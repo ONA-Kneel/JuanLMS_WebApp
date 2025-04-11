@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react';
 import { useNavigate } from "react-router-dom";
 import dashboardIcon from "../../../src/assets/dashboard.png";
 import classesIcon from "../../../src/assets/classes.png";
@@ -7,52 +7,46 @@ import chatsIcon from "../../../src/assets/chats.png";
 import progressIcon from "../../../src/assets/progress.png";
 import gradesIcon from "../../../src/assets/grades.png";
 import calendarIcon from "../../../src/assets/calendar.png";
-
+import logo5 from "../../assets/logo/Logo5.svg"
+import { Menu, X } from 'lucide-react'; // install lucide-react or use SVGs
 
 const Student_Navbar = () => {
+    const [isOpen, setIsOpen] = useState(false);
     const navigate = useNavigate();
 
-    const handleDashboard = () => navigate("/student_dashboard");
-    const handleClasses = () => navigate("/student_classes");
-    const handleActivities = () => navigate("/student_activities");
-    const handleChats = () => navigate("/student_chats");
-    const handleProgress = () => navigate("/student_progress");
-    const handleGrades = () => navigate("/student_grades");
-    const handleCalendar = () => navigate("/student_calendar");
+    const navItems = [
+        { handler: () => navigate("/student_dashboard"), icon: dashboardIcon, label: "Dashboard" },
+        { handler: () => navigate("/student_classes"), icon: classesIcon, label: "Classes" },
+        { handler: () => navigate("/student_activities"), icon: activitiesIcon, label: "Activities" },
+        { handler: () => navigate("/student_chats"), icon: chatsIcon, label: "Chats" },
+        { handler: () => navigate("/student_progress"), icon: progressIcon, label: "Progress" },
+        { handler: () => navigate("/student_grades"), icon: gradesIcon, label: "Grades" },
+        { handler: () => navigate("/student_calendar"), icon: calendarIcon, label: "Calendar" },
+    ];
 
     return (
-    
-        <div className=" min-h-screen bg-[#010a51] text-white p-6  flex-col justify-center ">
+        <div className="bg-[#010a51] text-white h-screen p-4 w-full md:w-64 flex-shrink-0">
+            <div className="flex justify-between items-center mb-2 md:mb-6 p-3">
+                <img src={logo5} className='w-40 ml-3'/>
+                <button className="md:hidden" onClick={() => setIsOpen(!isOpen)}>
+                    {isOpen ? <X size={24} /> : <Menu size={24} />}
+                </button>
+            </div>
 
-            <h2 className="text-3xl mb-12 text-center">
-                <span className="font-bold">JUAN</span>
-                <span className="font-bold italic">LMS</span>
-            </h2>
-            <nav className="space-y-10  flex flex-col items-center h-full pr-6">
-                {[
-                    { handler: handleDashboard, icon: dashboardIcon, label: "Dashboard"},
-                    { handler: handleClasses, icon: classesIcon, label: "Classes" },
-                    { handler: handleActivities, icon: activitiesIcon, label: "Activities" },
-                    { handler: handleChats, icon: chatsIcon, label: "Chats" },
-                    { handler: handleProgress, icon: progressIcon, label: "Progress" },
-                    { handler: handleGrades, icon: gradesIcon, label: "Grades" },
-                    { handler: handleCalendar, icon: calendarIcon, label: "Calendar" },
-                ].map((item, index) => (
+            <nav className={` ml-1.5 space-y-6 flex-col ${isOpen ? "flex" : "hidden"} md:flex`}>
+                {navItems.map((item, index) => (
                     <button
                         key={index}
                         onClick={item.handler}
-                        className="text-2xl flex items-center space-x-5 p-2 w-50 rounded-lg transition-colors duration-300 hover:bg-[#1a237e]"
+                        className="text-lg flex items-center space-x-3 p-2 w-full rounded-lg hover:bg-[#1a237e] transition-colors"
                     >
-                        <img src={item.icon} alt={item.label} className="w-6 h-6"/>
+                        <img src={item.icon} alt={item.label} className="w-6 h-6" />
                         <span>{item.label}</span>
                     </button>
                 ))}
             </nav>
         </div>
+    );
+};
 
-            
-        
-    )
-}
-
-export default Student_Navbar
+export default Student_Navbar;

@@ -1,10 +1,8 @@
-
 import { useState } from "react";
 import dropdown from "../../../src/assets/dropdown.png";
 import Student_Navbar from "./Student_Navbar";
 
 export default function Student_Activities() {
-
   const [activeTab, setActiveTab] = useState("upcoming");
 
   const tabs = [
@@ -13,16 +11,16 @@ export default function Student_Activities() {
     { id: "completed", label: "Completed" },
   ];
 
-
   return (
-    <div className="flex min-h-screen">
-      <Student_Navbar/>
+    <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+      <Student_Navbar />
 
-      <div className="w-4/4 bg-gray-100 p-6">
-        <div className="flex justify-between items-center mb-6">
-          <div className="mb-4">
-            <h2 className="text-3xl font-bold leading-tight">Activities</h2>
-            <p className="text-xl">
+      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold">Activities</h2>
+            <p className="text-base md:text-lg">
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
@@ -31,18 +29,21 @@ export default function Student_Activities() {
               })}
             </p>
           </div>
-          <div className="flex items-center space-x-4 bg-gray-300 p-3 rounded-2xl transition-colors duration-300 hover:bg-gray-400 w-55">
-            <span className="bg-blue-900 w-12 h-12 rounded-full"></span>
-            <span className="text-xl font-medium">Doe, John</span>
-            <img src={dropdown} alt="Arrow" className="absolute w-10 h-9 mt-2 ml-40" />
+          <div className="flex items-center space-x-2 bg-gray-300 p-2 rounded-2xl hover:bg-gray-400 transition">
+            <span className="bg-blue-900 w-10 h-10 rounded-full"></span>
+            <span className="text-sm md:text-base font-medium">Doe, John</span>
+            <img src={dropdown} alt="Dropdown" className="w-5 h-5" />
           </div>
         </div>
 
-        <ul className="flex flex-wrap border-b border-gray-700 text-2xl text-center font-medium text-gray-400">
+        {/* Tabs */}
+        <ul className="flex flex-wrap border-b border-gray-700 text-xl sm:text-2xl font-medium text-gray-400">
           {tabs.map((tab) => (
             <li
               key={tab.id}
-              className={`me-2 cursor-pointer p-4 ${activeTab === tab.id ? "text-black border-b-4 border-blue-500" : "hover:text-gray-600"
+              className={`me-4 cursor-pointer py-2 px-4 ${activeTab === tab.id
+                  ? "text-black border-b-4 border-blue-500"
+                  : "hover:text-gray-600"
                 }`}
               onClick={() => setActiveTab(tab.id)}
             >
@@ -51,15 +52,16 @@ export default function Student_Activities() {
           ))}
         </ul>
 
+        {/* Content */}
         <div className="mt-6">
           {activeTab === "upcoming" && (
             <div>
-              <h3 className="text-black text-2xl font-bold mb-4 ml-2"> December 32</h3>
-              <div className="bg-[#00418B] pt-4 w-406 h-35 rounded-xl shadow-lg relative mb-4 transition-colors duration-300 hover:bg-[#002d5a]">
+              <h3 className="text-black text-2xl font-bold mb-4">December 32</h3>
+              <div className="bg-[#00418B] p-4 rounded-xl shadow-lg mb-4 hover:bg-[#002d5a] relative">
                 <div className="absolute top-3 right-3 text-white px-3 py-1 font-bold">20 points</div>
-                <h3 className="text-white text-2xl font-semibold ml-7">Activity 1</h3>
-                <p className="text-white mb-5 ml-7">Due at 11:59 PM</p>
-                <p className="text-lg text-white font-medium ml-7">Introduction to Computing</p>
+                <h3 className="text-white text-xl md:text-2xl font-semibold">Activity 1</h3>
+                <p className="text-white">Due at 11:59 PM</p>
+                <p className="text-lg text-white font-medium">Introduction to Computing</p>
               </div>
             </div>
           )}

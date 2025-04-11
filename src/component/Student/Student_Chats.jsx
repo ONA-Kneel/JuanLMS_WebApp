@@ -2,34 +2,34 @@ import dropdown from "../../../src/assets/dropdown.png";
 import Student_Navbar from "./Student_Navbar";
 
 export default function Student_Chats() {
-
-
   return (
-    <div>
-      <div className="flex min-h-screen">
-        <Student_Navbar/>
+    <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+      <Student_Navbar />
 
-        <div className="w-4/4 bg-gray-100 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <div className="mb-4">
-              <h2 className="text-3xl font-bold leading-tight">Chats</h2>
-              <p className="text-xl">
-                {new Date().toLocaleDateString("en-US", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </p>
-            </div>
-            <div className="flex items-center space-x-4 bg-gray-300 p-3 rounded-2xl transition-colors duration-300 hover:bg-gray-400 w-55">
-              <span className="bg-blue-900 w-12 h-12 rounded-full"></span>
-              <span className="text-xl font-medium">Doe, John</span>
-              <img src={dropdown} alt="Arrow" className="absolute w-10 h-9 mt-2 ml-40" />
-            </div>
+      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold">Chats</h2>
+            <p className="text-base md:text-lg">
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </p>
+          </div>
+          <div className="flex items-center space-x-2 bg-gray-300 p-2 rounded-2xl hover:bg-gray-400 transition">
+            <span className="bg-blue-900 w-10 h-10 rounded-full"></span>
+            <span className="text-sm md:text-base font-medium">Doe, John</span>
+            <img src={dropdown} alt="Dropdown" className="w-5 h-5" />
           </div>
         </div>
+
+        {/* Chats content can be added here */}
+        <p className="text-gray-500 text-lg mt-4">No chats yet. Start a conversation with your classmates or instructors!</p>
       </div>
     </div>
-  )
+  );
 }

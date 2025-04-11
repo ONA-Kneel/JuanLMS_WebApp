@@ -8,9 +8,15 @@
     src: url("../src/assets/fonts/Poppins-Light.ttf");
 }
 
+@font-face {
+    font-family: PoppinsRegular;
+    src: url("../src/assets/fonts/Poppins-Regular.ttf");
+}
+
 @import "tailwindcss";
 
 @theme{
     --font-poppinsb: PoppinsBold, "sans-serif";
-    --font-poppinsl: PoppinsLight, "sans-serif"
+    --font-poppinsl: PoppinsLight, "sans-serif";
+    --font-poppinsr: PoppinsRegular, "sans-serif"
 }
