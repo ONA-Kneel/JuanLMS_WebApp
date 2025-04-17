@@ -25,15 +25,15 @@ const Student_Navbar = () => {
     ];
 
     return (
-        <div className="bg-[#010a51] text-white h-screen p-4 w-full md:w-64 flex-shrink-0">
+        <div className="bg-[#010a51] text-white h-30 p-4 w-full md:w-64 flex-shrink-0 font-poppinsr md:h-screen">
             <div className="flex justify-between items-center mb-2 md:mb-6 p-3">
                 <img src={logo5} className='w-40 ml-3'/>
-                <button className="md:hidden" onClick={() => setIsOpen(!isOpen)}>
+                <button className="md:hidden " onClick={() => setIsOpen(!isOpen)}>
                     {isOpen ? <X size={24} /> : <Menu size={24} />}
                 </button>
             </div>
 
-            <nav className={` ml-1.5 space-y-6 flex-col ${isOpen ? "flex" : "hidden"} md:flex`}>
+            <nav className={`bg-[#010a51] z-20 relative ml-1.5 space-y-6 flex-col ${isOpen ? "flex" : "hidden"} md:flex`}>
                 {navItems.map((item, index) => (
                     <button
                         key={index}

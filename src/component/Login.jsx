@@ -12,48 +12,48 @@ export default function Login() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 inset-shadow-black px-4">
-      <div className="w-full max-w-4xl bg-white shadow-lg flex flex-col md:flex-row h-auto md:h-[30rem]">
-        
+      <div className="w-full max-w-4xl bg-white shadow-lg flex flex-col md:flex-row h-auto md:h-[30rem] lg:w-[120rem] ]">
+
         {/* Left Section (Login Form) */}
         <div className="w-full md:w-1/2 p-8 md:p-12">
-          <h2 className="text-2xl mb-6 font-poppinsb text-gray-900">Login</h2>
+          <h2 className="text-3xl mb-8 font-poppinsb text-gray-900">Login</h2>
 
           <form onSubmit={handleLogin} className="space-y-4 mt-8">
             <div>
-              <label className="block text-sm font-poppinsr mb-2">Email</label>
+              <label className="block text-base font-poppinsr mb-2">Email</label>
               <input
                 type="email"
                 required
-                className="w-full px-3 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-sm border-blue-900"
+                className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900"
                 placeholder="username@gmail.com"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-poppinsr mb-2">Password</label>
+              <label className="block text-base font-poppinsr mb-2">Password</label>
               <div className="relative">
                 <input
                   type="password"
                   required
-                  className="w-full px-3 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-sm border-blue-900"
+                  className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900"
                   placeholder="********"
                 />
               </div>
             </div>
 
             <div className="flex items-center justify-between">
-              <label className="flex items-center font-poppinsr text-xs">
+              <label className="flex items-center font-poppinsr text-sm">
                 <input type="checkbox" className="mr-2" />
                 Remember Me
               </label>
-              <a href="#" className="text-blue-600 hover:underline font-poppinsr text-xs">
+              <a href="#" className="text-blue-600 hover:underline font-poppinsr text-sm">
                 Forgot Password?
               </a>
             </div>
 
             <button
               type="submit"
-              className="w-full bg-blue-900 text-white p-3 mt-10 rounded-lg hover:bg-blue-950 transition font-poppinsr text-sm"
+              className="w-full bg-blue-900 text-white p-3 mt-12 rounded-lg hover:bg-blue-950 transition font-poppinsr text-base"
             >
               Login
             </button>
