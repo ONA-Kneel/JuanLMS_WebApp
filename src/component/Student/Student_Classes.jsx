@@ -37,11 +37,11 @@ export default function Student_Classes() {
               key={idx}
               className="bg-[#00418b] text-white p-4 rounded-2xl hover:bg-[#002b5c] relative"
             >
-              <h4 className="text-2xl font-bold mb-5">
+              <h4 className="text-lg font-bold mb-5">
                 {["Intro to Computing", "Fundamentals of Programming", "Modern Math"][idx]}
               </h4>
               <img src={arrowRight} alt="Arrow" className="absolute top-6 right-6 w-6 h-6" />
-              <p className="text-lg mt-2">0% Progress</p>
+              <p className="text-sm mt-2">0% Progress</p>
               <div className="w-full rounded-full bg-gray-300 mt-2">
                 <div className="bg-blue-500 h-4 rounded-full w-[0%]"></div>
               </div>

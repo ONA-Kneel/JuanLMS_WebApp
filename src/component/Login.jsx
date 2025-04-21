@@ -7,9 +7,26 @@ export default function Login() {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    navigate('/student_dashboard');
+    const email = e.target.elements[0].value;
+  
+    if (email.endsWith('@students.sjddef.edu.ph')) 
+    {
+      navigate('/student_dashboard');
+    } 
+    else if (email.endsWith('@sjddef.edu.ph')) 
+    {
+      navigate('/faculty_dashboard');
+    } 
+    else if (email.endsWith('@parents.sjddef.edu.ph'))
+    {
+      navigate('/parent_dashboard')
+    }
+    else 
+    {
+      alert('Invalid email domain. Please use your student or faculty email.');
+    }
   };
-
+  
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 inset-shadow-black px-4">
       <div className="w-full max-w-4xl bg-white shadow-lg flex flex-col md:flex-row h-auto md:h-[30rem] lg:w-[120rem] ]">

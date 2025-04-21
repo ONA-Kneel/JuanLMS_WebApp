@@ -11,6 +11,15 @@ import Student_Chats from './component/Student/Student_Chats';
 import Student_Progress from './component/Student/Student_Progress';
 import Student_Grades from './component/Student/Student_Grades';
 import Student_Calendar from './component/Student/Student_Calendar';
+import Faculty_Dashboard from './component/Faculty/Faculty_Dashboard';
+// import Faculty_Classes from './component/Faculty/Faculty_Classes';
+// import Faculty_Activities from './component/Faculty/Faculty_Activities';
+// import Faculty_Chats from './component/Faculty/Faculty_Chats';
+// import Faculty_Progress from './component/Faculty/Faculty_Progress';
+// import Faculty_Grades from './component/Faculty/Faculty_Grades';
+// import Faculty_Calendar from './component/Faculty/Faculty_Calendar';
+import Parent_Dashboard from './component/Parent/Parent_Dashboard';
+
 
 function App() {
   return (
@@ -24,6 +33,14 @@ function App() {
         <Route path="/student_progress" element={<Student_Progress />}/>
         <Route path="/student_grades" element={<Student_Grades />}/>
         <Route path="/student_calendar" element={<Student_Calendar />}/>
+        <Route path="/faculty_dashboard" element={<Faculty_Dashboard/>}/>
+        {/* <Route path="/faculty_classes" element={<Faculty_Classes />}/>
+        <Route path="/faculty_activities" element={<Faculty_Activities />}/>
+        <Route path="/faculty_chats" element={<Faculty_Chats />}/>
+        <Route path="/faculty_progress" element={<Faculty_Progress />}/>
+        <Route path="/faculty_grades" element={<Faculty_Grades />}/>
+        <Route path="/faculty_calendar" element={<Faculty_Calendar />}/> */}
+        <Route path="/parent_dashboard" element={<Parent_Dashboard/>}/>
       </Routes>
     </Router>
   );

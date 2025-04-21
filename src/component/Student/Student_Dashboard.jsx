@@ -49,7 +49,7 @@ export default function Student_Dashboard() {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold">Dashboard</h2>
+            <h2 className="text-2xl md:text-3xl font-bold">Student Dashboard</h2>
             <p className="text-base md:text-lg">
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
@@ -97,7 +97,7 @@ export default function Student_Dashboard() {
         <h3 className="text-lg md:text-xl font-semibold mb-3">Overview</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {[
-            { icon: compClassesIcon, value: "0%", label: "Completed Classes", bg: "bg-gray-300", text: "text-black" },
+            { icon: compClassesIcon, value: "78%", label: "Completed Classes", bg: "bg-gray-300", text: "text-black" },
             { icon: compAssignsIcon, value: "0%", label: "Completed Assignments", bg: "bg-[#00418b]", text: "text-white" },
             { icon: dueAssignsIcon, value: "You're good mah dude! :3 No due assignments", label: "", bg: "bg-gray-300", text: "text-black" },
           ].map((item, index) => (
@@ -112,7 +112,7 @@ export default function Student_Dashboard() {
         </div>
 
         {/* Recent Classes Section */}
-        <h3 className="text-lg md:text-xl font-bold mb-3">Recent Classes</h3>
+        <h3 className="text-lg md:text-4xl font-bold mb-3">Recent Classes</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {["Intro to Computing", "Programming Fundamentals", "Modern Mathematics"].map((className, index) => (
             <div key={index} className="relative bg-[#00418b] text-white p-4 md:p-6 rounded-2xl hover:bg-[#002b5c] transition flex flex-col justify-between">
