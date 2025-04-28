@@ -16,30 +16,25 @@ export default function ProfileModal({
   cropModalOpen,
   onCrop,
   closeCropModal,
+  userType,
 }) {
   if (!open) return null;
 
-  const customStyles = {
-    content: {
-      top: '50%',
-      left: '50%',
-      right: 'auto',
-      bottom: 'auto',
-      marginRight: '-50%',
-      transform: 'translate(-50%, -50%)',
-      zIndex: 60,
-    },
+  const roleDescriptions = {
+    student: "Student | (To implement soon)",
+    faculty: "Faculty | (To implement soon)",
+    admin: "Administrator | (To implement soon)",
+    parent: "Parent | Guardian",
   };
 
   return ReactDom.createPortal(
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-30 p-4">
       <div className="z-40 bg-gray-50/95 p-6 md:p-12 rounded-3xl shadow-2xl max-w-5xl w-full h-[90vh] overflow-y-auto font-poppinsr relative">
-        {/* Sign-out */}
+
         <button onClick={onClose} className="absolute right-10 top-6 text-black font-poppinsb hover:underline">
           Sign-out
         </button>
 
-        {/* Avatar + Change button */}
         <div className="flex items-center gap-6 mb-6">
           <div className="justify-center items-center text-center">
             <img className="w-28 h-28 rounded-full bg-gray-600" src={avatarImg} />
@@ -51,11 +46,17 @@ export default function ProfileModal({
             </button>
           </div>
 
-          {/* Crop Modal */}
           <Modal
             isOpen={cropModalOpen}
             onRequestClose={closeCropModal}
-            style={customStyles}
+            style={{
+              content: {
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: 60,
+              },
+            }}
             contentLabel="Crop Modal"
             overlayClassName="fixed inset-0 bg-gray-50/75 z-[100] font-poppinsb"
           >
@@ -75,10 +76,10 @@ export default function ProfileModal({
             </div>
           </Modal>
 
-          {/* Name and Info */}
+          {/* Dynamic Info */}
           <div className="mb-5 text-center lg:text-left">
             <h2 className="text-3xl font-bold">{name}</h2>
-            <p className="text-sm text-gray-600">Student | College of Allied Health</p>
+            <p className="text-sm text-gray-600">{roleDescriptions[userType] || "User"}</p>
             <div className="flex items-center gap-2 text-green-600 text-sm mt-1">
               <span className="w-2 h-2 rounded-full bg-green-500" />
               Available
@@ -101,7 +102,6 @@ export default function ProfileModal({
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-6 text-lg font-semibold border-b border-gray-300 pb-2 mb-4">
           <button className="hover:text-blue-800">My Badges</button>
           <button className="hover:text-blue-800">Settings</button>

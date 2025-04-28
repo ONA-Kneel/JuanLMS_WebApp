@@ -84,8 +84,8 @@ export default function Student_Dashboard() {
                   openCropModal={openModal}
                   closeCropModal={closeModal}
                   onCrop={(i) => setim(i)}
+                  userType="student" 
                 />
-
               </div>
             )}
 

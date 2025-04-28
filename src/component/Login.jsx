@@ -21,6 +21,10 @@ export default function Login() {
     {
       navigate('/parent_dashboard')
     }
+    else if (email.endsWith('@admin.sjddef.edu.ph'))
+      {
+        navigate('/admin_dashboard')
+      }
     else 
     {
       alert('Invalid email domain. Please use your student or faculty email.');

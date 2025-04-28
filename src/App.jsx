@@ -19,6 +19,7 @@ import Faculty_Dashboard from './component/Faculty/Faculty_Dashboard';
 // import Faculty_Grades from './component/Faculty/Faculty_Grades';
 // import Faculty_Calendar from './component/Faculty/Faculty_Calendar';
 import Parent_Dashboard from './component/Parent/Parent_Dashboard';
+import Admin_Dashboard from './component/Admin/Admin_Dashboard';
 
 
 function App() {
@@ -41,6 +42,7 @@ function App() {
         <Route path="/faculty_grades" element={<Faculty_Grades />}/>
         <Route path="/faculty_calendar" element={<Faculty_Calendar />}/> */}
         <Route path="/parent_dashboard" element={<Parent_Dashboard/>}/>
+        <Route path="/admin_Dashboard" element={<Admin_Dashboard/>}/>
       </Routes>
     </Router>
   );
