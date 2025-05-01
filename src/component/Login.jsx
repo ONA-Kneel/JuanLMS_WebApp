@@ -92,7 +92,8 @@ export default function Login() {
             welcome!
           </h2>
           <p className="text-sm mt-4 font-poppinsl max-w-xs">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+            San Juan De Dios Educational Foundation, Inc.
+            Learning Management System
           </p>
         </div>
       </div>
