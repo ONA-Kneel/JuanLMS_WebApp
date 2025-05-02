@@ -1,8 +1,8 @@
 import { useState } from "react";
 import dropdown from "../../../src/assets/dropdown.png";
-import Faculty_Navbar from "./Faculty_Navbar";
+import Director_Navbar from "./Director_Navbar";
 
-export default function Faculty_Activities() {
+export default function Director_Activities() {
   const [activeTab, setActiveTab] = useState("upcoming");
 
   const tabs = [
@@ -13,7 +13,7 @@ export default function Faculty_Activities() {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
-      <Faculty_Navbar />
+      <Director_Navbar />
 
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr">
         {/* Header */}
@@ -31,7 +31,7 @@ export default function Faculty_Activities() {
           </div>
           <div className="flex items-center space-x-2 bg-gray-300 p-2 rounded-2xl hover:bg-gray-400 transition">
             <span className="bg-blue-900 w-10 h-10 rounded-full"></span>
-            <span className="text-sm md:text-base font-medium">James, Johnson</span>
+            <span className="text-sm md:text-base font-medium">Doe, John</span>
             <img src={dropdown} alt="Dropdown" className="w-5 h-5" />
           </div>
         </div>

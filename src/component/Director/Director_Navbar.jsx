@@ -2,20 +2,26 @@ import React, { useState } from 'react';
 import { useNavigate } from "react-router-dom";
 import dashboardIcon from "../../../src/assets/dashboard.png";
 import classesIcon from "../../../src/assets/classes.png";
+import activitiesIcon from "../../../src/assets/activities.png";
+import chatsIcon from "../../../src/assets/chats.png";
 import progressIcon from "../../../src/assets/progress.png";
 import gradesIcon from "../../../src/assets/grades.png";
+import calendarIcon from "../../../src/assets/calendar.png";
 import logo5 from "../../assets/logo/Logo5.svg";
 import { Menu, X } from 'lucide-react';
 
-const Parent_Navbar = () => {
+const Director_Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
     const navigate = useNavigate();
 
     const navItems = [
-        { handler: () => navigate("/parent_dashboard"), icon: dashboardIcon, label: "Dashboard" },
-        { handler: () => navigate("/parent_classes"), icon: classesIcon, label: "Schedule" },
-        { handler: () => navigate("/parent_progress"), icon: progressIcon, label: "Progress" },
-        { handler: () => navigate("/parent_grades"), icon: gradesIcon, label: "Grades" },
+        { handler: () => navigate("/director_dashboard"), icon: dashboardIcon, label: "Dashboard" },
+        { handler: () => navigate("/director_classes"), icon: classesIcon, label: "Classes" },
+        { handler: () => navigate("/director_activities"), icon: activitiesIcon, label: "Activities" },
+        { handler: () => navigate("/director_chats"), icon: chatsIcon, label: "Chats" },
+        { handler: () => navigate("/director_progress"), icon: progressIcon, label: "Progress" },
+        { handler: () => navigate("/director_grades"), icon: gradesIcon, label: "Grades" },
+        { handler: () => navigate("/director_calendar"), icon: calendarIcon, label: "Calendar" },
     ];
 
     return (
@@ -43,4 +49,4 @@ const Parent_Navbar = () => {
     );
 };
 
-export default Parent_Navbar;
+export default Director_Navbar;

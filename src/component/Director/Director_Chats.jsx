@@ -5,11 +5,11 @@ import voicecall from "../../../src/assets/voicecall.png";
 import uploadfile from "../../../src/assets/uploadfile.png";
 import uploadpicture from "../../../src/assets/uploadpicture.png";
 import profileicon from "../../../src/assets/profileicon (1).svg";
-import Faculty_Navbar from "./Faculty_Navbar";
+import Director_Navbar from "./Director_Navbar";
 import ProfileModal from "../ProfileModal";
 import { useNavigate } from "react-router-dom";
 
-export default function Faculty_Chats() {
+export default function Director_Chats() {
   const [selectedChat, setSelectedChat] = useState("Chat 1");
   const [isOpen, setisOpen] = useState(false);
   const [im, setim] = useState(null);
@@ -26,7 +26,7 @@ export default function Faculty_Chats() {
 
   return (
     <div className="flex min-h-screen">
-      <Faculty_Navbar />
+      <Director_Navbar />
 
       <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden">
 
@@ -68,7 +68,7 @@ export default function Faculty_Chats() {
                   openCropModal={openModal}
                   closeCropModal={closeModal}
                   onCrop={(i) => setim(i)}
-                  userType="faculty"
+                  userType="director"
                 />
               </div>
             )}

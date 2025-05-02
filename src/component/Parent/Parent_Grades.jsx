@@ -1,11 +1,11 @@
 import { useState } from "react";
 import dropdown from "../../../src/assets/dropdown.png";
-import Faculty_Navbar from "./Faculty_Navbar";
+import Parent_Navbar from "./Parent_Navbar";
 import ProfileModal from "../ProfileModal";
 import profileicon from "../../../src/assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 
-export default function Faculty_Grades() {
+export default function Parent_Grades() {
   const [isOpen, setIsOpen] = useState(false);
   const [im, setIm] = useState(null);
   const [modalIsOpen, setModalIsOpen] = useState(false);
@@ -16,7 +16,7 @@ export default function Faculty_Grades() {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
-      <Faculty_Navbar />
+      <Parent_Navbar />
 
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr">
         {/* Header */}
@@ -42,7 +42,7 @@ export default function Faculty_Grades() {
                 src={im ? im : profileicon}
                 alt="Profile"
               />
-              <span className="text-sm md:text-base font-medium">James, Johnson</span>
+              <span className="text-sm md:text-base font-medium">Doe, John</span>
               <img src={dropdown} alt="Dropdown" className="w-5 h-5" />
             </button>
 
@@ -52,14 +52,14 @@ export default function Faculty_Grades() {
                   open={isOpen}
                   onClose={() => navigate("/")}
                   avatarImg={im || profileicon}
-                  name="James, Johnson"
+                  name="Doe, John"
                   email="doejohn@sjdfdef.edu.ph"
                   phone="09"
                   cropModalOpen={modalIsOpen}
                   openCropModal={openModal}
                   closeCropModal={closeModal}
                   onCrop={(i) => setIm(i)}
-                  userType="faculty"
+                  userType="parent"
                 />
               </div>
             )}

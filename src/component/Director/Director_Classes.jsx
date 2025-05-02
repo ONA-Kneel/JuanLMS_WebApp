@@ -1,13 +1,13 @@
 import arrowRight from "../../../src/assets/arrowRight.png";
 import dropdown from "../../../src/assets/dropdown.png";
-import Faculty_Navbar from "./Faculty_Navbar";
+import Director_Navbar from "./Director_Navbar";
 
-export default function Faculty_Classes() {
+export default function Director_Classes() {
 
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
-      <Faculty_Navbar />
+      <Director_Navbar />
 
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr">
         {/* Header */}
