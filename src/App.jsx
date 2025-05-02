@@ -29,15 +29,22 @@ import Faculty_Grades from './component/Faculty/Faculty_Grades';
 import Faculty_Calendar from './component/Faculty/Faculty_Calendar';
 
 // Director Access
-import Director_Dashboard from './component/Director/Director_Dashboard';
-import Director_Classes from './component/Director/Director_Classes';
-import Director_Activities from './component/Director/Director_Activities';
-import Director_Chats from './component/Director/Director_Chats';
-import Director_Grades from './component/Director/Director_Grades';
-import Director_Calendar from './component/Director/Director_Calendar';
+// import Director_Dashboard from './component/Director/Director_Dashboard';
+// import Director_Classes from './component/Director/Director_Classes';
+// import Director_Activities from './component/Director/Director_Activities';
+// import Director_Chats from './component/Director/Director_Chats';
+// import Director_Grades from './component/Director/Director_Grades';
+// import Director_Calendar from './component/Director/Director_Calendar';
 
 // Admin Access
 import Admin_Dashboard from './component/Admin/Admin_Dashboard';
+// import Admin_Activities from './component/Admin/Admin_Activities';
+// import Admin_Calendar from './component/Admin/Admin_Calendar';
+// import Admin_Chats from './component/Admin/Admin_Chats';
+// import Admin_Classes from './component/Admin/Admin_Classes';
+// import Admin_Grades from './component/Admin/Admin_Grades';
+// import Admin_Progress from './component/Admin/Admin_Progress';
+
 
 // Parent Access
 import Parent_Dashboard from './component/Parent/Parent_Dashboard';
@@ -83,19 +90,7 @@ function App() {
         <Route path="/faculty_chats" element={<Faculty_Chats />}/>
         <Route path="/faculty_progress" element={<Faculty_Progress />}/>
         <Route path="/faculty_grades" element={<Faculty_Grades />}/>
-        <Route path="/faculty_calendar" element={<Faculty_Calendar />}/>
-
-        {/* Director */}
-        <Route path="/director_dashboard" element={<Director_Dashboard/>}/>
-        <Route path="/director_classes" element={<Director_Classes />}/>
-        <Route path="/director_activities" element={<Director_Activities />}/>
-        <Route path="/director_chats" element={<Director_Chats />}/>
-        <Route path="/director_grades" element={<Director_Grades />}/>
-        <Route path="/director_calendar" element={<Director_Calendar />}/>
-
-
-        {/* Admin */}
-        <Route path="/admin_Dashboard" element={<Admin_Dashboard/>}/>
+        <Route path="/faculty_calendar" element={<Faculty_Calendar />}/> 
 
         {/* Parent */}
         <Route path="/parent_dashboard" element={<Parent_Dashboard/>}/>

@@ -45,11 +45,66 @@ export default function ProfileModal({
     reader.readAsDataURL(file);
   };
 
+  // --- Helper to crop the image ---
+  const getCroppedImg = (imageSrc, crop) => {
+    const createImage = (url) =>
+      new Promise((resolve, reject) => {
+        const image = new Image();
+        image.addEventListener('load', () => resolve(image));
+        image.addEventListener('error', (error) => reject(error));
+        image.setAttribute('crossOrigin', 'anonymous'); // Avoid CORS issues
+        image.src = url;
+      });
+
+    return new Promise(async (resolve, reject) => {
+      const image = await createImage(imageSrc);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const { width, height } = crop;
+      canvas.width = width;
+      canvas.height = height;
+
+      ctx.drawImage(
+        image,
+        crop.x,
+        crop.y,
+        width,
+        height,
+        0,
+        0,
+        width,
+        height
+      );
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Canvas is empty'));
+          return;
+        }
+        const croppedImageUrl = URL.createObjectURL(blob);
+        resolve(croppedImageUrl);
+      }, 'image/jpeg');
+    });
+  };
+
+  const resetCropState = () => {
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
+    setImageSrc(null);
+  };
+
   const showCroppedImage = useCallback(async () => {
-    // You can pass croppedAreaPixels to your onCrop function
-    onCrop(croppedAreaPixels);
-    closeCropModal();
-  }, [croppedAreaPixels, onCrop, closeCropModal]);
+    try {
+      const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
+      onCrop(croppedImage);  // Update avatar image
+      closeCropModal();
+      resetCropState();
+    } catch (e) {
+      console.error(e);
+    }
+  }, [croppedAreaPixels, imageSrc, onCrop, closeCropModal]);
 
   if (!open) return null;
 
@@ -63,7 +118,7 @@ export default function ProfileModal({
 
         <div className="flex items-center gap-6 mb-6">
           <div className="justify-center items-center text-center">
-            <img className="w-28 h-28 rounded-full bg-gray-600 object-cover" src={avatarImg} />
+            <img className="w-28 h-28 rounded-full bg-gray-600 object-cover" src={avatarImg} alt="Avatar" />
             <button
               className="font-poppinsr hover:underline hover:text-blue-800 mt-2.5 ml-1.5 text-sm cursor-pointer"
               onClick={openCropModal}
@@ -75,7 +130,10 @@ export default function ProfileModal({
           {/* Crop Modal */}
           <Modal
             isOpen={cropModalOpen}
-            onRequestClose={closeCropModal}
+            onRequestClose={() => {
+              closeCropModal();
+              resetCropState();
+            }}
             style={{
               content: {
                 top: '50%',
@@ -91,7 +149,16 @@ export default function ProfileModal({
 
             {!imageSrc ? (
               <div className="flex justify-center mt-4">
-                <input type="file" accept="image/*" onChange={handleFileChange} />
+                <label className="inline-flex my-4 items-center px-4 py-2 bg-blue-900 text-white rounded cursor-pointer hover:bg-blue-950">
+                  Upload Image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </label>
+
               </div>
             ) : (
               <>
@@ -112,7 +179,7 @@ export default function ProfileModal({
                   <button className="px-4 py-1 text-white bg-blue-900 rounded hover:bg-blue-950" onClick={showCroppedImage}>
                     Save
                   </button>
-                  <button className="px-4 py-1 text-gray-800 bg-gray-200 rounded hover:bg-gray-300" onClick={closeCropModal}>
+                  <button className="px-4 py-1 text-gray-800 bg-gray-200 rounded hover:bg-gray-300" onClick={() => { closeCropModal(); resetCropState(); }}>
                     Cancel
                   </button>
                 </div>

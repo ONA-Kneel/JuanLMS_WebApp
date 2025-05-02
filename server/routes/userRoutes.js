@@ -60,8 +60,8 @@ userRoutes.route("/users/:id").post(async (request, response) => {
             password: request.body.password,
         }
 
-}
-    let data = await db.collection("Users").updateOne({_id: new ObjectId(request.params.id)},mongoObject)
+    };
+    let data = await db.collection("Users").updateOne({ _id: new ObjectId(request.params.id) }, mongoObject)
     response.json(data)
 })
 // ---------------------------------------------------------------
@@ -75,19 +75,31 @@ userRoutes.route("/users/:id").delete(async (request, response) => {
 // ---------------------------------------------------------------
 
 // Login Route
-userRoutes.route("/login").post(async (request, response) => {
+userRoutes.post('/login', async (req, res) => {
     const db = database.getDb();
-    const { email, password } = request.body;
+    const { email, password } = req.body;
 
-    // Look for user with matching email + password
     const user = await db.collection("Users").findOne({ email, password });
 
     if (user) {
-        response.json({ success: true, role: getRoleFromEmail(email) });
+        // Combine fullname
+        const middleInitial = user.middlename ? user.middlename.charAt(0) + '.' : '';
+        const fullName = [user.firstname, middleInitial, user.lastname]
+            .filter(Boolean).join(' ');
+
+
+        res.json({
+            success: true,
+            role: getRoleFromEmail(email),
+            name: fullName,
+            email: user.email,
+            phone: user.contactno
+        });
     } else {
-        response.status(401).json({ success: false, message: "Invalid email or password" });
+        res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 });
+
 
 // Helper function to determine role based on email
 function getRoleFromEmail(email) {

@@ -1,18 +1,13 @@
-import { useState } from "react";
-import dropdown from "../../../src/assets/dropdown.png";
+// import { useState } from "react";
+
 import Student_Navbar from "./Student_Navbar";
 import ProfileModal from "../ProfileModal";
-import profileicon from "../../../src/assets/profileicon (1).svg";
-import { useNavigate } from "react-router-dom";
+
+// import { useNavigate } from "react-router-dom";
+import ProfileMenu from "../ProfileMenu";
 
 export default function Student_Grades() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [im, setIm] = useState(null);
-  const [modalIsOpen, setModalIsOpen] = useState(false);
-  const navigate = useNavigate();
-
-  const openModal = () => setModalIsOpen(true);
-  const closeModal = () => setModalIsOpen(false);
+  
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -32,38 +27,8 @@ export default function Student_Grades() {
               })}
             </p>
           </div>
-          <div className="relative">
-            <button
-              onClick={() => setIsOpen((prev) => !prev)}
-              className="flex items-center space-x-2 bg-gray-300 p-2 rounded-2xl hover:bg-gray-400 transition"
-            >
-              <img
-                className="w-10 h-10 rounded-full bg-gray-600"
-                src={im ? im : profileicon}
-                alt="Profile"
-              />
-              <span className="text-sm md:text-base font-medium">Doe, John</span>
-              <img src={dropdown} alt="Dropdown" className="w-5 h-5" />
-            </button>
 
-            {isOpen && (
-              <div className="absolute right-0 mt-2 z-50">
-                <ProfileModal
-                  open={isOpen}
-                  onClose={() => navigate("/")}
-                  avatarImg={im || profileicon}
-                  name="Doe, John"
-                  email="doejohn@sjdfdef.edu.ph"
-                  phone="09"
-                  cropModalOpen={modalIsOpen}
-                  openCropModal={openModal}
-                  closeCropModal={closeModal}
-                  onCrop={(i) => setIm(i)}
-                  userType="student"
-                />
-              </div>
-            )}
-          </div>
+          <ProfileMenu/>
         </div>
 
         {/* Grades Table */}

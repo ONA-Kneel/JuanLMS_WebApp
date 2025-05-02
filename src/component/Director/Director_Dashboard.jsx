@@ -1,18 +1,14 @@
 import Director_Navbar from "./Director_Navbar";
-import { useState } from "react";
-import profileicon from "../../../src/assets/profileicon (1).svg";
-import dropdown from "../../../src/assets/dropdown.png";
+// import { useState } from "react";
+
 import ProfileModal from "../ProfileModal";
-import { useNavigate } from "react-router-dom";
+// import { useNavigate } from "react-router-dom";
 import compClassesIcon from "../../../src/assets/compClassesIcon.png";
 import arrowRight from "../../../src/assets/arrowRight.png";
+import ProfileMenu from "../ProfileMenu";
 
 export default function Director_Dashboard() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [modalIsOpen, setModalIsOpen] = useState(false);
-  const [im, setim] = useState(null);
-  const navigate = useNavigate();
-
+  
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr">
       <Director_Navbar />
@@ -31,31 +27,9 @@ export default function Director_Dashboard() {
             </p>
           </div>
 
-          <button
-            onClick={() => setIsOpen(prev => !prev)}
-            className="flex items-center space-x-2 bg-gray-300 p-2 rounded-2xl hover:bg-gray-400 transition z-40 relative"
-          >
-            <img className="w-10 h-10 rounded-full bg-gray-600" src={im ? im : profileicon} />
-            <span className="text-sm md:text-base font-medium">James, Johnson</span>
-            <img src={dropdown} alt="Dropdown" className="w-5 h-5" />
-          </button>
+          <ProfileMenu/>
         </div>
 
-        {isOpen && (
-            <ProfileModal
-            open={isOpen}
-            onClose={() => navigate("/")}
-            avatarImg={im || profileicon}
-            name="Prof. John"
-            email="prof.john@example.com"
-            phone="09"
-            cropModalOpen={modalIsOpen}
-            openCropModal={() => setModalIsOpen(true)}
-            closeCropModal={() => setModalIsOpen(false)}
-            onCrop={(i) => setim(i)}
-            userType="director" 
-          />
-        )}
 
         <h3 className="text-lg md:text-xl font-semibold mb-3">Overview</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

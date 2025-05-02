@@ -11,23 +11,27 @@ export default function Login() {
     e.preventDefault();
     const email = e.target.elements[0].value;
     const password = e.target.elements[1].value;
-
+  
     try {
       const response = await axios.post('http://localhost:5000/login', { email, password });
-      const role = response.data.role;
-
+      const { role, name, email: userEmail, phone } = response.data;
+    
+      // Save user info to localStorage
+      localStorage.setItem('user', JSON.stringify({ name, email: userEmail, phone, role }));
+    
       if (role === 'student') navigate('/student_dashboard');
       else if (role === 'faculty') navigate('/faculty_dashboard');
       else if (role === 'parent') navigate('/parent_dashboard');
       else if (role === 'admin') navigate('/admin_dashboard');
-      else if (role === 'director') navigate('/director_dashboard')
       else alert('Unknown role');
-
+    
     } catch (error) {
       console.log(error)
       alert('Invalid email or password');
     }
+    
   };
+  
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 inset-shadow-black px-4">

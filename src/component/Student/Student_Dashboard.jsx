@@ -2,8 +2,7 @@ import compClassesIcon from "../../../src/assets/compClassesIcon.png";
 import compAssignsIcon from "../../../src/assets/compAssignsIcon.png";
 import dueAssignsIcon from "../../../src/assets/dueAssignsIcon.png";
 import arrowRight from "../../../src/assets/arrowRight.png";
-import dropdown from "../../../src/assets/dropdown.png";
-import profileicon from "../../../src/assets/profileicon (1).svg";
+
 
 import Student_Navbar from "./Student_Navbar";
 import ProfileModal from "../ProfileModal";
@@ -11,33 +10,17 @@ import ProfileModal from "../ProfileModal";
 
 import Login from "../Login";
 
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-
-// Libraries
-import Modal from 'react-modal';
 
 
-Modal.setAppElement('#root');
+import ProfileMenu from "../ProfileMenu";
+
+
+
 
 
 export default function Student_Dashboard() {
 
-  const [isOpen, setisOpen] = useState(false)
-  const navigate = useNavigate();
-
-
-  //for profile pictures
-  const [modalIsOpen, setIsOpen] = useState(false);
-  const [im, setim] = useState(null)
-
-  function openModal() {
-    setIsOpen(true);
-  }
-
-  function closeModal() {
-    setIsOpen(false);
-  }
+  
 
 
 
@@ -59,38 +42,7 @@ export default function Student_Dashboard() {
               })}
             </p>
           </div>
-          <div>
-            {/* // Toggle button (always visible) */}
-            <button
-              onClick={() => setisOpen(prev => !prev)}
-              className="flex items-center space-x-2 bg-gray-300 p-2 rounded-2xl hover:bg-gray-400 transition z-40 relative"
-            >
-              <img className="w-10 h-10 rounded-full bg-gray-600 " src={im ? im : profileicon} />
-              <span className="text-sm md:text-base font-medium">Doe, John</span>
-              <img src={dropdown} alt="Dropdown" className="w-5 h-5" />
-            </button>
-
-            {/* Modal (only rendered if open) */}
-            {isOpen && (
-              <div className="flex flex-col lg:flex-row items-center gap-6 mb-6">
-                <ProfileModal
-                  open={isOpen}
-                  onClose={() => navigate("/")}
-                  avatarImg={im || profileicon}
-                  name="Doe, John"
-                  email="doejohn@sjdfdef.edu.ph"
-                  phone="09"
-                  cropModalOpen={modalIsOpen}
-                  openCropModal={openModal}
-                  closeCropModal={closeModal}
-                  onCrop={(i) => setim(i)}
-                  userType="student" 
-                />
-              </div>
-            )}
-
-
-          </div>
+          <ProfileMenu/>
         </div>
 
         {/* Overview Section */}

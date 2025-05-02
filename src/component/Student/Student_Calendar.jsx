@@ -1,4 +1,5 @@
-import dropdown from "../../../src/assets/dropdown.png";
+
+import ProfileMenu from "../ProfileMenu";
 import Student_Navbar from "./Student_Navbar";
 
 export default function Student_Calendar() {
@@ -22,13 +23,10 @@ export default function Student_Calendar() {
               })}
             </p>
           </div>
-          <div className="flex items-center space-x-2 bg-gray-300 p-2 rounded-2xl hover:bg-gray-400 transition">
-            <span className="bg-blue-900 w-10 h-10 rounded-full"></span>
-            <span className="text-sm md:text-base font-medium">Doe, John</span>
-            <img src={dropdown} alt="Dropdown" className="w-5 h-5" />
+          <ProfileMenu/>
           </div>
         </div>
       </div>
-    </div>
+   
   )
 }
