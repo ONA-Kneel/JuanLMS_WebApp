@@ -82,11 +82,13 @@ userRoutes.post('/login', async (req, res) => {
     const user = await db.collection("Users").findOne({ email, password });
 
     if (user) {
-        // Combine fullname
-        const middleInitial = user.middlename ? user.middlename.charAt(0) + '.' : '';
-        const fullName = [user.firstname, middleInitial, user.lastname]
-            .filter(Boolean).join(' ');
+        // Format names properly
+        const firstName = toProperCase(user.firstname);
+        const middleInitial = user.middlename ? toProperCase(user.middlename.charAt(0)) + '.' : '';
+        const lastName = toProperCase(user.lastname);
 
+        // Combine full name
+        const fullName = [firstName, middleInitial, lastName].filter(Boolean).join(' ');
 
         res.json({
             success: true,
@@ -109,6 +111,15 @@ function getRoleFromEmail(email) {
     if (email.endsWith('@admin.sjddef.edu.ph')) return 'admin';
     return 'unknown';
 }
+
+// to title case the names
+function toProperCase(str) {
+    return str
+      .toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
 
 
 
