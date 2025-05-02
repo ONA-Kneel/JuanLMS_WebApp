@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import ReactDom from 'react-dom';
 import Modal from 'react-modal';
-import Avatar from 'react-avatar-edit';
+import Cropper from 'react-easy-crop';
 
 Modal.setAppElement('#root');
 
@@ -18,7 +18,10 @@ export default function ProfileModal({
   closeCropModal,
   userType,
 }) {
-  if (!open) return null;
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [imageSrc, setImageSrc] = useState(null);
 
   const roleDescriptions = {
     student: "Student | (To implement soon)",
@@ -26,6 +29,28 @@ export default function ProfileModal({
     admin: "Administrator | (To implement soon)",
     parent: "Parent | Guardian",
   };
+
+  const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      setImageSrc(reader.result);
+    });
+    reader.readAsDataURL(file);
+  };
+
+  const showCroppedImage = useCallback(async () => {
+    // You can pass croppedAreaPixels to your onCrop function
+    onCrop(croppedAreaPixels);
+    closeCropModal();
+  }, [croppedAreaPixels, onCrop, closeCropModal]);
+
+  if (!open) return null;
 
   return ReactDom.createPortal(
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-30 p-4">
@@ -37,7 +62,7 @@ export default function ProfileModal({
 
         <div className="flex items-center gap-6 mb-6">
           <div className="justify-center items-center text-center">
-            <img className="w-28 h-28 rounded-full bg-gray-600" src={avatarImg} />
+            <img className="w-28 h-28 rounded-full bg-gray-600 object-cover" src={avatarImg} />
             <button
               className="font-poppinsr hover:underline hover:text-blue-800 mt-2.5 ml-1.5 text-sm cursor-pointer"
               onClick={openCropModal}
@@ -46,6 +71,7 @@ export default function ProfileModal({
             </button>
           </div>
 
+          {/* Crop Modal */}
           <Modal
             isOpen={cropModalOpen}
             onRequestClose={closeCropModal}
@@ -61,19 +87,36 @@ export default function ProfileModal({
             overlayClassName="fixed inset-0 bg-gray-50/75 z-[100] font-poppinsb"
           >
             <h2 className="text-center">Please upload a Picture.</h2>
-            <div className="w-full flex justify-center">
-              <Avatar
-                width={window.innerWidth < 450 ? 280 : 390}
-                height={295}
-                onCrop={onCrop}
-                onClose={closeCropModal}
-              />
-            </div>
-            <div className="mt-3 flex justify-center">
-              <button className="px-4 py-1 text-white bg-blue-900 rounded hover:bg-blue-950" onClick={closeCropModal}>
-                Save
-              </button>
-            </div>
+
+            {!imageSrc ? (
+              <div className="flex justify-center mt-4">
+                <input type="file" accept="image/*" onChange={handleFileChange} />
+              </div>
+            ) : (
+              <>
+                <div className="relative w-full h-64 bg-gray-200 mt-4">
+                  <Cropper
+                    image={imageSrc}
+                    crop={crop}
+                    zoom={zoom}
+                    aspect={1}
+                    cropShape="round"
+                    showGrid={false}
+                    onCropChange={setCrop}
+                    onZoomChange={setZoom}
+                    onCropComplete={onCropComplete}
+                  />
+                </div>
+                <div className="mt-4 flex justify-center space-x-4">
+                  <button className="px-4 py-1 text-white bg-blue-900 rounded hover:bg-blue-950" onClick={showCroppedImage}>
+                    Save
+                  </button>
+                  <button className="px-4 py-1 text-gray-800 bg-gray-200 rounded hover:bg-gray-300" onClick={closeCropModal}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
           </Modal>
 
           {/* Dynamic Info */}

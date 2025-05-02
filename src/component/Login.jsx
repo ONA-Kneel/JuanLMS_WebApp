@@ -1,36 +1,33 @@
 // Login.jsx
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo/Logo4.svg'
+import axios from 'axios';
+
 
 export default function Login() {
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     const email = e.target.elements[0].value;
-  
-    if (email.endsWith('@students.sjddef.edu.ph')) 
-    {
-      navigate('/student_dashboard');
-    } 
-    else if (email.endsWith('@sjddef.edu.ph')) 
-    {
-      navigate('/faculty_dashboard');
-    } 
-    else if (email.endsWith('@parents.sjddef.edu.ph'))
-    {
-      navigate('/parent_dashboard')
-    }
-    else if (email.endsWith('@admin.sjddef.edu.ph'))
-      {
-        navigate('/admin_dashboard')
-      }
-    else 
-    {
-      alert('Invalid email domain. Please use your student or faculty email.');
+    const password = e.target.elements[1].value;
+
+    try {
+      const response = await axios.post('http://localhost:5000/login', { email, password });
+      const role = response.data.role;
+
+      if (role === 'student') navigate('/student_dashboard');
+      else if (role === 'faculty') navigate('/faculty_dashboard');
+      else if (role === 'parent') navigate('/parent_dashboard');
+      else if (role === 'admin') navigate('/admin_dashboard');
+      else alert('Unknown role');
+
+    } catch (error) {
+      console.log(error)
+      alert('Invalid email or password');
     }
   };
-  
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 inset-shadow-black px-4">
       <div className="w-full max-w-4xl bg-white shadow-lg flex flex-col md:flex-row h-auto md:h-[30rem] lg:w-[120rem] ]">

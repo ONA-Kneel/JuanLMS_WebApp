@@ -16,7 +16,7 @@ import { useNavigate } from "react-router-dom";
 
 // Libraries
 import Modal from 'react-modal';
-import Avatar from 'react-avatar-edit'
+
 
 Modal.setAppElement('#root');
 

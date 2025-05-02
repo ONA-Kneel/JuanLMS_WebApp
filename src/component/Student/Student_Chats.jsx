@@ -4,7 +4,7 @@ import videocall from "../../../src/assets/videocall.png";
 import voicecall from "../../../src/assets/voicecall.png";
 import uploadfile from "../../../src/assets/uploadfile.png";
 import uploadpicture from "../../../src/assets/uploadpicture.png";
-import profileicon from "../../../src/assets/profileicon (1).svg"; 
+import profileicon from "../../../src/assets/profileicon (1).svg";
 import Student_Navbar from "./Student_Navbar";
 import ProfileModal from "../ProfileModal";
 import { useNavigate } from "react-router-dom";
@@ -44,21 +44,19 @@ export default function Student_Chats() {
           </div>
 
           <div>
+            {/* // Toggle button (always visible) */}
             <button
-              onClick={() => setisOpen((prev) => !prev)}
+              onClick={() => setisOpen(prev => !prev)}
               className="flex items-center space-x-2 bg-gray-300 p-2 rounded-2xl hover:bg-gray-400 transition z-40 relative"
             >
-              <img
-                className="w-10 h-10 rounded-full bg-gray-600"
-                src={im ? im : profileicon}
-                alt="Profile"
-              />
+              <img className="w-10 h-10 rounded-full bg-gray-600 " src={im ? im : profileicon} />
               <span className="text-sm md:text-base font-medium">Doe, John</span>
               <img src={dropdown} alt="Dropdown" className="w-5 h-5" />
             </button>
 
+            {/* Modal (only rendered if open) */}
             {isOpen && (
-              <div className="absolute right-10 mt-2 z-50">
+              <div className="flex flex-col lg:flex-row items-center gap-6 mb-6">
                 <ProfileModal
                   open={isOpen}
                   onClose={() => navigate("/")}
@@ -74,6 +72,8 @@ export default function Student_Chats() {
                 />
               </div>
             )}
+
+
           </div>
         </div>
 
@@ -84,11 +84,10 @@ export default function Student_Chats() {
             {Object.keys(chatData).map((chatName) => (
               <div
                 key={chatName}
-                className={`p-3 rounded-lg mb-3 cursor-pointer shadow-sm transition-all ${
-                  selectedChat === chatName
+                className={`p-3 rounded-lg mb-3 cursor-pointer shadow-sm transition-all ${selectedChat === chatName
                     ? "bg-white"
                     : "bg-gray-100 hover:bg-gray-300"
-                }`}
+                  }`}
                 onClick={() => setSelectedChat(chatName)}
               >
                 <strong>{chatName}</strong>

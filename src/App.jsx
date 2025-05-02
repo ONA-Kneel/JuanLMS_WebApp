@@ -1,7 +1,11 @@
-// import { useState } from 'react'
+// App.js
+import { useEffect, useState } from 'react'
+import axios from 'axios';
 // import reactLogo from './assets/react.svg'
 // import viteLogo from '/vite.svg'
-// App.js
+
+
+// MODULES/PAGES
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Login from './component/Login';
 import Student_Dashboard from './component/Student/Student_Dashboard';
@@ -22,7 +26,24 @@ import Parent_Dashboard from './component/Parent/Parent_Dashboard';
 import Admin_Dashboard from './component/Admin/Admin_Dashboard';
 
 
+
+
 function App() {
+  const [data, setData] = useState()
+
+  useEffect(()=>{
+    async function grabdata() {
+      const response = await axios.get("http://localhost:5000/users")
+      if (response.status ==- 200)
+      {
+        setData(response.data)
+      }
+      
+    }
+
+    grabdata()
+  },[])
+
   return (
     <Router>
       <Routes>
