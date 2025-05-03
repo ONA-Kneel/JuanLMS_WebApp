@@ -18,6 +18,7 @@ import Student_Chats from './component/Student/Student_Chats';
 import Student_Progress from './component/Student/Student_Progress';
 import Student_Grades from './component/Student/Student_Grades';
 import Student_Calendar from './component/Student/Student_Calendar';
+import Student_ClassWorkspace from './component/Student/Student_ClassWorkspace';
 
 // Faculty Access
 import Faculty_Dashboard from './component/Faculty/Faculty_Dashboard';
@@ -62,7 +63,7 @@ function App() {
   useEffect(()=>{
     async function grabdata() {
       const response = await axios.get("http://localhost:5000/users")
-      if (response.status ==- 200)
+      if (response.status === 200)
       {
         setData(response.data)
       }
@@ -85,6 +86,8 @@ function App() {
         <Route path="/student_progress" element={<Student_Progress />}/>
         <Route path="/student_grades" element={<Student_Grades />}/>
         <Route path="/student_calendar" element={<Student_Calendar />}/>
+        <Route path="/student_class/:classId" element={<Student_ClassWorkspace />} />
+
         
         {/* Faculty */}
         <Route path="/faculty_dashboard" element={<Faculty_Dashboard/>}/>

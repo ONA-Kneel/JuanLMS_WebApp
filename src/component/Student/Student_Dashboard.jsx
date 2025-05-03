@@ -3,26 +3,19 @@ import compAssignsIcon from "../../../src/assets/compAssignsIcon.png";
 import dueAssignsIcon from "../../../src/assets/dueAssignsIcon.png";
 import arrowRight from "../../../src/assets/arrowRight.png";
 
-
 import Student_Navbar from "./Student_Navbar";
 import ProfileModal from "../ProfileModal";
-
-
 import Login from "../Login";
-
-
-
 import ProfileMenu from "../ProfileMenu";
-
-
-
-
+import { Link } from 'react-router-dom';
 
 export default function Student_Dashboard() {
-
-  
-
-
+  // Define the classTitles object
+  const classTitles = {
+    "1": { title: "Introduction to Computing", section: "CCINCOM1 - Section 1" },
+    "2": { title: "Fundamentals of Programming", section: "CCPROG1 - Section 2" },
+    "3": { title: "Modern Mathematics", section: "CCMATH1 - Section 3" },
+  };
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr">
@@ -42,7 +35,7 @@ export default function Student_Dashboard() {
               })}
             </p>
           </div>
-          <ProfileMenu/>
+          <ProfileMenu />
         </div>
 
         {/* Overview Section */}
@@ -66,16 +59,19 @@ export default function Student_Dashboard() {
         {/* Recent Classes Section */}
         <h3 className="text-lg md:text-4xl font-bold mb-3">Recent Classes</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {["Intro to Computing", "Programming Fundamentals", "Modern Mathematics"].map((className, index) => (
-            <div key={index} className="relative bg-[#00418b] text-white p-4 md:p-6 rounded-2xl hover:bg-[#002b5c] transition flex flex-col justify-between">
-              <h4 className="text-base md:text-lg font-semibold">{className}</h4>
-              <p className="text-sm mt-1">0% Progress</p>
-              <div className="w-full bg-gray-300 rounded-full h-2 mt-2">
-                <div className="bg-blue-500 h-full rounded-full w-[0%]"></div>
-              </div>
-              <img src={arrowRight} alt="Arrow" className="absolute top-4 right-4 w-5 h-5" />
-            </div>
-          ))}
+          {["1", "2", "3"].map((classId, index) => {
+            const className = classTitles[classId].title; // Dynamically use class title
+            return (
+              <Link to={`/student_class/${classId}`} key={index} className="relative bg-[#00418b] text-white p-4 md:p-6 rounded-2xl hover:bg-[#002b5c] transition flex flex-col justify-between">
+                <h4 className="text-base md:text-lg font-semibold">{className}</h4>
+                <p className="text-sm mt-1">0% Progress</p>
+                <div className="w-full bg-gray-300 rounded-full h-2 mt-2">
+                  <div className="bg-blue-500 h-full rounded-full w-[0%]"></div>
+                </div>
+                <img src={arrowRight} alt="Arrow" className="absolute top-4 right-4 w-5 h-5" />
+              </Link>
+            );
+          })}
         </div>
       </div>
     </div>
