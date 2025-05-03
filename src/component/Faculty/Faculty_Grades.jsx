@@ -1,19 +1,10 @@
 // import { useState } from "react";
-
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileModal from "../ProfileModal";
-
 // import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../ProfileMenu";
 
 export default function Faculty_Grades() {
-  // const [isOpen, setIsOpen] = useState(false);
-  // const [im, setIm] = useState(null);
-  // const [modalIsOpen, setModalIsOpen] = useState(false);
-  // const navigate = useNavigate();
-
-  // const openModal = () => setModalIsOpen(true);
-  // const closeModal = () => setModalIsOpen(false);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">

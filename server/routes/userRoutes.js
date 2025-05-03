@@ -105,10 +105,14 @@ userRoutes.post('/login', async (req, res) => {
 
 // Helper function to determine role based on email
 function getRoleFromEmail(email) {
+    console.log('Checking role for email:', email);  // Debug
+
     if (email.endsWith('@students.sjddef.edu.ph')) return 'student';
-    if (email.endsWith('@sjddef.edu.ph')) return 'faculty';
     if (email.endsWith('@parents.sjddef.edu.ph')) return 'parent';
     if (email.endsWith('@admin.sjddef.edu.ph')) return 'admin';
+    if (email.endsWith('@director.sjddef.edu.ph')) return 'director';
+    if (email.endsWith('@sjddef.edu.ph')) return 'faculty';
+
     return 'unknown';
 }
 
