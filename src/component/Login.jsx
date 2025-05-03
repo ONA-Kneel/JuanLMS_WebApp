@@ -1,15 +1,16 @@
-// Login.jsx
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import logo from '../assets/logo/Logo4.svg'
+import logo from '../assets/logo/Logo4.svg';
 import axios from 'axios';
-
+import { Eye, EyeOff } from 'lucide-react';  // 👈 import icons
 
 export default function Login() {
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);  // 👈 track password visibility
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    const email = e.target.elements[0].value;
+    const email = e.target.elements[0].value.toLowerCase();  // 👈 force lowercase email
     const password = e.target.elements[1].value;
   
     try {
@@ -30,13 +31,11 @@ export default function Login() {
       console.log(error)
       alert('Invalid email or password');
     }
-    
   };
-  
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 inset-shadow-black px-4">
-      <div className="w-full max-w-4xl bg-white shadow-lg flex flex-col md:flex-row h-auto md:h-[30rem] lg:w-[120rem] ]">
+      <div className="w-full max-w-4xl bg-white shadow-lg flex flex-col md:flex-row h-auto md:h-[30rem] lg:w-[120rem]">
 
         {/* Left Section (Login Form) */}
         <div className="w-full md:w-1/2 p-8 md:p-12">
@@ -57,11 +56,18 @@ export default function Login() {
               <label className="block text-base font-poppinsr mb-2">Password</label>
               <div className="relative">
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}   // 👈 toggle input type
                   required
-                  className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900"
+                  className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900 pr-12"
                   placeholder="********"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}   // 👈 toggle state
+                  className="absolute top-1/2 right-3 transform -translate-y-1/2 text-gray-600 hover:text-blue-700"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}  {/* 👈 icon switch */}
+                </button>
               </div>
             </div>
 
@@ -87,18 +93,13 @@ export default function Login() {
         {/* Right Section (Welcome Message) */}
         <div className="relative w-full md:w-1/2 flex flex-col items-start justify-center p-8 md:p-10 bg-[url('/src/assets/bg-JuanLMS.svg')] bg-cover bg-center text-white">
           <img src={logo} className="w-20 md:w-24 absolute top-5 right-5 md:right-10" alt="Logo" />
-
-          <h2 className="text-3xl md:text-4xl font-bold font-poppinsb">
-            Hello,
-          </h2>
-          <h2 className="text-3xl md:text-4xl font-bold font-poppinsb">
-            welcome!
-          </h2>
+          <h2 className="text-3xl md:text-4xl font-bold font-poppinsb">Hello,</h2>
+          <h2 className="text-3xl md:text-4xl font-bold font-poppinsb">welcome!</h2>
           <p className="text-sm mt-4 font-poppinsl max-w-xs">
-            San Juan De Dios Educational Foundation, Inc.
-            Learning Management System
+            San Juan De Dios Educational Foundation, Inc. Learning Management System
           </p>
         </div>
+
       </div>
     </div>
   );
