@@ -1,23 +1,16 @@
 import { useState } from "react";
-import dropdown from "../../../src/assets/dropdown.png";
 import videocall from "../../../src/assets/videocall.png";
 import voicecall from "../../../src/assets/voicecall.png";
 import uploadfile from "../../../src/assets/uploadfile.png";
 import uploadpicture from "../../../src/assets/uploadpicture.png";
-import profileicon from "../../../src/assets/profileicon (1).svg";
 import Director_Navbar from "./Director_Navbar";
 import ProfileModal from "../ProfileModal";
-import { useNavigate } from "react-router-dom";
+// import { useNavigate } from "react-router-dom";
+import ProfileMenu from "../ProfileMenu";
 
 export default function Director_Chats() {
   const [selectedChat, setSelectedChat] = useState("Chat 1");
-  const [isOpen, setisOpen] = useState(false);
-  const [im, setim] = useState(null);
-  const [modalIsOpen, setModalIsOpen] = useState(false);
-  const navigate = useNavigate();
-
-  const openModal = () => setModalIsOpen(true);
-  const closeModal = () => setModalIsOpen(false);
+  
 
   const chatData = {
     "Chat 1": ["pasend code"],
@@ -43,38 +36,7 @@ export default function Director_Chats() {
             </p>
           </div>
 
-          <div>
-            {/* // Toggle button (always visible) */}
-            <button
-              onClick={() => setisOpen(prev => !prev)}
-              className="flex items-center space-x-2 bg-gray-300 p-2 rounded-2xl hover:bg-gray-400 transition z-40 relative"
-            >
-              <img className="w-10 h-10 rounded-full bg-gray-600 " src={im ? im : profileicon} />
-              <span className="text-sm md:text-base font-medium">James, Johnson</span>
-              <img src={dropdown} alt="Dropdown" className="w-5 h-5" />
-            </button>
-
-            {/* Modal (only rendered if open) */}
-            {isOpen && (
-              <div className="flex flex-col lg:flex-row items-center gap-6 mb-6">
-                <ProfileModal
-                  open={isOpen}
-                  onClose={() => navigate("/")}
-                  avatarImg={im || profileicon}
-                  name="James, Johnson"
-                  email="jamesjohnson@sjdfdef.edu.ph"
-                  phone="09"
-                  cropModalOpen={modalIsOpen}
-                  openCropModal={openModal}
-                  closeCropModal={closeModal}
-                  onCrop={(i) => setim(i)}
-                  userType="director"
-                />
-              </div>
-            )}
-
-
-          </div>
+          <ProfileMenu/>
         </div>
 
 

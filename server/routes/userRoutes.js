@@ -77,17 +77,16 @@ userRoutes.route("/users/:id").delete(async (request, response) => {
 // Login Route
 userRoutes.post('/login', async (req, res) => {
     const db = database.getDb();
-    const { email, password } = req.body;
+    const email = req.body.email.toLowerCase();  // normalize email
+    const { password } = req.body;
 
     const user = await db.collection("Users").findOne({ email, password });
 
     if (user) {
-        // Format names properly
         const firstName = toProperCase(user.firstname);
         const middleInitial = user.middlename ? toProperCase(user.middlename.charAt(0)) + '.' : '';
         const lastName = toProperCase(user.lastname);
 
-        // Combine full name
         const fullName = [firstName, middleInitial, lastName].filter(Boolean).join(' ');
 
         res.json({
@@ -102,28 +101,27 @@ userRoutes.post('/login', async (req, res) => {
     }
 });
 
-
-// Helper function to determine role based on email
 function getRoleFromEmail(email) {
-    console.log('Checking role for email:', email);  // Debug
+    const normalizedEmail = email.toLowerCase();
+    console.log('Checking role for email:', normalizedEmail);
 
-    if (email.endsWith('@students.sjddef.edu.ph')) return 'student';
-    if (email.endsWith('@parents.sjddef.edu.ph')) return 'parent';
-    if (email.endsWith('@admin.sjddef.edu.ph')) return 'admin';
-    if (email.endsWith('@director.sjddef.edu.ph')) return 'director';
-    if (email.endsWith('@sjddef.edu.ph')) return 'faculty';
+    if (normalizedEmail.endsWith('@students.sjddef.edu.ph')) return 'student';
+    if (normalizedEmail.endsWith('@parents.sjddef.edu.ph')) return 'parent';
+    if (normalizedEmail.endsWith('@admin.sjddef.edu.ph')) return 'admin';
+    if (normalizedEmail.endsWith('@director.sjddef.edu.ph')) return 'director';
+    if (normalizedEmail.endsWith('@sjddef.edu.ph')) return 'faculty';
 
     return 'unknown';
 }
 
-// to title case the names
 function toProperCase(str) {
     return str
-      .toLowerCase()
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  }
+        .toLowerCase()
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+}
+
 
 
 
