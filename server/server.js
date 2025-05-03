@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config({ path: './config.env' }); // ✅ Load config.env
+
 import connect from "./connect.cjs";
 import express from "express";
 import cors from "cors"

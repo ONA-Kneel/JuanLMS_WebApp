@@ -1,28 +1,66 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import axios from "axios";
 import videocall from "../../../src/assets/videocall.png";
 import voicecall from "../../../src/assets/voicecall.png";
 import uploadfile from "../../../src/assets/uploadfile.png";
 import uploadpicture from "../../../src/assets/uploadpicture.png";
 import Faculty_Navbar from "./Faculty_Navbar";
-import ProfileModal from "../ProfileModal";
-// import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../ProfileMenu";
 
 export default function Faculty_Chats() {
-  const [selectedChat, setSelectedChat] = useState("Chat 1");
+  const [selectedChat, setSelectedChat] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [users, setUsers] = useState([]);
+  const [messages, setMessages] = useState({});
+  const [newMessage, setNewMessage] = useState("");
 
+  const currentUserId = JSON.parse(localStorage.getItem("user"))?.id;
 
-  const chatData = {
-    "Chat 1": ["pasend code"],
-    "Chat 2": ["may gawa ka na?"],
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const res = await axios.get("http://localhost:5000/users");
+      setUsers(res.data.filter(user => user._id !== currentUserId));
+    };
+    fetchUsers();
+  }, [currentUserId]);
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedChat) return;
+
+    const msgObj = {
+      senderId: currentUserId,
+      receiverId: selectedChat._id,
+      message: newMessage,
+    };
+
+    await axios.post("http://localhost:5000/messages", msgObj);
+
+    setMessages((prev) => ({
+      ...prev,
+      [selectedChat._id]: [...(prev[selectedChat._id] || []), msgObj],
+    }));
+    setNewMessage("");
   };
+
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!selectedChat) return;
+      const res = await axios.get(
+        `http://localhost:5000/messages/${currentUserId}/${selectedChat._id}`
+      );
+      setMessages((prev) => ({ ...prev, [selectedChat._id]: res.data }));
+    };
+    fetchMessages();
+  }, [selectedChat, currentUserId]);
+
+  const filteredUsers = users.filter((u) =>
+    `${u.firstname} ${u.lastname}`.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="flex min-h-screen">
       <Faculty_Navbar />
-
       <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden">
-
         <div className="flex flex-col md:flex-row justify-between items-center px-10 py-10">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Chats</h2>
@@ -35,78 +73,99 @@ export default function Faculty_Chats() {
               })}
             </p>
           </div>
-
-          <ProfileMenu/>
-
+          <ProfileMenu />
         </div>
 
-
         <div className="flex flex-1 overflow-hidden">
-
           <div className="w-1/3 p-4 overflow-y-auto">
-            {Object.keys(chatData).map((chatName) => (
+            <input
+              type="text"
+              placeholder="Search users..."
+              className="w-full mb-4 p-2 border rounded-lg"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {filteredUsers.map((user) => (
               <div
-                key={chatName}
-                className={`p-3 rounded-lg mb-3 cursor-pointer shadow-sm transition-all ${selectedChat === chatName
+                key={user._id}
+                className={`p-3 rounded-lg mb-3 cursor-pointer shadow-sm transition-all ${
+                  selectedChat?._id === user._id
                     ? "bg-white"
                     : "bg-gray-100 hover:bg-gray-300"
-                  }`}
-                onClick={() => setSelectedChat(chatName)}
+                }`}
+                onClick={() => setSelectedChat(user)}
               >
-                <strong>{chatName}</strong>
-                <p className="text-xs text-gray-600">
-                  You: {chatData[chatName][0]}
-                </p>
+                <strong>{user.firstname} {user.lastname}</strong>
+                <p className="text-xs text-gray-600">Click to view conversation</p>
               </div>
             ))}
           </div>
+
           <div className="w-px bg-black" />
 
-          <div className="w-3/3 flex flex-col justify-between p-4">
-
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">{selectedChat}</h3>
-              <div className="flex space-x-3">
-                <img
-                  src={videocall}
-                  alt="Video Call"
-                  className="w- h-6 cursor-pointer hover:opacity-75"
-                />
-                <img
-                  src={voicecall}
-                  alt="Voice Call"
-                  className="w- h-6 cursor-pointer hover:opacity-75"
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto mb-4 space-y-2">
-              {chatData[selectedChat].map((message, index) => (
-                <div key={index} className="flex justify-end">
-                  <div className="bg-blue-900 text-white px-4 py-2 rounded-lg text-sm">
-                    {message}
+          <div className="w-2/3 flex flex-col justify-between p-4">
+            {selectedChat ? (
+              <>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">
+                    {selectedChat.firstname} {selectedChat.lastname}
+                  </h3>
+                  <div className="flex space-x-3">
+                    <img src={videocall} alt="Video Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
+                    <img src={voicecall} alt="Voice Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
                   </div>
                 </div>
-              ))}
-            </div>
 
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                placeholder="Type your message..."
-                className="flex-1 p-2 border rounded-lg text-sm"
-              />
-              <img
-                src={uploadfile}
-                alt="Upload File"
-                className="w-6 h-6 cursor-pointer hover:opacity-75"
-              />
-              <img
-                src={uploadpicture}
-                alt="Upload Picture"
-                className="w-6 h-6 cursor-pointer hover:opacity-75"
-              />
-            </div>
+                <div className="flex-1 overflow-y-auto mb-4 space-y-2">
+                  {(messages[selectedChat._id] || []).map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`flex ${msg.senderId === currentUserId ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`px-4 py-2 rounded-lg text-sm max-w-xs ${
+                          msg.senderId === currentUserId
+                            ? "bg-blue-900 text-white"
+                            : "bg-gray-300 text-black"
+                        }`}
+                      >
+                        {msg.message}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    placeholder="Type your message..."
+                    className="flex-1 p-2 border rounded-lg text-sm"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                  />
+                  <img
+                    src={uploadfile}
+                    alt="Upload File"
+                    className="w-6 h-6 cursor-pointer hover:opacity-75"
+                  />
+                  <img
+                    src={uploadpicture}
+                    alt="Upload Picture"
+                    className="w-6 h-6 cursor-pointer hover:opacity-75"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    className="px-4 py-2 bg-blue-900 text-white rounded-lg text-sm"
+                  >
+                    Send
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                Select a chat to start messaging
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -2,33 +2,43 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo/Logo4.svg';
 import axios from 'axios';
-import { Eye, EyeOff } from 'lucide-react';  // 👈 import icons
+import { Eye, EyeOff } from 'lucide-react';
+import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
 
 export default function Login() {
   const navigate = useNavigate();
-  const [showPassword, setShowPassword] = useState(false);  // 👈 track password visibility
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    const email = e.target.elements[0].value.toLowerCase();  // 👈 force lowercase email
+    const email = e.target.elements[0].value.toLowerCase(); // force lowercase email
     const password = e.target.elements[1].value;
-  
+
     try {
-      const response = await axios.post('http://localhost:5000/login', { email, password });
-      const { role, name, email: userEmail, phone } = response.data;
-    
-      // Save user info to localStorage
-      localStorage.setItem('user', JSON.stringify({ name, email: userEmail, phone, role }));
-    
+      const response = await axios.post('http://localhost:5000/login', {
+        email,
+        password,
+      });
+
+      const { token } = response.data;
+
+      // ✅ Decode the token to extract user data
+      const decoded = jwtDecode(token);
+      const { id, name, email: userEmail, phone, role } = decoded;
+
+      // ✅ Store both token and user info
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify({ id, name, email: userEmail, phone, role }));
+
+      // ✅ Navigate based on user role
       if (role === 'student') navigate('/student_dashboard');
       else if (role === 'faculty') navigate('/faculty_dashboard');
       else if (role === 'parent') navigate('/parent_dashboard');
       else if (role === 'admin') navigate('/admin_dashboard');
       else if (role === 'director') navigate('/director_dashboard');
       else alert('Unknown role');
-    
     } catch (error) {
-      console.log(error)
+      console.error(error);
       alert('Invalid email or password');
     }
   };
@@ -56,17 +66,17 @@ export default function Login() {
               <label className="block text-base font-poppinsr mb-2">Password</label>
               <div className="relative">
                 <input
-                  type={showPassword ? 'text' : 'password'}   // 👈 toggle input type
+                  type={showPassword ? 'text' : 'password'}
                   required
                   className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900 pr-12"
                   placeholder="********"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}   // 👈 toggle state
+                  onClick={() => setShowPassword(!showPassword)}
                   className="absolute top-1/2 right-3 transform -translate-y-1/2 text-gray-600 hover:text-blue-700"
                 >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}  {/* 👈 icon switch */}
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
             </div>
@@ -99,7 +109,6 @@ export default function Login() {
             San Juan De Dios Educational Foundation, Inc. Learning Management System
           </p>
         </div>
-
       </div>
     </div>
   );
