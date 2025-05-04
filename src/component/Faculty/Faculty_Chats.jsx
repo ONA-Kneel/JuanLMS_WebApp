@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import videocall from "../../../src/assets/videocall.png";
 import voicecall from "../../../src/assets/voicecall.png";
@@ -24,6 +24,17 @@ export default function Faculty_Chats() {
     fetchUsers();
   }, [currentUserId]);
 
+  const messagesEndRef = useRef(null);
+
+  const selectedChatMessages = messages[selectedChat?._id];
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [selectedChatMessages]);
+  // scroll whenever messages change  
+
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedChat) return;
 
@@ -39,8 +50,17 @@ export default function Faculty_Chats() {
       ...prev,
       [selectedChat._id]: [...(prev[selectedChat._id] || []), msgObj],
     }));
-    setNewMessage("");
+
+    setNewMessage('');
   };
+
+  //enter
+  const handleKeyDown = (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {  // Prevents sending on Shift+Enter
+        e.preventDefault();  // Prevent default "newline"
+        handleSendMessage();
+      }
+    };
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -84,15 +104,15 @@ export default function Faculty_Chats() {
               className="w-full mb-4 p-2 border rounded-lg"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={handleKeyDown} // Added keydown event for Enter key
             />
             {filteredUsers.map((user) => (
               <div
                 key={user._id}
-                className={`p-3 rounded-lg mb-3 cursor-pointer shadow-sm transition-all ${
-                  selectedChat?._id === user._id
+                className={`p-3 rounded-lg mb-3 cursor-pointer shadow-sm transition-all ${selectedChat?._id === user._id
                     ? "bg-white"
                     : "bg-gray-100 hover:bg-gray-300"
-                }`}
+                  }`}
                 onClick={() => setSelectedChat(user)}
               >
                 <strong>{user.firstname} {user.lastname}</strong>
@@ -123,11 +143,10 @@ export default function Faculty_Chats() {
                       className={`flex ${msg.senderId === currentUserId ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`px-4 py-2 rounded-lg text-sm max-w-xs ${
-                          msg.senderId === currentUserId
+                        className={`px-4 py-2 rounded-lg text-sm max-w-xs ${msg.senderId === currentUserId
                             ? "bg-blue-900 text-white"
                             : "bg-gray-300 text-black"
-                        }`}
+                          }`}
                       >
                         {msg.message}
                       </div>
@@ -142,6 +161,7 @@ export default function Faculty_Chats() {
                     className="flex-1 p-2 border rounded-lg text-sm"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={handleKeyDown} // Added keydown event for Enter key
                   />
                   <img
                     src={uploadfile}
@@ -155,10 +175,13 @@ export default function Faculty_Chats() {
                   />
                   <button
                     onClick={handleSendMessage}
-                    className="px-4 py-2 bg-blue-900 text-white rounded-lg text-sm"
+                    disabled={!newMessage.trim()}
+                    className={`px-4 py-2 rounded-lg text-sm ${newMessage.trim() ? 'bg-blue-900 text-white' : 'bg-gray-400 text-white cursor-not-allowed'
+                      }`}
                   >
                     Send
                   </button>
+
                 </div>
               </>
             ) : (

@@ -26,11 +26,14 @@ export default function Student_Chats() {
 
   const messagesEndRef = useRef(null);
 
+  const selectedChatMessages = messages[selectedChat?._id];
+
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages[selectedChat?._id]]); // scroll whenever messages change
+  }, [selectedChatMessages]);
+  ; // scroll whenever messages change
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedChat) return;
@@ -50,6 +53,13 @@ export default function Student_Chats() {
 
     setNewMessage('');
   };
+
+  const handleKeyDown = (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {  // Prevents sending on Shift+Enter
+        e.preventDefault();  // Prevent default "newline"
+        handleSendMessage();
+      }
+    };
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -93,13 +103,14 @@ export default function Student_Chats() {
               className="w-full mb-4 p-2 border rounded-lg"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={handleKeyDown}
             />
             {filteredUsers.map((user) => (
               <div
                 key={user._id}
                 className={`p-3 rounded-lg mb-3 cursor-pointer shadow-sm transition-all ${selectedChat?._id === user._id
-                    ? "bg-white"
-                    : "bg-gray-100 hover:bg-gray-300"
+                  ? "bg-white"
+                  : "bg-gray-100 hover:bg-gray-300"
                   }`}
                 onClick={() => setSelectedChat(user)}
               >
@@ -132,8 +143,8 @@ export default function Student_Chats() {
                     >
                       <div
                         className={`px-4 py-2 rounded-lg text-sm max-w-xs ${msg.senderId === currentUserId
-                            ? "bg-blue-900 text-white"
-                            : "bg-gray-300 text-black"
+                          ? "bg-blue-900 text-white"
+                          : "bg-gray-300 text-black"
                           }`}
                       >
                         {msg.message}
