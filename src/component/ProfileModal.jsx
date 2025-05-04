@@ -1,3 +1,5 @@
+// profileModal
+
 import React, { useState, useCallback } from 'react';
 import ReactDom from 'react-dom';
 import Modal from 'react-modal';
@@ -18,6 +20,9 @@ export default function ProfileModal({
   closeCropModal,
   userType,
 }) {
+  console.log(avatarImg);  // Debugging the avatar image in ProfileModal
+
+
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
@@ -96,13 +101,39 @@ export default function ProfileModal({
   };
 
   const showCroppedImage = useCallback(async () => {
+    const user = JSON.parse(localStorage.getItem('user'));
     try {
       const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
-      onCrop(croppedImage);  // Update avatar image
+
+      // Upload cropped image to backend
+      const blob = await fetch(croppedImage).then(res => res.blob());
+      const formData = new FormData();
+      formData.append('image', blob, 'profile.jpg');
+
+      const response = await fetch(`http://localhost:5000/users/${user._id}/upload-profile`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const uploadedImageUrl = `http://localhost:5000/uploads/${data.imageFilename}`;
+        onCrop(uploadedImageUrl); // Update avatar
+
+        // Update user localStorage
+        const updatedUser = { ...user, profilePic: uploadedImageUrl };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+
+      } else {
+        alert(data.error || "Image upload failed");
+      }
+
       closeCropModal();
       resetCropState();
     } catch (e) {
       console.error(e);
+      alert("An error occurred while uploading the image.");
     }
   }, [croppedAreaPixels, imageSrc, onCrop, closeCropModal]);
 
@@ -118,7 +149,12 @@ export default function ProfileModal({
 
         <div className="flex items-center gap-6 mb-6">
           <div className="justify-center items-center text-center">
-            <img className="w-28 h-28 rounded-full bg-gray-600 object-cover" src={avatarImg} alt="Avatar" />
+            <img
+              className="w-28 h-28 rounded-full bg-gray-600 object-cover"
+              src={avatarImg || '../assets/profileicon (1).svg'}
+              alt="Avatar"
+            />
+
             <button
               className="font-poppinsr hover:underline hover:text-blue-800 mt-2.5 ml-1.5 text-sm cursor-pointer"
               onClick={openCropModal}

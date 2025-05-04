@@ -1,3 +1,4 @@
+//userRoutes
 import e from "express";
 import database from "../connect.cjs";
 import { ObjectId } from "mongodb";
@@ -7,6 +8,7 @@ const userRoutes = e.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here"; // 👈 use env variable in production
 
 // ------------------ CRUD ROUTES ------------------
+
 
 // Retrieve ALL
 userRoutes.get("/users", async (req, res) => {
@@ -19,15 +21,17 @@ userRoutes.get("/users", async (req, res) => {
     }
 });
 
-// Retrieve ONE
-userRoutes.get("/users/:id", async (req, res) => {
-    const db = database.getDb();
-    const data = await db.collection("Users").findOne({ _id: new ObjectId(req.params.id) });
+// RetrieveOne
+userRoutes.route("/users/:id").get(async (request, response) => {
+    let db = database.getDb()
+    let data = await db.collection("Users").findOne({ _id: new ObjectId(request.params.id) });
+
     if (data) {
-        res.json(data);
+        response.json(data);
     } else {
-        throw new Error("Data was not found >:(");
+        response.status(404).json({ error: "User not found" });
     }
+
 });
 
 // Create ONE
@@ -45,10 +49,11 @@ userRoutes.post("/users", async (req, res) => {
     res.json(result);
 });
 
-// Update ONE
-userRoutes.post("/users/:id", async (req, res) => {
-    const db = database.getDb();
-    const updateObject = {
+// UpdateOne
+userRoutes.route("/users/:id").patch(async (req, res) => {
+
+    let db = database.getDb()
+    let mongoObject = {
         $set: {
             firstname: req.body.firstname,
             middlename: req.body.middlename,
@@ -58,7 +63,7 @@ userRoutes.post("/users/:id", async (req, res) => {
             password: req.body.password,
         },
     };
-    const result = await db.collection("Users").updateOne({ _id: new ObjectId(req.params.id) }, updateObject);
+    const result = await db.collection("Users").updateOne({ _id: new ObjectId(req.params.id) }, mongoObject);
     res.json(result);
 });
 
@@ -92,6 +97,8 @@ userRoutes.post('/login', async (req, res) => {
             email: user.email,
             phone: user.contactno,
             role: role,
+            _id: user._id, // Include user ID
+            profilePic: user.profilePic || null, // Include profile picture
         }, JWT_SECRET, { expiresIn: '1d' });
 
         res.json({ token }); // ✅ frontend will decode this

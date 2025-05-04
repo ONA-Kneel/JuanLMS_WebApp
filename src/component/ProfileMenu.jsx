@@ -1,3 +1,4 @@
+// profileMenu
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import profileicon from "../assets/profileicon (1).svg";
@@ -7,10 +8,11 @@ import ProfileModal from "./ProfileModal";
 export default function ProfileMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [modalIsOpen, setModalIsOpen] = useState(false);
-  const [im, setim] = useState(null);
   const navigate = useNavigate();
 
   const user = JSON.parse(localStorage.getItem('user'));
+  const [im, setim] = useState(user?.profilePic || null);
+
 
   return (
     <div className="relative z-50">
@@ -37,7 +39,12 @@ export default function ProfileMenu() {
           cropModalOpen={modalIsOpen}
           openCropModal={() => setModalIsOpen(true)}
           closeCropModal={() => setModalIsOpen(false)}
-          onCrop={(i) => setim(i)}
+          onCrop={(newImgUrl) => {
+            setim(newImgUrl);
+            const user = JSON.parse(localStorage.getItem('user'));
+            const updatedUser = { ...user, profilePic: newImgUrl };
+            localStorage.setItem('user', JSON.stringify(updatedUser));
+          }}          
           userType={user?.role}
         />
       )}

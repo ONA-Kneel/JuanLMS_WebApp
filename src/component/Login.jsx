@@ -1,3 +1,4 @@
+// login
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo/Logo4.svg';
@@ -11,37 +12,34 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    const email = e.target.elements[0].value.toLowerCase(); // force lowercase email
+    const email = e.target.elements[0].value;
     const password = e.target.elements[1].value;
-
+  
     try {
-      const response = await axios.post('http://localhost:5000/login', {
-        email,
-        password,
-      });
-
+      const response = await axios.post('http://localhost:5000/login', { email, password });
       const { token } = response.data;
-
-      // ✅ Decode the token to extract user data
+  
       const decoded = jwtDecode(token);
-      const { id, name, email: userEmail, phone, role } = decoded;
-
-      // ✅ Store both token and user info
+      const { _id, role, name, email: userEmail, phone, profilePic } = decoded;
+  
+      const imageUrl = profilePic ? `http://localhost:5000/uploads/${profilePic}` : null;
+  
+      localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
       localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify({ id, name, email: userEmail, phone, role }));
-
-      // ✅ Navigate based on user role
+  
       if (role === 'student') navigate('/student_dashboard');
       else if (role === 'faculty') navigate('/faculty_dashboard');
       else if (role === 'parent') navigate('/parent_dashboard');
       else if (role === 'admin') navigate('/admin_dashboard');
       else if (role === 'director') navigate('/director_dashboard');
       else alert('Unknown role');
+  
     } catch (error) {
-      console.error(error);
+      console.log(error);
       alert('Invalid email or password');
     }
   };
+  
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 inset-shadow-black px-4">
