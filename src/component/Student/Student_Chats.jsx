@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import videocall from "../../../src/assets/videocall.png";
 import voicecall from "../../../src/assets/voicecall.png";
@@ -24,6 +24,14 @@ export default function Student_Chats() {
     fetchUsers();
   }, [currentUserId]);
 
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages[selectedChat?._id]]); // scroll whenever messages change
+
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedChat) return;
 
@@ -39,7 +47,8 @@ export default function Student_Chats() {
       ...prev,
       [selectedChat._id]: [...(prev[selectedChat._id] || []), msgObj],
     }));
-    setNewMessage("");
+
+    setNewMessage('');
   };
 
   useEffect(() => {
@@ -88,11 +97,10 @@ export default function Student_Chats() {
             {filteredUsers.map((user) => (
               <div
                 key={user._id}
-                className={`p-3 rounded-lg mb-3 cursor-pointer shadow-sm transition-all ${
-                  selectedChat?._id === user._id
+                className={`p-3 rounded-lg mb-3 cursor-pointer shadow-sm transition-all ${selectedChat?._id === user._id
                     ? "bg-white"
                     : "bg-gray-100 hover:bg-gray-300"
-                }`}
+                  }`}
                 onClick={() => setSelectedChat(user)}
               >
                 <strong>{user.firstname} {user.lastname}</strong>
@@ -123,11 +131,10 @@ export default function Student_Chats() {
                       className={`flex ${msg.senderId === currentUserId ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`px-4 py-2 rounded-lg text-sm max-w-xs ${
-                          msg.senderId === currentUserId
+                        className={`px-4 py-2 rounded-lg text-sm max-w-xs ${msg.senderId === currentUserId
                             ? "bg-blue-900 text-white"
                             : "bg-gray-300 text-black"
-                        }`}
+                          }`}
                       >
                         {msg.message}
                       </div>
@@ -155,10 +162,13 @@ export default function Student_Chats() {
                   />
                   <button
                     onClick={handleSendMessage}
-                    className="px-4 py-2 bg-blue-900 text-white rounded-lg text-sm"
+                    disabled={!newMessage.trim()}
+                    className={`px-4 py-2 rounded-lg text-sm ${newMessage.trim() ? 'bg-blue-900 text-white' : 'bg-gray-400 text-white cursor-not-allowed'
+                      }`}
                   >
                     Send
                   </button>
+
                 </div>
               </>
             ) : (

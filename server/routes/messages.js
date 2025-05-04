@@ -3,7 +3,7 @@ import Message from '../models/Message.js';
 
 const router = express.Router();
 
-router.post('/', async (req, res) => {
+router.post('/messages', async (req, res) => {
   const { senderId, receiverId, message } = req.body;
   const newMessage = new Message({ senderId, receiverId, message });
   await newMessage.save();
