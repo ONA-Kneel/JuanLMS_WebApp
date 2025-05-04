@@ -3,7 +3,7 @@ import axios from "axios";
 import videocall from "../../../src/assets/videocall.png";
 import voicecall from "../../../src/assets/voicecall.png";
 import uploadfile from "../../../src/assets/uploadfile.png";
-import uploadpicture from "../../../src/assets/uploadpicture.png";
+// import uploadpicture from "../../../src/assets/uploadpicture.png";
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
@@ -13,6 +13,9 @@ export default function Student_Chats() {
   const [users, setUsers] = useState([]);
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
+
+  //files
+  const [selectedFile, setSelectedFile] = useState(null);
 
   const currentUserId = JSON.parse(localStorage.getItem("user"))?.id;
 
@@ -55,11 +58,11 @@ export default function Student_Chats() {
   };
 
   const handleKeyDown = (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {  // Prevents sending on Shift+Enter
-        e.preventDefault();  // Prevent default "newline"
-        handleSendMessage();
-      }
-    };
+    if (e.key === "Enter" && !e.shiftKey) {  // Prevents sending on Shift+Enter
+      e.preventDefault();  // Prevent default "newline"
+      handleSendMessage();
+    }
+  };
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -75,6 +78,34 @@ export default function Student_Chats() {
   const filteredUsers = users.filter((u) =>
     `${u.firstname} ${u.lastname}`.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const fileInputRef = useRef(null);
+  // const imageInputRef = useRef(null);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedFile(file);
+      alert(`Selected file: ${file.name}`); // You can remove alert and upload directly if you want!
+    }
+  };
+
+  const openFilePicker = () => {
+    fileInputRef.current.click();
+  };
+
+  // const handleImageSelect = (e) => {
+  //   const file = e.target.files[0];
+  //   if (file) {
+  //     setSelectedFile(file);
+  //     alert(`Selected image: ${file.name}`);  // Again, replace with upload logic later if needed
+  //   }
+  // };
+
+  // const openCamera = () => {
+  //   imageInputRef.current.click();
+  // };
+
 
   return (
     <div className="flex min-h-screen">
@@ -161,16 +192,34 @@ export default function Student_Chats() {
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                   />
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    style={{ display: 'none' }}
+                    onChange={handleFileSelect}
+                  />
                   <img
                     src={uploadfile}
                     alt="Upload File"
                     className="w-6 h-6 cursor-pointer hover:opacity-75"
+                    onClick={openFilePicker}
+                  />
+
+                  {/* <input
+                    type="file"
+                    ref={imageInputRef}
+                    accept="image/*"
+                    capture="environment"
+                    style={{ display: 'none' }}
+                    onChange={handleImageSelect}
                   />
                   <img
                     src={uploadpicture}
                     alt="Upload Picture"
                     className="w-6 h-6 cursor-pointer hover:opacity-75"
-                  />
+                    onClick={openCamera}
+                  /> */}
+
                   <button
                     onClick={handleSendMessage}
                     disabled={!newMessage.trim()}
