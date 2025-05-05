@@ -6,7 +6,7 @@ export default function Faculty_Classes() {
 
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+    <div className="flex flex-col md:flex-row min-h-screen overflow-hidden md:ml-64">
       <Faculty_Navbar />
 
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr">

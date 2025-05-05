@@ -49,7 +49,7 @@ export default function ClassContent({ selected }) {
   const goBack = () => setActiveLesson(null);
 
   return (
-    <div className="bg-white rounded-2xl shadow p-6 md:p-8 h-full overflow-auto">
+    <div className="bg-white rounded-2xl shadow p-6 md:p-8 h-full overflow-auto ">
       {selected === "home" && (
         <>
           <h2 className="text-2xl font-bold mb-4">Home Page</h2>
