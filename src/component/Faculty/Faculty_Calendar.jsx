@@ -1,15 +1,18 @@
+import React from "react";
+import FullCalendar from "@fullcalendar/react"; 
+import dayGridPlugin from "@fullcalendar/daygrid";
+import "@fullcalendar/common/main.css"; 
+
 import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
 
 export default function Faculty_Calendar() {
-
-
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Faculty_Navbar />
 
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr">
-        {/* Header */}
+
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Calendar</h2>
@@ -22,9 +25,21 @@ export default function Faculty_Calendar() {
               })}
             </p>
           </div>
-          <ProfileMenu/>
+          <ProfileMenu />
+        </div>
+        <div className="bg-white rounded-xl shadow p-4">
+          <FullCalendar
+            plugins={[dayGridPlugin]}
+            initialView="dayGridMonth"
+            height="auto"
+            // events={[
+            //   { title: "Math Quiz", date: "2025-05-07" },
+            //   { title: "Science Fair", date: "2025-05-12" },
+            //   { title: "Deadline: Project", date: "2025-05-17" },
+            // ]}
+          />
         </div>
       </div>
     </div>
-  )
+  );
 }

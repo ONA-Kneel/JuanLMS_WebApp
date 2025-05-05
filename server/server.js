@@ -1,4 +1,3 @@
-// server.js
 import dotenv from 'dotenv';
 import connect from "./connect.cjs";
 import express from "express";
@@ -22,12 +21,10 @@ app.use(cors());
 app.use('/uploads', express.static('uploads'));
 app.use(express.json());
 
-// Mongoose connection
-mongoose.connect('mongodb://localhost:27017/JuanLMS')
-  .then(() => console.log("Mongoose connected"))
-  .catch(err => console.error("Mongoose connection error:", err));
 
-// Ensure uploads folder exists
+mongoose.connect('mongodb://localhost:27017/JuanLMS');
+
+
 const uploadDir = './uploads';
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);

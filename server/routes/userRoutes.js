@@ -1,4 +1,4 @@
-//userRoutes
+//routes/userRoutes.js
 import e from "express";
 import database from "../connect.cjs";
 import { ObjectId } from "mongodb";

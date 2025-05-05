@@ -1,6 +1,7 @@
 import arrowRight from "../../../src/assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
+import addClass from "../../../src/assets/addClass.png";
 
 export default function Faculty_Classes() {
 
@@ -26,27 +27,7 @@ export default function Faculty_Classes() {
 
           <ProfileMenu/>
         </div>
-
-        {/* Class Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {[...Array(3)].map((_, idx) => (
-            <div
-              key={idx}
-              className="bg-[#00418b] text-white p-4 rounded-2xl hover:bg-[#002b5c] relative"
-            >
-              <h4 className="text-lg font-bold mb-5">
-                {["Intro to Computing", "Fundamentals of Programming", "Modern Math"][idx]}
-              </h4>
-              <img src={arrowRight} alt="Arrow" className="absolute top-6 right-6 w-6 h-6" />
-              <p className="text-sm mt-2">0% Progress</p>
-              <div className="w-full rounded-full bg-gray-300 mt-2">
-                <div className="bg-blue-500 h-4 rounded-full w-[0%]"></div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <h3 className="text-2xl font-semibold mt-10">Completed Classes</h3>
+        <h3 className="text-2xl font-bold mt-10">Create Classes</h3>
       </div>
     </div>
 
