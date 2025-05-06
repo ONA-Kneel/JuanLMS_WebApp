@@ -16,13 +16,13 @@ const Faculty_Navbar = () => {
     const location = useLocation();
 
     const navItems = [
-        { path: "/faculty_dashboard", icon: dashboardIcon, label: "Dashboard" },
-        { path: "/faculty_classes", icon: classesIcon, label: "Classes" },
-        { path: "/faculty_activities", icon: activitiesIcon, label: "Activities" },
-        { path: "/faculty_chats", icon: chatsIcon, label: "Chats" },
-        { path: "/faculty_progress", icon: progressIcon, label: "Progress" },
-        { path: "/faculty_grades", icon: gradesIcon, label: "Grades" },
-        { path: "/faculty_calendar", icon: calendarIcon, label: "Calendar" },
+        { path: "/faculty_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
+        { path: "/faculty_classes", icon: classesIcon, label: "CLASSES" },
+        { path: "/faculty_activities", icon: activitiesIcon, label: "ACTIVITIES" },
+        { path: "/faculty_chats", icon: chatsIcon, label: "CHATS" },
+        { path: "/faculty_progress", icon: progressIcon, label: "PROGRESS" },
+        { path: "/faculty_grades", icon: gradesIcon, label: "GRADES" },
+        { path: "/faculty_calendar", icon: calendarIcon, label: "CALENDAR" },
     ];
 
     return (
@@ -36,7 +36,7 @@ const Faculty_Navbar = () => {
 
             <div
                 className={`bg-[#010a51] text-white p-4 w-64 h-screen fixed top-0 left-0 z-30 transform transition-transform duration-300 ease-in-out
-                ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:block`}
+                ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:block font-poppinsr`}
                 style={{ overflowY: 'auto' }}
             >
                 <div className="flex justify-center md:justify-start items-center mb-6 p-3">

@@ -16,13 +16,13 @@ const Student_Navbar = () => {
   const location = useLocation();
 
   const navItems = [
-    { path: "/student_dashboard", icon: dashboardIcon, label: "Dashboard" },
-    { path: "/student_classes", icon: classesIcon, label: "Classes" },
-    { path: "/student_activities", icon: activitiesIcon, label: "Activities" },
-    { path: "/student_chats", icon: chatsIcon, label: "Chats" },
-    { path: "/student_progress", icon: progressIcon, label: "Progress" },
-    { path: "/student_grades", icon: gradesIcon, label: "Grades" },
-    { path: "/student_calendar", icon: calendarIcon, label: "Calendar" },
+    { path: "/student_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
+    { path: "/student_classes", icon: classesIcon, label: "CLASSES" },
+    { path: "/student_activities", icon: activitiesIcon, label: "ACTIVITIES" },
+    { path: "/student_chats", icon: chatsIcon, label: "CHATS" },
+    { path: "/student_progress", icon: progressIcon, label: "PROGRESS" },
+    { path: "/student_grades", icon: gradesIcon, label: "GRADES" },
+    { path: "/student_calendar", icon: calendarIcon, label: "CALENDAR" },
   ];
 
   return (
@@ -38,7 +38,7 @@ const Student_Navbar = () => {
       {/* Sidebar (always fixed, responsive visibility) */}
       <div
         className={`bg-[#010a51] text-white p-4 w-64 h-screen fixed top-0 left-0 z-30 transform transition-transform duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:block`}
+          ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:block font-poppinsr`}
         style={{ overflowY: 'auto' }}
       >
         <div className="flex justify-center md:justify-start items-center mb-6 p-3">

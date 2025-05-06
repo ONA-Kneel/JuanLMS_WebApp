@@ -13,10 +13,10 @@ const Parent_Navbar = () => {
     const location = useLocation();
 
     const navItems = [
-        { path: "/parent_dashboard", icon: dashboardIcon, label: "Dashboard" },
-        { path: "/parent_classes", icon: classesIcon, label: "Classes" },
-        { path: "/parent_progress", icon: progressIcon, label: "Progress" },
-        { path: "/parent_grades", icon: gradesIcon, label: "Grades" },
+        { path: "/parent_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
+        { path: "/parent_classes", icon: classesIcon, label: "CLASSES" },
+        { path: "/parent_progress", icon: progressIcon, label: "PPROGRESS" },
+        { path: "/parent_grades", icon: gradesIcon, label: "GRADES" },
     ];
 
     return (
@@ -30,7 +30,7 @@ const Parent_Navbar = () => {
 
             <div
                 className={`bg-[#010a51] text-white p-4 w-64 h-screen fixed top-0 left-0 z-30 transform transition-transform duration-300 ease-in-out
-                ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:block`}
+                ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:block font-poppinsr`}
                 style={{ overflowY: 'auto' }}
             >
                 <div className="flex justify-center md:justify-start items-center mb-6 p-3">

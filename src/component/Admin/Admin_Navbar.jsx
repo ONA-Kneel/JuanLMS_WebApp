@@ -16,13 +16,13 @@ const Admin_Navbar = () => {
     const location = useLocation();
 
     const navItems = [
-        { path: "/admin_dashboard", icon: dashboardIcon, label: "Dashboard" },
-        { path: "/admin_accounts", icon: classesIcon, label: "Accounts" },
-        { path: "/admin_activities", icon: activitiesIcon, label: "Activities" },
-        { path: "/admin_chats", icon: chatsIcon, label: "Chats" },
-        { path: "/admin_progress", icon: progressIcon, label: "Progress" },
-        { path: "/admin_grades", icon: gradesIcon, label: "Grades" },
-        { path: "/admin_calendar", icon: calendarIcon, label: "Calendar" },
+        { path: "/admin_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
+        { path: "/admin_accounts", icon: classesIcon, label: "ACCOUNTS" },
+        { path: "/admin_activities", icon: activitiesIcon, label: "ACTIVITIES" },
+        { path: "/admin_chats", icon: chatsIcon, label: "CHATS" },
+        { path: "/admin_progress", icon: progressIcon, label: "PROGRESS" },
+        { path: "/admin_grades", icon: gradesIcon, label: "GRADES" },
+        { path: "/admin_calendar", icon: calendarIcon, label: "CALENDAR" },
     ];
 
     return (
@@ -38,7 +38,7 @@ const Admin_Navbar = () => {
             {/* Sidebar (always fixed, responsive visibility) */}
             <div
                 className={`bg-[#010a51] text-white p-4 w-64 h-screen fixed top-0 left-0 z-30 transform transition-transform duration-300 ease-in-out
-                ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:block`}
+                ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:block font-poppinsr`}
                 style={{ overflowY: 'auto' }}
             >
                 <div className="flex justify-center md:justify-start items-center mb-6 p-3">

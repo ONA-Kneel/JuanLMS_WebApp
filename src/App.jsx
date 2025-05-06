@@ -28,6 +28,7 @@ import Faculty_Chats from './component/Faculty/Faculty_Chats';
 import Faculty_Progress from './component/Faculty/Faculty_Progress';
 import Faculty_Grades from './component/Faculty/Faculty_Grades';
 import Faculty_Calendar from './component/Faculty/Faculty_Calendar';
+import Faculty_ClassWorkspace from './component/Faculty/Faculty_ClassWorkspace';
 
 // Director Access
 import Director_Dashboard from './component/Director/Director_Dashboard';
@@ -97,6 +98,8 @@ function App() {
         <Route path="/faculty_progress" element={<Faculty_Progress />}/>
         <Route path="/faculty_grades" element={<Faculty_Grades />}/>
         <Route path="/faculty_calendar" element={<Faculty_Calendar />}/> 
+        <Route path="/faculty_class/:classId" element={<Faculty_ClassWorkspace />} />
+
 
         {/* Director */}
         <Route path="/director_dashboard" element={<Director_Dashboard/>}/>

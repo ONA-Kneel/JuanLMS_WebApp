@@ -16,13 +16,13 @@ const Director_Navbar = () => {
     const location = useLocation();
 
     const navItems = [
-        { path: "/director_dashboard", icon: dashboardIcon, label: "Dashboard" },
-        { path: "/director_classes", icon: classesIcon, label: "Classes" },
-        { path: "/director_activities", icon: activitiesIcon, label: "Activities" },
-        { path: "/director_chats", icon: chatsIcon, label: "Chats" },
-        { path: "/director_progress", icon: progressIcon, label: "Progress" },
-        { path: "/director_grades", icon: gradesIcon, label: "Grades" },
-        { path: "/director_calendar", icon: calendarIcon, label: "Calendar" },
+        { path: "/director_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
+        { path: "/director_classes", icon: classesIcon, label: "CLASSES" },
+        { path: "/director_activities", icon: activitiesIcon, label: "ACTIVITIES" },
+        { path: "/director_chats", icon: chatsIcon, label: "CHATS" },
+        { path: "/director_progress", icon: progressIcon, label: "PROGRESS" },
+        { path: "/director_grades", icon: gradesIcon, label: "GRADES" },
+        { path: "/director_calendar", icon: calendarIcon, label: "CALENDAR" },
     ];
 
     return (
@@ -36,7 +36,7 @@ const Director_Navbar = () => {
 
             <div
                 className={`bg-[#010a51] text-white p-4 w-64 h-screen fixed top-0 left-0 z-30 transform transition-transform duration-300 ease-in-out
-                ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:block`}
+                ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:block font-poppinsr`}
                 style={{ overflowY: 'auto' }}
             >
                 <div className="flex justify-center md:justify-start items-center mb-6 p-3">
