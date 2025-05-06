@@ -34,20 +34,48 @@ userRoutes.route("/users/:id").get(async (request, response) => {
 
 });
 
-// Create ONE
+// Create ONE (with role)
 userRoutes.post("/users", async (req, res) => {
     const db = database.getDb();
+
+    const {
+        firstname,
+        middlename,
+        lastname,
+        email,
+        contactno,
+        password,
+        personalemail,
+        profilePic,
+        role,   // ✅ <-- accept role
+    } = req.body;
+
+    // Simple server-side validation (backend safety)
+    if (!firstname || !lastname || !email || !password || !role) {
+        return res.status(400).json({ error: "Missing required fields" });
+    }
+
     const mongoObject = {
-        firstname: req.body.firstname,
-        middlename: req.body.middlename,
-        lastname: req.body.lastname,
-        email: req.body.email.toLowerCase(),
-        contactno: req.body.contactno,
-        password: req.body.password, // 🔐 optionally hash this
+        firstname,
+        middlename,
+        lastname,
+        email: email.toLowerCase(),
+        contactno,
+        password, // (✅ you'll hash later)
+        personalemail,
+        profilePic,
+        role, // ✅ <-- save role
     };
-    const result = await db.collection("Users").insertOne(mongoObject);
-    res.json(result);
+
+    try {
+        const result = await db.collection("Users").insertOne(mongoObject);
+        res.status(201).json({ success: true, result });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to create user" });
+    }
 });
+
 
 // UpdateOne
 userRoutes.route("/users/:id").patch(async (req, res) => {
@@ -61,6 +89,8 @@ userRoutes.route("/users/:id").patch(async (req, res) => {
             email: req.body.email.toLowerCase(),
             contactno: req.body.contactno,
             password: req.body.password,
+            personalemail: req.body.personalemail,
+            profilePic: req.body.profilePic, 
         },
     };
     const result = await db.collection("Users").updateOne({ _id: new ObjectId(req.params.id) }, mongoObject);
@@ -111,7 +141,7 @@ userRoutes.post('/login', async (req, res) => {
 
 function getRoleFromEmail(email) {
     const normalized = email.toLowerCase();
-    if (normalized.endsWith('@students.sjddef.edu.ph')) return 'student';
+    if (normalized.endsWith('@students.sjddef.edu.ph')) return 'students';
     if (normalized.endsWith('@parents.sjddef.edu.ph')) return 'parent';
     if (normalized.endsWith('@admin.sjddef.edu.ph')) return 'admin';
     if (normalized.endsWith('@director.sjddef.edu.ph')) return 'director';

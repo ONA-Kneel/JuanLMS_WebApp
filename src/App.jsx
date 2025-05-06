@@ -29,6 +29,8 @@ import Faculty_Progress from './component/Faculty/Faculty_Progress';
 import Faculty_Grades from './component/Faculty/Faculty_Grades';
 import Faculty_Calendar from './component/Faculty/Faculty_Calendar';
 import Faculty_CreateClass from './component/Faculty/Faculty_CreateClass';
+import Faculty_ClassWorkspace from './component/Faculty/Faculty_ClassWorkspace';
+
 // Director Access
 import Director_Dashboard from './component/Director/Director_Dashboard';
 import Director_Classes from './component/Director/Director_Classes';
@@ -44,7 +46,7 @@ import Admin_Dashboard from './component/Admin/Admin_Dashboard';
 import Admin_Activities from './component/Admin/Admin_Activities';
 import Admin_Calendar from './component/Admin/Admin_Calendar';
 import Admin_Chats from './component/Admin/Admin_Chats';
-import Admin_Classes from './component/Admin/Admin_Classes';
+import Admin_Accounts from './component/Admin/Admin_Accounts';
 import Admin_Grades from './component/Admin/Admin_Grades';
 import Admin_Progress from './component/Admin/Admin_Progress';
 
@@ -98,6 +100,8 @@ function App() {
         <Route path="/faculty_grades" element={<Faculty_Grades />}/>
         <Route path="/faculty_calendar" element={<Faculty_Calendar />}/> 
         <Route path="/faculty_createclass" element={<Faculty_CreateClass/>}/> 
+        <Route path="/faculty_class/:classId" element={<Faculty_ClassWorkspace />} />
+
 
         {/* Director */}
         <Route path="/director_dashboard" element={<Director_Dashboard/>}/>
@@ -110,7 +114,7 @@ function App() {
 
         {/* Admin */}
         <Route path="/admin_dashboard" element={<Admin_Dashboard/>}/>
-        <Route path="/admin_classes" element={<Admin_Classes />}/>
+        <Route path="/admin_accounts" element={<Admin_Accounts />}/>
         <Route path="/admin_activities" element={<Admin_Activities />}/>
         <Route path="/admin_chats" element={<Admin_Chats />}/>
         <Route path="/admin_grades" element={<Admin_Grades />}/>

@@ -14,8 +14,9 @@ export default function Student_Chats() {
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
 
-  //files
   const [selectedFile, setSelectedFile] = useState(null);
+  const fileInputRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
   const currentUserId = JSON.parse(localStorage.getItem("user"))?.id;
 
@@ -27,8 +28,6 @@ export default function Student_Chats() {
     fetchUsers();
   }, [currentUserId]);
 
-  const messagesEndRef = useRef(null);
-
   const selectedChatMessages = messages[selectedChat?._id];
 
   useEffect(() => {
@@ -36,7 +35,6 @@ export default function Student_Chats() {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [selectedChatMessages]);
-  ; // scroll whenever messages change
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedChat) return;
@@ -58,8 +56,8 @@ export default function Student_Chats() {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {  // Prevents sending on Shift+Enter
-      e.preventDefault();  // Prevent default "newline"
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
       handleSendMessage();
     }
   };
@@ -79,14 +77,11 @@ export default function Student_Chats() {
     `${u.firstname} ${u.lastname}`.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const fileInputRef = useRef(null);
-  // const imageInputRef = useRef(null);
-
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
       setSelectedFile(file);
-      alert(`Selected file: ${file.name}`); // You can remove alert and upload directly if you want!
+      alert(`Selected file: ${file.name}`);
     }
   };
 
@@ -94,23 +89,11 @@ export default function Student_Chats() {
     fileInputRef.current.click();
   };
 
-  // const handleImageSelect = (e) => {
-  //   const file = e.target.files[0];
-  //   if (file) {
-  //     setSelectedFile(file);
-  //     alert(`Selected image: ${file.name}`);  // Again, replace with upload logic later if needed
-  //   }
-  // };
-
-  // const openCamera = () => {
-  //   imageInputRef.current.click();
-  // };
-
-
   return (
     <div className="flex min-h-screen">
       <Student_Navbar />
-      <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden">
+      {/* ← 🟢 ADD margin-left (md:ml-64) to shift content beside sidebar */}
+      <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64">
         <div className="flex flex-col md:flex-row justify-between items-center px-10 py-10">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Chats</h2>
@@ -127,7 +110,8 @@ export default function Student_Chats() {
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          <div className="w-1/3 p-4 overflow-y-auto">
+          {/* LEFT PANEL */}
+          <div className="w-full md:w-1/3 p-4 overflow-hidden flex flex-col">
             <input
               type="text"
               placeholder="Search users..."
@@ -136,24 +120,29 @@ export default function Student_Chats() {
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={handleKeyDown}
             />
-            {filteredUsers.map((user) => (
-              <div
-                key={user._id}
-                className={`p-3 rounded-lg mb-3 cursor-pointer shadow-sm transition-all ${selectedChat?._id === user._id
-                  ? "bg-white"
-                  : "bg-gray-100 hover:bg-gray-300"
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {filteredUsers.map((user) => (
+                <div
+                  key={user._id}
+                  className={`p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
+                    selectedChat?._id === user._id
+                      ? "bg-white"
+                      : "bg-gray-100 hover:bg-gray-300"
                   }`}
-                onClick={() => setSelectedChat(user)}
-              >
-                <strong>{user.firstname} {user.lastname}</strong>
-                <p className="text-xs text-gray-600">Click to view conversation</p>
-              </div>
-            ))}
+                  onClick={() => setSelectedChat(user)}
+                >
+                  <strong>{user.firstname} {user.lastname}</strong>
+                  <p className="text-xs text-gray-600">Click to view conversation</p>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="w-px bg-black" />
 
-          <div className="w-2/3 flex flex-col justify-between p-4">
+          {/* RIGHT PANEL */}
+          <div className="w-full md:w-2/3 flex flex-col p-4 overflow-hidden">
             {selectedChat ? (
               <>
                 <div className="flex justify-between items-center mb-4">
@@ -166,22 +155,24 @@ export default function Student_Chats() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto mb-4 space-y-2">
+                <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
                   {(messages[selectedChat._id] || []).map((msg, index) => (
                     <div
                       key={index}
                       className={`flex ${msg.senderId === currentUserId ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`px-4 py-2 rounded-lg text-sm max-w-xs ${msg.senderId === currentUserId
-                          ? "bg-blue-900 text-white"
-                          : "bg-gray-300 text-black"
-                          }`}
+                        className={`px-4 py-2 rounded-lg text-sm max-w-xs ${
+                          msg.senderId === currentUserId
+                            ? "bg-blue-900 text-white"
+                            : "bg-gray-300 text-black"
+                        }`}
                       >
                         {msg.message}
                       </div>
                     </div>
                   ))}
+                  <div ref={messagesEndRef} />
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -204,35 +195,19 @@ export default function Student_Chats() {
                     className="w-6 h-6 cursor-pointer hover:opacity-75"
                     onClick={openFilePicker}
                   />
-
-                  {/* <input
-                    type="file"
-                    ref={imageInputRef}
-                    accept="image/*"
-                    capture="environment"
-                    style={{ display: 'none' }}
-                    onChange={handleImageSelect}
-                  />
-                  <img
-                    src={uploadpicture}
-                    alt="Upload Picture"
-                    className="w-6 h-6 cursor-pointer hover:opacity-75"
-                    onClick={openCamera}
-                  /> */}
-
                   <button
                     onClick={handleSendMessage}
                     disabled={!newMessage.trim()}
-                    className={`px-4 py-2 rounded-lg text-sm ${newMessage.trim() ? 'bg-blue-900 text-white' : 'bg-gray-400 text-white cursor-not-allowed'
-                      }`}
+                    className={`px-4 py-2 rounded-lg text-sm ${
+                      newMessage.trim() ? 'bg-blue-900 text-white' : 'bg-gray-400 text-white cursor-not-allowed'
+                    }`}
                   >
                     Send
                   </button>
-
                 </div>
               </>
             ) : (
-              <div className="flex items-center justify-center h-full text-gray-500">
+              <div className="flex items-center justify-center flex-1 text-gray-500">
                 Select a chat to start messaging
               </div>
             )}

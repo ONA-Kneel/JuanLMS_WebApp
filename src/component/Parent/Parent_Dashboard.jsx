@@ -11,7 +11,7 @@ export default function Parent_Dashboard() {
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr">
       <Parent_Navbar />
-      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr">
+      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
 
         <div className="flex justify-between items-center mb-6">
           <div>

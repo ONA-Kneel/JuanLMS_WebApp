@@ -1,84 +1,237 @@
+// ClassContent.jsx
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 
-export default function ClassContent({ selected }) {
+export default function ClassContent({ selected, isFaculty = false }) {
   const { classId } = useParams();
   const [activeLesson, setActiveLesson] = useState(null);
 
+  // Dummy data (default content for students)
   const dummyData = {
     1: {
       name: "Introduction to Computing",
       lessons: [
         { id: 1, title: "What is Computing?", content: "This lesson introduces the concept of computing, data, and information." },
         { id: 2, title: "Evolution of Computers", content: "Learn the historical milestones of computers from mechanical to modern era." },
-        { id: 3, title: "Components of a Computer System", content: "Understand hardware, software, and peripheral components." },
       ],
       posts: [
         { title: "Essay Submission", content: "Don't forget to submit your essay about the History of Computing by Friday." },
-        { title: "Quiz #1 Announcement", content: "Quiz #1 will cover Lessons 1 to 3. Study well!" },
       ],
     },
     2: {
       name: "Fundamentals of Programming",
       lessons: [
-        { id: 1, title: "Introduction to Programming Languages", content: "Overview of high-level vs low-level languages, compilers, and interpreters." },
-        { id: 2, title: "Variables & Data Types", content: "Learn about integer, float, string, and other data types in programming." },
-        { id: 3, title: "Conditional Statements", content: "Understand how if-else and switch-case structures work." },
+        { id: 1, title: "Intro to Programming", content: "Overview of high-level vs low-level languages." },
       ],
       posts: [
-        { title: "Coding Activity Due", content: "Coding activity on variables is due this Friday. Submit via LMS." },
-        { title: "Midterm Announcement", content: "Midterm will cover Lessons 1 to 5. Practice coding exercises!" },
+        { title: "Coding Activity Due", content: "Submit your coding activity on variables this Friday." },
       ],
     },
     3: {
       name: "Modern Mathematics",
       lessons: [
-        { id: 1, title: "Logic & Set Theory", content: "Introduction to logic gates, truth tables, and basic set operations." },
-        { id: 2, title: "Functions & Relations", content: "Learn about mappings, domain, range, and types of functions." },
-        { id: 3, title: "Probability & Statistics", content: "Understand basic probability concepts and descriptive statistics." },
+        { id: 1, title: "Logic & Set Theory", content: "Intro to logic gates and basic set operations." },
       ],
       posts: [
         { title: "Assignment #2", content: "Solve 10 probability problems and submit by next week." },
-        { title: "Online Quiz Reminder", content: "Online quiz on Sets will be open this weekend. Don't miss it!" },
       ],
     },
   };
 
-  const classContent = dummyData[classId] || dummyData[1]; // fallback if no id
+  const classContent = dummyData[classId] || dummyData[1];
 
   const goBack = () => setActiveLesson(null);
+
+  // Faculty-only states (dynamic content management)
+  const [announcements, setAnnouncements] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [lessons, setLessons] = useState([]);
+
+  const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
+  const [showAssignmentForm, setShowAssignmentForm] = useState(false);
+  const [showLessonForm, setShowLessonForm] = useState(false);
+
+  // Handlers for adding content (Faculty only)
+  const handleAddAnnouncement = (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const newAnnouncement = {
+      id: announcements.length + 1,
+      title: form.title.value,
+      content: form.content.value,
+    };
+    setAnnouncements([...announcements, newAnnouncement]);
+    setShowAnnouncementForm(false);
+    form.reset();
+  };
+
+  const handleAddAssignment = (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const newAssignment = {
+      id: assignments.length + 1,
+      title: form.title.value,
+      instructions: form.instructions.value,
+    };
+    setAssignments([...assignments, newAssignment]);
+    setShowAssignmentForm(false);
+    form.reset();
+  };
+
+  const handleAddLesson = (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const newLesson = {
+      id: lessons.length + 1,
+      title: form.title.value,
+      description: form.description.value,
+    };
+    setLessons([...lessons, newLesson]);
+    setShowLessonForm(false);
+    form.reset();
+  };
+
+  function LessonItem({ lesson }) {
+    const [expanded, setExpanded] = useState(false);
+    return (
+      <div
+        className="p-4 rounded bg-blue-50 border border-blue-200 shadow-sm cursor-pointer hover:bg-blue-100 transition"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <h3 className="font-semibold text-blue-900">{lesson.title}</h3>
+        {expanded && <p className="text-sm text-gray-700 mt-2">{lesson.description}</p>}
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-2xl shadow p-6 md:p-8 h-full overflow-auto">
       {selected === "home" && (
         <>
-          <h2 className="text-2xl font-bold mb-4">Home Page</h2>
-
-          {classContent.posts.map((post, index) => (
-            <div key={index} className="mb-6">
-              <h3 className="font-semibold text-lg mb-2">{post.title}</h3>
-              <p className="text-sm text-gray-700 mb-2">{post.content}</p>
-              <button className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 transition text-sm">
-                View Details
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">Home Page</h2>
+            {isFaculty && (
+              <button
+                onClick={() => setShowAnnouncementForm(!showAnnouncementForm)}
+                className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm"
+              >
+                {showAnnouncementForm ? "Cancel" : "+ Create New Announcement"}
               </button>
-            </div>
-          ))}
+            )}
+          </div>
+
+          {isFaculty && showAnnouncementForm && (
+            <form onSubmit={handleAddAnnouncement} className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
+                <input name="title" required className="w-full border rounded px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Content</label>
+                <textarea name="content" required className="w-full border rounded px-3 py-2 text-sm" rows={3} />
+              </div>
+              <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm">
+                Save Announcement
+              </button>
+            </form>
+          )}
+
+          <div className="space-y-4">
+            {(isFaculty ? announcements : classContent.posts).length > 0 ? (
+              (isFaculty ? announcements : classContent.posts).map((item, index) => (
+                <div key={index} className="p-4 rounded bg-blue-50 border border-blue-200 shadow-sm">
+                  <h3 className="font-semibold text-blue-900">{item.title}</h3>
+                  <p className="text-sm text-gray-700">{item.content}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-gray-700">No announcements yet.</p>
+            )}
+          </div>
         </>
       )}
 
       {selected === "classwork" && (
-        <p className="text-gray-700">Classwork content here for {classContent.name}...</p>
+        <>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">Classwork</h2>
+            {isFaculty && (
+              <button
+                onClick={() => setShowAssignmentForm(!showAssignmentForm)}
+                className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm"
+              >
+                {showAssignmentForm ? "Cancel" : "+ Create New Assignment"}
+              </button>
+            )}
+          </div>
+
+          {isFaculty && showAssignmentForm && (
+            <form onSubmit={handleAddAssignment} className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
+                <input name="title" required className="w-full border rounded px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Instructions</label>
+                <textarea name="instructions" required className="w-full border rounded px-3 py-2 text-sm" rows={3} />
+              </div>
+              <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm">
+                Save Assignment
+              </button>
+            </form>
+          )}
+
+          <div className="space-y-4">
+            {isFaculty && assignments.length > 0 ? (
+              assignments.map((item) => (
+                <div key={item.id} className="p-4 rounded bg-blue-50 border border-blue-200 shadow-sm">
+                  <h3 className="font-semibold text-blue-900">{item.title}</h3>
+                  <p className="text-sm text-gray-700">{item.instructions}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-gray-700">No assignments yet.</p>
+            )}
+          </div>
+        </>
       )}
 
       {selected === "materials" && (
         <>
           {!activeLesson && (
             <>
-              <h2 className="text-2xl font-bold mb-4">Class Materials</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold">Class Materials</h2>
+                {isFaculty && (
+                  <button
+                    onClick={() => setShowLessonForm(!showLessonForm)}
+                    className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm"
+                  >
+                    {showLessonForm ? "Cancel" : "+ Create New Lesson"}
+                  </button>
+                )}
+              </div>
+
+              {isFaculty && showLessonForm && (
+                <form onSubmit={handleAddLesson} className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <div>
+                    <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
+                    <input name="title" required className="w-full border rounded px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-blue-900 mb-1">Description / Content</label>
+                    <textarea name="description" required className="w-full border rounded px-3 py-2 text-sm" rows={4} />
+                  </div>
+                  <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm">
+                    Save Lesson
+                  </button>
+                </form>
+              )}
+
               <p className="text-gray-700 mb-6">Select a lesson to view its content.</p>
 
               <div className="space-y-4">
-                {classContent.lessons.map((lesson) => (
+                {(isFaculty ? lessons : classContent.lessons).map((lesson) => (
                   <button
                     key={lesson.id}
                     onClick={() => setActiveLesson(lesson)}
@@ -101,16 +254,7 @@ export default function ClassContent({ selected }) {
               </button>
 
               <h2 className="text-2xl font-bold mb-4">{activeLesson.title}</h2>
-              <p className="text-sm text-gray-700 mb-6">{activeLesson.content}</p>
-
-              <div className="flex items-center gap-4 mt-6">
-                <div className="w-full bg-gray-300 rounded-full h-3 overflow-hidden">
-                  <div className="bg-blue-500 h-full w-[30%]"></div>
-                </div>
-                <button className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 transition text-sm">
-                  Next
-                </button>
-              </div>
+              <p className="text-sm text-gray-700 mb-6">{activeLesson.description || activeLesson.content}</p>
             </>
           )}
         </>

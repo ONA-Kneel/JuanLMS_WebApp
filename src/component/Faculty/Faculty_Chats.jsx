@@ -110,7 +110,7 @@ export default function Faculty_Chats() {
   return (
     <div className="flex min-h-screen">
       <Faculty_Navbar />
-      <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden">
+      <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64">
         <div className="flex flex-col md:flex-row justify-between items-center px-10 py-10">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Chats</h2>
