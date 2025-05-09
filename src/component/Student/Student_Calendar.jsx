@@ -1,3 +1,5 @@
+//student_calendar.js
+
 import React, { useEffect, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -11,8 +13,13 @@ export default function Student_Calendar() {
 
   useEffect(() => {
     const fetchEvents = async () => {
-      const res = await axios.get("http://localhost:5000/api/events");
-      setEvents(res.data.map(e => ({ title: e.title, date: e.date })));
+      const res = await axios.get("http://localhost:5000/events");
+      console.log("Fetched events:", res.data); // <--- Add this
+      setEvents(res.data.map(e => ({
+        title: e.title,
+        date: e.date,
+        allDay: true,
+      })));
     };
     fetchEvents();
   }, []);
@@ -20,12 +27,7 @@ export default function Student_Calendar() {
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Student_Navbar />
-
-<<<<<<< Updated upstream
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
-=======
-      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr">
->>>>>>> Stashed changes
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
@@ -47,11 +49,7 @@ export default function Student_Calendar() {
             plugins={[dayGridPlugin]}
             initialView="dayGridMonth"
             height="auto"
-            events={[
-              { title: "Math Quiz", date: "2025-05-07" },
-              { title: "Science Fair", date: "2025-05-12" },
-              { title: "Deadline: Project", date: "2025-05-17" }
-            ]}
+            events={events}
           />
         </div>
       </div>

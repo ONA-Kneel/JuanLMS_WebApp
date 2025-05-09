@@ -1,15 +1,34 @@
+import React, { useEffect, useState } from "react";
 import Faculty_Navbar from "./Faculty_Navbar";
-
 
 import ProfileModal from "../ProfileModal"; 
 
 import compClassesIcon from "../../../src/assets/compClassesIcon.png";
 import arrowRight from "../../../src/assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
+import createEvent from "../../assets/createEvent.png";
 
 export default function Faculty_Dashboard() {
- 
+  const [classes, setClasses] = useState([]);
+  const [loading, setLoading] = useState(true);
 
+  const currentFacultyID = localStorage.getItem("userID");
+
+  useEffect(() => {
+    async function fetchClasses() {
+      try {
+        const res = await fetch("http://localhost:5000/classes");
+        const data = await res.json();
+        const filtered = data.filter(cls => cls.facultyID === currentFacultyID);
+        setClasses(filtered);
+      } catch (err) {
+        console.error("Failed to fetch classes", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchClasses();
+  }, [currentFacultyID]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr md:ml-64">
@@ -28,12 +47,8 @@ export default function Faculty_Dashboard() {
               })}
             </p>
           </div>
-              {/* PROFILE */}
           <ProfileMenu/>
         </div>
-
-       
-
 
         <h3 className="text-lg md:text-xl font-semibold mb-3">Overview</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -50,18 +65,28 @@ export default function Faculty_Dashboard() {
             </div>
           ))}
         </div>
+
         <h3 className="text-lg md:text-4xl font-bold mb-3">Current Term Classes</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {["Intro to Computing", "Modern Mathematics"].map((className, index) => (
-            <div key={index} className="relative bg-[#00418b] text-white p-4 md:p-6 rounded-2xl hover:bg-[#002b5c] transition flex flex-col justify-between">
-              <h4 className="text-base md:text-lg font-semibold">{className}</h4>
-              <p className="text-sm mt-1">0% Progress</p>
-              <div className="w-full bg-gray-300 rounded-full h-2 mt-2">
-                <div className="bg-blue-500 h-full rounded-full w-[0%]"></div>
+          {loading ? (
+            <p>Loading...</p>
+          ) : classes.length === 0 ? (
+            <p>No classes found.</p>
+          ) : (
+            classes.map(cls => (
+              <div
+                key={cls.classID}
+                className="relative bg-[#00418b] text-white p-4 md:p-6 rounded-2xl hover:bg-[#002b5c] transition flex flex-col justify-between"
+              >
+                <h4 className="text-base md:text-lg font-semibold">{cls.className}</h4>
+                <p className="text-sm mt-1">0% progress</p>
+                <div className="w-full bg-gray-300 rounded-full h-2 mt-2">
+                  <div className="bg-blue-500 h-full rounded-full w-[0%]"></div>
+                </div>
+                <img src={arrowRight} alt="Arrow" className="absolute top-4 right-4 w-5 h-5" />
               </div>
-              <img src={arrowRight} alt="Arrow" className="absolute top-4 right-4 w-5 h-5" />
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

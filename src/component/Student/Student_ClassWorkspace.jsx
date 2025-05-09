@@ -1,30 +1,41 @@
 // Student_ClassWorkspace.jsx
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react"; // <-- Import icon
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import ClassContent from "../ClassContent";
-import { useParams } from "react-router-dom";
 
 export default function Student_ClassWorkspace() {
-  const { classId } = useParams(); // grab id from route param
+  const { classId } = useParams();
   const [selected, setSelected] = useState("home");
+  const [classInfo, setClassInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-
-  const classTitles = {
-    "1": { title: "Introduction to Computing", section: "CCINCOM1 - Section 1" },
-    "2": { title: "Fundamentals of Programming", section: "CCPROG1 - Section 2" },
-    "3": { title: "Modern Mathematics", section: "CCMATH1 - Section 3" },
-  };
-  
-  const classInfo = classTitles[classId] || classTitles[1]; // fallback
 
   const tabs = [
     { label: "Home Page", key: "home" },
     { label: "Classwork", key: "classwork" },
     { label: "Class Materials", key: "materials" },
   ];
+
+  useEffect(() => {
+    async function fetchClass() {
+      try {
+        // You may want to use /classes/:id if you have that endpoint
+        const res = await fetch("http://localhost:5000/classes");
+        const data = await res.json();
+        // Find the class by classID
+        const found = data.find(cls => cls.classID === classId);
+        setClassInfo(found);
+      } catch (err) {
+        setClassInfo(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchClass();
+  }, [classId]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -43,8 +54,16 @@ export default function Student_ClassWorkspace() {
             </button>
 
             <div>
-              <h2 className="text-2xl md:text-3xl font-bold">{classInfo.title}</h2>
-              <p className="text-base md:text-lg text-gray-600">{classInfo.section}</p>
+              {loading ? (
+                <h2 className="text-2xl md:text-3xl font-bold">Loading...</h2>
+              ) : classInfo ? (
+                <>
+                  <h2 className="text-2xl md:text-3xl font-bold">{classInfo.className}</h2>
+                  <p className="text-base md:text-lg text-gray-600">{classInfo.classCode}</p>
+                </>
+              ) : (
+                <h2 className="text-2xl md:text-3xl font-bold text-red-600">Class not found</h2>
+              )}
             </div>
           </div>
 

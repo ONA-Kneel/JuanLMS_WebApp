@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
 import ProfileMenu from "../ProfileMenu";
 import Admin_Navbar from "./Admin_Navbar";
+import editIcon from "../../../src/assets/editing.png";
+import archiveIcon from "../../../src/assets/archive.png";
 
 export default function Admin_Accounts() {
+  
   const [formData, setFormData] = useState({
     firstname: "",
     middlename: "",
@@ -11,8 +14,57 @@ export default function Admin_Accounts() {
     personalemail: "",
     contactno: "",
     password: "",
-    role: "students",
+    role: "student",
+    userID: "", // invisible field
   });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [users, setUsers] = useState([]);
+  const [roleFilter, setRoleFilter] = useState(""); // "" means show all
+
+  // Fetch users on mount and after successful account creation
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch("http://localhost:5000/users");
+      const data = await res.json();
+      if (res.ok) {
+        setUsers(data);
+      } else {
+        console.error("Failed to fetch users:", data);
+      }
+    } catch (err) {
+      console.error("Error fetching users:", err);
+    }
+  };
+
+  const [searchTerms, setSearchTerms] = useState({
+    firstname: "",
+    middlename: "",
+    lastname: "",
+    userID: "",
+  });
+  
+  const filteredUsers = users.filter((user) => {
+    const matchesFirst = (user.firstname || "").toLowerCase().includes(searchTerms.firstname.toLowerCase());
+    const matchesLast = (user.lastname || "").toLowerCase().includes(searchTerms.lastname.toLowerCase());
+    const matchesMiddle = (user.middlename || "").toLowerCase().includes(searchTerms.middlename.toLowerCase());
+    const matchesRole = roleFilter === "" || (user.role || "") === roleFilter;
+    const matchesUserID = searchTerms.userID === "" || (user.userID || "").toLowerCase().includes(searchTerms.userID.toLowerCase());
+    return matchesFirst && matchesLast && matchesMiddle && matchesRole && matchesUserID;
+  });
+  
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    if (!sortConfig.key) return 0;
+    const aValue = (a[sortConfig.key] || "").toLowerCase();
+    const bValue = (b[sortConfig.key] || "").toLowerCase();
+    if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
+    if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+  
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -63,11 +115,15 @@ export default function Admin_Accounts() {
       return;
     }
   
+    // Generate userID here (only once per account creation)
+    const randomNum = Math.floor(100 + Math.random() * 900);
+    const userID = `${formData.role.charAt(0).toUpperCase()}${randomNum}`;
+  
     try {
       const res = await fetch("http://localhost:5000/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, userID }), // include userID
       });
   
       const data = await res.json();
@@ -81,9 +137,12 @@ export default function Admin_Accounts() {
           personalemail: "",
           contactno: "",
           password: "",
-          role: "students",
+          role: "student",
+          userID: "", // invisible field
         });
-      } else {
+        fetchUsers(); // ✅ Refresh user list
+      }
+       else {
         alert("Error: " + (data.error || "Failed to create account"));
       }
     } catch (err) {
@@ -92,8 +151,28 @@ export default function Admin_Accounts() {
     }
   };
   
+  const generatePassword = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let password = "";
+    for (let i = 0; i < 12; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setFormData((prev) => ({ ...prev, password }));
+  };
+  
+  const handleSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        // Toggle direction if clicking the same column
+        return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      // Otherwise, sort ascending
+      return { key, direction: "asc" };
+    });
+  };
 
   return (
+
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Admin_Navbar />
 
@@ -168,15 +247,25 @@ export default function Admin_Accounts() {
               placeholder="Contact Number"
               className="border rounded p-2"
             />
+            <div className="flex gap-2">
             <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Password"
-              className="border rounded p-2"
-              required
-            />
+                type="text"
+                name="password"
+                value={formData.password}
+                readOnly
+                placeholder="Password"
+                className="border rounded p-2 flex-1 bg-gray-100 cursor-not-allowed"
+              />
+
+              <button
+                type="button"
+                onClick={generatePassword}
+                className="bg-gray-300 hover:bg-gray-400 text-sm px-3 py-2 rounded"
+              >
+                Generate
+              </button>
+            </div>
+
 
             <select
               name="role"
@@ -185,7 +274,7 @@ export default function Admin_Accounts() {
               className="border rounded p-2"
               required
             >
-              <option value="students">Student</option>
+              <option value="student">Student</option>
               <option value="faculty">Faculty</option>
               <option value="parent">Parent</option>
               <option value="admin">Admin</option>
@@ -200,6 +289,80 @@ export default function Admin_Accounts() {
             </button>
           </form>
         </div>
+        <div className="mt-8">
+        <h4 className="text-lg font-semibold mb-2">Users</h4>
+        <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+        <thead>
+  <tr className="bg-gray-100 text-left">
+    <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("userID")}>User ID {sortConfig.key === "userID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+    <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+    <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+    <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+    <th className="p-3 border w-1/6">Role</th>
+    <th className="p-3 border w-1/6">Actions</th>
+  </tr>
+
+  {/* New row for search inputs */}
+  <tr className="bg-white text-left">
+    <th className="p-2 border">
+      <input type="text" placeholder="Search User ID" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, userID: e.target.value }))} />
+    </th>
+    <th className="p-2 border">
+      <input type="text" placeholder="Search Last Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, lastname: e.target.value }))} />
+    </th>
+    <th className="p-2 border">
+      <input type="text" placeholder="Search First Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, firstname: e.target.value }))} />
+    </th>
+    <th className="p-2 border">
+      <input type="text" placeholder="Search Middle Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, middlename: e.target.value }))} />
+    </th>
+    <th className="p-2 border">
+      <select className="w-full border rounded px-2 py-1 text-sm" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+        <option value="">All Roles</option>
+        <option value="student">Student</option>
+        <option value="faculty">Faculty</option>
+        <option value="parent">Parent</option>
+        <option value="admin">Admin</option>
+        <option value="director">Director</option>
+      </select>
+    </th>
+    <th className="p-2 border"></th>
+  </tr>
+</thead>
+
+          <tbody>
+  {users.length === 0 ? (
+    <tr>
+      <td colSpan="6" className="text-center p-4 text-gray-500">
+        No users found.
+      </td>
+    </tr>
+  ) : (
+    sortedUsers.map((user) => (
+      <tr key={user._id}>
+        <td className="p-3 border">{user.userID || '-'}</td>
+        <td className="p-3 border">{user.lastname}</td>
+        <td className="p-3 border">{user.firstname}</td>
+        <td className="p-3 border">{user.middlename}</td>
+        <td className="p-3 border capitalize">{user.role}</td>
+        <td className="p-3 border">
+          <div className="inline-flex space-x-2">
+            <button className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded">
+              <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
+            </button>
+            <button className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded">
+              <img src={archiveIcon} alt="Archive" className="w-8 h-8 inline-block" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    ))
+  )}
+</tbody>
+
+        </table>
+      </div>
+
       </div>
     </div>
   );
