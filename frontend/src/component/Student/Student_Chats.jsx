@@ -1,11 +1,13 @@
+// Student_Chats.jsx
+
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import videocall from "../../assets/videocall.png";
 import voicecall from "../../assets/voicecall.png";
 import uploadfile from "../../assets/uploadfile.png";
-// import uploadpicture from "../../../src/assets/uploadpicture.png";
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
+import { io } from "socket.io-client";
 
 export default function Student_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
@@ -18,18 +20,81 @@ export default function Student_Chats() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  const currentUserId = JSON.parse(localStorage.getItem("user"))?.id;
+  const socket = useRef();
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
+  // Safe localStorage parsing
+  const storedUser = localStorage.getItem("user");
+  const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
+
+  // If user is not logged in
+  if (!currentUserId) {
+    return (
+      <div className="flex items-center justify-center h-screen text-xl text-red-600 font-semibold">
+        Please login first to access chats.
+      </div>
+    );
+  }
+
+  // Initialize socket connection and listeners
+  useEffect(() => {
+    socket.current = io("http://localhost:8080");
+
+    socket.current.emit("addUser", currentUserId);
+
+    socket.current.on("getUsers", (users) => {
+      console.log("Online Users:", users);
+      setOnlineUsers(users);
+    });
+
+    socket.current.on("getMessage", (data) => {
+      const incomingMessage = {
+        senderId: data.senderId,
+        receiverId: currentUserId,
+        message: data.text,
+      };
+
+      setMessages((prev) => ({
+        ...prev,
+        [incomingMessage.senderId]: [
+          ...(prev[incomingMessage.senderId] || []),
+          incomingMessage,
+        ],
+      }));
+    });
+
+    return () => {
+      socket.current.disconnect();
+    };
+  }, [currentUserId]);
+
+  // Fetch users
   useEffect(() => {
     const fetchUsers = async () => {
       const res = await axios.get("http://localhost:5000/users");
-      setUsers(res.data.filter(user => user._id !== currentUserId));
+      setUsers(res.data.filter((user) => user._id !== currentUserId));
     };
     fetchUsers();
   }, [currentUserId]);
 
-  const selectedChatMessages = messages[selectedChat?._id];
+  // Fetch messages for selected chat
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!selectedChat) return;
+      try {
+        const res = await axios.get(
+          `http://localhost:5000/messages/${currentUserId}/${selectedChat._id}`
+        );
+        setMessages((prev) => ({ ...prev, [selectedChat._id]: res.data }));
+      } catch (err) {
+        console.error("Error fetching messages:", err);
+      }
+    };
+    fetchMessages();
+  }, [selectedChat, currentUserId]);
 
+  // Auto-scroll to bottom of messages
+  const selectedChatMessages = messages[selectedChat?._id];
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -45,14 +110,23 @@ export default function Student_Chats() {
       message: newMessage,
     };
 
+    // Save to database
     await axios.post("http://localhost:5000/messages", msgObj);
 
+    // Emit real-time message
+    socket.current.emit("sendMessage", {
+      senderId: currentUserId,
+      receiverId: selectedChat._id,
+      text: newMessage,
+    });
+
+    // Update UI immediately
     setMessages((prev) => ({
       ...prev,
       [selectedChat._id]: [...(prev[selectedChat._id] || []), msgObj],
     }));
 
-    setNewMessage('');
+    setNewMessage("");
   };
 
   const handleKeyDown = (e) => {
@@ -61,17 +135,6 @@ export default function Student_Chats() {
       handleSendMessage();
     }
   };
-
-  useEffect(() => {
-    const fetchMessages = async () => {
-      if (!selectedChat) return;
-      const res = await axios.get(
-        `http://localhost:5000/messages/${currentUserId}/${selectedChat._id}`
-      );
-      setMessages((prev) => ({ ...prev, [selectedChat._id]: res.data }));
-    };
-    fetchMessages();
-  }, [selectedChat, currentUserId]);
 
   const filteredUsers = users.filter((u) =>
     `${u.firstname} ${u.lastname}`.toLowerCase().includes(searchTerm.toLowerCase())
@@ -92,7 +155,6 @@ export default function Student_Chats() {
   return (
     <div className="flex max-h-screen">
       <Student_Navbar />
-      {/* ← 🟢 ADD margin-left (md:ml-64) to shift content beside sidebar */}
       <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64">
         <div className="flex flex-col md:flex-row justify-between items-center px-10 py-10">
           <div>
@@ -118,7 +180,6 @@ export default function Student_Chats() {
               className="w-full mb-4 p-2 border rounded-lg"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={handleKeyDown}
             />
 
             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
@@ -132,8 +193,12 @@ export default function Student_Chats() {
                   }`}
                   onClick={() => setSelectedChat(user)}
                 >
-                  <strong>{user.firstname} {user.lastname}</strong>
-                  <p className="text-xs text-gray-600">Click to view conversation</p>
+                  <strong>
+                    {user.firstname} {user.lastname}
+                  </strong>
+                  <p className="text-xs text-gray-600">
+                    Click to view conversation
+                  </p>
                 </div>
               ))}
             </div>
@@ -150,8 +215,16 @@ export default function Student_Chats() {
                     {selectedChat.firstname} {selectedChat.lastname}
                   </h3>
                   <div className="flex space-x-3">
-                    <img src={videocall} alt="Video Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
-                    <img src={voicecall} alt="Voice Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
+                    <img
+                      src={videocall}
+                      alt="Video Call"
+                      className="w-6 h-6 cursor-pointer hover:opacity-75"
+                    />
+                    <img
+                      src={voicecall}
+                      alt="Voice Call"
+                      className="w-6 h-6 cursor-pointer hover:opacity-75"
+                    />
                   </div>
                 </div>
 
@@ -159,7 +232,11 @@ export default function Student_Chats() {
                   {(messages[selectedChat._id] || []).map((msg, index) => (
                     <div
                       key={index}
-                      className={`flex ${msg.senderId === currentUserId ? "justify-end" : "justify-start"}`}
+                      className={`flex ${
+                        msg.senderId === currentUserId
+                          ? "justify-end"
+                          : "justify-start"
+                      }`}
                     >
                       <div
                         className={`px-4 py-2 rounded-lg text-sm max-w-xs ${
@@ -182,11 +259,12 @@ export default function Student_Chats() {
                     className="flex-1 p-2 border rounded-lg text-sm"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={handleKeyDown}
                   />
                   <input
                     type="file"
                     ref={fileInputRef}
-                    style={{ display: 'none' }}
+                    style={{ display: "none" }}
                     onChange={handleFileSelect}
                   />
                   <img
@@ -199,7 +277,9 @@ export default function Student_Chats() {
                     onClick={handleSendMessage}
                     disabled={!newMessage.trim()}
                     className={`px-4 py-2 rounded-lg text-sm ${
-                      newMessage.trim() ? 'bg-blue-900 text-white' : 'bg-gray-400 text-white cursor-not-allowed'
+                      newMessage.trim()
+                        ? "bg-blue-900 text-white"
+                        : "bg-gray-400 text-white cursor-not-allowed"
                     }`}
                   >
                     Send

@@ -111,7 +111,7 @@ app.post("/users/:id/upload-profile", upload.single("image"), async (req, res) =
 app.use(users);
 
 // ✅ ADD THIS LINE to attach /messages routes
-app.use(messageRoutes);
+app.use('/messages', messageRoutes);
 
 app.use("/events", eventRoutes);
 

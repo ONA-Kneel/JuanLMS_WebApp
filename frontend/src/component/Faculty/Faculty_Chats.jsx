@@ -1,9 +1,11 @@
+// Faculty_Chats.jsx
+
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { io } from "socket.io-client";
 import videocall from "../../assets/videocall.png";
 import voicecall from "../../assets/voicecall.png";
 import uploadfile from "../../assets/uploadfile.png";
-// import uploadpicture from "../../../src/assets/uploadpicture.png";
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
@@ -14,29 +16,88 @@ export default function Faculty_Chats() {
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
 
-  //files
   const [selectedFile, setSelectedFile] = useState(null);
+  const fileInputRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
-  const currentUserId = JSON.parse(localStorage.getItem("user"))?.id;
+  const socket = useRef();
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
+  const storedUser = localStorage.getItem("user");
+  const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
+
+  if (!currentUserId) {
+    return (
+      <div className="flex items-center justify-center h-screen text-xl text-red-600 font-semibold">
+        Please login first to access chats.
+      </div>
+    );
+  }
+
+  // Initialize socket connection
+  useEffect(() => {
+    socket.current = io("http://localhost:8080");
+
+    socket.current.emit("addUser", currentUserId);
+
+    socket.current.on("getUsers", (users) => {
+      console.log("Online Users:", users);
+      setOnlineUsers(users);
+    });
+
+    socket.current.on("getMessage", (data) => {
+      const incomingMessage = {
+        senderId: data.senderId,
+        receiverId: currentUserId,
+        message: data.text,
+      };
+
+      setMessages((prev) => ({
+        ...prev,
+        [incomingMessage.senderId]: [
+          ...(prev[incomingMessage.senderId] || []),
+          incomingMessage,
+        ],
+      }));
+    });
+
+    return () => {
+      socket.current.disconnect();
+    };
+  }, [currentUserId]);
+
+  // Fetch users
   useEffect(() => {
     const fetchUsers = async () => {
       const res = await axios.get("http://localhost:5000/users");
-      setUsers(res.data.filter(user => user._id !== currentUserId));
+      setUsers(res.data.filter((user) => user._id !== currentUserId));
     };
     fetchUsers();
   }, [currentUserId]);
 
-  const messagesEndRef = useRef(null);
+  // Fetch messages when chat selected
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!selectedChat) return;
+      try {
+        const res = await axios.get(
+          `http://localhost:5000/messages/${currentUserId}/${selectedChat._id}`
+        );
+        setMessages((prev) => ({ ...prev, [selectedChat._id]: res.data }));
+      } catch (err) {
+        console.error("Error fetching messages:", err);
+      }
+    };
+    fetchMessages();
+  }, [selectedChat, currentUserId]);
 
+  // Auto-scroll on new messages
   const selectedChatMessages = messages[selectedChat?._id];
-
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [selectedChatMessages]);
-  ; // scroll whenever messages change
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedChat) return;
@@ -47,65 +108,47 @@ export default function Faculty_Chats() {
       message: newMessage,
     };
 
+    // Save to database
     await axios.post("http://localhost:5000/messages", msgObj);
 
+    // Emit real-time message
+    socket.current.emit("sendMessage", {
+      senderId: currentUserId,
+      receiverId: selectedChat._id,
+      text: newMessage,
+    });
+
+    // Update UI immediately
     setMessages((prev) => ({
       ...prev,
       [selectedChat._id]: [...(prev[selectedChat._id] || []), msgObj],
     }));
 
-    setNewMessage('');
+    setNewMessage("");
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {  // Prevents sending on Shift+Enter
-      e.preventDefault();  // Prevent default "newline"
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
       handleSendMessage();
     }
   };
-
-  useEffect(() => {
-    const fetchMessages = async () => {
-      if (!selectedChat) return;
-      const res = await axios.get(
-        `http://localhost:5000/messages/${currentUserId}/${selectedChat._id}`
-      );
-      setMessages((prev) => ({ ...prev, [selectedChat._id]: res.data }));
-    };
-    fetchMessages();
-  }, [selectedChat, currentUserId]);
 
   const filteredUsers = users.filter((u) =>
     `${u.firstname} ${u.lastname}`.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const fileInputRef = useRef(null);
-  // const imageInputRef = useRef(null);
-
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
       setSelectedFile(file);
-      alert(`Selected file: ${file.name}`); // You can remove alert and upload directly if you want!
+      alert(`Selected file: ${file.name}`);
     }
   };
 
   const openFilePicker = () => {
     fileInputRef.current.click();
   };
-
-  // const handleImageSelect = (e) => {
-  //   const file = e.target.files[0];
-  //   if (file) {
-  //     setSelectedFile(file);
-  //     alert(`Selected image: ${file.name}`);  // Again, replace with upload logic later if needed
-  //   }
-  // };
-
-  // const openCamera = () => {
-  //   imageInputRef.current.click();
-  // };
-
 
   return (
     <div className="flex max-h-screen">
@@ -127,33 +170,40 @@ export default function Faculty_Chats() {
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          <div className="w-1/3 p-4 overflow-y-auto">
+          {/* LEFT PANEL */}
+          <div className="w-full md:w-1/3 p-4 overflow-hidden flex flex-col">
             <input
               type="text"
               placeholder="Search users..."
               className="w-full mb-4 p-2 border rounded-lg"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={handleKeyDown}
             />
-            {filteredUsers.map((user) => (
-              <div
-                key={user._id}
-                className={`p-3 rounded-lg mb-3 cursor-pointer shadow-sm transition-all ${selectedChat?._id === user._id
-                  ? "bg-white"
-                  : "bg-gray-100 hover:bg-gray-300"
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {filteredUsers.map((user) => (
+                <div
+                  key={user._id}
+                  className={`p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
+                    selectedChat?._id === user._id
+                      ? "bg-white"
+                      : "bg-gray-100 hover:bg-gray-300"
                   }`}
-                onClick={() => setSelectedChat(user)}
-              >
-                <strong>{user.firstname} {user.lastname}</strong>
-                <p className="text-xs text-gray-600">Click to view conversation</p>
-              </div>
-            ))}
+                  onClick={() => setSelectedChat(user)}
+                >
+                  <strong>
+                    {user.firstname} {user.lastname}
+                  </strong>
+                  <p className="text-xs text-gray-600">Click to view conversation</p>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="w-px bg-black" />
 
-          <div className="w-2/3 flex flex-col justify-between p-4">
+          {/* RIGHT PANEL */}
+          <div className="w-full md:w-2/3 flex flex-col p-4 overflow-hidden">
             {selectedChat ? (
               <>
                 <div className="flex justify-between items-center mb-4">
@@ -161,27 +211,41 @@ export default function Faculty_Chats() {
                     {selectedChat.firstname} {selectedChat.lastname}
                   </h3>
                   <div className="flex space-x-3">
-                    <img src={videocall} alt="Video Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
-                    <img src={voicecall} alt="Voice Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
+                    <img
+                      src={videocall}
+                      alt="Video Call"
+                      className="w-6 h-6 cursor-pointer hover:opacity-75"
+                    />
+                    <img
+                      src={voicecall}
+                      alt="Voice Call"
+                      className="w-6 h-6 cursor-pointer hover:opacity-75"
+                    />
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto mb-4 space-y-2">
+                <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
                   {(messages[selectedChat._id] || []).map((msg, index) => (
                     <div
                       key={index}
-                      className={`flex ${msg.senderId === currentUserId ? "justify-end" : "justify-start"}`}
+                      className={`flex ${
+                        msg.senderId === currentUserId
+                          ? "justify-end"
+                          : "justify-start"
+                      }`}
                     >
                       <div
-                        className={`px-4 py-2 rounded-lg text-sm max-w-xs ${msg.senderId === currentUserId
-                          ? "bg-blue-900 text-white"
-                          : "bg-gray-300 text-black"
-                          }`}
+                        className={`px-4 py-2 rounded-lg text-sm max-w-xs ${
+                          msg.senderId === currentUserId
+                            ? "bg-blue-900 text-white"
+                            : "bg-gray-300 text-black"
+                        }`}
                       >
                         {msg.message}
                       </div>
                     </div>
                   ))}
+                  <div ref={messagesEndRef} />
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -191,11 +255,12 @@ export default function Faculty_Chats() {
                     className="flex-1 p-2 border rounded-lg text-sm"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={handleKeyDown}
                   />
                   <input
                     type="file"
                     ref={fileInputRef}
-                    style={{ display: 'none' }}
+                    style={{ display: "none" }}
                     onChange={handleFileSelect}
                   />
                   <img
@@ -204,35 +269,21 @@ export default function Faculty_Chats() {
                     className="w-6 h-6 cursor-pointer hover:opacity-75"
                     onClick={openFilePicker}
                   />
-
-                  {/* <input
-                    type="file"
-                    ref={imageInputRef}
-                    accept="image/*"
-                    capture="environment"
-                    style={{ display: 'none' }}
-                    onChange={handleImageSelect}
-                  />
-                  <img
-                    src={uploadpicture}
-                    alt="Upload Picture"
-                    className="w-6 h-6 cursor-pointer hover:opacity-75"
-                    onClick={openCamera}
-                  /> */}
-
                   <button
                     onClick={handleSendMessage}
                     disabled={!newMessage.trim()}
-                    className={`px-4 py-2 rounded-lg text-sm ${newMessage.trim() ? 'bg-blue-900 text-white' : 'bg-gray-400 text-white cursor-not-allowed'
-                      }`}
+                    className={`px-4 py-2 rounded-lg text-sm ${
+                      newMessage.trim()
+                        ? "bg-blue-900 text-white"
+                        : "bg-gray-400 text-white cursor-not-allowed"
+                    }`}
                   >
                     Send
                   </button>
-
                 </div>
               </>
             ) : (
-              <div className="flex items-center justify-center h-full text-gray-500">
+              <div className="flex items-center justify-center flex-1 text-gray-500">
                 Select a chat to start messaging
               </div>
             )}

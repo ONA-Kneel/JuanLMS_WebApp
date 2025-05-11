@@ -3,7 +3,7 @@ import Message from '../models/Message.js';
 
 const router = express.Router();
 
-router.post('/messages', async (req, res) => {
+router.post('/', async (req, res) => {
   const { senderId, receiverId, message } = req.body;
   const newMessage = new Message({ senderId, receiverId, message });
   await newMessage.save();
@@ -12,14 +12,20 @@ router.post('/messages', async (req, res) => {
 
 router.get('/:userId/:chatWithId', async (req, res) => {
   const { userId, chatWithId } = req.params;
-  const messages = await Message.find({
-    $or: [
-      { senderId: userId, receiverId: chatWithId },
-      { senderId: chatWithId, receiverId: userId },
-    ]
-  }).sort({ timestamp: 1 });
+  try {
+    const messages = await Message.find({
+      $or: [
+        { senderId: userId, receiverId: chatWithId },
+        { senderId: chatWithId, receiverId: userId },
+      ]
+    }).sort({ timestamp: 1 });
 
-  res.json(messages);
+    res.json(messages);
+  } catch (err) {
+    console.error("Error fetching messages:", err);
+    res.status(500).json({ error: "Server error fetching messages" });
+  }
 });
+
 
 export default router;
