@@ -1,3 +1,5 @@
+//server.js
+
 import dotenv from 'dotenv';
 import connect from "./connect.cjs";
 import express from "express";
@@ -9,6 +11,9 @@ import fs from "fs";
 import ImageModel from "./model/image.model.js";
 import mongoose from "mongoose";
 import database from "./connect.cjs"
+import eventRoutes from "./routes/eventRoutes.js";
+import classRoutes from "./routes/classRoutes.js";
+
 
 dotenv.config({ path: './config.env' });
 
@@ -22,8 +27,20 @@ app.use('/uploads', express.static('uploads'));
 app.use(express.json());
 
 
-mongoose.connect('mongodb://localhost:27017/JuanLMS');
+mongoose.connect(process.env.ATLAS_URI)
+.then(() => {
+  console.log("Connected to MongoDB");
+})
+.catch((error) => {
+  console.error("Error connecting to MongoDB:", error);
+});
 
+mongoose.connection.on('connected', () => {
+  console.log("MongoDB connected successfully");
+});
+mongoose.connection.on('error', (err) => {
+  console.error("MongoDB connection error:", err);
+});
 
 const uploadDir = './uploads';
 if (!fs.existsSync(uploadDir)) {
@@ -89,11 +106,16 @@ app.post("/users/:id/upload-profile", upload.single("image"), async (req, res) =
   }
 });
 
+
 // User routes
 app.use(users);
 
 // ✅ ADD THIS LINE to attach /messages routes
 app.use(messageRoutes);
+
+app.use("/events", eventRoutes);
+
+app.use("/classes", classRoutes);
 
 app.listen(PORT, () => {
   connect.connectToServer();

@@ -16,6 +16,7 @@ const Faculty_Navbar = () => {
     const location = useLocation();
 
     const navItems = [
+
         { path: "/faculty_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
         { path: "/faculty_classes", icon: classesIcon, label: "CLASSES" },
         { path: "/faculty_activities", icon: activitiesIcon, label: "ACTIVITIES" },
@@ -27,13 +28,14 @@ const Faculty_Navbar = () => {
 
     return (
         <>
+            <div>
             <button
                 className="md:hidden fixed top-4 left-4 z-40 bg-[#010a51] text-white p-2 rounded-lg"
                 onClick={() => setIsOpen(!isOpen)}
             >
                 {isOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
-
+            </div>
             <div
                 className={`bg-[#010a51] text-white p-4 w-64 h-screen fixed top-0 left-0 z-30 transform transition-transform duration-300 ease-in-out
                 ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:block font-poppinsr`}

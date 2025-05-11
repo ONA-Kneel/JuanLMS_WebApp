@@ -15,6 +15,7 @@ const Student_Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+
   const navItems = [
     { path: "/student_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
     { path: "/student_classes", icon: classesIcon, label: "CLASSES" },
@@ -24,7 +25,6 @@ const Student_Navbar = () => {
     { path: "/student_grades", icon: gradesIcon, label: "GRADES" },
     { path: "/student_calendar", icon: calendarIcon, label: "CALENDAR" },
   ];
-
   return (
     <>
       {/* Toggle Button (fixed top-left on mobile) */}
@@ -34,6 +34,7 @@ const Student_Navbar = () => {
       >
         {isOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
+
 
       {/* Sidebar (always fixed, responsive visibility) */}
       <div

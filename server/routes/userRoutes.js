@@ -9,6 +9,24 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here"; // 👈 use
 
 // ------------------ CRUD ROUTES ------------------
 
+// Search students by name (must be before /users/:id)
+userRoutes.get("/users/search", async (req, res) => {
+    const db = database.getDb();
+    const query = req.query.q || "";
+    const users = await db.collection("Users").find({
+        role: "student",
+        $or: [
+            { firstname: { $regex: query, $options: "i" } },
+            { middlename: { $regex: query, $options: "i" } },
+            { lastname: { $regex: query, $options: "i" } },
+        ],
+    }).toArray();
+    if (users.length > 0) {
+        res.json(users);
+    } else {
+        res.json([]);
+    }
+});
 
 // Retrieve ALL
 userRoutes.get("/users", async (req, res) => {
@@ -48,6 +66,7 @@ userRoutes.post("/users", async (req, res) => {
         personalemail,
         profilePic,
         role,   // ✅ <-- accept role
+        userID
     } = req.body;
 
     // Simple server-side validation (backend safety)
@@ -65,6 +84,7 @@ userRoutes.post("/users", async (req, res) => {
         personalemail,
         profilePic,
         role, // ✅ <-- save role
+        userID
     };
 
     try {
@@ -91,6 +111,7 @@ userRoutes.route("/users/:id").patch(async (req, res) => {
             password: req.body.password,
             personalemail: req.body.personalemail,
             profilePic: req.body.profilePic, 
+            userID: req.body.userID
         },
     };
     const result = await db.collection("Users").updateOne({ _id: new ObjectId(req.params.id) }, mongoObject);
@@ -129,6 +150,7 @@ userRoutes.post('/login', async (req, res) => {
             role: role,
             _id: user._id, // Include user ID
             profilePic: user.profilePic || null, // Include profile picture
+            userID: user.userID
         }, JWT_SECRET, { expiresIn: '1d' });
 
         res.json({ token }); // ✅ frontend will decode this
@@ -141,7 +163,7 @@ userRoutes.post('/login', async (req, res) => {
 
 function getRoleFromEmail(email) {
     const normalized = email.toLowerCase();
-    if (normalized.endsWith('@students.sjddef.edu.ph')) return 'students';
+    if (normalized.endsWith('@student.sjddef.edu.ph')) return 'student';
     if (normalized.endsWith('@parents.sjddef.edu.ph')) return 'parent';
     if (normalized.endsWith('@admin.sjddef.edu.ph')) return 'admin';
     if (normalized.endsWith('@director.sjddef.edu.ph')) return 'director';

@@ -20,14 +20,15 @@ export default function Login() {
       const { token } = response.data;
   
       const decoded = jwtDecode(token);
-      const { _id, role, name, email: userEmail, phone, profilePic } = decoded;
+      const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
   
       const imageUrl = profilePic ? `http://localhost:5000/uploads/${profilePic}` : null;
   
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
       localStorage.setItem('token', token);
+      localStorage.setItem('userID', userID);
   
-      if (role === 'students') navigate('/student_dashboard');
+      if (role === 'student') navigate('/student_dashboard');
       else if (role === 'faculty') navigate('/faculty_dashboard');
       else if (role === 'parent') navigate('/parent_dashboard');
       else if (role === 'admin') navigate('/admin_dashboard');

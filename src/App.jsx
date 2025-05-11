@@ -80,6 +80,7 @@ function App() {
       <Routes>
         {/* Login into different User Accounts */}
         <Route path="/" element={<Login />} />
+        
         {/* Students */}
         <Route path="/student_dashboard" element={<Student_Dashboard />} />
         <Route path="/student_classes" element={<Student_Classes />}/>
