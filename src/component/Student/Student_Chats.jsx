@@ -90,7 +90,7 @@ export default function Student_Chats() {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex max-h-screen">
       <Student_Navbar />
       {/* ← 🟢 ADD margin-left (md:ml-64) to shift content beside sidebar */}
       <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64">
