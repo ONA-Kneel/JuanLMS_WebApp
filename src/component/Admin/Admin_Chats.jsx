@@ -94,21 +94,10 @@ export default function Admin_Chats() {
     fileInputRef.current.click();
   };
 
-  // const handleImageSelect = (e) => {
-  //   const file = e.target.files[0];
-  //   if (file) {
-  //     setSelectedFile(file);
-  //     alert(`Selected image: ${file.name}`);  // Again, replace with upload logic later if needed
-  //   }
-  // };
-
-  // const openCamera = () => {
-  //   imageInputRef.current.click();
-  // };
 
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex max-h-screen">
       <Admin_Navbar />
       <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64">
         <div className="flex flex-col md:flex-row justify-between items-center px-10 py-10">
