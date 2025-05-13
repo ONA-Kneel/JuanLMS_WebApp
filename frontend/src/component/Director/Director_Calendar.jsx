@@ -1,8 +1,48 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import "@fullcalendar/common/main.css";
 import ProfileMenu from "../ProfileMenu";
 import Director_Navbar from "./Director_Navbar";
 
 export default function Director_Calendar() {
+  const [holidays, setHolidays] = useState([]);
+  const [adminEvents, setAdminEvents] = useState([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
 
+  useEffect(() => {
+    (async () => {
+      setLoadingEvents(true);
+      try {
+        const res = await axios.get("http://localhost:5000/events");
+        setAdminEvents(res.data.map(ev => ({ ...ev, date: ev.date.slice(0, 10), color: '#1890ff' })));
+      } catch (err) {
+        console.error("Failed to fetch events", err);
+      }
+      setLoadingEvents(false);
+    })();
+  }, []);
+
+  useEffect(() => {
+    const years = [2024, 2025, 2026, 2027, 2028, 2029, 2030];
+    Promise.all(
+      years.map(year =>
+        fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/PH`).then(res => res.json())
+      )
+    ).then(results => {
+      const allHolidayEvents = results.flatMap(data =>
+        data.map(holiday => ({
+          title: holiday.localName,
+          date: holiday.date,
+          color: '#ff4d4f',
+        }))
+      );
+      setHolidays(allHolidayEvents);
+    });
+  }, []);
+
+  const allEvents = [...adminEvents, ...holidays];
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -23,6 +63,18 @@ export default function Director_Calendar() {
             </p>
           </div>
           <ProfileMenu/>
+        </div>
+        <div className="bg-white rounded-xl shadow p-4">
+          {loadingEvents ? (
+            <div>Loading events...</div>
+          ) : (
+            <FullCalendar
+              plugins={[dayGridPlugin]}
+              initialView="dayGridMonth"
+              height="auto"
+              events={allEvents}
+            />
+          )}
         </div>
       </div>
     </div>
