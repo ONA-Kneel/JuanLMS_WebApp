@@ -16,7 +16,7 @@ export default function Director_Calendar() {
       setLoadingEvents(true);
       try {
         const res = await axios.get("http://localhost:5000/events");
-        setAdminEvents(res.data.map(ev => ({ ...ev, date: ev.date.slice(0, 10), color: '#1890ff' })));
+        setAdminEvents(res.data.map(ev => ({ ...ev, date: ev.date.slice(0, 10) })));
       } catch (err) {
         console.error("Failed to fetch events", err);
       }
