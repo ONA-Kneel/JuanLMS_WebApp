@@ -3,6 +3,7 @@ import React, { useState, useCallback } from 'react';
 import ReactDom from 'react-dom';
 import Modal from 'react-modal';
 import Cropper from 'react-easy-crop';
+import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 
 Modal.setAppElement('#root');
@@ -15,6 +16,9 @@ function ChangePasswordModal({ userId, onClose }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // --- Password Change Handler ---
   const handleChangePassword = async (e) => {
@@ -51,30 +55,57 @@ function ChangePasswordModal({ userId, onClose }) {
         <h2 className="text-xl font-bold mb-4">Change Password</h2>
         {error && <div className="text-red-500 mb-2">{error}</div>}
         {success && <div className="text-green-600 mb-2">{success}</div>}
-        <input
-          type="password"
-          placeholder="Current Password"
-          className="w-full border rounded px-3 py-2 mb-2"
-          value={currentPassword}
-          onChange={e => setCurrentPassword(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="New Password"
-          className="w-full border rounded px-3 py-2 mb-2"
-          value={newPassword}
-          onChange={e => setNewPassword(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Confirm New Password"
-          className="w-full border rounded px-3 py-2 mb-4"
-          value={confirmPassword}
-          onChange={e => setConfirmPassword(e.target.value)}
-          required
-        />
+        <div className="relative">
+          <input
+            type={showCurrentPassword ? "text" : "password"}
+            placeholder="Current Password"
+            className="w-full border rounded px-3 py-2 mb-2"
+            value={currentPassword}
+            onChange={e => setCurrentPassword(e.target.value)}
+            required
+          />
+          <button
+            type="button"
+            className="absolute right-3 top-2 text-gray-500 hover:text-gray-700"
+            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+          >
+            {showCurrentPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+        </div>
+        <div className="relative">
+          <input
+            type={showNewPassword ? "text" : "password"}
+            placeholder="New Password"
+            className="w-full border rounded px-3 py-2 mb-2"
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+            required
+          />
+          <button
+            type="button"
+            className="absolute right-3 top-2 text-gray-500 hover:text-gray-700"
+            onClick={() => setShowNewPassword(!showNewPassword)}
+          >
+            {showNewPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+        </div>
+        <div className="relative">
+          <input
+            type={showConfirmPassword ? "text" : "password"}
+            placeholder="Confirm New Password"
+            className="w-full border rounded px-3 py-2 mb-4"
+            value={confirmPassword}
+            onChange={e => setConfirmPassword(e.target.value)}
+            required
+          />
+          <button
+            type="button"
+            className="absolute right-3 top-2 text-gray-500 hover:text-gray-700"
+            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+          >
+            {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+        </div>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded bg-gray-300">Cancel</button>
           <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white" disabled={loading}>Change</button>
@@ -218,7 +249,20 @@ export default function ProfileModal({
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-30 p-4">
       <div className="z-40 bg-gray-50/95 p-6 md:p-12 rounded-3xl shadow-2xl max-w-5xl w-full h-[90vh] overflow-y-auto font-poppinsr relative">
         {/* Sign-out Button */}
-        <button onClick={onClose} className="absolute right-10 top-6 text-black font-poppinsb hover:underline">
+        <button 
+          onClick={() => {
+            // Clear all user data from localStorage
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+            localStorage.removeItem('userID');
+            localStorage.removeItem('rememberedEmail');
+            localStorage.removeItem('rememberedPassword');
+            // Close modal and redirect to login
+            onClose();
+            window.location.href = '/';
+          }} 
+          className="absolute right-10 top-6 text-black font-poppinsb hover:underline"
+        >
           Sign-out
         </button>
 

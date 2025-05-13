@@ -1,5 +1,5 @@
 // login
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo/Logo4.svg';
 import axios from 'axios';
@@ -9,6 +9,46 @@ import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
 export default function Login() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+
+  useEffect(() => {
+    // Check for stored credentials on component mount
+    const storedEmail = localStorage.getItem('rememberedEmail');
+    const storedPassword = localStorage.getItem('rememberedPassword');
+    
+    if (storedEmail && storedPassword) {
+      // Auto-login with stored credentials
+      handleAutoLogin(storedEmail, storedPassword);
+    }
+  }, []);
+
+  const handleAutoLogin = async (email, password) => {
+    try {
+      const response = await axios.post('http://localhost:5000/login', { email, password });
+      const { token } = response.data;
+  
+      const decoded = jwtDecode(token);
+      const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
+  
+      const imageUrl = profilePic ? `http://localhost:5000/uploads/${profilePic}` : null;
+  
+      localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
+      localStorage.setItem('token', token);
+      localStorage.setItem('userID', userID);
+  
+      if (role === 'student') navigate('/student_dashboard');
+      else if (role === 'faculty') navigate('/faculty_dashboard');
+      else if (role === 'parent') navigate('/parent_dashboard');
+      else if (role === 'admin') navigate('/admin_dashboard');
+      else if (role === 'director') navigate('/director_dashboard');
+      else alert('Unknown role');
+    } catch (error) {
+      console.log(error);
+      // Clear stored credentials if auto-login fails
+      localStorage.removeItem('rememberedEmail');
+      localStorage.removeItem('rememberedPassword');
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -27,6 +67,16 @@ export default function Login() {
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
       localStorage.setItem('token', token);
       localStorage.setItem('userID', userID);
+
+      // Store credentials if remember me is checked
+      if (rememberMe) {
+        localStorage.setItem('rememberedEmail', email);
+        localStorage.setItem('rememberedPassword', password);
+      } else {
+        // Clear any previously stored credentials
+        localStorage.removeItem('rememberedEmail');
+        localStorage.removeItem('rememberedPassword');
+      }
   
       if (role === 'student') navigate('/student_dashboard');
       else if (role === 'faculty') navigate('/faculty_dashboard');
@@ -82,7 +132,12 @@ export default function Login() {
 
             <div className="flex items-center justify-between">
               <label className="flex items-center font-poppinsr text-sm">
-                <input type="checkbox" className="mr-2" />
+                <input 
+                  type="checkbox" 
+                  className="mr-2" 
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
                 Remember Me
               </label>
               <a href="#" className="text-blue-600 hover:underline font-poppinsr text-sm">
