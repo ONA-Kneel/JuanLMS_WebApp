@@ -3,6 +3,7 @@ import e from "express";
 import database from "../connect.cjs";
 import { ObjectId } from "mongodb";
 import jwt from "jsonwebtoken";
+// import bcrypt from "bcryptjs"; // If you want to use hashing in the future
 
 const userRoutes = e.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here"; // 👈 use env variable in production
@@ -123,6 +124,38 @@ userRoutes.delete("/users/:id", async (req, res) => {
     const db = database.getDb();
     const result = await db.collection("Users").deleteOne({ _id: new ObjectId(req.params.id) });
     res.json(result);
+});
+
+// Change password route
+userRoutes.patch("/users/:id/change-password", async (req, res) => {
+  const db = database.getDb();
+  const { currentPassword, newPassword } = req.body;
+  const userId = req.params.id;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: "All fields are required." });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters." });
+  }
+
+  const user = await db.collection("Users").findOne({ _id: new ObjectId(userId) });
+  if (!user) return res.status(404).json({ error: "User not found." });
+
+  // If you already hash passwords, use bcrypt.compare
+  const isMatch = user.password === currentPassword; // Replace with bcrypt.compare if hashed
+  // const isMatch = await bcrypt.compare(currentPassword, user.password);
+
+  if (!isMatch) {
+    return res.status(400).json({ error: "Current password is incorrect." });
+  }
+
+  // Hash the new password before saving (recommended)
+  // const hashedPassword = await bcrypt.hash(newPassword, 10);
+  // await db.collection("Users").updateOne({ _id: new ObjectId(userId) }, { $set: { password: hashedPassword } });
+  await db.collection("Users").updateOne({ _id: new ObjectId(userId) }, { $set: { password: newPassword } });
+
+  res.json({ success: true, message: "Password updated successfully." });
 });
 
 // ------------------ JWT LOGIN ROUTE ------------------

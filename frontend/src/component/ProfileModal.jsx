@@ -1,12 +1,90 @@
-// ProfileModal.jsx
-
+// ===================== Imports =====================
 import React, { useState, useCallback } from 'react';
 import ReactDom from 'react-dom';
 import Modal from 'react-modal';
 import Cropper from 'react-easy-crop';
+import axios from 'axios';
 
 Modal.setAppElement('#root');
 
+// ===================== ChangePasswordModal =====================
+function ChangePasswordModal({ userId, onClose }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // --- Password Change Handler ---
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    if (newPassword.length < 8) {
+      setError("New password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await axios.patch(`http://localhost:5000/users/${userId}/change-password`, {
+        currentPassword,
+        newPassword,
+      });
+      setSuccess("Password changed successfully!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to change password.");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
+      <form onSubmit={handleChangePassword} className="bg-white p-6 rounded shadow w-96">
+        <h2 className="text-xl font-bold mb-4">Change Password</h2>
+        {error && <div className="text-red-500 mb-2">{error}</div>}
+        {success && <div className="text-green-600 mb-2">{success}</div>}
+        <input
+          type="password"
+          placeholder="Current Password"
+          className="w-full border rounded px-3 py-2 mb-2"
+          value={currentPassword}
+          onChange={e => setCurrentPassword(e.target.value)}
+          required
+        />
+        <input
+          type="password"
+          placeholder="New Password"
+          className="w-full border rounded px-3 py-2 mb-2"
+          value={newPassword}
+          onChange={e => setNewPassword(e.target.value)}
+          required
+        />
+        <input
+          type="password"
+          placeholder="Confirm New Password"
+          className="w-full border rounded px-3 py-2 mb-4"
+          value={confirmPassword}
+          onChange={e => setConfirmPassword(e.target.value)}
+          required
+        />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded bg-gray-300">Cancel</button>
+          <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white" disabled={loading}>Change</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ===================== Main ProfileModal =====================
 export default function ProfileModal({
   open,
   onClose,
@@ -20,11 +98,17 @@ export default function ProfileModal({
   closeCropModal,
   userType,
 }) {
+  // --- State ---
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [imageSrc, setImageSrc] = useState(null);
+  const [activeTab, setActiveTab] = useState("badges");
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
+  const user = JSON.parse(localStorage.getItem('user'));
+
+  // --- Role Descriptions ---
   const roleDescriptions = {
     student: "Student | (To implement soon)",
     faculty: "Faculty | (To implement soon)",
@@ -33,6 +117,7 @@ export default function ProfileModal({
     parent: "Parent | Guardian",
   };
 
+  // ===================== Cropper Logic =====================
   const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
@@ -53,7 +138,7 @@ export default function ProfileModal({
         const image = new Image();
         image.addEventListener('load', () => resolve(image));
         image.addEventListener('error', (error) => reject(error));
-        image.setAttribute('crossOrigin', 'anonymous'); // Avoid CORS issues
+        image.setAttribute('crossOrigin', 'anonymous');
         image.src = url;
       });
 
@@ -61,11 +146,9 @@ export default function ProfileModal({
       const image = await createImage(imageSrc);
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-
       const { width, height } = crop;
       canvas.width = width;
       canvas.height = height;
-
       ctx.drawImage(
         image,
         crop.x,
@@ -77,7 +160,6 @@ export default function ProfileModal({
         width,
         height
       );
-
       canvas.toBlob((blob) => {
         if (!blob) {
           reject(new Error('Canvas is empty'));
@@ -98,64 +180,49 @@ export default function ProfileModal({
 
   const showCroppedImage = useCallback(async () => {
     const user = JSON.parse(localStorage.getItem('user'));
-
     try {
       const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
-
-      // Prepare blob and formData for upload
       const blob = await fetch(croppedImage).then(res => res.blob());
       const formData = new FormData();
       formData.append('image', blob, 'profile.jpg');
-
-      // Upload image to backend
       const uploadResponse = await fetch(`http://localhost:5000/users/${user._id}/upload-profile`, {
         method: 'POST',
         body: formData,
       });
-
       const uploadData = await uploadResponse.json();
-
       if (!uploadResponse.ok) {
         alert(uploadData.error || "Image upload failed");
         return;
       }
-
-      // After upload, fetch the latest user data from backend (to ensure sync)
       const userResponse = await fetch(`http://localhost:5000/users/${user._id}`);
       const updatedUser = await userResponse.json();
-
       if (!userResponse.ok) {
         alert("Failed to fetch updated user data.");
         return;
       }
-
-      // Update localStorage and state with fresh backend data
       localStorage.setItem('user', JSON.stringify(updatedUser));
       const uploadedImageUrl = updatedUser.profilePic;
-
-      // Trigger avatar update on parent component
       onCrop(uploadedImageUrl);
-
-      // Cleanup
       closeCropModal();
       resetCropState();
-
     } catch (e) {
       console.error(e);
       alert("An error occurred while uploading the image.");
     }
   }, [croppedAreaPixels, imageSrc, onCrop, closeCropModal]);
 
+  // ===================== Render =====================
   if (!open) return null;
 
   return ReactDom.createPortal(
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-30 p-4">
       <div className="z-40 bg-gray-50/95 p-6 md:p-12 rounded-3xl shadow-2xl max-w-5xl w-full h-[90vh] overflow-y-auto font-poppinsr relative">
-
+        {/* Sign-out Button */}
         <button onClick={onClose} className="absolute right-10 top-6 text-black font-poppinsb hover:underline">
           Sign-out
         </button>
 
+        {/* Profile Header */}
         <div className="flex items-center gap-6 mb-6">
           <div className="justify-center items-center text-center">
             <img
@@ -163,7 +230,6 @@ export default function ProfileModal({
               src={avatarImg || '../assets/profileicon (1).svg'}
               alt="Avatar"
             />
-
             <button
               className="font-poppinsr hover:underline hover:text-blue-800 mt-2.5 ml-1.5 text-sm cursor-pointer"
               onClick={openCropModal}
@@ -191,7 +257,7 @@ export default function ProfileModal({
             overlayClassName="fixed inset-0 bg-gray-50/75 z-[100] font-poppinsb"
           >
             <h2 className="text-center">Please upload a Picture.</h2>
-
+            {/* Cropper Content */}
             {!imageSrc ? (
               <div className="flex justify-center mt-4">
                 <label className="inline-flex my-4 items-center px-4 py-2 bg-blue-900 text-white rounded cursor-pointer hover:bg-blue-950">
@@ -257,12 +323,44 @@ export default function ProfileModal({
           </div>
         </div>
 
+        {/* ===================== Tab Navigation ===================== */}
         <div className="flex gap-6 text-lg font-semibold border-b border-gray-300 pb-2 mb-4">
-          <button className="hover:text-blue-800">My Badges</button>
-          <button className="hover:text-blue-800">Settings</button>
+          <button
+            className={`hover:text-blue-800 ${activeTab === "badges" ? "text-blue-800 underline" : ""}`}
+            onClick={() => setActiveTab("badges")}
+          >
+            My Badges
+          </button>
+          <button
+            className={`hover:text-blue-800 ${activeTab === "settings" ? "text-blue-800 underline" : ""}`}
+            onClick={() => setActiveTab("settings")}
+          >
+            Settings
+          </button>
         </div>
 
-        <div className="bg-gray-200 rounded-2xl h-40 w-60" />
+        {/* ===================== Tab Content ===================== */}
+        {activeTab === "badges" && (
+          <div className="bg-gray-200 rounded-2xl h-40 w-60">
+            {/* Badges content here */}
+          </div>
+        )}
+        {activeTab === "settings" && (
+          <div>
+            {/* Other settings here */}
+            <button
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              onClick={() => setShowChangePassword(true)}
+            >
+              Change Password
+            </button>
+          </div>
+        )}
+
+        {/* ===================== Change Password Modal ===================== */}
+        {showChangePassword && (
+          <ChangePasswordModal userId={user?._id} onClose={() => setShowChangePassword(false)} />
+        )}
       </div>
     </div>,
     document.getElementById('portal')
