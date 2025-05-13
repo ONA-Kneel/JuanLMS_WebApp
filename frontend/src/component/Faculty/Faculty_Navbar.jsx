@@ -4,7 +4,6 @@ import dashboardIcon from "../../assets/dashboard.png";
 import classesIcon from "../../assets/classes.png";
 import activitiesIcon from "../../assets/activities.png";
 import chatsIcon from "../../assets/chats.png";
-import progressIcon from "../../assets/progress.png";
 import gradesIcon from "../../assets/grades.png";
 import calendarIcon from "../../assets/calendar.png";
 import logo5 from "../../assets/logo/Logo5.svg";
@@ -21,7 +20,6 @@ const Faculty_Navbar = () => {
         { path: "/faculty_classes", icon: classesIcon, label: "CLASSES" },
         { path: "/faculty_activities", icon: activitiesIcon, label: "ACTIVITIES" },
         { path: "/faculty_chats", icon: chatsIcon, label: "CHATS" },
-        { path: "/faculty_progress", icon: progressIcon, label: "PROGRESS" },
         { path: "/faculty_grades", icon: gradesIcon, label: "GRADES" },
         { path: "/faculty_calendar", icon: calendarIcon, label: "CALENDAR" },
     ];

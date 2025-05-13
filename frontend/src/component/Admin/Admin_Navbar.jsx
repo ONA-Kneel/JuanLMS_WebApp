@@ -18,10 +18,8 @@ const Admin_Navbar = () => {
     const navItems = [
         { path: "/admin_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
         { path: "/admin_accounts", icon: classesIcon, label: "ACCOUNTS" },
-        { path: "/admin_activities", icon: activitiesIcon, label: "ACTIVITIES" },
         { path: "/admin_chats", icon: chatsIcon, label: "CHATS" },
-        { path: "/admin_progress", icon: progressIcon, label: "PROGRESS" },
-        { path: "/admin_grades", icon: gradesIcon, label: "GRADES" },
+        { path: "/admin_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
         { path: "/admin_calendar", icon: calendarIcon, label: "CALENDAR" },
     ];
 

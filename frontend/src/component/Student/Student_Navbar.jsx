@@ -4,7 +4,6 @@ import dashboardIcon from "../../assets/dashboard.png";
 import classesIcon from "../../assets/classes.png";
 import activitiesIcon from "../../assets/activities.png";
 import chatsIcon from "../../assets/chats.png";
-import progressIcon from "../../assets/progress.png";
 import gradesIcon from "../../assets/grades.png";
 import calendarIcon from "../../assets/calendar.png";
 import logo5 from "../../assets/logo/Logo5.svg";
@@ -21,7 +20,6 @@ const Student_Navbar = () => {
     { path: "/student_classes", icon: classesIcon, label: "CLASSES" },
     { path: "/student_activities", icon: activitiesIcon, label: "ACTIVITIES" },
     { path: "/student_chats", icon: chatsIcon, label: "CHATS" },
-    { path: "/student_progress", icon: progressIcon, label: "PROGRESS" },
     { path: "/student_grades", icon: gradesIcon, label: "GRADES" },
     { path: "/student_calendar", icon: calendarIcon, label: "CALENDAR" },
   ];

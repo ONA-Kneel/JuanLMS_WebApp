@@ -21,7 +21,7 @@ const Director_Navbar = () => {
         { path: "/director_classes", icon: classesIcon, label: "CLASSES" },
         { path: "/director_activities", icon: activitiesIcon, label: "ACTIVITIES" },
         { path: "/director_chats", icon: chatsIcon, label: "CHATS" },
-        { path: "/director_progress", icon: progressIcon, label: "PROGRESS" },
+        { path: "/director_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
         { path: "/director_grades", icon: gradesIcon, label: "GRADES" },
         { path: "/director_calendar", icon: calendarIcon, label: "CALENDAR" },
     ];
