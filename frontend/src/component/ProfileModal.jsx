@@ -1,4 +1,4 @@
-// profileModal
+// ProfileModal.jsx
 
 import React, { useState, useCallback } from 'react';
 import ReactDom from 'react-dom';
@@ -20,9 +20,6 @@ export default function ProfileModal({
   closeCropModal,
   userType,
 }) {
-  console.log(avatarImg);  // Debugging the avatar image in ProfileModal
-
-
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
@@ -50,7 +47,6 @@ export default function ProfileModal({
     reader.readAsDataURL(file);
   };
 
-  // --- Helper to crop the image ---
   const getCroppedImg = (imageSrc, crop) => {
     const createImage = (url) =>
       new Promise((resolve, reject) => {
@@ -102,35 +98,48 @@ export default function ProfileModal({
 
   const showCroppedImage = useCallback(async () => {
     const user = JSON.parse(localStorage.getItem('user'));
+
     try {
       const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
 
-      // Upload cropped image to backend
+      // Prepare blob and formData for upload
       const blob = await fetch(croppedImage).then(res => res.blob());
       const formData = new FormData();
       formData.append('image', blob, 'profile.jpg');
 
-      const response = await fetch(`http://localhost:5000/users/${user._id}/upload-profile`, {
+      // Upload image to backend
+      const uploadResponse = await fetch(`http://localhost:5000/users/${user._id}/upload-profile`, {
         method: 'POST',
         body: formData,
       });
 
-      const data = await response.json();
+      const uploadData = await uploadResponse.json();
 
-      if (response.ok) {
-        const uploadedImageUrl = `http://localhost:5000/uploads/${data.imageFilename}`;
-        onCrop(uploadedImageUrl); // Update avatar
-
-        // Update user localStorage
-        const updatedUser = { ...user, profilePic: uploadedImageUrl };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-
-      } else {
-        alert(data.error || "Image upload failed");
+      if (!uploadResponse.ok) {
+        alert(uploadData.error || "Image upload failed");
+        return;
       }
 
+      // After upload, fetch the latest user data from backend (to ensure sync)
+      const userResponse = await fetch(`http://localhost:5000/users/${user._id}`);
+      const updatedUser = await userResponse.json();
+
+      if (!userResponse.ok) {
+        alert("Failed to fetch updated user data.");
+        return;
+      }
+
+      // Update localStorage and state with fresh backend data
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      const uploadedImageUrl = updatedUser.profilePic;
+
+      // Trigger avatar update on parent component
+      onCrop(uploadedImageUrl);
+
+      // Cleanup
       closeCropModal();
       resetCropState();
+
     } catch (e) {
       console.error(e);
       alert("An error occurred while uploading the image.");
@@ -194,7 +203,6 @@ export default function ProfileModal({
                     className="hidden"
                   />
                 </label>
-
               </div>
             ) : (
               <>

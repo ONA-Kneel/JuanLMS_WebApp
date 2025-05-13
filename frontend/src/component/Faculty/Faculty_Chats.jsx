@@ -15,13 +15,12 @@ export default function Faculty_Chats() {
   const [users, setUsers] = useState([]);
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
-
   const [selectedFile, setSelectedFile] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
-
-  const socket = useRef();
-  const [onlineUsers, setOnlineUsers] = useState([]);
+  const socket = useRef(null);
 
   const storedUser = localStorage.getItem("user");
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
@@ -34,14 +33,17 @@ export default function Faculty_Chats() {
     );
   }
 
-  // Initialize socket connection
+  // ===================== SOCKET.IO SETUP =====================
   useEffect(() => {
-    socket.current = io("http://localhost:8080");
+    socket.current = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:8080", {
+      transports: ["websocket"],
+      reconnectionAttempts: 5,
+      timeout: 10000,
+    });
 
     socket.current.emit("addUser", currentUserId);
 
     socket.current.on("getUsers", (users) => {
-      console.log("Online Users:", users);
       setOnlineUsers(users);
     });
 
@@ -50,6 +52,7 @@ export default function Faculty_Chats() {
         senderId: data.senderId,
         receiverId: currentUserId,
         message: data.text,
+        fileUrl: data.fileUrl || null,
       };
 
       setMessages((prev) => ({
@@ -62,69 +65,94 @@ export default function Faculty_Chats() {
     });
 
     return () => {
-      socket.current.disconnect();
+      if (socket.current) socket.current.disconnect();
     };
   }, [currentUserId]);
 
-  // Fetch users
+  // ===================== FETCH USERS =====================
   useEffect(() => {
     const fetchUsers = async () => {
-      const res = await axios.get("http://localhost:5000/users");
-      setUsers(res.data.filter((user) => user._id !== currentUserId));
+      try {
+        const res = await axios.get(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/users`);
+        const otherUsers = res.data.filter((user) => user._id !== currentUserId);
+        setUsers(otherUsers);
+
+        const savedChatId = localStorage.getItem("selectedChatId");
+        if (savedChatId) {
+          const chatUser = otherUsers.find((u) => u._id === savedChatId);
+          if (chatUser) setSelectedChat(chatUser);
+        }
+      } catch (err) {
+        console.error("Error fetching users:", err);
+      }
     };
+
     fetchUsers();
   }, [currentUserId]);
 
-  // Fetch messages when chat selected
+  // ===================== FETCH MESSAGES =====================
   useEffect(() => {
     const fetchMessages = async () => {
       if (!selectedChat) return;
       try {
         const res = await axios.get(
-          `http://localhost:5000/messages/${currentUserId}/${selectedChat._id}`
+          `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/messages/${currentUserId}/${selectedChat._id}`
         );
         setMessages((prev) => ({ ...prev, [selectedChat._id]: res.data }));
       } catch (err) {
         console.error("Error fetching messages:", err);
       }
     };
+
     fetchMessages();
   }, [selectedChat, currentUserId]);
 
-  // Auto-scroll on new messages
-  const selectedChatMessages = messages[selectedChat?._id];
+  // Auto-scroll to bottom
+  const selectedChatMessages = messages[selectedChat?._id] || [];
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [selectedChatMessages]);
 
+  // ===================== HANDLER FUNCTIONS =====================
+
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedChat) return;
+    if (!newMessage.trim() && !selectedFile) return;
+    if (!selectedChat) return;
 
-    const msgObj = {
-      senderId: currentUserId,
-      receiverId: selectedChat._id,
-      message: newMessage,
-    };
+    const formData = new FormData();
+    formData.append("senderId", currentUserId);
+    formData.append("receiverId", selectedChat._id);
+    formData.append("message", newMessage);
+    if (selectedFile) {
+      formData.append("file", selectedFile);
+    }
 
-    // Save to database
-    await axios.post("http://localhost:5000/messages", msgObj);
+    try {
+      const res = await axios.post(
+        `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/messages`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
 
-    // Emit real-time message
-    socket.current.emit("sendMessage", {
-      senderId: currentUserId,
-      receiverId: selectedChat._id,
-      text: newMessage,
-    });
+      const sentMessage = res.data;
 
-    // Update UI immediately
-    setMessages((prev) => ({
-      ...prev,
-      [selectedChat._id]: [...(prev[selectedChat._id] || []), msgObj],
-    }));
+      socket.current.emit("sendMessage", {
+        senderId: currentUserId,
+        receiverId: selectedChat._id,
+        text: sentMessage.message,
+        fileUrl: sentMessage.fileUrl || null,
+      });
 
-    setNewMessage("");
+      setMessages((prev) => ({
+        ...prev,
+        [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
+      }));
+
+      setNewMessage("");
+      setSelectedFile(null);
+    } catch (err) {
+      console.error("Error sending message:", err);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -134,15 +162,11 @@ export default function Faculty_Chats() {
     }
   };
 
-  const filteredUsers = users.filter((u) =>
-    `${u.firstname} ${u.lastname}`.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
       setSelectedFile(file);
-      alert(`Selected file: ${file.name}`);
+      e.target.value = null;
     }
   };
 
@@ -150,6 +174,16 @@ export default function Faculty_Chats() {
     fileInputRef.current.click();
   };
 
+  const handleSelectChat = (user) => {
+    setSelectedChat(user);
+    localStorage.setItem("selectedChatId", user._id);
+  };
+
+  const filteredUsers = users.filter((u) =>
+    `${u.firstname} ${u.lastname}`.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // ===================== RENDER =====================
   return (
     <div className="flex max-h-screen">
       <Faculty_Navbar />
@@ -170,7 +204,7 @@ export default function Faculty_Chats() {
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* LEFT PANEL */}
+          {/* LEFT PANEL - User List */}
           <div className="w-full md:w-1/3 p-4 overflow-hidden flex flex-col">
             <input
               type="text"
@@ -179,21 +213,16 @@ export default function Faculty_Chats() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-
             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
               {filteredUsers.map((user) => (
                 <div
                   key={user._id}
                   className={`p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                    selectedChat?._id === user._id
-                      ? "bg-white"
-                      : "bg-gray-100 hover:bg-gray-300"
+                    selectedChat?._id === user._id ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
                   }`}
-                  onClick={() => setSelectedChat(user)}
+                  onClick={() => handleSelectChat(user)}
                 >
-                  <strong>
-                    {user.firstname} {user.lastname}
-                  </strong>
+                  <strong>{user.firstname} {user.lastname}</strong>
                   <p className="text-xs text-gray-600">Click to view conversation</p>
                 </div>
               ))}
@@ -202,7 +231,7 @@ export default function Faculty_Chats() {
 
           <div className="w-px bg-black" />
 
-          {/* RIGHT PANEL */}
+          {/* RIGHT PANEL - Chat Messages */}
           <div className="w-full md:w-2/3 flex flex-col p-4 overflow-hidden">
             {selectedChat ? (
               <>
@@ -211,44 +240,41 @@ export default function Faculty_Chats() {
                     {selectedChat.firstname} {selectedChat.lastname}
                   </h3>
                   <div className="flex space-x-3">
-                    <img
-                      src={videocall}
-                      alt="Video Call"
-                      className="w-6 h-6 cursor-pointer hover:opacity-75"
-                    />
-                    <img
-                      src={voicecall}
-                      alt="Voice Call"
-                      className="w-6 h-6 cursor-pointer hover:opacity-75"
-                    />
+                    <img src={videocall} alt="Video Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
+                    <img src={voicecall} alt="Voice Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
-                  {(messages[selectedChat._id] || []).map((msg, index) => (
+                  {selectedChatMessages.map((msg, index) => (
                     <div
                       key={index}
-                      className={`flex ${
-                        msg.senderId === currentUserId
-                          ? "justify-end"
-                          : "justify-start"
-                      }`}
+                      className={`flex ${msg.senderId === currentUserId ? "justify-end" : "justify-start"}`}
                     >
                       <div
                         className={`px-4 py-2 rounded-lg text-sm max-w-xs ${
-                          msg.senderId === currentUserId
-                            ? "bg-blue-900 text-white"
-                            : "bg-gray-300 text-black"
+                          msg.senderId === currentUserId ? "bg-blue-900 text-white" : "bg-gray-300 text-black"
                         }`}
                       >
-                        {msg.message}
+                        {msg.message && <p>{msg.message}</p>}
+                        {msg.fileUrl && (
+                          <a
+                            href={`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/${msg.fileUrl}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-xs block mt-1"
+                          >
+                            📎 {msg.fileUrl.split("-").slice(1).join("-")}
+                          </a>
+                        )}
                       </div>
                     </div>
                   ))}
                   <div ref={messagesEndRef} />
                 </div>
 
-                <div className="flex items-center space-x-2">
+                {/* Message Input Area */}
+                <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="text"
                     placeholder="Type your message..."
@@ -257,25 +283,39 @@ export default function Faculty_Chats() {
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
                   />
+
                   <input
                     type="file"
                     ref={fileInputRef}
                     style={{ display: "none" }}
                     onChange={handleFileSelect}
                   />
+
                   <img
                     src={uploadfile}
                     alt="Upload File"
                     className="w-6 h-6 cursor-pointer hover:opacity-75"
                     onClick={openFilePicker}
                   />
+
+                  {selectedFile && (
+                    <span className="text-xs text-gray-600 truncate max-w-[100px] flex items-center gap-1">
+                      📎 {selectedFile.name}
+                      <button
+                        onClick={() => setSelectedFile(null)}
+                        className="ml-1 text-red-500 hover:text-red-700 text-xs"
+                        title="Remove file"
+                      >
+                        ❌
+                      </button>
+                    </span>
+                  )}
+
                   <button
                     onClick={handleSendMessage}
-                    disabled={!newMessage.trim()}
+                    disabled={!newMessage.trim() && !selectedFile}
                     className={`px-4 py-2 rounded-lg text-sm ${
-                      newMessage.trim()
-                        ? "bg-blue-900 text-white"
-                        : "bg-gray-400 text-white cursor-not-allowed"
+                      newMessage.trim() || selectedFile ? "bg-blue-900 text-white" : "bg-gray-400 text-white cursor-not-allowed"
                     }`}
                   >
                     Send

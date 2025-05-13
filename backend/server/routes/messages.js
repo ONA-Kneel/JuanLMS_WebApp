@@ -1,12 +1,35 @@
+// routes/messages.js
+
 import express from 'express';
 import Message from '../models/Message.js';
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 
 const router = express.Router();
 
-router.post('/', async (req, res) => {
+const uploadDir = './uploads/messages';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + "-" + file.originalname);
+  }
+});
+const upload = multer({ storage });
+
+router.post('/', upload.single('file'), async (req, res) => {
   const { senderId, receiverId, message } = req.body;
-  const newMessage = new Message({ senderId, receiverId, message });
+  const fileUrl = req.file ? `uploads/messages/${req.file.filename}` : null;
+
+  const newMessage = new Message({ senderId, receiverId, message, fileUrl });
   await newMessage.save();
+
   res.status(201).json(newMessage);
 });
 
@@ -26,6 +49,5 @@ router.get('/:userId/:chatWithId', async (req, res) => {
     res.status(500).json({ error: "Server error fetching messages" });
   }
 });
-
 
 export default router;

@@ -1,10 +1,24 @@
-import mongoose from "mongoose";
+// models/Message.js
+import mongoose from 'mongoose';
 
-const messageSchema = new mongoose.Schema({
-  senderId: String,
-  receiverId: String,
-  message: String,
-  timestamp: { type: Date, default: Date.now },
-});
+const messageSchema = new mongoose.Schema(
+  {
+    senderId: { type: String, required: true },
+    receiverId: { type: String, required: true },
+    message: {
+      type: String,
+      required: function () {
+        // message is required only if fileUrl is NOT present
+        return !this.fileUrl;
+      },
+      default: null,
+    },
+    fileUrl: { type: String, default: null },
+  },
+  { timestamps: true }
+);
 
-export default mongoose.model("Message", messageSchema);
+const Message = mongoose.model('Message', messageSchema);
+
+export default Message;
+
