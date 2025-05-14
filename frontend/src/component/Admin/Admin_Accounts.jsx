@@ -14,7 +14,7 @@ export default function Admin_Accounts() {
     personalemail: "",
     contactno: "",
     password: "",
-    role: "student",
+    role: "students",
     userID: "", // invisible field
   });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
@@ -137,7 +137,7 @@ export default function Admin_Accounts() {
           personalemail: "",
           contactno: "",
           password: "",
-          role: "student",
+          role: "students",
           userID: "", // invisible field
         });
         fetchUsers(); // ✅ Refresh user list
@@ -274,7 +274,7 @@ export default function Admin_Accounts() {
               className="border rounded p-2"
               required
             >
-              <option value="student">Student</option>
+              <option value="students">Students</option>
               <option value="faculty">Faculty</option>
               <option value="parent">Parent</option>
               <option value="admin">Admin</option>
@@ -319,7 +319,7 @@ export default function Admin_Accounts() {
     <th className="p-2 border">
       <select className="w-full border rounded px-2 py-1 text-sm" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
         <option value="">All Roles</option>
-        <option value="student">Student</option>
+        <option value="students">Students</option>
         <option value="faculty">Faculty</option>
         <option value="parent">Parent</option>
         <option value="admin">Admin</option>

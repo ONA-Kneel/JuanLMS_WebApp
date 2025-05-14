@@ -15,7 +15,7 @@ userRoutes.get("/users/search", async (req, res) => {
     const db = database.getDb();
     const query = req.query.q || "";
     const users = await db.collection("Users").find({
-        role: "student",
+        role: "students",
         $or: [
             { firstname: { $regex: query, $options: "i" } },
             { middlename: { $regex: query, $options: "i" } },
@@ -211,7 +211,7 @@ userRoutes.post('/login', async (req, res) => {
 
 function getRoleFromEmail(email) {
     const normalized = email.toLowerCase();
-    if (normalized.endsWith('@student.sjddef.edu.ph')) return 'student';
+    if (normalized.endsWith('@students.sjddef.edu.ph')) return 'students';
     if (normalized.endsWith('@parents.sjddef.edu.ph')) return 'parent';
     if (normalized.endsWith('@admin.sjddef.edu.ph')) return 'admin';
     if (normalized.endsWith('@director.sjddef.edu.ph')) return 'director';
