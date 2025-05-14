@@ -176,17 +176,18 @@ userRoutes.post('/login', async (req, res) => {
 
         // ✅ JWT Token Payload
         const token = jwt.sign({
-            id: user._id,
+            _id: user._id,
+            firstname: user.firstname,
+            lastname: user.lastname,
             name: fullName,
             email: user.email,
             phone: user.contactno,
             role: role,
-            _id: user._id, // Include user ID
-            profilePic: user.profilePic || null, // Include profile picture
+            profilePic: user.profilePic || null,
             userID: user.userID
         }, JWT_SECRET, { expiresIn: '1d' });
 
-        res.json({ token }); // ✅ frontend will decode this
+        res.json({ token });
 
         // --- Audit log for login (native driver) ---
         try {

@@ -11,14 +11,42 @@ const client = new MongoClient(process.env.ATLAS_URI, {
   }
 });
 
-let database
+let database;
 
 module.exports = {
-    connectToServer: () => {
-        database = client.db("JuanLMS")
+    connectToServer: async () => {
+        try {
+            // Connect to MongoDB
+            await client.connect();
+            console.log("Successfully connected to MongoDB.");
+            
+            // Initialize the database
+            database = client.db("JuanLMS");
+            
+            // Test the connection
+            await database.command({ ping: 1 });
+            console.log("Database connection test successful");
+            
+            return database;
+        } catch (error) {
+            console.error("Error connecting to MongoDB:", error);
+            throw error;
+        }
     },
     getDb: () => {
-        return database
+        if (!database) {
+            throw new Error("Database not initialized. Call connectToServer first.");
+        }
+        return database;
+    },
+    closeConnection: async () => {
+        try {
+            await client.close();
+            console.log("MongoDB connection closed.");
+        } catch (error) {
+            console.error("Error closing MongoDB connection:", error);
+            throw error;
+        }
     }
 }
 
