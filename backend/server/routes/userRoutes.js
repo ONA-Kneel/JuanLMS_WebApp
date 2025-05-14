@@ -187,6 +187,21 @@ userRoutes.post('/login', async (req, res) => {
         }, JWT_SECRET, { expiresIn: '1d' });
 
         res.json({ token }); // ✅ frontend will decode this
+
+        // --- Audit log for login (native driver) ---
+        try {
+            await db.collection('AuditLogs').insertOne({
+                userId: user._id,
+                userName: `${user.firstname} ${user.lastname}`,
+                action: 'Login',
+                details: `User ${user.email} logged in.`,
+                ipAddress: req.ip || req.connection.remoteAddress,
+                timestamp: new Date()
+            });
+        } catch (err) {
+            console.error('Failed to log audit trail:', err);
+        }
+        // --- End audit log ---
     } else {
         res.status(401).json({ success: false, message: "Invalid email or password" });
     }

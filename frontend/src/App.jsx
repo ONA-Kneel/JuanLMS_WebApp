@@ -1,11 +1,4 @@
 // App.js
-import { useEffect, useState } from 'react'
-import axios from 'axios';
-// import reactLogo from './assets/react.svg'
-// import viteLogo from '/vite.svg'
-
-
-// MODULES/PAGES
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 // For Logging in into different user and accounts
 import Login from './component/Login';
@@ -49,6 +42,7 @@ import Admin_Chats from './component/Admin/Admin_Chats';
 import Admin_Accounts from './component/Admin/Admin_Accounts';
 import Admin_Grades from './component/Admin/Admin_Grades';
 import Admin_Progress from './component/Admin/Admin_Progress';
+import Admin_AuditTrail from './component/Admin/Admin_AuditTrail';
 
 
 // Parent Access
@@ -57,24 +51,7 @@ import Parent_Classes from './component/Parent/Parent_Classes';
 import Parent_Grades from './component/Parent/Parent_Grades';
 import Parent_Progress from './component/Parent/Parent_Progress';
 
-
-
 function App() {
-  const [data, setData] = useState()
-
-  useEffect(()=>{
-    async function grabdata() {
-      const response = await axios.get("http://localhost:5000/users")
-      if (response.status === 200)
-      {
-        setData(response.data)
-      }
-      
-    }
-
-    grabdata()
-  },[])
-
   return (
     <Router>
       <Routes>
@@ -121,6 +98,7 @@ function App() {
         <Route path="/admin_grades" element={<Admin_Grades />}/>
         <Route path="/admin_calendar" element={<Admin_Calendar />}/>
         <Route path="/admin_progress" element={<Admin_Progress />}/>
+        <Route path="/admin_audit_trail" element={<Admin_AuditTrail />}/>
 
         {/* Parent */}
         <Route path="/parent_dashboard" element={<Parent_Dashboard/>}/>

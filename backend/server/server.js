@@ -12,6 +12,7 @@ import mongoose from "mongoose";
 import database from "./connect.cjs";
 import eventRoutes from "./routes/eventRoutes.js";
 import classRoutes from "./routes/classRoutes.js";
+import auditTrailRoutes from "./routes/auditTrailroutes.js";
 
 dotenv.config({ path: './config.env' });
 
@@ -83,6 +84,7 @@ app.use('/messages', messageRoutes);
 app.use('/uploads', express.static('uploads'));
 app.use("/events", eventRoutes);
 app.use("/classes", classRoutes);
+app.use("/", auditTrailRoutes);
 
 // Start server
 app.listen(PORT, () => {
