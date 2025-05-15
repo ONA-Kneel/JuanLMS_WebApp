@@ -176,14 +176,13 @@ userRoutes.post('/login', async (req, res) => {
 
         // ✅ JWT Token Payload
         const token = jwt.sign({
-            _id: user._id,
-            firstname: user.firstname,
-            lastname: user.lastname,
+            id: user._id,
             name: fullName,
             email: user.email,
             phone: user.contactno,
             role: role,
-            profilePic: user.profilePic || null,
+            _id: user._id, // Include user ID
+            profilePic: user.profilePic || null, // Include profile picture
             userID: user.userID
         }, JWT_SECRET, { expiresIn: '1d' });
 

@@ -21,12 +21,7 @@ const app = express();
 const PORT = 5000;
 
 // Middleware
-app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
@@ -90,12 +85,13 @@ app.post("/users/:id/upload-profile", upload.single("image"), async (req, res) =
   }
 });
 
-// API Routes
-app.use('/api/users', users);
-app.use('/api/messages', messageRoutes);
-app.use('/api/events', eventRoutes);
-app.use('/api/classes', classRoutes);
-app.use('/api', auditTrailRoutes);
+// ✅ Routes
+app.use(users);
+app.use('/messages', messageRoutes);
+app.use('/uploads', express.static('uploads'));
+app.use("/events", eventRoutes);
+app.use("/classes", classRoutes);
+app.use("/", auditTrailRoutes);
 
 // Start server
 app.listen(PORT, () => {
