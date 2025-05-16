@@ -36,7 +36,7 @@ export default function Login() {
       localStorage.setItem('token', token);
       localStorage.setItem('userID', userID);
   
-      if (role === 'student') navigate('/student_dashboard');
+      if (role === 'students') navigate('/student_dashboard');
       else if (role === 'faculty') navigate('/faculty_dashboard');
       else if (role === 'parent') navigate('/parent_dashboard');
       else if (role === 'admin') navigate('/admin_dashboard');
@@ -78,7 +78,7 @@ export default function Login() {
         localStorage.removeItem('rememberedPassword');
       }
   
-      if (role === 'student') navigate('/student_dashboard');
+      if (role === 'students') navigate('/student_dashboard');
       else if (role === 'faculty') navigate('/faculty_dashboard');
       else if (role === 'parent') navigate('/parent_dashboard');
       else if (role === 'admin') navigate('/admin_dashboard');

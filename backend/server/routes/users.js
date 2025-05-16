@@ -8,7 +8,7 @@ const router = express.Router();
 router.get('/search', async (req, res) => {
   const query = req.query.q;
   const users = await User.find({
-    role: 'student',
+    role: 'students',
     $or: [
       { firstname: new RegExp(query, 'i') },
       { middlename: new RegExp(query, 'i') },
