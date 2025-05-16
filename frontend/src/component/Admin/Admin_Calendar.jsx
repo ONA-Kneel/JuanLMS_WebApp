@@ -5,9 +5,9 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import "@fullcalendar/common/main.css";
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
-import generateEvent from "../../assets/generateEvent.png";
+// import generateEvent from "../../assets/generateEvent.png";
 import createEvent from "../../assets/createEvent.png";
-import editEvent from "../../assets/editEvent.png";
+// import editEvent from "../../assets/editEvent.png";
 import ProfileModal from "../ProfileModal";
 
 const PRESET_COLORS = [
@@ -107,7 +107,7 @@ export default function Admin_Calendar() {
       await axios.post("http://localhost:5000/events", newEvent);
       await fetchEvents();
       setShowEventModal(false);
-    } catch (err) {
+    } catch {
       alert("Failed to add event");
     }
   };
@@ -137,7 +137,7 @@ export default function Admin_Calendar() {
       await axios.put(`http://localhost:5000/events/${_id}`, { title, date, color });
       await fetchEvents();
       setShowEditModal(false);
-    } catch (err) {
+    } catch {
       alert("Failed to update event");
     }
   };
@@ -150,7 +150,7 @@ export default function Admin_Calendar() {
       await axios.delete(`http://localhost:5000/events/${_id}`);
       await fetchEvents();
       setShowEditModal(false);
-    } catch (err) {
+    } catch {
       alert("Failed to delete event");
     }
   };

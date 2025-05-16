@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import Admin_Navbar from "./Admin_Navbar";
+import Director_Navbar from "./Director_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
 
-export default function Admin_AuditTrail() {
+export default function Director_AuditTrail() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -72,7 +72,7 @@ export default function Admin_AuditTrail() {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
-      <Admin_Navbar />
+      <Director_Navbar />
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
@@ -111,9 +111,6 @@ export default function Admin_AuditTrail() {
                     User
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Action
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Details
                   </th>
                 </tr>
@@ -121,7 +118,7 @@ export default function Admin_AuditTrail() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan="4" className="px-6 py-4 text-center">
+                    <td colSpan="3" className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                       </div>
@@ -129,7 +126,7 @@ export default function Admin_AuditTrail() {
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan="4" className="px-6 py-4">
+                    <td colSpan="3" className="px-6 py-4">
                       <div className="text-center text-red-500">
                         <p className="font-medium">Error</p>
                         <p className="text-sm mt-1">{error}</p>
@@ -144,7 +141,7 @@ export default function Admin_AuditTrail() {
                   </tr>
                 ) : auditLogs.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan="3" className="px-6 py-4 text-center text-gray-500">
                       No audit logs found. System actions will be recorded here.
                     </td>
                   </tr>
@@ -156,9 +153,6 @@ export default function Admin_AuditTrail() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {log.userName}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {log.action}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {log.details}

@@ -31,7 +31,7 @@ import Director_Activities from './component/Director/Director_Activities';
 import Director_Chats from './component/Director/Director_Chats';
 import Director_Grades from './component/Director/Director_Grades';
 import Director_Calendar from './component/Director/Director_Calendar';
-import Director_Progress from './component/Director/Director_Progress';
+import Director_AuditTrail from './component/Director/Director_AuditTrail';
 
 
 // Admin Access
@@ -88,7 +88,7 @@ function App() {
         <Route path="/director_chats" element={<Director_Chats />}/>
         <Route path="/director_grades" element={<Director_Grades />}/>
         <Route path="/director_calendar" element={<Director_Calendar />}/> 
-        <Route path="/director_progress" element={<Director_Progress/>}/>
+        <Route path="/director_audit_trail" element={<Director_AuditTrail/>}/>
 
         {/* Admin */}
         <Route path="/admin_dashboard" element={<Admin_Dashboard/>}/>
