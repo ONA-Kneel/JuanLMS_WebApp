@@ -246,7 +246,7 @@ export default function ProfileModal({
   if (!open) return null;
 
   return ReactDom.createPortal(
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-30 p-4">
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-30 p-4">
       <div className="z-40 bg-gray-50/95 p-6 md:p-12 rounded-3xl shadow-2xl max-w-5xl w-full h-[90vh] overflow-y-auto font-poppinsr relative">
         {/* Sign-out Button */}
         <button 

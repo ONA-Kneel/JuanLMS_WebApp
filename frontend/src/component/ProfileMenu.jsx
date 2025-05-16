@@ -13,7 +13,6 @@ export default function ProfileMenu() {
   const user = JSON.parse(localStorage.getItem('user'));
   const [im, setim] = useState(user?.profilePic || null);
 
-
   return (
     <div className="relative z-50">
       <button

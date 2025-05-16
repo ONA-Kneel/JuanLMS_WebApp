@@ -4,7 +4,7 @@ import Director_Navbar from "./Director_Navbar";
 import ProfileModal from "../ProfileModal";
 // import { useNavigate } from "react-router-dom";
 import compClassesIcon from "../../assets/compClassesIcon.png";
-import arrowRight from "../../assets/arrowRight.png";
+// import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 
 export default function Director_Dashboard() {
