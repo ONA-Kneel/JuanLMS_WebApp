@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from "react-router-dom";
 import dashboardIcon from "../../assets/dashboard.png";
-import classesIcon from "../../assets/classes.png";
-import activitiesIcon from "../../assets/activities.png";
+// import classesIcon from "../../assets/classes.png";
+// import activitiesIcon from "../../assets/activities.png";
 import chatsIcon from "../../assets/chats.png";
 import progressIcon from "../../assets/progress.png";
 import gradesIcon from "../../assets/grades.png";
@@ -18,12 +18,10 @@ const Director_Navbar = () => {
     const navItems = [
 
         { path: "/director_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
-        { path: "/director_classes", icon: classesIcon, label: "CLASSES" },
-        { path: "/director_activities", icon: activitiesIcon, label: "ACTIVITIES" },
-        { path: "/director_chats", icon: chatsIcon, label: "CHATS" },
-        { path: "/director_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
-        { path: "/director_grades", icon: gradesIcon, label: "GRADES" },
         { path: "/director_calendar", icon: calendarIcon, label: "CALENDAR" },
+        { path: "/director_grades", icon: gradesIcon, label: "GRADES" },
+        { path: "/director_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
+        { path: "/director_chats", icon: chatsIcon, label: "CHATS" },
     ];
 
     return (

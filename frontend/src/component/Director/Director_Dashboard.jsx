@@ -46,19 +46,7 @@ export default function Director_Dashboard() {
                 </div>
                 ))}
             </div>
-        <h3 className="text-lg md:text-4xl font-bold mb-3">Current Term Classes</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {["Intro to Computing", "Modern Mathematics"].map((className, index) => (
-                    <div key={index} className="relative bg-[#00418b] text-white p-4 md:p-6 rounded-2xl hover:bg-[#002b5c] transition flex flex-col justify-between">
-                      <h4 className="text-base md:text-lg font-semibold">{className}</h4>
-                      <p className="text-sm mt-1">0% Progress</p>
-                      <div className="w-full bg-gray-300 rounded-full h-2 mt-2">
-                        <div className="bg-blue-500 h-full rounded-full w-[0%]"></div>
-                      </div>
-                      <img src={arrowRight} alt="Arrow" className="absolute top-4 right-4 w-5 h-5" />
-                    </div>
-                  ))}
-                </div>
+
       </div>
     </div>
   );

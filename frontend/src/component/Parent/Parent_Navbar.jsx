@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from "react-router-dom";
 import dashboardIcon from "../../assets/dashboard.png";
 import classesIcon from "../../assets/classes.png";
-import progressIcon from "../../assets/progress.png";
 import gradesIcon from "../../assets/grades.png";
 import logo5 from "../../assets/logo/Logo5.svg";
 import { Menu, X } from 'lucide-react';
@@ -15,8 +14,7 @@ const Parent_Navbar = () => {
     const navItems = [
 
         { path: "/parent_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
-        { path: "/parent_classes", icon: classesIcon, label: "CLASSES" },
-        { path: "/parent_progress", icon: progressIcon, label: "PPROGRESS" },
+        { path: "/parent_progress", icon: classesIcon, label: "ACTIVITY LOG" },
         { path: "/parent_grades", icon: gradesIcon, label: "GRADES" },
     ];
 

@@ -26,8 +26,6 @@ import Faculty_ClassWorkspace from './component/Faculty/Faculty_ClassWorkspace';
 
 // Director Access
 import Director_Dashboard from './component/Director/Director_Dashboard';
-import Director_Classes from './component/Director/Director_Classes';
-import Director_Activities from './component/Director/Director_Activities';
 import Director_Chats from './component/Director/Director_Chats';
 import Director_Grades from './component/Director/Director_Grades';
 import Director_Calendar from './component/Director/Director_Calendar';
@@ -47,7 +45,6 @@ import Admin_AuditTrail from './component/Admin/Admin_AuditTrail';
 
 // Parent Access
 import Parent_Dashboard from './component/Parent/Parent_Dashboard';
-import Parent_Classes from './component/Parent/Parent_Classes';
 import Parent_Grades from './component/Parent/Parent_Grades';
 import Parent_Progress from './component/Parent/Parent_Progress';
 
@@ -83,8 +80,6 @@ function App() {
 
         {/* Director */}
         <Route path="/director_dashboard" element={<Director_Dashboard/>}/>
-        <Route path="/director_classes" element={<Director_Classes />}/>
-        <Route path="/director_activities" element={<Director_Activities />}/>
         <Route path="/director_chats" element={<Director_Chats />}/>
         <Route path="/director_grades" element={<Director_Grades />}/>
         <Route path="/director_calendar" element={<Director_Calendar />}/> 
@@ -103,7 +98,6 @@ function App() {
         {/* Parent */}
         <Route path="/parent_dashboard" element={<Parent_Dashboard/>}/>
         <Route path="/parent_grades" element={<Parent_Grades/>}/>
-        <Route path="/parent_classes" element={<Parent_Classes/>}/>
         <Route path="/parent_progress" element={<Parent_Progress/>}/>
 
       </Routes>
