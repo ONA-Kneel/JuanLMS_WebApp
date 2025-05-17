@@ -228,19 +228,96 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 </form>
               )}
 
-              <p className="text-gray-700 mb-6">Select a lesson to view its content.</p>
+              {/* {isFaculty && (
+                <button
+                  onClick={() => setShowLessonForm(!showLessonForm)}
+                  className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm mb-4"
+                >
+                  {showLessonForm ? "Cancel" : "+ Create New Lesson"}
+                </button>
+              )} */}
 
-              <div className="space-y-4">
-                {(isFaculty ? lessons : classContent.lessons).map((lesson) => (
-                  <button
-                    key={lesson.id}
-                    onClick={() => setActiveLesson(lesson)}
-                    className="w-full text-left py-4 px-6 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 font-medium transition shadow-sm border border-blue-200"
-                  >
-                    {lesson.title}
-                  </button>
-                ))}
-              </div>
+              <p className="text-gray-700 mb-6">Select a lesson to view or download its file.</p>
+
+              {lessonsLoading ? (
+                <p className="text-blue-700">Loading lessons...</p>
+              ) : lessonError ? (
+                <p className="text-red-600">{lessonError}</p>
+              ) : backendLessons.length === 0 ? (
+                <p className="text-sm text-gray-700">No lessons yet.</p>
+              ) : (
+                <div className="space-y-6">
+                  {backendLessons.map((lesson) => (
+                    <div key={lesson._id} className="rounded-2xl shadow bg-white overflow-hidden">
+                      {/* Card/Header */}
+                      <div className="flex items-center bg-blue-800 rounded-t-2xl p-4">
+                        <FiBook className="w-14 h-14 text-white bg-blue-900 rounded shadow mr-4 p-2" />
+                        <div>
+                          <h2 className="text-lg font-bold text-white">{lesson.title}</h2>
+                          <span className="bg-white text-blue-800 px-3 py-1 rounded-full text-xs font-semibold ml-2">Completed ✓</span>
+                        </div>
+                      </div>
+                      {/* Table/List */}
+                      <div className="p-4">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-gray-600 border-b">
+                              <th className="text-left py-2">Section</th>
+                              <th>Submitted</th>
+                              <th>Score</th>
+                              <th>Due</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {lesson.files && lesson.files.length > 0 ? (
+                              lesson.files.map((file, idx) => (
+                                <tr className="border-b hover:bg-gray-50" key={idx}>
+                                  <td className="py-2 flex items-center">
+                                    <FiFile className="w-5 h-5 text-blue-700 mr-2" />
+                                    <a
+                                      href={`http://localhost:5000${file.fileUrl}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-700 underline hover:text-blue-900"
+                                    >
+                                      {file.fileName}
+                                    </a>
+                                  </td>
+                                  <td></td>
+                                  <td></td>
+                                  <td></td>
+                                  <td><span className="text-green-600 font-bold">✓</span></td>
+                                </tr>
+                              ))
+                            ) : lesson.fileUrl && lesson.fileName ? (
+                              <tr>
+                                <td className="py-2 flex items-center">
+                                  <FiFile className="w-5 h-5 text-blue-700 mr-2" />
+                                  <a
+                                    href={`http://localhost:5000${lesson.fileUrl}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-700 underline hover:text-blue-900"
+                                  >
+                                    {lesson.fileName}
+                                  </a>
+                                </td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td><span className="text-green-600 font-bold">✓</span></td>
+                              </tr>
+                            ) : (
+                              <tr><td colSpan={5} className="text-center text-gray-400">No files</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
 
