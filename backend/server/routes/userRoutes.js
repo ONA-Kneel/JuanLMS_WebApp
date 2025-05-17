@@ -1,4 +1,7 @@
 //routes/userRoutes.js
+// Handles user CRUD, authentication, password reset (with OTP), and email sending for JuanLMS.
+// Uses JWT for login, Brevo for OTP email, and MongoDB for user storage.
+
 import e from "express";
 import database from "../connect.cjs";
 import { ObjectId } from "mongodb";
@@ -31,7 +34,7 @@ userRoutes.get("/users/search", async (req, res) => {
     }
 });
 
-// Retrieve ALL
+// Retrieve ALL users
 userRoutes.get("/users", async (req, res) => {
     const db = database.getDb();
     const data = await db.collection("Users").find({}).toArray();
@@ -42,7 +45,7 @@ userRoutes.get("/users", async (req, res) => {
     }
 });
 
-// RetrieveOne
+// Retrieve ONE user by ID
 userRoutes.route("/users/:id").get(async (request, response) => {
     let db = database.getDb()
     let data = await db.collection("Users").findOne({ _id: new ObjectId(request.params.id) });
@@ -55,7 +58,7 @@ userRoutes.route("/users/:id").get(async (request, response) => {
 
 });
 
-// Create ONE (with role)
+// Create ONE user (with role)
 userRoutes.post("/users", async (req, res) => {
     const db = database.getDb();
 
@@ -99,8 +102,7 @@ userRoutes.post("/users", async (req, res) => {
     }
 });
 
-
-// UpdateOne
+// Update ONE user
 userRoutes.route("/users/:id").patch(async (req, res) => {
 
     let db = database.getDb()
@@ -121,14 +123,16 @@ userRoutes.route("/users/:id").patch(async (req, res) => {
     res.json(result);
 });
 
-// Delete ONE
+// Delete ONE user
 userRoutes.delete("/users/:id", async (req, res) => {
     const db = database.getDb();
     const result = await db.collection("Users").deleteOne({ _id: new ObjectId(req.params.id) });
     res.json(result);
 });
 
-// Change password route
+// ------------------ PASSWORD CHANGE/RESET ------------------
+
+// Change password route (requires current password)
 userRoutes.patch("/users/:id/change-password", async (req, res) => {
   const db = database.getDb();
   const { currentPassword, newPassword } = req.body;
@@ -170,6 +174,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
     const genericMsg = 'If your email is registered, a reset link or OTP has been sent to your personal email.';
 
     try {
+        // Find user by personal email
         const user = await db.collection('Users').findOne({ personalemail: email.toLowerCase() });
         console.log('User found:', user);
         if (!user || !user.personalemail) {
@@ -177,15 +182,17 @@ userRoutes.post('/forgot-password', async (req, res) => {
             return res.json({ message: genericMsg });
         }
 
+        // --- Generate OTP and expiry ---
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const otpExpiry = Date.now() + 15 * 60 * 1000;
+        const otpExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
 
+        // Store OTP and expiry in user document
         await db.collection('Users').updateOne(
             { _id: user._id },
             { $set: { resetOTP: otp, resetOTPExpires: otpExpiry } }
         );
 
-        // Configure Brevo
+        // --- Send OTP via Brevo (Sendinblue) ---
         let defaultClient = SibApiV3Sdk.ApiClient.instance;
         let apiKey = defaultClient.authentications['api-key'];
         apiKey.apiKey = process.env.BREVO_API_KEY;
@@ -219,7 +226,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
     }
 });
 
-// Test email endpoint
+// Test email endpoint (for development)
 userRoutes.get('/test-email', async (req, res) => {
     try {
         const transporter = nodemailer.createTransport({
@@ -265,9 +272,11 @@ userRoutes.post('/reset-password', async (req, res) => {
         return res.status(400).json({ message: 'Password must be at least 8 characters.' });
     }
 
+    // Find user by personal email
     const user = await db.collection('Users').findOne({ personalemail: personalemail.toLowerCase() });
     if (!user) return res.status(404).json({ message: 'User not found.' });
 
+    // --- OTP validation ---
     if (
         !user.resetOTP ||
         !user.resetOTPExpires ||
@@ -288,11 +297,13 @@ userRoutes.post('/reset-password', async (req, res) => {
 
 // ------------------ JWT LOGIN ROUTE ------------------
 
+// Login route: issues JWT on success, logs audit trail
 userRoutes.post('/login', async (req, res) => {
     const db = database.getDb();
     const email = req.body.email.toLowerCase();
     const { password } = req.body;
 
+    // Find user by email and password
     const user = await db.collection("Users").findOne({ email, password });
 
     if (user) {
@@ -337,6 +348,7 @@ userRoutes.post('/login', async (req, res) => {
 
 // ------------------ UTILS ------------------
 
+// Get user role from email domain
 function getRoleFromEmail(email) {
     const normalized = email.toLowerCase();
     if (normalized.endsWith('@students.sjddef.edu.ph')) return 'students';
@@ -347,6 +359,7 @@ function getRoleFromEmail(email) {
     return 'unknown';
 }
 
+// Convert string to Proper Case
 function toProperCase(str) {
     return str
         .toLowerCase()

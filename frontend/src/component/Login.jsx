@@ -1,4 +1,7 @@
-// login
+// Login.jsx
+// Login page for JuanLMS. Handles user authentication, auto-login, and role-based navigation.
+// Features: Remember Me, password visibility toggle, JWT decode, and auto-login if credentials are stored.
+
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import logo from '../assets/logo/Logo4.svg';
@@ -8,9 +11,12 @@ import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
 
 export default function Login() {
   const navigate = useNavigate();
+
+  // --- STATE ---
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
+  // --- EFFECT: Auto-login if credentials are stored in localStorage ---
   useEffect(() => {
     // Check for stored credentials on component mount
     const storedEmail = localStorage.getItem('rememberedEmail');
@@ -22,20 +28,25 @@ export default function Login() {
     }
   }, []);
 
+  // --- HANDLER: Auto-login using stored credentials ---
   const handleAutoLogin = async (email, password) => {
     try {
       const response = await axios.post('http://localhost:5000/login', { email, password });
       const { token } = response.data;
   
+      // Decode JWT to extract user info and role
       const decoded = jwtDecode(token);
       const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
   
+      // If user has a profile picture, build the image URL
       const imageUrl = profilePic ? `http://localhost:5000/uploads/${profilePic}` : null;
   
+      // Store user info and token in localStorage
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
       localStorage.setItem('token', token);
       localStorage.setItem('userID', userID);
   
+      // Navigate to dashboard based on user role
       if (role === 'students') navigate('/student_dashboard');
       else if (role === 'faculty') navigate('/faculty_dashboard');
       else if (role === 'parent') navigate('/parent_dashboard');
@@ -50,6 +61,7 @@ export default function Login() {
     }
   };
 
+  // --- HANDLER: Manual login form submission ---
   const handleLogin = async (e) => {
     e.preventDefault();
     const email = e.target.elements[0].value;
@@ -59,11 +71,13 @@ export default function Login() {
       const response = await axios.post('http://localhost:5000/login', { email, password });
       const { token } = response.data;
   
+      // Decode JWT to extract user info and role
       const decoded = jwtDecode(token);
       const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
   
       const imageUrl = profilePic ? `http://localhost:5000/uploads/${profilePic}` : null;
   
+      // Store user info and token in localStorage
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
       localStorage.setItem('token', token);
       localStorage.setItem('userID', userID);
@@ -78,6 +92,7 @@ export default function Login() {
         localStorage.removeItem('rememberedPassword');
       }
   
+      // Navigate to dashboard based on user role
       if (role === 'students') navigate('/student_dashboard');
       else if (role === 'faculty') navigate('/faculty_dashboard');
       else if (role === 'parent') navigate('/parent_dashboard');
@@ -92,6 +107,7 @@ export default function Login() {
   };
   
 
+  // --- RENDER ---
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 inset-shadow-black px-4">
       <div className="w-full max-w-4xl bg-white shadow-lg flex flex-col md:flex-row h-auto md:h-[30rem] lg:w-[120rem]">
@@ -120,6 +136,7 @@ export default function Login() {
                   className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900 pr-12"
                   placeholder="********"
                 />
+                {/* Password visibility toggle */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}

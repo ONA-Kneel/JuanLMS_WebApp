@@ -1,8 +1,13 @@
+// ResetPassword.jsx
+// Handles the final step of password reset: user enters OTP, new password, and confirms it.
+// Verifies OTP and updates password via backend API.
+
 import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 export default function ResetPassword() {
+  // --- STATE ---
   const [personalemail, setPersonalEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -12,6 +17,7 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  // --- HANDLER: Submit OTP and new password to backend ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -35,6 +41,7 @@ export default function ResetPassword() {
     }
   };
 
+  // --- RENDER ---
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 px-4">
       <div className="w-full max-w-md bg-white shadow-lg rounded-lg p-8">
@@ -92,8 +99,10 @@ export default function ResetPassword() {
             {loading ? 'Resetting...' : 'Reset Password'}
           </button>
         </form>
+        {/* Show success or error message */}
         {message && <p className="text-green-600 mt-4">{message}</p>}
         {error && <p className="text-red-600 mt-4">{error}</p>}
+        {/* Back to login navigation */}
         <button className="mt-6 text-blue-700 hover:underline" onClick={() => navigate('/login')}>Back to Login</button>
       </div>
     </div>

@@ -1,12 +1,18 @@
 // ClassContent.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 
 export default function ClassContent({ selected, isFaculty = false }) {
+  // --- ROUTER PARAMS ---
   const { classId } = useParams();
   const [activeLesson, setActiveLesson] = useState(null);
 
-  // Dummy data (default content for students)
+  // Backend lessons state
+  const [backendLessons, setBackendLessons] = useState([]);
+  const [lessonsLoading, setLessonsLoading] = useState(false);
+  const [lessonError, setLessonError] = useState(null);
+
+  // --- DUMMY DATA (for students, fallback if no backend) ---
   const dummyData = {
     1: {
       name: "Introduction to Computing",
@@ -38,20 +44,44 @@ export default function ClassContent({ selected, isFaculty = false }) {
     },
   };
 
+  // Use dummy data if no backend data is available
   const classContent = dummyData[classId] || dummyData[1];
 
+  // --- UI STATE ---
   const goBack = () => setActiveLesson(null);
 
   // Faculty-only states (dynamic content management)
   const [announcements, setAnnouncements] = useState([]);
   const [assignments, setAssignments] = useState([]);
-  const [lessons, setLessons] = useState([]);
-
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
   const [showLessonForm, setShowLessonForm] = useState(false);
 
-  // Handlers for adding content (Faculty only)
+  // File input state for lesson upload
+  const [lessonFile, setLessonFile] = useState(null);
+  const [lessonUploadLoading, setLessonUploadLoading] = useState(false);
+  const [lessonUploadError, setLessonUploadError] = useState(null);
+  const [lessonUploadSuccess, setLessonUploadSuccess] = useState(null);
+
+  // Fetch lessons from backend
+  useEffect(() => {
+    if (selected === "materials") {
+      setLessonsLoading(true);
+      setLessonError(null);
+      fetch(`http://localhost:5000/lessons?classID=${classId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setBackendLessons(data);
+          else setBackendLessons([]);
+        })
+        .catch(() => setLessonError("Failed to fetch lessons."))
+        .finally(() => setLessonsLoading(false));
+    }
+  }, [selected, classId, lessonUploadSuccess]);
+
+  // --- HANDLERS FOR ADDING CONTENT (Faculty only) ---
+
+  // Add announcement handler
   const handleAddAnnouncement = (e) => {
     e.preventDefault();
     const form = e.target;
@@ -65,6 +95,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     form.reset();
   };
 
+  // Add assignment handler
   const handleAddAssignment = (e) => {
     e.preventDefault();
     const form = e.target;
@@ -78,19 +109,49 @@ export default function ClassContent({ selected, isFaculty = false }) {
     form.reset();
   };
 
-  const handleAddLesson = (e) => {
+  const handleAddLesson = async (e) => {
     e.preventDefault();
     const form = e.target;
-    const newLesson = {
-      id: lessons.length + 1,
-      title: form.title.value,
-      description: form.description.value,
-    };
-    setLessons([...lessons, newLesson]);
-    setShowLessonForm(false);
-    form.reset();
+    const title = form.title.value;
+    const files = lessonFile;
+    if (!files || files.length === 0) {
+      setLessonUploadError("Please select at least one file.");
+      setLessonUploadLoading(false);
+      return;
+    }
+    if (files.length > 5) {
+      setLessonUploadError("You can upload up to 5 files per lesson.");
+      setLessonUploadLoading(false);
+      return;
+    }
+    const formData = new FormData();
+    formData.append("classID", classId);
+    formData.append("title", title);
+    for (let i = 0; i < files.length; i++) {
+      formData.append("files", files[i]);
+    }
+    try {
+      const res = await fetch("http://localhost:5000/lessons", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLessonUploadSuccess("Lesson uploaded successfully!");
+        setShowLessonForm(false);
+        setLessonFile(null);
+        form.reset();
+      } else {
+        setLessonUploadError(data.error || "Failed to upload lesson.");
+      }
+    } catch {
+      setLessonUploadError("Failed to upload lesson.");
+    } finally {
+      setLessonUploadLoading(false);
+    }
   };
 
+  // --- COMPONENT: Renders a single lesson item (not used in main render, but kept for possible future use) ---
   function LessonItem({ lesson }) {
     const [expanded, setExpanded] = useState(false);
     return (
@@ -104,8 +165,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
     );
   }
 
+  // --- MAIN RENDER ---
   return (
     <div className="bg-white rounded-2xl shadow p-6 md:p-8 h-full overflow-auto">
+      {/* --- HOME TAB: Announcements --- */}
       {selected === "home" && (
         <>
           <div className="flex justify-between items-center mb-4">
@@ -120,6 +183,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
             )}
           </div>
 
+          {/* Announcement form for faculty */}
           {isFaculty && showAnnouncementForm && (
             <form onSubmit={handleAddAnnouncement} className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
               <div>
@@ -136,6 +200,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
             </form>
           )}
 
+          {/* Announcements list (faculty: own, students: dummy) */}
           <div className="space-y-4">
             {(isFaculty ? announcements : classContent.posts).length > 0 ? (
               (isFaculty ? announcements : classContent.posts).map((item, index) => (
@@ -151,6 +216,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
         </>
       )}
 
+      {/* --- CLASSWORK TAB: Assignments --- */}
       {selected === "classwork" && (
         <>
           <div className="flex justify-between items-center mb-4">
@@ -165,6 +231,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
             )}
           </div>
 
+          {/* Assignment form for faculty */}
           {isFaculty && showAssignmentForm && (
             <form onSubmit={handleAddAssignment} className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
               <div>
@@ -181,6 +248,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
             </form>
           )}
 
+          {/* Assignments list (faculty only) */}
           <div className="space-y-4">
             {isFaculty && assignments.length > 0 ? (
               assignments.map((item) => (
@@ -196,8 +264,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
         </>
       )}
 
+      {/* --- MATERIALS TAB: Lessons --- */}
       {selected === "materials" && (
         <>
+          {/* Only show lesson list if not viewing a single lesson */}
           {!activeLesson && (
             <>
               <div className="flex justify-between items-center mb-4">
@@ -212,6 +282,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 )}
               </div>
 
+              {/* Lesson upload form for faculty */}
               {isFaculty && showLessonForm && (
                 <form onSubmit={handleAddLesson} className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <div>
@@ -222,7 +293,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     <label className="block text-sm font-medium text-blue-900 mb-1">Description / Content</label>
                     <textarea name="description" required className="w-full border rounded px-3 py-2 text-sm" rows={4} />
                   </div>
-                  <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm">
+                  {lessonUploadLoading && <p className="text-blue-700 text-sm">Uploading...</p>}
+                  {lessonUploadError && <p className="text-red-600 text-sm">{lessonUploadError}</p>}
+                  {lessonUploadSuccess && <p className="text-green-600 text-sm">{lessonUploadSuccess}</p>}
+                  <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm" disabled={lessonUploadLoading}>
                     Save Lesson
                   </button>
                 </form>
@@ -321,6 +395,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
             </>
           )}
 
+          {/* --- SINGLE LESSON VIEW (not currently used, but ready for future expansion) --- */}
           {activeLesson && (
             <>
               <button
