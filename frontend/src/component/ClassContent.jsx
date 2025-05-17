@@ -1,6 +1,9 @@
 // ClassContent.jsx
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
+import { FiFile, FiBook } from "react-icons/fi";
+// import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
+// import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
 export default function ClassContent({ selected, isFaculty = false }) {
   // --- ROUTER PARAMS ---
@@ -111,6 +114,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
 
   const handleAddLesson = async (e) => {
     e.preventDefault();
+    setLessonUploadLoading(true);
+    setLessonUploadError(null);
+    setLessonUploadSuccess(null);
     const form = e.target;
     const title = form.title.value;
     const files = lessonFile;
@@ -284,14 +290,14 @@ export default function ClassContent({ selected, isFaculty = false }) {
 
               {/* Lesson upload form for faculty */}
               {isFaculty && showLessonForm && (
-                <form onSubmit={handleAddLesson} className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <form onSubmit={handleAddLesson} className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200" encType="multipart/form-data">
                   <div>
                     <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
                     <input name="title" required className="w-full border rounded px-3 py-2 text-sm" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-blue-900 mb-1">Description / Content</label>
-                    <textarea name="description" required className="w-full border rounded px-3 py-2 text-sm" rows={4} />
+                    <label className="block text-sm font-medium text-blue-900 mb-1">Upload File (PDF, PPT, DOC, etc.)</label>
+                    <input type="file" accept=".pdf,.ppt,.pptx,.doc,.docx" multiple onChange={e => setLessonFile(e.target.files)} required className="w-full border rounded px-3 py-2 text-sm" />
                   </div>
                   {lessonUploadLoading && <p className="text-blue-700 text-sm">Uploading...</p>}
                   {lessonUploadError && <p className="text-red-600 text-sm">{lessonUploadError}</p>}

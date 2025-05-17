@@ -29,7 +29,7 @@ export default function FacultyCreateClass() {
       const data = await response.json();
 
       const filteredStudents = data
-        .filter(student => student.role === 'student')
+        .filter(student => student.role === 'students')
         .filter(student => !selectedStudents.some(sel => sel._id === student._id));
       
       if (filteredStudents.length === 0) {

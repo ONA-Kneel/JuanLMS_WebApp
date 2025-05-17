@@ -73,7 +73,8 @@ export default function Faculty_Classes() {
             classes.map(cls => (
               <div
                 key={cls.classID}
-                className="relative bg-[#00418b] text-white p-4 md:p-6 rounded-2xl hover:bg-[#002b5c] transition flex flex-col justify-between"
+                className="relative bg-[#00418b] text-white p-4 md:p-6 rounded-2xl hover:bg-[#002b5c] transition flex flex-col justify-between cursor-pointer"
+                onClick={() => navigate(`/faculty_class/${cls.classID}`)}
               >
                 <h4 className="text-base md:text-lg font-semibold">{cls.className}</h4>
                 <p className="text-sm mt-1">0% progress</p>

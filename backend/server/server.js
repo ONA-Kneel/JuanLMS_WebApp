@@ -13,6 +13,7 @@ import database from "./connect.cjs";
 import eventRoutes from "./routes/eventRoutes.js";
 import classRoutes from "./routes/classRoutes.js";
 import auditTrailRoutes from "./routes/auditTrailroutes.js";
+import lessonRoutes from "./routes/lessonRoutes.js";
 
 dotenv.config({ path: './config.env' });
 
@@ -92,6 +93,8 @@ app.use('/uploads', express.static('uploads'));
 app.use("/events", eventRoutes);
 app.use("/classes", classRoutes);
 app.use("/", auditTrailRoutes);
+app.use("/lessons", lessonRoutes);
+app.use('/uploads/lessons', express.static('uploads/lessons'));
 
 // Start server
 app.listen(PORT, () => {
