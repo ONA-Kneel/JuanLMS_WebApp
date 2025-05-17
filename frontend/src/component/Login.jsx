@@ -1,6 +1,6 @@
 // login
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import logo from '../assets/logo/Logo4.svg';
 import axios from 'axios';
 import { Eye, EyeOff } from 'lucide-react';
@@ -140,9 +140,9 @@ export default function Login() {
                 />
                 Remember Me
               </label>
-              <a href="#" className="text-blue-600 hover:underline font-poppinsr text-sm">
+              <Link to="/forgot-password" className="text-blue-600 hover:underline font-poppinsr text-sm">
                 Forgot Password?
-              </a>
+              </Link>
             </div>
 
             <button

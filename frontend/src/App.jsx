@@ -2,6 +2,7 @@
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 // For Logging in into different user and accounts
 import Login from './component/Login';
+import ForgotPassword from './component/ForgotPassword';
 
 // Students Access
 import Student_Dashboard from './component/Student/Student_Dashboard';
@@ -54,7 +55,7 @@ function App() {
       <Routes>
         {/* Login into different User Accounts */}
         <Route path="/" element={<Login />} />
-        
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         {/* Students */}
         <Route path="/student_dashboard" element={<Student_Dashboard />} />
         <Route path="/student_classes" element={<Student_Classes />}/>

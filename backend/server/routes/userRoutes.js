@@ -3,6 +3,8 @@ import e from "express";
 import database from "../connect.cjs";
 import { ObjectId } from "mongodb";
 import jwt from "jsonwebtoken";
+import nodemailer from 'nodemailer';
+import SibApiV3Sdk from 'sib-api-v3-sdk';
 // import bcrypt from "bcryptjs"; // If you want to use hashing in the future
 
 const userRoutes = e.Router();
@@ -156,6 +158,132 @@ userRoutes.patch("/users/:id/change-password", async (req, res) => {
   await db.collection("Users").updateOne({ _id: new ObjectId(userId) }, { $set: { password: newPassword } });
 
   res.json({ success: true, message: "Password updated successfully." });
+});
+
+// Forgot Password (send OTP or reset link to personal email)
+userRoutes.post('/forgot-password', async (req, res) => {
+    console.log('Forgot password endpoint hit');
+    const db = database.getDb();
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required.' });
+
+    const genericMsg = 'If your email is registered, a reset link or OTP has been sent to your personal email.';
+
+    try {
+        const user = await db.collection('Users').findOne({ personalemail: email.toLowerCase() });
+        console.log('User found:', user);
+        if (!user || !user.personalemail) {
+            console.log('User not found or missing personalemail');
+            return res.json({ message: genericMsg });
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpiry = Date.now() + 15 * 60 * 1000;
+
+        await db.collection('Users').updateOne(
+            { _id: user._id },
+            { $set: { resetOTP: otp, resetOTPExpires: otpExpiry } }
+        );
+
+        // Configure Brevo
+        let defaultClient = SibApiV3Sdk.ApiClient.instance;
+        let apiKey = defaultClient.authentications['api-key'];
+        apiKey.apiKey = process.env.BREVO_API_KEY;
+
+        let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+
+        // Use a plain object for sendSmtpEmail
+        let sendSmtpEmail = {
+            to: [{ email: user.personalemail, name: user.firstname || '' }],
+            sender: { email: 'nicolettecborre@gmail.com', name: 'Nicolette Borre' },
+            subject: 'Your JuanLMS Password Reset OTP',
+            textContent: `Hello ${user.firstname || ''},\n\nYour OTP for password reset is: ${otp}\n\nIf you did not request this, please ignore this email.\n\nThank you,\nJuanLMS Team`
+        };
+
+        console.log('About to call Brevo sendTransacEmail...');
+
+        try {
+            const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+            console.log('OTP email sent to', user.personalemail, 'Result:', result);
+        } catch (emailErr) {
+            console.error('Error sending OTP email via Brevo:', emailErr);
+        }
+
+        console.log('After sendTransacEmail call');
+
+        return res.json({ message: genericMsg });
+
+    } catch (err) {
+        console.error('Error in forgot-password:', err);
+        return res.status(500).json({ message: 'Server error. Please try again.' });
+    }
+});
+
+// Test email endpoint
+userRoutes.get('/test-email', async (req, res) => {
+    try {
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: process.env.GMAIL_USER,
+                pass: process.env.GMAIL_PASS,
+            },
+        });
+
+        transporter.verify(function(error, success) {
+            if (error) {
+                console.error('Nodemailer transporter error:', error);
+                return res.status(500).json({ message: 'Nodemailer transporter error', error });
+            } else {
+                console.log('Nodemailer transporter is ready');
+            }
+        });
+
+        await transporter.sendMail({
+            from: `"JuanLMS Test" <${process.env.GMAIL_USER}>`,
+            to: process.env.GMAIL_USER, // send to yourself for testing
+            subject: 'JuanLMS Test Email',
+            text: 'This is a test email from JuanLMS backend using Nodemailer and Gmail.',
+        });
+        console.log('Test email sent to', process.env.GMAIL_USER);
+        return res.json({ message: 'Test email sent successfully.' });
+    } catch (err) {
+        console.error('Error sending test email:', err);
+        return res.status(500).json({ message: 'Error sending test email', error: err });
+    }
+});
+
+// Reset Password with OTP
+userRoutes.post('/reset-password', async (req, res) => {
+    const db = database.getDb();
+    const { personalemail, otp, newPassword } = req.body;
+
+    if (!personalemail || !otp || !newPassword) {
+        return res.status(400).json({ message: 'All fields are required.' });
+    }
+    if (newPassword.length < 8) {
+        return res.status(400).json({ message: 'Password must be at least 8 characters.' });
+    }
+
+    const user = await db.collection('Users').findOne({ personalemail: personalemail.toLowerCase() });
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    if (
+        !user.resetOTP ||
+        !user.resetOTPExpires ||
+        user.resetOTP !== otp ||
+        Date.now() > user.resetOTPExpires
+    ) {
+        return res.status(400).json({ message: 'Invalid or expired OTP.' });
+    }
+
+    // Update password and clear OTP fields
+    await db.collection('Users').updateOne(
+        { _id: user._id },
+        { $set: { password: newPassword }, $unset: { resetOTP: '', resetOTPExpires: '' } }
+    );
+
+    res.json({ message: 'Password reset successful. You can now log in with your new password.' });
 });
 
 // ------------------ JWT LOGIN ROUTE ------------------
