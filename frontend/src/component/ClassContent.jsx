@@ -173,7 +173,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
 
   // --- MAIN RENDER ---
   return (
-    <div className="bg-white rounded-2xl shadow p-6 md:p-8 h-full overflow-auto">
+    <div className="bg-white rounded-2xl shadow p-6 md:p-8 ">
       {/* --- HOME TAB: Announcements --- */}
       {selected === "home" && (
         <>
