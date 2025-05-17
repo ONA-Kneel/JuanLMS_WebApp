@@ -253,7 +253,7 @@ userRoutes.get('/test-email', async (req, res) => {
     }
 });
 
-// Reset Password with OTP
+// Reset Password (OTP verification and password update)
 userRoutes.post('/reset-password', async (req, res) => {
     const db = database.getDb();
     const { personalemail, otp, newPassword } = req.body;
