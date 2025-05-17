@@ -195,7 +195,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
         // Use a plain object for sendSmtpEmail
         let sendSmtpEmail = {
             to: [{ email: user.personalemail, name: user.firstname || '' }],
-            sender: { email: 'nicolettecborre@gmail.com', name: 'Nicolette Borre' },
+            sender: { email: 'nicolettecborre@gmail.com', name: 'JuanLMS Support' },
             subject: 'Your JuanLMS Password Reset OTP',
             textContent: `Hello ${user.firstname || ''},\n\nYour OTP for password reset is: ${otp}\n\nIf you did not request this, please ignore this email.\n\nThank you,\nJuanLMS Team`
         };
