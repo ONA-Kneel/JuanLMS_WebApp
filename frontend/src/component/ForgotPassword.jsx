@@ -148,7 +148,7 @@ export default function ForgotPassword() {
         {error && <p className="text-red-600 mt-4">{error}</p>}
         {/* Back to login button (not on step 3) */}
         {step !== 3 && (
-          <button className="mt-6 text-blue-700 hover:underline" onClick={() => navigate('/login')}>Back to Login</button>
+          <button className="mt-6 text-blue-700 hover:underline" onClick={() => navigate('/')}>Back to Login</button>
         )}
       </div>
     </div>
