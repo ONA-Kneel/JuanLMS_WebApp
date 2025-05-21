@@ -12,6 +12,17 @@ export default function Admin_Accounts() {
   const [showArchiveSuccess, setShowArchiveSuccess] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
+  const [showCreateSuccess, setShowCreateSuccess] = useState(false);
+  const [showArchivedTable, setShowArchivedTable] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [showRecoverConfirm, setShowRecoverConfirm] = useState(false);
+  const [userToRecover, setUserToRecover] = useState(null);
+  const [showRecoverSuccess, setShowRecoverSuccess] = useState(false);
+  const [showArchivePasswordModal, setShowArchivePasswordModal] = useState(false);
+  const [archivePassword, setArchivePassword] = useState("");
+  const [archivePasswordError, setArchivePasswordError] = useState("");
   
   const [formData, setFormData] = useState({
     firstname: "",
@@ -27,6 +38,52 @@ export default function Admin_Accounts() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [users, setUsers] = useState([]);
   const [roleFilter, setRoleFilter] = useState(""); // "" means show all
+
+  // Placeholder archived users data
+  const [archivedUsers, setArchivedUsers] = useState([
+    {
+      _id: "1",
+      userID: "S101",
+      lastname: "Doe",
+      firstname: "Jane",
+      middlename: "A.",
+      role: "students",
+      archivedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
+      deletedAt: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000), // 25 days left
+    },
+    {
+      _id: "2",
+      userID: "F202",
+      lastname: "Smith",
+      firstname: "John",
+      middlename: "B.",
+      role: "faculty",
+      archivedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), // 10 days ago
+      deletedAt: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000), // 20 days left
+    },
+  ]);
+
+  // Calculate days left until permanent deletion
+  const getDaysLeft = (deletedAt) => {
+    const now = new Date();
+    const deleteDate = new Date(deletedAt);
+    const diffTime = deleteDate - now;
+    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  };
+
+  // Simulate password check (always succeeds for now)
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+    if (adminPassword.trim() === "") {
+      setPasswordError("Password is required.");
+      return;
+    }
+    // Simulate success
+    setShowArchivedTable(true);
+    setShowPasswordModal(false);
+    setAdminPassword("");
+    setPasswordError("");
+  };
 
   // Fetch users on mount and after successful account creation
   const fetchUsers = async () => {
@@ -71,6 +128,14 @@ export default function Admin_Accounts() {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (showArchivedTable) {
+      fetch('http://localhost:5000/archived-users')
+        .then(res => res.json())
+        .then(data => setArchivedUsers(data));
+    }
+  }, [showArchivedTable]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -150,7 +215,7 @@ export default function Admin_Accounts() {
   
         const data = await res.json();
         if (res.ok) {
-          alert("Account created successfully!");
+          setShowCreateSuccess(true);
           setFormData({
             firstname: "",
             middlename: "",
@@ -279,21 +344,41 @@ export default function Admin_Accounts() {
 
   const handleArchive = (user) => {
     setUserToArchive(user);
-    setShowArchiveConfirm(true);
+    setShowArchivePasswordModal(true);
+    setArchivePassword("");
+    setArchivePasswordError("");
   };
 
-  const confirmArchive = () => {
-    setShowArchiveConfirm(false);
+  const handleArchivePasswordSubmit = (e) => {
+    e.preventDefault();
+    if (!archivePassword) {
+      setArchivePasswordError("Password is required.");
+      return;
+    }
+    // Simulate password check (always succeeds)
+    setShowArchivePasswordModal(false);
     setShowArchiveSuccess(true);
-    // Here you would typically make an API call to archive the user
-    setTimeout(() => {
-      setShowArchiveSuccess(false);
-    }, 3000);
+    setUsers(prev => prev.filter(u => u._id !== userToArchive._id));
+    setUserToArchive(null);
+    setTimeout(() => setShowArchiveSuccess(false), 2000);
   };
 
-  const cancelArchive = () => {
-    setShowArchiveConfirm(false);
+  const cancelArchivePassword = () => {
+    setShowArchivePasswordModal(false);
     setUserToArchive(null);
+    setArchivePassword("");
+    setArchivePasswordError("");
+  };
+
+  const handleRecover = async (user) => {
+    const res = await fetch(`http://localhost:5000/archived-users/${user._id}/recover`, {
+      method: 'POST'
+    });
+    if (res.ok) {
+      setArchivedUsers(prev => prev.filter(u => u._id !== user._id));
+      fetchUsers(); // Refresh active users
+      setShowRecoverSuccess(true);
+    }
   };
 
   return (
@@ -409,7 +494,12 @@ export default function Admin_Accounts() {
             <div className="col-span-1 md:col-span-2 flex gap-2">
               <button
                 type="submit"
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded p-2 mt-2"
+                disabled={!formData.password}
+                className={`flex-1 text-white rounded p-2 mt-2 ${
+                  formData.password 
+                    ? 'bg-blue-600 hover:bg-blue-700' 
+                    : 'bg-gray-400 cursor-not-allowed'
+                }`}
               >
                 {isEditMode ? 'Save Edited Account' : 'Create Account'}
               </button>
@@ -440,130 +530,283 @@ export default function Admin_Accounts() {
           </form>
         </div>
 
-        <div className="mt-8">
-          <h4 className="text-lg font-semibold mb-2">Users</h4>
-          <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
-            <thead>
-              <tr className="bg-gray-100 text-left">
-                <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("userID")}>
-                  User ID {sortConfig.key === "userID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-                </th>
-                <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("lastname")}>
-                  Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-                </th>
-                <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("firstname")}>
-                  First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-                </th>
-                <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("middlename")}>
-                  Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-                </th>
-                <th className="p-3 border w-1/6">Role</th>
-                <th className="p-3 border w-1/6">Actions</th>
-              </tr>
-
-              {/* New row for search inputs */}
-              <tr className="bg-white text-left">
-                <th className="p-2 border">
-                  <input type="text" placeholder="Search User ID" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, userID: e.target.value }))} />
-                </th>
-                <th className="p-2 border">
-                  <input type="text" placeholder="Search Last Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, lastname: e.target.value }))} />
-                </th>
-                <th className="p-2 border">
-                  <input type="text" placeholder="Search First Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, firstname: e.target.value }))} />
-                </th>
-                <th className="p-2 border">
-                  <input type="text" placeholder="Search Middle Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, middlename: e.target.value }))} />
-                </th>
-                <th className="p-2 border">
-                  <select className="w-full border rounded px-2 py-1 text-sm" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-                    <option value="">All Roles</option>
-                    <option value="students">Students</option>
-                    <option value="faculty">Faculty</option>
-                    <option value="parent">Parent</option>
-                    <option value="admin">Admin</option>
-                    <option value="director">Director</option>
-                  </select>
-                </th>
-                <th className="p-2 border"></th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {users.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="text-center p-4 text-gray-500">
-                    No users found.
-                  </td>
-                </tr>
-              ) : (
-                sortedUsers.map((user) => (
-                  <tr key={user._id}>
-                    <td className="p-3 border">{user.userID || '-'}</td>
-                    <td className="p-3 border">{user.lastname}</td>
-                    <td className="p-3 border">{user.firstname}</td>
-                    <td className="p-3 border">{user.middlename}</td>
-                    <td className="p-3 border capitalize">{user.role}</td>
-                    <td className="p-3 border">
-                      <div className="inline-flex space-x-2">
-                        <button
-                          onClick={() => handleEdit(user)}
-                          className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded"
-                        >
-                          <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
-                        </button>
-                        <button
-                          onClick={() => handleArchive(user)}
-                          className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded"
-                        >
-                          <img src={archiveIcon} alt="Archive" className="w-8 h-8 inline-block" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        {/* Button to view archived accounts */}
+        <div className="mb-4">
+          <button
+            className="bg-gray-700 hover:bg-gray-900 text-white px-4 py-2 rounded"
+            onClick={() => setShowPasswordModal(true)}
+          >
+            View Archived Accounts
+          </button>
         </div>
 
-        {/* Archive Confirmation Modal */}
-        {showArchiveConfirm && (
+        {/* Password Modal */}
+        {showPasswordModal && (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-              <h3 className="text-xl font-semibold mb-4">Confirm Archive</h3>
-              <p className="mb-4">Are you sure you want to archive this user?</p>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={cancelArchive}
-                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
-                >
-                  No
-                </button>
-                <button
-                  onClick={confirmArchive}
-                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
-                >
-                  Yes
-                </button>
-              </div>
+              <h3 className="text-xl font-semibold mb-4">Enter Admin Password</h3>
+              <form onSubmit={handlePasswordSubmit}>
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={e => setAdminPassword(e.target.value)}
+                  placeholder="Admin Password"
+                  className="border rounded p-2 w-full mb-2"
+                  autoFocus
+                />
+                {passwordError && <p className="text-red-600 text-sm mb-2">{passwordError}</p>}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPasswordModal(false);
+                      setAdminPassword("");
+                      setPasswordError("");
+                    }}
+                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                  >
+                    Submit
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
 
-        {/* Archive Success Message */}
-        {showArchiveSuccess && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-              <h3 className="text-xl font-semibold mb-2 text-green-600">User Archived</h3>
-              <p className="text-gray-600">You have 30 days to recover if you change your mind.</p>
-              <button
-                onClick={() => setShowArchiveSuccess(false)}
-                className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
-              >
-                OK
-              </button>
-            </div>
+        {/* Show archived table OR users table, not both */}
+        {showArchivedTable ? (
+          <div className="mt-8">
+            <h4 className="text-lg font-semibold mb-2">Archived Users</h4>
+            <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+              <thead>
+                <tr className="bg-gray-100 text-left">
+                  <th className="p-3 border w-1/6">User ID</th>
+                  <th className="p-3 border w-1/6">Last Name</th>
+                  <th className="p-3 border w-1/6">First Name</th>
+                  <th className="p-3 border w-1/6">Middle Name</th>
+                  <th className="p-3 border w-1/6">Role</th>
+                  <th className="p-3 border w-1/6">Time Left</th>
+                  <th className="p-3 border w-1/6">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {archivedUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="text-center p-4 text-gray-500">
+                      No archived users found.
+                    </td>
+                  </tr>
+                ) : (
+                  archivedUsers.map((user) => (
+                    <tr key={user._id}>
+                      <td className="p-3 border">{user.userID || '-'}</td>
+                      <td className="p-3 border">{user.lastname}</td>
+                      <td className="p-3 border">{user.firstname}</td>
+                      <td className="p-3 border">{user.middlename}</td>
+                      <td className="p-3 border capitalize">{user.role}</td>
+                      <td className="p-3 border">{getDaysLeft(user.deletedAt)} days left</td>
+                      <td className="p-3 border">
+                        <button
+                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
+                          onClick={() => handleRecover(user)}
+                        >
+                          Recover Account
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+            <button
+              className="mt-4 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+              onClick={() => setShowArchivedTable(false)}
+            >
+              Back to Active Accounts
+            </button>
+
+            {/* Recover Confirmation Modal */}
+            {showRecoverConfirm && (
+              <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                  <h3 className="text-xl font-semibold mb-4">Confirm Recovery</h3>
+                  <p className="mb-4">Are you sure you want to recover this account?</p>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={cancelRecover}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                    >
+                      No
+                    </button>
+                    <button
+                      onClick={confirmRecover}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+                    >
+                      Yes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Recover Success Message */}
+            {showRecoverSuccess && (
+              <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                  <h3 className="text-xl font-semibold mb-2 text-green-600">Account Recovered</h3>
+                  <button
+                    onClick={() => setShowRecoverSuccess(false)}
+                    className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-8">
+            <h4 className="text-lg font-semibold mb-2">Users</h4>
+            <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+              <thead>
+                <tr className="bg-gray-100 text-left">
+                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("userID")}>
+                    User ID {sortConfig.key === "userID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
+                  </th>
+                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("lastname")}>
+                    Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
+                  </th>
+                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("firstname")}>
+                    First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
+                  </th>
+                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("middlename")}>
+                    Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
+                  </th>
+                  <th className="p-3 border w-1/6">Role</th>
+                  <th className="p-3 border w-1/6">Actions</th>
+                </tr>
+
+                {/* New row for search inputs */}
+                <tr className="bg-white text-left">
+                  <th className="p-2 border">
+                    <input type="text" placeholder="Search User ID" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, userID: e.target.value }))} />
+                  </th>
+                  <th className="p-2 border">
+                    <input type="text" placeholder="Search Last Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, lastname: e.target.value }))} />
+                  </th>
+                  <th className="p-2 border">
+                    <input type="text" placeholder="Search First Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, firstname: e.target.value }))} />
+                  </th>
+                  <th className="p-2 border">
+                    <input type="text" placeholder="Search Middle Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, middlename: e.target.value }))} />
+                  </th>
+                  <th className="p-2 border">
+                    <select className="w-full border rounded px-2 py-1 text-sm" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+                      <option value="">All Roles</option>
+                      <option value="students">Students</option>
+                      <option value="faculty">Faculty</option>
+                      <option value="parent">Parent</option>
+                      <option value="admin">Admin</option>
+                      <option value="director">Director</option>
+                    </select>
+                  </th>
+                  <th className="p-2 border"></th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {users.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="text-center p-4 text-gray-500">
+                      No users found.
+                    </td>
+                  </tr>
+                ) : (
+                  sortedUsers.map((user) => (
+                    <tr key={user._id}>
+                      <td className="p-3 border">{user.userID || '-'}</td>
+                      <td className="p-3 border">{user.lastname}</td>
+                      <td className="p-3 border">{user.firstname}</td>
+                      <td className="p-3 border">{user.middlename}</td>
+                      <td className="p-3 border capitalize">{user.role}</td>
+                      <td className="p-3 border">
+                        <div className="inline-flex space-x-2">
+                          <button
+                            onClick={() => handleEdit(user)}
+                            className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded"
+                          >
+                            <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
+                          </button>
+                          <button
+                            onClick={() => handleArchive(user)}
+                            className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded"
+                          >
+                            <img src={archiveIcon} alt="Archive" className="w-8 h-8 inline-block" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+
+            {/* Archive Password Modal */}
+            {showArchivePasswordModal && (
+              <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                  <h3 className="text-xl font-semibold mb-4">Account Archive</h3>
+                  <p className="mb-4">In order to archive this account you must enter admin password</p>
+                  <form onSubmit={handleArchivePasswordSubmit}>
+                    <input
+                      type="password"
+                      value={archivePassword}
+                      onChange={e => setArchivePassword(e.target.value)}
+                      placeholder="Enter admin password"
+                      className="border rounded p-2 w-full mb-2"
+                      autoFocus
+                    />
+                    {archivePasswordError && <p className="text-red-600 text-sm mb-2">{archivePasswordError}</p>}
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={cancelArchivePassword}
+                        className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+                      >
+                        Archive
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Archive Success Message */}
+            {showArchiveSuccess && (
+              <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                  <h3 className="text-xl font-semibold mb-2 text-green-600">Account Archived</h3>
+                  <button
+                    onClick={() => setShowArchiveSuccess(false)}
+                    className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -598,6 +841,22 @@ export default function Admin_Accounts() {
               <h3 className="text-xl font-semibold mb-2 text-green-600">Account Updated</h3>
               <button
                 onClick={() => setShowUpdateSuccess(false)}
+                className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Create Success Message */}
+        {showCreateSuccess && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+              <h3 className="text-xl font-semibold mb-2 text-green-600">Account Created Successfully</h3>
+              <p className="text-gray-600 mb-4">The new account has been created and added to the system.</p>
+              <button
+                onClick={() => setShowCreateSuccess(false)}
                 className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
               >
                 OK
