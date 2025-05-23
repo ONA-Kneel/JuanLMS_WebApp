@@ -1,16 +1,17 @@
-// Student_Chats.jsx
+// Admin_Chats.jsx
 
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { io } from "socket.io-client";
 import videocall from "../../assets/videocall.png";
 import voicecall from "../../assets/voicecall.png";
 import uploadfile from "../../assets/uploadfile.png";
+import closeIcon from "../../assets/close.png";
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
-import { io } from "socket.io-client";
+import defaultAvatar from "../../assets/profileicon (1).svg";
 
 export default function Student_Chats() {
-  // ===================== STATE =====================
   const [selectedChat, setSelectedChat] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [users, setUsers] = useState([]);
@@ -18,15 +19,23 @@ export default function Student_Chats() {
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [lastMessages, setLastMessages] = useState({});
+  const [recentChats, setRecentChats] = useState(() => {
+    // Load from localStorage if available
+    const stored = localStorage.getItem("recentChats_student");
+    return stored ? JSON.parse(stored) : [];
+  });
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
 
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
+
   const storedUser = localStorage.getItem("user");
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
 
-  // ===================== AUTH GUARD =====================
   if (!currentUserId) {
     return (
       <div className="flex items-center justify-center h-screen text-xl text-red-600 font-semibold">
@@ -35,9 +44,9 @@ export default function Student_Chats() {
     );
   }
 
-  // ===================== SOCKET.IO SETUP =====================
+  // ================= SOCKET.IO SETUP =================
   useEffect(() => {
-    socket.current = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:8080", {
+    socket.current = io(SOCKET_URL, {
       transports: ["websocket"],
       reconnectionAttempts: 5,
       timeout: 10000,
@@ -57,33 +66,51 @@ export default function Student_Chats() {
         fileUrl: data.fileUrl || null,
       };
 
-      setMessages((prev) => ({
-        ...prev,
-        [incomingMessage.senderId]: [
-          ...(prev[incomingMessage.senderId] || []),
-          incomingMessage,
-        ],
-      }));
+      setMessages((prev) => {
+        const newMessages = {
+          ...prev,
+          [incomingMessage.senderId]: [
+            ...(prev[incomingMessage.senderId] || []),
+            incomingMessage,
+          ],
+        };
+        
+        // Update last message for this chat
+        const chat = recentChats.find(c => c._id === incomingMessage.senderId);
+        if (chat) {
+          const prefix = incomingMessage.senderId === currentUserId 
+            ? "You: " 
+            : `${chat.lastname}, ${chat.firstname}: `;
+          const text = incomingMessage.message 
+            ? incomingMessage.message 
+            : (incomingMessage.fileUrl ? "File sent" : "");
+          setLastMessages(prev => ({
+            ...prev,
+            [chat._id]: { prefix, text }
+          }));
+        }
+        
+        return newMessages;
+      });
     });
 
     return () => {
-      if (socket.current) socket.current.disconnect();
+      socket.current.disconnect();
     };
-  }, [currentUserId]);
+  }, [currentUserId, recentChats]);
 
-  // ===================== FETCH USERS =====================
+  // ================= FETCH USERS =================
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/users`);
+        const res = await axios.get(`${API_URL}/users`);
         const otherUsers = res.data.filter((user) => user._id !== currentUserId);
         setUsers(otherUsers);
 
-        const savedChatId = localStorage.getItem("selectedChatId");
-        if (savedChatId) {
-          const chatUser = otherUsers.find((u) => u._id === savedChatId);
-          if (chatUser) setSelectedChat(chatUser);
-        }
+        // Always clear selected chat
+        setSelectedChat(null);
+        // Optionally, clear localStorage
+        localStorage.removeItem("selectedChatId_student");
       } catch (err) {
         console.error("Error fetching users:", err);
       }
@@ -92,32 +119,50 @@ export default function Student_Chats() {
     fetchUsers();
   }, [currentUserId]);
 
-  // ===================== FETCH MESSAGES =====================
+  // ================= FETCH MESSAGES =================
   useEffect(() => {
     const fetchMessages = async () => {
       if (!selectedChat) return;
       try {
-        const res = await axios.get(
-          `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/messages/${currentUserId}/${selectedChat._id}`
-        );
-        setMessages((prev) => ({ ...prev, [selectedChat._id]: res.data }));
+        const res = await axios.get(`${API_URL}/messages/${currentUserId}/${selectedChat._id}`);
+        setMessages((prev) => {
+          const newMessages = { ...prev, [selectedChat._id]: res.data };
+          
+          // Compute last messages for all recent chats
+          const newLastMessages = {};
+          recentChats.forEach(chat => {
+            const chatMessages = newMessages[chat._id] || [];
+            const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
+            if (lastMsg) {
+              const prefix = lastMsg.senderId === currentUserId 
+                ? "You: " 
+                : `${chat.lastname}, ${chat.firstname}: `;
+              const text = lastMsg.message 
+                ? lastMsg.message 
+                : (lastMsg.fileUrl ? "File sent" : "");
+              newLastMessages[chat._id] = { prefix, text };
+            }
+          });
+          setLastMessages(newLastMessages);
+          
+          return newMessages;
+        });
       } catch (err) {
         console.error("Error fetching messages:", err);
       }
     };
 
     fetchMessages();
-  }, [selectedChat, currentUserId]);
+  }, [selectedChat, currentUserId, recentChats]);
 
-  // Auto-scroll to bottom when messages update
+  // Auto-scroll
   const selectedChatMessages = messages[selectedChat?._id] || [];
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [selectedChatMessages]);
 
-  // ===================== HANDLER FUNCTIONS =====================
+  // ================= HANDLERS =================
 
-  // --- Handle Send Message ---
   const handleSendMessage = async () => {
     if (!newMessage.trim() && !selectedFile) return;
     if (!selectedChat) return;
@@ -131,11 +176,9 @@ export default function Student_Chats() {
     }
 
     try {
-      const res = await axios.post(
-        `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/messages`,
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
+      const res = await axios.post(`${API_URL}/messages`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
       const sentMessage = res.data;
 
@@ -158,7 +201,6 @@ export default function Student_Chats() {
     }
   };
 
-  // --- Handle Enter Key Press ---
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -166,37 +208,105 @@ export default function Student_Chats() {
     }
   };
 
-  // --- Handle File Select ---
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
       setSelectedFile(file);
-      // Reset input to allow selecting same file again
       e.target.value = null;
     }
   };
 
-  // --- Open File Picker ---
   const openFilePicker = () => {
     fileInputRef.current.click();
   };
 
-  // --- Select Chat ---
   const handleSelectChat = (user) => {
     setSelectedChat(user);
-    localStorage.setItem("selectedChatId", user._id);
+    localStorage.setItem("selectedChatId_student", user._id);
+    // Add to recent chats if not already present
+    setRecentChats((prev) => {
+      const exists = prev.find((u) => u._id === user._id);
+      if (exists) return prev;
+      const updated = [user, ...prev].slice(0, 10); // Keep max 10 recent
+      localStorage.setItem("recentChats_student", JSON.stringify(updated));
+      return updated;
+    });
   };
 
-  // Filter users by search term
+  // Keep recentChats in sync with localStorage
+  useEffect(() => {
+    localStorage.setItem("recentChats_student", JSON.stringify(recentChats));
+  }, [recentChats]);
+
   const filteredUsers = users.filter((u) =>
-    `${u.firstname} ${u.lastname}`.toLowerCase().includes(searchTerm.toLowerCase())
+    `${u.firstname} ${u.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) && u.role !== "parent"
   );
 
-  // ===================== RENDER =====================
+  // ================= RENDER =================
+  useEffect(() => {
+    if (selectedChat) {
+      const chatMessages = messages[selectedChat._id] || [];
+      const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
+      if (lastMsg) {
+        let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
+        let text = (lastMsg.message) ? lastMsg.message : (lastMsg.fileUrl ? "File sent" : "");
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix, text }
+        }));
+      } else {
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: null
+        }));
+      }
+    } else {
+      setLastMessages(prev => ({
+        ...prev,
+        [selectedChat?._id]: null
+      }));
+    }
+  }, [selectedChat, messages, currentUserId]);
+
+  // Preload last messages for all users in recentChats
+  useEffect(() => {
+    if (!currentUserId || recentChats.length === 0) return;
+    const fetchAllRecentMessages = async () => {
+      const newMessages = { ...messages };
+      const newLastMessages = { ...lastMessages };
+      for (const chat of recentChats) {
+        // Only fetch if not already loaded
+        if (!newMessages[chat._id] || newMessages[chat._id].length === 0) {
+          try {
+            const res = await axios.get(`${API_URL}/messages/${currentUserId}/${chat._id}`);
+            newMessages[chat._id] = res.data;
+          } catch (err) {
+            newMessages[chat._id] = [];
+          }
+        }
+        const chatMessages = newMessages[chat._id] || [];
+        const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
+        if (lastMsg) {
+          const prefix = lastMsg.senderId === currentUserId 
+            ? "You: " 
+            : `${chat.lastname}, ${chat.firstname}: `;
+          const text = lastMsg.message 
+            ? lastMsg.message 
+            : (lastMsg.fileUrl ? "File sent" : "");
+          newLastMessages[chat._id] = { prefix, text };
+        }
+      }
+      setMessages(newMessages);
+      setLastMessages(newLastMessages);
+    };
+    fetchAllRecentMessages();
+    // eslint-disable-next-line
+  }, [recentChats, currentUserId]);
+
   return (
-    <div className="flex max-h-screen">
+    <div className="flex min-h-screen h-screen max-h-screen">
       <Student_Navbar />
-      <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64">
+      <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
         <div className="flex flex-col md:flex-row justify-between items-center px-10 py-10">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Chats</h2>
@@ -212,9 +322,9 @@ export default function Student_Chats() {
           <ProfileMenu />
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
-          {/* LEFT PANEL - User List */}
-          <div className="w-full md:w-1/3 p-4 overflow-hidden flex flex-col">
+        <div className="flex flex-1 overflow-hidden h-full">
+          {/* LEFT PANEL */}
+          <div className="w-full md:w-1/3 p-4 overflow-hidden flex flex-col h-full">
             <input
               type="text"
               placeholder="Search users..."
@@ -222,32 +332,131 @@ export default function Student_Chats() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-              {filteredUsers.map((user) => (
-                <div
-                  key={user._id}
-                  className={`p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                    selectedChat?._id === user._id ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
-                  }`}
-                  onClick={() => handleSelectChat(user)}
-                >
-                  <strong>{user.firstname} {user.lastname}</strong>
-                  <p className="text-xs text-gray-600">Click to view conversation</p>
+            {/* Search Results */}
+            {searchTerm.trim() !== "" && (
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                {filteredUsers.length > 0 ? (
+                  filteredUsers.map((user) => (
+                    <div
+                      key={user._id}
+                      className={`p-3 rounded-lg cursor-pointer shadow-sm transition-all bg-gray-100 hover:bg-gray-300 flex items-center gap-2`}
+                      onClick={() => handleSelectChat(user)}
+                    >
+                      <img
+                        src={user.profilePic ? `${API_URL}/uploads/${user.profilePic}` : defaultAvatar}
+                        alt="Profile"
+                        className="w-8 h-8 rounded-full object-cover border"
+                        onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                      />
+                      <strong>{user.lastname}, {user.firstname}</strong>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-gray-400 text-center mt-10 select-none">
+                    No users found
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Recent Chats */}
+            {searchTerm.trim() === "" && recentChats.length > 0 && (
+              <div className="mt-2">
+                <div className="text-xs text-gray-500 mb-2 pl-1">Recent Chats</div>
+                <div className="space-y-2">
+                  {recentChats.map((user) => {
+                    // Find the latest message between current user and this user
+                    const chatMessages = messages[user._id] || [];
+                    const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
+                    let lastMsgPrefix = "";
+                    let lastMsgText = "";
+                    if (lastMsg) {
+                      if (lastMsg.senderId === currentUserId) {
+                        lastMsgPrefix = "You: ";
+                      } else {
+                        lastMsgPrefix = `${user.lastname}, ${user.firstname}: `;
+                      }
+                      if (lastMsg.message) {
+                        lastMsgText = lastMsg.message;
+                      } else if (lastMsg.fileUrl) {
+                        lastMsgText = "File sent";
+                      }
+                    }
+                    return (
+                      <div
+                        key={user._id}
+                        className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
+                          selectedChat?._id === user._id ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                        }`}
+                        onClick={() => handleSelectChat(user)}
+                      >
+                        <span className="pr-10 min-w-0 truncate flex items-center gap-2">
+                          <img
+                            src={user.profilePic ? `${API_URL}/uploads/${user.profilePic}` : defaultAvatar}
+                            alt="Profile"
+                            className="w-8 h-8 rounded-full object-cover border"
+                            onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                          />
+                          <div className="flex flex-col min-w-0">
+                            <strong className="truncate">{user.lastname}, {user.firstname}</strong>
+                            {lastMessages[user._id] && (
+                              <span className="text-xs text-gray-500 truncate">
+                                {lastMessages[user._id].prefix}{lastMessages[user._id].text}
+                              </span>
+                            )}
+                          </div>
+                        </span>
+                        <button
+                          className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity"
+                          title="Remove from recent chats"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setRecentChats(prev => {
+                              const updated = prev.filter(u => u._id !== user._id);
+                              localStorage.setItem('recentChats_student', JSON.stringify(updated));
+                              return updated;
+                            });
+                          }}
+                          style={{ padding: 0, border: 'none', background: 'none', lineHeight: 0 }}
+                          tabIndex={-1}
+                          aria-label="Remove from recent chats"
+                        >
+                          <img src={closeIcon} alt="Remove" className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+            {/* If no search and no recent chats, show message */}
+            {searchTerm.trim() === "" && recentChats.length === 0 && (
+              <div className="p-3 rounded-lg bg-gray-100">
+                <p className="text-gray-600 text-center">No users available</p>
+              </div>
+            )}
           </div>
 
+          {/* Divider - Always show */}
           <div className="w-px bg-black" />
 
-          {/* RIGHT PANEL - Chat Messages */}
-          <div className="w-full md:w-2/3 flex flex-col p-4 overflow-hidden">
-            {selectedChat ? (
+          {/* RIGHT PANEL - Always show */}
+          <div className="w-full md:w-2/3 flex flex-col p-4 overflow-hidden h-full">
+            {selectedChat && users.some(u => u._id === selectedChat._id) ? (
               <>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold">
-                    {selectedChat.firstname} {selectedChat.lastname}
-                  </h3>
+                <div className="flex justify-between items-center mb-4 border-b border-black pb-4">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={selectedChat.profilePic ? `${API_URL}/uploads/${selectedChat.profilePic}` : defaultAvatar}
+                      alt="Profile"
+                      className="w-10 h-10 rounded-full object-cover border"
+                      onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                    />
+                    <div className="flex flex-col">
+                      <h3 className="text-lg font-semibold">
+                        {selectedChat.lastname}, {selectedChat.firstname}
+                      </h3>
+                    </div>
+                  </div>
                   <div className="flex space-x-3">
                     <img src={videocall} alt="Video Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
                     <img src={voicecall} alt="Voice Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
@@ -255,34 +464,130 @@ export default function Student_Chats() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
-                  {selectedChatMessages.map((msg, index) => (
-                    <div
-                      key={index}
-                      className={`flex ${msg.senderId === currentUserId ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`px-4 py-2 rounded-lg text-sm max-w-xs ${
-                          msg.senderId === currentUserId ? "bg-blue-900 text-white" : "bg-gray-300 text-black"
-                        }`}
-                      >
-                        {msg.message && <p>{msg.message}</p>}
-                        {msg.fileUrl && (
-                          <a
-                            href={`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/${msg.fileUrl}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline text-xs block mt-1"
-                          >
-                            📎 {msg.fileUrl.split("-").slice(1).join("-")}
-                          </a>
+                  {selectedChatMessages.map((msg, index) => {
+                    const isRecipient = msg.senderId !== currentUserId;
+                    const sender = isRecipient ? users.find(u => u._id === msg.senderId) : null;
+                    const prevMsg = selectedChatMessages[index - 1];
+                    const showHeader =
+                      index === 0 ||
+                      msg.senderId !== prevMsg?.senderId ||
+                      Math.abs(new Date(msg.createdAt || msg.updatedAt) - new Date(prevMsg?.createdAt || prevMsg?.updatedAt)) > 5 * 60 * 1000;
+
+                    // Date separator logic
+                    const msgDate = new Date(msg.createdAt || msg.updatedAt);
+                    const now = new Date();
+                    const isToday = msgDate.toDateString() === now.toDateString();
+                    const isYesterday = (() => {
+                      const yesterday = new Date();
+                      yesterday.setDate(now.getDate() - 1);
+                      return msgDate.toDateString() === yesterday.toDateString();
+                    })();
+                    let dateLabel;
+                    if (isToday) dateLabel = "Today";
+                    else if (isYesterday) dateLabel = "Yesterday";
+                    else dateLabel = msgDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+                    const timeLabel = msgDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+                    const currentDate = msgDate.toDateString();
+                    const prevDate = prevMsg ? new Date(prevMsg.createdAt || prevMsg.updatedAt).toDateString() : null;
+                    const showDateSeparator = index === 0 || currentDate !== prevDate;
+
+                    return (
+                      <div key={index}>
+                        {showDateSeparator && (
+                          <div className="flex justify-center my-4">
+                            <span className="bg-gray-200 text-gray-600 text-xs px-4 py-1 rounded-full shadow">
+                              {dateLabel || msgDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                            </span>
+                          </div>
+                        )}
+                        {msg.senderId === currentUserId ? (
+                          // Current user's message (right aligned, time above message)
+                          <div>
+                            {showHeader && (msg.createdAt || msg.updatedAt) && (
+                              <div className="flex justify-end mb-1">
+                                <span className="text-xs text-gray-400">
+                                  {dateLabel ? `${dateLabel}, ` : ""}{timeLabel}
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex justify-end">
+                              <div className="px-4 py-2 rounded-lg text-sm max-w-xs bg-blue-900 text-white mt-0.5">
+                                {msg.message && <p>{msg.message}</p>}
+                                {msg.fileUrl && (
+                                  <a
+                                    href={`${API_URL}/${msg.fileUrl}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="underline text-xs block mt-1"
+                                  >
+                                    📎 {msg.fileUrl.split("-").slice(1).join("-")}
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          // Recipient's message (left aligned, profile pic, name, timestamp)
+                          <div className="flex items-end gap-2">
+                            {showHeader ? (
+                              <>
+                                <img
+                                  src={sender && sender.profilePic ? `${API_URL}/uploads/${sender.profilePic}` : defaultAvatar}
+                                  alt="Profile"
+                                  className="w-10 h-10 rounded-full object-cover border"
+                                  onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                                />
+                                <div>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-semibold text-sm">{sender ? `${sender.lastname}, ${sender.firstname}` : ""}</span>
+                                    {(msg.createdAt || msg.updatedAt) && (
+                                      <span className="text-xs text-gray-400 ml-2">
+                                        {dateLabel ? `${dateLabel}, ` : ""}{timeLabel}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="px-4 py-2 rounded-lg text-sm max-w-xs bg-gray-300 text-black w-fit mt-0.5">
+                                    {msg.message && <p>{msg.message}</p>}
+                                    {msg.fileUrl && (
+                                      <a
+                                        href={`${API_URL}/${msg.fileUrl}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="underline text-xs block mt-1"
+                                      >
+                                        📎 {msg.fileUrl.split("-").slice(1).join("-")}
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="ml-[52px]">
+                                <div className="px-4 py-2 rounded-lg text-sm max-w-xs bg-gray-300 text-black w-fit mt-0.5">
+                                  {msg.message && <p>{msg.message}</p>}
+                                  {msg.fileUrl && (
+                                    <a
+                                      href={`${API_URL}/${msg.fileUrl}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="underline text-xs block mt-1"
+                                    >
+                                      📎 {msg.fileUrl.split("-").slice(1).join("-")}
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Message Input Area */}
+                {/* Input Area */}
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="text"
@@ -332,8 +637,11 @@ export default function Student_Chats() {
                 </div>
               </>
             ) : (
-              <div className="flex items-center justify-center flex-1 text-gray-500">
-                Select a chat to start messaging
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center text-gray-500">
+                  <h3 className="text-xl font-semibold mb-2">Select a chat to start!</h3>
+                  <p className="text-sm">Choose a conversation from the left panel to begin messaging.</p>
+                </div>
               </div>
             )}
           </div>

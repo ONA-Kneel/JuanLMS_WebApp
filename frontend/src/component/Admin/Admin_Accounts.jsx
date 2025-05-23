@@ -38,6 +38,8 @@ export default function Admin_Accounts() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [users, setUsers] = useState([]);
   const [roleFilter, setRoleFilter] = useState(""); // "" means show all
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   // Placeholder archived users data
   const [archivedUsers, setArchivedUsers] = useState([
@@ -116,7 +118,9 @@ export default function Admin_Accounts() {
     return matchesFirst && matchesLast && matchesMiddle && matchesRole && matchesUserID;
   });
   
-  const sortedUsers = [...filteredUsers].sort((a, b) => {
+  // First, paginate filteredUsers, then sort only the users on the current page
+  const paginatedUnsortedUsers = filteredUsers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const paginatedUsers = [...paginatedUnsortedUsers].sort((a, b) => {
     if (!sortConfig.key) return 0;
     const aValue = (a[sortConfig.key] || "").toLowerCase();
     const bValue = (b[sortConfig.key] || "").toLowerCase();
@@ -124,6 +128,7 @@ export default function Admin_Accounts() {
     if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
     return 0;
   });
+  const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
 
   useEffect(() => {
     fetchUsers();
@@ -728,7 +733,7 @@ export default function Admin_Accounts() {
                     </td>
                   </tr>
                 ) : (
-                  sortedUsers.map((user) => (
+                  paginatedUsers.map((user) => (
                     <tr key={user._id}>
                       <td className="p-3 border">{user.userID || '-'}</td>
                       <td className="p-3 border">{user.lastname}</td>
@@ -756,6 +761,27 @@ export default function Admin_Accounts() {
                 )}
               </tbody>
             </table>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-4 mt-4">
+                <button
+                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                <span className="text-sm">Page {currentPage} of {totalPages}</span>
+                <button
+                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            )}
 
             {/* Archive Password Modal */}
             {showArchivePasswordModal && (
