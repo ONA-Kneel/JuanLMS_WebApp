@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { FiFile, FiBook } from "react-icons/fi";
+import QuizTab from "./QuizTab";
 // import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
@@ -59,6 +60,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
   const [showLessonForm, setShowLessonForm] = useState(false);
+  const [showQuizBuilder, setShowQuizBuilder] = useState(false);
 
   // File input state for lesson upload
   const [lessonFile, setLessonFile] = useState(null);
@@ -250,13 +252,27 @@ export default function ClassContent({ selected, isFaculty = false }) {
             <h2 className="text-2xl font-bold">Classwork</h2>
             {isFaculty && (
               <button
-                onClick={() => setShowAssignmentForm(!showAssignmentForm)}
+                onClick={() => setShowQuizBuilder(true)}
                 className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm"
               >
-                {showAssignmentForm ? "Cancel" : "+ Create New Assignment"}
+                + Add Assignment or Quiz
               </button>
             )}
           </div>
+          {showQuizBuilder && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className="relative w-full max-w-2xl mx-auto bg-white rounded-xl shadow-xl max-h-[90vh] overflow-y-auto">
+                <QuizTab onClose={() => setShowQuizBuilder(false)} />
+                <button
+                  className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl font-bold"
+                  onClick={() => setShowQuizBuilder(false)}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Assignment form for faculty */}
           {isFaculty && showAssignmentForm && (
