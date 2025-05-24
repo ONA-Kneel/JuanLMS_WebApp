@@ -25,6 +25,10 @@ const auditLogSchema = new mongoose.Schema({
   timestamp: {
     type: Date,
     default: Date.now
+  },
+  userRole: {
+    type: String,
+    required: false
   }
 });
 

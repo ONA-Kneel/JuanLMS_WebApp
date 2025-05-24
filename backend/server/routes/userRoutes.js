@@ -71,7 +71,7 @@ userRoutes.post("/users", async (req, res) => {
         password,
         personalemail,
         profilePic,
-        role,   // ✅ <-- accept role
+        role,
         userID
     } = req.body;
 
@@ -86,15 +86,27 @@ userRoutes.post("/users", async (req, res) => {
         lastname,
         email: email.toLowerCase(),
         contactno,
-        password, // (✅ you'll hash later)
+        password,
         personalemail,
         profilePic,
-        role, // ✅ <-- save role
+        role,
         userID
     };
 
     try {
         const result = await db.collection("Users").insertOne(mongoObject);
+        
+        // Create audit log for account creation
+        await db.collection('AuditLogs').insertOne({
+            userId: result.insertedId,
+            userName: `${firstname} ${lastname}`,
+            userRole: role,
+            action: 'Create Account',
+            details: `Created new ${role} account for ${email}`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            timestamp: new Date()
+        });
+
         res.status(201).json({ success: true, result });
     } catch (err) {
         console.error(err);
@@ -128,6 +140,70 @@ userRoutes.delete("/users/:id", async (req, res) => {
     const db = database.getDb();
     const result = await db.collection("Users").deleteOne({ _id: new ObjectId(req.params.id) });
     res.json(result);
+});
+
+// Get all active (non-archived) users
+userRoutes.get('/users', async (req, res) => {
+  const db = database.getDb();
+  const users = await db.collection('Users').find({ isArchived: { $ne: true } }).toArray();
+  res.json(users);
+});
+
+// Archive a user (set isArchived, archivedAt, deletedAt)
+userRoutes.post('/users/archive/:userId', async (req, res) => {
+    console.log('ARCHIVE ROUTE HIT', req.params, req.body);
+    const db = database.getDb();
+    const { userId } = req.params;
+    const { adminId, adminPassword } = req.body;
+
+    const admin = await db.collection('Users').findOne({ _id: new ObjectId(adminId), role: 'admin' });
+    if (!admin) {
+        console.log('Admin not found:', adminId);
+        return res.status(403).json({ message: 'Admin not found.' });
+    }
+
+    if (admin.password !== adminPassword) {
+        console.log('Invalid admin password for:', adminId);
+        return res.status(401).json({ message: 'Invalid admin password.' });
+    }
+
+    const user = await db.collection('Users').findOne({ _id: new ObjectId(userId) });
+    if (!user) {
+        console.log('User not found:', userId);
+        return res.status(404).json({ message: 'User not found.' });
+    }
+
+    const updateResult = await db.collection('Users').updateOne(
+        { _id: new ObjectId(userId) },
+        {
+            $set: {
+                isArchived: true,
+                archivedAt: new Date(),
+                deletedAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            }
+        }
+    );
+
+    // Create audit log for account archiving
+    await db.collection('AuditLogs').insertOne({
+        userId: new ObjectId(userId),
+        userName: `${user.firstname} ${user.lastname}`,
+        userRole: user.role,
+        action: 'Archive Account',
+        details: `Archived account for ${user.email}`,
+        ipAddress: req.ip || req.connection.remoteAddress,
+        timestamp: new Date()
+    });
+
+    console.log('Archive update result:', updateResult);
+    res.json({ message: 'User archived successfully.' });
+});
+
+// Get all archived users
+userRoutes.get('/users/archived-users', async (req, res) => {
+  const db = database.getDb();
+  const archivedUsers = await db.collection('Users').find({ isArchived: true }).toArray();
+  res.json(archivedUsers);
 });
 
 // ------------------ PASSWORD CHANGE/RESET ------------------
@@ -313,34 +389,30 @@ userRoutes.post('/login', async (req, res) => {
         const fullName = [firstName, middleInitial, lastName].filter(Boolean).join(' ');
         const role = getRoleFromEmail(email);
 
-        // ✅ JWT Token Payload
+        // JWT Token Payload
         const token = jwt.sign({
             id: user._id,
             name: fullName,
             email: user.email,
             phone: user.contactno,
             role: role,
-            _id: user._id, // Include user ID
-            profilePic: user.profilePic || null, // Include profile picture
+            _id: user._id,
+            profilePic: user.profilePic || null,
             userID: user.userID
         }, JWT_SECRET, { expiresIn: '1d' });
 
         res.json({ token });
 
-        // --- Audit log for login (native driver) ---
-        try {
-            await db.collection('AuditLogs').insertOne({
-                userId: user._id,
-                userName: `${user.firstname} ${user.lastname}`,
-                action: 'Login',
-                details: `User ${user.email} logged in.`,
-                ipAddress: req.ip || req.connection.remoteAddress,
-                timestamp: new Date()
-            });
-        } catch (err) {
-            console.error('Failed to log audit trail:', err);
-        }
-        // --- End audit log ---
+        // Create audit log for login
+        await db.collection('AuditLogs').insertOne({
+            userId: user._id,
+            userName: `${user.firstname} ${user.lastname}`,
+            userRole: role,
+            action: 'Login',
+            details: `${role} ${user.email} logged in`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            timestamp: new Date()
+        });
     } else {
         res.status(401).json({ success: false, message: "Invalid email or password" });
     }

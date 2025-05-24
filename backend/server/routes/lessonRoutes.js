@@ -6,6 +6,9 @@ import express from 'express';
 import multer from 'multer';
 import Lesson from '../models/Lesson.js';
 import path from 'path';
+import database from '../connect.cjs';
+import { ObjectId } from 'mongodb';
+import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -45,7 +48,7 @@ const upload = multer({
 
 // --- POST /lessons - upload lesson with multiple files ---
 // Accepts up to 5 files per lesson
-router.post('/', upload.array('files', 5), async (req, res) => {
+router.post('/', authenticateToken, upload.array('files', 5), async (req, res) => {
   try {
     const { classID, title } = req.body;
     // Validate required fields and at least one file
@@ -60,6 +63,19 @@ router.post('/', upload.array('files', 5), async (req, res) => {
     // Create and save the lesson document
     const lesson = new Lesson({ classID, title, files });
     await lesson.save();
+
+    // Create audit log for material upload
+    const db = database.getDb();
+    await db.collection('AuditLogs').insertOne({
+      userId: new ObjectId(req.user._id),
+      userName: `${req.user.firstname} ${req.user.lastname}`,
+      userRole: req.user.role,
+      action: `${req.user.role.toUpperCase()}_UPLOAD_MATERIAL`,
+      details: `Uploaded ${files.length} file(s) for lesson "${title}" in class ${classID}`,
+      ipAddress: req.ip || req.connection.remoteAddress,
+      timestamp: new Date()
+    });
+
     res.status(201).json({ success: true, lesson });
   } catch (err) {
     console.error(err);
@@ -68,7 +84,7 @@ router.post('/', upload.array('files', 5), async (req, res) => {
 });
 
 // --- GET /lessons?classID=... - fetch lessons for a class ---
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const { classID } = req.query;
     if (!classID) return res.status(400).json({ error: 'classID required' });

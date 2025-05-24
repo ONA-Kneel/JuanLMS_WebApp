@@ -4,11 +4,13 @@ import { useNavigate } from "react-router-dom";
 import profileicon from "../assets/profileicon (1).svg";
 import dropdown from "../assets/dropdown.png";
 import ProfileModal from "./ProfileModal";
+import SupportModal from './Support/SupportModal';
 
-export default function ProfileMenu() {
+export default function ProfileMenu({ isAdmin }) {
   const [isOpen, setIsOpen] = useState(false);
   const [modalIsOpen, setModalIsOpen] = useState(false);
   const navigate = useNavigate();
+  const [showHelp, setShowHelp] = useState(false);
 
   const user = JSON.parse(localStorage.getItem('user'));
   const [im, setim] = useState(user?.profilePic || null);

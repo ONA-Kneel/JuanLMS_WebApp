@@ -11,7 +11,74 @@ export default function Admin_AuditTrail() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [logsPerPage] = useState(10);
+  const [selectedAction, setSelectedAction] = useState('all');
+  const [selectedRole, setSelectedRole] = useState('all');
   const navigate = useNavigate();
+
+  // Map backend action values to user-friendly labels
+  const actionLabelMap = {
+    'Login': 'Login',
+    'Create Account': 'Create Account',
+    'Archive Account': 'Archive Account',
+    'Upload Material': 'Upload Material',
+    'Add Class': 'Add Class',
+    'Upload': 'Upload',
+    // Backend variants:
+    'ADMIN_CREATE_ACCOUNT': 'Create Account',
+    'ADMIN_ARCHIVE_ACCOUNT': 'Archive Account',
+    'ADMIN_UPLOAD': 'Upload',
+    'STUDENT_UPLOAD_MATERIAL': 'Upload Material',
+    'STUDENT_ADD_CLASS': 'Add Class',
+    'FACULTY_UPLOAD_MATERIAL': 'Upload Material',
+    'FACULTY_ADD_CLASS': 'Add Class',
+    'DIRECTOR_UPLOAD_MATERIAL': 'Upload Material',
+    'DIRECTOR_ADD_CLASS': 'Add Class',
+    'PARENT_UPLOAD_MATERIAL': 'Upload Material',
+    'PARENT_ADD_CLASS': 'Add Class',
+  };
+
+  // All possible actions for the filter
+  const actionTypes = {
+    all: 'All Actions',
+    'Login': 'Login',
+    'Create Account': 'Create Account',
+    'Archive Account': 'Archive Account',
+    'Upload Material': 'Upload Material',
+    'Add Class': 'Add Class',
+    'Upload': 'Upload',
+  };
+
+  const roleTypes = {
+    all: 'All Roles',
+    student: 'Student',
+    faculty: 'Faculty',
+    director: 'Director',
+    parent: 'Parent',
+    admin: 'Admin'
+  };
+
+  // Map user-friendly action names to all possible backend action values
+  const actionBackendMap = {
+    all: [],
+    'Login': ['Login'],
+    'Create Account': ['Create Account', 'ADMIN_CREATE_ACCOUNT'],
+    'Archive Account': ['Archive Account', 'ADMIN_ARCHIVE_ACCOUNT'],
+    'Upload Material': [
+      'Upload Material',
+      'STUDENT_UPLOAD_MATERIAL',
+      'FACULTY_UPLOAD_MATERIAL',
+      'DIRECTOR_UPLOAD_MATERIAL',
+      'PARENT_UPLOAD_MATERIAL',
+    ],
+    'Add Class': [
+      'Add Class',
+      'STUDENT_ADD_CLASS',
+      'FACULTY_ADD_CLASS',
+      'DIRECTOR_ADD_CLASS',
+      'PARENT_ADD_CLASS',
+    ],
+    'Upload': ['Upload', 'ADMIN_UPLOAD'],
+  };
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
@@ -20,7 +87,7 @@ export default function Admin_AuditTrail() {
       return;
     }
     fetchAuditLogs();
-  }, [currentPage, navigate]);
+  }, [currentPage, selectedAction, selectedRole, navigate]);
 
   const fetchAuditLogs = async () => {
     try {
@@ -30,11 +97,14 @@ export default function Admin_AuditTrail() {
         return;
       }
 
-      const response = await axios.get(`http://localhost:5000/audit-logs?page=${currentPage}&limit=${logsPerPage}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
+      const response = await axios.get(
+        `http://localhost:5000/audit-logs?page=${currentPage}&limit=${logsPerPage}&action=${selectedAction}&role=${selectedRole}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
         }
-      });
+      );
 
       if (response.data && response.data.logs) {
         setAuditLogs(response.data.logs);
@@ -70,6 +140,18 @@ export default function Admin_AuditTrail() {
     });
   };
 
+  // Filter logs on the frontend based on selected action and role
+  const filteredLogs = auditLogs.filter(log => {
+    // Action filter
+    if (selectedAction !== 'all') {
+      const backendActions = actionBackendMap[selectedAction] || [selectedAction];
+      if (!backendActions.includes(log.action)) return false;
+    }
+    // Role filter
+    if (selectedRole !== 'all' && log.userRole !== selectedRole) return false;
+    return true;
+  });
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Admin_Navbar />
@@ -96,6 +178,29 @@ export default function Admin_AuditTrail() {
             </button>
             <ProfileMenu />
           </div>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-4 mb-6">
+          <select
+            value={selectedAction}
+            onChange={(e) => setSelectedAction(e.target.value)}
+            className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {Object.entries(actionTypes).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+
+          <select
+            value={selectedRole}
+            onChange={(e) => setSelectedRole(e.target.value)}
+            className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {Object.entries(roleTypes).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
         </div>
 
         {/* Audit Logs Table */}
@@ -132,18 +237,18 @@ export default function Admin_AuditTrail() {
                     </button>
                   </td>
                 </tr>
-              ) : auditLogs.length === 0 ? (
+              ) : filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan="4" className="text-center p-4 text-gray-500">
                     No audit logs found. System actions will be recorded here.
                   </td>
                 </tr>
               ) : (
-                auditLogs.map((log) => (
+                filteredLogs.map((log) => (
                   <tr key={log._id} className="hover:bg-gray-50">
                     <td className="p-3 border text-gray-500 whitespace-nowrap">{formatDate(log.timestamp)}</td>
                     <td className="p-3 border text-gray-900 whitespace-nowrap">{log.userName}</td>
-                    <td className="p-3 border text-gray-900 whitespace-nowrap">{log.action}</td>
+                    <td className="p-3 border text-gray-900 whitespace-nowrap">{actionLabelMap[log.action] || log.action}</td>
                     <td className="p-3 border text-gray-500">{log.details}</td>
                   </tr>
                 ))
@@ -152,7 +257,7 @@ export default function Admin_AuditTrail() {
           </table>
 
           {/* Pagination Controls */}
-          {!loading && !error && auditLogs.length > 0 && totalPages > 1 && (
+          {!loading && !error && filteredLogs.length > 0 && totalPages > 1 && (
             <div className="flex justify-center items-center gap-4 mt-4">
               <button
                 className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"

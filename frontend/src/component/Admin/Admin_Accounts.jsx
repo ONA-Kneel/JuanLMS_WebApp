@@ -136,7 +136,7 @@ export default function Admin_Accounts() {
 
   useEffect(() => {
     if (showArchivedTable) {
-      fetch('http://localhost:5000/archived-users')
+      fetch('http://localhost:5000/users/archived-users')
         .then(res => res.json())
         .then(data => setArchivedUsers(data));
     }
@@ -354,18 +354,42 @@ export default function Admin_Accounts() {
     setArchivePasswordError("");
   };
 
-  const handleArchivePasswordSubmit = (e) => {
+  const handleArchivePasswordSubmit = async (e) => {
     e.preventDefault();
     if (!archivePassword) {
       setArchivePasswordError("Password is required.");
       return;
     }
-    // Simulate password check (always succeeds)
-    setShowArchivePasswordModal(false);
-    setShowArchiveSuccess(true);
-    setUsers(prev => prev.filter(u => u._id !== userToArchive._id));
-    setUserToArchive(null);
-    setTimeout(() => setShowArchiveSuccess(false), 2000);
+
+    // Get adminId from localStorage (or your auth context)
+    const admin = JSON.parse(localStorage.getItem('user'));
+    const adminId = admin?._id;
+
+    if (!adminId) {
+      setArchivePasswordError("Admin not logged in.");
+      return;
+    }
+
+    const res = await fetch(`http://localhost:5000/users/archive/${userToArchive._id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        adminId,
+        adminPassword: archivePassword
+      })
+    });
+
+    if (res.ok) {
+      setShowArchivePasswordModal(false);
+      setShowArchiveSuccess(true);
+      setUsers(prev => prev.filter(u => u._id !== userToArchive._id));
+      setUserToArchive(null);
+      setTimeout(() => setShowArchiveSuccess(false), 2000);
+      fetchUsers(); // Refresh the users list from the backend
+    } else {
+      const data = await res.json();
+      setArchivePasswordError(data.message || "Failed to archive user.");
+    }
   };
 
   const cancelArchivePassword = () => {
@@ -376,7 +400,7 @@ export default function Admin_Accounts() {
   };
 
   const handleRecover = async (user) => {
-    const res = await fetch(`http://localhost:5000/archived-users/${user._id}/recover`, {
+    const res = await fetch(`http://localhost:5000/users/archived-users/${user._id}/recover`, {
       method: 'POST'
     });
     if (res.ok) {

@@ -42,7 +42,7 @@ import Admin_Accounts from './component/Admin/Admin_Accounts';
 import Admin_Grades from './component/Admin/Admin_Grades';
 import Admin_Progress from './component/Admin/Admin_Progress';
 import Admin_AuditTrail from './component/Admin/Admin_AuditTrail';
-
+import { AdminSupportCenter } from './component/Admin';
 
 // Parent Access
 import Parent_Dashboard from './component/Parent/Parent_Dashboard';
@@ -95,6 +95,7 @@ function App() {
         <Route path="/admin_calendar" element={<Admin_Calendar />}/>
         <Route path="/admin_progress" element={<Admin_Progress />}/>
         <Route path="/admin_audit_trail" element={<Admin_AuditTrail />}/>
+        <Route path="/admin/support-center" element={<AdminSupportCenter />} />
 
         {/* Parent */}
         <Route path="/parent_dashboard" element={<Parent_Dashboard/>}/>

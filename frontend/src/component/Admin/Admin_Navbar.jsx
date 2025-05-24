@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import dashboardIcon from "../../assets/dashboard.png";
 import classesIcon from "../../assets/classes.png";
 import activitiesIcon from "../../assets/activities.png";
@@ -8,7 +8,7 @@ import progressIcon from "../../assets/progress.png";
 import gradesIcon from "../../assets/grades.png";
 import calendarIcon from "../../assets/calendar.png";
 import logo5 from "../../assets/logo/Logo5.svg";
-import { Menu, X } from 'lucide-react';
+import { Menu, X, HelpCircle } from 'lucide-react';
 
 const Admin_Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -58,6 +58,17 @@ const Admin_Navbar = () => {
                             <span>{item.label}</span>
                         </button>
                     ))}
+                    <button
+                        onClick={() => {
+                            navigate('/admin/support-center');
+                            setIsOpen(false);
+                        }}
+                        className={`text-lg flex items-center space-x-3 p-2 w-full rounded-lg transition-colors 
+                        ${location.pathname === '/admin/support-center' ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"}`}
+                    >
+                        <HelpCircle className="w-6 h-6" />
+                        <span>Support Center</span>
+                    </button>
                 </nav>
             </div>
         </>

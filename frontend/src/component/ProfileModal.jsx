@@ -5,6 +5,7 @@ import Modal from 'react-modal';
 import Cropper from 'react-easy-crop';
 import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
+import SupportModal from './Support/SupportModal';
 
 Modal.setAppElement('#root');
 
@@ -136,6 +137,7 @@ export default function ProfileModal({
   const [imageSrc, setImageSrc] = useState(null);
   const [activeTab, setActiveTab] = useState("badges");
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const user = JSON.parse(localStorage.getItem('user'));
 
@@ -398,6 +400,18 @@ export default function ProfileModal({
             >
               Change Password
             </button>
+            {/* Remove Support Center button for admin users */}
+            {!(userType && userType.trim().toLowerCase() === 'admin') && (
+              <>
+                <button
+                  className="mt-3 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                  onClick={() => setShowHelp(true)}
+                >
+                  Support Center
+                </button>
+                {showHelp && <SupportModal onClose={() => setShowHelp(false)} />}
+              </>
+            )}
           </div>
         )}
 

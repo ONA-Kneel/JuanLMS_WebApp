@@ -4,7 +4,6 @@ import dotenv from 'dotenv';
 import connect from "./connect.cjs";
 import express from "express";
 import cors from "cors";
-import users from "./routes/userRoutes.js";
 import messageRoutes from "./routes/messages.js";
 import multer from "multer";
 import fs from "fs";
@@ -14,6 +13,7 @@ import eventRoutes from "./routes/eventRoutes.js";
 import classRoutes from "./routes/classRoutes.js";
 import auditTrailRoutes from "./routes/auditTrailroutes.js";
 import lessonRoutes from "./routes/lessonRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 
 dotenv.config({ path: './config.env' });
 
@@ -87,7 +87,7 @@ app.post("/users/:id/upload-profile", upload.single("image"), async (req, res) =
 });
 
 // ✅ Routes
-app.use(users);
+app.use('/', userRoutes);
 app.use('/messages', messageRoutes);
 app.use('/uploads', express.static('uploads'));
 app.use("/events", eventRoutes);
