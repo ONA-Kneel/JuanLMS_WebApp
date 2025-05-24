@@ -80,11 +80,32 @@ userRoutes.post("/users", async (req, res) => {
         return res.status(400).json({ error: "Missing required fields" });
     }
 
+    // Generate a unique school email if duplicate exists
+    let baseEmail = email.toLowerCase();
+    let emailUsername = baseEmail.split('@')[0];
+    let emailDomain = baseEmail.split('@')[1];
+    let uniqueEmail = baseEmail;
+    let counter = 1;
+    let duplicateFound = false;
+    while (await db.collection("Users").findOne({ email: uniqueEmail })) {
+        duplicateFound = true;
+        uniqueEmail = `${emailUsername}${counter}@${emailDomain}`;
+        counter++;
+    }
+
+    // If duplicate was found, return 409 and suggested email, do not create user yet
+    if (duplicateFound && uniqueEmail !== baseEmail) {
+        return res.status(409).json({
+            error: "Duplicate email found.",
+            suggestedEmail: uniqueEmail
+        });
+    }
+
     const mongoObject = {
         firstname,
         middlename,
         lastname,
-        email: email.toLowerCase(),
+        email: uniqueEmail,
         contactno,
         password, // (✅ you'll hash later)
         personalemail,
@@ -95,6 +116,31 @@ userRoutes.post("/users", async (req, res) => {
 
     try {
         const result = await db.collection("Users").insertOne(mongoObject);
+        // Send welcome email via Brevo (Sendinblue)
+        try {
+            let defaultClient = SibApiV3Sdk.ApiClient.instance;
+            let apiKey = defaultClient.authentications['api-key'];
+            apiKey.apiKey = process.env.BREVO_API_KEY;
+
+            let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+
+            let sendSmtpEmail = {
+                to: [{ email: personalemail, name: firstname || '' }],
+                sender: { email: 'nicolettecborre@gmail.com', name: 'JuanLMS Support' },
+                subject: 'Welcome to JuanLMS!',
+                textContent:
+                  `Hello ${firstname || ''},\n\n` +
+                  `Your JuanLMS account has been created.\n` +
+                  `School Email: ${uniqueEmail}\n` +
+                  `Password: ${password}\n\n` +
+                  `Please log in and change your password after your first login.\n\n` +
+                  `Thank you,\nJuanLMS Team`
+            };
+
+            await apiInstance.sendTransacEmail(sendSmtpEmail);
+        } catch (emailErr) {
+            console.error('Error sending welcome email via Brevo:', emailErr);
+        }
         res.status(201).json({ success: true, result });
     } catch (err) {
         console.error(err);

@@ -66,6 +66,12 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [lessonUploadError, setLessonUploadError] = useState(null);
   const [lessonUploadSuccess, setLessonUploadSuccess] = useState(null);
 
+  // --- MEMBERS TAB STATE ---
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState(null);
+  const [facultyMembers, setFacultyMembers] = useState([]);
+  const [studentMembers, setStudentMembers] = useState([]);
+
   // Fetch lessons from backend
   useEffect(() => {
     if (selected === "materials") {
@@ -81,6 +87,21 @@ export default function ClassContent({ selected, isFaculty = false }) {
         .finally(() => setLessonsLoading(false));
     }
   }, [selected, classId, lessonUploadSuccess]);
+
+  useEffect(() => {
+    if (selected === "members") {
+      setMembersLoading(true);
+      setMembersError(null);
+      fetch(`http://localhost:5000/classes/${classId}/members`)
+        .then(res => res.json())
+        .then(data => {
+          setFacultyMembers(data.faculty || []);
+          setStudentMembers(data.students || []);
+        })
+        .catch(() => setMembersError("Failed to fetch class members."))
+        .finally(() => setMembersLoading(false));
+    }
+  }, [selected, classId]);
 
   // --- HANDLERS FOR ADDING CONTENT (Faculty only) ---
 
@@ -415,6 +436,53 @@ export default function ClassContent({ selected, isFaculty = false }) {
               <p className="text-sm text-gray-700 mb-6">{activeLesson.description || activeLesson.content}</p>
             </>
           )}
+        </>
+      )}
+
+      {/* --- MEMBERS TAB: Faculty & Students --- */}
+      {selected === "members" && (
+        <>
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold mb-2">Class Members</h2>
+            {membersLoading && <p className="text-blue-700">Loading members...</p>}
+            {membersError && <p className="text-red-600">{membersError}</p>}
+            {!membersLoading && !membersError && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Faculty Section */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-2 text-blue-900">Faculty</h3>
+                  {facultyMembers.length === 0 ? (
+                    <p className="text-gray-500">No faculty found.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {facultyMembers.map(fac => (
+                        <li key={fac._id} className="p-3 bg-blue-50 rounded border border-blue-200">
+                          <span className="font-bold">{fac.firstname} {fac.lastname}</span>
+                          <span className="block text-sm text-gray-700">{fac.email}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                {/* Students Section */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-2 text-blue-900">Students</h3>
+                  {studentMembers.length === 0 ? (
+                    <p className="text-gray-500">No students found.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {studentMembers.map(stu => (
+                        <li key={stu._id} className="p-3 bg-blue-50 rounded border border-blue-200">
+                          <span className="font-bold">{stu.firstname} {stu.lastname}</span>
+                          <span className="block text-sm text-gray-700">{stu.email}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

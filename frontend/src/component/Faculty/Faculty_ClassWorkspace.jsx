@@ -23,6 +23,7 @@ export default function Faculty_ClassWorkspace() {
         { label: "Home Page", key: "home" },
         { label: "Classwork", key: "classwork" },
         { label: "Class Materials", key: "materials" },
+        { label: "Members", key: "members" },
     ];
 
     // // State for content
@@ -134,150 +135,7 @@ export default function Faculty_ClassWorkspace() {
                 <ClassContent selected={selected} isFaculty="true"/>
            
 
-            {/* Content
-                <div className="bg-white rounded-2xl shadow p-6 md:p-8">
-                    {selected === "home" && (
-                        <>
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-2xl font-bold">Manage Announcements</h2>
-                                <button
-                                    onClick={() => setShowAnnouncementForm(!showAnnouncementForm)}
-                                    className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm"
-                                >
-                                    {showAnnouncementForm ? "Cancel" : "+ Create New Announcement"}
-                                </button>
-                            </div>
-
-                            {showAnnouncementForm && (
-                                <form onSubmit={handleAddAnnouncement} className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
-                                    <div>
-                                        <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
-                                        <input name="title" required className="w-full border rounded px-3 py-2 text-sm" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-blue-900 mb-1">Content</label>
-                                        <textarea name="content" required className="w-full border rounded px-3 py-2 text-sm" rows={3} />
-                                    </div>
-                                    <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm">
-                                        Save Announcement
-                                    </button>
-                                </form>
-                            )}
-
-                            <div className="space-y-4">
-                                {announcements.length > 0 ? (
-                                    announcements.map((item) => (
-                                        <div key={item.id} className="p-4 rounded bg-blue-50 border border-blue-200 shadow-sm">
-                                            <h3 className="font-semibold text-blue-900">{item.title}</h3>
-                                            <p className="text-sm text-gray-700">{item.content}</p>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-gray-700">No announcements yet.</p>
-                                )}
-                            </div>
-                        </>
-                    )}
-
-                    {selected === "classwork" && (
-                        <>
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-2xl font-bold">Manage Assignments</h2>
-                                <button
-                                    onClick={() => setShowAssignmentForm(!showAssignmentForm)}
-                                    className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm"
-                                >
-                                    {showAssignmentForm ? "Cancel" : "+ Create New Assignment"}
-                                </button>
-                            </div>
-
-                            {showAssignmentForm && (
-                                <form onSubmit={handleAddAssignment} className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
-                                    <div>
-                                        <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
-                                        <input name="title" required className="w-full border rounded px-3 py-2 text-sm" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-blue-900 mb-1">Instructions</label>
-                                        <textarea name="instructions" required className="w-full border rounded px-3 py-2 text-sm" rows={3} />
-                                    </div>
-                                    <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm">
-                                        Save Assignment
-                                    </button>
-                                </form>
-                            )}
-
-                            <div className="space-y-4">
-                                {assignments.length > 0 ? (
-                                    assignments.map((item) => (
-                                        <div key={item.id} className="p-4 rounded bg-blue-50 border border-blue-200 shadow-sm">
-                                            <h3 className="font-semibold text-blue-900">{item.title}</h3>
-                                            <p className="text-sm text-gray-700">{item.instructions}</p>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-gray-700">No assignments yet.</p>
-                                )}
-                            </div>
-                        </>
-                    )}
-
-                    {selected === "materials" && (
-                        <>
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-2xl font-bold">Manage Lessons</h2>
-                                <button
-                                    onClick={() => setShowLessonForm(!showLessonForm)}
-                                    className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm"
-                                >
-                                    {showLessonForm ? "Cancel" : "+ Create New Lesson"}
-                                </button>
-                            </div>
-
-                            {showLessonForm && (
-                                <form
-                                    onSubmit={handleAddLesson}
-                                    className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200"
-                                >
-                                    <div>
-                                        <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
-                                        <input
-                                            name="title"
-                                            required
-                                            className="w-full border rounded px-3 py-2 text-sm"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-blue-900 mb-1">Description / Content</label>
-                                        <textarea
-                                            name="description"
-                                            required
-                                            className="w-full border rounded px-3 py-2 text-sm"
-                                            rows={4}
-                                        />
-                                    </div>
-                                    <button
-                                        type="submit"
-                                        className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm"
-                                    >
-                                        Save Lesson
-                                    </button>
-                                </form>
-                            )}
-
-                            <div className="space-y-4">
-                                {lessons.length > 0 ? (
-                                    lessons.map((item) => (
-                                        <LessonItem key={item.id} lesson={item} />
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-gray-700">No lessons yet.</p>
-                                )}
-                            </div>
-                        </>
-                    )}
-
-                </div> */}
+           
         </div>
         </div >
     );
