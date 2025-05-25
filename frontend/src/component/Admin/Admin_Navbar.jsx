@@ -67,7 +67,7 @@ const Admin_Navbar = () => {
                         ${location.pathname === '/admin/support-center' ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"}`}
                     >
                         <HelpCircle className="w-6 h-6" />
-                        <span>Support Center</span>
+                        <span>SUPPORT CENTER</span>
                     </button>
                 </nav>
             </div>

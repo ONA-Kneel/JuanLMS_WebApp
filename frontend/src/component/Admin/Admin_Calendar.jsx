@@ -9,6 +9,7 @@ import ProfileMenu from "../ProfileMenu";
 import createEvent from "../../assets/createEvent.png";
 // import editEvent from "../../assets/editEvent.png";
 import ProfileModal from "../ProfileModal";
+import interactionPlugin from "@fullcalendar/interaction";
 
 const PRESET_COLORS = [
   "#1890ff", // blue
@@ -30,11 +31,14 @@ export default function Admin_Calendar() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [newEvent, setNewEvent] = useState({ title: '', date: '', color: '#1890ff' });
-  const [editEventData, setEditEventData] = useState({ _id: '', title: '', date: '', color: '#1890ff' });
+  const [newEvent, setNewEvent] = useState({ title: '', start: '', end: '', color: '#1890ff', isRange: false });
+  const [editEventData, setEditEventData] = useState({ _id: '', title: '', start: '', end: '', color: '#1890ff', isRange: false });
   const [events, setEvents] = useState([]);
   const [holidays, setHolidays] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [selectedDayEvents, setSelectedDayEvents] = useState([]);
+  const [showDayModal, setShowDayModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
 
   const formattedDate = today.toLocaleDateString("en-US", {
     weekday: "long",
@@ -50,7 +54,12 @@ export default function Admin_Calendar() {
     setLoadingEvents(true);
     try {
       const res = await axios.get("http://localhost:5000/events");
-      setEvents(res.data.map(ev => ({ ...ev, date: ev.date.slice(0, 10), color: ev.color || '#1890ff' })));
+      setEvents(res.data.map(ev => ({
+        ...ev,
+        start: ev.start ? ev.start.slice(0, 16) : '',
+        end: ev.end ? ev.end.slice(0, 16) : '',
+        color: ev.color || '#1890ff'
+      })));
     } catch (err) {
       console.error("Failed to fetch events", err);
     }
@@ -88,23 +97,28 @@ export default function Admin_Calendar() {
 
   // Modal handlers
   const openEventModal = () => {
-    setNewEvent({ title: '', date: '', color: '#1890ff' });
+    setNewEvent({ title: '', start: '', end: '', color: '#1890ff', isRange: false });
     setShowEventModal(true);
   };
   const closeEventModal = () => setShowEventModal(false);
 
   // Handle form input
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewEvent((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setNewEvent((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   // Add new event
   const handleAddEvent = async (e) => {
     e.preventDefault();
-    if (!newEvent.title || !newEvent.date) return;
+    if (!newEvent.title || !newEvent.start) return;
     try {
-      await axios.post("http://localhost:5000/events", newEvent);
+      await axios.post("http://localhost:5000/events", {
+        title: newEvent.title,
+        start: newEvent.start,
+        end: newEvent.isRange && newEvent.end ? newEvent.end : undefined,
+        color: newEvent.color
+      });
       await fetchEvents();
       setShowEventModal(false);
     } catch {
@@ -115,26 +129,38 @@ export default function Admin_Calendar() {
   // Edit event modal handlers
   const openEditModal = (eventInfo) => {
     // Only allow editing admin events (not holidays)
-    const ev = events.find(ev => ev.title === eventInfo.event.title && ev.date === eventInfo.event.startStr);
+    const ev = events.find(ev => ev.title === eventInfo.event.title && ev.start === eventInfo.event.startStr);
     if (!ev) return; // Not an admin event
-    setEditEventData({ _id: ev._id, title: ev.title, date: ev.date, color: ev.color || '#1890ff' });
+    setEditEventData({
+      _id: ev._id,
+      title: ev.title,
+      start: ev.start,
+      end: ev.end || '',
+      color: ev.color || '#1890ff',
+      isRange: !!ev.end
+    });
     setShowEditModal(true);
   };
   const closeEditModal = () => setShowEditModal(false);
 
   // Handle edit form input
   const handleEditInputChange = (e) => {
-    const { name, value } = e.target;
-    setEditEventData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setEditEventData((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   // Save edited event
   const handleEditEvent = async (e) => {
     e.preventDefault();
-    const { _id, title, date, color } = editEventData;
-    if (!_id || !title || !date) return;
+    const { _id, title, start, end, color, isRange } = editEventData;
+    if (!_id || !title || !start) return;
     try {
-      await axios.put(`http://localhost:5000/events/${_id}`, { title, date, color });
+      await axios.put(`http://localhost:5000/events/${_id}`, {
+        title,
+        start,
+        end: isRange && end ? end : undefined,
+        color
+      });
       await fetchEvents();
       setShowEditModal(false);
     } catch {
@@ -158,10 +184,24 @@ export default function Admin_Calendar() {
   // FullCalendar event click handler
   const handleEventClick = (eventInfo) => {
     // Only allow editing admin events (not holidays)
-    const isAdminEvent = events.some(ev => ev.title === eventInfo.event.title && ev.date === eventInfo.event.startStr);
+    const isAdminEvent = events.some(ev => ev.title === eventInfo.event.title && ev.start === eventInfo.event.startStr);
     if (isAdminEvent) {
       openEditModal(eventInfo);
     }
+  };
+
+  // FullCalendar day click handler
+  const handleDateClick = (arg) => {
+    const clickedDate = arg.dateStr; // e.g. '2025-05-01'
+    setSelectedDate(clickedDate);
+    // Filter events that occur on this day
+    const eventsForDay = events.filter(ev => {
+      const start = ev.start.slice(0, 10);
+      const end = ev.end ? ev.end.slice(0, 10) : start;
+      return clickedDate >= start && clickedDate <= end;
+    });
+    setSelectedDayEvents(eventsForDay);
+    setShowDayModal(true);
   };
 
   return (
@@ -180,16 +220,17 @@ export default function Admin_Calendar() {
         </div>
 
         {/* Calendar */}
-        <div className="bg-white rounded-xl shadow p-4">
+        <div className="bg-white rounded-xl shadow p-4 cursor-pointer">
           {loadingEvents ? (
             <div>Loading events...</div>
           ) : (
             <FullCalendar
-              plugins={[dayGridPlugin]}
+              plugins={[dayGridPlugin, interactionPlugin]}
               initialView="dayGridMonth"
               height="auto"
               events={allEvents}
               eventClick={handleEventClick}
+              dateClick={handleDateClick}
             />
           )}
         </div>
@@ -209,15 +250,40 @@ export default function Admin_Calendar() {
                 className="w-full border rounded px-3 py-2 mb-4"
                 required
               />
-              <label className="block mb-2 font-medium">Date</label>
+              <label className="block mb-2 font-medium">Event Type</label>
+              <div className="flex gap-2 mb-4">
+                <label className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    name="isRange"
+                    checked={newEvent.isRange}
+                    onChange={handleInputChange}
+                  />
+                  Range
+                </label>
+              </div>
+              <label className="block mb-2 font-medium">{newEvent.isRange ? 'Start' : 'Date & Time'}</label>
               <input
-                type="date"
-                name="date"
-                value={newEvent.date}
+                type="datetime-local"
+                name="start"
+                value={newEvent.start}
                 onChange={handleInputChange}
                 className="w-full border rounded px-3 py-2 mb-4"
                 required
               />
+              {newEvent.isRange && (
+                <>
+                  <label className="block mb-2 font-medium">End</label>
+                  <input
+                    type="datetime-local"
+                    name="end"
+                    value={newEvent.end}
+                    onChange={handleInputChange}
+                    className="w-full border rounded px-3 py-2 mb-4"
+                    required
+                  />
+                </>
+              )}
               <label className="block mb-2 font-medium">Color</label>
               <div className="flex gap-2 mb-4">
                 {PRESET_COLORS.map((preset) => (
@@ -250,7 +316,7 @@ export default function Admin_Calendar() {
         {/* Edit Event Modal */}
         {showEditModal && (
           <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="absolute inset-0 bg-black bg-opacity-20" onClick={closeEditModal}></div>
+            <div className="absolute inset-0 bg-black/50 filter backdrop-blur-sm" onClick={closeEditModal}></div>
             <form onSubmit={handleEditEvent} className="relative bg-white rounded-lg shadow-lg p-8 z-10 w-80">
               <h3 className="text-xl font-bold mb-4">Edit Event</h3>
               <label className="block mb-2 font-medium">Title</label>
@@ -262,15 +328,40 @@ export default function Admin_Calendar() {
                 className="w-full border rounded px-3 py-2 mb-4"
                 required
               />
-              <label className="block mb-2 font-medium">Date</label>
+              <label className="block mb-2 font-medium">Event Type</label>
+              <div className="flex gap-2 mb-4">
+                <label className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    name="isRange"
+                    checked={editEventData.isRange}
+                    onChange={handleEditInputChange}
+                  />
+                  Range
+                </label>
+              </div>
+              <label className="block mb-2 font-medium">{editEventData.isRange ? 'Start' : 'Date & Time'}</label>
               <input
-                type="date"
-                name="date"
-                value={editEventData.date}
+                type="datetime-local"
+                name="start"
+                value={editEventData.start}
                 onChange={handleEditInputChange}
                 className="w-full border rounded px-3 py-2 mb-4"
                 required
               />
+              {editEventData.isRange && (
+                <>
+                  <label className="block mb-2 font-medium">End</label>
+                  <input
+                    type="datetime-local"
+                    name="end"
+                    value={editEventData.end}
+                    onChange={handleEditInputChange}
+                    className="w-full border rounded px-3 py-2 mb-4"
+                    required
+                  />
+                </>
+              )}
               <label className="block mb-2 font-medium">Color</label>
               <div className="flex gap-2 mb-4">
                 {PRESET_COLORS.map((preset) => (
@@ -339,6 +430,44 @@ export default function Admin_Calendar() {
               </button>
               <span className="font-semibold text-blue-900">Edit</span>
             </div> */}
+          </div>
+        )}
+
+        {/* Day Events Modal */}
+        {showDayModal && (
+          <div className="fixed inset-0 flex items-center justify-center z-50 ">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setShowDayModal(false)}></div>
+            <div className="relative bg-white rounded-lg shadow-lg p-8 z-10 w-96">
+              <h3 className="text-xl font-bold mb-4">
+                Events for {new Date(selectedDate).toLocaleDateString()}
+              </h3>
+              {selectedDayEvents.length === 0 ? (
+                <p>No events scheduled.</p>
+              ) : (
+                <ul>
+                  {selectedDayEvents.map(ev => (
+                    <li key={ev._id} className="mb-2">
+                      <span className="font-semibold">{ev.title}</span>
+                      <br />
+                      <span className="text-sm text-gray-600">
+                        {ev.start
+                          ? new Date(ev.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : ''}
+                        {ev.end && (
+                          <>
+                            {' - '}
+                            {new Date(ev.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex justify-end mt-4">
+                <button onClick={() => setShowDayModal(false)} className="px-4 py-2 rounded bg-gray-300">Close</button>
+              </div>
+            </div>
           </div>
         )}
       </div>

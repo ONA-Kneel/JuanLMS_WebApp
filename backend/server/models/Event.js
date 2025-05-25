@@ -3,8 +3,9 @@ import mongoose from "mongoose";
 
 const eventSchema = new mongoose.Schema({
   title: { type: String, required: true },
-  date: { type: Date, required: true },
-  color: { type: String, default: "#1890ff" } // <-- Add this line
+  start: { type: Date, required: true }, // start datetime
+  end: { type: Date }, // end datetime (optional)
+  color: { type: String, default: "#1890ff" }
 }, { collection: "Events" }); // Explicitly use "Events" collection
 
 const Event = mongoose.model("Event", eventSchema);

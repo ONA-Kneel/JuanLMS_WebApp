@@ -16,27 +16,27 @@ router.get("/", async (req, res) => {
 
 // POST new event (optional, for adding events)
 router.post("/", async (req, res) => {
-    console.log("POST /events body:", req.body); // <--- Add this
-    const { title, date } = req.body;
-  if (!title || !date) {
-    return res.status(400).json({ message: "Title and date are required" });
-  }
-  try {
-    const newEvent = new Event({ title, date: new Date(date) });
-    await newEvent.save();
-    res.status(201).json(newEvent);
-  } catch (error) {
-    res.status(500).json({ message: "Internal server error" });
-  }
+    console.log("POST /events body:", req.body);
+    const { title, start, end, color } = req.body;
+    if (!title || !start) {
+        return res.status(400).json({ message: "Title and start date are required" });
+    }
+    try {
+        const newEvent = new Event({ title, start: new Date(start), end: end ? new Date(end) : undefined, color });
+        await newEvent.save();
+        res.status(201).json(newEvent);
+    } catch (error) {
+        res.status(500).json({ message: "Internal server error" });
+    }
 });
 
 // PUT update event
 router.put("/:id", async (req, res) => {
-  const { title, date, color } = req.body;
+  const { title, start, end, color } = req.body;
   try {
     const updated = await Event.findByIdAndUpdate(
       req.params.id,
-      { title, date: new Date(date), color },
+      { title, start: new Date(start), end: end ? new Date(end) : undefined, color },
       { new: true }
     );
     if (!updated) {

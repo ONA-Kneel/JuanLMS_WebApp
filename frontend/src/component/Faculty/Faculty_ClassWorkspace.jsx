@@ -26,55 +26,7 @@ export default function Faculty_ClassWorkspace() {
         { label: "Members", key: "members" },
     ];
 
-    // // State for content
-    // const [announcements, setAnnouncements] = useState([]);
-    // const [assignments, setAssignments] = useState([]);
-    // const [lessons, setLessons] = useState([]);
-
-    // // Toggle states for showing forms
-    // const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
-    // const [showAssignmentForm, setShowAssignmentForm] = useState(false);
-    // const [showLessonForm, setShowLessonForm] = useState(false);
-
-    // // Handlers
-    // const handleAddAnnouncement = (e) => {
-    //     e.preventDefault();
-    //     const form = e.target;
-    //     const newAnnouncement = {
-    //         id: announcements.length + 1,
-    //         title: form.title.value,
-    //         content: form.content.value,
-    //     };
-    //     setAnnouncements([...announcements, newAnnouncement]);
-    //     setShowAnnouncementForm(false);
-    //     form.reset();
-    // };
-
-    // const handleAddAssignment = (e) => {
-    //     e.preventDefault();
-    //     const form = e.target;
-    //     const newAssignment = {
-    //         id: assignments.length + 1,
-    //         title: form.title.value,
-    //         instructions: form.instructions.value,
-    //     };
-    //     setAssignments([...assignments, newAssignment]);
-    //     setShowAssignmentForm(false);
-    //     form.reset();
-    // };
-
-    // const handleAddLesson = (e) => {
-    //     e.preventDefault();
-    //     const form = e.target;
-    //     const newLesson = {
-    //         id: lessons.length + 1,
-    //         title: form.title.value,
-    //         description: form.description.value,
-    //     };
-    //     setLessons([...lessons, newLesson]);
-    //     setShowLessonForm(false);
-    //     form.reset();
-    // };
+    
 
     function LessonItem({ lesson }) {
         const [expanded, setExpanded] = useState(false);
