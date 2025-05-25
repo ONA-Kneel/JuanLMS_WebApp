@@ -8,6 +8,7 @@ import database from '../connect.cjs';
 import { ObjectId } from 'mongodb';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
+
 const router = express.Router();
 
 // --- POST / - Create a new class ---
@@ -55,16 +56,37 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // --- GET /:id - Get a specific class ---
-router.get('/:id', authenticateToken, async (req, res) => {
+// router.get('/:id', authenticateToken, async (req, res) => {
+//   try {
+//     const classData = await Class.findById(req.params.id);
+//     if (!classData) {
+//       return res.status(404).json({ error: 'Class not found' });
+//     }
+//     res.json(classData);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: 'Failed to fetch class' });
+//   }
+// });
+
+// --- GET /:classID/members - Get all members (faculty and students) of a class ---
+router.get('/:classID/members', async (req, res) => {
   try {
-    const classData = await Class.findById(req.params.id);
-    if (!classData) {
-      return res.status(404).json({ error: 'Class not found' });
-    }
-    res.json(classData);
+    const { classID } = req.params;
+    const db = req.app.locals.db || database.getDb();
+    // Find the class by classID
+    const classDoc = await db.collection('Classes').findOne({ classID });
+    if (!classDoc) return res.status(404).json({ error: 'Class not found' });
+    // Get faculty user
+    const faculty = await db.collection('Users').find({ userID: classDoc.facultyID }).toArray();
+    // Get student users
+    const students = classDoc.members && classDoc.members.length > 0
+      ? await db.collection('Users').find({ userID: { $in: classDoc.members } }).toArray()
+      : [];
+    res.json({ faculty, students });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch class' });
+    res.status(500).json({ error: 'Failed to fetch class members' });
   }
 });
 

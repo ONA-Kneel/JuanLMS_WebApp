@@ -17,12 +17,13 @@ export default function Admin_Accounts() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [showRecoverConfirm, setShowRecoverConfirm] = useState(false);
-  const [userToRecover, setUserToRecover] = useState(null);
   const [showRecoverSuccess, setShowRecoverSuccess] = useState(false);
   const [showArchivePasswordModal, setShowArchivePasswordModal] = useState(false);
   const [archivePassword, setArchivePassword] = useState("");
   const [archivePasswordError, setArchivePasswordError] = useState("");
+  const [duplicateEmailModal, setDuplicateEmailModal] = useState(false);
+  const [suggestedEmail, setSuggestedEmail] = useState("");
+  const [pendingFormData, setPendingFormData] = useState(null);
   
   const [formData, setFormData] = useState({
     firstname: "",
@@ -173,9 +174,8 @@ export default function Admin_Accounts() {
     }
   }, [formData.firstname, formData.lastname, formData.role]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-  
+  const handleSubmit = async (e, overrideEmail = null) => {
+    if (e && e.preventDefault) e.preventDefault();
     const requiredFields = ["firstname", "lastname", "email", "password", "role"];
     for (const field of requiredFields) {
       if (!formData[field]) {
@@ -183,13 +183,10 @@ export default function Admin_Accounts() {
         return;
       }
     }
-  
-    // Validate contact number (optional but must be valid if provided)
     if (formData.contactno && formData.contactno.length !== 11) {
       alert("Contact number must be exactly 11 digits.");
       return;
     }
-
     if (isEditMode) {
       // Validate if any changes were made
       const hasChanges = 
@@ -207,17 +204,14 @@ export default function Admin_Accounts() {
       // Show save confirmation modal instead of proceeding directly
       setShowSaveConfirm(true);
     } else {
-      // Original create account logic
       const randomNum = Math.floor(100 + Math.random() * 900);
       const userID = `${formData.role.charAt(0).toUpperCase()}${randomNum}`;
-  
       try {
         const res = await fetch("http://localhost:5000/users", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...formData, userID }),
+          body: JSON.stringify({ ...formData, userID, email: overrideEmail || formData.email }),
         });
-  
         const data = await res.json();
         if (res.ok) {
           setShowCreateSuccess(true);
@@ -233,6 +227,10 @@ export default function Admin_Accounts() {
             userID: "",
           });
           fetchUsers();
+        } else if (res.status === 409 && data.suggestedEmail) {
+          setSuggestedEmail(data.suggestedEmail);
+          setPendingFormData({ ...formData, userID });
+          setDuplicateEmailModal(true);
         } else {
           alert("Error: " + (data.error || "Failed to create account"));
         }
@@ -474,8 +472,9 @@ export default function Admin_Accounts() {
               name="personalemail"
               value={formData.personalemail}
               onChange={handleChange}
-              placeholder="Personal Email (optional)"
+              placeholder="Personal Email"
               className="border rounded p-2"
+              required
             />
             <input
               type="text"
@@ -484,6 +483,7 @@ export default function Admin_Accounts() {
               onChange={handleChange}
               placeholder="Contact Number"
               className="border rounded p-2"
+              required
             />
             <div className="flex gap-2">
               <input
@@ -659,30 +659,6 @@ export default function Admin_Accounts() {
             >
               Back to Active Accounts
             </button>
-
-            {/* Recover Confirmation Modal */}
-            {showRecoverConfirm && (
-              <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                  <h3 className="text-xl font-semibold mb-4">Confirm Recovery</h3>
-                  <p className="mb-4">Are you sure you want to recover this account?</p>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={cancelRecover}
-                      className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
-                    >
-                      No
-                    </button>
-                    <button
-                      onClick={confirmRecover}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
-                    >
-                      Yes
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Recover Success Message */}
             {showRecoverSuccess && (
@@ -911,6 +887,41 @@ export default function Admin_Accounts() {
               >
                 OK
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Duplicate Email Modal */}
+        {duplicateEmailModal && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+              <h3 className="text-xl font-semibold mb-4">Duplicate Email Detected</h3>
+              <p className="mb-4">
+                The email you entered already exists.<br />
+                Suggested email: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{suggestedEmail}</span>
+              </p>
+              <p className="mb-4">Do you want to proceed with this suggested email?</p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setDuplicateEmailModal(false)}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    setDuplicateEmailModal(false);
+                    if (pendingFormData) {
+                      // Resubmit with suggested email
+                      await handleSubmit(null, suggestedEmail);
+                      setPendingFormData(null);
+                    }
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                >
+                  Proceed
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -17,6 +17,7 @@ export default function Student_ClassWorkspace() {
     { label: "Home Page", key: "home" },
     { label: "Classwork", key: "classwork" },
     { label: "Class Materials", key: "materials" },
+    { label: "Members", key: "members" },
   ];
 
   useEffect(() => {
