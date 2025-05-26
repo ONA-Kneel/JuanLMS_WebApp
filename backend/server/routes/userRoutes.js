@@ -19,14 +19,20 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here"; // 👈 use
 userRoutes.get("/users/search", async (req, res) => {
     const db = database.getDb();
     const query = req.query.q || "";
-    const users = await db.collection("Users").find({
-        role: "students",
-        $or: [
-            { firstname: { $regex: query, $options: "i" } },
-            { middlename: { $regex: query, $options: "i" } },
-            { lastname: { $regex: query, $options: "i" } },
-        ],
-    }).toArray();
+    let users = [];
+    // If the query looks like an email, match exactly
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(query)) {
+        users = await db.collection("Users").find({ email: query.toLowerCase() }).toArray();
+    } else {
+        users = await db.collection("Users").find({
+            $or: [
+                { firstname: { $regex: query, $options: "i" } },
+                { middlename: { $regex: query, $options: "i" } },
+                { lastname: { $regex: query, $options: "i" } },
+                { email: { $regex: query, $options: "i" } }
+            ],
+        }).toArray();
+    }
     if (users.length > 0) {
         res.json(users);
     } else {

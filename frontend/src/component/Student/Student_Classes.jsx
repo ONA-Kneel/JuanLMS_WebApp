@@ -11,11 +11,16 @@ export default function Student_Classes() {
   const [loading, setLoading] = useState(true);
 
   const currentUserID = localStorage.getItem("userID");
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
     async function fetchClasses() {
       try {
-        const res = await fetch("http://localhost:5000/classes");
+        const res = await fetch("http://localhost:5000/classes", {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
         const data = await res.json();
         const filtered = data.filter(cls => cls.members.includes(currentUserID));
         setClasses(filtered);
@@ -26,7 +31,7 @@ export default function Student_Classes() {
       }
     }
     fetchClasses();
-  }, [currentUserID]);
+  }, [currentUserID, token]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">

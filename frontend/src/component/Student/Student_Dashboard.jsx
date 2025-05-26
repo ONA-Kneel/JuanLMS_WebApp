@@ -21,7 +21,12 @@ export default function Student_Dashboard() {
   useEffect(() => {
     async function fetchClasses() {
       try {
-        const res = await fetch("http://localhost:5000/classes");
+        const token = localStorage.getItem("token");
+        const res = await fetch("http://localhost:5000/classes", {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
         const data = await res.json();
         // Only include classes where the current user is a member
         const filtered = data.filter(cls => cls.members.includes(currentUserID));

@@ -1,25 +1,27 @@
 import React, { useState } from "react";
 import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
-import addClass from "../../assets/addClass.png";
 import archiveIcon from "../../assets/archive.png";
 import createEventIcon from "../../assets/createEvent.png";
+import * as XLSX from "xlsx";
 
 export default function FacultyCreateClass() {
-  const [studentName, setStudentName] = useState("");  
-  const [students, setStudents] = useState([]);        
-  const [error, setError] = useState("");             
+  const [studentName, setStudentName] = useState("");
+  const [students, setStudents] = useState([]);
+  const [error, setError] = useState("");
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [className, setClassName] = useState("");
   const [classCode, setClassCode] = useState("");
   const [classDesc, setClassDesc] = useState("");
-  
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [batchMessage, setBatchMessage] = useState('');
+
   const handleSearch = async (e) => {
     const query = e.target.value;
-    setStudentName(query); 
+    setStudentName(query);
 
     if (!query) {
-      setStudents([]); 
+      setStudents([]);
       setError("");
       return;
     }
@@ -31,7 +33,7 @@ export default function FacultyCreateClass() {
       const filteredStudents = data
         .filter(student => student.role === 'students')
         .filter(student => !selectedStudents.some(sel => sel._id === student._id));
-      
+
       if (filteredStudents.length === 0) {
         setError("No student found");
       } else {
@@ -60,6 +62,7 @@ export default function FacultyCreateClass() {
     const classID = `C${randomNum}`;
     const members = selectedStudents.map(s => s.userID);
     const facultyID = localStorage.getItem("userID"); // get the faculty's userID
+    const token = localStorage.getItem("token"); // or whatever you use for auth
 
     if (!className || !classCode || !classDesc || members.length === 0) {
       alert("Please fill in all fields and add at least one member.");
@@ -78,7 +81,10 @@ export default function FacultyCreateClass() {
     try {
       const res = await fetch("http://localhost:5000/classes", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
         body: JSON.stringify(classData),
       });
       if (res.ok) {
@@ -95,6 +101,54 @@ export default function FacultyCreateClass() {
       console.error(err);
       alert("Something went wrong.");
     }
+  };
+
+  const handleBatchUpload = async (e) => {
+    setBatchLoading(true);
+    setBatchMessage('');
+    const file = e.target.files[0];
+    if (!file) {
+      setBatchLoading(false);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const data = evt.target.result;
+      const workbook = XLSX.read(data, { type: "binary" });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json(worksheet);
+
+      let added = 0;
+      for (const row of json) {
+        const name = (row.Name || row["Full Name"] || row["name"] || row["FullName"] || "").trim();
+        const email = (row.Email || row["email"] || row["School Email"] || row["school email"] || "").trim();
+        if (!email) {
+          console.log('No email found in row:', row);
+          continue;
+        }
+        try {
+          const res = await fetch(`http://localhost:5000/users/search?q=${encodeURIComponent(email)}`);
+          const users = await res.json();
+          console.log('Searching for:', email, 'Got:', users);
+          const found = users.find(
+            (u) => u.email.toLowerCase() === email.toLowerCase()
+          );
+          if (found && !selectedStudents.some(s => s._id === found._id)) {
+            setSelectedStudents(prev => [...prev, found]);
+            added++;
+          } else {
+            console.log('No match for:', email, 'in', users);
+          }
+        } catch (err) {
+          console.error("Error searching for user:", err);
+        }
+      }
+      setBatchLoading(false);
+      setBatchMessage(added > 0 ? `${added} member(s) added from Excel.` : 'No matching users found.');
+    };
+    reader.readAsBinaryString(file);
   };
 
   return (
@@ -149,7 +203,23 @@ export default function FacultyCreateClass() {
             onChange={e => setClassDesc(e.target.value)}
           />
 
+
+
           <h3 className="text-4xl font-bold mt-5">Members</h3>
+          {/* Batch Upload Input */}
+          <p className=" font-bold ">
+            Batch Upload Members (Excel File)
+            {batchLoading && <p className="text-blue-600">Processing batch upload...</p>}
+            {batchMessage && <p className="text-green-600">{batchMessage}</p>}
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleBatchUpload}
+              className="mb-4 pl-2 bg-blue-950 font-normal text-white rounded-md"
+              
+            />
+          </p>
+
           <input
             type="text"
             placeholder="Enter Student Name"

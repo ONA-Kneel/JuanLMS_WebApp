@@ -23,8 +23,12 @@ export default function Student_ClassWorkspace() {
   useEffect(() => {
     async function fetchClass() {
       try {
-        // You may want to use /classes/:id if you have that endpoint
-        const res = await fetch("http://localhost:5000/classes");
+        const token = localStorage.getItem("token");
+        const res = await fetch("http://localhost:5000/classes", {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
         const data = await res.json();
         // Find the class by classID
         const found = data.find(cls => cls.classID === classId);

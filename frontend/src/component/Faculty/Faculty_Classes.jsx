@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
-import addClass from "../../assets/addClass.png";
 import createEvent from "../../assets/createEvent.png";
 
 export default function Faculty_Classes() {
@@ -17,7 +16,12 @@ export default function Faculty_Classes() {
   useEffect(() => {
     async function fetchClasses() {
       try {
-        const res = await fetch("http://localhost:5000/classes");
+        const token = localStorage.getItem("token");
+        const res = await fetch("http://localhost:5000/classes", {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
         const data = await res.json();
         const filtered = data.filter(cls => cls.facultyID === currentFacultyID);
         setClasses(filtered);

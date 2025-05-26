@@ -17,7 +17,12 @@ export default function Faculty_Dashboard() {
   useEffect(() => {
     async function fetchClasses() {
       try {
-        const res = await fetch("http://localhost:5000/classes");
+        const token = localStorage.getItem("token");
+        const res = await fetch("http://localhost:5000/classes", {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
         const data = await res.json();
         const filtered = data.filter(cls => cls.facultyID === currentFacultyID);
         setClasses(filtered);
