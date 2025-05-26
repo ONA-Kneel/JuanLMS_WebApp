@@ -6,7 +6,7 @@ import ProfileModal from "../ProfileModal";
 import compClassesIcon from "../../assets/compClassesIcon.png";
 import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
-import createEvent from "../../assets/createEvent.png";
+// import createEvent from "../../assets/createEvent.png";
 
 export default function Faculty_Dashboard() {
   const [classes, setClasses] = useState([]);

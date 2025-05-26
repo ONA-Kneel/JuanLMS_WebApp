@@ -8,6 +8,7 @@ import gradesIcon from "../../assets/grades.png";
 import calendarIcon from "../../assets/calendar.png";
 import logo5 from "../../assets/logo/Logo5.svg";
 import { Menu, X } from 'lucide-react';
+import meetingIcon from "../../assets/editEvent.png";
 
 const Faculty_Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -22,6 +23,7 @@ const Faculty_Navbar = () => {
         { path: "/faculty_chats", icon: chatsIcon, label: "CHATS" },
         { path: "/faculty_grades", icon: gradesIcon, label: "GRADES" },
         { path: "/faculty_calendar", icon: calendarIcon, label: "CALENDAR" },
+        { path: "/faculty_meeting", icon: meetingIcon, label: "MEETING" },
     ];
 
     return (
