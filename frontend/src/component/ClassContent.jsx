@@ -79,7 +79,12 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (selected === "materials") {
       setLessonsLoading(true);
       setLessonError(null);
-      fetch(`http://localhost:5000/lessons?classID=${classId}`)
+      const token = localStorage.getItem('token');
+      fetch(`http://localhost:5000/lessons?classID=${classId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setBackendLessons(data);
@@ -160,8 +165,12 @@ export default function ClassContent({ selected, isFaculty = false }) {
       formData.append("files", files[i]);
     }
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch("http://localhost:5000/lessons", {
         method: "POST",
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData,
       });
       const data = await res.json();
@@ -393,7 +402,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                   <td className="py-2 flex items-center">
                                     <FiFile className="w-5 h-5 text-blue-700 mr-2" />
                                     <a
-                                      href={`http://localhost:5000${file.fileUrl}`}
+                                      href={file.fileName && file.fileName.toLowerCase().endsWith('.pdf')
+                                        ? `/pdf-viewer?file=${encodeURIComponent(`http://localhost:5000${file.fileUrl}`)}`
+                                        : `http://localhost:5000${file.fileUrl}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="text-blue-700 underline hover:text-blue-900"
@@ -412,7 +423,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                 <td className="py-2 flex items-center">
                                   <FiFile className="w-5 h-5 text-blue-700 mr-2" />
                                   <a
-                                    href={`http://localhost:5000${lesson.fileUrl}`}
+                                    href={lesson.fileName && lesson.fileName.toLowerCase().endsWith('.pdf')
+                                      ? `/pdf-viewer?file=${encodeURIComponent(`http://localhost:5000${lesson.fileUrl}`)}`
+                                      : `http://localhost:5000${lesson.fileUrl}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-blue-700 underline hover:text-blue-900"

@@ -27,7 +27,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB per file
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB per file
   fileFilter: (req, file, cb) => {
     // Only allow certain file types for lesson materials
     const allowed = [
@@ -96,6 +96,17 @@ router.get('/', authenticateToken, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch lessons' });
   }
+});
+
+// Add Multer error handler for file size
+router.use((err, req, res, next) => {
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ error: 'File too large. Max size is 100MB per file.' });
+  }
+  if (err.message && err.message.includes('Only PDF, PPT, PPTX, DOC, DOCX files are allowed!')) {
+    return res.status(400).json({ error: err.message });
+  }
+  next(err);
 });
 
 export default router; 

@@ -334,7 +334,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
 
         // --- Generate OTP and expiry ---
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const otpExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
+        const otpExpiry = Date.now() + 5 * 60 * 1000; // 5 minutes
 
         // Store OTP and expiry in user document
         await db.collection('Users').updateOne(

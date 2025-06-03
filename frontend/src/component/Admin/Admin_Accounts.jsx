@@ -7,8 +7,6 @@ import archiveIcon from "../../assets/archive.png";
 export default function Admin_Accounts() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
-  const [userToArchive, setUserToArchive] = useState(null);
   const [showArchiveSuccess, setShowArchiveSuccess] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
@@ -24,6 +22,7 @@ export default function Admin_Accounts() {
   const [duplicateEmailModal, setDuplicateEmailModal] = useState(false);
   const [suggestedEmail, setSuggestedEmail] = useState("");
   const [pendingFormData, setPendingFormData] = useState(null);
+  const [userToArchive, setUserToArchive] = useState(null);
   
   const [formData, setFormData] = useState({
     firstname: "",
@@ -146,9 +145,11 @@ export default function Admin_Accounts() {
   const handleChange = (e) => {
     const { name, value } = e.target;
   
-    // For contact number: allow only digits
+    // For contact number: allow only digits, max 11, must start with 09
     if (name === "contactno") {
-      const digitsOnly = value.replace(/\D/g, ""); // remove non-digits
+      let digitsOnly = value.replace(/\D/g, ""); // remove non-digits
+      if (digitsOnly.length > 11) digitsOnly = digitsOnly.slice(0, 11);
+      if (digitsOnly && !digitsOnly.startsWith("09")) digitsOnly = "09";
       setFormData((prev) => ({ ...prev, [name]: digitsOnly }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
@@ -167,7 +168,12 @@ export default function Admin_Accounts() {
         .replace(/[^a-z]/g, ""); // remove non-letters
 
     if (firstname && lastname) {
-      const generatedEmail = `${clean(firstname)}.${clean(lastname)}@${role}.sjddef.edu.ph`;
+      let generatedEmail;
+      if (role === "faculty") {
+        generatedEmail = `${clean(firstname)}.${clean(lastname)}@sjddef.edu.ph`;
+      } else {
+        generatedEmail = `${clean(firstname)}.${clean(lastname)}@${role}.sjddef.edu.ph`;
+      }
       setFormData((prev) => ({ ...prev, email: generatedEmail }));
     } else {
       setFormData((prev) => ({ ...prev, email: "" }));
@@ -183,8 +189,9 @@ export default function Admin_Accounts() {
         return;
       }
     }
-    if (formData.contactno && formData.contactno.length !== 11) {
-      alert("Contact number must be exactly 11 digits.");
+    // Contact number validation for all roles
+    if (!/^09\d{9}$/.test(formData.contactno)) {
+      alert("Contact number must be a valid PH mobile number (11 digits, starts with 09)");
       return;
     }
     if (isEditMode) {
@@ -481,7 +488,7 @@ export default function Admin_Accounts() {
               name="contactno"
               value={formData.contactno}
               onChange={handleChange}
-              placeholder="Contact Number"
+              placeholder="Contact Number (Optional)"
               className="border rounded p-2"
               required
             />

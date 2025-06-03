@@ -1,5 +1,5 @@
 // ===================== Imports =====================
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import ReactDom from 'react-dom';
 import Modal from 'react-modal';
 import Cropper from 'react-easy-crop';
@@ -120,10 +120,6 @@ function ChangePasswordModal({ userId, onClose }) {
 export default function ProfileModal({
   open,
   onClose,
-  avatarImg,
-  name,
-  email,
-  phone,
   openCropModal,
   cropModalOpen,
   onCrop,
@@ -138,8 +134,7 @@ export default function ProfileModal({
   const [activeTab, setActiveTab] = useState("badges");
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-
-  const user = JSON.parse(localStorage.getItem('user'));
+  const [userInfo, setUserInfo] = useState({});
 
   // --- Role Descriptions ---
   const roleDescriptions = {
@@ -149,6 +144,24 @@ export default function ProfileModal({
     admin: "Administrator | (To implement soon)",
     parent: "Parent | Guardian",
   };
+
+  // Fetch user info from backend
+  const fetchUserInfo = async () => {
+    const user = JSON.parse(localStorage.getItem('user'));
+    if (!user || !user._id) return;
+    try {
+      const res = await axios.get(`http://localhost:5000/users/${user._id}`);
+      setUserInfo(res.data);
+      localStorage.setItem('user', JSON.stringify(res.data));
+    } catch {
+      setUserInfo({});
+    }
+  };
+
+  useEffect(() => {
+    fetchUserInfo();
+    // eslint-disable-next-line
+  }, [open]);
 
   // ===================== Cropper Logic =====================
   const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
@@ -175,8 +188,7 @@ export default function ProfileModal({
         image.src = url;
       });
 
-    return new Promise(async (resolve, reject) => {
-      const image = await createImage(imageSrc);
+    return createImage(imageSrc).then(image => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       const { width, height } = crop;
@@ -193,14 +205,16 @@ export default function ProfileModal({
         width,
         height
       );
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error('Canvas is empty'));
-          return;
-        }
-        const croppedImageUrl = URL.createObjectURL(blob);
-        resolve(croppedImageUrl);
-      }, 'image/jpeg');
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('Canvas is empty'));
+            return;
+          }
+          const croppedImageUrl = URL.createObjectURL(blob);
+          resolve(croppedImageUrl);
+        }, 'image/jpeg');
+      });
     });
   };
 
@@ -227,15 +241,9 @@ export default function ProfileModal({
         alert(uploadData.error || "Image upload failed");
         return;
       }
-      const userResponse = await fetch(`http://localhost:5000/users/${user._id}`);
-      const updatedUser = await userResponse.json();
-      if (!userResponse.ok) {
-        alert("Failed to fetch updated user data.");
-        return;
-      }
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      const uploadedImageUrl = updatedUser.profilePic;
-      onCrop(uploadedImageUrl);
+      // Fetch updated user info from backend
+      await fetchUserInfo();
+      onCrop();
       closeCropModal();
       resetCropState();
     } catch (e) {
@@ -273,7 +281,11 @@ export default function ProfileModal({
           <div className="justify-center items-center text-center">
             <img
               className="w-28 h-28 rounded-full bg-gray-600 object-cover"
-              src={avatarImg || '../assets/profileicon (1).svg'}
+              src={
+                userInfo.profilePic
+                  ? `http://localhost:5000/uploads/${userInfo.profilePic}`
+                  : '../assets/profileicon (1).svg'
+              }
               alt="Avatar"
             />
             <button
@@ -345,7 +357,7 @@ export default function ProfileModal({
 
           {/* Dynamic Info */}
           <div className="mb-5 text-center lg:text-left">
-            <h2 className="text-3xl font-bold">{name}</h2>
+            <h2 className="text-3xl font-bold">{userInfo.firstname} {userInfo.lastname}</h2>
             <p className="text-sm text-gray-600">{roleDescriptions[userType] || "User"}</p>
             <div className="flex items-center gap-2 text-green-600 text-sm mt-1">
               <span className="w-2 h-2 rounded-full bg-green-500" />
@@ -356,14 +368,14 @@ export default function ProfileModal({
           <div className="space-y-1 text-sm text-center lg:text-left ml-20">
             <div className="flex items-center gap-2 text-sm">
               <span className="material-icons text-black">email</span>
-              <a href={`mailto:${email}`} className="text-blue-600 hover:underline">
-                {email}
+              <a href={`mailto:${userInfo.email}`} className="text-blue-600 hover:underline">
+                {userInfo.email}
               </a>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <span className="material-icons text-black">phone</span>
-              <a href={`tel:${phone}`} className="text-blue-600 hover:underline">
-                {phone}
+              <a href={`tel:${userInfo.contactno}`} className="text-blue-600 hover:underline">
+                {userInfo.contactno}
               </a>
             </div>
           </div>
@@ -417,7 +429,7 @@ export default function ProfileModal({
 
         {/* ===================== Change Password Modal ===================== */}
         {showChangePassword && (
-          <ChangePasswordModal userId={user?._id} onClose={() => setShowChangePassword(false)} />
+          <ChangePasswordModal userId={userInfo._id} onClose={() => setShowChangePassword(false)} />
         )}
       </div>
     </div>,

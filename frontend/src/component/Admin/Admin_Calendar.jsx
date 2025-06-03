@@ -56,6 +56,7 @@ export default function Admin_Calendar() {
       const res = await axios.get("http://localhost:5000/events");
       setEvents(res.data.map(ev => ({
         ...ev,
+        id: ev._id,
         start: ev.start ? ev.start.slice(0, 16) : '',
         end: ev.end ? ev.end.slice(0, 16) : '',
         color: ev.color || '#1890ff'
@@ -129,7 +130,7 @@ export default function Admin_Calendar() {
   // Edit event modal handlers
   const openEditModal = (eventInfo) => {
     // Only allow editing admin events (not holidays)
-    const ev = events.find(ev => ev.title === eventInfo.event.title && ev.start === eventInfo.event.startStr);
+    const ev = events.find(ev => ev._id === eventInfo.event.id);
     if (!ev) return; // Not an admin event
     setEditEventData({
       _id: ev._id,
@@ -184,7 +185,7 @@ export default function Admin_Calendar() {
   // FullCalendar event click handler
   const handleEventClick = (eventInfo) => {
     // Only allow editing admin events (not holidays)
-    const isAdminEvent = events.some(ev => ev.title === eventInfo.event.title && ev.start === eventInfo.event.startStr);
+    const isAdminEvent = events.some(ev => ev._id === eventInfo.event.id);
     if (isAdminEvent) {
       openEditModal(eventInfo);
     }

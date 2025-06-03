@@ -1,19 +1,42 @@
 // profileMenu
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import profileicon from "../assets/profileicon (1).svg";
 import dropdown from "../assets/dropdown.png";
 import ProfileModal from "./ProfileModal";
-import SupportModal from './Support/SupportModal';
+import axios from "axios";
 
-export default function ProfileMenu({ isAdmin }) {
+export default function ProfileMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [modalIsOpen, setModalIsOpen] = useState(false);
+  const [userInfo, setUserInfo] = useState({});
   const navigate = useNavigate();
-  const [showHelp, setShowHelp] = useState(false);
 
-  const user = JSON.parse(localStorage.getItem('user'));
-  const [im, setim] = useState(user?.profilePic || null);
+  // Fetch user info from backend
+  const fetchUserInfo = async () => {
+    const user = JSON.parse(localStorage.getItem('user'));
+    if (!user || !user._id) return;
+    try {
+      const res = await axios.get(`http://localhost:5000/users/${user._id}`);
+      setUserInfo(res.data);
+      localStorage.setItem('user', JSON.stringify(res.data));
+    } catch {
+      setUserInfo({});
+    }
+  };
+
+  useEffect(() => {
+    fetchUserInfo();
+    // eslint-disable-next-line
+  }, []);
+
+  // Helper to get the correct profile image URL
+  const getProfileImg = () => {
+    if (userInfo.profilePic) {
+      return `http://localhost:5000/uploads/${userInfo.profilePic}`;
+    }
+    return profileicon;
+  };
 
   return (
     <div className="relative z-50">
@@ -21,8 +44,10 @@ export default function ProfileMenu({ isAdmin }) {
         onClick={() => setIsOpen(prev => !prev)}
         className="flex items-center space-x-2 bg-gray-300 p-2 rounded-2xl hover:bg-gray-400 transition"
       >
-        <img className="w-10 h-10 rounded-full bg-gray-600" src={im || profileicon} />
-        <span className="text-sm md:text-base font-medium">{user?.name}</span>
+        <img className="w-10 h-10 rounded-full bg-gray-600" src={getProfileImg()} alt="Profile" />
+        <span className="text-sm md:text-base font-medium">
+          {userInfo.firstname} {userInfo.lastname}
+        </span>
         <img src={dropdown} alt="Dropdown" className="w-5 h-5" />
       </button>
 
@@ -31,22 +56,15 @@ export default function ProfileMenu({ isAdmin }) {
           open={isOpen}
           onClose={() => {
             setIsOpen(false);
-            navigate("/");  // Or logout or dashboard etc
+            navigate("/");
           }}
-          avatarImg={im || profileicon}
-          name={user?.name}
-          email={user?.email}
-          phone={user?.phone}
           cropModalOpen={modalIsOpen}
           openCropModal={() => setModalIsOpen(true)}
           closeCropModal={() => setModalIsOpen(false)}
-          onCrop={(newImgUrl) => {
-            setim(newImgUrl);
-            const user = JSON.parse(localStorage.getItem('user'));
-            const updatedUser = { ...user, profilePic: newImgUrl };
-            localStorage.setItem('user', JSON.stringify(updatedUser));
-          }}          
-          userType={user?.role}
+          onCrop={() => {
+            fetchUserInfo();
+          }}
+          userType={userInfo.role}
         />
       )}
     </div>
