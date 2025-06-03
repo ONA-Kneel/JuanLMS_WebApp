@@ -43,6 +43,7 @@ import Admin_Grades from './component/Admin/Admin_Grades';
 import Admin_Progress from './component/Admin/Admin_Progress';
 import Admin_AuditTrail from './component/Admin/Admin_AuditTrail';
 import { AdminSupportCenter } from './component/Admin';
+import Admin_AcademicSettings from './component/Admin/Admin_AcademicSettings';
 
 // Parent Access
 import Parent_Dashboard from './component/Parent/Parent_Dashboard';
@@ -89,6 +90,7 @@ function App() {
         {/* Admin */}
         <Route path="/admin_dashboard" element={<Admin_Dashboard/>}/>
         <Route path="/admin_accounts" element={<Admin_Accounts />}/>
+        <Route path="/admin_academic_settings" element={<Admin_AcademicSettings />}/>
         <Route path="/admin_activities" element={<Admin_Activities />}/>
         <Route path="/admin_chats" element={<Admin_Chats />}/>
         <Route path="/admin_grades" element={<Admin_Grades />}/>

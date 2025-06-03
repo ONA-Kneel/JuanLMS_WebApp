@@ -168,23 +168,45 @@ userRoutes.post("/users", async (req, res) => {
 
 // Update ONE user
 userRoutes.route("/users/:id").patch(async (req, res) => {
+    let db = database.getDb();
+    const updateFields = {};
 
-    let db = database.getDb()
-    let mongoObject = {
-        $set: {
-            firstname: req.body.firstname,
-            middlename: req.body.middlename,
-            lastname: req.body.lastname,
-            email: req.body.email.toLowerCase(),
-            contactno: req.body.contactno,
-            password: req.body.password,
-            personalemail: req.body.personalemail,
-            profilePic: req.body.profilePic, 
-            userID: req.body.userID
-        },
-    };
-    const result = await db.collection("Users").updateOne({ _id: new ObjectId(req.params.id) }, mongoObject);
-    res.json(result);
+    // General user fields - only add to updateFields if they exist in req.body
+    if (req.body.firstname !== undefined) updateFields.firstname = req.body.firstname;
+    if (req.body.middlename !== undefined) updateFields.middlename = req.body.middlename;
+    if (req.body.lastname !== undefined) updateFields.lastname = req.body.lastname;
+    if (req.body.email !== undefined) updateFields.email = req.body.email.toLowerCase();
+    if (req.body.contactno !== undefined) updateFields.contactno = req.body.contactno;
+    if (req.body.password !== undefined) updateFields.password = req.body.password; // Consider security implications for password updates
+    if (req.body.personalemail !== undefined) updateFields.personalemail = req.body.personalemail;
+    if (req.body.profilePic !== undefined) updateFields.profilePic = req.body.profilePic;
+    if (req.body.userID !== undefined) updateFields.userID = req.body.userID;
+    if (req.body.role !== undefined) updateFields.role = req.body.role; // If role updates are allowed
+
+    // Faculty assignment specific fields
+    if (req.body.programHandle !== undefined) {
+        updateFields.programHandle = req.body.programHandle === '' ? null : req.body.programHandle;
+    }
+    if (req.body.courseHandle !== undefined) {
+        updateFields.courseHandle = req.body.courseHandle === '' ? null : req.body.courseHandle;
+    }
+
+    if (Object.keys(updateFields).length === 0) {
+        return res.status(400).json({ message: "No fields to update" });
+    }
+
+    let mongoObject = { $set: updateFields };
+
+    try {
+        const result = await db.collection("Users").updateOne({ _id: new ObjectId(req.params.id) }, mongoObject);
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        res.json({ message: "User updated successfully", result });
+    } catch (error) {
+        console.error("Error updating user:", error);
+        res.status(500).json({ message: "Error updating user", error: error.message });
+    }
 });
 
 // Delete ONE user

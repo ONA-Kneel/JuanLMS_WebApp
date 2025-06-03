@@ -19,6 +19,16 @@ const userSchema = new mongoose.Schema({
   archiveLockUntil: { type: Date, default: null },
   recoverAttempts: { type: Number, default: 0 },
   recoverLockUntil: { type: Date, default: null },
+  programHandle: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Program',
+    default: null,
+  },
+  courseHandle: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Course',
+    default: null,
+  },
 });
 
 export default mongoose.model("User", userSchema);

@@ -14,6 +14,10 @@ import classRoutes from "./routes/classRoutes.js";
 import auditTrailRoutes from "./routes/auditTrailroutes.js";
 import lessonRoutes from "./routes/lessonRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import schoolYearRoutes from "./routes/schoolYearRoutes.js";
+import programRoutes from "./routes/programRoutes.js";
+import courseRoutes from "./routes/courseRoutes.js";
+import sectionRoutes from "./routes/sectionRoutes.js";
 
 dotenv.config({ path: './config.env' });
 
@@ -95,6 +99,10 @@ app.use("/classes", classRoutes);
 app.use("/", auditTrailRoutes);
 app.use("/lessons", lessonRoutes);
 app.use('/uploads/lessons', express.static('uploads/lessons'));
+app.use('/schoolyears', schoolYearRoutes);
+app.use('/programs', programRoutes);
+app.use('/courses', courseRoutes);
+app.use('/sections', sectionRoutes);
 
 // Start server
 app.listen(PORT, () => {

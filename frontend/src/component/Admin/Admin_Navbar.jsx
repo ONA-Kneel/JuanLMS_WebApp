@@ -8,6 +8,7 @@ import progressIcon from "../../assets/progress.png";
 import gradesIcon from "../../assets/grades.png";
 import calendarIcon from "../../assets/calendar.png";
 import logo5 from "../../assets/logo/Logo5.svg";
+import acadSettingsIcon from "../../assets/acadsettings.png"
 import { Menu, X, HelpCircle } from 'lucide-react';
 
 const Admin_Navbar = () => {
@@ -18,6 +19,7 @@ const Admin_Navbar = () => {
     const navItems = [
         { path: "/admin_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
         { path: "/admin_accounts", icon: classesIcon, label: "ACCOUNTS" },
+        { path: "/admin_academic_settings", icon: acadSettingsIcon, label: "SETTINGS" },
         { path: "/admin_chats", icon: chatsIcon, label: "CHATS" },
         { path: "/admin_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
         { path: "/admin_calendar", icon: calendarIcon, label: "CALENDAR" },
@@ -51,11 +53,11 @@ const Admin_Navbar = () => {
                                 navigate(item.path);
                                 setIsOpen(false);
                             }}
-                            className={`text-lg flex items-center space-x-3 p-2 w-full rounded-lg transition-colors 
+                            className={`text-lg flex items-center p-2 w-full rounded-lg transition-colors 
                             ${location.pathname === item.path ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"}`}
                         >
                             <img src={item.icon} alt={item.label} className="w-6 h-6" />
-                            <span>{item.label}</span>
+                            <span className="flex items-center ml-3">{item.label}</span>
                         </button>
                     ))}
                     <button
@@ -63,11 +65,11 @@ const Admin_Navbar = () => {
                             navigate('/admin/support-center');
                             setIsOpen(false);
                         }}
-                        className={`text-lg flex items-center space-x-3 p-2 w-full rounded-lg transition-colors 
+                        className={`text-lg flex items-center p-2 w-full rounded-lg transition-colors 
                         ${location.pathname === '/admin/support-center' ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"}`}
                     >
                         <HelpCircle className="w-6 h-6" />
-                        <span>SUPPORT CENTER</span>
+                        <span className="ml-3">SUPPORT CENTER</span>
                     </button>
                 </nav>
             </div>
