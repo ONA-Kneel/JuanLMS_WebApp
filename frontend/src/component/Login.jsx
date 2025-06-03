@@ -15,6 +15,23 @@ export default function Login() {
   // --- STATE ---
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [isLocked, setIsLocked] = useState(() => {
+    const lockoutEndTime = localStorage.getItem('lockoutEndTime');
+    if (lockoutEndTime) {
+      const remainingTime = Math.ceil((parseInt(lockoutEndTime) - Date.now()) / 1000);
+      return remainingTime > 0;
+    }
+    return false;
+  });
+  const [lockoutTime, setLockoutTime] = useState(() => {
+    const lockoutEndTime = localStorage.getItem('lockoutEndTime');
+    if (lockoutEndTime) {
+      const remainingTime = Math.ceil((parseInt(lockoutEndTime) - Date.now()) / 1000);
+      return remainingTime > 0 ? remainingTime : 30;
+    }
+    return 30;
+  });
 
   // --- EFFECT: Auto-login if credentials are stored in localStorage ---
   useEffect(() => {
@@ -61,15 +78,45 @@ export default function Login() {
     }
   };
 
+  // --- HANDLER: Lockout timer countdown ---
+  useEffect(() => {
+    let timer;
+    if (isLocked && lockoutTime > 0) {
+      timer = setInterval(() => {
+        setLockoutTime((prev) => {
+          const newTime = prev - 1;
+          if (newTime === 0) {
+            setIsLocked(false);
+            setFailedAttempts(0);
+            localStorage.removeItem('lockoutEndTime');
+            return 30;
+          }
+          return newTime;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isLocked, lockoutTime]);
+
   // --- HANDLER: Manual login form submission ---
   const handleLogin = async (e) => {
     e.preventDefault();
+    
+    // Check if account is locked
+    if (isLocked) {
+      alert(`Account is locked. Please try again in ${lockoutTime} seconds.`);
+      return;
+    }
+
     const email = e.target.elements[0].value;
     const password = e.target.elements[1].value;
   
     try {
       const response = await axios.post('http://localhost:5000/login', { email, password });
       const { token } = response.data;
+  
+      // Reset failed attempts on successful login
+      setFailedAttempts(0);
   
       // Decode JWT to extract user info and role
       const decoded = jwtDecode(token);
@@ -102,7 +149,18 @@ export default function Login() {
   
     } catch (error) {
       console.log(error);
-      alert('Invalid email or password');
+      // Increment failed attempts
+      const newFailedAttempts = failedAttempts + 1;
+      setFailedAttempts(newFailedAttempts);
+      
+      if (newFailedAttempts >= 3) {
+        setIsLocked(true);
+        const lockoutEndTime = Date.now() + (30 * 1000); // 30 seconds from now
+        localStorage.setItem('lockoutEndTime', lockoutEndTime.toString());
+        alert('Too many failed attempts. Account locked for 30 seconds.');
+      } else {
+        alert(`Invalid email or password.`);
+      }
     }
   };
   
@@ -122,6 +180,7 @@ export default function Login() {
               <input
                 type="email"
                 required
+                disabled={isLocked}
                 className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900"
                 placeholder="username@gmail.com"
               />
@@ -133,6 +192,7 @@ export default function Login() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
+                  disabled={isLocked}
                   className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900 pr-12"
                   placeholder="********"
                 />
@@ -140,12 +200,25 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  disabled={isLocked}
                   className="absolute top-1/2 right-3 transform -translate-y-1/2 text-gray-600 hover:text-blue-700"
                 >
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
             </div>
+
+            {failedAttempts > 0 && !isLocked && (
+              <div className="text-red-600 font-poppinsr text-sm">
+                Invalid email or password.
+              </div>
+            )}
+
+            {isLocked && (
+              <div className="text-red-600 font-poppinsr text-sm">
+                Account locked. Please try again in {lockoutTime} seconds.
+              </div>
+            )}
 
             <div className="flex items-center justify-between">
               <label className="flex items-center font-poppinsr text-sm">
@@ -154,6 +227,7 @@ export default function Login() {
                   className="mr-2" 
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={isLocked}
                 />
                 Remember Me
               </label>
@@ -164,9 +238,14 @@ export default function Login() {
 
             <button
               type="submit"
-              className="w-full bg-blue-900 text-white p-3 mt-12 rounded-lg hover:bg-blue-950 transition font-poppinsr text-base"
+              disabled={isLocked}
+              className={`w-full p-3 mt-12 rounded-lg transition font-poppinsr text-base ${
+                isLocked 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-blue-900 text-white hover:bg-blue-950'
+              }`}
             >
-              Login
+              {isLocked ? `Locked (${lockoutTime}s)` : 'Login'}
             </button>
           </form>
         </div>
