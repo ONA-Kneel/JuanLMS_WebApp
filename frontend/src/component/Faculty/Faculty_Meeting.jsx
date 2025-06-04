@@ -1,102 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { CallComposite, fromFlatCommunicationIdentifier, useAzureCommunicationCallAdapter } from '@azure/communication-react';
-import { AzureCommunicationTokenCredential } from '@azure/communication-common';
-import axios from 'axios';
+import React from 'react';
+import Faculty_Navbar from './Faculty_Navbar';
+import ProfileMenu from '../ProfileMenu';
 
 const Faculty_Meeting = () => {
-  const [userId, setUserId] = useState('');
-  const [token, setToken] = useState('');
-  const [teamsMeetingLink, setTeamsMeetingLink] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Create credential from token
-  const credential = React.useMemo(() => {
-    if (token) {
-      return new AzureCommunicationTokenCredential(token);
-    }
-    return null;
-  }, [token]);
-
-  // Create call adapter
-  const callAdapterArgs = React.useMemo(() => {
-    if (userId && credential && displayName && teamsMeetingLink) {
-      return {
-        userId: fromFlatCommunicationIdentifier(userId),
-        credential,
-        displayName,
-        teamsMeetingLink
-      };
-    }
-    return null;
-  }, [userId, credential, displayName, teamsMeetingLink]);
-
-  const callAdapter = useAzureCommunicationCallAdapter(callAdapterArgs);
-
-  useEffect(() => {
-    const initializeMeeting = async () => {
-      try {
-        setIsLoading(true);
-        // TODO: Replace with your actual API endpoint
-        const response = await axios.get('/api/meeting/initialize', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        
-        const { userId, token, teamsMeetingLink, displayName } = response.data;
-        setUserId(userId);
-        setToken(token);
-        setTeamsMeetingLink(teamsMeetingLink);
-        setDisplayName(displayName);
-      } catch (err) {
-        setError('Failed to initialize meeting. Please try again later.');
-        console.error('Meeting initialization error:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initializeMeeting();
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-          <strong className="font-bold">Error! </strong>
-          <span className="block sm:inline">{error}</span>
+  return (
+    <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+      <Faculty_Navbar />
+      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold">Meeting</h2>
+            <p className="text-base md:text-lg">
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </p>
+          </div>
+          <ProfileMenu/>
+        </div>
+        <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Meeting Component</h1>
+            <p>This component is currently under maintenance.</p>
+          </div>
         </div>
       </div>
-    );
-  }
-
-  return (
-    <div className="h-screen w-full">
-      {callAdapter && (
-        <CallComposite
-          adapter={callAdapter}
-          options={{
-            callControls: {
-              cameraButton: true,
-              microphoneButton: true,
-              screenShareButton: true,
-              moreButton: true,
-              peopleButton: true,
-              displayType: 'compact'
-            }
-          }}
-        />
-      )}
     </div>
   );
 };
