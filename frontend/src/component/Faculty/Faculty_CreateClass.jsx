@@ -27,7 +27,7 @@ export default function FacultyCreateClass() {
     }
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users/search?q=${query}`);
+      const response = await fetch(`http://localhost:5000/users/search?q=${query}`);
       const data = await response.json();
 
       const filteredStudents = data
@@ -79,7 +79,7 @@ export default function FacultyCreateClass() {
     };
 
     try {
-      const res = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/classes", {
+      const res = await fetch("http://localhost:5000/classes", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -129,7 +129,7 @@ export default function FacultyCreateClass() {
           continue;
         }
         try {
-          const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users/search?q=${encodeURIComponent(email)}`);
+          const res = await fetch(`http://localhost:5000/users/search?q=${encodeURIComponent(email)}`);
           const users = await res.json();
           console.log('Searching for:', email, 'Got:', users);
           const found = users.find(

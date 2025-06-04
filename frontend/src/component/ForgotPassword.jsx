@@ -25,7 +25,7 @@ export default function ForgotPassword() {
     setError('');
     setMessage('');
     try {
-      const response = await axios.post('${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/forgot-password', { email });
+      const response = await axios.post('http://localhost:5000/forgot-password', { email });
       setMessage(response.data.message || 'If your email is registered, a reset link or OTP has been sent.');
       setStep(2); // Move to next step
     } catch (err) {
@@ -47,7 +47,7 @@ export default function ForgotPassword() {
       return;
     }
     try {
-      const response = await axios.post('${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/reset-password', {
+      const response = await axios.post('http://localhost:5000/reset-password', {
         personalemail: email,
         otp,
         newPassword,

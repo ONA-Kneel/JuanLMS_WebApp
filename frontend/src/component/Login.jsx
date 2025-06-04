@@ -48,7 +48,7 @@ export default function Login() {
   // --- HANDLER: Auto-login using stored credentials ---
   const handleAutoLogin = async (email, password) => {
     try {
-      const response = await axios.post('${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/login', { email, password });
+      const response = await axios.post('http://localhost:5000/login', { email, password });
       const { token } = response.data;
   
       // Decode JWT to extract user info and role
@@ -56,7 +56,7 @@ export default function Login() {
       const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
   
       // If user has a profile picture, build the image URL
-      const imageUrl = profilePic ? `${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/uploads/${profilePic}` : null;
+      const imageUrl = profilePic ? `http://localhost:5000/uploads/${profilePic}` : null;
   
       // Store user info and token in localStorage
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
@@ -112,7 +112,7 @@ export default function Login() {
     const password = e.target.elements[1].value;
   
     try {
-      const response = await axios.post(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/login`, { email, password });
+      const response = await axios.post('http://localhost:5000/login', { email, password });
       const { token } = response.data;
   
       // Reset failed attempts on successful login
@@ -122,7 +122,7 @@ export default function Login() {
       const decoded = jwtDecode(token);
       const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
   
-      const imageUrl = profilePic ? `${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/uploads/${profilePic}` : null;
+      const imageUrl = profilePic ? `http://localhost:5000/uploads/${profilePic}` : null;
   
       // Store user info and token in localStorage
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));

@@ -98,7 +98,7 @@ export default function Admin_AuditTrail() {
       }
 
       const response = await axios.get(
-        `${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/audit-logs?page=${currentPage}&limit=${logsPerPage}&action=${selectedAction}&role=${selectedRole}`,
+        `http://localhost:5000/audit-logs?page=${currentPage}&limit=${logsPerPage}&action=${selectedAction}&role=${selectedRole}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`

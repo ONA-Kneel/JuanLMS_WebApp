@@ -17,7 +17,7 @@ export default function Student_Classes() {
   useEffect(() => {
     async function fetchClasses() {
       try {
-        const res = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/classes", {
+        const res = await fetch("http://localhost:5000/classes", {
           headers: {
             "Authorization": `Bearer ${token}`,
           },
@@ -30,7 +30,7 @@ export default function Student_Classes() {
         const progressMap = {};
         for (const cls of filtered) {
           // Fetch lessons for this class
-          const lessonRes = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/lessons?classID=${cls.classID}`, {
+          const lessonRes = await fetch(`http://localhost:5000/lessons?classID=${cls.classID}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const lessons = await lessonRes.json();
@@ -41,7 +41,7 @@ export default function Student_Classes() {
               for (const file of lesson.files) {
                 // Fetch progress for this file
                 try {
-                  const progRes = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
+                  const progRes = await fetch(`http://localhost:5000/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                   });
                   const prog = await progRes.json();

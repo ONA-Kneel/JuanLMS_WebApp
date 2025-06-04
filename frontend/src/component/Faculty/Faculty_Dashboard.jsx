@@ -18,7 +18,7 @@ export default function Faculty_Dashboard() {
     async function fetchClasses() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/classes", {
+        const res = await fetch("http://localhost:5000/classes", {
           headers: {
             "Authorization": `Bearer ${token}`,
           },

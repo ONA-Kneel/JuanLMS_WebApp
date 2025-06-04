@@ -22,7 +22,7 @@ export default function Student_Calendar() {
     (async () => {
       setLoadingEvents(true);
       try {
-        const res = await axios.get("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/events");
+        const res = await axios.get("http://localhost:5000/events");
         setAdminEvents(res.data.map(ev => ({
           ...ev,
           start: ev.start ? ev.start.slice(0, 16) : '',
@@ -59,13 +59,13 @@ export default function Student_Calendar() {
     const fetchAssignments = async () => {
       try {
         const token = localStorage.getItem('token');
-        const resClasses = await fetch('${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/classes/my-classes', {
+        const resClasses = await fetch('http://localhost:5000/classes/my-classes', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const classes = await resClasses.json();
         let events = [];
         for (const cls of classes) {
-          const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/assignments?classID=${cls._id}`, {
+          const res = await fetch(`http://localhost:5000/assignments?classID=${cls._id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const data = await res.json();

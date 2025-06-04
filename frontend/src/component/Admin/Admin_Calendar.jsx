@@ -53,7 +53,7 @@ export default function Admin_Calendar() {
   const fetchEvents = async () => {
     setLoadingEvents(true);
     try {
-      const res = await axios.get("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/events");
+      const res = await axios.get("http://localhost:5000/events");
       setEvents(res.data.map(ev => ({
         ...ev,
         id: ev._id,
@@ -114,7 +114,7 @@ export default function Admin_Calendar() {
     e.preventDefault();
     if (!newEvent.title || !newEvent.start) return;
     try {
-      await axios.post("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/events", {
+      await axios.post("http://localhost:5000/events", {
         title: newEvent.title,
         start: newEvent.start,
         end: newEvent.isRange && newEvent.end ? newEvent.end : undefined,
@@ -156,7 +156,7 @@ export default function Admin_Calendar() {
     const { _id, title, start, end, color, isRange } = editEventData;
     if (!_id || !title || !start) return;
     try {
-      await axios.put(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/events/${_id}`, {
+      await axios.put(`http://localhost:5000/events/${_id}`, {
         title,
         start,
         end: isRange && end ? end : undefined,
@@ -174,7 +174,7 @@ export default function Admin_Calendar() {
     const { _id } = editEventData;
     if (!_id) return;
     try {
-      await axios.delete(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/events/${_id}`);
+      await axios.delete(`http://localhost:5000/events/${_id}`);
       await fetchEvents();
       setShowEditModal(false);
     } catch {

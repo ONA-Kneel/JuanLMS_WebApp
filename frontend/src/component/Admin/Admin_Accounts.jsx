@@ -90,7 +90,7 @@ export default function Admin_Accounts() {
   // Fetch users on mount and after successful account creation
   const fetchUsers = async () => {
     try {
-      const res = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users");
+      const res = await fetch("http://localhost:5000/users");
       const data = await res.json();
       if (res.ok) {
         setUsers(data);
@@ -136,7 +136,7 @@ export default function Admin_Accounts() {
 
   useEffect(() => {
     if (showArchivedTable) {
-      fetch('${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users/archived-users')
+      fetch('http://localhost:5000/users/archived-users')
         .then(res => res.json())
         .then(data => setArchivedUsers(data));
     }
@@ -214,7 +214,7 @@ export default function Admin_Accounts() {
       const randomNum = Math.floor(100 + Math.random() * 900);
       const userID = `${formData.role.charAt(0).toUpperCase()}${randomNum}`;
       try {
-        const res = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users", {
+        const res = await fetch("http://localhost:5000/users", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...formData, userID, email: overrideEmail || formData.email }),
@@ -258,7 +258,7 @@ export default function Admin_Accounts() {
         updatedUserID = `${formData.role.charAt(0).toUpperCase()}${randomNum}`;
       }
 
-      const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users/${editingUser._id}`, {
+      const res = await fetch(`http://localhost:5000/users/${editingUser._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -375,7 +375,7 @@ export default function Admin_Accounts() {
       return;
     }
 
-    const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users/archive/${userToArchive._id}`, {
+    const res = await fetch(`http://localhost:5000/users/archive/${userToArchive._id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -405,7 +405,7 @@ export default function Admin_Accounts() {
   };
 
   const handleRecover = async (user) => {
-    const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users/archived-users/${user._id}/recover`, {
+    const res = await fetch(`http://localhost:5000/users/archived-users/${user._id}/recover`, {
       method: 'POST'
     });
     if (res.ok) {

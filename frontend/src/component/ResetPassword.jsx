@@ -28,7 +28,7 @@ export default function ResetPassword() {
     }
     setLoading(true);
     try {
-      const response = await axios.post('${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/reset-password', {
+      const response = await axios.post('http://localhost:5000/reset-password', {
         personalemail,
         otp,
         newPassword
