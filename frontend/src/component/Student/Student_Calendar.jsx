@@ -16,7 +16,7 @@ export default function Student_Calendar() {
   const [selectedDayEvents, setSelectedDayEvents] = useState([]);
   const [showDayModal, setShowDayModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
-  const [assignmentEvents, setAssignmentEvents] = useState([]);
+  // const [assignmentEvents, setAssignmentEvents] = useState([]); // commented out with assignments useEffect
 
   useEffect(() => {
     (async () => {
@@ -55,6 +55,7 @@ export default function Student_Calendar() {
   }, []);
 
   // Fetch assignments/quizzes for student's classes and add as calendar events
+  /*
   useEffect(() => {
     const fetchAssignments = async () => {
       try {
@@ -93,8 +94,9 @@ export default function Student_Calendar() {
     };
     fetchAssignments();
   }, []);
+  */
 
-  const allEvents = [...adminEvents, ...holidays, ...assignmentEvents];
+  const allEvents = [...adminEvents, ...holidays /*, ...assignmentEvents*/];
 
   const handleDateClick = (arg) => {
     const clickedDate = arg.dateStr;
@@ -105,11 +107,11 @@ export default function Student_Calendar() {
         const end = ev.end ? ev.end.slice(0, 10) : start;
         return clickedDate >= start && clickedDate <= end;
       }),
-      ...assignmentEvents.filter(ev => {
-        const start = ev.start ? ev.start.slice(0, 10) : ev.date;
-        const end = ev.end ? ev.end.slice(0, 10) : start;
-        return clickedDate >= start && clickedDate <= end;
-      })
+      // ...assignmentEvents.filter(ev => {
+      //   const start = ev.start ? ev.start.slice(0, 10) : ev.date;
+      //   const end = ev.end ? ev.end.slice(0, 10) : start;
+      //   return clickedDate >= start && clickedDate <= end;
+      // })
     ];
     setSelectedDayEvents(eventsForDay);
     setShowDayModal(true);
@@ -151,8 +153,8 @@ export default function Student_Calendar() {
 
         {showDayModal && (
           <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="absolute inset-0 bg-black/50" onClick={() => setShowDayModal(false)}></div>
-            <div className="relative bg-white rounded-lg shadow-lg p-8 z-10 w-96">
+            <div className="absolute inset-0 bg-black/50"></div>
+            <div className="relative bg-white rounded-lg shadow-lg p-8 z-10 w-96" onClick={e => e.stopPropagation()}>
               <h3 className="text-xl font-bold mb-4">
                 Events for {new Date(selectedDate).toLocaleDateString()}
               </h3>

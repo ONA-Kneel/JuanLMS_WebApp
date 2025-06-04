@@ -150,7 +150,7 @@ export default function Faculty_Calendar() {
 
         {!showProfileModal && (
           <div className="flex justify-end gap-8 mt-8">
-            <div className="flex flex-col items-center">
+            {/* <div className="flex flex-col items-center">
               <button style={{ backgroundColor: sidebarColor }} className="rounded-full shadow-lg w-20 h-20 flex items-center justify-center mb-2">
                 <img src={generateEvent} alt="Generate" className="w-12 h-12" />
               </button>
@@ -167,7 +167,7 @@ export default function Faculty_Calendar() {
                 <img src={editEvent} alt="Edit" className="w-12 h-12" />
               </button>
               <span className="font-semibold text-blue-900">Edit</span>
-            </div>
+            </div> */}
           </div>
         )}
         {showProfileModal && (

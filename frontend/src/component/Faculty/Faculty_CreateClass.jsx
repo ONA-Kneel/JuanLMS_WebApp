@@ -122,7 +122,6 @@ export default function FacultyCreateClass() {
 
       let added = 0;
       for (const row of json) {
-        const name = (row.Name || row["Full Name"] || row["name"] || row["FullName"] || "").trim();
         const email = (row.Email || row["email"] || row["School Email"] || row["school email"] || "").trim();
         if (!email) {
           console.log('No email found in row:', row);
@@ -291,6 +290,7 @@ export default function FacultyCreateClass() {
           className="bg-blue-900 hover:bg-blue-800 rounded-full w-20 h-20 flex items-center justify-center shadow-lg transition-colors"
           style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
           onClick={handleCreateClass}
+          disabled={batchLoading}
         >
           <img src={createEventIcon} alt="Create" className="w-10 h-10" />
         </button>

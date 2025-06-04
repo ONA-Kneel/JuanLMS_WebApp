@@ -6,6 +6,7 @@ import Cropper from 'react-easy-crop';
 import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 import SupportModal from './Support/SupportModal';
+import profileicon from "../assets/profileicon (1).svg";
 
 Modal.setAppElement('#root');
 
@@ -377,7 +378,7 @@ export default function ProfileModal({
               src={
                 userInfo.profilePic
                   ? `http://localhost:5000/uploads/${userInfo.profilePic}`
-                  : '../assets/profileicon (1).svg'
+                  : profileicon
               }
               alt="Avatar"
             />
