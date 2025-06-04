@@ -1,6 +1,6 @@
 // ForgotPassword.jsx
 // Handles the password reset process: requests OTP, verifies OTP, and sets new password.
-// Step-based UI: 1) request OTP, 2) enter OTP & new password, 3) success message.
+// Step-based UI: 1) request OTP, 2) enter OTP, 3) enter new password, 4) success message.
 
 import { useState } from 'react';
 import axios from 'axios';
@@ -12,7 +12,7 @@ export default function ForgotPassword() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1); // 1: request OTP, 2: enter OTP & new password
+  const [step, setStep] = useState(1); // 1: request OTP, 2: enter OTP, 3: enter new password
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -35,7 +35,27 @@ export default function ForgotPassword() {
     }
   };
 
-  // --- HANDLER: Reset password using OTP ---
+  // --- HANDLER: Validate OTP ---
+  const handleValidateOTP = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      await axios.post('http://localhost:5000/validate-otp', {
+        personalemail: email,
+        otp,
+      });
+      setMessage('OTP validated. Please enter your new password.');
+      setStep(3);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Invalid or expired OTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- HANDLER: Reset password using OTP (step 3) ---
   const handleResetPassword = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -53,7 +73,7 @@ export default function ForgotPassword() {
         newPassword,
       });
       setMessage(response.data.message || 'Password reset successful.');
-      setStep(3); // Show success message
+      setStep(4); // Show success message
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong. Please try again.');
     } finally {
@@ -89,9 +109,9 @@ export default function ForgotPassword() {
             </button>
           </form>
         )}
-        {/* Step 2: Enter OTP and new password */}
+        {/* Step 2: Enter OTP */}
         {step === 2 && (
-          <form onSubmit={handleResetPassword} className="space-y-4">
+          <form onSubmit={handleValidateOTP} className="space-y-4">
             <div>
               <label className="block text-base mb-2">Enter the OTP sent to your email</label>
               <input
@@ -103,6 +123,18 @@ export default function ForgotPassword() {
                 onChange={e => setOtp(e.target.value)}
               />
             </div>
+            <button
+              type="submit"
+              className="w-full bg-blue-900 text-white p-3 rounded-lg hover:bg-blue-950 transition"
+              disabled={loading}
+            >
+              {loading ? 'Validating...' : 'Validate OTP'}
+            </button>
+          </form>
+        )}
+        {/* Step 3: Enter new password */}
+        {step === 3 && (
+          <form onSubmit={handleResetPassword} className="space-y-4">
             <div>
               <label className="block text-base mb-2">New Password</label>
               <input
@@ -136,18 +168,18 @@ export default function ForgotPassword() {
             </button>
           </form>
         )}
-        {/* Step 3: Success message */}
-        {step === 3 && (
+        {/* Step 4: Success message */}
+        {step === 4 && (
           <div>
             <p className="text-green-600 mt-4">{message}</p>
             <button className="mt-6 text-blue-700 hover:underline" onClick={() => navigate('/')}>Back to Login</button>
           </div>
         )}
-        {/* Show message or error if not on step 3 */}
-        {message && step !== 3 && <p className="text-green-600 mt-4">{message}</p>}
+        {/* Show message or error if not on step 4 */}
+        {message && step !== 4 && <p className="text-green-600 mt-4">{message}</p>}
         {error && <p className="text-red-600 mt-4">{error}</p>}
-        {/* Back to login button (not on step 3) */}
-        {step !== 3 && (
+        {/* Back to login button (not on step 4) */}
+        {step !== 4 && (
           <button className="mt-6 text-blue-700 hover:underline" onClick={() => navigate('/')}>Back to Login</button>
         )}
       </div>

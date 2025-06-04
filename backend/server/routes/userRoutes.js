@@ -25,13 +25,13 @@ userRoutes.get("/users/search", async (req, res) => {
         users = await db.collection("Users").find({ email: query.toLowerCase() }).toArray();
     } else {
         users = await db.collection("Users").find({
-            $or: [
-                { firstname: { $regex: query, $options: "i" } },
-                { middlename: { $regex: query, $options: "i" } },
-                { lastname: { $regex: query, $options: "i" } },
+        $or: [
+            { firstname: { $regex: query, $options: "i" } },
+            { middlename: { $regex: query, $options: "i" } },
+            { lastname: { $regex: query, $options: "i" } },
                 { email: { $regex: query, $options: "i" } }
-            ],
-        }).toArray();
+        ],
+    }).toArray();
     }
     if (users.length > 0) {
         res.json(users);
@@ -235,7 +235,7 @@ userRoutes.route("/users/:id").patch(async (req, res) => {
     let mongoObject = { $set: updateFields };
 
     try {
-        const result = await db.collection("Users").updateOne({ _id: new ObjectId(req.params.id) }, mongoObject);
+    const result = await db.collection("Users").updateOne({ _id: new ObjectId(req.params.id) }, mongoObject);
         if (result.matchedCount === 0) {
             return res.status(404).json({ message: "User not found" });
         }
@@ -319,7 +319,41 @@ userRoutes.get('/users/archived-users', async (req, res) => {
 
 // ------------------ PASSWORD CHANGE/RESET ------------------
 
-// Change password route (requires current password)
+// Send OTP for password change (authenticated user)
+userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
+    const db = database.getDb();
+    const userId = req.params.id;
+    const user = await db.collection('Users').findOne({ _id: new ObjectId(userId) });
+    if (!user || !user.personalemail) {
+        return res.status(404).json({ message: 'User not found or missing personal email.' });
+    }
+    // Generate OTP and expiry
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
+    await db.collection('Users').updateOne(
+        { _id: user._id },
+        { $set: { resetOTP: otp, resetOTPExpires: otpExpiry } }
+    );
+    // Send OTP via Brevo (Sendinblue)
+    let defaultClient = SibApiV3Sdk.ApiClient.instance;
+    let apiKey = defaultClient.authentications['api-key'];
+    apiKey.apiKey = process.env.BREVO_API_KEY;
+    let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+    let sendSmtpEmail = {
+        to: [{ email: user.personalemail, name: user.firstname || '' }],
+        sender: { email: 'nicolettecborre@gmail.com', name: 'JuanLMS Support' },
+        subject: 'Your JuanLMS Password Change OTP',
+        textContent: `Hello ${user.firstname || ''},\n\nYour OTP for password change is: ${otp}\n\nIf you did not request this, please ignore this email.\n\nThank you,\nJuanLMS Team`
+    };
+    try {
+        await apiInstance.sendTransacEmail(sendSmtpEmail);
+    } catch (emailErr) {
+        console.error('Error sending OTP email via Brevo:', emailErr);
+    }
+    return res.json({ message: 'OTP sent to your personal email.' });
+});
+
+// Change password route (requires current password, after OTP is validated)
 userRoutes.patch("/users/:id/change-password", async (req, res) => {
   const db = database.getDb();
   const { currentPassword, newPassword } = req.body;
@@ -337,16 +371,15 @@ userRoutes.patch("/users/:id/change-password", async (req, res) => {
 
   // If you already hash passwords, use bcrypt.compare
   const isMatch = user.password === currentPassword; // Replace with bcrypt.compare if hashed
-  // const isMatch = await bcrypt.compare(currentPassword, user.password);
 
   if (!isMatch) {
     return res.status(400).json({ error: "Current password is incorrect." });
   }
 
-  // Hash the new password before saving (recommended)
-  // const hashedPassword = await bcrypt.hash(newPassword, 10);
-  // await db.collection("Users").updateOne({ _id: new ObjectId(userId) }, { $set: { password: hashedPassword } });
-  await db.collection("Users").updateOne({ _id: new ObjectId(userId) }, { $set: { password: newPassword } });
+  await db.collection("Users").updateOne(
+    { _id: new ObjectId(userId) },
+    { $set: { password: newPassword }, $unset: { resetOTP: '', resetOTPExpires: '' } }
+  );
 
   res.json({ success: true, message: "Password updated successfully." });
 });
@@ -372,7 +405,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
         // --- Generate OTP and expiry ---
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const otpExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
-        
+
         // Store OTP and expiry in user document
         await db.collection('Users').updateOne(
             { _id: user._id },
@@ -480,6 +513,49 @@ userRoutes.post('/reset-password', async (req, res) => {
     );
 
     res.json({ message: 'Password reset successful. You can now log in with your new password.' });
+});
+
+// Validate OTP only (for password reset flow)
+userRoutes.post('/validate-otp', async (req, res) => {
+    const db = database.getDb();
+    const { personalemail, otp } = req.body;
+    if (!personalemail || !otp) {
+        return res.status(400).json({ message: 'All fields are required.' });
+    }
+    // Find user by personal email
+    const user = await db.collection('Users').findOne({ personalemail: personalemail.toLowerCase() });
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    // --- OTP validation ---
+    if (
+        !user.resetOTP ||
+        !user.resetOTPExpires ||
+        user.resetOTP !== otp ||
+        Date.now() > user.resetOTPExpires
+    ) {
+        return res.status(400).json({ message: 'Invalid or expired OTP.' });
+    }
+    return res.json({ message: 'OTP is valid.' });
+});
+
+// Validate OTP for password change (authenticated user)
+userRoutes.post('/users/:id/validate-otp', async (req, res) => {
+    const db = database.getDb();
+    const userId = req.params.id;
+    const { otp } = req.body;
+    if (!otp) {
+        return res.status(400).json({ message: 'OTP is required.' });
+    }
+    const user = await db.collection('Users').findOne({ _id: new ObjectId(userId) });
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (
+        !user.resetOTP ||
+        !user.resetOTPExpires ||
+        user.resetOTP !== otp ||
+        Date.now() > user.resetOTPExpires
+    ) {
+        return res.status(400).json({ message: 'Invalid or expired OTP.' });
+    }
+    return res.json({ message: 'OTP is valid.' });
 });
 
 // ------------------ JWT LOGIN ROUTE ------------------

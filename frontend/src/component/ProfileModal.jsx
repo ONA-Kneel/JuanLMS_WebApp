@@ -14,12 +14,49 @@ function ChangePasswordModal({ userId, onClose }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState(1); // 1: request OTP, 2: enter OTP, 3: enter passwords
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // --- Request OTP Handler ---
+  const handleRequestOTP = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setLoading(true);
+    try {
+      await axios.post(`http://localhost:5000/users/${userId}/request-password-change-otp`);
+      setSuccess("OTP sent to your personal email.");
+      setStep(2);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to send OTP.");
+    }
+    setLoading(false);
+  };
+
+  // --- Validate OTP Handler ---
+  const handleValidateOTP = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    if (!otp) {
+      setError("Please enter the OTP sent to your email.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await axios.post(`http://localhost:5000/users/${userId}/validate-otp`, { otp });
+      setStep(3);
+    } catch (err) {
+      setError(err.response?.data?.message || "Invalid or expired OTP.");
+    }
+    setLoading(false);
+  };
 
   // --- Password Change Handler ---
   const handleChangePassword = async (e) => {
@@ -38,12 +75,14 @@ function ChangePasswordModal({ userId, onClose }) {
     try {
       await axios.patch(`http://localhost:5000/users/${userId}/change-password`, {
         currentPassword,
-        newPassword,
+        newPassword
       });
       setSuccess("Password changed successfully!");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      setOtp("");
+      setStep(4);
     } catch (err) {
       setError(err.response?.data?.error || "Failed to change password.");
     }
@@ -52,65 +91,119 @@ function ChangePasswordModal({ userId, onClose }) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
-      <form onSubmit={handleChangePassword} className="bg-white p-6 rounded shadow w-96">
+      <form className="bg-white p-6 rounded shadow w-96">
         <h2 className="text-xl font-bold mb-4">Change Password</h2>
         {error && <div className="text-red-500 mb-2">{error}</div>}
         {success && <div className="text-green-600 mb-2">{success}</div>}
-        <div className="relative">
-          <input
-            type={showCurrentPassword ? "text" : "password"}
-            placeholder="Current Password"
-            className="w-full border rounded px-3 py-2 mb-2"
-            value={currentPassword}
-            onChange={e => setCurrentPassword(e.target.value)}
-            required
-          />
-          <button
-            type="button"
-            className="absolute right-3 top-2 text-gray-500 hover:text-gray-700"
-            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-          >
-            {showCurrentPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-          </button>
-        </div>
-        <div className="relative">
-          <input
-            type={showNewPassword ? "text" : "password"}
-            placeholder="New Password"
-            className="w-full border rounded px-3 py-2 mb-2"
-            value={newPassword}
-            onChange={e => setNewPassword(e.target.value)}
-            required
-          />
-          <button
-            type="button"
-            className="absolute right-3 top-2 text-gray-500 hover:text-gray-700"
-            onClick={() => setShowNewPassword(!showNewPassword)}
-          >
-            {showNewPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-          </button>
-        </div>
-        <div className="relative">
-          <input
-            type={showConfirmPassword ? "text" : "password"}
-            placeholder="Confirm New Password"
-            className="w-full border rounded px-3 py-2 mb-4"
-            value={confirmPassword}
-            onChange={e => setConfirmPassword(e.target.value)}
-            required
-          />
-          <button
-            type="button"
-            className="absolute right-3 top-2 text-gray-500 hover:text-gray-700"
-            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-          >
-            {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-          </button>
-        </div>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded bg-gray-300">Cancel</button>
-          <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white" disabled={loading}>Change</button>
-        </div>
+        {/* Step 1: Request OTP */}
+        {step === 1 && (
+          <>
+            <p className="mb-4">To change your password, request an OTP to your registered personal email.</p>
+            <button
+              type="button"
+              className="w-full bg-blue-900 text-white p-3 rounded-lg hover:bg-blue-950 transition mb-2"
+              onClick={handleRequestOTP}
+              disabled={loading}
+            >
+              {loading ? 'Sending OTP...' : 'Send OTP'}
+            </button>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded bg-gray-300">Cancel</button>
+            </div>
+          </>
+        )}
+        {/* Step 2: Enter OTP */}
+        {step === 2 && (
+          <>
+            <label className="block mb-2">Enter the OTP sent to your email</label>
+            <input
+              type="text"
+              className="w-full border rounded px-3 py-2 mb-4"
+              value={otp}
+              onChange={e => setOtp(e.target.value)}
+              required
+            />
+            <button
+              type="button"
+              className="w-full bg-blue-900 text-white p-3 rounded-lg hover:bg-blue-950 transition mb-2"
+              onClick={handleValidateOTP}
+            >
+              Next
+            </button>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded bg-gray-300">Cancel</button>
+            </div>
+          </>
+        )}
+        {/* Step 3: Enter passwords */}
+        {step === 3 && (
+          <>
+            <div className="relative">
+              <input
+                type={showCurrentPassword ? "text" : "password"}
+                placeholder="Current Password"
+                className="w-full border rounded px-3 py-2 mb-2"
+                value={currentPassword}
+                onChange={e => setCurrentPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-2 text-gray-500 hover:text-gray-700"
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+              >
+                {showCurrentPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type={showNewPassword ? "text" : "password"}
+                placeholder="New Password"
+                className="w-full border rounded px-3 py-2 mb-2"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-2 text-gray-500 hover:text-gray-700"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+              >
+                {showNewPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                placeholder="Confirm New Password"
+                className="w-full border rounded px-3 py-2 mb-4"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-2 text-gray-500 hover:text-gray-700"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded bg-gray-300">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white" disabled={loading} onClick={handleChangePassword}>Change</button>
+            </div>
+          </>
+        )}
+        {/* Step 4: Success */}
+        {step === 4 && (
+          <div>
+            <div className="text-green-600 mb-2">Password changed successfully!</div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded bg-blue-600 text-white">Close</button>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );

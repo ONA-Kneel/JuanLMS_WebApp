@@ -170,8 +170,8 @@ export default function ClassContent({ selected, isFaculty = false }) {
           .then(res => res.json())
           .then(data => setAnnouncements(Array.isArray(data) ? data : []))
           .finally(() => setAnnouncementsLoading(false));
-        setShowAnnouncementForm(false);
-        form.reset();
+    setShowAnnouncementForm(false);
+    form.reset();
       } else {
         alert('Failed to add announcement.');
       }
@@ -427,8 +427,8 @@ export default function ClassContent({ selected, isFaculty = false }) {
               announcements.map((item) => (
                 <div key={item._id} className="p-4 rounded bg-blue-50 border border-blue-200 shadow-sm flex justify-between items-start">
                   <div>
-                    <h3 className="font-semibold text-blue-900">{item.title}</h3>
-                    <p className="text-sm text-gray-700">{item.content}</p>
+                  <h3 className="font-semibold text-blue-900">{item.title}</h3>
+                  <p className="text-sm text-gray-700">{item.content}</p>
                   </div>
                   {isFaculty && (
                     <div className="flex gap-2">
@@ -624,7 +624,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                         <FiBook className="w-14 h-14 text-white bg-blue-900 rounded shadow mr-4 p-2" />
                         <div style={{ width: '100%' }}>
                           <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-bold text-white">{lesson.title}</h2>
+                          <h2 className="text-lg font-bold text-white">{lesson.title}</h2>
                             {isFaculty && (
                               <div className="flex gap-2">
                                 <button onClick={() => handleEditLesson(lesson._id, lesson.title)} className="bg-yellow-400 hover:bg-yellow-500 text-xs px-2 py-1 rounded font-bold">Edit</button>
@@ -663,26 +663,26 @@ export default function ClassContent({ selected, isFaculty = false }) {
                             {lesson.files && lesson.files.length > 0 ? (
                               lesson.files.map((file, idx) => {
                                 return (
-                                  <tr className="border-b hover:bg-gray-50" key={idx}>
+                                <tr className="border-b hover:bg-gray-50" key={idx}>
                                     <td className="py-2 flex flex-col items-start">
                                       <div className="flex items-center">
-                                        <FiFile className="w-5 h-5 text-blue-700 mr-2" />
-                                        <a
+                                    <FiFile className="w-5 h-5 text-blue-700 mr-2" />
+                                    <a
                                           href={file.fileName && file.fileName.toLowerCase().endsWith('.pdf')
                                             ? `/web/viewer.html?file=${encodeURIComponent(file.fileUrl)}&lessonId=${lesson._id}`
                                             : file.fileUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-blue-700 underline hover:text-blue-900"
-                                        >
-                                          {file.fileName}
-                                        </a>
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-700 underline hover:text-blue-900"
+                                    >
+                                      {file.fileName}
+                                    </a>
                                         {isFaculty && (
                                           <button onClick={() => handleDeleteFile(lesson._id, file.fileUrl)} className="ml-2 text-xs bg-red-100 hover:bg-red-300 text-red-700 px-2 py-1 rounded">Delete File</button>
                                         )}
                                       </div>
-                                    </td>
-                                  </tr>
+                                  </td>
+                                </tr>
                                 );
                               })
                             ) : lesson.fileUrl && lesson.fileName ? (
