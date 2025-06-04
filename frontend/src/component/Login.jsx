@@ -208,17 +208,18 @@ export default function Login() {
               </div>
             </div>
 
-            {failedAttempts > 0 && !isLocked && (
-              <div className="text-red-600 font-poppinsr text-sm">
-                Invalid email or password.
-              </div>
-            )}
-
-            {isLocked && (
-              <div className="text-red-600 font-poppinsr text-sm">
-                Account locked. Please try again in {lockoutTime} seconds.
-              </div>
-            )}
+            <div className="h-5 mb-2">
+              {failedAttempts > 0 && !isLocked && (
+                <div className="text-red-600 font-poppinsr text-sm">
+                  Invalid email or password.
+                </div>
+              )}
+              {isLocked && (
+                <div className="text-red-600 font-poppinsr text-sm">
+                  Account locked. Please try again in {lockoutTime} seconds.
+                </div>
+              )}
+            </div>
 
             <div className="flex items-center justify-between">
               <label className="flex items-center font-poppinsr text-sm">
