@@ -7,6 +7,10 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     react()
-
   ],
+  server: {
+    proxy: {
+      '/uploads': 'http://localhost:5000'
+    }
+  }
 })

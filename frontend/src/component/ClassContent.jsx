@@ -74,6 +74,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [facultyMembers, setFacultyMembers] = useState([]);
   const [studentMembers, setStudentMembers] = useState([]);
 
+  // --- PROGRESS STATE ---
+  // { [lessonId_fileUrl]: { lastPage, totalPages } }
+  const [fileProgress, setFileProgress] = useState({});
+
   // Fetch lessons from backend
   useEffect(() => {
     if (selected === "materials") {
@@ -109,6 +113,33 @@ export default function ClassContent({ selected, isFaculty = false }) {
         .finally(() => setMembersLoading(false));
     }
   }, [selected, classId]);
+
+  // Fetch progress for all files in all lessons
+  useEffect(() => {
+    if (selected === "materials" && backendLessons.length > 0) {
+      const token = localStorage.getItem('token');
+      const fetchAllProgress = async () => {
+        const progressMap = {};
+        for (const lesson of backendLessons) {
+          if (lesson.files && lesson.files.length > 0) {
+            for (const file of lesson.files) {
+              try {
+                const res = await fetch(`http://localhost:5000/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (data && data.lastPage && data.totalPages) {
+                  progressMap[`${lesson._id}_${file.fileUrl}`] = { lastPage: data.lastPage, totalPages: data.totalPages };
+                }
+              } catch { /* ignore progress fetch errors */ }
+            }
+          }
+        }
+        setFileProgress(progressMap);
+      };
+      fetchAllProgress();
+    }
+  }, [selected, backendLessons]);
 
   // --- HANDLERS FOR ADDING CONTENT (Faculty only) ---
 
@@ -186,6 +217,65 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setLessonUploadError("Failed to upload lesson.");
     } finally {
       setLessonUploadLoading(false);
+    }
+  };
+
+  // --- HANDLERS FOR FACULTY EDIT/DELETE ---
+  const handleDeleteLesson = async (lessonId) => {
+    if (!window.confirm('Are you sure you want to delete this lesson?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/lessons/${lessonId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setBackendLessons(backendLessons.filter(l => l._id !== lessonId));
+      } else {
+        alert('Failed to delete lesson.');
+      }
+    } catch {
+      alert('Failed to delete lesson.');
+    }
+  };
+  const handleDeleteFile = async (lessonId, fileUrl) => {
+    if (!window.confirm('Are you sure you want to delete this file?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/lessons/${lessonId}/file?fileUrl=${encodeURIComponent(fileUrl)}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        // Refresh lessons
+        setLessonUploadSuccess('File deleted');
+      } else {
+        alert('Failed to delete file.');
+      }
+    } catch {
+      alert('Failed to delete file.');
+    }
+  };
+  const handleEditLesson = async (lessonId, currentTitle) => {
+    const newTitle = window.prompt('Edit lesson title:', currentTitle);
+    if (!newTitle || newTitle === currentTitle) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/lessons/${lessonId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ title: newTitle })
+      });
+      if (res.ok) {
+        setLessonUploadSuccess('Lesson updated');
+      } else {
+        alert('Failed to update lesson.');
+      }
+    } catch {
+      alert('Failed to update lesson.');
     }
   };
 
@@ -342,8 +432,8 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     <input name="title" required className="w-full border rounded px-3 py-2 text-sm" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-blue-900 mb-1">Upload File (PDF, PPT, DOC, etc.)</label>
-                    <input type="file" accept=".pdf,.ppt,.pptx,.doc,.docx" multiple onChange={e => setLessonFile(e.target.files)} required className="w-full border rounded px-3 py-2 text-sm" />
+                    <label className="block text-sm font-medium text-blue-900 mb-1">Upload File (PDF only)</label>
+                    <input type="file" accept=".pdf" multiple onChange={e => setLessonFile(e.target.files)} required className="w-full border rounded px-3 py-2 text-sm" />
                   </div>
                   {lessonUploadLoading && <p className="text-blue-700 text-sm">Uploading...</p>}
                   {lessonUploadError && <p className="text-red-600 text-sm">{lessonUploadError}</p>}
@@ -378,9 +468,33 @@ export default function ClassContent({ selected, isFaculty = false }) {
                       {/* Card/Header */}
                       <div className="flex items-center bg-blue-800 rounded-t-2xl p-4">
                         <FiBook className="w-14 h-14 text-white bg-blue-900 rounded shadow mr-4 p-2" />
-                        <div>
-                          <h2 className="text-lg font-bold text-white">{lesson.title}</h2>
-                          <span className="bg-white text-blue-800 px-3 py-1 rounded-full text-xs font-semibold ml-2">Completed ✓</span>
+                        <div style={{ width: '100%' }}>
+                          <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-bold text-white">{lesson.title}</h2>
+                            {isFaculty && (
+                              <div className="flex gap-2">
+                                <button onClick={() => handleEditLesson(lesson._id, lesson.title)} className="bg-yellow-400 hover:bg-yellow-500 text-xs px-2 py-1 rounded font-bold">Edit</button>
+                                <button onClick={() => handleDeleteLesson(lesson._id)} className="bg-red-600 hover:bg-red-700 text-xs px-2 py-1 rounded text-white font-bold">Delete</button>
+                              </div>
+                            )}
+                          </div>
+                          {/* Render the progress bar for the first file (or 0% if none) */}
+                          {lesson.files && lesson.files.length > 0 ? (() => {
+                            const file = lesson.files[0];
+                            const progress = fileProgress[`${lesson._id}_${file.fileUrl}`];
+                            let percent = 0;
+                            if (progress && progress.totalPages > 0) {
+                              percent = Math.round((progress.lastPage / progress.totalPages) * 100);
+                            }
+                            return (
+                              <div style={{ width: '100%', marginTop: 8 }}>
+                                <div style={{ background: '#e0e7ef', borderRadius: 8, height: 8, width: '100%' }}>
+                                  <div style={{ background: '#00418b', height: 8, borderRadius: 8, width: `${percent}%`, transition: 'width 0.3s' }}></div>
+                                </div>
+                                <span style={{ fontSize: 12, color: '#fff', fontWeight: 'bold' }}>{percent}%</span>
+                              </div>
+                            );
+                          })() : null}
                         </div>
                       </div>
                       {/* Table/List */}
@@ -389,43 +503,42 @@ export default function ClassContent({ selected, isFaculty = false }) {
                           <thead>
                             <tr className="text-gray-600 border-b">
                               <th className="text-left py-2">Section</th>
-                              <th>Submitted</th>
-                              <th>Score</th>
-                              <th>Due</th>
-                              <th>Status</th>
                             </tr>
                           </thead>
                           <tbody>
                             {lesson.files && lesson.files.length > 0 ? (
-                              lesson.files.map((file, idx) => (
-                                <tr className="border-b hover:bg-gray-50" key={idx}>
-                                  <td className="py-2 flex items-center">
-                                    <FiFile className="w-5 h-5 text-blue-700 mr-2" />
-                                    <a
-                                      href={file.fileName && file.fileName.toLowerCase().endsWith('.pdf')
-                                        ? `/pdf-viewer?file=${encodeURIComponent(`http://localhost:5000${file.fileUrl}`)}`
-                                        : `http://localhost:5000${file.fileUrl}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-700 underline hover:text-blue-900"
-                                    >
-                                      {file.fileName}
-                                    </a>
-                                  </td>
-                                  <td></td>
-                                  <td></td>
-                                  <td></td>
-                                  <td><span className="text-green-600 font-bold">✓</span></td>
-                                </tr>
-                              ))
+                              lesson.files.map((file, idx) => {
+                                return (
+                                  <tr className="border-b hover:bg-gray-50" key={idx}>
+                                    <td className="py-2 flex flex-col items-start">
+                                      <div className="flex items-center">
+                                        <FiFile className="w-5 h-5 text-blue-700 mr-2" />
+                                        <a
+                                          href={file.fileName && file.fileName.toLowerCase().endsWith('.pdf')
+                                            ? `/web/viewer.html?file=${encodeURIComponent(file.fileUrl)}&lessonId=${lesson._id}`
+                                            : file.fileUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-blue-700 underline hover:text-blue-900"
+                                        >
+                                          {file.fileName}
+                                        </a>
+                                        {isFaculty && (
+                                          <button onClick={() => handleDeleteFile(lesson._id, file.fileUrl)} className="ml-2 text-xs bg-red-100 hover:bg-red-300 text-red-700 px-2 py-1 rounded">Delete File</button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })
                             ) : lesson.fileUrl && lesson.fileName ? (
                               <tr>
                                 <td className="py-2 flex items-center">
                                   <FiFile className="w-5 h-5 text-blue-700 mr-2" />
                                   <a
                                     href={lesson.fileName && lesson.fileName.toLowerCase().endsWith('.pdf')
-                                      ? `/pdf-viewer?file=${encodeURIComponent(`http://localhost:5000${lesson.fileUrl}`)}`
-                                      : `http://localhost:5000${lesson.fileUrl}`}
+                                      ? `/web/viewer.html?file=${encodeURIComponent(lesson.fileUrl)}&lessonId=${lesson._id}`
+                                      : lesson.fileUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-blue-700 underline hover:text-blue-900"
@@ -433,10 +546,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                     {lesson.fileName}
                                   </a>
                                 </td>
-                                <td></td>
-                                <td></td>
-                                <td></td>
-                                <td><span className="text-green-600 font-bold">✓</span></td>
                               </tr>
                             ) : (
                               <tr><td colSpan={5} className="text-center text-gray-400">No files</td></tr>

@@ -14,6 +14,7 @@ export default function Student_Dashboard() {
   // Define the classTitles object
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [classProgress, setClassProgress] = useState({}); // { classID: percent }
 
   // Get current userID (adjust as needed for your auth)
   const currentUserID = localStorage.getItem("userID");
@@ -31,6 +32,43 @@ export default function Student_Dashboard() {
         // Only include classes where the current user is a member
         const filtered = data.filter(cls => cls.members.includes(currentUserID));
         setClasses(filtered);
+
+        // --- Fetch progress for each class ---
+        const progressMap = {};
+        for (const cls of filtered) {
+          // Fetch lessons for this class
+          const lessonRes = await fetch(`http://localhost:5000/lessons?classID=${cls.classID}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const lessons = await lessonRes.json();
+          let totalPages = 0;
+          let totalRead = 0;
+          for (const lesson of lessons) {
+            if (lesson.files && lesson.files.length > 0) {
+              for (const file of lesson.files) {
+                // Fetch progress for this file
+                try {
+                  const progRes = await fetch(`http://localhost:5000/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  const prog = await progRes.json();
+                  if (prog && prog.totalPages) {
+                    totalPages += prog.totalPages;
+                    totalRead += Math.min(prog.lastPage, prog.totalPages);
+                  } else if (file.totalPages) {
+                    totalPages += file.totalPages;
+                  }
+                } catch { /* ignore progress fetch errors */ }
+              }
+            }
+          }
+          let percent = 0;
+          if (totalPages > 0) {
+            percent = Math.round((totalRead / totalPages) * 100);
+          }
+          progressMap[cls.classID] = percent;
+        }
+        setClassProgress(progressMap);
       } catch (err) {
         console.error("Failed to fetch classes", err);
       } finally {
@@ -87,7 +125,7 @@ export default function Student_Dashboard() {
           ) : classes.length === 0 ? (
             <p>No classes found.</p>
           ) : (
-            classes.map((cls, index) => (
+            classes.map((cls) => (
               <Link
                 to={`/student_class/${cls.classID}`}
                 key={cls.classID}
@@ -95,9 +133,15 @@ export default function Student_Dashboard() {
                 style={{ textDecoration: 'none' }}
               >
                 <h4 className="text-base md:text-lg font-semibold">{cls.className}</h4>
-                <p className="text-sm mt-1">0% Progress</p>
+                <p className="text-sm mt-1">
+                  {classProgress[cls.classID] === 100
+                    ? 'Completed'
+                    : classProgress[cls.classID] > 0
+                      ? `${classProgress[cls.classID]}% Resume`
+                      : '0%'}
+                </p>
                 <div className="w-full bg-gray-300 rounded-full h-2 mt-2">
-                  <div className="bg-blue-500 h-full rounded-full w-[0%]"></div>
+                  <div className="bg-blue-500 h-full rounded-full" style={{ width: `${classProgress[cls.classID] || 0}%` }}></div>
                 </div>
                 <img src={arrowRight} alt="Arrow" className="absolute top-4 right-4 w-5 h-5" />
               </Link>

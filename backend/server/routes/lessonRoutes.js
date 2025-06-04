@@ -9,6 +9,7 @@ import path from 'path';
 import database from '../connect.cjs';
 import { ObjectId } from 'mongodb';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import LessonProgress from '../models/LessonProgress.js';
 
 const router = express.Router();
 
@@ -29,19 +30,14 @@ const upload = multer({
   storage: storage,
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB per file
   fileFilter: (req, file, cb) => {
-    // Only allow certain file types for lesson materials
+    // Only allow PDF files for lesson materials
     const allowed = [
-      'application/pdf',
-      'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      'application/pdf'
     ];
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      // Reject files that are not allowed
-      cb(new Error('Only PDF, PPT, PPTX, DOC, DOCX files are allowed!'));
+      cb(new Error('Only PDF files are allowed!'));
     }
   }
 });
@@ -103,10 +99,92 @@ router.use((err, req, res, next) => {
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: 'File too large. Max size is 100MB per file.' });
   }
-  if (err.message && err.message.includes('Only PDF, PPT, PPTX, DOC, DOCX files are allowed!')) {
+  if (err.message && err.message.includes('Only PDF files are allowed!')) {
     return res.status(400).json({ error: err.message });
   }
   next(err);
+});
+
+// --- LESSON PROGRESS ROUTES ---
+// POST /lesson-progress: set/update progress
+router.post('/lesson-progress', authenticateToken, async (req, res) => {
+  try {
+    const { lessonId, fileUrl, lastPage, totalPages } = req.body;
+    if (!lessonId || !fileUrl || lastPage == null || totalPages == null) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const filter = { userId: req.user._id, lessonId, fileUrl };
+    const update = { lastPage, totalPages, updatedAt: new Date() };
+    const options = { upsert: true, new: true, setDefaultsOnInsert: true };
+    const progress = await LessonProgress.findOneAndUpdate(filter, update, options);
+    res.json({ success: true, progress });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to save progress' });
+  }
+});
+
+// GET /lesson-progress?lessonId=...&fileUrl=...: get progress for current user
+router.get('/lesson-progress', authenticateToken, async (req, res) => {
+  try {
+    const { lessonId, fileUrl } = req.query;
+    if (!lessonId || !fileUrl) return res.status(400).json({ error: 'lessonId and fileUrl required' });
+    const progress = await LessonProgress.findOne({ userId: req.user._id, lessonId, fileUrl });
+    res.json(progress || {});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch progress' });
+  }
+});
+
+// --- DELETE /lessons/:lessonId - delete a lesson and its files (faculty only) ---
+router.delete('/:lessonId', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
+    const { lessonId } = req.params;
+    const lesson = await Lesson.findByIdAndDelete(lessonId);
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+    // Optionally: delete files from disk here
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete lesson' });
+  }
+});
+
+// --- DELETE /lessons/:lessonId/file?fileUrl=... - delete a file from a lesson (faculty only) ---
+router.delete('/:lessonId/file', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
+    const { lessonId } = req.params;
+    const { fileUrl } = req.query;
+    if (!fileUrl) return res.status(400).json({ error: 'fileUrl required' });
+    const lesson = await Lesson.findById(lessonId);
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+    lesson.files = lesson.files.filter(f => f.fileUrl !== fileUrl);
+    await lesson.save();
+    // Optionally: delete file from disk here
+    res.json({ success: true, lesson });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
+// --- PUT /lessons/:lessonId - edit lesson title (faculty only) ---
+router.put('/:lessonId', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
+    const { lessonId } = req.params;
+    const { title } = req.body;
+    if (!title) return res.status(400).json({ error: 'title required' });
+    const lesson = await Lesson.findByIdAndUpdate(lessonId, { title }, { new: true });
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+    res.json({ success: true, lesson });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update lesson' });
+  }
 });
 
 export default router; 

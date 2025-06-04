@@ -1,5 +1,5 @@
 // Faculty_ClassWorkspace.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import Faculty_Navbar from "./Faculty_Navbar";
@@ -11,13 +11,29 @@ export default function Faculty_ClassWorkspace() {
     const [selected, setSelected] = useState("home");
     const navigate = useNavigate();
 
-    const classTitles = {
-        "1": { title: "Introduction to Computing", section: "CCINCOM1 - Section 1" },
-        "2": { title: "Fundamentals of Programming", section: "CCPROG1 - Section 2" },
-        "3": { title: "Modern Mathematics", section: "CCMATH1 - Section 3" },
-    };
-
-    const classInfo = classTitles[classId] || classTitles[1];
+    const [classInfo, setClassInfo] = useState(null);
+    const [loading, setLoading] = useState(true);
+    useEffect(() => {
+        async function fetchClass() {
+            try {
+                const token = localStorage.getItem("token");
+                const res = await fetch("http://localhost:5000/classes", {
+                    headers: {
+                        "Authorization": `Bearer ${token}`,
+                    },
+                });
+                const data = await res.json();
+                // Find the class by classID
+                const found = data.find(cls => cls.classID === classId);
+                setClassInfo(found);
+            } catch {
+                setClassInfo(null);
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchClass();
+    }, [classId]);
 
     const tabs = [
         { label: "Home Page", key: "home" },
@@ -59,8 +75,16 @@ export default function Faculty_ClassWorkspace() {
                         </button>
 
                         <div>
-                            <h2 className="text-2xl md:text-3xl font-bold">{classInfo.title}</h2>
-                            <p className="text-base md:text-lg text-gray-600">{classInfo.section}</p>
+                            {loading ? (
+                                <h2 className="text-2xl md:text-3xl font-bold">Loading...</h2>
+                            ) : classInfo ? (
+                                <>
+                                    <h2 className="text-2xl md:text-3xl font-bold">{classInfo.className}</h2>
+                                    <p className="text-base md:text-lg text-gray-600">{classInfo.classCode}</p>
+                                </>
+                            ) : (
+                                <h2 className="text-2xl md:text-3xl font-bold text-red-600">Class not found</h2>
+                            )}
                         </div>
                     </div>
 
