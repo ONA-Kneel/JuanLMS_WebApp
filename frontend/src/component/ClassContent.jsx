@@ -16,49 +16,17 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [lessonsLoading, setLessonsLoading] = useState(false);
   const [lessonError, setLessonError] = useState(null);
 
-  // --- DUMMY DATA (for students, fallback if no backend) ---
-  const dummyData = {
-    1: {
-      name: "Introduction to Computing",
-      lessons: [
-        { id: 1, title: "What is Computing?", content: "This lesson introduces the concept of computing, data, and information." },
-        { id: 2, title: "Evolution of Computers", content: "Learn the historical milestones of computers from mechanical to modern era." },
-      ],
-      posts: [
-        { title: "Essay Submission", content: "Don't forget to submit your essay about the History of Computing by Friday." },
-      ],
-    },
-    2: {
-      name: "Fundamentals of Programming",
-      lessons: [
-        { id: 1, title: "Intro to Programming", content: "Overview of high-level vs low-level languages." },
-      ],
-      posts: [
-        { title: "Coding Activity Due", content: "Submit your coding activity on variables this Friday." },
-      ],
-    },
-    3: {
-      name: "Modern Mathematics",
-      lessons: [
-        { id: 1, title: "Logic & Set Theory", content: "Intro to logic gates and basic set operations." },
-      ],
-      posts: [
-        { title: "Assignment #2", content: "Solve 10 probability problems and submit by next week." },
-      ],
-    },
-  };
-
-  // Use dummy data if no backend data is available
-  const classContent = dummyData[classId] || dummyData[1];
-
   // --- UI STATE ---
   const goBack = () => setActiveLesson(null);
 
   // Faculty-only states (dynamic content management)
   const [announcements, setAnnouncements] = useState([]);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(false);
+  const [announcementError, setAnnouncementError] = useState(null);
   const [assignments, setAssignments] = useState([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+  const [assignmentError, setAssignmentError] = useState(null);
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
-  const [showAssignmentForm, setShowAssignmentForm] = useState(false);
   const [showLessonForm, setShowLessonForm] = useState(false);
   const [showQuizBuilder, setShowQuizBuilder] = useState(false);
 
@@ -77,6 +45,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
   // --- PROGRESS STATE ---
   // { [lessonId_fileUrl]: { lastPage, totalPages } }
   const [fileProgress, setFileProgress] = useState({});
+
+  // New state for selected assignment
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
 
   // Fetch lessons from backend
   useEffect(() => {
@@ -141,34 +112,72 @@ export default function ClassContent({ selected, isFaculty = false }) {
     }
   }, [selected, backendLessons]);
 
+  // Fetch announcements from backend
+  useEffect(() => {
+    if (selected === "home") {
+      setAnnouncementsLoading(true);
+      setAnnouncementError(null);
+      const token = localStorage.getItem('token');
+      fetch(`http://localhost:5000/announcements?classID=${classId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => setAnnouncements(Array.isArray(data) ? data : []))
+        .catch(() => setAnnouncementError("Failed to fetch announcements."))
+        .finally(() => setAnnouncementsLoading(false));
+    }
+  }, [selected, classId]);
+
+  // Fetch assignments from backend
+  useEffect(() => {
+    if (selected === "classwork") {
+      setAssignmentsLoading(true);
+      setAssignmentError(null);
+      const token = localStorage.getItem('token');
+      fetch(`http://localhost:5000/assignments?classID=${classId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => setAssignments(Array.isArray(data) ? data : []))
+        .catch(() => setAssignmentError("Failed to fetch assignments."))
+        .finally(() => setAssignmentsLoading(false));
+    }
+  }, [selected, classId]);
+
   // --- HANDLERS FOR ADDING CONTENT (Faculty only) ---
 
   // Add announcement handler
-  const handleAddAnnouncement = (e) => {
+  const handleAddAnnouncement = async (e) => {
     e.preventDefault();
     const form = e.target;
-    const newAnnouncement = {
-      id: announcements.length + 1,
-      title: form.title.value,
-      content: form.content.value,
-    };
-    setAnnouncements([...announcements, newAnnouncement]);
-    setShowAnnouncementForm(false);
-    form.reset();
-  };
-
-  // Add assignment handler
-  const handleAddAssignment = (e) => {
-    e.preventDefault();
-    const form = e.target;
-    const newAssignment = {
-      id: assignments.length + 1,
-      title: form.title.value,
-      instructions: form.instructions.value,
-    };
-    setAssignments([...assignments, newAssignment]);
-    setShowAssignmentForm(false);
-    form.reset();
+    const title = form.title.value;
+    const content = form.content.value;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:5000/announcements', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ classID: classId, title, content })
+      });
+      if (res.ok) {
+        setAnnouncementsLoading(true);
+        fetch(`http://localhost:5000/announcements?classID=${classId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => setAnnouncements(Array.isArray(data) ? data : []))
+          .finally(() => setAnnouncementsLoading(false));
+        setShowAnnouncementForm(false);
+        form.reset();
+      } else {
+        alert('Failed to add announcement.');
+      }
+    } catch {
+      alert('Failed to add announcement.');
+    }
   };
 
   const handleAddLesson = async (e) => {
@@ -279,6 +288,86 @@ export default function ClassContent({ selected, isFaculty = false }) {
     }
   };
 
+  // --- HANDLERS FOR ANNOUNCEMENTS ---
+  const handleDeleteAnnouncement = async (id) => {
+    if (!window.confirm('Delete this announcement?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/announcements/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) setAnnouncements(announcements.filter(a => a._id !== id));
+      else alert('Failed to delete announcement.');
+    } catch {
+      alert('Failed to delete announcement.');
+    }
+  };
+  const handleEditAnnouncement = async (id, currentTitle, currentContent) => {
+    const newTitle = window.prompt('Edit title:', currentTitle);
+    if (!newTitle) return;
+    const newContent = window.prompt('Edit content:', currentContent);
+    if (!newContent) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/announcements/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ title: newTitle, content: newContent })
+      });
+      if (res.ok) {
+        setAnnouncements(announcements.map(a => a._id === id ? { ...a, title: newTitle, content: newContent } : a));
+      } else {
+        alert('Failed to update announcement.');
+      }
+    } catch {
+      alert('Failed to update announcement.');
+    }
+  };
+
+  // --- HANDLERS FOR ASSIGNMENTS ---
+  const handleDeleteAssignment = async (id) => {
+    if (!window.confirm('Delete this assignment?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/assignments/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) setAssignments(assignments.filter(a => a._id !== id));
+      else alert('Failed to delete assignment.');
+    } catch {
+      alert('Failed to delete assignment.');
+    }
+  };
+  const handleEditAssignment = async (id, currentTitle, currentInstructions) => {
+    const newTitle = window.prompt('Edit title:', currentTitle);
+    if (!newTitle) return;
+    const newInstructions = window.prompt('Edit instructions:', currentInstructions);
+    if (!newInstructions) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/assignments/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ title: newTitle, instructions: newInstructions })
+      });
+      if (res.ok) {
+        setAssignments(assignments.map(a => a._id === id ? { ...a, title: newTitle, instructions: newInstructions } : a));
+      } else {
+        alert('Failed to update assignment.');
+      }
+    } catch {
+      alert('Failed to update assignment.');
+    }
+  };
+
   // --- COMPONENT: Renders a single lesson item (not used in main render, but kept for possible future use) ---
   function LessonItem({ lesson }) {
     const [expanded, setExpanded] = useState(false);
@@ -328,13 +417,25 @@ export default function ClassContent({ selected, isFaculty = false }) {
             </form>
           )}
 
-          {/* Announcements list (faculty: own, students: dummy) */}
+          {/* Announcements list (faculty: backend, students: backend) */}
           <div className="space-y-4">
-            {(isFaculty ? announcements : classContent.posts).length > 0 ? (
-              (isFaculty ? announcements : classContent.posts).map((item, index) => (
-                <div key={index} className="p-4 rounded bg-blue-50 border border-blue-200 shadow-sm">
-                  <h3 className="font-semibold text-blue-900">{item.title}</h3>
-                  <p className="text-sm text-gray-700">{item.content}</p>
+            {announcementsLoading ? (
+              <p className="text-blue-700">Loading announcements...</p>
+            ) : announcementError ? (
+              <p className="text-red-600">{announcementError}</p>
+            ) : announcements.length > 0 ? (
+              announcements.map((item) => (
+                <div key={item._id} className="p-4 rounded bg-blue-50 border border-blue-200 shadow-sm flex justify-between items-start">
+                  <div>
+                    <h3 className="font-semibold text-blue-900">{item.title}</h3>
+                    <p className="text-sm text-gray-700">{item.content}</p>
+                  </div>
+                  {isFaculty && (
+                    <div className="flex gap-2">
+                      <button onClick={() => handleEditAnnouncement(item._id, item.title, item.content)} className="bg-yellow-400 hover:bg-yellow-500 text-xs px-2 py-1 rounded font-bold">Edit</button>
+                      <button onClick={() => handleDeleteAnnouncement(item._id)} className="bg-red-600 hover:bg-red-700 text-xs px-2 py-1 rounded text-white font-bold">Delete</button>
+                    </div>
+                  )}
                 </div>
               ))
             ) : (
@@ -373,36 +474,89 @@ export default function ClassContent({ selected, isFaculty = false }) {
             </div>
           )}
 
-          {/* Assignment form for faculty */}
-          {isFaculty && showAssignmentForm && (
-            <form onSubmit={handleAddAssignment} className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
-              <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
-                <input name="title" required className="w-full border rounded px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Instructions</label>
-                <textarea name="instructions" required className="w-full border rounded px-3 py-2 text-sm" rows={3} />
-              </div>
-              <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm">
-                Save Assignment
-              </button>
-            </form>
-          )}
-
-          {/* Assignments list (faculty only) */}
+          {/* Assignment/Quiz list (Teams-style cards, clickable) */}
           <div className="space-y-4">
-            {isFaculty && assignments.length > 0 ? (
+            {assignmentsLoading ? (
+              <p className="text-blue-700">Loading assignments...</p>
+            ) : assignmentError ? (
+              <p className="text-red-600">{assignmentError}</p>
+            ) : assignments.length > 0 ? (
               assignments.map((item) => (
-                <div key={item.id} className="p-4 rounded bg-blue-50 border border-blue-200 shadow-sm">
-                  <h3 className="font-semibold text-blue-900">{item.title}</h3>
-                  <p className="text-sm text-gray-700">{item.instructions}</p>
+                <div
+                  key={item._id}
+                  className="p-4 rounded-xl bg-white border border-blue-200 shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer hover:bg-blue-50 transition"
+                  onClick={() => setSelectedAssignment(item)}
+                >
+                  <div>
+                    <span className={`inline-block px-2 py-1 rounded text-xs font-bold mr-2 ${item.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{item.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
+                    <span className="text-lg font-bold text-blue-900">{item.title}</span>
+                    <div className="text-gray-700 text-sm mt-1">{item.instructions}</div>
+                    {item.dueDate && <div className="text-xs text-gray-500 mt-1">Due: {new Date(item.dueDate).toLocaleString()}</div>}
+                    {item.points && <div className="text-xs text-gray-500">Points: {item.points}</div>}
+                  </div>
+                  {isFaculty && (
+                    <div className="flex gap-2">
+                      <button onClick={e => { e.stopPropagation(); handleEditAssignment(item._id, item.title, item.instructions); }} className="bg-yellow-400 hover:bg-yellow-500 text-xs px-2 py-1 rounded font-bold">Edit</button>
+                      <button onClick={e => { e.stopPropagation(); handleDeleteAssignment(item._id); }} className="bg-red-600 hover:bg-red-700 text-xs px-2 py-1 rounded text-white font-bold">Delete</button>
+                    </div>
+                  )}
                 </div>
               ))
             ) : (
-              <p className="text-sm text-gray-700">No assignments yet.</p>
+              <p className="text-sm text-gray-700">No assignments or quizzes yet.</p>
             )}
           </div>
+
+          {/* Assignment/Quiz Detail Modal */}
+          {selectedAssignment && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className="relative w-full max-w-lg mx-auto bg-white rounded-xl shadow-xl max-h-[90vh] overflow-y-auto p-8">
+                <button
+                  className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl font-bold"
+                  onClick={() => setSelectedAssignment(null)}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+                <div className="mb-4">
+                  <span className={`inline-block px-2 py-1 rounded text-xs font-bold mr-2 ${selectedAssignment.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{selectedAssignment.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
+                  <span className="text-2xl font-bold text-blue-900">{selectedAssignment.title}</span>
+                </div>
+                <div className="mb-2 text-gray-700">{selectedAssignment.instructions}</div>
+                {selectedAssignment.description && <div className="mb-2 text-gray-600">{selectedAssignment.description}</div>}
+                {selectedAssignment.dueDate && <div className="mb-2 text-xs text-gray-500">Due: {new Date(selectedAssignment.dueDate).toLocaleString()}</div>}
+                {selectedAssignment.points && <div className="mb-2 text-xs text-gray-500">Points: {selectedAssignment.points}</div>}
+                {/* Placeholder for reference materials and file upload/quiz */}
+                {selectedAssignment.fileUploadRequired && (
+                  <div className="mb-4">
+                    <div className="font-semibold text-sm mb-1">File Upload Required</div>
+                    <div className="text-xs text-gray-500">Allowed file types: {selectedAssignment.allowedFileTypes}</div>
+                    {selectedAssignment.fileInstructions && <div className="text-xs text-gray-500">{selectedAssignment.fileInstructions}</div>}
+                    {/* TODO: Add file upload input for students */}
+                    <div className="mt-2"><input type="file" className="border rounded px-2 py-1" /></div>
+                  </div>
+                )}
+                {selectedAssignment.type === 'quiz' && selectedAssignment.questions && (
+                  <div className="mb-4">
+                    <div className="font-semibold text-sm mb-1">Quiz Questions</div>
+                    <ul className="list-decimal ml-6">
+                      {selectedAssignment.questions.map((q, idx) => (
+                        <li key={idx} className="mb-2">
+                          <div className="font-semibold">{q.question}</div>
+                          <div className="text-xs text-gray-600">Type: {q.type}</div>
+                          <div className="text-xs text-gray-600">Points: {q.points}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {/* TODO: Add submission/turn in button for students */}
+                <div className="flex justify-end mt-6">
+                  <button className="bg-blue-900 text-white px-6 py-2 rounded" onClick={() => setSelectedAssignment(null)}>Close</button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 

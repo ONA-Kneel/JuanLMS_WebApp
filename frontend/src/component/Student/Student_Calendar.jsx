@@ -16,6 +16,7 @@ export default function Student_Calendar() {
   const [selectedDayEvents, setSelectedDayEvents] = useState([]);
   const [showDayModal, setShowDayModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
+  const [assignmentEvents, setAssignmentEvents] = useState([]);
 
   useEffect(() => {
     (async () => {
@@ -53,16 +54,63 @@ export default function Student_Calendar() {
     });
   }, []);
 
-  const allEvents = [...adminEvents, ...holidays];
+  // Fetch assignments/quizzes for student's classes and add as calendar events
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const resClasses = await fetch('http://localhost:5000/classes/my-classes', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const classes = await resClasses.json();
+        let events = [];
+        for (const cls of classes) {
+          const res = await fetch(`http://localhost:5000/assignments?classID=${cls._id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            data.forEach(a => {
+              if (a.dueDate) {
+                events.push({
+                  title: `${a.title} (${cls.className || cls.name || 'Class'})`,
+                  start: a.dueDate,
+                  end: a.dueDate,
+                  color: a.type === 'quiz' ? '#a259e6' : '#00b894',
+                  assignmentId: a._id,
+                  classId: cls._id,
+                  type: a.type,
+                });
+              }
+            });
+          }
+        }
+        console.log('Assignment events for calendar:', events);
+        setAssignmentEvents(events);
+      } catch {
+        // ignore assignment fetch errors
+      }
+    };
+    fetchAssignments();
+  }, []);
+
+  const allEvents = [...adminEvents, ...holidays, ...assignmentEvents];
 
   const handleDateClick = (arg) => {
     const clickedDate = arg.dateStr;
     setSelectedDate(clickedDate);
-    const eventsForDay = adminEvents.filter(ev => {
-      const start = ev.start ? ev.start.slice(0, 10) : ev.date;
-      const end = ev.end ? ev.end.slice(0, 10) : start;
-      return clickedDate >= start && clickedDate <= end;
-    });
+    const eventsForDay = [
+      ...adminEvents.filter(ev => {
+        const start = ev.start ? ev.start.slice(0, 10) : ev.date;
+        const end = ev.end ? ev.end.slice(0, 10) : start;
+        return clickedDate >= start && clickedDate <= end;
+      }),
+      ...assignmentEvents.filter(ev => {
+        const start = ev.start ? ev.start.slice(0, 10) : ev.date;
+        const end = ev.end ? ev.end.slice(0, 10) : start;
+        return clickedDate >= start && clickedDate <= end;
+      })
+    ];
     setSelectedDayEvents(eventsForDay);
     setShowDayModal(true);
   };
@@ -113,8 +161,11 @@ export default function Student_Calendar() {
               ) : (
                 <ul>
                   {selectedDayEvents.map(ev => (
-                    <li key={ev._id} className="mb-2">
+                    <li key={ev._id || ev.assignmentId || ev.title} className="mb-2">
                       <span className="font-semibold">{ev.title}</span>
+                      {ev.type && (
+                        <span className={`ml-2 px-2 py-1 rounded text-xs font-bold ${ev.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{ev.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
+                      )}
                       <br />
                       <span className="text-sm text-gray-600">
                         {ev.start

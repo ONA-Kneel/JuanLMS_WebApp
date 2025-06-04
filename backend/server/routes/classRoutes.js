@@ -90,4 +90,15 @@ router.get('/:classID/members', async (req, res) => {
   }
 });
 
+// Get all classes for the logged-in user (student)
+router.get('/my-classes', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const classes = await Class.find({ members: userId });
+    res.json(classes);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch classes.' });
+  }
+});
+
 export default router; 

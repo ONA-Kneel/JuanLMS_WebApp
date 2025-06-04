@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useParams } from "react-router-dom";
 
 export default function QuizTab({ onClose }) {
+    const { classId } = useParams();
     const [activityType, setActivityType] = useState("quiz"); // 'quiz' or 'assignment'
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
@@ -74,13 +76,45 @@ export default function QuizTab({ onClose }) {
     const handleDelete = idx => setQuestions(questions.filter((_, i) => i !== idx));
     const handleDuplicate = idx => setQuestions([...questions, { ...questions[idx] }]);
 
-    const handleSave = () => {
-        if (activityType === "quiz") {
-            alert(`Saved as Quiz/Questionnaire!\nTitle: ${title}\nQuestions: ${questions.length}\nFile Upload: ${requireFileUpload ? 'Yes' : 'No'}`);
-        } else {
-            alert(`Saved as Assignment!\nTitle: ${title}\nDue: ${dueDate}\nFile Upload: ${requireFileUpload ? 'Yes' : 'No'}`);
+    const handleSave = async () => {
+        const token = localStorage.getItem('token');
+        const payload = {
+            classID: classId,
+            title,
+            instructions: description,
+            type: activityType,
+            description,
+            points: questions.reduce((sum, q) => sum + (q.points || 0), 0),
+            fileUploadRequired: requireFileUpload,
+            allowedFileTypes,
+            fileInstructions,
+            questions: activityType === 'quiz' ? questions : undefined,
+        };
+        if (dueDate) {
+            const isoDueDate = new Date(dueDate).toISOString();
+            if (!isNaN(Date.parse(isoDueDate))) {
+                payload.dueDate = isoDueDate;
+            }
         }
-        onClose && onClose();
+        try {
+            const res = await fetch('http://localhost:5000/assignments', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                alert(`${activityType === 'quiz' ? 'Quiz' : 'Assignment'} saved!`);
+                onClose && onClose();
+            } else {
+                const err = await res.json();
+                alert('Failed to save: ' + (err.error || res.status));
+            }
+        } catch {
+            alert('Failed to save (network error)');
+        }
     };
 
     return (
@@ -98,6 +132,7 @@ export default function QuizTab({ onClose }) {
                     placeholder="Description"
                     value={description}
                     onChange={e => setDescription(e.target.value)}
+                    required
                 />
 
                 <div className="flex gap-4 items-center mb-4">

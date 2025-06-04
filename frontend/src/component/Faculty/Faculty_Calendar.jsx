@@ -21,6 +21,7 @@ export default function Faculty_Calendar() {
   const [selectedDayEvents, setSelectedDayEvents] = useState([]);
   const [showDayModal, setShowDayModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
+  const [assignmentEvents, setAssignmentEvents] = useState([]);
 
   useEffect(() => {
     (async () => {
@@ -58,7 +59,49 @@ export default function Faculty_Calendar() {
     });
   }, []);
 
-  const allEvents = [...adminEvents, ...holidays];
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        // Fetch all classes the faculty teaches
+        const resClasses = await fetch('http://localhost:5000/classes', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const classes = await resClasses.json();
+        // Filter classes where the logged-in user is the faculty
+        const userId = JSON.parse(atob(token.split('.')[1])).id || JSON.parse(atob(token.split('.')[1]))._id;
+        const myClasses = classes.filter(cls => cls.facultyID === userId || cls.facultyID === userId?.toString());
+        let events = [];
+        for (const cls of myClasses) {
+          const res = await fetch(`http://localhost:5000/assignments?classID=${cls._id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            data.forEach(a => {
+              if (a.dueDate) {
+                events.push({
+                  title: `${a.title} (${cls.className || cls.name || 'Class'})`,
+                  start: a.dueDate,
+                  end: a.dueDate,
+                  color: a.type === 'quiz' ? '#a259e6' : '#00b894',
+                  assignmentId: a._id,
+                  classId: cls._id,
+                  type: a.type,
+                });
+              }
+            });
+          }
+        }
+        setAssignmentEvents(events);
+      } catch {
+        // ignore assignment fetch errors
+      }
+    };
+    fetchAssignments();
+  }, []);
+
+  const allEvents = [...adminEvents, ...holidays, ...assignmentEvents];
 
   const handleDateClick = (arg) => {
     const clickedDate = arg.dateStr;

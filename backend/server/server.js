@@ -18,6 +18,8 @@ import schoolYearRoutes from "./routes/schoolYearRoutes.js";
 import programRoutes from "./routes/programRoutes.js";
 import courseRoutes from "./routes/courseRoutes.js";
 import sectionRoutes from "./routes/sectionRoutes.js";
+import announcementRoutes from "./routes/announcementRoutes.js";
+import assignmentRoutes from "./routes/assignmentRoutes.js";
 
 dotenv.config({ path: './config.env' });
 
@@ -103,6 +105,8 @@ app.use('/schoolyears', schoolYearRoutes);
 app.use('/programs', programRoutes);
 app.use('/courses', courseRoutes);
 app.use('/sections', sectionRoutes);
+app.use("/announcements", announcementRoutes);
+app.use("/assignments", assignmentRoutes);
 
 // Start server
 app.listen(PORT, () => {
