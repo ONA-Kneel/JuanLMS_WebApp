@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import Faculty_Navbar from "./Faculty_Navbar";
 
+import ProfileModal from "../ProfileModal"; 
+
 import compClassesIcon from "../../assets/compClassesIcon.png";
 import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
