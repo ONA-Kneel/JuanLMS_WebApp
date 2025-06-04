@@ -168,12 +168,9 @@ export default function Admin_Accounts() {
         .replace(/[^a-z]/g, ""); // remove non-letters
 
     if (firstname && lastname) {
-      let generatedEmail;
-      if (role === "faculty") {
-        generatedEmail = `${clean(firstname)}.${clean(lastname)}@sjddef.edu.ph`;
-      } else {
-        generatedEmail = `${clean(firstname)}.${clean(lastname)}@${role}.sjddef.edu.ph`;
-      }
+      const generatedEmail = role === "faculty" 
+        ? `${clean(firstname)}.${clean(lastname)}@sjddef.edu.ph`
+        : `${clean(firstname)}.${clean(lastname)}@${role}.sjddef.edu.ph`;
       setFormData((prev) => ({ ...prev, email: generatedEmail }));
     } else {
       setFormData((prev) => ({ ...prev, email: "" }));
@@ -213,11 +210,36 @@ export default function Admin_Accounts() {
     } else {
       const randomNum = Math.floor(100 + Math.random() * 900);
       const userID = `${formData.role.charAt(0).toUpperCase()}${randomNum}`;
+
+      let accountData = {
+        ...formData,
+        userID,
+        email: overrideEmail || formData.email,
+        // Default archive/recovery fields (OTP fields removed from here)
+        isArchived: false,
+        archivedAt: null,
+        deletedAt: null, 
+        archiveAttempts: 0,
+        archiveLockUntil: null,
+        recoverAttempts: 0,
+        recoverLockUntil: null,
+      };
+
+      if (formData.role === "students") {
+        accountData = {
+          ...accountData,
+          yearLevelAssigned: null, // This one was already correctly named as per previous request
+          programAssigned: null,   // Was programHandle
+          courseAssigned: null,    // Was courseHandle
+          sectionAssigned: null,   // Was sectionHandle
+        };
+      }
+
       try {
         const res = await fetch("http://localhost:5000/users", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...formData, userID, email: overrideEmail || formData.email }),
+          body: JSON.stringify(accountData),
         });
         const data = await res.json();
         if (res.ok) {

@@ -8,10 +8,10 @@ const sectionSchema = new mongoose.Schema({
     // Consider if section names should be unique, perhaps unique per program and year level.
     // For now, allowing duplicate names across different program/year combinations.
   },
-  program: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Program', // Refers to the Program model
-    required: [true, 'Program is required for the section.'],
+  programName: {
+    type: String,
+    required: [true, 'Program name is required.'],
+    trim: true,
   },
   yearLevel: {
     type: String,
@@ -20,10 +20,10 @@ const sectionSchema = new mongoose.Schema({
     // Example enum if you want to restrict values, adjust as needed:
     // enum: ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Grade 11', 'Grade 12'] 
   },
-  course: { // New field for Course reference
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Course',
-    default: null, // Optional: makes it explicitly optional
+  courseName: {
+    type: String,
+    default: null,
+    trim: true,
   },
 }, { timestamps: true }); // Adds createdAt and updatedAt
 

@@ -78,7 +78,11 @@ userRoutes.post("/users", async (req, res) => {
         personalemail,
         profilePic,
         role,
-        userID
+        userID,
+        programAssigned,
+        courseAssigned,
+        sectionAssigned,
+        yearLevelAssigned
     } = req.body;
 
     // Simple server-side validation (backend safety)
@@ -117,8 +121,29 @@ userRoutes.post("/users", async (req, res) => {
         personalemail,
         profilePic,
         role,
-        userID
+        userID,
+        isArchived: false,
+        archivedAt: null,
+        deletedAt: null,
+        archiveAttempts: 0,
+        archiveLockUntil: null,
+        recoverAttempts: 0,
+        recoverLockUntil: null,
+        resetOTP: null,
+        resetOTPExpires: null,
     };
+
+    if (role === "students") {
+        mongoObject.programAssigned = programAssigned !== undefined ? programAssigned : null;
+        mongoObject.courseAssigned = courseAssigned !== undefined ? courseAssigned : null;
+        mongoObject.sectionAssigned = sectionAssigned !== undefined ? sectionAssigned : null;
+        mongoObject.yearLevelAssigned = yearLevelAssigned !== undefined ? yearLevelAssigned : null;
+    } else {
+        mongoObject.programAssigned = null;
+        mongoObject.courseAssigned = null;
+        mongoObject.sectionAssigned = null;
+        mongoObject.yearLevelAssigned = null;
+    }
 
     try {
         const result = await db.collection("Users").insertOne(mongoObject);
@@ -183,13 +208,25 @@ userRoutes.route("/users/:id").patch(async (req, res) => {
     if (req.body.userID !== undefined) updateFields.userID = req.body.userID;
     if (req.body.role !== undefined) updateFields.role = req.body.role; // If role updates are allowed
 
-    // Faculty assignment specific fields
-    if (req.body.programHandle !== undefined) {
-        updateFields.programHandle = req.body.programHandle === '' ? null : req.body.programHandle;
+    // Assignment specific fields
+    if (req.body.programAssigned !== undefined) {
+        updateFields.programAssigned = req.body.programAssigned === '' || req.body.programAssigned === null ? null : req.body.programAssigned;
     }
-    if (req.body.courseHandle !== undefined) {
-        updateFields.courseHandle = req.body.courseHandle === '' ? null : req.body.courseHandle;
+    if (req.body.courseAssigned !== undefined) {
+        updateFields.courseAssigned = req.body.courseAssigned === '' || req.body.courseAssigned === null ? null : req.body.courseAssigned;
     }
+    if (req.body.sectionAssigned !== undefined) {
+        updateFields.sectionAssigned = req.body.sectionAssigned === '' || req.body.sectionAssigned === null ? null : req.body.sectionAssigned;
+    }
+    if (req.body.yearLevelAssigned !== undefined) { // For direct assignment of year level to a student
+        updateFields.yearLevelAssigned = req.body.yearLevelAssigned === '' ? null : req.body.yearLevelAssigned;
+    }
+
+    // Archive/Recovery fields (less likely to be updated here, but good to have if needed by a specific admin function)
+    if (req.body.isArchived !== undefined) updateFields.isArchived = req.body.isArchived;
+    if (req.body.archivedAt !== undefined) updateFields.archivedAt = req.body.archivedAt === '' ? null : req.body.archivedAt;
+    if (req.body.deletedAt !== undefined) updateFields.deletedAt = req.body.deletedAt === '' ? null : req.body.deletedAt;
+    // Add other archive fields if they need to be PATCHable: archiveAttempts, archiveLockUntil, recoverAttempts, recoverLockUntil
 
     if (Object.keys(updateFields).length === 0) {
         return res.status(400).json({ message: "No fields to update" });
@@ -334,8 +371,8 @@ userRoutes.post('/forgot-password', async (req, res) => {
 
         // --- Generate OTP and expiry ---
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const otpExpiry = Date.now() + 5 * 60 * 1000; // 5 minutes
-
+        const otpExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
+        
         // Store OTP and expiry in user document
         await db.collection('Users').updateOne(
             { _id: user._id },
@@ -501,7 +538,7 @@ function getRoleFromEmail(email) {
     if (normalized.endsWith('@parent.sjddef.edu.ph')) return 'parent';
     if (normalized.endsWith('@admin.sjddef.edu.ph')) return 'admin';
     if (normalized.endsWith('@director.sjddef.edu.ph')) return 'director';
-    if (normalized.endsWith('@sjddef.edu.ph')) return 'faculty';
+    if (normalized.endsWith('@sjddef.edu.ph') && !normalized.includes('@students.') && !normalized.includes('@parent.') && !normalized.includes('@admin.') && !normalized.includes('@director.')) return 'faculty';
     return 'unknown';
 }
 

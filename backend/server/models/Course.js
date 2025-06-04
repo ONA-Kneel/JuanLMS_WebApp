@@ -8,11 +8,10 @@ const courseSchema = new mongoose.Schema({
     // We might want to make course names unique within a specific program, but not globally unique without more context.
     // For now, we'll allow duplicate course names across different programs.
   },
-  program: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Program', // This refers to the Program model
-    required: [true, 'Program is required for the course.'],
-  },
+  programName: {
+    type: String,
+    required: [true, 'Program name is required.'],
+  }
 }, { timestamps: true }); // This will add createdAt and updatedAt automatically
 
 // Optional: Add a compound index if you want courseName to be unique per program

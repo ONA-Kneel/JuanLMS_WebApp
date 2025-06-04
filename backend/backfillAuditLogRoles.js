@@ -7,17 +7,33 @@ const dbName = "JuanLMS";
 async function inferRoleFromDetails(details, userName, userEmail) {
   // Try to infer from details or email
   if (!details && !userEmail) return null;
-  if (details && details.includes("@students.sjddef.edu.ph")) return "student";
-  if (details && details.includes("@parents.sjddef.edu.ph")) return "parent";
-  if (details && details.includes("@admin.sjddef.edu.ph")) return "admin";
-  if (details && details.includes("@director.sjddef.edu.ph")) return "director";
-  if (details && details.includes("@sjddef.edu.ph")) return "faculty";
+  
+  // Helper function to check faculty email
+  const isFacultyEmail = (email) => {
+    return email.endsWith("@sjddef.edu.ph") && 
+           !email.includes("@students.") && 
+           !email.includes("@parents.") && 
+           !email.includes("@admin.") && 
+           !email.includes("@director.");
+  };
+
+  if (details) {
+    if (details.includes("@students.sjddef.edu.ph")) return "student";
+    if (details.includes("@parents.sjddef.edu.ph")) return "parent";
+    if (details.includes("@admin.sjddef.edu.ph")) return "admin";
+    if (details.includes("@director.sjddef.edu.ph")) return "director";
+    if (isFacultyEmail(details)) return "faculty";
+  }
+
   // fallback: try from email
-  if (userEmail && userEmail.endsWith("@students.sjddef.edu.ph")) return "student";
-  if (userEmail && userEmail.endsWith("@parents.sjddef.edu.ph")) return "parent";
-  if (userEmail && userEmail.endsWith("@admin.sjddef.edu.ph")) return "admin";
-  if (userEmail && userEmail.endsWith("@director.sjddef.edu.ph")) return "director";
-  if (userEmail && userEmail.endsWith("@sjddef.edu.ph")) return "faculty";
+  if (userEmail) {
+    if (userEmail.endsWith("@students.sjddef.edu.ph")) return "student";
+    if (userEmail.endsWith("@parents.sjddef.edu.ph")) return "parent";
+    if (userEmail.endsWith("@admin.sjddef.edu.ph")) return "admin";
+    if (userEmail.endsWith("@director.sjddef.edu.ph")) return "director";
+    if (isFacultyEmail(userEmail)) return "faculty";
+  }
+  
   return null;
 }
 

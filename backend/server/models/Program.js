@@ -7,12 +7,6 @@ const programSchema = new mongoose.Schema({
     trim: true,
     unique: true, // Assuming program names should be unique
   },
-  status: {
-    type: String,
-    required: true,
-    enum: ['active', 'inactive'],
-    default: 'inactive',
-  },
   yearLevel: {
     type: String,
     required: [true, 'Year level is required for the program.'],

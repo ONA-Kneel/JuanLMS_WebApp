@@ -39,4 +39,31 @@ router.post('/', async (req, res) => {
   }
 });
 
+// DELETE a school year
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // First check if the school year exists and is not active
+    const schoolYear = await SchoolYear.findById(id);
+    if (!schoolYear) {
+      return res.status(404).json({ message: 'School year not found' });
+    }
+    
+    if (schoolYear.status === 'active') {
+      return res.status(400).json({ message: 'Cannot delete an active school year' });
+    }
+
+    const deletedSchoolYear = await SchoolYear.findByIdAndDelete(id);
+    if (!deletedSchoolYear) {
+      return res.status(404).json({ message: 'School year not found' });
+    }
+
+    res.status(200).json({ message: 'School year deleted successfully' });
+  } catch (error) {
+    console.error("Error deleting school year:", error);
+    res.status(500).json({ message: 'Error deleting school year', error: error.message });
+  }
+});
+
 export default router; 
