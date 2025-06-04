@@ -104,7 +104,6 @@ export default function Login() {
     
     // Check if account is locked
     if (isLocked) {
-      alert(`Account is locked. Please try again in ${lockoutTime} seconds.`);
       return;
     }
 
@@ -157,9 +156,6 @@ export default function Login() {
         setIsLocked(true);
         const lockoutEndTime = Date.now() + (30 * 1000); // 30 seconds from now
         localStorage.setItem('lockoutEndTime', lockoutEndTime.toString());
-        alert('Too many failed attempts. Account locked for 30 seconds.');
-      } else {
-        alert(`Invalid email or password.`);
       }
     }
   };
@@ -240,7 +236,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={isLocked}
-              className={`w-full p-3 mt-12 rounded-lg transition font-poppinsr text-base ${
+              className={`w-full p-3 mt-10 rounded-lg transition font-poppinsr text-base ${
                 isLocked 
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-blue-900 text-white hover:bg-blue-950'
