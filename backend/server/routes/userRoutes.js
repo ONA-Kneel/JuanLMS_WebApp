@@ -208,7 +208,7 @@ userRoutes.route("/users/:id").patch(async (req, res) => {
     if (req.body.userID !== undefined) updateFields.userID = req.body.userID;
     if (req.body.role !== undefined) updateFields.role = req.body.role; // If role updates are allowed
 
-    // Assignment specific fields
+    // Assignment specific fields (allow explicit null for unassign)
     if (req.body.programAssigned !== undefined) {
         updateFields.programAssigned = req.body.programAssigned === '' || req.body.programAssigned === null ? null : req.body.programAssigned;
     }
@@ -221,6 +221,10 @@ userRoutes.route("/users/:id").patch(async (req, res) => {
     if (req.body.yearLevelAssigned !== undefined) { // For direct assignment of year level to a student
         updateFields.yearLevelAssigned = req.body.yearLevelAssigned === '' ? null : req.body.yearLevelAssigned;
     }
+    // Allow unassigning handles (even if all are null)
+    if (req.body.programHandle !== undefined) updateFields.programHandle = req.body.programHandle;
+    if (req.body.courseHandle !== undefined) updateFields.courseHandle = req.body.courseHandle;
+    if (req.body.sectionHandle !== undefined) updateFields.sectionHandle = req.body.sectionHandle;
 
     // Archive/Recovery fields (less likely to be updated here, but good to have if needed by a specific admin function)
     if (req.body.isArchived !== undefined) updateFields.isArchived = req.body.isArchived;
@@ -228,6 +232,7 @@ userRoutes.route("/users/:id").patch(async (req, res) => {
     if (req.body.deletedAt !== undefined) updateFields.deletedAt = req.body.deletedAt === '' ? null : req.body.deletedAt;
     // Add other archive fields if they need to be PATCHable: archiveAttempts, archiveLockUntil, recoverAttempts, recoverLockUntil
 
+    // Only return 400 if truly no fields at all are being updated
     if (Object.keys(updateFields).length === 0) {
         return res.status(400).json({ message: "No fields to update" });
     }
@@ -235,7 +240,7 @@ userRoutes.route("/users/:id").patch(async (req, res) => {
     let mongoObject = { $set: updateFields };
 
     try {
-    const result = await db.collection("Users").updateOne({ _id: new ObjectId(req.params.id) }, mongoObject);
+        const result = await db.collection("Users").updateOne({ _id: new ObjectId(req.params.id) }, mongoObject);
         if (result.matchedCount === 0) {
             return res.status(404).json({ message: "User not found" });
         }

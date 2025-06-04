@@ -53,6 +53,10 @@ export default function Admin_AcademicSettings() {
     status: "inactive", // Default status
   });
 
+  // Add edit state for school year
+  const [isEditingSchoolYear, setIsEditingSchoolYear] = useState(false);
+  const [editingSchoolYear, setEditingSchoolYear] = useState(null);
+
   // State for Program Tab
   const [programsData, setProgramsData] = useState([]);
   const [isLoadingPrograms, setIsLoadingPrograms] = useState(false);
@@ -83,7 +87,8 @@ export default function Admin_AcademicSettings() {
   });
 
   // Filtered data for dropdowns in Section tab
-  const [filteredProgramsForSectionDropdown, setFilteredProgramsForSectionDropdown] = useState([]);
+  // eslint-disable-next-line
+  const [filteredProgramsForSectionDropdown, setFilteredProgramsForSectionDropdown] = useState([]); // unused
   const [filteredCoursesForSectionDropdown, setFilteredCoursesForSectionDropdown] = useState([]);
 
   // Faculty Assignment State
@@ -139,46 +144,18 @@ export default function Admin_AcademicSettings() {
     }
   };
 
-  // Add program search function
-  const [programSearchTerm, setProgramSearchTerm] = useState("");
-  const [filteredPrograms, setFilteredPrograms] = useState([]);
-
-  const handleProgramSearch = (searchTerm) => {
-    setProgramSearchTerm(searchTerm);
-    const filtered = programsData.filter(program =>
-      program.programName.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredPrograms(filtered);
-  };
-
   // Add course search function
-  const [courseSearchTerm, setCourseSearchTerm] = useState("");
+  // eslint-disable-next-line
+  const [courseSearchTerm, setCourseSearchTerm] = useState(""); // unused
   
-  const handleCourseSearch = (searchTerm) => {
-    setCourseSearchTerm(searchTerm);
-    if (selectedProgramIdForStudent) {
-      const filtered = coursesData.filter(course =>
-        course.program._id === selectedProgramIdForStudent &&
-        course.courseName.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredCoursesForStudent(filtered);
-    }
-  };
-
-  // Add section search function
-  const [sectionSearchTerm, setSectionSearchTerm] = useState("");
+  // eslint-disable-next-line
+  const [programSearchTerm, setProgramSearchTerm] = useState(""); // unused
   
-  const handleSectionSearch = (searchTerm) => {
-    setSectionSearchTerm(searchTerm);
-    if (selectedProgramIdForStudent) {
-      const filtered = sectionsData.filter(section =>
-        section.program._id === selectedProgramIdForStudent &&
-        (!selectedCourseIdForStudent || section.course?._id === selectedCourseIdForStudent) &&
-        section.sectionName.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredSectionsForStudent(filtered);
-    }
-  };
+  // eslint-disable-next-line
+  const [sectionSearchTerm, setSectionSearchTerm] = useState(""); // unused
+  
+  // eslint-disable-next-line
+  const [selectedFile, setSelectedFile] = useState(null); // unused
 
   const yearLevelOptions = [
     { value: "College", label: "College" },
@@ -296,21 +273,21 @@ export default function Admin_AcademicSettings() {
   };
 
   // Fetch all faculty assignments (faculty with programHandle or courseHandle)
-  const fetchFacultyAssignments = async () => {
-    setIsLoadingFaculty(true);
-    setErrorFaculty(null);
-    try {
-      const response = await fetch("http://localhost:5000/users");
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      setFacultyAssignments(data.filter(u => u.role === "faculty" && (u.programHandle || u.courseHandle)));
-    } catch (error) {
-      setErrorFaculty(error.message);
-      console.error("Error fetching faculty assignments:", error);
-    } finally {
-      setIsLoadingFaculty(false);
-    }
-  };
+  // const fetchFacultyAssignments = async () => { // unused
+  //   setIsLoadingFaculty(true);
+  //   setErrorFaculty(null);
+  //   try {
+  //     const response = await fetch("http://localhost:5000/users");
+  //     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  //     const data = await response.json();
+  //     setFacultyAssignments(data.filter(u => u.role === "faculty" && (u.programHandle || u.courseHandle)));
+  //   } catch (error) {
+  //     setErrorFaculty(error.message);
+  //     console.error("Error fetching faculty assignments:", error);
+  //   } finally {
+  //     setIsLoadingFaculty(false);
+  //   }
+  // };
 
   // Fetch student list (role: "students")
   const fetchStudents = async () => {
@@ -416,10 +393,21 @@ export default function Admin_AcademicSettings() {
     }));
   };
 
+  // Handle edit for school year
+  const handleEditSchoolYear = (sy) => {
+    setIsEditingSchoolYear(true);
+    setEditingSchoolYear(sy);
+    setFormDataSchoolYear({
+      startYear: sy.startYear,
+      endYear: sy.endYear,
+      status: sy.status
+    });
+  };
+
   // Handle submit for school year form
   const handleSchoolYearSubmit = async (e) => {
     e.preventDefault();
-    const { startYear, endYear } = formDataSchoolYear;
+    const { startYear, endYear, status } = formDataSchoolYear;
 
     if (!startYear || !endYear) {
       alert("Please fill in both Start Year and End Year.");
@@ -435,26 +423,42 @@ export default function Admin_AcademicSettings() {
     }
 
     try {
-      const response = await fetch("http://localhost:5000/schoolyears", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formDataSchoolYear,
-          startYear: parseInt(startYear),
-          endYear: parseInt(endYear),
-        }),
-      });
+      let response;
+      if (isEditingSchoolYear && editingSchoolYear) {
+        // PATCH request to update
+        response = await fetch(`http://localhost:5000/schoolyears/${editingSchoolYear._id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            startYear: parseInt(startYear),
+            endYear: parseInt(endYear),
+            status
+          }),
+        });
+      } else {
+        // POST request to create
+        response = await fetch("http://localhost:5000/schoolyears", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            startYear: parseInt(startYear),
+            endYear: parseInt(endYear),
+            status
+          }),
+        });
+      }
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
-      // Refresh list and clear form
       fetchSchoolYears();
       setFormDataSchoolYear({ startYear: "", endYear: "", status: "inactive" });
-      alert("School Year added successfully!"); // Replace with a better notification later
+      setIsEditingSchoolYear(false);
+      setEditingSchoolYear(null);
+      alert(isEditingSchoolYear ? "School Year updated successfully!" : "School Year added successfully!");
     } catch (error) {
-      alert(`Error adding school year: ${error.message}`);
-      console.error("Error adding school year:", error);
+      alert(`Error: ${error.message}`);
+      console.error("Error saving school year:", error);
     }
   };
 
@@ -958,7 +962,8 @@ export default function Admin_AcademicSettings() {
     setEditingStudentAssignment(student);
     setSelectedStudentId(student._id);
     setSelectedProgramIdForStudent(student.programHandle ? student.programHandle.toString() : "");
-    // Course and Section will be set by the useEffect watching editingStudentAssignment and filtered lists
+    setSelectedCourseIdForStudent(student.courseHandle ? student.courseHandle.toString() : "");
+    setSelectedSectionIdForStudent(student.sectionHandle ? student.sectionHandle.toString() : "");
   };
 
   const handleRemoveStudentAssignment = async (student) => {
@@ -976,7 +981,7 @@ export default function Admin_AcademicSettings() {
         if (editingStudentAssignment && editingStudentAssignment._id === student._id) {
             cancelEditStudentAssignment();
         }
-        alert("Student assignment removed.");
+        alert("Student assignment removed (unassigned). Successfully!");
       } catch (error) { alert(`Error: ${error.message}`); }
       finally { setIsAssigningStudent(false); }
     }
@@ -1028,7 +1033,8 @@ export default function Admin_AcademicSettings() {
   // Add new state for modal
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewData, setPreviewData] = useState([]);
-  const [selectedFile, setSelectedFile] = useState(null);
+  // eslint-disable-next-line
+  // const [selectedFile, setSelectedFile] = useState(null); // unused
 
   // Modify the preview data processing in handleBatchUpload
   const handleBatchUpload = async (e) => {
@@ -1702,12 +1708,27 @@ export default function Admin_AcademicSettings() {
                         Set Active
                       </label>
                     </div>
-                    <button
-                      type="submit"
-                      className="bg-[#00418b] hover:bg-[#002b5c] text-white px-4 py-2 rounded"
-                    >
-                      + Add
-                    </button>
+                    <div className="flex gap-2">
+                      {isEditingSchoolYear && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEditingSchoolYear(false);
+                            setEditingSchoolYear(null);
+                            setFormDataSchoolYear({ startYear: "", endYear: "", status: "inactive" });
+                          }}
+                          className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                        >
+                          Cancel Edit
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        className="bg-[#00418b] hover:bg-[#002b5c] text-white px-4 py-2 rounded"
+                      >
+                        {isEditingSchoolYear ? 'Save School Year' : '+ Add'}
+                      </button>
+                    </div>
                   </div>
                 </form>
               </div>
@@ -1745,7 +1766,7 @@ export default function Admin_AcademicSettings() {
                             <td className="p-3 border">
                               <div className="inline-flex space-x-2">
                                 <button
-                                  // onClick={() => handleEditSchoolYear(sy)} // Add logic later
+                                  onClick={() => handleEditSchoolYear(sy)}
                                   className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded"
                                 >
                                   <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
