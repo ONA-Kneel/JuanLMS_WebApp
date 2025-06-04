@@ -10,7 +10,7 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      '/uploads': 'http://localhost:5000'
+      '/uploads': '${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}'
     }
   }
 })

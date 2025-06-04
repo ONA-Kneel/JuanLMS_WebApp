@@ -97,7 +97,7 @@ export default function QuizTab({ onClose }) {
             }
         }
         try {
-            const res = await fetch('http://localhost:5000/assignments', {
+            const res = await fetch('${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/assignments', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

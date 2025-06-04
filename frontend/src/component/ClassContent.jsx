@@ -55,7 +55,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setLessonsLoading(true);
       setLessonError(null);
       const token = localStorage.getItem('token');
-      fetch(`http://localhost:5000/lessons?classID=${classId}`, {
+      fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/lessons?classID=${classId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -74,7 +74,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (selected === "members") {
       setMembersLoading(true);
       setMembersError(null);
-      fetch(`http://localhost:5000/classes/${classId}/members`)
+      fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/classes/${classId}/members`)
         .then(res => res.json())
         .then(data => {
           setFacultyMembers(data.faculty || []);
@@ -95,7 +95,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
           if (lesson.files && lesson.files.length > 0) {
             for (const file of lesson.files) {
               try {
-                const res = await fetch(`http://localhost:5000/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
+                const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
                   headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
@@ -118,7 +118,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setAnnouncementsLoading(true);
       setAnnouncementError(null);
       const token = localStorage.getItem('token');
-      fetch(`http://localhost:5000/announcements?classID=${classId}`, {
+      fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/announcements?classID=${classId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -134,7 +134,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setAssignmentsLoading(true);
       setAssignmentError(null);
       const token = localStorage.getItem('token');
-      fetch(`http://localhost:5000/assignments?classID=${classId}`, {
+      fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/assignments?classID=${classId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -154,7 +154,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     const content = form.content.value;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5000/announcements', {
+      const res = await fetch('${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/announcements', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -164,7 +164,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       });
       if (res.ok) {
         setAnnouncementsLoading(true);
-        fetch(`http://localhost:5000/announcements?classID=${classId}`, {
+        fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/announcements?classID=${classId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
           .then(res => res.json())
@@ -206,7 +206,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     }
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch("http://localhost:5000/lessons", {
+      const res = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/lessons", {
         method: "POST",
         headers: {
           'Authorization': `Bearer ${token}`
@@ -234,7 +234,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!window.confirm('Are you sure you want to delete this lesson?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/lessons/${lessonId}`, {
+      const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/lessons/${lessonId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -251,7 +251,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!window.confirm('Are you sure you want to delete this file?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/lessons/${lessonId}/file?fileUrl=${encodeURIComponent(fileUrl)}`, {
+      const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/lessons/${lessonId}/file?fileUrl=${encodeURIComponent(fileUrl)}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -270,7 +270,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!newTitle || newTitle === currentTitle) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/lessons/${lessonId}`, {
+      const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/lessons/${lessonId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -293,7 +293,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!window.confirm('Delete this announcement?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/announcements/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/announcements/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -310,7 +310,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!newContent) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/announcements/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/announcements/${id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -333,7 +333,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!window.confirm('Delete this assignment?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/assignments/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/assignments/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -350,7 +350,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!newInstructions) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/assignments/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/assignments/${id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

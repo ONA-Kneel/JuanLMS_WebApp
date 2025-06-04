@@ -82,7 +82,7 @@ export default function Admin_AcademicSettings() {
     setIsLoadingSchoolYears(true);
     setErrorSchoolYears(null);
     try {
-      const response = await fetch("http://localhost:5000/schoolyears");
+      const response = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/schoolyears");
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -101,7 +101,7 @@ export default function Admin_AcademicSettings() {
     setIsLoadingPrograms(true);
     setErrorPrograms(null);
     try {
-      const response = await fetch("http://localhost:5000/programs");
+      const response = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/programs");
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
@@ -121,7 +121,7 @@ export default function Admin_AcademicSettings() {
     setIsLoadingCourses(true);
     setErrorCourses(null);
     try {
-      const response = await fetch("http://localhost:5000/courses");
+      const response = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/courses");
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
@@ -141,7 +141,7 @@ export default function Admin_AcademicSettings() {
     setIsLoadingSections(true);
     setErrorSections(null);
     try {
-      const response = await fetch("http://localhost:5000/sections");
+      const response = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/sections");
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
@@ -161,7 +161,7 @@ export default function Admin_AcademicSettings() {
     setIsLoadingFaculty(true);
     setErrorFaculty(null);
     try {
-      const response = await fetch("http://localhost:5000/users");
+      const response = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users");
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       // Only faculty
@@ -179,7 +179,7 @@ export default function Admin_AcademicSettings() {
     setIsLoadingFaculty(true);
     setErrorFaculty(null);
     try {
-      const response = await fetch("http://localhost:5000/users");
+      const response = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users");
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       setFacultyAssignments(data.filter(u => u.role === "faculty" && (u.programHandle || u.courseHandle)));
@@ -281,7 +281,7 @@ export default function Admin_AcademicSettings() {
     }
 
     try {
-      const response = await fetch("http://localhost:5000/schoolyears", {
+      const response = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/schoolyears", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -324,7 +324,7 @@ export default function Admin_AcademicSettings() {
     }
 
     try {
-      const response = await fetch("http://localhost:5000/programs", {
+      const response = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/programs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formDataProgram), // formDataProgram now includes yearLevel and status
@@ -362,7 +362,7 @@ export default function Admin_AcademicSettings() {
     }
 
     try {
-      const response = await fetch("http://localhost:5000/courses", {
+      const response = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/courses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formDataCourse),
@@ -409,7 +409,7 @@ export default function Admin_AcademicSettings() {
     };
 
     try {
-      const response = await fetch("http://localhost:5000/sections", {
+      const response = await fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/sections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -441,7 +441,7 @@ export default function Admin_AcademicSettings() {
         programHandle: selectedProgramId,
         courseHandle: selectedCourseId || null,
       };
-      const response = await fetch(`http://localhost:5000/users/${selectedFacultyId}`, {
+      const response = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users/${selectedFacultyId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

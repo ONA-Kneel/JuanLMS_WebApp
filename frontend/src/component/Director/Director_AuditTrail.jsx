@@ -30,7 +30,7 @@ export default function Director_AuditTrail() {
         return;
       }
 
-      const response = await axios.get(`http://localhost:5000/audit-logs?page=${currentPage}&limit=${logsPerPage}`, {
+      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/audit-logs?page=${currentPage}&limit=${logsPerPage}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

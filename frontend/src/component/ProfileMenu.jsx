@@ -17,7 +17,7 @@ export default function ProfileMenu() {
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || !user._id) return;
     try {
-      const res = await axios.get(`http://localhost:5000/users/${user._id}`);
+      const res = await axios.get(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users/${user._id}`);
       setUserInfo(res.data);
       localStorage.setItem('user', JSON.stringify(res.data));
     } catch {
@@ -33,7 +33,7 @@ export default function ProfileMenu() {
   // Helper to get the correct profile image URL
   const getProfileImg = () => {
     if (userInfo.profilePic) {
-      return `http://localhost:5000/uploads/${userInfo.profilePic}`;
+      return `${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/uploads/${userInfo.profilePic}`;
     }
     return profileicon;
   };

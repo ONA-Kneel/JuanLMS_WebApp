@@ -12,7 +12,7 @@ export default function Admin_Dashboard() {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    fetch("http://localhost:5000/audit-logs?page=1&limit=5", {
+    fetch("${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/audit-logs?page=1&limit=5", {
       headers: {
         'Authorization': `Bearer ${token}`
       }

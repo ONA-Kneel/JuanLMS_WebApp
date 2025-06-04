@@ -22,13 +22,13 @@ export default function Student_Activities() {
       try {
         const token = localStorage.getItem('token');
         // Fetch all classes for the student
-        const resClasses = await fetch('http://localhost:5000/classes/my-classes', {
+        const resClasses = await fetch('${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/classes/my-classes', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const classes = await resClasses.json();
         let allAssignments = [];
         for (const cls of classes) {
-          const res = await fetch(`http://localhost:5000/assignments?classID=${cls._id}`, {
+          const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/assignments?classID=${cls._id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const data = await res.json();

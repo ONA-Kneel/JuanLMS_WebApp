@@ -36,7 +36,7 @@ function ChangePasswordModal({ userId, onClose }) {
     }
     setLoading(true);
     try {
-      await axios.patch(`http://localhost:5000/users/${userId}/change-password`, {
+      await axios.patch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users/${userId}/change-password`, {
         currentPassword,
         newPassword,
       });
@@ -150,7 +150,7 @@ export default function ProfileModal({
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || !user._id) return;
     try {
-      const res = await axios.get(`http://localhost:5000/users/${user._id}`);
+      const res = await axios.get(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users/${user._id}`);
       setUserInfo(res.data);
       localStorage.setItem('user', JSON.stringify(res.data));
     } catch {
@@ -232,7 +232,7 @@ export default function ProfileModal({
       const blob = await fetch(croppedImage).then(res => res.blob());
       const formData = new FormData();
       formData.append('image', blob, 'profile.jpg');
-      const uploadResponse = await fetch(`http://localhost:5000/users/${user._id}/upload-profile`, {
+      const uploadResponse = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/users/${user._id}/upload-profile`, {
         method: 'POST',
         body: formData,
       });
@@ -283,7 +283,7 @@ export default function ProfileModal({
               className="w-28 h-28 rounded-full bg-gray-600 object-cover"
               src={
                 userInfo.profilePic
-                  ? `http://localhost:5000/uploads/${userInfo.profilePic}`
+                  ? `${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/uploads/${userInfo.profilePic}`
                   : '../assets/profileicon (1).svg'
               }
               alt="Avatar"
