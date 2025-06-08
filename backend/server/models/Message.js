@@ -47,11 +47,7 @@ messageSchema.methods.getDecryptedMessage = function () {
   return this.message ? decrypt(this.message) : null;
 };
 messageSchema.methods.getDecryptedFileUrl = function () {
-  if (!this.fileUrl) return null;
-  if (typeof this.fileUrl === 'string' && this.fileUrl.includes(':')) {
-    return decrypt(this.fileUrl);
-  }
-  return this.fileUrl;
+  return this.fileUrl ? decrypt(this.fileUrl) : null;
 };
 
 const Message = mongoose.model('Message', messageSchema);

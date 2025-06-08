@@ -14,10 +14,18 @@ export function encrypt(text) {
 }
 
 export function decrypt(encrypted) {
+  if (!encrypted || typeof encrypted !== "string") return encrypted;
+  if (!encrypted.includes(":")) return encrypted;
   const [ivHex, encryptedText] = encrypted.split(":");
-  const iv = Buffer.from(ivHex, "hex");
-  const decipher = crypto.createDecipheriv(algorithm, key, iv);
-  let decrypted = decipher.update(encryptedText, "hex", "utf8");
-  decrypted += decipher.final("utf8");
-  return decrypted;
+  if (!ivHex || !encryptedText) return encrypted;
+  if (ivHex.length !== 32) return encrypted; // 16 bytes IV in hex
+  try {
+    const iv = Buffer.from(ivHex, "hex");
+    const decipher = crypto.createDecipheriv(algorithm, key, iv);
+    let decrypted = decipher.update(encryptedText, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  } catch (err) {
+    return encrypted;
+  }
 }
