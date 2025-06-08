@@ -1,5 +1,6 @@
 // models/Message.js
 import mongoose from 'mongoose';
+import { encrypt, decrypt } from "../utils/encryption.js";
 
 const messageSchema = new mongoose.Schema(
   {
@@ -17,6 +18,37 @@ const messageSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Encrypt message and fileUrl before saving
+messageSchema.pre("save", function (next) {
+  if (this.isModified("senderId") && this.senderId) {
+    this.senderId = encrypt(this.senderId);
+  }
+  if (this.isModified("receiverId") && this.receiverId) {
+    this.receiverId = encrypt(this.receiverId);
+  }
+  if (this.isModified("message") && this.message) {
+    this.message = encrypt(this.message);
+  }
+  if (this.isModified("fileUrl") && this.fileUrl) {
+    this.fileUrl = encrypt(this.fileUrl);
+  }
+  next();
+});
+
+// Decrypt methods
+messageSchema.methods.getDecryptedSenderId = function () {
+  return this.senderId ? decrypt(this.senderId) : null;
+};
+messageSchema.methods.getDecryptedReceiverId = function () {
+  return this.receiverId ? decrypt(this.receiverId) : null;
+};
+messageSchema.methods.getDecryptedMessage = function () {
+  return this.message ? decrypt(this.message) : null;
+};
+messageSchema.methods.getDecryptedFileUrl = function () {
+  return this.fileUrl ? decrypt(this.fileUrl) : null;
+};
 
 const Message = mongoose.model('Message', messageSchema);
 

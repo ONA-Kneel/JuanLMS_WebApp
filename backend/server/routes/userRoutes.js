@@ -8,6 +8,10 @@ import { ObjectId } from "mongodb";
 import jwt from "jsonwebtoken";
 import nodemailer from 'nodemailer';
 import SibApiV3Sdk from 'sib-api-v3-sdk';
+import User from "../models/User.js";
+import { encrypt } from "../utils/encryption.js";
+import bcrypt from "bcrypt";
+import crypto from "crypto";
 // import bcrypt from "bcryptjs"; // If you want to use hashing in the future
 
 const userRoutes = e.Router();
@@ -42,32 +46,46 @@ userRoutes.get("/users/search", async (req, res) => {
 
 // Retrieve ALL users
 userRoutes.get("/users", async (req, res) => {
-    const db = database.getDb();
-    const data = await db.collection("Users").find({}).toArray();
-    if (data.length > 0) {
-        res.json(data);
-    } else {
-        throw new Error("Data was not found >:(");
+    try {
+        const users = await User.find();
+        const decryptedUsers = users.map(user => ({
+            ...user.toObject(),
+            email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+            contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+            personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+            password: undefined,
+        }));
+        res.json(decryptedUsers);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch users" });
     }
 });
 
 // Retrieve ONE user by ID
-userRoutes.route("/users/:id").get(async (request, response) => {
-    let db = database.getDb()
-    let data = await db.collection("Users").findOne({ _id: new ObjectId(request.params.id) });
+userRoutes.route("/users/:id").get(async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ error: "User not found" });
 
-    if (data) {
-        response.json(data);
-    } else {
-        response.status(404).json({ error: "User not found" });
+        // Decrypt sensitive fields
+        const decryptedUser = {
+            ...user.toObject(),
+            email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+            contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+            personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+            password: undefined, // Never send password!
+        };
+
+        res.json(decryptedUser);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch user" });
     }
-
 });
 
 // Create ONE user (with role)
 userRoutes.post("/users", async (req, res) => {
-    const db = database.getDb();
-
     const {
         firstname,
         middlename,
@@ -90,67 +108,60 @@ userRoutes.post("/users", async (req, res) => {
         return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Generate a unique school email if duplicate exists
-    let baseEmail = email.toLowerCase();
-    let emailUsername = baseEmail.split('@')[0];
-    let emailDomain = baseEmail.split('@')[1];
-    let uniqueEmail = baseEmail;
-    let counter = 1;
-    let duplicateFound = false;
-    while (await db.collection("Users").findOne({ email: uniqueEmail })) {
-        duplicateFound = true;
-        uniqueEmail = `${emailUsername}${counter}@${emailDomain}`;
-        counter++;
-    }
-
-    // If duplicate was found, return 409 and suggested email, do not create user yet
-    if (duplicateFound && uniqueEmail !== baseEmail) {
+    // Check for duplicate email (unencrypted, before saving)
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+        // Suggest a new email if duplicate
+        let baseEmail = email.toLowerCase();
+        let emailUsername = baseEmail.split('@')[0];
+        let emailDomain = baseEmail.split('@')[1];
+        let counter = 1;
+        let uniqueEmail = baseEmail;
+        while (await User.findOne({ email: uniqueEmail })) {
+            uniqueEmail = `${emailUsername}${counter}@${emailDomain}`;
+            counter++;
+        }
         return res.status(409).json({
             error: "Duplicate email found.",
             suggestedEmail: uniqueEmail
         });
     }
 
-    const mongoObject = {
-        firstname,
-        middlename,
-        lastname,
-        email: uniqueEmail,
-        contactno,
-        password,
-        personalemail,
-        profilePic,
-        role,
-        userID,
-        isArchived: false,
-        archivedAt: null,
-        deletedAt: null,
-        archiveAttempts: 0,
-        archiveLockUntil: null,
-        recoverAttempts: 0,
-        recoverLockUntil: null,
-        resetOTP: null,
-        resetOTPExpires: null,
-    };
-
-    if (role === "students") {
-        mongoObject.programAssigned = programAssigned !== undefined ? programAssigned : null;
-        mongoObject.courseAssigned = courseAssigned !== undefined ? courseAssigned : null;
-        mongoObject.sectionAssigned = sectionAssigned !== undefined ? sectionAssigned : null;
-        mongoObject.yearLevelAssigned = yearLevelAssigned !== undefined ? yearLevelAssigned : null;
-    } else {
-        mongoObject.programAssigned = null;
-        mongoObject.courseAssigned = null;
-        mongoObject.sectionAssigned = null;
-        mongoObject.yearLevelAssigned = null;
-    }
-
     try {
-        const result = await db.collection("Users").insertOne(mongoObject);
-        
-        // Create audit log for account creation
+        const user = new User({
+            firstname,
+            middlename,
+            lastname,
+            email: email.toLowerCase(),
+            contactno,
+            password,
+            personalemail,
+            profilePic,
+            role,
+            userID,
+            programAssigned: programAssigned || null,
+            courseAssigned: courseAssigned || null,
+            sectionAssigned: sectionAssigned || null,
+            yearLevelAssigned: yearLevelAssigned || null,
+            isArchived: false,
+            archivedAt: null,
+            deletedAt: null,
+            archiveAttempts: 0,
+            archiveLockUntil: null,
+            recoverAttempts: 0,
+            recoverLockUntil: null,
+            resetOTP: null,
+            resetOTPExpires: null,
+        });
+
+        console.log("About to save user");
+        await user.save(); // Triggers pre-save hook for hashing/encryption
+        console.log("User saved:", user);
+
+        const db = database.getDb();
+        console.log("About to write audit log");
         await db.collection('AuditLogs').insertOne({
-            userId: result.insertedId,
+            userId: user._id,
             userName: `${firstname} ${lastname}`,
             userRole: role,
             action: 'Create Account',
@@ -158,6 +169,7 @@ userRoutes.post("/users", async (req, res) => {
             ipAddress: req.ip || req.connection.remoteAddress,
             timestamp: new Date()
         });
+        console.log("Audit log written");
 
         // Send welcome email via Brevo (Sendinblue)
         try {
@@ -174,17 +186,19 @@ userRoutes.post("/users", async (req, res) => {
                 textContent:
                   `Hello ${firstname || ''},\n\n` +
                   `Your JuanLMS account has been created.\n` +
-                  `School Email: ${uniqueEmail}\n` +
+                  `School Email: ${email}\n` +
                   `Password: ${password}\n\n` +
                   `Please log in and change your password after your first login.\n\n` +
                   `Thank you,\nJuanLMS Team`
             };
 
+            console.log("About to send welcome email");
             await apiInstance.sendTransacEmail(sendSmtpEmail);
+            console.log("Welcome email sent");
         } catch (emailErr) {
             console.error('Error sending welcome email via Brevo:', emailErr);
         }
-        res.status(201).json({ success: true, result });
+        res.status(201).json({ success: true, user });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Failed to create user" });
@@ -193,58 +207,22 @@ userRoutes.post("/users", async (req, res) => {
 
 // Update ONE user
 userRoutes.route("/users/:id").patch(async (req, res) => {
-    let db = database.getDb();
-    const updateFields = {};
-
-    // General user fields - only add to updateFields if they exist in req.body
-    if (req.body.firstname !== undefined) updateFields.firstname = req.body.firstname;
-    if (req.body.middlename !== undefined) updateFields.middlename = req.body.middlename;
-    if (req.body.lastname !== undefined) updateFields.lastname = req.body.lastname;
-    if (req.body.email !== undefined) updateFields.email = req.body.email.toLowerCase();
-    if (req.body.contactno !== undefined) updateFields.contactno = req.body.contactno;
-    if (req.body.password !== undefined) updateFields.password = req.body.password; // Consider security implications for password updates
-    if (req.body.personalemail !== undefined) updateFields.personalemail = req.body.personalemail;
-    if (req.body.profilePic !== undefined) updateFields.profilePic = req.body.profilePic;
-    if (req.body.userID !== undefined) updateFields.userID = req.body.userID;
-    if (req.body.role !== undefined) updateFields.role = req.body.role; // If role updates are allowed
-
-    // Assignment specific fields (allow explicit null for unassign)
-    if (req.body.programAssigned !== undefined) {
-        updateFields.programAssigned = req.body.programAssigned === '' || req.body.programAssigned === null ? null : req.body.programAssigned;
-    }
-    if (req.body.courseAssigned !== undefined) {
-        updateFields.courseAssigned = req.body.courseAssigned === '' || req.body.courseAssigned === null ? null : req.body.courseAssigned;
-    }
-    if (req.body.sectionAssigned !== undefined) {
-        updateFields.sectionAssigned = req.body.sectionAssigned === '' || req.body.sectionAssigned === null ? null : req.body.sectionAssigned;
-    }
-    if (req.body.yearLevelAssigned !== undefined) { // For direct assignment of year level to a student
-        updateFields.yearLevelAssigned = req.body.yearLevelAssigned === '' ? null : req.body.yearLevelAssigned;
-    }
-    // Allow unassigning handles (even if all are null)
-    if (req.body.programHandle !== undefined) updateFields.programHandle = req.body.programHandle;
-    if (req.body.courseHandle !== undefined) updateFields.courseHandle = req.body.courseHandle;
-    if (req.body.sectionHandle !== undefined) updateFields.sectionHandle = req.body.sectionHandle;
-
-    // Archive/Recovery fields (less likely to be updated here, but good to have if needed by a specific admin function)
-    if (req.body.isArchived !== undefined) updateFields.isArchived = req.body.isArchived;
-    if (req.body.archivedAt !== undefined) updateFields.archivedAt = req.body.archivedAt === '' ? null : req.body.archivedAt;
-    if (req.body.deletedAt !== undefined) updateFields.deletedAt = req.body.deletedAt === '' ? null : req.body.deletedAt;
-    // Add other archive fields if they need to be PATCHable: archiveAttempts, archiveLockUntil, recoverAttempts, recoverLockUntil
-
-    // Only return 400 if truly no fields at all are being updated
-    if (Object.keys(updateFields).length === 0) {
-        return res.status(400).json({ message: "No fields to update" });
-    }
-
-    let mongoObject = { $set: updateFields };
-
     try {
-        const result = await db.collection("Users").updateOne({ _id: new ObjectId(req.params.id) }, mongoObject);
-        if (result.matchedCount === 0) {
-            return res.status(404).json({ message: "User not found" });
-        }
-        res.json({ message: "User updated successfully", result });
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        // Update only allowed fields
+        [
+            "firstname", "middlename", "lastname", "email", "contactno",
+            "password", "personalemail", "profilePic", "userID", "role",
+            "programAssigned", "courseAssigned", "sectionAssigned", "yearLevelAssigned"
+        ].forEach(field => {
+            if (req.body[field] !== undefined) user[field] = req.body[field];
+        });
+
+        await user.save(); // Triggers pre-save hook
+
+        res.json({ message: "User updated successfully", user });
     } catch (error) {
         console.error("Error updating user:", error);
         res.status(500).json({ message: "Error updating user", error: error.message });
@@ -567,47 +545,44 @@ userRoutes.post('/users/:id/validate-otp', async (req, res) => {
 
 // Login route: issues JWT on success, logs audit trail
 userRoutes.post('/login', async (req, res) => {
-    const db = database.getDb();
     const email = req.body.email.toLowerCase();
     const { password } = req.body;
 
-    // Find user by email and password
-    const user = await db.collection("Users").findOne({ email, password });
+    // Hash the email for lookup
+    const emailHash = crypto.createHash('sha256').update(email).digest('hex');
 
-    if (user) {
-        const firstName = toProperCase(user.firstname);
-        const middleInitial = user.middlename ? toProperCase(user.middlename.charAt(0)) + '.' : '';
-        const lastName = toProperCase(user.lastname);
-        const fullName = [firstName, middleInitial, lastName].filter(Boolean).join(' ');
-        const role = getRoleFromEmail(email);
+    console.log('Login attempt:', email);
+    console.log('Email hash:', emailHash);
 
-        // JWT Token Payload
-        const token = jwt.sign({
-            id: user._id,
-            name: fullName,
-            email: user.email,
-            phone: user.contactno,
-            role: role,
-            _id: user._id,
-            profilePic: user.profilePic || null,
-            userID: user.userID
-        }, JWT_SECRET, { expiresIn: '1d' });
-
-        res.json({ token });
-
-        // Create audit log for login
-        await db.collection('AuditLogs').insertOne({
-            userId: user._id,
-            userName: `${user.firstname} ${user.lastname}`,
-            userRole: role,
-            action: 'Login',
-            details: `${role} ${user.email} logged in`,
-            ipAddress: req.ip || req.connection.remoteAddress,
-            timestamp: new Date()
-        });
-    } else {
-        res.status(401).json({ success: false, message: "Invalid email or password" });
+    // Find user by emailHash
+    const user = await User.findOne({ emailHash });
+    console.log('User found:', user);
+    if (!user) {
+        return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
+
+    // Compare hashed password
+    const isMatch = await bcrypt.compare(password, user.password);
+    console.log('Password match:', isMatch);
+    if (!isMatch) {
+        return res.status(401).json({ success: false, message: "Invalid email or password" });
+    }
+
+    // JWT Token Payload (adapt as needed)
+    const token = jwt.sign({
+        id: user._id,
+        name: `${user.firstname} ${user.lastname}`,
+        email: email, // original email
+        phone: user.getDecryptedContactNo ? user.getDecryptedContactNo() : undefined,
+        role: user.role,
+        _id: user._id,
+        profilePic: user.profilePic || null,
+        userID: user.userID
+    }, process.env.JWT_SECRET || "your_secret_key_here", { expiresIn: '1d' });
+
+    res.json({ token });
+
+    // Optionally, add audit log here if needed
 });
 
 // ------------------ UTILS ------------------

@@ -40,22 +40,37 @@ router.post('/', upload.single('file'), async (req, res) => {
   const newMessage = new Message({ senderId, receiverId, message, fileUrl });
   await newMessage.save();
 
-  res.status(201).json(newMessage);
+  // Return decrypted message to frontend
+  res.status(201).json({
+    ...newMessage.toObject(),
+    senderId: newMessage.getDecryptedSenderId(),
+    receiverId: newMessage.getDecryptedReceiverId(),
+    message: newMessage.getDecryptedMessage(),
+    fileUrl: newMessage.getDecryptedFileUrl(),
+  });
 });
 
 // --- GET /:userId/:chatWithId - fetch messages between two users ---
 router.get('/:userId/:chatWithId', async (req, res) => {
   const { userId, chatWithId } = req.params;
   try {
-    // Find all messages between the two users, sorted by timestamp (oldest first)
-    const messages = await Message.find({
-      $or: [
-        { senderId: userId, receiverId: chatWithId },
-        { senderId: chatWithId, receiverId: userId },
-      ]
-    }).sort({ timestamp: 1 });
-
-    res.json(messages);
+    const messages = await Message.find({}); // We'll filter after decrypting
+    // Decrypt all fields
+    const decryptedMessages = messages.map(msg => ({
+      ...msg.toObject(),
+      senderId: msg.getDecryptedSenderId(),
+      receiverId: msg.getDecryptedReceiverId(),
+      message: msg.getDecryptedMessage(),
+      fileUrl: msg.getDecryptedFileUrl(),
+    }));
+    // Filter messages for this chat
+    const filtered = decryptedMessages.filter(m =>
+      (m.senderId === userId && m.receiverId === chatWithId) ||
+      (m.senderId === chatWithId && m.receiverId === userId)
+    );
+    // Sort by createdAt (oldest first)
+    filtered.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    res.json(filtered);
   } catch (err) {
     console.error("Error fetching messages:", err);
     res.status(500).json({ error: "Server error fetching messages" });

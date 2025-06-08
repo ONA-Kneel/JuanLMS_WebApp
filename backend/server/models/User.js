@@ -1,15 +1,19 @@
 //models/users.js
 
 import mongoose from "mongoose";
+import bcrypt from "bcrypt";
+import { encrypt, decrypt } from "../utils/encryption.js";
+import crypto from "crypto";
 
 const userSchema = new mongoose.Schema({
   firstname: String,
   middlename: String,
   lastname: String,
   email: String,
+  emailHash: String,
   personalemail: String,
   contactno: String,
-  // password: String, // plain text for now
+  password: String,
   role: String,
   userID: String,
 
@@ -44,4 +48,33 @@ const userSchema = new mongoose.Schema({
   recoverLockUntil: { type: Date, default: null },
 });
 
-export default mongoose.model("User", userSchema);
+// Hash password and encrypt sensitive fields before saving
+userSchema.pre("save", async function (next) {
+  if (this.isModified("password")) {
+    this.password = await bcrypt.hash(this.password, 10);
+  }
+  if (this.isModified("email")) {
+    this.emailHash = crypto.createHash('sha256').update(this.email.toLowerCase()).digest('hex');
+    this.email = encrypt(this.email);
+  }
+  if (this.isModified("contactno")) {
+    this.contactno = encrypt(this.contactno);
+  }
+  if (this.isModified("personalemail")) {
+    this.personalemail = encrypt(this.personalemail);
+  }
+  next();
+});
+
+// Decrypt methods
+userSchema.methods.getDecryptedEmail = function () {
+  return decrypt(this.email);
+};
+userSchema.methods.getDecryptedContactNo = function () {
+  return decrypt(this.contactno);
+};
+userSchema.methods.getDecryptedPersonalEmail = function () {
+  return decrypt(this.personalemail);
+};
+
+export default mongoose.model("users", userSchema);
