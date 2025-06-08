@@ -1,34 +1,48 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
-
-// Dummy data for tickets (20+ samples)
-const tickets = [
-  { id: "SJDD1234567890", subject: "Login Issue", context: "Can't login", status: "Open" },
-  { id: "SJDD0987654321", subject: "Bug Report", context: "Page crashes", status: "Open" },
-  { id: "SJDD1111111111", subject: "Feature Request", context: "Add dark mode", status: "In Transit" },
-  { id: "SJDD2222222222", subject: "Account Issue", context: "Cannot update email", status: "Seen" },
-  { id: "SJDD3333333333", subject: "UI Glitch", context: "Sidebar overlaps content", status: "Completed" },
-  { id: "SJDD4444444444", subject: "Performance", context: "App is slow on login", status: "Open" },
-  { id: "SJDD5555555555", subject: "Security", context: "Password reset not working", status: "Open" },
-  { id: "SJDD6666666666", subject: "Notification Bug", context: "No notifications received", status: "Seen" },
-  { id: "SJDD7777777777", subject: "Mobile Issue", context: "Layout broken on mobile", status: "In Transit" },
-  { id: "SJDD8888888888", subject: "File Upload", context: "Cannot upload PDF", status: "Completed" },
-  { id: "SJDD9999999999", subject: "Integration", context: "Google login fails", status: "Open" },
-  { id: "SJDD1010101010", subject: "Accessibility", context: "Screen reader issues", status: "Seen" },
-  { id: "SJDD1212121212", subject: "Crash", context: "App crashes on submit", status: "Open" },
-  { id: "SJDD1313131313", subject: "Data Loss", context: "Lost progress after refresh", status: "Completed" },
-  { id: "SJDD1414141414", subject: "Sync Issue", context: "Data not syncing", status: "Open" },
-  { id: "SJDD1515151515", subject: "Email Bug", context: "No confirmation email", status: "Seen" },
-  { id: "SJDD1616161616", subject: "Export Problem", context: "Cannot export CSV", status: "Open" },
-  { id: "SJDD1717171717", subject: "Import Problem", context: "Import stuck at 99%", status: "In Transit" },
-  { id: "SJDD1818181818", subject: "UI Feedback", context: "Button color too light", status: "Completed" },
-  { id: "SJDD1919191919", subject: "Other", context: "Miscellaneous feedback", status: "Open" },
-  { id: "SJDD2020202020", subject: "Test Ticket", context: "This is a test ticket", status: "Open" },
-];
+import { getAllTickets, replyToTicket } from '../../services/ticketService';
 
 export default function AdminSupportCenter() {
+  const [tickets, setTickets] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reply, setReply] = useState('');
+  const [replyLoading, setReplyLoading] = useState(false);
+  const [replyError, setReplyError] = useState('');
+
+  useEffect(() => {
+    async function fetchTickets() {
+      setLoading(true);
+      setError('');
+      try {
+        const data = await getAllTickets();
+        setTickets(data);
+      } catch (err) {
+        setError('Failed to fetch tickets');
+      }
+      setLoading(false);
+    }
+    fetchTickets();
+  }, []);
+
+  async function handleReply(ticketId) {
+    setReplyLoading(true);
+    setReplyError('');
+    try {
+      await replyToTicket(ticketId, {
+        sender: 'admin',
+        senderId: 'ADMIN_ID', // Replace with actual admin id
+        message: reply
+      });
+      setReply('');
+      // Optionally, refetch tickets or update state
+    } catch (err) {
+      setReplyError('Failed to send reply');
+    }
+    setReplyLoading(false);
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr ">
@@ -50,27 +64,68 @@ export default function AdminSupportCenter() {
         </div>
         <div className="flex h-[70vh] bg-white rounded-2xl shadow-md">
           <div className="w-80 border-r border-gray-200 overflow-y-auto bg-white p-2" style={{ maxHeight: '100%' }}>
-            {tickets.map(ticket => (
-              <div
-                key={ticket.id}
-                className={`p-4 mb-2 rounded-lg cursor-pointer border border-transparent hover:border-[#9575cd] hover:bg-[#ede7f6] transition-all ${selected === ticket.id ? 'bg-[#d1c4e9] border-[#9575cd] shadow' : ''}`}
-                onClick={() => setSelected(ticket.id)}
-              >
-                <b className="block text-base">{ticket.subject}</b>
-                <span className="block text-xs text-gray-500">{ticket.id}</span>
-                <span className="block text-xs mt-1 font-semibold text-[#7e57c2]">{ticket.status}</span>
-              </div>
-            ))}
+            {loading ? (
+              <div className="text-center text-gray-500">Loading...</div>
+            ) : error ? (
+              <div className="text-center text-red-500">{error}</div>
+            ) : tickets.length === 0 ? (
+              <div className="text-center text-gray-500">No tickets found</div>
+            ) : (
+              tickets.map(ticket => (
+                <div
+                  key={ticket._id}
+                  className={`p-4 mb-2 rounded-lg cursor-pointer border border-transparent hover:border-[#9575cd] hover:bg-[#ede7f6] transition-all ${selected === ticket._id ? 'bg-[#d1c4e9] border-[#9575cd] shadow' : ''}`}
+                  onClick={() => setSelected(ticket._id)}
+                >
+                  <b className="block text-base">{ticket.subject}</b>
+                  <span className="block text-xs text-gray-500">{ticket.number}</span>
+                  <span className="block text-xs mt-1 font-semibold text-[#7e57c2]">{ticket.status}</span>
+                </div>
+              ))
+            )}
           </div>
           <div className="flex-1 p-8 bg-white rounded-r-2xl shadow-inner">
             {selected ? (
-              <>
-                <h3 className="text-xl font-semibold mb-2">{tickets.find(t => t.id === selected).subject}</h3>
-                <div className="mb-2 text-sm text-[#7e57c2] font-semibold">Ticket No: {tickets.find(t => t.id === selected).id} | Status: {tickets.find(t => t.id === selected).status}</div>
-                <p className="mb-4 text-gray-700">{tickets.find(t => t.id === selected).context}</p>
-                <textarea placeholder="Respond to this ticket..." className="w-full min-h-[100px] border rounded p-2 mb-4" />
-                <button className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Send Response</button>
-              </>
+              (() => {
+                const ticket = tickets.find(t => t._id === selected);
+                if (!ticket) return <div className="text-gray-500">Ticket not found</div>;
+                return (
+                  <>
+                    <h3 className="text-xl font-semibold mb-2">{ticket.subject}</h3>
+                    <div className="mb-2 text-sm text-[#7e57c2] font-semibold">Ticket No: {ticket.number} | Status: {ticket.status}</div>
+                    <p className="mb-4 text-gray-700">{ticket.description}</p>
+                    <div className="mb-4">
+                      <b>Messages:</b>
+                      <ul className="mt-2 space-y-2">
+                        {ticket.messages && ticket.messages.length > 0 ? (
+                          ticket.messages.map((msg, idx) => (
+                            <li key={idx} className="bg-gray-100 rounded p-2 text-sm">
+                              <span className="font-semibold">{msg.sender}:</span> {msg.message}
+                              <span className="block text-xs text-gray-400">{new Date(msg.timestamp).toLocaleString()}</span>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="text-gray-400">No messages</li>
+                        )}
+                      </ul>
+                    </div>
+                    <textarea
+                      placeholder="Respond to this ticket..."
+                      className="w-full min-h-[100px] border rounded p-2 mb-4"
+                      value={reply}
+                      onChange={e => setReply(e.target.value)}
+                    />
+                    {replyError && <div className="text-red-500 mb-2">{replyError}</div>}
+                    <button
+                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                      onClick={() => handleReply(ticket._id)}
+                      disabled={replyLoading}
+                    >
+                      {replyLoading ? 'Sending...' : 'Send Response'}
+                    </button>
+                  </>
+                );
+              })()
             ) : (
               <p className="text-gray-500">Select a ticket to view details</p>
             )}

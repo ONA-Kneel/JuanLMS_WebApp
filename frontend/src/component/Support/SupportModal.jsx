@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Headphones } from 'lucide-react';
+import axios from 'axios';
+import { createTicket, getTicketByNumber } from '../../services/ticketService';
 
 function generateTicketNumber() {
   const random = Math.random().toString().slice(2, 14).padEnd(12, '0');
@@ -24,6 +26,9 @@ export default function SupportModal({ onClose }) {
   });
   const [submitted, setSubmitted] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [ticketData, setTicketData] = useState(null);
+  const [error, setError] = useState('');
 
   // Auto-close toast and modal after 2.5s
   useEffect(() => {
@@ -45,6 +50,47 @@ export default function SupportModal({ onClose }) {
     setSubmitted(false);
     onClose();
   };
+
+  // Active Ticket view: handle fetch by number
+  async function handleViewTicket(e) {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setShowTicket(false);
+    setTicketData(null);
+    try {
+      const ticket = await getTicketByNumber(ticketInput);
+      setTicketData(ticket);
+      setShowTicket(true);
+    } catch (err) {
+      setError('Ticket not found');
+    }
+    setLoading(false);
+  }
+
+  // New Request view: handle submit
+  async function handleSubmitNewTicket(e) {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('userId', 'USER_ID'); // Replace with actual user id from context/session
+      formData.append('subject', newTicket.subject);
+      formData.append('description', newTicket.content);
+      if (newTicket.file) {
+        formData.append('file', newTicket.file);
+      }
+      await axios.post('/api/tickets', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setSubmitted(true);
+      setShowToast(true);
+    } catch (err) {
+      setError('Failed to submit ticket');
+    }
+    setLoading(false);
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
@@ -106,10 +152,7 @@ export default function SupportModal({ onClose }) {
             </div>
             <form
               className="flex flex-col gap-4"
-              onSubmit={e => {
-                e.preventDefault();
-                setShowTicket(true);
-              }}
+              onSubmit={handleViewTicket}
             >
               <input
                 className="w-full rounded-full px-4 py-3 bg-[#9575cd] bg-opacity-80 text-white placeholder-white text-center border border-white focus:outline-none"
@@ -117,14 +160,16 @@ export default function SupportModal({ onClose }) {
                 value={ticketInput}
                 onChange={e => setTicketInput(e.target.value)}
               />
-              {showTicket && (
+              {loading && <div className="text-center text-gray-500">Loading...</div>}
+              {error && <div className="text-center text-red-500">{error}</div>}
+              {showTicket && ticketData && (
                 <div className="w-full rounded-2xl bg-white bg-opacity-60 p-6 text-gray-900 border border-[#9575cd] mt-2">
-                  <div className="mb-2 font-semibold">show sample ticket number</div>
-                  <div className="mb-2">show sample ticket status</div>
-                  <div className="text-center text-lg mt-4">show ticket content</div>
+                  <div className="mb-2 font-semibold">Ticket Number: {ticketData.number}</div>
+                  <div className="mb-2">Status: {ticketData.status}</div>
+                  <div className="text-center text-lg mt-4">{ticketData.description}</div>
                 </div>
               )}
-              {!showTicket && (
+              {!showTicket && !loading && (
                 <button
                   type="submit"
                   className="w-full rounded-full px-4 py-3 bg-[#9575cd] text-white font-semibold text-center hover:bg-[#7e57c2] transition border border-white"
@@ -158,11 +203,7 @@ export default function SupportModal({ onClose }) {
             {!submitted ? (
               <form
                 className="flex flex-col gap-4"
-                onSubmit={e => {
-                  e.preventDefault();
-                  setSubmitted(true);
-                  setShowToast(true);
-                }}
+                onSubmit={handleSubmitNewTicket}
               >
                 <div className="text-sm text-gray-700 mb-1">Ticket Number: <span className="font-mono">{newTicket.number}</span></div>
                 <input
@@ -184,9 +225,12 @@ export default function SupportModal({ onClose }) {
                   className="w-full rounded-full px-4 py-2 bg-white bg-opacity-30 text-gray-900 border border-white focus:outline-none"
                   onChange={e => setNewTicket({ ...newTicket, file: e.target.files[0] })}
                 />
+                {loading && <div className="text-center text-gray-500">Submitting...</div>}
+                {error && <div className="text-center text-red-500">{error}</div>}
                 <button
                   type="submit"
                   className="w-full rounded-full px-4 py-3 bg-[#9575cd] text-white font-semibold text-center hover:bg-[#7e57c2] transition border border-white mt-2"
+                  disabled={loading}
                 >
                   Submit
                 </button>

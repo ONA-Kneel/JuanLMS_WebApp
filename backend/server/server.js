@@ -21,6 +21,7 @@ import sectionRoutes from "./routes/sectionRoutes.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import assignmentRoutes from "./routes/assignmentRoutes.js";
 import User from "./models/User.js";
+import ticketsRouter from './routes/tickets.js';
 
 dotenv.config({ path: './config.env' });
 
@@ -106,6 +107,7 @@ app.use('/courses', courseRoutes);
 app.use('/sections', sectionRoutes);
 app.use("/announcements", announcementRoutes);
 app.use("/assignments", assignmentRoutes);
+app.use('/api/tickets', ticketsRouter);
 
 // Start server
 app.listen(PORT, () => {
