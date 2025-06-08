@@ -39,6 +39,7 @@ export default function Admin_Accounts() {
   const [users, setUsers] = useState([]);
   const [roleFilter, setRoleFilter] = useState(""); // "" means show all
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
   // Placeholder archived users data
@@ -88,12 +89,14 @@ export default function Admin_Accounts() {
   };
 
   // Fetch users on mount and after successful account creation
-  const fetchUsers = async () => {
+  const fetchUsers = async (page = 1, limit = ITEMS_PER_PAGE) => {
     try {
-      const res = await fetch("http://localhost:5000/users");
+      const res = await fetch(`http://localhost:5000/users?page=${page}&limit=${limit}`);
       const data = await res.json();
       if (res.ok) {
-        setUsers(data);
+        setUsers(data.users);
+        setTotalPages(data.pagination.totalPages);
+        setCurrentPage(data.pagination.currentPage);
       } else {
         console.error("Failed to fetch users:", data);
       }
@@ -118,9 +121,7 @@ export default function Admin_Accounts() {
     return matchesFirst && matchesLast && matchesMiddle && matchesRole && matchesUserID;
   });
   
-  // First, paginate filteredUsers, then sort only the users on the current page
-  const paginatedUnsortedUsers = filteredUsers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-  const paginatedUsers = [...paginatedUnsortedUsers].sort((a, b) => {
+  const paginatedUsers = [...filteredUsers].sort((a, b) => {
     if (!sortConfig.key) return 0;
     const aValue = (a[sortConfig.key] || "").toLowerCase();
     const bValue = (b[sortConfig.key] || "").toLowerCase();
@@ -128,11 +129,11 @@ export default function Admin_Accounts() {
     if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
     return 0;
   });
-  const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    fetchUsers(currentPage, ITEMS_PER_PAGE);
+    // eslint-disable-next-line
+  }, [currentPage]);
 
   useEffect(() => {
     if (showArchivedTable) {
@@ -391,6 +392,7 @@ export default function Admin_Accounts() {
     // Get adminId from localStorage (or your auth context)
     const admin = JSON.parse(localStorage.getItem('user'));
     const adminId = admin?._id;
+    const token = localStorage.getItem('token');
 
     if (!adminId) {
       setArchivePasswordError("Admin not logged in.");
@@ -399,7 +401,10 @@ export default function Admin_Accounts() {
 
     const res = await fetch(`http://localhost:5000/users/archive/${userToArchive._id}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({
         adminId,
         adminPassword: archivePassword

@@ -27,9 +27,9 @@ userRoutes.get("/users/search", authenticateToken, async (req, res) => {
     let users = [];
     // If the query looks like an email, match exactly
     if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(query)) {
-        users = await db.collection("Users").find({ email: query.toLowerCase() }).toArray();
+        users = await db.collection("users").find({ email: query.toLowerCase() }).toArray();
     } else {
-        users = await db.collection("Users").find({
+        users = await db.collection("users").find({
         $or: [
             { firstname: { $regex: query, $options: "i" } },
             { middlename: { $regex: query, $options: "i" } },
@@ -45,10 +45,17 @@ userRoutes.get("/users/search", authenticateToken, async (req, res) => {
     }
 });
 
-// Retrieve ALL users
+// Retrieve ALL users (paginated)
 userRoutes.get("/users", async (req, res) => {
     try {
-        const users = await User.find();
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const totalUsers = await User.countDocuments();
+        const users = await User.find()
+            .skip(skip)
+            .limit(limit);
         const decryptedUsers = users.map(user => ({
             ...user.toObject(),
             email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
@@ -57,11 +64,26 @@ userRoutes.get("/users", async (req, res) => {
             profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
             password: undefined,
         }));
-        res.json(decryptedUsers);
+        res.json({
+            users: decryptedUsers,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalUsers / limit),
+                totalUsers,
+                usersPerPage: limit
+            }
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Failed to fetch users" });
     }
+});
+
+// Get all archived users
+userRoutes.get('/users/archived-users', async (req, res) => {
+  const db = database.getDb();
+  const archivedUsers = await db.collection('users').find({ isArchived: true }).toArray();
+  res.json(archivedUsers);
 });
 
 // Retrieve ONE user by ID
@@ -245,14 +267,14 @@ userRoutes.delete("/users/:id", authenticateToken, async (req, res) => {
         return res.status(403).json({ message: 'Access denied. Only admin can delete users.' });
     }
     const db = database.getDb();
-    const result = await db.collection("Users").deleteOne({ _id: new ObjectId(req.params.id) });
+    const result = await db.collection("users").deleteOne({ _id: new ObjectId(req.params.id) });
     res.json(result);
 });
 
 // Get all active (non-archived) users
 userRoutes.get('/users', async (req, res) => {
   const db = database.getDb();
-  const users = await db.collection('Users').find({ isArchived: { $ne: true } }).toArray();
+  const users = await db.collection('users').find({ isArchived: { $ne: true } }).toArray();
   res.json(users);
 });
 
@@ -263,24 +285,31 @@ userRoutes.post('/users/archive/:userId', async (req, res) => {
     const { userId } = req.params;
     const { adminId, adminPassword } = req.body;
 
-    const admin = await db.collection('Users').findOne({ _id: new ObjectId(adminId), role: 'admin' });
+    // Debug: print all admins and the adminId being searched for
+    const admins = await db.collection('users').find({ role: 'admin' }).toArray();
+    console.log('All admins in DB:', admins);
+    console.log('Looking for adminId:', adminId);
+
+    const admin = await db.collection('users').findOne({ _id: new ObjectId(adminId), role: 'admin' });
     if (!admin) {
         console.log('Admin not found:', adminId);
         return res.status(403).json({ message: 'Admin not found.' });
     }
 
-    if (admin.password !== adminPassword) {
+    // Use bcrypt.compare for password check
+    const passwordMatch = await bcrypt.compare(adminPassword, admin.password);
+    if (!passwordMatch) {
         console.log('Invalid admin password for:', adminId);
         return res.status(401).json({ message: 'Invalid admin password.' });
     }
 
-    const user = await db.collection('Users').findOne({ _id: new ObjectId(userId) });
+    const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
     if (!user) {
         console.log('User not found:', userId);
         return res.status(404).json({ message: 'User not found.' });
     }
 
-    const updateResult = await db.collection('Users').updateOne(
+    const updateResult = await db.collection('users').updateOne(
         { _id: new ObjectId(userId) },
         {
             $set: {
@@ -306,27 +335,20 @@ userRoutes.post('/users/archive/:userId', async (req, res) => {
     res.json({ message: 'User archived successfully.' });
 });
 
-// Get all archived users
-userRoutes.get('/users/archived-users', async (req, res) => {
-  const db = database.getDb();
-  const archivedUsers = await db.collection('Users').find({ isArchived: true }).toArray();
-  res.json(archivedUsers);
-});
-
 // ------------------ PASSWORD CHANGE/RESET ------------------
 
 // Send OTP for password change (authenticated user)
 userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
     const db = database.getDb();
     const userId = req.params.id;
-    const user = await db.collection('Users').findOne({ _id: new ObjectId(userId) });
+    const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
     if (!user || !user.personalemail) {
         return res.status(404).json({ message: 'User not found or missing personal email.' });
     }
     // Generate OTP and expiry
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
-    await db.collection('Users').updateOne(
+    await db.collection('users').updateOne(
         { _id: user._id },
         { $set: { resetOTP: otp, resetOTPExpires: otpExpiry } }
     );
@@ -362,7 +384,7 @@ userRoutes.patch("/users/:id/change-password", async (req, res) => {
     return res.status(400).json({ error: "Password must be at least 8 characters." });
   }
 
-  const user = await db.collection("Users").findOne({ _id: new ObjectId(userId) });
+  const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
   if (!user) return res.status(404).json({ error: "User not found." });
 
   // If you already hash passwords, use bcrypt.compare
@@ -372,7 +394,7 @@ userRoutes.patch("/users/:id/change-password", async (req, res) => {
     return res.status(400).json({ error: "Current password is incorrect." });
   }
 
-  await db.collection("Users").updateOne(
+  await db.collection("users").updateOne(
     { _id: new ObjectId(userId) },
     { $set: { password: newPassword }, $unset: { resetOTP: '', resetOTPExpires: '' } }
   );
@@ -391,7 +413,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
 
     try {
         // Find user by personal email
-        const user = await db.collection('Users').findOne({ personalemail: email.toLowerCase() });
+        const user = await db.collection('users').findOne({ personalemail: email.toLowerCase() });
         console.log('User found:', user);
         if (!user || !user.personalemail) {
             console.log('User not found or missing personalemail');
@@ -403,7 +425,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
         const otpExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
 
         // Store OTP and expiry in user document
-        await db.collection('Users').updateOne(
+        await db.collection('users').updateOne(
             { _id: user._id },
             { $set: { resetOTP: otp, resetOTPExpires: otpExpiry } }
         );
@@ -489,7 +511,7 @@ userRoutes.post('/reset-password', async (req, res) => {
     }
 
     // Find user by personal email
-    const user = await db.collection('Users').findOne({ personalemail: personalemail.toLowerCase() });
+    const user = await db.collection('users').findOne({ personalemail: personalemail.toLowerCase() });
     if (!user) return res.status(404).json({ message: 'User not found.' });
 
     // --- OTP validation ---
@@ -503,7 +525,7 @@ userRoutes.post('/reset-password', async (req, res) => {
     }
 
     // Update password and clear OTP fields
-    await db.collection('Users').updateOne(
+    await db.collection('users').updateOne(
         { _id: user._id },
         { $set: { password: newPassword }, $unset: { resetOTP: '', resetOTPExpires: '' } }
     );
@@ -519,7 +541,7 @@ userRoutes.post('/validate-otp', async (req, res) => {
         return res.status(400).json({ message: 'All fields are required.' });
     }
     // Find user by personal email
-    const user = await db.collection('Users').findOne({ personalemail: personalemail.toLowerCase() });
+    const user = await db.collection('users').findOne({ personalemail: personalemail.toLowerCase() });
     if (!user) return res.status(404).json({ message: 'User not found.' });
     // --- OTP validation ---
     if (
@@ -541,7 +563,7 @@ userRoutes.post('/users/:id/validate-otp', async (req, res) => {
     if (!otp) {
         return res.status(400).json({ message: 'OTP is required.' });
     }
-    const user = await db.collection('Users').findOne({ _id: new ObjectId(userId) });
+    const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
     if (!user) return res.status(404).json({ message: 'User not found.' });
     if (
         !user.resetOTP ||
