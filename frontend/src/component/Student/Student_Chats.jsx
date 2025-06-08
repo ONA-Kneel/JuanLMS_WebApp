@@ -19,7 +19,6 @@ export default function Student_Chats() {
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
-  const [onlineUsers, setOnlineUsers] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
@@ -55,7 +54,7 @@ export default function Student_Chats() {
     socket.current.emit("addUser", currentUserId);
 
     socket.current.on("getUsers", (users) => {
-      setOnlineUsers(users);
+      setUsers(users);
     });
 
     socket.current.on("getMessage", (data) => {
@@ -109,15 +108,21 @@ export default function Student_Chats() {
             ...(token && { Authorization: `Bearer ${token}` }),
           },
         });
+        if (!Array.isArray(res.data)) {
+          setUsers([]);
+          setSelectedChat(null);
+          localStorage.removeItem("selectedChatId_student");
+          return;
+        }
         const otherUsers = res.data.filter((user) => user._id !== currentUserId);
         setUsers(otherUsers);
         setSelectedChat(null);
         localStorage.removeItem("selectedChatId_student");
-      } catch (err) {
-        if (err.response && err.response.status === 401) {
+      } catch (error) {
+        if (error.response && error.response.status === 401) {
           window.location.href = '/';
         } else {
-          console.error("Error fetching users:", err);
+          console.error("Error fetching users:", error);
         }
       }
     };

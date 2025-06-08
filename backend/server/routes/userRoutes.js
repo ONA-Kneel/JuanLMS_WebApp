@@ -22,38 +22,61 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here"; // 👈 use
 
 // Search students by name (must be before /users/:id)
 userRoutes.get("/users/search", authenticateToken, async (req, res) => {
-    const db = database.getDb();
     const query = req.query.q || "";
     let users = [];
-    // If the query looks like an email, match exactly
     if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(query)) {
-        users = await db.collection("users").find({ email: query.toLowerCase() }).toArray();
+        users = await User.find({ email: query.toLowerCase(), isArchived: { $ne: true } });
     } else {
-        users = await db.collection("users").find({
-        $or: [
-            { firstname: { $regex: query, $options: "i" } },
-            { middlename: { $regex: query, $options: "i" } },
-            { lastname: { $regex: query, $options: "i" } },
+        users = await User.find({
+            isArchived: { $ne: true },
+            $or: [
+                { firstname: { $regex: query, $options: "i" } },
+                { middlename: { $regex: query, $options: "i" } },
+                { lastname: { $regex: query, $options: "i" } },
                 { email: { $regex: query, $options: "i" } }
-        ],
-    }).toArray();
+            ],
+        });
     }
-    if (users.length > 0) {
-        res.json(users);
-    } else {
-        res.json([]);
-    }
+    // Decrypt fields
+    const decryptedUsers = users.map(user => ({
+        ...user.toObject(),
+        email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+        contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+        personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+        middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
+        firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
+        lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
+        profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+        password: undefined,
+    }));
+    res.json(decryptedUsers);
 });
 
 // Retrieve ALL users (paginated)
 userRoutes.get("/users", async (req, res) => {
+    // If no pagination params, return all users as an array (for chat)
+    if (!req.query.page && !req.query.limit) {
+        const users = await User.find({ isArchived: { $ne: true } });
+        const decryptedUsers = users.map(user => ({
+            ...user.toObject(),
+            email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+            contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+            personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+            profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+            password: undefined,
+        }));
+        return res.json(decryptedUsers);
+    }
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
 
-        const totalUsers = await User.countDocuments();
-        const users = await User.find()
+        // Only count and fetch non-archived users
+        const filter = { isArchived: { $ne: true } };
+
+        const totalUsers = await User.countDocuments(filter);
+        const users = await User.find(filter)
             .skip(skip)
             .limit(limit);
         const decryptedUsers = users.map(user => ({
@@ -191,10 +214,10 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
         console.log("About to write audit log");
         await db.collection('AuditLogs').insertOne({
             userId: user._id,
-            userName: `${firstname} ${lastname}`,
+            userName: `${user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname} ${user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname}`,
             userRole: role,
             action: 'Create Account',
-            details: `Created new ${role} account for ${email}`,
+            details: `Created new ${role} account for ${user.getDecryptedEmail ? user.getDecryptedEmail() : user.email}`,
             ipAddress: req.ip || req.connection.remoteAddress,
             timestamp: new Date()
         });
@@ -321,12 +344,13 @@ userRoutes.post('/users/archive/:userId', async (req, res) => {
     );
 
     // Create audit log for account archiving
+    const decryptedEmail = typeof user.email === 'string' && user.email.includes(':') ? decrypt(user.email) : user.email;
     await db.collection('AuditLogs').insertOne({
         userId: new ObjectId(userId),
         userName: `${user.firstname} ${user.lastname}`,
         userRole: user.role,
         action: 'Archive Account',
-        details: `Archived account for ${user.email}`,
+        details: `Archived account for ${decryptedEmail}`,
         ipAddress: req.ip || req.connection.remoteAddress,
         timestamp: new Date()
     });

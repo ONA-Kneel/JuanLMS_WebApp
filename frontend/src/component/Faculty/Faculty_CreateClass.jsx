@@ -27,9 +27,28 @@ export default function FacultyCreateClass() {
     }
 
     try {
-      const response = await fetch(`http://localhost:5000/users/search?q=${query}`);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/users/search?q=${query}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError("Session expired. Please log in again.");
+          // Optionally: window.location.href = '/login';
+        } else {
+          setError("Error fetching student data");
+        }
+        setStudents([]);
+        return;
+      }
       const data = await response.json();
-
+      if (!Array.isArray(data)) {
+        setError("Unexpected response from server");
+        setStudents([]);
+        return;
+      }
       const filteredStudents = data
         .filter(student => student.role === 'students')
         .filter(student => !selectedStudents.some(sel => sel._id === student._id));

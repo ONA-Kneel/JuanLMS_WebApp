@@ -7,6 +7,7 @@ import Class from '../models/Class.js';
 import database from '../connect.cjs';
 import { ObjectId } from 'mongodb';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import User from '../models/User.js';
 
 
 const router = express.Router();
@@ -77,13 +78,35 @@ router.get('/:classID/members', async (req, res) => {
     // Find the class by classID
     const classDoc = await db.collection('Classes').findOne({ classID });
     if (!classDoc) return res.status(404).json({ error: 'Class not found' });
-    // Get faculty user
-    const faculty = await db.collection('Users').find({ userID: classDoc.facultyID }).toArray();
-    // Get student users
+    // Use Mongoose User model to fetch and decrypt users
+    const faculty = await User.find({ userID: classDoc.facultyID, isArchived: { $ne: true } });
     const students = classDoc.members && classDoc.members.length > 0
-      ? await db.collection('Users').find({ userID: { $in: classDoc.members } }).toArray()
+      ? await User.find({ userID: { $in: classDoc.members }, isArchived: { $ne: true } })
       : [];
-    res.json({ faculty, students });
+    // Decrypt fields
+    const decryptedFaculty = faculty.map(user => ({
+      ...user.toObject(),
+      email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+      contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+      personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+      middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
+      firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
+      lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
+      profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+      password: undefined,
+    }));
+    const decryptedStudents = students.map(user => ({
+      ...user.toObject(),
+      email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+      contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+      personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+      middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
+      firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
+      lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
+      profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+      password: undefined,
+    }));
+    res.json({ faculty: decryptedFaculty, students: decryptedStudents });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch class members' });

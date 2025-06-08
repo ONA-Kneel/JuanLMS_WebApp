@@ -109,6 +109,12 @@ export default function Director_Chats() {
             ...(token && { Authorization: `Bearer ${token}` }),
           },
         });
+        if (!Array.isArray(res.data)) {
+          setUsers([]);
+          setSelectedChat(null);
+          localStorage.removeItem("selectedChatId_director");
+          return;
+        }
         const otherUsers = res.data.filter((user) => user._id !== currentUserId);
         setUsers(otherUsers);
         setSelectedChat(null);

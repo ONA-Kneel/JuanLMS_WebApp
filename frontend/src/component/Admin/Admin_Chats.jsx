@@ -106,8 +106,9 @@ export default function Admin_Chats() {
     const fetchUsers = async () => {
       try {
         const res = await axios.get('http://localhost:5000/users');
-        const users = res.data.users;
-        setUsers(users);
+        // Support both array and paginated object
+        const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
+        setUsers(userArray);
         setSelectedChat(null);
         localStorage.removeItem("selectedChatId_admin");
       } catch (err) {

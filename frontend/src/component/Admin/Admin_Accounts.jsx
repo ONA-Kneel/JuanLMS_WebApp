@@ -414,6 +414,11 @@ export default function Admin_Accounts() {
       setUserToArchive(null);
       setTimeout(() => setShowArchiveSuccess(false), 2000);
       fetchUsers(); // Refresh the users list from the backend
+      if (showArchivedTable) {
+        fetch('http://localhost:5000/users/archived-users')
+          .then(res => res.json())
+          .then(data => setArchivedUsers(data));
+      }
     } else {
       const data = await res.json();
       setArchivePasswordError(data.message || "Failed to archive user.");

@@ -14,10 +14,16 @@ export function encrypt(text) {
 }
 
 export function decrypt(encrypted) {
-  if (!encrypted || typeof encrypted !== "string") return encrypted;
+  if (!encrypted || typeof encrypted !== "string") {
+    console.error("decrypt called with invalid input:", encrypted);
+    return encrypted;
+  }
   if (!encrypted.includes(":")) return encrypted;
   const [ivHex, encryptedText] = encrypted.split(":");
-  if (!ivHex || !encryptedText) return encrypted;
+  if (!ivHex || !encryptedText || typeof ivHex !== "string" || typeof encryptedText !== "string") {
+    console.error("decrypt called with invalid ivHex or encryptedText:", ivHex, encryptedText, "from", encrypted);
+    return encrypted;
+  }
   if (ivHex.length !== 32) return encrypted; // 16 bytes IV in hex
   try {
     const iv = Buffer.from(ivHex, "hex");
