@@ -9,7 +9,7 @@ import jwt from "jsonwebtoken";
 import nodemailer from 'nodemailer';
 import SibApiV3Sdk from 'sib-api-v3-sdk';
 import User from "../models/User.js";
-import { encrypt } from "../utils/encryption.js";
+import { encrypt, decrypt } from "../utils/encryption.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { authenticateToken } from '../middleware/authMiddleware.js';
@@ -345,6 +345,14 @@ userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
     if (!user || !user.personalemail) {
         return res.status(404).json({ message: 'User not found or missing personal email.' });
     }
+    // Decrypt personal email
+    const decryptedPersonalEmail = user.getDecryptedPersonalEmail
+      ? user.getDecryptedPersonalEmail()
+      : (typeof user.personalemail === 'string' ? decrypt(user.personalemail) : '');
+    if (!decryptedPersonalEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(decryptedPersonalEmail)) {
+      console.error('Invalid or missing personal email for user:', user);
+      return res.status(400).json({ message: 'User does not have a valid personal email.' });
+    }
     // Generate OTP and expiry
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
@@ -358,7 +366,7 @@ userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
     apiKey.apiKey = process.env.BREVO_API_KEY;
     let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
     let sendSmtpEmail = {
-        to: [{ email: user.personalemail, name: user.firstname || '' }],
+        to: [{ email: decryptedPersonalEmail, name: user.firstname || '' }],
         sender: { email: 'nicolettecborre@gmail.com', name: 'JuanLMS Support' },
         subject: 'Your JuanLMS Password Change OTP',
         textContent: `Hello ${user.firstname || ''},\n\nYour OTP for password change is: ${otp}\n\nIf you did not request this, please ignore this email.\n\nThank you,\nJuanLMS Team`
@@ -387,16 +395,19 @@ userRoutes.patch("/users/:id/change-password", async (req, res) => {
   const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
   if (!user) return res.status(404).json({ error: "User not found." });
 
-  // If you already hash passwords, use bcrypt.compare
-  const isMatch = user.password === currentPassword; // Replace with bcrypt.compare if hashed
+  // Use bcrypt to compare hashed password
+  const isMatch = await bcrypt.compare(currentPassword, user.password);
 
   if (!isMatch) {
     return res.status(400).json({ error: "Current password is incorrect." });
   }
 
+  // Hash the new password before saving
+  const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
   await db.collection("users").updateOne(
     { _id: new ObjectId(userId) },
-    { $set: { password: newPassword }, $unset: { resetOTP: '', resetOTPExpires: '' } }
+    { $set: { password: hashedNewPassword }, $unset: { resetOTP: '', resetOTPExpires: '' } }
   );
 
   res.json({ success: true, message: "Password updated successfully." });
@@ -419,7 +430,14 @@ userRoutes.post('/forgot-password', async (req, res) => {
             console.log('User not found or missing personalemail');
             return res.json({ message: genericMsg });
         }
-
+        // Decrypt personal email
+        const decryptedPersonalEmail = user.getDecryptedPersonalEmail
+          ? user.getDecryptedPersonalEmail()
+          : (typeof user.personalemail === 'string' ? decrypt(user.personalemail) : '');
+        if (!decryptedPersonalEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(decryptedPersonalEmail)) {
+          console.error('Invalid or missing personal email for user:', user);
+          return res.json({ message: genericMsg });
+        }
         // --- Generate OTP and expiry ---
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const otpExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
@@ -439,7 +457,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
 
         // Use a plain object for sendSmtpEmail
         let sendSmtpEmail = {
-            to: [{ email: user.personalemail, name: user.firstname || '' }],
+            to: [{ email: decryptedPersonalEmail, name: user.firstname || '' }],
             sender: { email: 'nicolettecborre@gmail.com', name: 'JuanLMS Support' },
             subject: 'Your JuanLMS Password Reset OTP',
             textContent: `Hello ${user.firstname || ''},\n\nYour OTP for password reset is: ${otp}\n\nIf you did not request this, please ignore this email.\n\nThank you,\nJuanLMS Team`
@@ -449,7 +467,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
 
         try {
             const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
-            console.log('OTP email sent to', user.personalemail, 'Result:', result);
+            console.log('OTP email sent to', decryptedPersonalEmail, 'Result:', result);
         } catch (emailErr) {
             console.error('Error sending OTP email via Brevo:', emailErr);
         }
