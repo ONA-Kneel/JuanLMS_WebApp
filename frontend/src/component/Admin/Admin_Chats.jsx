@@ -10,6 +10,7 @@ import closeIcon from "../../assets/close.png";
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
+import { useNavigate } from "react-router-dom";
 
 export default function Admin_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
@@ -37,13 +38,13 @@ export default function Admin_Chats() {
   const storedUser = localStorage.getItem("user");
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
 
-  if (!currentUserId) {
-    return (
-      <div className="flex items-center justify-center h-screen text-xl text-red-600 font-semibold">
-        Please login first to access chats.
-      </div>
-    );
-  }
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!currentUserId) {
+      navigate("/", { replace: true });
+    }
+  }, [currentUserId, navigate]);
 
   // ================= SOCKET.IO SETUP =================
   useEffect(() => {
@@ -104,19 +105,24 @@ export default function Admin_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_URL}/users`);
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_URL}/users`, {
+          headers: {
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        });
         const otherUsers = res.data.filter((user) => user._id !== currentUserId);
         setUsers(otherUsers);
-
-        // Always clear selected chat
         setSelectedChat(null);
-        // Optionally, clear localStorage
         localStorage.removeItem("selectedChatId_admin");
       } catch (err) {
-        console.error("Error fetching users:", err);
+        if (err.response && err.response.status === 401) {
+          window.location.href = '/';
+        } else {
+          console.error("Error fetching users:", err);
+        }
       }
     };
-
     fetchUsers();
   }, [currentUserId]);
 

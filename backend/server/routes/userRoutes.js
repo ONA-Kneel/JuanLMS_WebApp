@@ -12,6 +12,7 @@ import User from "../models/User.js";
 import { encrypt } from "../utils/encryption.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
+import { authenticateToken } from '../middleware/authMiddleware.js';
 // import bcrypt from "bcryptjs"; // If you want to use hashing in the future
 
 const userRoutes = e.Router();
@@ -20,7 +21,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here"; // 👈 use
 // ------------------ CRUD ROUTES ------------------
 
 // Search students by name (must be before /users/:id)
-userRoutes.get("/users/search", async (req, res) => {
+userRoutes.get("/users/search", authenticateToken, async (req, res) => {
     const db = database.getDb();
     const query = req.query.q || "";
     let users = [];
@@ -87,7 +88,11 @@ userRoutes.route("/users/:id").get(async (req, res) => {
 });
 
 // Create ONE user (with role)
-userRoutes.post("/users", async (req, res) => {
+userRoutes.post("/users", authenticateToken, async (req, res) => {
+    // Only allow admin to create users
+    if (!req.user || req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Access denied. Only admin can create users.' });
+    }
     const {
         firstname,
         middlename,
@@ -208,7 +213,10 @@ userRoutes.post("/users", async (req, res) => {
 });
 
 // Update ONE user
-userRoutes.route("/users/:id").patch(async (req, res) => {
+userRoutes.route("/users/:id").patch(authenticateToken, async (req, res) => {
+    if (!req.user || req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied. Only admin can update users.' });
+    }
     try {
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ message: "User not found" });
@@ -232,7 +240,10 @@ userRoutes.route("/users/:id").patch(async (req, res) => {
 });
 
 // Delete ONE user
-userRoutes.delete("/users/:id", async (req, res) => {
+userRoutes.delete("/users/:id", authenticateToken, async (req, res) => {
+    if (!req.user || req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied. Only admin can delete users.' });
+    }
     const db = database.getDb();
     const result = await db.collection("Users").deleteOne({ _id: new ObjectId(req.params.id) });
     res.json(result);

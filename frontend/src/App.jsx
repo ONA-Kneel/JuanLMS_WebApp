@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Login from './component/Login';
 import ForgotPassword from './component/ForgotPassword';
 import PdfViewer from './component/PdfViewer';
+import ProtectedRoute from './component/ProtectedRoute';
 
 // Students Access
 import Student_Dashboard from './component/Student/Student_Dashboard';
@@ -61,52 +62,52 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/pdf-viewer" element={<PdfViewer />} />
         {/* Students */}
-        <Route path="/student_dashboard" element={<Student_Dashboard />} />
-        <Route path="/student_classes" element={<Student_Classes />}/>
-        <Route path="/student_activities" element={<Student_Activities />}/>
-        <Route path="/student_chats" element={<Student_Chats />}/>
-        <Route path="/student_progress" element={<Student_Progress />}/>
-        <Route path="/student_grades" element={<Student_Grades />}/>
-        <Route path="/student_calendar" element={<Student_Calendar />}/>
-        <Route path="/student_class/:classId" element={<Student_ClassWorkspace />} />
+        <Route path="/student_dashboard" element={<ProtectedRoute allowedRoles={['students']}><Student_Dashboard /></ProtectedRoute>} />
+        <Route path="/student_classes" element={<ProtectedRoute allowedRoles={['students']}><Student_Classes /></ProtectedRoute>}/>
+        <Route path="/student_activities" element={<ProtectedRoute allowedRoles={['students']}><Student_Activities /></ProtectedRoute>}/>
+        <Route path="/student_chats" element={<ProtectedRoute allowedRoles={['students']}><Student_Chats /></ProtectedRoute>}/>
+        <Route path="/student_progress" element={<ProtectedRoute allowedRoles={['students']}><Student_Progress /></ProtectedRoute>}/>
+        <Route path="/student_grades" element={<ProtectedRoute allowedRoles={['students']}><Student_Grades /></ProtectedRoute>}/>
+        <Route path="/student_calendar" element={<ProtectedRoute allowedRoles={['students']}><Student_Calendar /></ProtectedRoute>}/>
+        <Route path="/student_class/:classId" element={<ProtectedRoute allowedRoles={['students']}><Student_ClassWorkspace /></ProtectedRoute>} />
 
         
         {/* Faculty */}
-        <Route path="/faculty_dashboard" element={<Faculty_Dashboard/>}/>
-        <Route path="/faculty_classes" element={<Faculty_Classes />}/>
-        <Route path="/faculty_activities" element={<Faculty_Activities />}/>
-        <Route path="/faculty_chats" element={<Faculty_Chats />}/>
-        <Route path="/faculty_progress" element={<Faculty_Progress />}/>
-        <Route path="/faculty_grades" element={<Faculty_Grades />}/>
-        <Route path="/faculty_calendar" element={<Faculty_Calendar />}/> 
-        <Route path="/faculty_createclass" element={<Faculty_CreateClass/>}/> 
-        <Route path="/faculty_class/:classId" element={<Faculty_ClassWorkspace />} />
-        <Route path="/faculty_meeting" element={<Faculty_Meeting />} />
+        <Route path="/faculty_dashboard" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Dashboard/></ProtectedRoute>}/>
+        <Route path="/faculty_classes" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Classes /></ProtectedRoute>}/>
+        <Route path="/faculty_activities" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Activities /></ProtectedRoute>}/>
+        <Route path="/faculty_chats" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Chats /></ProtectedRoute>}/>
+        <Route path="/faculty_progress" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Progress /></ProtectedRoute>}/>
+        <Route path="/faculty_grades" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Grades /></ProtectedRoute>}/>
+        <Route path="/faculty_calendar" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Calendar /></ProtectedRoute>}/> 
+        <Route path="/faculty_createclass" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_CreateClass/></ProtectedRoute>}/> 
+        <Route path="/faculty_class/:classId" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_ClassWorkspace /></ProtectedRoute>} />
+        <Route path="/faculty_meeting" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Meeting /></ProtectedRoute>} />
 
 
         {/* Director */}
-        <Route path="/director_dashboard" element={<Director_Dashboard/>}/>
-        <Route path="/director_chats" element={<Director_Chats />}/>
-        <Route path="/director_grades" element={<Director_Grades />}/>
-        <Route path="/director_calendar" element={<Director_Calendar />}/> 
-        <Route path="/director_audit_trail" element={<Director_AuditTrail/>}/>
+        <Route path="/director_dashboard" element={<ProtectedRoute allowedRoles={['director']}><Director_Dashboard/></ProtectedRoute>}/>
+        <Route path="/director_chats" element={<ProtectedRoute allowedRoles={['director']}><Director_Chats /></ProtectedRoute>}/>
+        <Route path="/director_grades" element={<ProtectedRoute allowedRoles={['director']}><Director_Grades /></ProtectedRoute>}/>
+        <Route path="/director_calendar" element={<ProtectedRoute allowedRoles={['director']}><Director_Calendar /></ProtectedRoute>}/> 
+        <Route path="/director_audit_trail" element={<ProtectedRoute allowedRoles={['director']}><Director_AuditTrail/></ProtectedRoute>}/>
 
         {/* Admin */}
-        <Route path="/admin_dashboard" element={<Admin_Dashboard/>}/>
-        <Route path="/admin_accounts" element={<Admin_Accounts />}/>
-        <Route path="/admin_academic_settings" element={<Admin_AcademicSettings />}/>
-        <Route path="/admin_activities" element={<Admin_Activities />}/>
-        <Route path="/admin_chats" element={<Admin_Chats />}/>
-        <Route path="/admin_grades" element={<Admin_Grades />}/>
-        <Route path="/admin_calendar" element={<Admin_Calendar />}/>
-        <Route path="/admin_progress" element={<Admin_Progress />}/>
-        <Route path="/admin_audit_trail" element={<Admin_AuditTrail />}/>
-        <Route path="/admin/support-center" element={<AdminSupportCenter />} />
+        <Route path="/admin_dashboard" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Dashboard/></ProtectedRoute>}/>
+        <Route path="/admin_accounts" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Accounts /></ProtectedRoute>}/>
+        <Route path="/admin_academic_settings" element={<ProtectedRoute allowedRoles={['admin']}><Admin_AcademicSettings /></ProtectedRoute>}/>
+        <Route path="/admin_activities" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Activities /></ProtectedRoute>}/>
+        <Route path="/admin_chats" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Chats /></ProtectedRoute>}/>
+        <Route path="/admin_grades" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Grades /></ProtectedRoute>}/>
+        <Route path="/admin_calendar" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Calendar /></ProtectedRoute>}/>
+        <Route path="/admin_progress" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Progress /></ProtectedRoute>}/>
+        <Route path="/admin_audit_trail" element={<ProtectedRoute allowedRoles={['admin']}><Admin_AuditTrail /></ProtectedRoute>}/>
+        <Route path="/admin/support-center" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupportCenter /></ProtectedRoute>} />
 
         {/* Parent */}
-        <Route path="/parent_dashboard" element={<Parent_Dashboard/>}/>
-        <Route path="/parent_grades" element={<Parent_Grades/>}/>
-        <Route path="/parent_progress" element={<Parent_Progress/>}/>
+        <Route path="/parent_dashboard" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Dashboard/></ProtectedRoute>}/>
+        <Route path="/parent_grades" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Grades/></ProtectedRoute>}/>
+        <Route path="/parent_progress" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Progress/></ProtectedRoute>}/>
 
       </Routes>
     </Router>

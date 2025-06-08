@@ -10,6 +10,7 @@ import closeIcon from "../../assets/close.png";
 import Director_Navbar from "./Director_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
+import { useNavigate } from "react-router-dom";
 
 export default function Director_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
@@ -29,6 +30,7 @@ export default function Director_Chats() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
+  const navigate = useNavigate();
 
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
   const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
@@ -36,13 +38,11 @@ export default function Director_Chats() {
   const storedUser = localStorage.getItem("user");
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
 
-  if (!currentUserId) {
-    return (
-      <div className="flex items-center justify-center h-screen text-xl text-red-600 font-semibold">
-        Please login first to access chats.
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!currentUserId) {
+      navigate("/", { replace: true });
+    }
+  }, [currentUserId, navigate]);
 
   // ================= SOCKET.IO SETUP =================
   useEffect(() => {
@@ -103,19 +103,24 @@ export default function Director_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_URL}/users`);
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_URL}/users`, {
+          headers: {
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        });
         const otherUsers = res.data.filter((user) => user._id !== currentUserId);
         setUsers(otherUsers);
-
-        // Always clear selected chat
         setSelectedChat(null);
-        // Optionally, clear localStorage
         localStorage.removeItem("selectedChatId_director");
       } catch (err) {
-        console.error("Error fetching users:", err);
+        if (err.response && err.response.status === 401) {
+          window.location.href = '/';
+        } else {
+          console.error("Error fetching users:", err);
+        }
       }
     };
-
     fetchUsers();
   }, [currentUserId]);
 
