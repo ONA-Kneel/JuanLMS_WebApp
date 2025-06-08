@@ -20,6 +20,7 @@ import courseRoutes from "./routes/courseRoutes.js";
 import sectionRoutes from "./routes/sectionRoutes.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import assignmentRoutes from "./routes/assignmentRoutes.js";
+import User from "./models/User.js";
 
 dotenv.config({ path: './config.env' });
 
@@ -72,15 +73,13 @@ app.post("/users/:id/upload-profile", upload.single("image"), async (req, res) =
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
     const filename = req.file.filename;
-    if (!ObjectId.isValid(userId)) return res.status(400).json({ error: "Invalid user ID" });
+    if (!mongoose.Types.ObjectId.isValid(userId)) return res.status(400).json({ error: "Invalid user ID" });
 
-    const db = database.getDb();
-    const result = await db.collection("Users").updateOne(
-      { _id: new ObjectId(userId) },
-      { $set: { profilePic: filename } }
-    );
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-    if (result.modifiedCount === 0) return res.status(404).json({ error: "User not found" });
+    user.profilePic = filename;
+    await user.save();
 
     res.json({
       message: "Profile image uploaded and linked successfully",

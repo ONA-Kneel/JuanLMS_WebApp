@@ -53,6 +53,7 @@ userRoutes.get("/users", async (req, res) => {
             email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
             contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
             personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+            profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
             password: undefined,
         }));
         res.json(decryptedUsers);
@@ -74,6 +75,7 @@ userRoutes.route("/users/:id").get(async (req, res) => {
             email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
             contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
             personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+            profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
             password: undefined, // Never send password!
         };
 

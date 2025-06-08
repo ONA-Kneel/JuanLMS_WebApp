@@ -16,6 +16,7 @@ const userSchema = new mongoose.Schema({
   password: String,
   role: String,
   userID: String,
+  profilePic: { type: String, default: null },
 
   // Assignment Handles
   programAssigned: {
@@ -63,6 +64,9 @@ userSchema.pre("save", async function (next) {
   if (this.isModified("personalemail")) {
     this.personalemail = encrypt(this.personalemail);
   }
+  if (this.isModified("profilePic") && this.profilePic) {
+    this.profilePic = encrypt(this.profilePic);
+  }
   next();
 });
 
@@ -75,6 +79,13 @@ userSchema.methods.getDecryptedContactNo = function () {
 };
 userSchema.methods.getDecryptedPersonalEmail = function () {
   return decrypt(this.personalemail);
+};
+userSchema.methods.getDecryptedProfilePic = function () {
+  if (!this.profilePic) return null;
+  if (typeof this.profilePic === 'string' && this.profilePic.includes(':')) {
+    return decrypt(this.profilePic);
+  }
+  return this.profilePic;
 };
 
 export default mongoose.model("users", userSchema);
