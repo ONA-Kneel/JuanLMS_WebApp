@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema({
   email: String,
   emailHash: String,
   personalemail: String,
+  personalemailHash: String,
   contactno: String,
   password: String,
   role: String,
@@ -62,6 +63,7 @@ userSchema.pre("save", async function (next) {
     this.contactno = encrypt(this.contactno);
   }
   if (this.isModified("personalemail")) {
+    this.personalemailHash = crypto.createHash('sha256').update(this.personalemail.toLowerCase()).digest('hex');
     this.personalemail = encrypt(this.personalemail);
   }
   if (this.isModified("profilePic") && this.profilePic) {

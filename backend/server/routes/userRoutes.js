@@ -423,8 +423,9 @@ userRoutes.post('/forgot-password', async (req, res) => {
     const genericMsg = 'If your email is registered, a reset link or OTP has been sent to your personal email.';
 
     try {
-        // Find user by personal email
-        const user = await db.collection('users').findOne({ personalemail: email.toLowerCase() });
+        // Find user by personalemailHash
+        const emailHash = crypto.createHash('sha256').update(email.toLowerCase()).digest('hex');
+        const user = await db.collection('users').findOne({ personalemailHash: emailHash });
         console.log('User found:', user);
         if (!user || !user.personalemail) {
             console.log('User not found or missing personalemail');
@@ -528,8 +529,9 @@ userRoutes.post('/reset-password', async (req, res) => {
         return res.status(400).json({ message: 'Password must be at least 8 characters.' });
     }
 
-    // Find user by personal email
-    const user = await db.collection('users').findOne({ personalemail: personalemail.toLowerCase() });
+    // Find user by personalemailHash
+    const emailHash = crypto.createHash('sha256').update(personalemail.toLowerCase()).digest('hex');
+    const user = await db.collection('users').findOne({ personalemailHash: emailHash });
     if (!user) return res.status(404).json({ message: 'User not found.' });
 
     // --- OTP validation ---
@@ -543,9 +545,10 @@ userRoutes.post('/reset-password', async (req, res) => {
     }
 
     // Update password and clear OTP fields
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
     await db.collection('users').updateOne(
         { _id: user._id },
-        { $set: { password: newPassword }, $unset: { resetOTP: '', resetOTPExpires: '' } }
+        { $set: { password: hashedNewPassword }, $unset: { resetOTP: '', resetOTPExpires: '' } }
     );
 
     res.json({ message: 'Password reset successful. You can now log in with your new password.' });
@@ -558,8 +561,9 @@ userRoutes.post('/validate-otp', async (req, res) => {
     if (!personalemail || !otp) {
         return res.status(400).json({ message: 'All fields are required.' });
     }
-    // Find user by personal email
-    const user = await db.collection('users').findOne({ personalemail: personalemail.toLowerCase() });
+    // Find user by personalemailHash
+    const emailHash = crypto.createHash('sha256').update(personalemail.toLowerCase()).digest('hex');
+    const user = await db.collection('users').findOne({ personalemailHash: emailHash });
     if (!user) return res.status(404).json({ message: 'User not found.' });
     // --- OTP validation ---
     if (

@@ -105,14 +105,9 @@ export default function Admin_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const res = await axios.get(`${API_URL}/users`, {
-          headers: {
-            ...(token && { Authorization: `Bearer ${token}` }),
-          },
-        });
-        const otherUsers = res.data.filter((user) => user._id !== currentUserId);
-        setUsers(otherUsers);
+        const res = await axios.get('http://localhost:5000/users');
+        const users = res.data.users;
+        setUsers(users);
         setSelectedChat(null);
         localStorage.removeItem("selectedChatId_admin");
       } catch (err) {

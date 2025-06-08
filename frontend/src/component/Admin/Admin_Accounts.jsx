@@ -3,6 +3,7 @@ import ProfileMenu from "../ProfileMenu";
 import Admin_Navbar from "./Admin_Navbar";
 import editIcon from "../../assets/editing.png";
 import archiveIcon from "../../assets/archive.png";
+import axios from "axios";
 
 export default function Admin_Accounts() {
   const [isEditMode, setIsEditMode] = useState(false);
@@ -20,7 +21,6 @@ export default function Admin_Accounts() {
   const [archivePassword, setArchivePassword] = useState("");
   const [archivePasswordError, setArchivePasswordError] = useState("");
   const [duplicateEmailModal, setDuplicateEmailModal] = useState(false);
-  const [suggestedEmail, setSuggestedEmail] = useState("");
   const [pendingFormData, setPendingFormData] = useState(null);
   const [userToArchive, setUserToArchive] = useState(null);
   
@@ -236,37 +236,33 @@ export default function Admin_Accounts() {
         };
       }
 
+      const token = localStorage.getItem('token');
+
       try {
-        const res = await fetch("http://localhost:5000/users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(accountData),
+        const res = await axios.post('http://localhost:5000/users', accountData, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
         });
-        const data = await res.json();
-        if (res.ok) {
+        if (res.status === 200 || res.status === 201) {
           setShowCreateSuccess(true);
           setFormData({
-            firstname: "",
-            middlename: "",
-            lastname: "",
-            email: "",
-            personalemail: "",
-            contactno: "",
-            password: "",
-            role: "students",
-            userID: "",
+            firstname: '',
+            middlename: '',
+            lastname: '',
+            email: '',
+            personalemail: '',
+            contactno: '',
+            password: '',
+            role: 'students',
+            userID: '',
           });
           fetchUsers();
-        } else if (res.status === 409 && data.suggestedEmail) {
-          setSuggestedEmail(data.suggestedEmail);
-          setPendingFormData({ ...formData, userID });
-          setDuplicateEmailModal(true);
         } else {
-          alert("Error: " + (data.error || "Failed to create account"));
+          alert('Error: Failed to create account');
         }
-      } catch (err) {
-        console.error(err);
-        alert("Something went wrong.");
+      } catch {
+        alert('Error: Failed to create account');
       }
     }
   };
@@ -932,9 +928,8 @@ export default function Admin_Accounts() {
               <h3 className="text-xl font-semibold mb-4">Duplicate Email Detected</h3>
               <p className="mb-4">
                 The email you entered already exists.<br />
-                Suggested email: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{suggestedEmail}</span>
               </p>
-              <p className="mb-4">Do you want to proceed with this suggested email?</p>
+              <p className="mb-4">Do you want to proceed with the suggested email?</p>
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setDuplicateEmailModal(false)}
@@ -946,8 +941,7 @@ export default function Admin_Accounts() {
                   onClick={async () => {
                     setDuplicateEmailModal(false);
                     if (pendingFormData) {
-                      // Resubmit with suggested email
-                      await handleSubmit(null, suggestedEmail);
+                      await handleSubmit(null);
                       setPendingFormData(null);
                     }
                   }}
