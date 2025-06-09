@@ -3,11 +3,6 @@ import { Headphones } from 'lucide-react';
 import axios from 'axios';
 import { createTicket, getTicketByNumber } from '../../services/ticketService';
 
-function generateTicketNumber() {
-  const random = Math.random().toString().slice(2, 14).padEnd(12, '0');
-  return `SJDD${random}`;
-}
-
 const sampleTicket = {
   number: 'SJDD1234567890',
   status: 'Sent',
@@ -19,7 +14,7 @@ export default function SupportModal({ onClose }) {
   const [ticketInput, setTicketInput] = useState('');
   const [showTicket, setShowTicket] = useState(false);
   const [newTicket, setNewTicket] = useState({
-    number: generateTicketNumber(),
+    number: '',
     subject: '',
     content: '',
     file: null
@@ -46,7 +41,7 @@ export default function SupportModal({ onClose }) {
     setView('main');
     setTicketInput('');
     setShowTicket(false);
-    setNewTicket({ number: generateTicketNumber(), subject: '', content: '', file: null });
+    setNewTicket({ number: '', subject: '', content: '', file: null });
     setSubmitted(false);
     onClose();
   };
@@ -81,9 +76,10 @@ export default function SupportModal({ onClose }) {
       if (newTicket.file) {
         formData.append('file', newTicket.file);
       }
-      await axios.post('/api/tickets', formData, {
+      const response = await axios.post('/api/tickets', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+      setNewTicket(prev => ({ ...prev, number: response.data.number }));
       setSubmitted(true);
       setShowToast(true);
     } catch (err) {

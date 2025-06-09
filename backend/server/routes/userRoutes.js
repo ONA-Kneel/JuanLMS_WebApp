@@ -661,9 +661,24 @@ userRoutes.post('/login', async (req, res) => {
         userID: user.userID
     }, process.env.JWT_SECRET || "your_secret_key_here", { expiresIn: '1d' });
 
-    res.json({ token });
+    // Add audit log for successful login
+    try {
+        const db = database.getDb();
+        await db.collection('AuditLogs').insertOne({
+            userId: user._id,
+            userName: `${user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname} ${user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname}`,
+            userRole: user.role,
+            action: 'Login',
+            details: `User logged in from ${req.ip || req.connection.remoteAddress}`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            timestamp: new Date()
+        });
+    } catch (auditError) {
+        console.error('Failed to create login audit log:', auditError);
+        // Don't fail the login if audit logging fails
+    }
 
-    // Optionally, add audit log here if needed
+    res.json({ token });
 });
 
 // ------------------ UTILS ------------------

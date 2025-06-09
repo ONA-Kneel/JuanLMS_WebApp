@@ -3,6 +3,8 @@ import Ticket from '../models/Ticket.js';
 import mongoose from 'mongoose';
 import multer from 'multer';
 import path from 'path';
+import { encrypt, decrypt } from '../utils/encryption.js';
+import fs from 'fs';
 
 const ticketsRouter = express.Router();
 
@@ -26,7 +28,16 @@ function generateTicketNumber() {
 ticketsRouter.post('/', upload.single('file'), async (req, res) => {
   const { userId, subject, description } = req.body;
   const now = new Date();
-  const fileUrl = req.file ? req.file.filename : null;
+  let fileUrl = req.file ? req.file.filename : null;
+
+  // Encrypt the uploaded file if present
+  if (req.file) {
+    const filePath = path.join('uploads', req.file.filename);
+    const fileBuffer = fs.readFileSync(filePath);
+    const encrypted = encrypt(fileBuffer.toString('base64'));
+    fs.writeFileSync(filePath, encrypted, 'utf8');
+  }
+
   const ticket = new Ticket({
     userId,
     subject,
@@ -45,20 +56,41 @@ ticketsRouter.post('/', upload.single('file'), async (req, res) => {
   });
   try {
     await ticket.save();
-    console.log('[TICKET CREATED]', ticket);
+    const decryptedTicket = ticket.decryptSensitiveData();
+    console.log('[TICKET CREATED]', decryptedTicket);
     console.log('[MONGOOSE CONNECTION]', Ticket.db.name);
-    res.status(201).json(ticket);
+    res.status(201).json(decryptedTicket);
   } catch (err) {
     console.error('[TICKET ERROR]', err);
     res.status(500).json({ error: 'Failed to save ticket' });
   }
 });
 
+// Endpoint to download and decrypt the file by ticketId
+ticketsRouter.get('/file/:ticketId', async (req, res) => {
+  try {
+    const ticket = await Ticket.findById(req.params.ticketId);
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    const decryptedTicket = ticket.decryptSensitiveData();
+    if (!decryptedTicket.file) return res.status(404).json({ error: 'No file attached' });
+    const filePath = path.join('uploads', decryptedTicket.file);
+    const encrypted = fs.readFileSync(filePath, 'utf8');
+    const decryptedBase64 = decrypt(encrypted);
+    const fileBuffer = Buffer.from(decryptedBase64, 'base64');
+    res.setHeader('Content-Disposition', `attachment; filename=file`);
+    res.send(fileBuffer);
+  } catch (err) {
+    res.status(404).json({ error: 'File not found or decryption failed' });
+  }
+});
+
 // Get all tickets for a user
 // GET /api/tickets/user/:userId
 ticketsRouter.get('/user/:userId', async (req, res) => {
-  const tickets = await Ticket.find({ userId: req.params.userId });
-  res.json(tickets);
+  const encryptedUserId = encrypt(req.params.userId);
+  const tickets = await Ticket.find({ userId: encryptedUserId });
+  const decryptedTickets = tickets.map(ticket => ticket.decryptSensitiveData());
+  res.json(decryptedTickets);
 });
 
 // Reply to a ticket (user or admin)
@@ -75,7 +107,8 @@ ticketsRouter.post('/:ticketId/reply', async (req, res) => {
     },
     { new: true }
   );
-  res.json(ticket);
+  const decryptedTicket = ticket.decryptSensitiveData();
+  res.json(decryptedTicket);
 });
 
 // Get all tickets (admin, with optional status filter)
@@ -88,7 +121,8 @@ ticketsRouter.get('/', async (req, res) => {
     query.status = status;
   }
   const tickets = await Ticket.find(query);
-  res.json(tickets);
+  const decryptedTickets = tickets.map(ticket => ticket.decryptSensitiveData());
+  res.json(decryptedTickets);
 });
 
 // Mark ticket as opened (admin)
@@ -118,9 +152,11 @@ ticketsRouter.post('/:ticketId/close', async (req, res) => {
 // GET /api/tickets/number/:number
 // Fetch a ticket by its number
 ticketsRouter.get('/number/:number', async (req, res) => {
-  const ticket = await Ticket.findOne({ number: req.params.number });
+  const encryptedNumber = encrypt(req.params.number);
+  const ticket = await Ticket.findOne({ number: encryptedNumber });
   if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
-  res.json(ticket);
+  const decryptedTicket = ticket.decryptSensitiveData();
+  res.json(decryptedTicket);
 });
 
 export default ticketsRouter; 
