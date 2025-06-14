@@ -1,54 +1,50 @@
 import mongoose from 'mongoose';
 
 const schoolYearSchema = new mongoose.Schema({
-  startYear: {
+  schoolYearStart: {
     type: Number,
-    required: [true, 'Start year is required.'],
+    required: true,
     validate: {
-      validator: Number.isInteger,
-      message: '{VALUE} is not an integer value for start year.'
+      validator: function(v) {
+        return v > 1900 && v < 2100;
+      },
+      message: 'Start year must be between 1900 and 2100'
     }
   },
-  endYear: {
+  schoolYearEnd: {
     type: Number,
-    required: [true, 'End year is required.'],
+    required: true,
     validate: {
-      validator: Number.isInteger,
-      message: '{VALUE} is not an integer value for end year.'
+      validator: function(v) {
+        return v === this.schoolYearStart + 1;
+      },
+      message: 'End year must be start year + 1'
     }
   },
   status: {
     type: String,
-    required: true,
     enum: ['active', 'inactive'],
-    default: 'inactive',
-  },
-}, { timestamps: true });
-
-// Pre-save hook to ensure endYear is greater than startYear
-schoolYearSchema.pre('save', function(next) {
-  if (this.startYear >= this.endYear) {
-    next(new Error('End year must be greater than start year.'));
-  } else {
-    next();
+    default: 'inactive'
   }
+}, {
+  timestamps: true,
+  collection: 'schoolyears'
 });
 
-// Pre-save hook to ensure only one active school year
+// Ensure only one active school year exists
 schoolYearSchema.pre('save', async function(next) {
-  if (this.isModified('status') && this.status === 'active') {
-    try {
-      // `this.constructor` refers to the Mongoose model
-      await this.constructor.updateMany({ _id: { $ne: this._id }, status: 'active' }, { $set: { status: 'inactive' } });
-      next();
-    } catch (error) {
-      next(error);
+  if (this.status === 'active') {
+    const activeSchoolYear = await this.constructor.findOne({ 
+      status: 'active',
+      _id: { $ne: this._id }
+    });
+    if (activeSchoolYear) {
+      throw new Error('Another active school year already exists');
     }
-  } else {
-    next();
   }
+  next();
 });
 
 const SchoolYear = mongoose.model('SchoolYear', schoolYearSchema);
 
-export default SchoolYear;
+export default SchoolYear; 

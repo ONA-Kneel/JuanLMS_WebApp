@@ -1,68 +1,80 @@
 import express from 'express';
-import SchoolYear from '../models/SchoolYear.js'; // Adjust path as needed
+import SchoolYear from '../models/SchoolYear.js';
 
 const router = express.Router();
 
-// GET all school years
+// Get all school years
 router.get('/', async (req, res) => {
   try {
-    const schoolYears = await SchoolYear.find().sort({ startYear: -1 }); // Sort by startYear descending
-    res.status(200).json(schoolYears);
+    const schoolYears = await SchoolYear.find().sort({ schoolYearStart: -1 });
+    res.json(schoolYears);
   } catch (error) {
-    console.error("Error fetching school years:", error);
-    res.status(500).json({ message: 'Error fetching school years', error: error.message });
+    res.status(500).json({ message: error.message });
   }
 });
 
-// POST a new school year
+// Create a new school year
 router.post('/', async (req, res) => {
-  const { startYear, endYear, status } = req.body;
-
-  if (!startYear || !endYear || !status) {
-    return res.status(400).json({ message: 'Missing required fields: startYear, endYear, status.' });
-  }
-
   try {
-    const newSchoolYear = new SchoolYear({
-      startYear: parseInt(startYear),
-      endYear: parseInt(endYear),
-      status,
+    const { schoolYearStart } = req.body;
+    
+    // Validate start year
+    if (!schoolYearStart || schoolYearStart < 1900 || schoolYearStart > 2100) {
+      return res.status(400).json({ message: 'Invalid school year start' });
+    }
+
+    // Check if a school year with this start year already exists
+    const existingSchoolYear = await SchoolYear.findOne({ schoolYearStart });
+    if (existingSchoolYear) {
+      return res.status(400).json({ message: 'A school year with this start year already exists.' });
+    }
+
+    // Deactivate all existing school years before creating a new active one
+    await SchoolYear.updateMany({}, { status: 'inactive' });
+
+    const schoolYear = new SchoolYear({
+      schoolYearStart,
+      schoolYearEnd: schoolYearStart + 1,
+      status: 'active' // Automatically set to active
     });
-    await newSchoolYear.save();
+
+    const newSchoolYear = await schoolYear.save();
     res.status(201).json(newSchoolYear);
   } catch (error) {
-    console.error("Error creating school year:", error);
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({ message: 'Validation Error', error: error.message });
-    }
-    res.status(500).json({ message: 'Error creating school year', error: error.message });
+    res.status(400).json({ message: error.message });
   }
 });
 
-// DELETE a school year
-router.delete('/:id', async (req, res) => {
+// Update school year status
+router.patch('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    
-    // First check if the school year exists and is not active
-    const schoolYear = await SchoolYear.findById(id);
+    const schoolYear = await SchoolYear.findById(req.params.id);
     if (!schoolYear) {
       return res.status(404).json({ message: 'School year not found' });
     }
+
+    // If setting to active, deactivate all others
+    if (req.body.status === 'active') {
+      await SchoolYear.updateMany({ _id: { $ne: req.params.id } }, { status: 'inactive' });
+    }
     
-    if (schoolYear.status === 'active') {
-      return res.status(400).json({ message: 'Cannot delete an active school year' });
-    }
+    schoolYear.status = req.body.status;
 
-    const deletedSchoolYear = await SchoolYear.findByIdAndDelete(id);
-    if (!deletedSchoolYear) {
-      return res.status(404).json({ message: 'School year not found' });
-    }
-
-    res.status(200).json({ message: 'School year deleted successfully' });
+    const updatedSchoolYear = await schoolYear.save();
+    res.json(updatedSchoolYear);
   } catch (error) {
-    console.error("Error deleting school year:", error);
-    res.status(500).json({ message: 'Error deleting school year', error: error.message });
+    // Remove specific active school year error check, as updateMany handles it implicitly
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Get active school year
+router.get('/active', async (req, res) => {
+  try {
+    const activeSchoolYear = await SchoolYear.findOne({ status: 'active' });
+    res.json(activeSchoolYear);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 

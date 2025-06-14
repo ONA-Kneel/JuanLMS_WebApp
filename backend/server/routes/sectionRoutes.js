@@ -1,133 +1,91 @@
 import express from 'express';
 import Section from '../models/Section.js';
-import Program from '../models/Program.js'; // For validating program existence
-import Course from '../models/Course.js'; // For validating course existence
-import User from '../models/User.js';
 
 const router = express.Router();
 
-// GET all sections
-router.get('/', async (req, res) => {
+// Get all sections for a specific track and strand
+router.get('/track/:trackName/strand/:strandName', async (req, res) => {
   try {
-    const sections = await Section.find().sort({ sectionName: 1 });
+    const { trackName, strandName } = req.params;
+    const sections = await Section.find({ trackName, strandName, status: 'active' });
     res.status(200).json(sections);
   } catch (error) {
-    console.error("Error fetching sections:", error);
-    res.status(500).json({ message: 'Error fetching sections', error: error.message });
+    res.status(500).json({ message: error.message });
   }
 });
 
-// POST a new section
+// Create a new section
 router.post('/', async (req, res) => {
-  const { sectionName, programName, yearLevel, courseName } = req.body;
+  const { sectionName, trackName, strandName } = req.body;
 
-  if (!sectionName || !programName || !yearLevel) {
-    return res.status(400).json({ message: 'Missing required fields: sectionName, programName, yearLevel.' });
+  if (!sectionName || !trackName || !strandName) {
+    return res.status(400).json({ message: 'All fields are required' });
   }
 
   try {
-    // Validate if the program exists
-    const programExists = await Program.findOne({ programName });
-    if (!programExists) {
-      return res.status(404).json({ message: 'Program not found. Cannot create section.' });
+    const existingSection = await Section.findOne({ sectionName, trackName, strandName });
+    if (existingSection) {
+      return res.status(409).json({ message: 'Section with this name already exists for this track and strand.' });
     }
 
-    // If courseName is provided, validate if it exists and belongs to the program
-    if (courseName) {
-      const courseExists = await Course.findOne({ courseName, programName });
-      if (!courseExists) {
-        return res.status(404).json({ message: 'Course not found or does not belong to the selected program.' });
-      }
-    }
-
-    const newSection = new Section({
-      sectionName,
-      programName,
-      yearLevel,
-      courseName: courseName || null
-    });
-
+    const newSection = new Section({ sectionName, trackName, strandName });
     await newSection.save();
     res.status(201).json(newSection);
   } catch (error) {
-    console.error("Error creating section:", error);
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({ message: 'Validation Error', error: error.message });
-    }
-    res.status(500).json({ message: 'Error creating section', error: error.message });
+    res.status(400).json({ message: error.message });
   }
 });
 
-// PATCH/Update a section
+// Update a section
 router.patch('/:id', async (req, res) => {
-  try {
     const { id } = req.params;
-    const { sectionName, programName, yearLevel, courseName } = req.body;
+  const { sectionName, trackName, strandName } = req.body;
 
-    if (!sectionName || !programName || !yearLevel) {
-      return res.status(400).json({ message: 'Missing required fields: sectionName, programName, yearLevel.' });
-    }
-
-    // Validate if the program exists
-    const programExists = await Program.findOne({ programName });
-    if (!programExists) {
-      return res.status(404).json({ message: 'Program not found. Cannot update section.' });
-    }
-
-    // If courseName is provided, validate if it exists and belongs to the program
-    if (courseName) {
-      const courseExists = await Course.findOne({ courseName, programName });
-      if (!courseExists) {
-        return res.status(404).json({ message: 'Course not found or does not belong to the selected program.' });
-      }
-    }
-
-    const updatedSection = await Section.findByIdAndUpdate(
-      id,
-      {
-        sectionName,
-        programName,
-        yearLevel,
-        courseName: courseName || null
-      },
-      { new: true }
-    );
-
-    if (!updatedSection) {
-      return res.status(404).json({ message: 'Section not found' });
-    }
-
-    res.status(200).json(updatedSection);
-  } catch (error) {
-    console.error("Error updating section:", error);
-    res.status(500).json({ message: 'Error updating section', error: error.message });
+  if (!sectionName || !trackName || !strandName) {
+    return res.status(400).json({ message: 'All fields are required' });
   }
-});
 
-// DELETE a section
-router.delete('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-
-    // First check if the section exists
     const section = await Section.findById(id);
     if (!section) {
       return res.status(404).json({ message: 'Section not found' });
     }
 
-    // Check for dependencies in users (students)
-    const hasUsers = await User.exists({ sectionAssigned: id });
-    if (hasUsers) {
-      return res.status(400).json({ 
-        message: 'Cannot delete section with assigned students. Please remove student assignments first.' 
-      });
+    // Check for duplicate section name for the same track and strand, excluding the current section
+    const existingSection = await Section.findOne({
+      sectionName,
+      trackName,
+      strandName,
+      _id: { $ne: id }
+    });
+
+    if (existingSection) {
+      return res.status(409).json({ message: 'Section with this name already exists for this track and strand.' });
     }
 
+    section.sectionName = sectionName;
+    section.trackName = trackName;
+    section.strandName = strandName;
+
+    await section.save();
+    res.status(200).json(section);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Delete a section
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
     const deletedSection = await Section.findByIdAndDelete(id);
+
+    if (!deletedSection) {
+      return res.status(404).json({ message: 'Section not found' });
+    }
     res.status(200).json({ message: 'Section deleted successfully' });
   } catch (error) {
-    console.error("Error deleting section:", error);
-    res.status(500).json({ message: 'Error deleting section', error: error.message });
+    res.status(500).json({ message: error.message });
   }
 });
 

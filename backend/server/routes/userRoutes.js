@@ -151,8 +151,6 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
         userID,
         programAssigned,
         courseAssigned,
-        sectionAssigned,
-        yearLevelAssigned
     } = req.body;
 
     // Simple server-side validation (backend safety)
@@ -191,10 +189,8 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
             profilePic,
             role,
             userID,
-            programAssigned: programAssigned || null,
-            courseAssigned: courseAssigned || null,
-            sectionAssigned: sectionAssigned || null,
-            yearLevelAssigned: yearLevelAssigned || null,
+            programAssigned: programAssigned,
+            courseAssigned: courseAssigned,
             isArchived: false,
             archivedAt: null,
             deletedAt: null,
@@ -269,8 +265,7 @@ userRoutes.route("/users/:id").patch(authenticateToken, async (req, res) => {
         // Update only allowed fields
         [
             "firstname", "middlename", "lastname", "email", "contactno",
-            "password", "personalemail", "profilePic", "userID", "role",
-            "programAssigned", "courseAssigned", "sectionAssigned", "yearLevelAssigned"
+            "password", "personalemail", "profilePic", "userID", "role"
         ].forEach(field => {
             if (req.body[field] !== undefined) user[field] = req.body[field];
         });
@@ -357,6 +352,41 @@ userRoutes.post('/users/archive/:userId', async (req, res) => {
 
     console.log('Archive update result:', updateResult);
     res.json({ message: 'User archived successfully.' });
+});
+
+// Recover an archived user (set isArchived to false, clear archivedAt/deletedAt, increment archiveAttempts)
+userRoutes.post('/users/archived-users/:userId/recover', async (req, res) => {
+    const db = database.getDb();
+    const { userId } = req.params;
+    const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+    if (!user) {
+        return res.status(404).json({ message: 'User not found.' });
+    }
+    if (!user.isArchived) {
+        return res.status(400).json({ message: 'User is not archived.' });
+    }
+    const updateResult = await db.collection('users').updateOne(
+        { _id: new ObjectId(userId) },
+        {
+            $set: {
+                isArchived: false,
+                archivedAt: null,
+                deletedAt: null
+            },
+            $inc: { archiveAttempts: 1 }
+        }
+    );
+    // Create audit log for account recovery
+    await db.collection('AuditLogs').insertOne({
+        userId: new ObjectId(userId),
+        userName: `${user.firstname} ${user.lastname}`,
+        userRole: user.role,
+        action: 'Recover Account',
+        details: `Recovered account for ${user.email}`,
+        ipAddress: req.ip || req.connection.remoteAddress,
+        timestamp: new Date()
+    });
+    res.json({ message: 'User recovered successfully.' });
 });
 
 // ------------------ PASSWORD CHANGE/RESET ------------------
@@ -640,6 +670,11 @@ userRoutes.post('/login', async (req, res) => {
     console.log('User found:', user);
     if (!user) {
         return res.status(401).json({ success: false, message: "Invalid email or password" });
+    }
+
+    // Check if user is archived
+    if (user.isArchived) {
+        return res.status(403).json({ success: false, message: "Account is archived. Please contact admin." });
     }
 
     // Compare hashed password

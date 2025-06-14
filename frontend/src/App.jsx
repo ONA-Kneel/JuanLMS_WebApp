@@ -47,6 +47,7 @@ import Admin_Progress from './component/Admin/Admin_Progress';
 import Admin_AuditTrail from './component/Admin/Admin_AuditTrail';
 import { AdminSupportCenter } from './component/Admin';
 import Admin_AcademicSettings from './component/Admin/Admin_AcademicSettings';
+import TermDetails from './component/Admin/TermDetails';
 
 // Parent Access
 import Parent_Dashboard from './component/Parent/Parent_Dashboard';
@@ -103,6 +104,7 @@ function App() {
         <Route path="/admin_progress" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Progress /></ProtectedRoute>}/>
         <Route path="/admin_audit_trail" element={<ProtectedRoute allowedRoles={['admin']}><Admin_AuditTrail /></ProtectedRoute>}/>
         <Route path="/admin/support-center" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupportCenter /></ProtectedRoute>} />
+        <Route path="/admin/academic-settings/terms/:termId" element={<ProtectedRoute allowedRoles={['admin']}><TermDetails /></ProtectedRoute>} />
 
         {/* Parent */}
         <Route path="/parent_dashboard" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Dashboard/></ProtectedRoute>}/>

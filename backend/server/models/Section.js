@@ -3,32 +3,28 @@ import mongoose from 'mongoose';
 const sectionSchema = new mongoose.Schema({
   sectionName: {
     type: String,
-    required: [true, 'Section name is required.'],
-    trim: true,
-    // Consider if section names should be unique, perhaps unique per program and year level.
-    // For now, allowing duplicate names across different program/year combinations.
+    required: true,
+    trim: true
   },
-  programName: {
+  trackName: {
     type: String,
-    required: [true, 'Program name is required.'],
-    trim: true,
+    required: true,
   },
-  yearLevel: {
+  strandName: {
     type: String,
-    required: [true, 'Year level is required.'],
-    trim: true,
-    // Example enum if you want to restrict values, adjust as needed:
-    // enum: ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Grade 11', 'Grade 12'] 
+    required: true,
   },
-  courseName: {
+  status: {
     type: String,
-    default: null,
-    trim: true,
-  },
-}, { timestamps: true }); // Adds createdAt and updatedAt
+    enum: ['active', 'archived'],
+    default: 'active'
+  }
+}, {
+  timestamps: true
+});
 
-// Optional: Add a compound index for uniqueness if needed, e.g., unique section name per program and year level
-// sectionSchema.index({ program: 1, yearLevel: 1, sectionName: 1 }, { unique: true });
+// Add a compound unique index to prevent duplicate section names within the same track and strand
+sectionSchema.index({ sectionName: 1, trackName: 1, strandName: 1 }, { unique: true });
 
 const Section = mongoose.model('Section', sectionSchema);
 

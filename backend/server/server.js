@@ -14,14 +14,17 @@ import classRoutes from "./routes/classRoutes.js";
 import auditTrailRoutes from "./routes/auditTrailroutes.js";
 import lessonRoutes from "./routes/lessonRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
-import schoolYearRoutes from "./routes/schoolYearRoutes.js";
-import programRoutes from "./routes/programRoutes.js";
-import courseRoutes from "./routes/courseRoutes.js";
-import sectionRoutes from "./routes/sectionRoutes.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import assignmentRoutes from "./routes/assignmentRoutes.js";
 import User from "./models/User.js";
 import ticketsRouter from './routes/tickets.js';
+import schoolYearRoutes from "./routes/schoolYearRoutes.js";
+import termRoutes from './routes/termRoutes.js';
+import trackRoutes from './routes/trackRoutes.js';
+import strandRoutes from './routes/strandRoutes.js';
+import sectionRoutes from './routes/sectionRoutes.js';
+import facultyAssignmentRoutes from './routes/facultyAssignmentRoutes.js';
+import studentAssignmentRoutes from './routes/studentAssignmentRoutes.js';
 
 dotenv.config({ path: './config.env' });
 
@@ -101,13 +104,16 @@ app.use("/classes", classRoutes);
 app.use("/", auditTrailRoutes);
 app.use("/lessons", lessonRoutes);
 app.use('/uploads/lessons', express.static('uploads/lessons'));
-app.use('/schoolyears', schoolYearRoutes);
-app.use('/programs', programRoutes);
-app.use('/courses', courseRoutes);
-app.use('/sections', sectionRoutes);
 app.use("/announcements", announcementRoutes);
 app.use("/assignments", assignmentRoutes);
 app.use('/api/tickets', ticketsRouter);
+app.use('/api/schoolyears', schoolYearRoutes);
+app.use('/api/terms', termRoutes);
+app.use('/api/tracks', trackRoutes);
+app.use('/api/strands', strandRoutes);
+app.use('/api/sections', sectionRoutes);
+app.use("/api/faculty-assignments", facultyAssignmentRoutes);
+app.use("/api/student-assignments", studentAssignmentRoutes);
 
 // Start server
 app.listen(PORT, () => {

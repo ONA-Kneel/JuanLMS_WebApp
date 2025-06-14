@@ -224,15 +224,24 @@ export default function Admin_Accounts() {
         archiveLockUntil: null,
         recoverAttempts: 0,
         recoverLockUntil: null,
+        trackAssigned: [],
+        strandAssigned: [],
+        sectionAssigned: null,
       };
 
       if (formData.role === "students") {
         accountData = {
           ...accountData,
-          yearLevelAssigned: null, // This one was already correctly named as per previous request
-          programAssigned: null,   // Was programHandle
-          courseAssigned: null,    // Was courseHandle
-          sectionAssigned: null,   // Was sectionHandle
+          programAssigned: null,
+          courseAssigned: null,
+          sectionAssigned: null,
+        };
+      } else if (formData.role === "faculty") {
+        accountData = {
+          ...accountData,
+          trackAssigned: [],
+          strandAssigned: [],
+          sectionAssigned: [], // Can be multiple values
         };
       }
 
@@ -289,7 +298,10 @@ export default function Admin_Accounts() {
           password: formData.password,
           personalemail: formData.personalemail,
           role: formData.role,
-          userID: updatedUserID
+          userID: updatedUserID,
+          trackAssigned: formData.trackAssigned || [],
+          strandAssigned: formData.strandAssigned || [],
+          sectionAssigned: formData.sectionAssigned || [],
         }),
       });
 

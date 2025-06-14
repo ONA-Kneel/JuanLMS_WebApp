@@ -19,27 +19,6 @@ const userSchema = new mongoose.Schema({
   userID: String,
   profilePic: { type: String, default: null },
 
-  // Assignment Handles
-  programAssigned: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Program',
-    default: null,
-  },
-  courseAssigned: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Course',
-    default: null,
-  },
-  sectionAssigned: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Section',
-    default: null,
-  },
-  yearLevelAssigned: {
-    type: String,
-    default: null,
-  },
-
   // Archive & Recovery fields
   isArchived: { type: Boolean, default: false },
   archivedAt: { type: Date, default: null },
