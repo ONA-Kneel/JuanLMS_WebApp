@@ -66,6 +66,9 @@ export default function Admin_Accounts() {
     },
   ]);
 
+  // Add state for active tab
+  const [activeTab, setActiveTab] = useState('all');
+
   // Calculate days left until permanent deletion
   const getDaysLeft = (deletedAt) => {
     const now = new Date();
@@ -129,6 +132,11 @@ export default function Admin_Accounts() {
     if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
     return 0;
   });
+
+  // Filter users by active tab (role)
+  const tabFilteredUsers = activeTab === 'all'
+    ? paginatedUsers
+    : paginatedUsers.filter(user => user.role === activeTab);
 
   useEffect(() => {
     fetchUsers(currentPage, ITEMS_PER_PAGE);
@@ -347,14 +355,23 @@ export default function Admin_Accounts() {
     setShowSaveConfirm(false);
   };
 
+  // Generate a random password
   const generatePassword = () => {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let password = "";
     for (let i = 0; i < 12; i++) {
       password += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    setFormData((prev) => ({ ...prev, password }));
+    return password;
   };
+
+  // Set a generated password on mount and when not editing
+  useEffect(() => {
+    if (!isEditMode) {
+      setFormData((prev) => ({ ...prev, password: generatePassword() }));
+    }
+    // eslint-disable-next-line
+  }, [isEditMode]);
 
   const handleSort = (key) => {
     setSortConfig((prev) => {
@@ -475,9 +492,9 @@ export default function Admin_Accounts() {
           <ProfileMenu />
         </div>
 
+        {/* Move New Account form to the top */}
         <div className="bg-white p-6 rounded-xl shadow mb-10">
           <h3 className="text-xl font-semibold mb-4">{isEditMode ? 'Edit Account' : 'New Account'}</h3>
-
           <form className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleSubmit}>
             <input
               type="text"
@@ -541,18 +558,7 @@ export default function Admin_Accounts() {
                 placeholder="Password"
                 className="border rounded p-2 flex-1 bg-gray-100 cursor-not-allowed"
               />
-
-              {!isEditMode && (
-                <button
-                  type="button"
-                  onClick={generatePassword}
-                  className="bg-gray-300 hover:bg-gray-400 text-sm px-3 py-2 rounded"
-                >
-                  Generate
-                </button>
-              )}
             </div>
-
             <select
               name="role"
               value={formData.role}
@@ -566,7 +572,6 @@ export default function Admin_Accounts() {
               <option value="admin">Admin</option>
               <option value="director">Director</option>
             </select>
-
             <div className="col-span-1 md:col-span-2 flex gap-2">
               <button
                 type="submit"
@@ -605,7 +610,6 @@ export default function Admin_Accounts() {
             </div>
           </form>
         </div>
-
         {/* Button to view archived accounts */}
         <div className="mb-4">
           <button
@@ -615,135 +619,43 @@ export default function Admin_Accounts() {
             View Archived Accounts
           </button>
         </div>
-
-        {/* Password Modal */}
-        {showPasswordModal && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-              <h3 className="text-xl font-semibold mb-4">Enter Admin Password</h3>
-              <form onSubmit={handlePasswordSubmit}>
-                <input
-                  type="password"
-                  value={adminPassword}
-                  onChange={e => setAdminPassword(e.target.value)}
-                  placeholder="Admin Password"
-                  className="border rounded p-2 w-full mb-2"
-                  autoFocus
-                />
-                {passwordError && <p className="text-red-600 text-sm mb-2">{passwordError}</p>}
-                <div className="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowPasswordModal(false);
-                      setAdminPassword("");
-                      setPasswordError("");
-                    }}
-                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-                  >
-                    Submit
-                  </button>
-                </div>
-              </form>
+        {/* Users section (with tabs and table) below */}
+        <div className="mt-8">
+          <h4 className="text-lg font-semibold mb-2">Users</h4>
+          <div className="bg-white p-4 rounded-xl shadow mb-4">
+            {/* Tabs for roles (inside the table card) */}
+            <div className="flex gap-2 mb-4">
+              {[
+                { label: 'All', value: 'all' },
+                { label: 'Students', value: 'students' },
+                { label: 'Faculty', value: 'faculty' },
+                { label: 'Parent', value: 'parent' },
+                { label: 'Admin', value: 'admin' },
+                { label: 'Director', value: 'director' },
+              ].map(tab => (
+                <button
+                  key={tab.value}
+                  className={`px-4 py-2 rounded-t-lg font-semibold focus:outline-none transition-colors border-b-2 ${
+                    activeTab === tab.value
+                      ? 'bg-white border-blue-600 text-blue-700'
+                      : 'bg-gray-200 border-transparent text-gray-600 hover:bg-gray-300'
+                  }`}
+                  onClick={() => setActiveTab(tab.value)}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
-          </div>
-        )}
-
-        {/* Show archived table OR users table, not both */}
-        {showArchivedTable ? (
-          <div className="mt-8">
-            <h4 className="text-lg font-semibold mb-2">Archived Users</h4>
             <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
               <thead>
                 <tr className="bg-gray-100 text-left">
-                  <th className="p-3 border w-1/6">User ID</th>
-                  <th className="p-3 border w-1/6">Last Name</th>
-                  <th className="p-3 border w-1/6">First Name</th>
-                  <th className="p-3 border w-1/6">Middle Name</th>
-                  <th className="p-3 border w-1/6">Role</th>
-                  <th className="p-3 border w-1/6">Time Left</th>
-                  <th className="p-3 border w-1/6">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {archivedUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="text-center p-4 text-gray-500">
-                      No archived users found.
-                    </td>
-                  </tr>
-                ) : (
-                  archivedUsers.map((user) => (
-                    <tr key={user._id}>
-                      <td className="p-3 border">{user.userID || '-'}</td>
-                      <td className="p-3 border">{user.lastname}</td>
-                      <td className="p-3 border">{user.firstname}</td>
-                      <td className="p-3 border">{user.middlename}</td>
-                      <td className="p-3 border capitalize">{user.role}</td>
-                      <td className="p-3 border">{getDaysLeft(user.deletedAt)} days left</td>
-                      <td className="p-3 border">
-                        <button
-                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
-                          onClick={() => handleRecover(user)}
-                        >
-                          Recover Account
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-            <button
-              className="mt-4 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
-              onClick={() => setShowArchivedTable(false)}
-            >
-              Back to Active Accounts
-            </button>
-
-            {/* Recover Success Message */}
-            {showRecoverSuccess && (
-              <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                  <h3 className="text-xl font-semibold mb-2 text-green-600">Account Recovered</h3>
-                  <button
-                    onClick={() => setShowRecoverSuccess(false)}
-                    className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
-                  >
-                    OK
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="mt-8">
-            <h4 className="text-lg font-semibold mb-2">Users</h4>
-            <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
-              <thead>
-                <tr className="bg-gray-100 text-left">
-                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("userID")}>
-                    User ID {sortConfig.key === "userID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-                  </th>
-                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("lastname")}>
-                    Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-                  </th>
-                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("firstname")}>
-                    First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-                  </th>
-                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("middlename")}>
-                    Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-                  </th>
+                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("userID")}>User ID {sortConfig.key === "userID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
                   <th className="p-3 border w-1/6">Role</th>
                   <th className="p-3 border w-1/6">Actions</th>
                 </tr>
-
                 {/* New row for search inputs */}
                 <tr className="bg-white text-left">
                   <th className="p-2 border">
@@ -771,16 +683,15 @@ export default function Admin_Accounts() {
                   <th className="p-2 border"></th>
                 </tr>
               </thead>
-
               <tbody>
-                {users.length === 0 ? (
+                {tabFilteredUsers.length === 0 ? (
                   <tr>
                     <td colSpan="6" className="text-center p-4 text-gray-500">
                       No users found.
                     </td>
                   </tr>
                 ) : (
-                  paginatedUsers.map((user) => (
+                  tabFilteredUsers.map((user) => (
                     <tr key={user._id}>
                       <td className="p-3 border">{user.userID || '-'}</td>
                       <td className="p-3 border">{user.lastname}</td>
@@ -808,80 +719,80 @@ export default function Admin_Accounts() {
                 )}
               </tbody>
             </table>
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-4 mt-4">
-                <button
-                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
-                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </button>
-                <span className="text-sm">Page {currentPage} of {totalPages}</span>
-                <button
-                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
-                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                </button>
-              </div>
-            )}
-
-            {/* Archive Password Modal */}
-            {showArchivePasswordModal && (
-              <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                  <h3 className="text-xl font-semibold mb-4">Account Archive</h3>
-                  <p className="mb-4">In order to archive this account you must enter admin password</p>
-                  <form onSubmit={handleArchivePasswordSubmit}>
-                    <input
-                      type="password"
-                      value={archivePassword}
-                      onChange={e => setArchivePassword(e.target.value)}
-                      placeholder="Enter admin password"
-                      className="border rounded p-2 w-full mb-2"
-                      autoFocus
-                    />
-                    {archivePasswordError && <p className="text-red-600 text-sm mb-2">{archivePasswordError}</p>}
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={cancelArchivePassword}
-                        className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
-                      >
-                        Archive
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* Archive Success Message */}
-            {showArchiveSuccess && (
-              <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                  <h3 className="text-xl font-semibold mb-2 text-green-600">Account Archived</h3>
-                  <button
-                    onClick={() => setShowArchiveSuccess(false)}
-                    className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
-                  >
-                    OK
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
-        )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-4 mt-4">
+              <button
+                className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <span className="text-sm">Page {currentPage} of {totalPages}</span>
+              <button
+                className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          )}
+
+          {/* Archive Password Modal */}
+          {showArchivePasswordModal && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                <h3 className="text-xl font-semibold mb-4">Account Archive</h3>
+                <p className="mb-4">In order to archive this account you must enter admin password</p>
+                <form onSubmit={handleArchivePasswordSubmit}>
+                  <input
+                    type="password"
+                    value={archivePassword}
+                    onChange={e => setArchivePassword(e.target.value)}
+                    placeholder="Enter admin password"
+                    className="border rounded p-2 w-full mb-2"
+                    autoFocus
+                  />
+                  {archivePasswordError && <p className="text-red-600 text-sm mb-2">{archivePasswordError}</p>}
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={cancelArchivePassword}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+                    >
+                      Archive
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Archive Success Message */}
+          {showArchiveSuccess && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                <h3 className="text-xl font-semibold mb-2 text-green-600">Account Archived</h3>
+                <button
+                  onClick={() => setShowArchiveSuccess(false)}
+                  className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Save Confirmation Modal */}
         {showSaveConfirm && (
@@ -967,6 +878,45 @@ export default function Admin_Accounts() {
                   Proceed
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Password Modal */}
+        {showPasswordModal && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+              <h3 className="text-xl font-semibold mb-4">Enter Admin Password</h3>
+              <form onSubmit={handlePasswordSubmit}>
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={e => setAdminPassword(e.target.value)}
+                  placeholder="Admin Password"
+                  className="border rounded p-2 w-full mb-2"
+                  autoFocus
+                />
+                {passwordError && <p className="text-red-600 text-sm mb-2">{passwordError}</p>}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPasswordModal(false);
+                      setAdminPassword("");
+                      setPasswordError("");
+                    }}
+                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                  >
+                    Submit
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
