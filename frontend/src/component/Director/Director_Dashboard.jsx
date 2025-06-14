@@ -17,7 +17,7 @@ export default function Director_Dashboard() {
         <div className="flex justify-between items-center mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Director Dashboard</h2>
-            <p className="text-base md:text-lg">
+            <p className="text-base md:text-lg"> Academic Year and Term here | 
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",

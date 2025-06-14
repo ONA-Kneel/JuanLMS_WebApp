@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import logo from '../assets/logo/Logo4.svg';
+import logo6 from '../assets/logo/SJDD Logo.svg';
 import axios from 'axios';
 import { Eye, EyeOff } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
@@ -249,7 +250,8 @@ export default function Login() {
 
         {/* Right Section (Welcome Message) */}
         <div className="relative w-full md:w-1/2 flex flex-col items-start justify-center p-8 md:p-10 bg-[url('/src/assets/bg-JuanLMS.svg')] bg-cover bg-center text-white">
-          <img src={logo} className="w-20 md:w-24 absolute top-5 right-5 md:right-10" alt="Logo" />
+          <img src={logo} className="w-20 md:w-24 absolute top-5 right-5 md:right-10" alt="JUANLMS Logo" />
+          <img src={logo6} className="w-18 md:w-20 absolute top-7 right-10 md:right-35" alt="SJDDEFI Logo" />
           <h2 className="text-3xl md:text-4xl font-bold font-poppinsb">Hello,</h2>
           <h2 className="text-3xl md:text-4xl font-bold font-poppinsb">welcome!</h2>
           <p className="text-sm mt-4 font-poppinsl max-w-xs">

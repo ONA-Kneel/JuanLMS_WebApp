@@ -329,7 +329,7 @@ export default function Admin_AcademicSettings() {
             <h2 className="text-2xl md:text-3xl font-bold">
               {showView ? `School Year ${selectedYear?.schoolYearStart}-${selectedYear?.schoolYearEnd}` : 'Academic Settings'}
             </h2>
-            <p className="text-base md:text-lg">
+            <p className="text-base md:text-lg"> Academic Year and Term here | 
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
