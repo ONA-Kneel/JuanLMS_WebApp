@@ -13,6 +13,7 @@ const assignmentSchema = new mongoose.Schema({
   allowedFileTypes: { type: String },
   fileInstructions: { type: String },
   questions: { type: Array },
-  status: { type: String, enum: ['upcoming', 'past-due', 'completed'], default: 'upcoming' }
+  status: { type: String, enum: ['upcoming', 'past-due', 'completed'], default: 'upcoming' },
+  views: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 });
 export default mongoose.model("Assignment", assignmentSchema, "Assignments"); 

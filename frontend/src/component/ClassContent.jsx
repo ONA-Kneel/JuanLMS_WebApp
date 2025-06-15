@@ -1,7 +1,7 @@
 // ClassContent.jsx
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { FiFile, FiBook } from "react-icons/fi";
+import { FiFile, FiBook, FiMessageSquare } from "react-icons/fi";
 import QuizTab from "./QuizTab";
 // import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
@@ -9,6 +9,7 @@ import QuizTab from "./QuizTab";
 export default function ClassContent({ selected, isFaculty = false }) {
   // --- ROUTER PARAMS ---
   const { classId } = useParams();
+  const [realClassId, setRealClassId] = useState(null);
   const [activeLesson, setActiveLesson] = useState(null);
 
   // Backend lessons state
@@ -48,6 +49,27 @@ export default function ClassContent({ selected, isFaculty = false }) {
 
   // New state for selected assignment
   const [selectedAssignment, setSelectedAssignment] = useState(null);
+
+  // Add state for student view status
+  const [studentViewStatus, setStudentViewStatus] = useState([]);
+
+  // Add state for assignment modal tab
+  const [assignmentModalTab, setAssignmentModalTab] = useState('assignment');
+
+  // Fetch the real class _id from the class code (classId)
+  useEffect(() => {
+    if (!classId) return;
+    const token = localStorage.getItem('token');
+    fetch('http://localhost:5000/classes', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        const found = data.find(cls => cls.classID === classId);
+        if (found) setRealClassId(found._id);
+        else setRealClassId(null);
+      });
+  }, [classId]);
 
   // Fetch lessons from backend
   useEffect(() => {
@@ -130,11 +152,11 @@ export default function ClassContent({ selected, isFaculty = false }) {
 
   // Fetch assignments from backend
   useEffect(() => {
-    if (selected === "classwork") {
+    if (selected === "classwork" && realClassId) {
       setAssignmentsLoading(true);
       setAssignmentError(null);
       const token = localStorage.getItem('token');
-      fetch(`http://localhost:5000/assignments?classID=${classId}`, {
+      fetch(`http://localhost:5000/assignments?classID=${realClassId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -142,7 +164,56 @@ export default function ClassContent({ selected, isFaculty = false }) {
         .catch(() => setAssignmentError("Failed to fetch assignments."))
         .finally(() => setAssignmentsLoading(false));
     }
-  }, [selected, classId]);
+  }, [selected, realClassId]);
+
+  // When assignment modal opens, mark as viewed (if student), or fetch view status (if faculty)
+  useEffect(() => {
+    if (!selectedAssignment) return;
+    const token = localStorage.getItem('token');
+    const userRole = localStorage.getItem('role');
+    if (userRole === 'faculty') {
+      // Fetch assignment with views and class members
+      Promise.all([
+        fetch(`http://localhost:5000/assignments/${selectedAssignment._id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).then(res => res.json()),
+        fetch(`http://localhost:5000/classes/${classId}/members`).then(res => res.json())
+      ]).then(([assignment, members]) => {
+        console.log('Assignment modal members:', members); // Debug
+        // Use fetched students, or fallback to studentMembers if empty
+        const students = (members.students && members.students.length > 0) ? members.students : studentMembers;
+        const views = assignment.views || [];
+        // For demo/testing: add default graded/turnedIn/score fields
+        const mapped = students.map(stu => ({
+          ...stu,
+          viewed: views.includes(stu._id),
+          graded: false,
+          turnedIn: false,
+          score: undefined
+        }));
+        // For demo: mark the first student as graded/turnedIn
+        if (mapped.length > 0) {
+          mapped[0].turnedIn = true;
+          mapped[0].graded = true;
+          mapped[0].score = assignment?.points || 50;
+        }
+        setStudentViewStatus(mapped);
+      });
+    } else {
+      // Student: mark as viewed
+      fetch(`http://localhost:5000/assignments/${selectedAssignment._id}/view`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    }
+  }, [selectedAssignment, classId]);
+
+  // When assignment modal opens, reset tab
+  useEffect(() => {
+    if (selectedAssignment && isFaculty) {
+      setAssignmentModalTab('assignment');
+    }
+  }, [selectedAssignment, isFaculty]);
 
   // --- HANDLERS FOR ADDING CONTENT (Faculty only) ---
 
@@ -510,49 +581,141 @@ export default function ClassContent({ selected, isFaculty = false }) {
           {/* Assignment/Quiz Detail Modal */}
           {selectedAssignment && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-              <div className="relative w-full max-w-lg mx-auto bg-white rounded-xl shadow-xl max-h-[90vh] overflow-y-auto p-8">
+              <div className="relative w-full max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl max-h-[95vh] overflow-y-auto p-10">
                 <button
-                  className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl font-bold"
+                  className="absolute top-4 right-4 text-gray-500 hover:text-gray-800 text-3xl font-bold"
                   onClick={() => setSelectedAssignment(null)}
                   aria-label="Close"
                 >
                   ×
                 </button>
-                <div className="mb-4">
-                  <span className={`inline-block px-2 py-1 rounded text-xs font-bold mr-2 ${selectedAssignment.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{selectedAssignment.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
-                  <span className="text-2xl font-bold text-blue-900">{selectedAssignment.title}</span>
-                </div>
-                <div className="mb-2 text-gray-700">{selectedAssignment.instructions}</div>
-                {selectedAssignment.description && <div className="mb-2 text-gray-600">{selectedAssignment.description}</div>}
-                {selectedAssignment.dueDate && <div className="mb-2 text-xs text-gray-500">Due: {new Date(selectedAssignment.dueDate).toLocaleString()}</div>}
-                {selectedAssignment.points && <div className="mb-2 text-xs text-gray-500">Points: {selectedAssignment.points}</div>}
-                {/* Placeholder for reference materials and file upload/quiz */}
-                {selectedAssignment.fileUploadRequired && (
-                  <div className="mb-4">
-                    <div className="font-semibold text-sm mb-1">File Upload Required</div>
-                    <div className="text-xs text-gray-500">Allowed file types: {selectedAssignment.allowedFileTypes}</div>
-                    {selectedAssignment.fileInstructions && <div className="text-xs text-gray-500">{selectedAssignment.fileInstructions}</div>}
-                    {/* TODO: Add file upload input for students */}
-                    <div className="mt-2"><input type="file" className="border rounded px-2 py-1" /></div>
+                {/* Modal Tab Navigation */}
+                {isFaculty && (
+                  <div className="flex gap-4 mb-8 border-b">
+                    <button onClick={() => setAssignmentModalTab('assignment')} className={`py-2 px-4 font-semibold border-b-2 ${assignmentModalTab === 'assignment' ? 'border-blue-900 text-blue-900' : 'border-transparent text-gray-500 hover:text-blue-900'}`}>Assignment</button>
+                    <button onClick={() => { setAssignmentModalTab('toGrade'); }} className={`py-2 px-4 font-semibold border-b-2 ${assignmentModalTab === 'toGrade' ? 'border-blue-900 text-blue-900' : 'border-transparent text-gray-500 hover:text-blue-900'}`}>To grade</button>
+                    <button onClick={() => { setAssignmentModalTab('graded'); }} className={`py-2 px-4 font-semibold border-b-2 ${assignmentModalTab === 'graded' ? 'border-blue-900 text-blue-900' : 'border-transparent text-gray-500 hover:text-blue-900'}`}>Graded</button>
                   </div>
                 )}
-                {selectedAssignment.type === 'quiz' && selectedAssignment.questions && (
-                  <div className="mb-4">
-                    <div className="font-semibold text-sm mb-1">Quiz Questions</div>
-                    <ul className="list-decimal ml-6">
-                      {selectedAssignment.questions.map((q, idx) => (
-                        <li key={idx} className="mb-2">
-                          <div className="font-semibold">{q.question}</div>
-                          <div className="text-xs text-gray-600">Type: {q.type}</div>
-                          <div className="text-xs text-gray-600">Points: {q.points}</div>
-                        </li>
-                      ))}
-                    </ul>
+                {/* Assignment Details Tab */}
+                {assignmentModalTab === 'assignment' && (
+                  <>
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 border-b pb-4">
+                      <div>
+                        <span className={`inline-block px-3 py-1 rounded text-base font-bold mr-3 ${selectedAssignment.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{selectedAssignment.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
+                        <span className="text-2xl md:text-3xl font-bold text-blue-900 align-middle">{selectedAssignment.title}</span>
+                      </div>
+                      <div className="flex flex-col md:items-end gap-1">
+                        {selectedAssignment.points && <span className="text-lg font-semibold text-blue-900">{selectedAssignment.points} points</span>}
+                        {selectedAssignment.dueDate && <span className="text-sm text-gray-500">Due: {new Date(selectedAssignment.dueDate).toLocaleString()}</span>}
+                      </div>
+                    </div>
+                    <div className="mb-6">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-2">Instructions</h4>
+                      <div className="bg-gray-50 rounded p-4 text-base text-gray-700 whitespace-pre-line">{selectedAssignment.instructions}</div>
+                      {selectedAssignment.description && <div className="mt-2 text-gray-600 text-sm">{selectedAssignment.description}</div>}
+                    </div>
+                    {selectedAssignment.fileUploadRequired && (
+                      <div className="mb-6">
+                        <h4 className="text-lg font-semibold text-gray-800 mb-2">File Upload Required</h4>
+                        <div className="text-sm text-gray-700 mb-1">Allowed file types: <span className="font-mono">{selectedAssignment.allowedFileTypes}</span></div>
+                        {selectedAssignment.fileInstructions && <div className="text-xs text-gray-500 mb-2">{selectedAssignment.fileInstructions}</div>}
+                        <input type="file" className="border rounded px-2 py-1" />
+                      </div>
+                    )}
+                    {selectedAssignment.type === 'quiz' && selectedAssignment.questions && (
+                      <div className="mb-6">
+                        <h4 className="text-lg font-semibold text-gray-800 mb-2">Quiz Questions</h4>
+                        <ul className="list-decimal ml-6 space-y-3">
+                          {selectedAssignment.questions.map((q, idx) => (
+                            <li key={idx} className="mb-2">
+                              <div className="font-semibold text-gray-900">{q.question}</div>
+                              <div className="text-xs text-gray-600">Type: {q.type}</div>
+                              <div className="text-xs text-gray-600">Points: {q.points}</div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+                {/* To Grade Tab */}
+                {assignmentModalTab === 'toGrade' && isFaculty && (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-left">
+                          <th className="p-3 border-b">Name</th>
+                          <th className="p-3 border-b">Status</th>
+                          <th className="p-3 border-b">Feedback</th>
+                          <th className="p-3 border-b">/ {selectedAssignment.points || 100}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {studentViewStatus.map(stu => (
+                          <tr key={stu._id} className="border-b hover:bg-gray-50">
+                            <td className="p-3 flex items-center gap-2">
+                              <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-white text-sm ${stringToColor(stu.firstname + stu.lastname)}`}>{getInitials(stu.firstname, stu.lastname)}</span>
+                              <span>{stu.lastname}, {stu.firstname}</span>
+                            </td>
+                            <td className="p-3">
+                              {stu.turnedIn ? (
+                                <span className="inline-block px-2 py-1 rounded bg-blue-100 text-blue-800 font-semibold text-xs">Turned in</span>
+                              ) : (
+                                <span className="inline-block px-2 py-1 rounded bg-gray-200 text-gray-800 font-semibold text-xs">Not turned in</span>
+                              )}
+                            </td>
+                            <td className="p-3 text-center">
+                              <FiMessageSquare className="inline text-gray-400" />
+                            </td>
+                            <td className="p-3 text-center">{stu.score !== undefined ? stu.score : "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
-                {/* TODO: Add submission/turn in button for students */}
-                <div className="flex justify-end mt-6">
-                  <button className="bg-blue-900 text-white px-6 py-2 rounded" onClick={() => setSelectedAssignment(null)}>Close</button>
+                {/* Graded Tab */}
+                {assignmentModalTab === 'graded' && isFaculty && (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-left">
+                          <th className="p-3 border-b">Name</th>
+                          <th className="p-3 border-b">Status</th>
+                          <th className="p-3 border-b">Feedback</th>
+                          <th className="p-3 border-b">/ {selectedAssignment.points || 100}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {studentViewStatus
+                          .filter(stu => stu.graded)
+                          .map(stu => (
+                            <tr key={stu._id} className="border-b hover:bg-gray-50">
+                              <td className="p-3 flex items-center gap-2">
+                                <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-white text-sm ${stringToColor(stu.firstname + stu.lastname)}`}>{getInitials(stu.firstname, stu.lastname)}</span>
+                                <span>{stu.lastname}, {stu.firstname}</span>
+                              </td>
+                              <td className="p-3">
+                                {stu.turnedIn ? (
+                                  <span className="inline-block px-2 py-1 rounded bg-blue-100 text-blue-800 font-semibold text-xs">Turned in</span>
+                                ) : (
+                                  <span className="inline-block px-2 py-1 rounded bg-gray-200 text-gray-800 font-semibold text-xs">Not turned in</span>
+                                )}
+                              </td>
+                              <td className="p-3 text-center">
+                                <FiMessageSquare className="inline text-gray-400" />
+                              </td>
+                              <td className="p-3 text-center">{stu.score !== undefined ? stu.score : "—"}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {/* Close Button at Bottom */}
+                <div className="flex justify-end mt-8">
+                  <button className="bg-blue-900 text-white px-8 py-2 rounded-lg text-lg font-semibold hover:bg-blue-950" onClick={() => setSelectedAssignment(null)}>Close</button>
                 </div>
               </div>
             </div>
@@ -779,4 +942,21 @@ export default function ClassContent({ selected, isFaculty = false }) {
       )}
     </div>
   );
+}
+
+// Helper functions
+function getInitials(first, last) {
+  return `${(first?.[0] || "").toUpperCase()}${(last?.[0] || "").toUpperCase()}`;
+}
+function stringToColor(str) {
+  // Simple hash to color
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  // Pick from a palette or use Tailwind bg classes
+  const colors = [
+    "bg-pink-500", "bg-blue-500", "bg-green-500", "bg-yellow-500", "bg-purple-500", "bg-red-500", "bg-indigo-500"
+  ];
+  return colors[Math.abs(hash) % colors.length];
 }

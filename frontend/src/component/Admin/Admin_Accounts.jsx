@@ -269,7 +269,7 @@ export default function Admin_Accounts() {
             email: '',
             personalemail: '',
             contactno: '',
-            password: '',
+            password: generatePassword(),
             role: 'students',
             userID: '',
           });

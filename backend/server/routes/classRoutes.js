@@ -113,11 +113,30 @@ router.get('/:classID/members', async (req, res) => {
   }
 });
 
-// Get all classes for the logged-in user (student)
+// Get all classes for the logged-in user (student or faculty)
 router.get('/my-classes', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user._id;
-    const classes = await Class.find({ members: userId });
+    const userID = req.user.userID;
+    let classes = [];
+    if (req.user.role === 'faculty') {
+      // Faculty: classes where facultyID matches
+      classes = await Class.find({ facultyID: userID });
+    } else if (req.user.role === 'students') {
+      // Student: classes where members includes userID
+      classes = await Class.find({ members: userID });
+    } else {
+      // Other roles: return both sets (union, no duplicates)
+      const asFaculty = await Class.find({ facultyID: userID });
+      const asMember = await Class.find({ members: userID });
+      const all = [...asFaculty, ...asMember];
+      // Remove duplicates by classID
+      const seen = new Set();
+      classes = all.filter(cls => {
+        if (seen.has(cls.classID)) return false;
+        seen.add(cls.classID);
+        return true;
+      });
+    }
     res.json(classes);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch classes.' });
