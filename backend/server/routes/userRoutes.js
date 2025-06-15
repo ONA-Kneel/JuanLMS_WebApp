@@ -54,27 +54,11 @@ userRoutes.get("/users/search", authenticateToken, async (req, res) => {
 
 // Retrieve ALL users (paginated)
 userRoutes.get("/users", async (req, res) => {
-    // If no pagination params, return all users as an array (for chat)
-    if (!req.query.page && !req.query.limit) {
-        const users = await User.find({ isArchived: { $ne: true } });
-        const decryptedUsers = users.map(user => ({
-            ...user.toObject(),
-            email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
-            contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
-            personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
-            profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
-            password: undefined,
-        }));
-        return res.json(decryptedUsers);
-    }
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
-
-        // Only count and fetch non-archived users
         const filter = { isArchived: { $ne: true } };
-
         const totalUsers = await User.countDocuments(filter);
         const users = await User.find(filter)
             .skip(skip)
@@ -99,6 +83,25 @@ userRoutes.get("/users", async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Failed to fetch users" });
+    }
+});
+
+// Add GET /users/active for all non-archived users (no pagination, for search/autocomplete)
+userRoutes.get("/users/active", async (req, res) => {
+    try {
+        const users = await User.find({ isArchived: { $ne: true } });
+        const decryptedUsers = users.map(user => ({
+            ...user.toObject(),
+            email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+            contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+            personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+            profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+            password: undefined,
+        }));
+        res.json(decryptedUsers);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch active users" });
     }
 });
 

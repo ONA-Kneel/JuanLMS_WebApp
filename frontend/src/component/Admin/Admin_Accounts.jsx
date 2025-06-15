@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
 import ProfileMenu from "../ProfileMenu";
 import Admin_Navbar from "./Admin_Navbar";
+import editIcon from "../../assets/editing.png";
+import archiveIcon from "../../assets/archive.png";
 import axios from "axios";
-import { Table, Button, Tooltip, Input } from 'antd';
-import 'antd/dist/reset.css';
-import React from 'react';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 
 export default function Admin_Accounts() {
   const [isEditMode, setIsEditMode] = useState(false);
@@ -18,6 +16,7 @@ export default function Admin_Accounts() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [showRecoverSuccess, setShowRecoverSuccess] = useState(false);
   const [showArchivePasswordModal, setShowArchivePasswordModal] = useState(false);
   const [archivePassword, setArchivePassword] = useState("");
   const [archivePasswordError, setArchivePasswordError] = useState("");
@@ -43,11 +42,54 @@ export default function Admin_Accounts() {
   const [totalPages, setTotalPages] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
+  // Placeholder archived users data
+  const [archivedUsers, setArchivedUsers] = useState([
+    {
+      _id: "1",
+      userID: "S101",
+      lastname: "Doe",
+      firstname: "Jane",
+      middlename: "A.",
+      role: "students",
+      archivedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
+      deletedAt: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000), // 25 days left
+    },
+    {
+      _id: "2",
+      userID: "F202",
+      lastname: "Smith",
+      firstname: "John",
+      middlename: "B.",
+      role: "faculty",
+      archivedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), // 10 days ago
+      deletedAt: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000), // 20 days left
+    },
+  ]);
+
   // Add state for active tab
   const [activeTab, setActiveTab] = useState('all');
 
-  // Restore archivedUsers state
-  const [archivedUsers, setArchivedUsers] = useState([]);
+  // Calculate days left until permanent deletion
+  const getDaysLeft = (deletedAt) => {
+    const now = new Date();
+    const deleteDate = new Date(deletedAt);
+    const diffTime = deleteDate - now;
+    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  };
+
+  // Simulate password check (always succeeds for now)
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+    if (adminPassword.trim() === "") {
+      setPasswordError("Password is required.");
+      return;
+    }
+    // Simulate success
+    setShowArchivedTable(true);
+    setShowPasswordModal(false);
+    setAdminPassword("");
+    setPasswordError("");
+  };
 
   // Fetch users on mount and after successful account creation
   const fetchUsers = async (page = 1, limit = ITEMS_PER_PAGE) => {
@@ -66,7 +108,21 @@ export default function Admin_Accounts() {
     }
   };
 
-  const filteredUsers = users;
+  const [searchTerms, setSearchTerms] = useState({
+    firstname: "",
+    middlename: "",
+    lastname: "",
+    userID: "",
+  });
+  
+  const filteredUsers = users.filter((user) => {
+    const matchesFirst = (user.firstname || "").toLowerCase().includes(searchTerms.firstname.toLowerCase());
+    const matchesLast = (user.lastname || "").toLowerCase().includes(searchTerms.lastname.toLowerCase());
+    const matchesMiddle = (user.middlename || "").toLowerCase().includes(searchTerms.middlename.toLowerCase());
+    const matchesRole = roleFilter === "" || (user.role || "") === roleFilter;
+    const matchesUserID = searchTerms.userID === "" || (user.userID || "").toLowerCase().includes(searchTerms.userID.toLowerCase());
+    return matchesFirst && matchesLast && matchesMiddle && matchesRole && matchesUserID;
+  });
   
   const paginatedUsers = [...filteredUsers].sort((a, b) => {
     if (!sortConfig.key) return 0;
@@ -87,7 +143,6 @@ export default function Admin_Accounts() {
     // eslint-disable-next-line
   }, [currentPage]);
 
-  // Fetch archived users when showArchivedTable is true
   useEffect(() => {
     if (showArchivedTable) {
       fetch('http://localhost:5000/users/archived-users')
@@ -318,6 +373,17 @@ export default function Admin_Accounts() {
     // eslint-disable-next-line
   }, [isEditMode]);
 
+  const handleSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        // Toggle direction if clicking the same column
+        return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      // Otherwise, sort ascending
+      return { key, direction: "asc" };
+    });
+  };
+
   const handleEdit = (user) => {
     setIsEditMode(true);
     setEditingUser(user);
@@ -395,80 +461,6 @@ export default function Admin_Accounts() {
     setArchivePasswordError("");
   };
 
-  // Search state for each column
-  const [searchText, setSearchText] = useState('');
-  const [searchedColumn, setSearchedColumn] = useState('');
-  const searchInput = React.useRef(null);
-
-  const getColumnSearchProps = dataIndex => ({
-    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
-      <div style={{ padding: 8 }}>
-        <Input
-          ref={searchInput}
-          placeholder={`Search ${dataIndex}`}
-          value={selectedKeys[0]}
-          onChange={e => setSelectedKeys(e.target.value ? [e.target.value] : [])}
-          onPressEnter={() => handleSearch(selectedKeys, confirm, dataIndex)}
-          style={{ marginBottom: 8, display: 'block' }}
-        />
-        <Button
-          type="primary"
-          onClick={() => handleSearch(selectedKeys, confirm, dataIndex)}
-          icon={<EditOutlined />}
-          size="small"
-          style={{ width: 90, marginRight: 8 }}
-        >
-          Search
-        </Button>
-        <Button onClick={() => handleReset(clearFilters)} size="small" style={{ width: 90 }}>
-          Reset
-        </Button>
-      </div>
-    ),
-    filterIcon: filtered => <EditOutlined style={{ color: filtered ? '#1890ff' : undefined }} />,
-    onFilter: (value, record) =>
-      record[dataIndex]
-        ? record[dataIndex].toString().toLowerCase().includes(value.toLowerCase())
-        : '',
-    onFilterDropdownOpenChange: open => {
-      if (open) {
-        setTimeout(() => searchInput.current?.select(), 100);
-      }
-    },
-    render: text =>
-      searchedColumn === dataIndex ? (
-        <span style={{ backgroundColor: '#ffc069', padding: 0 }}>{text}</span>
-      ) : (
-        text
-      ),
-  });
-
-  const handleSearch = (selectedKeys, confirm, dataIndex) => {
-    confirm();
-    setSearchText(selectedKeys[0]);
-    setSearchedColumn(dataIndex);
-  };
-
-  const handleReset = clearFilters => {
-    clearFilters();
-    setSearchText('');
-  };
-
-  // Restore handlePasswordSubmit for the password modal
-  const handlePasswordSubmit = (e) => {
-    e.preventDefault();
-    if (adminPassword.trim() === "") {
-      setPasswordError("Password is required.");
-      return;
-    }
-    // Simulate success
-    setShowArchivedTable(true);
-    setShowPasswordModal(false);
-    setAdminPassword("");
-    setPasswordError("");
-  };
-
-  // Restore handleRecover for archived users
   const handleRecover = async (user) => {
     const res = await fetch(`http://localhost:5000/users/archived-users/${user._id}/recover`, {
       method: 'POST'
@@ -476,6 +468,7 @@ export default function Admin_Accounts() {
     if (res.ok) {
       setArchivedUsers(prev => prev.filter(u => u._id !== user._id));
       fetchUsers(); // Refresh active users
+      setShowRecoverSuccess(true);
     }
   };
 
@@ -627,252 +620,179 @@ export default function Admin_Accounts() {
           </button>
         </div>
         {/* Users section (with tabs and table) below */}
-        {showArchivedTable ? (
-          <div className="mt-8">
-            <h4 className="text-lg font-semibold mb-2">Archived Users</h4>
-            <Table
-              dataSource={archivedUsers.map(user => ({ ...user, key: user._id }))}
-              columns={[
-                {
-                  title: 'User ID',
-                  dataIndex: 'userID',
-                  key: 'userID',
-                },
-                {
-                  title: 'Last Name',
-                  dataIndex: 'lastname',
-                  key: 'lastname',
-                },
-                {
-                  title: 'First Name',
-                  dataIndex: 'firstname',
-                  key: 'firstname',
-                },
-                {
-                  title: 'Middle Name',
-                  dataIndex: 'middlename',
-                  key: 'middlename',
-                },
-                {
-                  title: 'Role',
-                  dataIndex: 'role',
-                  key: 'role',
-                  render: (role) => <span className="capitalize">{role}</span>,
-                },
-                {
-                  title: 'Time Left',
-                  dataIndex: 'deletedAt',
-                  key: 'deletedAt',
-                  render: (deletedAt) => {
-                    const now = new Date();
-                    const deleteDate = new Date(deletedAt);
-                    const diffTime = deleteDate - now;
-                    const daysLeft = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-                    return `${daysLeft} days left`;
-                  },
-                },
-                {
-                  title: 'Actions',
-                  key: 'actions',
-                  render: (_, user) => (
-                    <Button
-                      type="primary"
-                      onClick={() => handleRecover(user)}
-                      style={{ backgroundColor: '#52c41a', borderColor: '#52c41a', color: '#fff' }}
-                    >
-                      Recover Account
-                    </Button>
-                  ),
-                },
-              ]}
-              pagination={{ pageSize: 10 }}
-              scroll={{ x: true }}
-              locale={{ emptyText: 'No archived users found.' }}
-            />
-            <Button
-              className="mt-4"
-              style={{ backgroundColor: '#595959', color: '#fff' }}
-              onClick={() => setShowArchivedTable(false)}
-            >
-              Back to Active Accounts
-            </Button>
-          </div>
-        ) : (
-          <div className="mt-8">
-            <h4 className="text-lg font-semibold mb-2">Users</h4>
-            <div className="bg-white p-4 rounded-xl shadow mb-4">
-              {/* Tabs for roles (inside the table card) */}
-              <div className="flex gap-2 mb-4">
-                {[
-                  { label: 'All', value: 'all' },
-                  { label: 'Students', value: 'students' },
-                  { label: 'Faculty', value: 'faculty' },
-                  { label: 'Parent', value: 'parent' },
-                  { label: 'Admin', value: 'admin' },
-                  { label: 'Director', value: 'director' },
-                ].map(tab => (
-                  <button
-                    key={tab.value}
-                    className={`px-4 py-2 rounded-t-lg font-semibold focus:outline-none transition-colors border-b-2 ${
-                      activeTab === tab.value
-                        ? 'bg-white border-blue-600 text-blue-700'
-                        : 'bg-gray-200 border-transparent text-gray-600 hover:bg-gray-300'
-                    }`}
-                    onClick={() => setActiveTab(tab.value)}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              {/* Ant Design Table */}
-              <Table
-                dataSource={tabFilteredUsers.map(user => ({ ...user, key: user._id }))}
-                columns={[
-                  {
-                    title: 'User ID',
-                    dataIndex: 'userID',
-                    key: 'userID',
-                    sorter: (a, b) => (a.userID || '').localeCompare(b.userID || ''),
-                    ...getColumnSearchProps('userID'),
-                  },
-                  {
-                    title: 'Last Name',
-                    dataIndex: 'lastname',
-                    key: 'lastname',
-                    sorter: (a, b) => (a.lastname || '').localeCompare(b.lastname || ''),
-                    ...getColumnSearchProps('lastname'),
-                  },
-                  {
-                    title: 'First Name',
-                    dataIndex: 'firstname',
-                    key: 'firstname',
-                    sorter: (a, b) => (a.firstname || '').localeCompare(b.firstname || ''),
-                    ...getColumnSearchProps('firstname'),
-                  },
-                  {
-                    title: 'Middle Name',
-                    dataIndex: 'middlename',
-                    key: 'middlename',
-                    sorter: (a, b) => (a.middlename || '').localeCompare(b.middlename || ''),
-                    ...getColumnSearchProps('middlename'),
-                  },
-                  {
-                    title: 'Role',
-                    dataIndex: 'role',
-                    key: 'role',
-                    render: (role) => <span className="capitalize">{role}</span>,
-                    filters: [
-                      { text: 'Students', value: 'students' },
-                      { text: 'Faculty', value: 'faculty' },
-                      { text: 'Parent', value: 'parent' },
-                      { text: 'Admin', value: 'admin' },
-                      { text: 'Director', value: 'director' },
-                    ],
-                    onFilter: (value, record) => record.role === value,
-                  },
-                  {
-                    title: 'Actions',
-                    key: 'actions',
-                    render: (_, user) => (
-                      <div className="inline-flex space-x-2">
-                        <Tooltip title="Edit">
-                          <Button
-                            type="primary"
-                            shape="circle"
-                            icon={<EditOutlined />}
-                            onClick={() => handleEdit(user)}
-                            style={{ backgroundColor: '#ffc107', borderColor: '#ffc107', color: '#222' }}
-                          />
-                        </Tooltip>
-                        <Tooltip title="Archive">
-                          <Button
-                            type="primary"
-                            shape="circle"
-                            icon={<DeleteOutlined />}
-                            onClick={() => handleArchive(user)}
-                            style={{ backgroundColor: '#f5222d', borderColor: '#f5222d', color: '#fff' }}
-                          />
-                        </Tooltip>
-                      </div>
-                    ),
-                  },
-                ]}
-                pagination={{ pageSize: 10 }}
-                scroll={{ x: true }}
-                locale={{ emptyText: 'No users found.' }}
-              />
+        <div className="mt-8">
+          <h4 className="text-lg font-semibold mb-2">Users</h4>
+          <div className="bg-white p-4 rounded-xl shadow mb-4">
+            {/* Tabs for roles (inside the table card) */}
+            <div className="flex gap-2 mb-4">
+              {[
+                { label: 'All', value: 'all' },
+                { label: 'Students', value: 'students' },
+                { label: 'Faculty', value: 'faculty' },
+                { label: 'Parent', value: 'parent' },
+                { label: 'Admin', value: 'admin' },
+                { label: 'Director', value: 'director' },
+              ].map(tab => (
+                <button
+                  key={tab.value}
+                  className={`px-4 py-2 rounded-t-lg font-semibold focus:outline-none transition-colors border-b-2 ${
+                    activeTab === tab.value
+                      ? 'bg-white border-blue-600 text-blue-700'
+                      : 'bg-gray-200 border-transparent text-gray-600 hover:bg-gray-300'
+                  }`}
+                  onClick={() => setActiveTab(tab.value)}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-4 mt-4">
-                <button
-                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
-                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </button>
-                <span className="text-sm">Page {currentPage} of {totalPages}</span>
-                <button
-                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
-                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                </button>
-              </div>
-            )}
-            {/* Archive Password Modal */}
-            {showArchivePasswordModal && (
-              <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                  <h3 className="text-xl font-semibold mb-4">Account Archive</h3>
-                  <p className="mb-4">In order to archive this account you must enter admin password</p>
-                  <form onSubmit={handleArchivePasswordSubmit}>
-                    <input
-                      type="password"
-                      value={archivePassword}
-                      onChange={e => setArchivePassword(e.target.value)}
-                      placeholder="Enter admin password"
-                      className="border rounded p-2 w-full mb-2"
-                      autoFocus
-                    />
-                    {archivePasswordError && <p className="text-red-600 text-sm mb-2">{archivePasswordError}</p>}
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={cancelArchivePassword}
-                        className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
-                      >
-                        Archive
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-            {/* Archive Success Message */}
-            {showArchiveSuccess && (
-              <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                  <h3 className="text-xl font-semibold mb-2 text-green-600">Account Archived</h3>
-                  <button
-                    onClick={() => setShowArchiveSuccess(false)}
-                    className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
-                  >
-                    OK
-                  </button>
-                </div>
-              </div>
-            )}
+            <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+              <thead>
+                <tr className="bg-gray-100 text-left">
+                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("userID")}>User ID {sortConfig.key === "userID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                  <th className="p-3 border w-1/6">Role</th>
+                  <th className="p-3 border w-1/6">Actions</th>
+                </tr>
+                {/* New row for search inputs */}
+                <tr className="bg-white text-left">
+                  <th className="p-2 border">
+                    <input type="text" placeholder="Search User ID" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, userID: e.target.value }))} />
+                  </th>
+                  <th className="p-2 border">
+                    <input type="text" placeholder="Search Last Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, lastname: e.target.value }))} />
+                  </th>
+                  <th className="p-2 border">
+                    <input type="text" placeholder="Search First Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, firstname: e.target.value }))} />
+                  </th>
+                  <th className="p-2 border">
+                    <input type="text" placeholder="Search Middle Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, middlename: e.target.value }))} />
+                  </th>
+                  <th className="p-2 border">
+                    <select className="w-full border rounded px-2 py-1 text-sm" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+                      <option value="">All Roles</option>
+                      <option value="students">Students</option>
+                      <option value="faculty">Faculty</option>
+                      <option value="parent">Parent</option>
+                      <option value="admin">Admin</option>
+                      <option value="director">Director</option>
+                    </select>
+                  </th>
+                  <th className="p-2 border"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {tabFilteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="text-center p-4 text-gray-500">
+                      No users found.
+                    </td>
+                  </tr>
+                ) : (
+                  tabFilteredUsers.map((user) => (
+                    <tr key={user._id}>
+                      <td className="p-3 border">{user.userID || '-'}</td>
+                      <td className="p-3 border">{user.lastname}</td>
+                      <td className="p-3 border">{user.firstname}</td>
+                      <td className="p-3 border">{user.middlename}</td>
+                      <td className="p-3 border capitalize">{user.role}</td>
+                      <td className="p-3 border">
+                        <div className="inline-flex space-x-2">
+                          <button
+                            onClick={() => handleEdit(user)}
+                            className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded"
+                          >
+                            <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
+                          </button>
+                          <button
+                            onClick={() => handleArchive(user)}
+                            className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded"
+                          >
+                            <img src={archiveIcon} alt="Archive" className="w-8 h-8 inline-block" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-4 mt-4">
+              <button
+                className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <span className="text-sm">Page {currentPage} of {totalPages}</span>
+              <button
+                className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          )}
+
+          {/* Archive Password Modal */}
+          {showArchivePasswordModal && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                <h3 className="text-xl font-semibold mb-4">Account Archive</h3>
+                <p className="mb-4">In order to archive this account you must enter admin password</p>
+                <form onSubmit={handleArchivePasswordSubmit}>
+                  <input
+                    type="password"
+                    value={archivePassword}
+                    onChange={e => setArchivePassword(e.target.value)}
+                    placeholder="Enter admin password"
+                    className="border rounded p-2 w-full mb-2"
+                    autoFocus
+                  />
+                  {archivePasswordError && <p className="text-red-600 text-sm mb-2">{archivePasswordError}</p>}
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={cancelArchivePassword}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+                    >
+                      Archive
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Archive Success Message */}
+          {showArchiveSuccess && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                <h3 className="text-xl font-semibold mb-2 text-green-600">Account Archived</h3>
+                <button
+                  onClick={() => setShowArchiveSuccess(false)}
+                  className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Save Confirmation Modal */}
         {showSaveConfirm && (

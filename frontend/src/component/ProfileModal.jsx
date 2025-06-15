@@ -1,3 +1,5 @@
+//PROFILE MODAL
+
 // ===================== Imports =====================
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactDom from 'react-dom';
