@@ -4,7 +4,6 @@ import Admin_Navbar from "./Admin_Navbar";
 
 import ProfileModal from "../ProfileModal"; // reuse if you want it for faculty too
 // import { useNavigate } from "react-router-dom";
-import compClassesIcon from "../../assets/compClassesIcon.png";
 import ProfileMenu from "../ProfileMenu";
 
 export default function Admin_Dashboard() {
@@ -126,10 +125,10 @@ export default function Admin_Dashboard() {
               <h3 className="text-lg md:text-xl font-bold mb-3">Audit Preview</h3>
               <table className="min-w-full bg-white border rounded-lg overflow-hidden text-xs table-fixed">
                 <thead>
-                  <tr className="bg-gray-100 text-left">
-                    <th className="p-2 border w-2/6">Timestamp</th>
-                    <th className="p-2 border w-2/6">User</th>
-                    <th className="p-2 border w-1/6">Action</th>
+                  <tr className="bg-gray-50 text-left">
+                    <th className="p-2 border-b w-2/6 font-semibold text-gray-700">Timestamp</th>
+                    <th className="p-2 border-b w-2/6 font-semibold text-gray-700">User</th>
+                    <th className="p-2 border-b w-1/6 font-semibold text-gray-700">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -140,11 +139,11 @@ export default function Admin_Dashboard() {
                       </td>
                     </tr>
                   ) : (
-                    recentAuditLogs.map((log) => (
-                      <tr key={log._id} className="hover:bg-gray-50">
-                        <td className="p-2 border text-gray-500 whitespace-nowrap">{formatDate(log.timestamp)}</td>
-                        <td className="p-2 border text-gray-900 whitespace-nowrap">{log.userName}</td>
-                        <td className="p-2 border text-gray-900 whitespace-nowrap">{log.action}</td>
+                    recentAuditLogs.map((log, idx) => (
+                      <tr key={log._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
+                        <td className="p-2 border-b text-gray-500 whitespace-nowrap">{formatDate(log.timestamp)}</td>
+                        <td className="p-2 border-b text-gray-900 whitespace-nowrap">{log.userName}</td>
+                        <td className="p-2 border-b text-gray-900 whitespace-nowrap">{log.action}</td>
                       </tr>
                     ))
                   )}

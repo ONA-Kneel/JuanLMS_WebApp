@@ -646,29 +646,29 @@ export default function Admin_Accounts() {
               </div>
               <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                 <thead>
-                  <tr className="bg-gray-100 text-left">
-                    <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("userID")}>User ID {sortConfig.key === "userID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border w-1/6">Role</th>
-                    <th className="p-3 border w-1/6">Actions</th>
+                  <tr className="bg-gray-50 text-left">
+                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("userID")}>User ID {sortConfig.key === "userID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b w-1/6 font-semibold text-gray-700">Role</th>
+                    <th className="p-3 border-b w-1/6 font-semibold text-gray-700">Actions</th>
                   </tr>
                   {/* New row for search inputs */}
                   <tr className="bg-white text-left">
-                    <th className="p-2 border">
+                    <th className="p-2 border-b">
                       <input type="text" placeholder="Search User ID" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, userID: e.target.value }))} />
                     </th>
-                    <th className="p-2 border">
+                    <th className="p-2 border-b">
                       <input type="text" placeholder="Search Last Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, lastname: e.target.value }))} />
                     </th>
-                    <th className="p-2 border">
+                    <th className="p-2 border-b">
                       <input type="text" placeholder="Search First Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, firstname: e.target.value }))} />
                     </th>
-                    <th className="p-2 border">
+                    <th className="p-2 border-b">
                       <input type="text" placeholder="Search Middle Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, middlename: e.target.value }))} />
                     </th>
-                    <th className="p-2 border">
+                    <th className="p-2 border-b">
                       <select className="w-full border rounded px-2 py-1 text-sm" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
                         <option value="">All Roles</option>
                         <option value="students">Students</option>
@@ -678,7 +678,7 @@ export default function Admin_Accounts() {
                         <option value="director">Director</option>
                       </select>
                     </th>
-                    <th className="p-2 border"></th>
+                    <th className="p-2 border-b"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -689,26 +689,38 @@ export default function Admin_Accounts() {
                       </td>
                     </tr>
                   ) : (
-                    tabFilteredUsers.map((user) => (
-                      <tr key={user._id}>
-                        <td className="p-3 border">{user.userID || '-'}</td>
-                        <td className="p-3 border">{user.lastname}</td>
-                        <td className="p-3 border">{user.firstname}</td>
-                        <td className="p-3 border">{user.middlename}</td>
-                        <td className="p-3 border capitalize">{user.role}</td>
-                        <td className="p-3 border">
+                    tabFilteredUsers.map((user, idx) => (
+                      <tr key={user._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
+                        <td className="p-3 border-b">{user.userID || '-'}</td>
+                        <td className="p-3 border-b">{user.lastname}</td>
+                        <td className="p-3 border-b">{user.firstname}</td>
+                        <td className="p-3 border-b">{user.middlename}</td>
+                        <td className="p-3 border-b">
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold
+                            ${user.role === 'students' ? 'bg-green-100 text-green-700 border border-green-300' :
+                              user.role === 'faculty' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
+                              user.role === 'admin' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                              user.role === 'director' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
+                              user.role === 'parent' ? 'bg-pink-100 text-pink-700 border border-pink-300' :
+                              'bg-gray-100 text-gray-700 border border-gray-300'}`}>{user.role}</span>
+                        </td>
+                        <td className="p-3 border-b">
                           <div className="inline-flex space-x-2">
                             <button
                               onClick={() => handleEdit(user)}
-                              className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded"
+                              className="p-1 rounded hover:bg-yellow-100 group relative"
+                              title="Edit"
                             >
-                              <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
+                              <img src={editIcon} alt="Edit" className="w-6 h-6 inline-block" />
+                              <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Edit</span>
                             </button>
                             <button
                               onClick={() => handleArchive(user)}
-                              className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded"
+                              className="p-1 rounded hover:bg-red-100 group relative"
+                              title="Archive"
                             >
-                              <img src={archiveIcon} alt="Archive" className="w-8 h-8 inline-block" />
+                              <img src={archiveIcon} alt="Archive" className="w-6 h-6 inline-block" />
+                              <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Archive</span>
                             </button>
                           </div>
                         </td>
@@ -919,7 +931,7 @@ export default function Admin_Accounts() {
             <div className="overflow-x-auto">
               <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                 <thead>
-                  <tr className="bg-gray-100 text-left">
+                  <tr className="bg-gray-50 text-left">
                     <th className="p-3 border">User ID</th>
                     <th className="p-3 border">Last Name</th>
                     <th className="p-3 border">First Name</th>
@@ -938,22 +950,34 @@ export default function Admin_Accounts() {
                       </td>
                     </tr>
                   ) : (
-                    archivedUsers.map((user) => (
-                      <tr key={user._id}>
-                        <td className="p-3 border">{user.userID || '-'}</td>
-                        <td className="p-3 border">{user.lastname}</td>
-                        <td className="p-3 border">{user.firstname}</td>
-                        <td className="p-3 border">{user.middlename}</td>
-                        <td className="p-3 border capitalize">{user.role}</td>
-                        <td className="p-3 border">{user.archivedAt ? new Date(user.archivedAt).toLocaleDateString() : '-'}</td>
-                        <td className="p-3 border">{user.deletedAt ? getDaysLeft(user.deletedAt) : '-'}</td>
-                        <td className="p-3 border">
-                          <button
-                            onClick={() => handleRecover(user)}
-                            className="bg-green-500 hover:bg-green-700 text-white px-2 py-1 text-xs rounded"
-                          >
-                            Recover
-                          </button>
+                    archivedUsers.map((user, idx) => (
+                      <tr key={user._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
+                        <td className="p-3 border-b">{user.userID || '-'}</td>
+                        <td className="p-3 border-b">{user.lastname}</td>
+                        <td className="p-3 border-b">{user.firstname}</td>
+                        <td className="p-3 border-b">{user.middlename}</td>
+                        <td className="p-3 border-b">
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold
+                            ${user.role === 'students' ? 'bg-green-100 text-green-700 border border-green-300' :
+                              user.role === 'faculty' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
+                              user.role === 'admin' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                              user.role === 'director' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
+                              user.role === 'parent' ? 'bg-pink-100 text-pink-700 border border-pink-300' :
+                              'bg-gray-100 text-gray-700 border border-gray-300'}`}>{user.role}</span>
+                        </td>
+                        <td className="p-3 border-b">{user.archivedAt ? new Date(user.archivedAt).toLocaleDateString() : '-'}</td>
+                        <td className="p-3 border-b">{user.deletedAt ? getDaysLeft(user.deletedAt) : '-'}</td>
+                        <td className="p-3 border-b">
+                          <div className="inline-flex space-x-2">
+                            <button
+                              onClick={() => handleRecover(user)}
+                              className="p-1 rounded hover:bg-green-100 group relative"
+                              title="Recover"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-green-600 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582M20 20v-5h-.581M5.5 19A7.5 7.5 0 0112 4.5c2.485 0 4.5 2.015 4.5 4.5S14.485 13.5 12 13.5c-2.485 0-4.5-2.015-4.5-4.5" /></svg>
+                              <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Recover</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
