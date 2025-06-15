@@ -8,7 +8,6 @@ import axios from "axios";
 export default function Admin_Accounts() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [showArchiveSuccess, setShowArchiveSuccess] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
   const [showCreateSuccess, setShowCreateSuccess] = useState(false);
@@ -438,10 +437,9 @@ export default function Admin_Accounts() {
 
     if (res.ok) {
       setShowArchivePasswordModal(false);
-      setShowArchiveSuccess(true);
       setUsers(prev => prev.filter(u => u._id !== userToArchive._id));
       setUserToArchive(null);
-      setTimeout(() => setShowArchiveSuccess(false), 2000);
+      setTimeout(() => setShowArchivePasswordModal(false), 2000);
       fetchUsers(); // Refresh the users list from the backend
       if (showArchivedTable) {
         fetch('http://localhost:5000/users/archived-users')
@@ -473,275 +471,402 @@ export default function Admin_Accounts() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
-      <Admin_Navbar />
-
-      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-          <div>
-            <h2 className="text-2xl md:text-3xl font-bold">Create Accounts</h2>
-            <p className="text-base md:text-lg"> Academic Year and Term here | 
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
+    <>
+      <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+        <Admin_Navbar />
+        <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-bold">Create Accounts</h2>
+              <p className="text-base md:text-lg"> Academic Year and Term here | 
+                {new Date().toLocaleDateString("en-US", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </p>
+            </div>
+            <ProfileMenu />
           </div>
-          <ProfileMenu />
-        </div>
 
-        {/* Move New Account form to the top */}
-        <div className="bg-white p-6 rounded-xl shadow mb-10">
-          <h3 className="text-xl font-semibold mb-4">{isEditMode ? 'Edit Account' : 'New Account'}</h3>
-          <form className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleSubmit}>
-            <input
-              type="text"
-              name="firstname"
-              value={formData.firstname}
-              onChange={handleChange}
-              placeholder="First Name"
-              className="border rounded p-2"
-              required
-            />
-            <input
-              type="text"
-              name="middlename"
-              value={formData.middlename}
-              onChange={handleChange}
-              placeholder="Middle Name"
-              className="border rounded p-2"
-            />
-            <input
-              type="text"
-              name="lastname"
-              value={formData.lastname}
-              onChange={handleChange}
-              placeholder="Last Name"
-              className="border rounded p-2"
-              required
-            />
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              readOnly
-              placeholder="School Email (auto-generated)"
-              className="border rounded p-2 bg-gray-100 cursor-not-allowed"
-              required
-            />
-            <input
-              type="email"
-              name="personalemail"
-              value={formData.personalemail}
-              onChange={handleChange}
-              placeholder="Personal Email"
-              className="border rounded p-2"
-              required
-            />
-            <input
-              type="text"
-              name="contactno"
-              value={formData.contactno}
-              onChange={handleChange}
-              placeholder="Contact Number (Optional)"
-              className="border rounded p-2"
-              required
-            />
-            <div className="flex gap-2">
+          {/* Move New Account form to the top */}
+          <div className="bg-white p-6 rounded-xl shadow mb-10">
+            <h3 className="text-xl font-semibold mb-4">{isEditMode ? 'Edit Account' : 'New Account'}</h3>
+            <form className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleSubmit}>
               <input
                 type="text"
-                name="password"
-                value={formData.password}
-                readOnly
-                placeholder="Password"
-                className="border rounded p-2 flex-1 bg-gray-100 cursor-not-allowed"
+                name="firstname"
+                value={formData.firstname}
+                onChange={handleChange}
+                placeholder="First Name"
+                className="border rounded p-2"
+                required
               />
-            </div>
-            <select
-              name="role"
-              value={formData.role}
-              onChange={handleChange}
-              className="border rounded p-2"
-              required
-            >
-              <option value="students">Students</option>
-              <option value="faculty">Faculty</option>
-              <option value="parent">Parent</option>
-              <option value="admin">Admin</option>
-              <option value="director">Director</option>
-            </select>
-            <div className="col-span-1 md:col-span-2 flex gap-2">
-              <button
-                type="submit"
-                disabled={!formData.password}
-                className={`flex-1 text-white rounded p-2 mt-2 ${
-                  formData.password 
-                    ? 'bg-blue-600 hover:bg-blue-700' 
-                    : 'bg-gray-400 cursor-not-allowed'
-                }`}
+              <input
+                type="text"
+                name="middlename"
+                value={formData.middlename}
+                onChange={handleChange}
+                placeholder="Middle Name"
+                className="border rounded p-2"
+              />
+              <input
+                type="text"
+                name="lastname"
+                value={formData.lastname}
+                onChange={handleChange}
+                placeholder="Last Name"
+                className="border rounded p-2"
+                required
+              />
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                readOnly
+                placeholder="School Email (auto-generated)"
+                className="border rounded p-2 bg-gray-100 cursor-not-allowed"
+                required
+              />
+              <input
+                type="email"
+                name="personalemail"
+                value={formData.personalemail}
+                onChange={handleChange}
+                placeholder="Personal Email"
+                className="border rounded p-2"
+                required
+              />
+              <input
+                type="text"
+                name="contactno"
+                value={formData.contactno}
+                onChange={handleChange}
+                placeholder="Contact Number (Optional)"
+                className="border rounded p-2"
+                required
+              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  name="password"
+                  value={formData.password}
+                  readOnly
+                  placeholder="Password"
+                  className="border rounded p-2 flex-1 bg-gray-100 cursor-not-allowed"
+                />
+              </div>
+              <select
+                name="role"
+                value={formData.role}
+                onChange={handleChange}
+                className="border rounded p-2"
+                required
               >
-                {isEditMode ? 'Save Edited Account' : 'Create Account'}
-              </button>
-              {isEditMode && (
+                <option value="students">Students</option>
+                <option value="faculty">Faculty</option>
+                <option value="parent">Parent</option>
+                <option value="admin">Admin</option>
+                <option value="director">Director</option>
+              </select>
+              <div className="col-span-1 md:col-span-2 flex gap-2">
                 <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditMode(false);
-                    setEditingUser(null);
-                    setFormData({
-                      firstname: "",
-                      middlename: "",
-                      lastname: "",
-                      email: "",
-                      personalemail: "",
-                      contactno: "",
-                      password: "",
-                      role: "students",
-                      userID: "",
-                    });
-                  }}
-                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white rounded p-2 mt-2"
-                >
-                  Cancel Edit
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-        {/* Button to view archived accounts */}
-        <div className="mb-4">
-          <button
-            className="bg-gray-700 hover:bg-gray-900 text-white px-4 py-2 rounded"
-            onClick={() => setShowPasswordModal(true)}
-          >
-            View Archived Accounts
-          </button>
-        </div>
-        {/* Users section (with tabs and table) below */}
-        <div className="mt-8">
-          <h4 className="text-lg font-semibold mb-2">Users</h4>
-          <div className="bg-white p-4 rounded-xl shadow mb-4">
-            {/* Tabs for roles (inside the table card) */}
-            <div className="flex gap-2 mb-4">
-              {[
-                { label: 'All', value: 'all' },
-                { label: 'Students', value: 'students' },
-                { label: 'Faculty', value: 'faculty' },
-                { label: 'Parent', value: 'parent' },
-                { label: 'Admin', value: 'admin' },
-                { label: 'Director', value: 'director' },
-              ].map(tab => (
-                <button
-                  key={tab.value}
-                  className={`px-4 py-2 rounded-t-lg font-semibold focus:outline-none transition-colors border-b-2 ${
-                    activeTab === tab.value
-                      ? 'bg-white border-blue-600 text-blue-700'
-                      : 'bg-gray-200 border-transparent text-gray-600 hover:bg-gray-300'
+                  type="submit"
+                  disabled={!formData.password}
+                  className={`flex-1 text-white rounded p-2 mt-2 ${
+                    formData.password 
+                      ? 'bg-blue-600 hover:bg-blue-700' 
+                      : 'bg-gray-400 cursor-not-allowed'
                   }`}
-                  onClick={() => setActiveTab(tab.value)}
                 >
-                  {tab.label}
+                  {isEditMode ? 'Save Edited Account' : 'Create Account'}
                 </button>
-              ))}
-            </div>
-            <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
-              <thead>
-                <tr className="bg-gray-100 text-left">
-                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("userID")}>User ID {sortConfig.key === "userID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                  <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                  <th className="p-3 border w-1/6">Role</th>
-                  <th className="p-3 border w-1/6">Actions</th>
-                </tr>
-                {/* New row for search inputs */}
-                <tr className="bg-white text-left">
-                  <th className="p-2 border">
-                    <input type="text" placeholder="Search User ID" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, userID: e.target.value }))} />
-                  </th>
-                  <th className="p-2 border">
-                    <input type="text" placeholder="Search Last Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, lastname: e.target.value }))} />
-                  </th>
-                  <th className="p-2 border">
-                    <input type="text" placeholder="Search First Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, firstname: e.target.value }))} />
-                  </th>
-                  <th className="p-2 border">
-                    <input type="text" placeholder="Search Middle Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, middlename: e.target.value }))} />
-                  </th>
-                  <th className="p-2 border">
-                    <select className="w-full border rounded px-2 py-1 text-sm" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-                      <option value="">All Roles</option>
-                      <option value="students">Students</option>
-                      <option value="faculty">Faculty</option>
-                      <option value="parent">Parent</option>
-                      <option value="admin">Admin</option>
-                      <option value="director">Director</option>
-                    </select>
-                  </th>
-                  <th className="p-2 border"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {tabFilteredUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="text-center p-4 text-gray-500">
-                      No users found.
-                    </td>
+                {isEditMode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditMode(false);
+                      setEditingUser(null);
+                      setFormData({
+                        firstname: "",
+                        middlename: "",
+                        lastname: "",
+                        email: "",
+                        personalemail: "",
+                        contactno: "",
+                        password: "",
+                        role: "students",
+                        userID: "",
+                      });
+                    }}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white rounded p-2 mt-2"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+          {/* Button to view archived accounts */}
+          <div className="mb-4">
+            <button
+              className="bg-gray-700 hover:bg-gray-900 text-white px-4 py-2 rounded"
+              onClick={() => setShowPasswordModal(true)}
+            >
+              View Archived Accounts
+            </button>
+          </div>
+          {/* Users section (with tabs and table) below */}
+          <div className="mt-8">
+            <h4 className="text-lg font-semibold mb-2">Users</h4>
+            <div className="bg-white p-4 rounded-xl shadow mb-4">
+              {/* Tabs for roles (inside the table card) */}
+              <div className="flex gap-2 mb-4">
+                {[
+                  { label: 'All', value: 'all' },
+                  { label: 'Students', value: 'students' },
+                  { label: 'Faculty', value: 'faculty' },
+                  { label: 'Parent', value: 'parent' },
+                  { label: 'Admin', value: 'admin' },
+                  { label: 'Director', value: 'director' },
+                ].map(tab => (
+                  <button
+                    key={tab.value}
+                    className={`px-4 py-2 rounded-t-lg font-semibold focus:outline-none transition-colors border-b-2 ${
+                      activeTab === tab.value
+                        ? 'bg-white border-blue-600 text-blue-700'
+                        : 'bg-gray-200 border-transparent text-gray-600 hover:bg-gray-300'
+                    }`}
+                    onClick={() => setActiveTab(tab.value)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                <thead>
+                  <tr className="bg-gray-100 text-left">
+                    <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("userID")}>User ID {sortConfig.key === "userID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border w-1/6 cursor-pointer select-none" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border w-1/6">Role</th>
+                    <th className="p-3 border w-1/6">Actions</th>
                   </tr>
-                ) : (
-                  tabFilteredUsers.map((user) => (
-                    <tr key={user._id}>
-                      <td className="p-3 border">{user.userID || '-'}</td>
-                      <td className="p-3 border">{user.lastname}</td>
-                      <td className="p-3 border">{user.firstname}</td>
-                      <td className="p-3 border">{user.middlename}</td>
-                      <td className="p-3 border capitalize">{user.role}</td>
-                      <td className="p-3 border">
-                        <div className="inline-flex space-x-2">
-                          <button
-                            onClick={() => handleEdit(user)}
-                            className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded"
-                          >
-                            <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
-                          </button>
-                          <button
-                            onClick={() => handleArchive(user)}
-                            className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded"
-                          >
-                            <img src={archiveIcon} alt="Archive" className="w-8 h-8 inline-block" />
-                          </button>
-                        </div>
+                  {/* New row for search inputs */}
+                  <tr className="bg-white text-left">
+                    <th className="p-2 border">
+                      <input type="text" placeholder="Search User ID" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, userID: e.target.value }))} />
+                    </th>
+                    <th className="p-2 border">
+                      <input type="text" placeholder="Search Last Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, lastname: e.target.value }))} />
+                    </th>
+                    <th className="p-2 border">
+                      <input type="text" placeholder="Search First Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, firstname: e.target.value }))} />
+                    </th>
+                    <th className="p-2 border">
+                      <input type="text" placeholder="Search Middle Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, middlename: e.target.value }))} />
+                    </th>
+                    <th className="p-2 border">
+                      <select className="w-full border rounded px-2 py-1 text-sm" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+                        <option value="">All Roles</option>
+                        <option value="students">Students</option>
+                        <option value="faculty">Faculty</option>
+                        <option value="parent">Parent</option>
+                        <option value="admin">Admin</option>
+                        <option value="director">Director</option>
+                      </select>
+                    </th>
+                    <th className="p-2 border"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tabFilteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="text-center p-4 text-gray-500">
+                        No users found.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    tabFilteredUsers.map((user) => (
+                      <tr key={user._id}>
+                        <td className="p-3 border">{user.userID || '-'}</td>
+                        <td className="p-3 border">{user.lastname}</td>
+                        <td className="p-3 border">{user.firstname}</td>
+                        <td className="p-3 border">{user.middlename}</td>
+                        <td className="p-3 border capitalize">{user.role}</td>
+                        <td className="p-3 border">
+                          <div className="inline-flex space-x-2">
+                            <button
+                              onClick={() => handleEdit(user)}
+                              className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded"
+                            >
+                              <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
+                            </button>
+                            <button
+                              onClick={() => handleArchive(user)}
+                              className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded"
+                            >
+                              <img src={archiveIcon} alt="Archive" className="w-8 h-8 inline-block" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-4 mt-4">
+                <button
+                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                <span className="text-sm">Page {currentPage} of {totalPages}</span>
+                <button
+                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-4 mt-4">
-              <button
-                className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </button>
-              <span className="text-sm">Page {currentPage} of {totalPages}</span>
-              <button
-                className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </button>
+          {/* Save Confirmation Modal */}
+          {showSaveConfirm && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                <h3 className="text-xl font-semibold mb-4">Confirm Save</h3>
+                <p className="mb-4">Save these necessary changes?</p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={cancelSave}
+                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                  >
+                    No
+                  </button>
+                  <button
+                    onClick={confirmSave}
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                  >
+                    Yes
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
+          {/* Update Success Message */}
+          {showUpdateSuccess && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                <h3 className="text-xl font-semibold mb-2 text-green-600">Account Updated</h3>
+                <button
+                  onClick={() => setShowUpdateSuccess(false)}
+                  className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Create Success Message */}
+          {showCreateSuccess && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                <h3 className="text-xl font-semibold mb-2 text-green-600">Account Created Successfully</h3>
+                <p className="text-gray-600 mb-4">The new account has been created and added to the system.</p>
+                <button
+                  onClick={() => setShowCreateSuccess(false)}
+                  className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Duplicate Email Modal */}
+          {duplicateEmailModal && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                <h3 className="text-xl font-semibold mb-4">Duplicate Email Detected</h3>
+                <p className="mb-4">
+                  The email you entered already exists.<br />
+                </p>
+                <p className="mb-4">Do you want to proceed with the suggested email?</p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setDuplicateEmailModal(false)}
+                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setDuplicateEmailModal(false);
+                      if (pendingFormData) {
+                        await handleSubmit(null);
+                        setPendingFormData(null);
+                      }
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                  >
+                    Proceed
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Password Modal */}
+          {showPasswordModal && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                <h3 className="text-xl font-semibold mb-4">Enter Admin Password</h3>
+                <form onSubmit={handlePasswordSubmit}>
+                  <input
+                    type="password"
+                    value={adminPassword}
+                    onChange={e => setAdminPassword(e.target.value)}
+                    placeholder="Admin Password"
+                    className="border rounded p-2 w-full mb-2"
+                    autoFocus
+                  />
+                  {passwordError && <p className="text-red-600 text-sm mb-2">{passwordError}</p>}
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPasswordModal(false);
+                        setAdminPassword("");
+                        setPasswordError("");
+                      }}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                    >
+                      Submit
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
           {/* Archive Password Modal */}
           {showArchivePasswordModal && (
             <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
@@ -777,150 +902,71 @@ export default function Admin_Accounts() {
               </div>
             </div>
           )}
-
-          {/* Archive Success Message */}
-          {showArchiveSuccess && (
-            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-              <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                <h3 className="text-xl font-semibold mb-2 text-green-600">Account Archived</h3>
-                <button
-                  onClick={() => setShowArchiveSuccess(false)}
-                  className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
-                >
-                  OK
-                </button>
-              </div>
-            </div>
-          )}
         </div>
-
-        {/* Save Confirmation Modal */}
-        {showSaveConfirm && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-              <h3 className="text-xl font-semibold mb-4">Confirm Save</h3>
-              <p className="mb-4">Save these necessary changes?</p>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={cancelSave}
-                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
-                >
-                  No
-                </button>
-                <button
-                  onClick={confirmSave}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
-                >
-                  Yes
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Update Success Message */}
-        {showUpdateSuccess && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-              <h3 className="text-xl font-semibold mb-2 text-green-600">Account Updated</h3>
-              <button
-                onClick={() => setShowUpdateSuccess(false)}
-                className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Create Success Message */}
-        {showCreateSuccess && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-              <h3 className="text-xl font-semibold mb-2 text-green-600">Account Created Successfully</h3>
-              <p className="text-gray-600 mb-4">The new account has been created and added to the system.</p>
-              <button
-                onClick={() => setShowCreateSuccess(false)}
-                className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Duplicate Email Modal */}
-        {duplicateEmailModal && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-              <h3 className="text-xl font-semibold mb-4">Duplicate Email Detected</h3>
-              <p className="mb-4">
-                The email you entered already exists.<br />
-              </p>
-              <p className="mb-4">Do you want to proceed with the suggested email?</p>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setDuplicateEmailModal(false)}
-                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={async () => {
-                    setDuplicateEmailModal(false);
-                    if (pendingFormData) {
-                      await handleSubmit(null);
-                      setPendingFormData(null);
-                    }
-                  }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-                >
-                  Proceed
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Password Modal */}
-        {showPasswordModal && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-              <h3 className="text-xl font-semibold mb-4">Enter Admin Password</h3>
-              <form onSubmit={handlePasswordSubmit}>
-                <input
-                  type="password"
-                  value={adminPassword}
-                  onChange={e => setAdminPassword(e.target.value)}
-                  placeholder="Admin Password"
-                  className="border rounded p-2 w-full mb-2"
-                  autoFocus
-                />
-                {passwordError && <p className="text-red-600 text-sm mb-2">{passwordError}</p>}
-                <div className="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowPasswordModal(false);
-                      setAdminPassword("");
-                      setPasswordError("");
-                    }}
-                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-                  >
-                    Submit
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
-    </div>
+      {/* Archived Accounts Modal */}
+      {showArchivedTable && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-3xl w-full relative">
+            <button
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl font-bold"
+              onClick={() => setShowArchivedTable(false)}
+              aria-label="Close"
+            >
+              &times;
+            </button>
+            <h3 className="text-xl font-semibold mb-4">Archived Accounts</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                <thead>
+                  <tr className="bg-gray-100 text-left">
+                    <th className="p-3 border">User ID</th>
+                    <th className="p-3 border">Last Name</th>
+                    <th className="p-3 border">First Name</th>
+                    <th className="p-3 border">Middle Name</th>
+                    <th className="p-3 border">Role</th>
+                    <th className="p-3 border">Archived At</th>
+                    <th className="p-3 border">Days Left</th>
+                    <th className="p-3 border">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {archivedUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="text-center p-4 text-gray-500">
+                        No archived users found.
+                      </td>
+                    </tr>
+                  ) : (
+                    archivedUsers.map((user) => (
+                      <tr key={user._id}>
+                        <td className="p-3 border">{user.userID || '-'}</td>
+                        <td className="p-3 border">{user.lastname}</td>
+                        <td className="p-3 border">{user.firstname}</td>
+                        <td className="p-3 border">{user.middlename}</td>
+                        <td className="p-3 border capitalize">{user.role}</td>
+                        <td className="p-3 border">{user.archivedAt ? new Date(user.archivedAt).toLocaleDateString() : '-'}</td>
+                        <td className="p-3 border">{user.deletedAt ? getDaysLeft(user.deletedAt) : '-'}</td>
+                        <td className="p-3 border">
+                          <button
+                            onClick={() => handleRecover(user)}
+                            className="bg-green-500 hover:bg-green-700 text-white px-2 py-1 text-xs rounded"
+                          >
+                            Recover
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {showRecoverSuccess && (
+              <div className="mt-4 text-green-600 font-semibold">Account recovered successfully!</div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

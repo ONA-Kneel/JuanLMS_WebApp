@@ -33,6 +33,7 @@ export default function Login() {
     }
     return 30;
   });
+  const [showArchivedModal, setShowArchivedModal] = useState(false);
 
   // --- EFFECT: Auto-login if credentials are stored in localStorage ---
   useEffect(() => {
@@ -158,6 +159,14 @@ export default function Login() {
         const lockoutEndTime = Date.now() + (30 * 1000); // 30 seconds from now
         localStorage.setItem('lockoutEndTime', lockoutEndTime.toString());
       }
+      if (
+        error.response &&
+        error.response.data &&
+        error.response.data.message === 'Account is archived. Please contact admin.'
+      ) {
+        setShowArchivedModal(true);
+        return;
+      }
     }
   };
   
@@ -259,6 +268,21 @@ export default function Login() {
           </p>
         </div>
       </div>
+      {/* Archived Account Modal */}
+      {showArchivedModal && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+            <h3 className="text-xl font-semibold mb-4 text-red-600">Account Archived</h3>
+            <p className="mb-4">Your account is archived. Please contact the administrator for assistance.</p>
+            <button
+              onClick={() => setShowArchivedModal(false)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
