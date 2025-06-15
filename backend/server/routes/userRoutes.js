@@ -289,13 +289,6 @@ userRoutes.delete("/users/:id", authenticateToken, async (req, res) => {
     res.json(result);
 });
 
-// Get all active (non-archived) users
-userRoutes.get('/users', async (req, res) => {
-  const db = database.getDb();
-  const users = await db.collection('users').find({ isArchived: { $ne: true } }).toArray();
-  res.json(users);
-});
-
 // Archive a user (set isArchived, archivedAt, deletedAt)
 userRoutes.post('/users/archive/:userId', async (req, res) => {
     console.log('ARCHIVE ROUTE HIT', req.params, req.body);

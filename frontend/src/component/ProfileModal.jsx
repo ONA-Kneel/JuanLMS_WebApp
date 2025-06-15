@@ -245,8 +245,13 @@ export default function ProfileModal({
     if (!user || !user._id) return;
     try {
       const res = await axios.get(`http://localhost:5000/users/${user._id}`);
-      setUserInfo(res.data);
-      localStorage.setItem('user', JSON.stringify(res.data));
+      // Only update localStorage if the response has valid fields
+      if (res.data && res.data.firstname && res.data.lastname) {
+        setUserInfo(res.data);
+        localStorage.setItem('user', JSON.stringify(res.data));
+      } else {
+        setUserInfo({});
+      }
     } catch {
       setUserInfo({});
     }
@@ -381,6 +386,7 @@ export default function ProfileModal({
                   : profileicon
               }
               alt="Avatar"
+              onError={e => { e.target.onerror = null; e.target.src = profileicon; }}
             />
             <button
               className="font-poppinsr hover:underline hover:text-blue-800 mt-2.5 ml-1.5 text-sm cursor-pointer"
@@ -451,7 +457,7 @@ export default function ProfileModal({
 
           {/* Dynamic Info */}
           <div className="mb-5 text-center lg:text-left">
-            <h2 className="text-3xl font-bold">{userInfo.firstname} {userInfo.lastname}</h2>
+            <h2 className="text-3xl font-bold">{userInfo.firstname || 'First'} {userInfo.lastname || 'Last'}</h2>
             <p className="text-sm text-gray-600">{roleDescriptions[userType] || "User"}</p>
             <div className="flex items-center gap-2 text-green-600 text-sm mt-1">
               <span className="w-2 h-2 rounded-full bg-green-500" />
@@ -462,14 +468,14 @@ export default function ProfileModal({
           <div className="space-y-1 text-sm text-center lg:text-left ml-20">
             <div className="flex items-center gap-2 text-sm">
               <span className="material-icons text-black">email</span>
-              <a href={`mailto:${userInfo.email}`} className="text-blue-600 hover:underline">
-                {userInfo.email}
+              <a href={`mailto:${userInfo.email || ''}`} className="text-blue-600 hover:underline">
+                {userInfo.email || 'No email'}
               </a>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <span className="material-icons text-black">phone</span>
-              <a href={`tel:${userInfo.contactno}`} className="text-blue-600 hover:underline">
-                {userInfo.contactno}
+              <a href={`tel:${userInfo.contactno || ''}`} className="text-blue-600 hover:underline">
+                {userInfo.contactno || 'No phone'}
               </a>
             </div>
           </div>

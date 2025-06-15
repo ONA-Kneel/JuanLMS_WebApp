@@ -60,7 +60,7 @@ const Student_Navbar = () => {
                 navigate(item.path);
                 setIsOpen(false);
               }}
-              className={`text-lg flex items-center space-x-3 p-2 w-full rounded-lg transition-colors 
+              className={`text-lg flex items-center space-x-3 p-3 w-full rounded-lg transition-colors 
                 ${location.pathname === item.path ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"}`}
             >
               <img src={item.icon} alt={item.label} className="w-6 h-6" />
