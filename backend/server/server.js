@@ -31,7 +31,7 @@ dotenv.config({ path: './config.env' });
 
 const { ObjectId } = mongoose.Types;
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = 5000;
 
 // Middleware
 app.use(cors());
