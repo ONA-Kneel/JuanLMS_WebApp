@@ -64,6 +64,7 @@ export default function Login() {
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
       localStorage.setItem('token', token);
       localStorage.setItem('userID', userID);
+      localStorage.setItem('role', role);
   
       // Navigate to dashboard based on user role
       if (role === 'students') navigate('/student_dashboard');
@@ -129,6 +130,7 @@ export default function Login() {
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
       localStorage.setItem('token', token);
       localStorage.setItem('userID', userID);
+      localStorage.setItem('role', role);
 
       // Store credentials if remember me is checked
       if (rememberMe) {

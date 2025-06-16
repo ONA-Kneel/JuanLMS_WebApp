@@ -69,4 +69,4 @@ userSchema.methods.getDecryptedProfilePic = function () {
   return this.profilePic;
 };
 
-export default mongoose.model("users", userSchema);
+export default mongoose.model("User", userSchema);

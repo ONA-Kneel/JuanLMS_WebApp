@@ -1,0 +1,289 @@
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import Faculty_Navbar from './Faculty/Faculty_Navbar';
+import Student_Navbar from './Student/Student_Navbar';
+
+export default function AssignmentDetailPage() {
+  const { assignmentId } = useParams();
+  const [role, setRole] = useState('');
+  const [assignment, setAssignment] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('assignment');
+  const [submissions, setSubmissions] = useState([]);
+  const [studentSubmission, setStudentSubmission] = useState(null);
+  const [file, setFile] = useState(null);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [gradeLoading, setGradeLoading] = useState(false);
+  const [gradeError, setGradeError] = useState('');
+  const [gradeValue, setGradeValue] = useState('');
+  const [feedbackValue, setFeedbackValue] = useState('');
+  const [classMembers, setClassMembers] = useState([]);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    setRole(localStorage.getItem('role'));
+    const token = localStorage.getItem('token');
+    setLoading(true);
+    fetch(`http://localhost:5000/assignments/${assignmentId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        setAssignment(data);
+      })
+      .catch(() => setError('Failed to fetch assignment.'))
+      .finally(() => setLoading(false));
+  }, [assignmentId]);
+
+  // Fetch class members and submissions for faculty
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (role === 'faculty' && assignment && assignment.classID) {
+      // Fetch class members
+      fetch(`http://localhost:5000/classes/${assignment.classID}/members`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(members => {
+          // If the response is an object with a 'students' array, use that
+          let memberList = [];
+          if (Array.isArray(members)) {
+            memberList = members;
+          } else if (members && Array.isArray(members.students)) {
+            memberList = members.students;
+          } else {
+            console.error('No valid members array found:', members);
+          }
+          setClassMembers(memberList);
+          // Fetch submissions
+          fetch(`http://localhost:5000/assignments/${assignmentId}/submissions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+            .then(res => res.json())
+            .then(subs => {
+              if (!Array.isArray(subs)) {
+                console.error('Expected array for submissions, got:', subs);
+              }
+              // Merge members and submissions
+              const merged = memberList.map(member => {
+                const submission = Array.isArray(subs) ? subs.find(sub => sub.student && (sub.student._id === member._id || sub.student === member._id)) : null;
+                return {
+                  ...member,
+                  submission
+                };
+              });
+              setSubmissions(merged);
+            });
+        });
+    } else if (role === 'students') {
+      // For students, fetch only their own submission
+      fetch(`http://localhost:5000/assignments/${assignmentId}/submissions`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          const userId = localStorage.getItem('userID');
+          const sub = Array.isArray(data) ? data.find(s => s.student && (s.student._id === userId || s.student === userId)) : null;
+          setStudentSubmission(sub);
+        });
+    }
+  }, [role, assignment, assignmentId, submitSuccess, gradeLoading]);
+
+  // Student submit handler
+  const handleStudentSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitLoading(true);
+    setSubmitSuccess(false);
+    setError('');
+    const token = localStorage.getItem('token');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`http://localhost:5000/assignments/${assignmentId}/submit`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (res.ok) {
+        setSubmitSuccess(true);
+        setFile(null);
+      } else {
+        setError('Failed to submit.');
+      }
+    } catch {
+      setError('Failed to submit.');
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  // Faculty grade handler
+  const handleGrade = async (submissionId) => {
+    setGradeLoading(true);
+    setGradeError('');
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`http://localhost:5000/assignments/${assignmentId}/grade`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId, grade: gradeValue, feedback: feedbackValue })
+      });
+      if (res.ok) {
+        setGradeValue('');
+        setFeedbackValue('');
+        setSubmitSuccess(true); // trigger refresh
+      } else {
+        setGradeError('Failed to grade.');
+      }
+    } catch {
+      setGradeError('Failed to grade.');
+    } finally {
+      setGradeLoading(false);
+    }
+  };
+
+  if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-100">Loading...</div>;
+  if (error || !assignment) return <div className="flex items-center justify-center min-h-screen bg-gray-100">{error || 'Assignment not found.'}</div>;
+
+  return (
+    <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+      {role === 'faculty' ? <Faculty_Navbar /> : <Student_Navbar />}
+      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64 flex flex-col items-center">
+        <div className="w-full max-w-4xl bg-white rounded-xl shadow-xl p-10 mt-8">
+          <button className="mb-6 text-blue-900 hover:underline" onClick={() => navigate(-1)}>&larr; Back</button>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2">
+            <h1 className="text-3xl font-bold text-blue-900 mb-2 md:mb-0">{assignment.title}</h1>
+            <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${assignment.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{assignment.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
+          </div>
+          {assignment.dueDate && <div className="text-sm text-gray-500 mb-2">Due: {new Date(assignment.dueDate).toLocaleString()}</div>}
+          {assignment.points && <div className="text-sm text-gray-500 mb-2">Points: {assignment.points}</div>}
+
+          {/* Tabs for faculty */}
+          {role === 'faculty' && (
+            <div className="mt-6 mb-4">
+              <div className="flex gap-4 border-b mb-4">
+                <button className={`pb-2 px-4 ${activeTab === 'assignment' ? 'border-b-2 border-blue-900 font-bold' : ''}`} onClick={() => setActiveTab('assignment')}>Assignment</button>
+                <button className={`pb-2 px-4 ${activeTab === 'toGrade' ? 'border-b-2 border-blue-900 font-bold' : ''}`} onClick={() => setActiveTab('toGrade')}>To Grade</button>
+                <button className={`pb-2 px-4 ${activeTab === 'graded' ? 'border-b-2 border-blue-900 font-bold' : ''}`} onClick={() => setActiveTab('graded')}>Graded</button>
+              </div>
+              {activeTab === 'assignment' && (
+                <div>
+                  <h2 className="text-lg font-semibold mb-1">Instructions</h2>
+                  <div className="text-gray-800 whitespace-pre-line mb-4">{assignment.instructions}</div>
+                  {assignment.description && (
+                    <div className="mb-4">
+                      <h2 className="text-lg font-semibold mb-1">Description</h2>
+                      <div className="text-gray-700 whitespace-pre-line">{assignment.description}</div>
+                    </div>
+                  )}
+                  {assignment.fileUploadRequired && (
+                    <div className="mb-4">
+                      <h2 className="text-lg font-semibold mb-1">File Upload Required</h2>
+                      <div className="text-gray-700">Allowed file types: {assignment.allowedFileTypes}</div>
+                      {assignment.fileInstructions && <div className="text-gray-700 mt-1">{assignment.fileInstructions}</div>}
+                    </div>
+                  )}
+                </div>
+              )}
+              {(activeTab === 'toGrade' || activeTab === 'graded') && (
+                <div>
+                  <h2 className="text-lg font-semibold mb-4">Submissions</h2>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="p-3 border">Name</th>
+                          <th className="p-3 border">Status</th>
+                          <th className="p-3 border">File</th>
+                          <th className="p-3 border">Grade</th>
+                          <th className="p-3 border">Feedback</th>
+                          <th className="p-3 border">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {submissions.map((member) => (
+                          <tr key={member._id}>
+                            <td className="p-3 border">{member.lastname}, {member.firstname}</td>
+                            <td className="p-3 border">{member.submission ? member.submission.status : "Not Turned In"}</td>
+                            <td className="p-3 border">{member.submission && member.submission.fileUrl ? (
+                              <a href={member.submission.fileUrl} className="text-blue-700 underline" target="_blank" rel="noopener noreferrer">{member.submission.fileName}</a>
+                            ) : "-"}</td>
+                            <td className="p-3 border">{member.submission && member.submission.grade !== undefined ? member.submission.grade : "-"}</td>
+                            <td className="p-3 border">{member.submission && member.submission.feedback ? member.submission.feedback : "-"}</td>
+                            <td className="p-3 border">
+                              {member.submission && member.submission.status === 'turned-in' ? (
+                                <form onSubmit={e => { e.preventDefault(); handleGrade(member.submission._id); }} className="flex gap-2 items-center">
+                                  <input type="number" className="border rounded px-2 py-1 w-16" placeholder="Grade" value={gradeValue} onChange={e => setGradeValue(e.target.value)} required />
+                                  <input type="text" className="border rounded px-2 py-1 w-32" placeholder="Feedback" value={feedbackValue} onChange={e => setFeedbackValue(e.target.value)} />
+                                  <button type="submit" className="bg-green-700 text-white px-2 py-1 rounded" disabled={gradeLoading}>Grade</button>
+                                </form>
+                              ) : member.submission && member.submission.status === 'graded' ? (
+                                <span className="text-green-700 font-semibold">Graded</span>
+                              ) : "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {gradeError && <div className="text-red-600 text-sm mt-2">{gradeError}</div>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Student view */}
+          {role !== 'faculty' && (
+            <>
+              <div className="mt-4 mb-4">
+                <h2 className="text-lg font-semibold mb-1">Instructions</h2>
+                <div className="text-gray-800 whitespace-pre-line">{assignment.instructions}</div>
+              </div>
+              {assignment.description && (
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold mb-1">Description</h2>
+                  <div className="text-gray-700 whitespace-pre-line">{assignment.description}</div>
+                </div>
+              )}
+              {assignment.fileUploadRequired && (
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold mb-1">File Upload Required</h2>
+                  <div className="text-gray-700">Allowed file types: {assignment.allowedFileTypes}</div>
+                  {assignment.fileInstructions && <div className="text-gray-700 mt-1">{assignment.fileInstructions}</div>}
+                </div>
+              )}
+              {role !== 'faculty' && assignment.fileUploadRequired && (
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold mb-1">Submit Assignment</h2>
+                  {submitSuccess && (
+                    <div className="text-green-700 font-semibold mb-2">Your assignment has been submitted successfully!</div>
+                  )}
+                  {studentSubmission ? (
+                    <div className="text-green-700 font-semibold mb-2">You have submitted this assignment.</div>
+                  ) : (
+                    <form onSubmit={handleStudentSubmit} className="space-y-2" encType="multipart/form-data">
+                      <input type="file" className="border rounded px-2 py-1 w-full" accept={assignment.allowedFileTypes || '*'} onChange={e => setFile(e.target.files[0])} required />
+                      <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded" disabled={submitLoading}>{submitLoading ? 'Submitting...' : 'Submit'}</button>
+                      {error && <div className="text-red-600 text-sm">{error}</div>}
+                    </form>
+                  )}
+                  {studentSubmission && (
+                    <div className="mt-2 text-sm">File: <a href={studentSubmission.fileUrl} className="text-blue-700 underline" target="_blank" rel="noopener noreferrer">{studentSubmission.fileName}</a></div>
+                  )}
+                  {studentSubmission && studentSubmission.grade !== undefined && (
+                    <div className="mt-2 text-green-700">Grade: {studentSubmission.grade}</div>
+                  )}
+                  {studentSubmission && studentSubmission.feedback && (
+                    <div className="mt-2 text-gray-700">Feedback: {studentSubmission.feedback}</div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+} 

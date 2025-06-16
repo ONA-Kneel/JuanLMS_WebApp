@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 
-export default function QuizTab({ onClose }) {
+export default function QuizTab({ onClose, onAssignmentCreated, alwaysRequireFileUploadForAssignment = false }) {
     const { classId } = useParams();
     const [activityType, setActivityType] = useState("quiz"); // 'quiz' or 'assignment'
     const [title, setTitle] = useState("");
@@ -22,6 +22,11 @@ export default function QuizTab({ onClose }) {
     const [allowedFileTypes, setAllowedFileTypes] = useState(".pdf,.zip,.docx");
     const [fileInstructions, setFileInstructions] = useState("");
     const [dueDate, setDueDate] = useState("");
+    const [showClassModal, setShowClassModal] = useState(false);
+    const [availableClasses, setAvailableClasses] = useState([]);
+    const [selectedClassIDs, setSelectedClassIDs] = useState([]);
+    const [pendingSavePayload, setPendingSavePayload] = useState(null);
+    const [showSuccess, setShowSuccess] = useState(false);
 
     const resetForm = () => setForm({
         type: "multiple",
@@ -78,6 +83,7 @@ export default function QuizTab({ onClose }) {
 
     const handleSave = async () => {
         const token = localStorage.getItem('token');
+        const userRole = localStorage.getItem('role');
         const payload = {
             classID: classId,
             title,
@@ -85,7 +91,7 @@ export default function QuizTab({ onClose }) {
             type: activityType,
             description,
             points: questions.reduce((sum, q) => sum + (q.points || 0), 0),
-            fileUploadRequired: requireFileUpload,
+            fileUploadRequired: alwaysRequireFileUploadForAssignment ? true : requireFileUpload,
             allowedFileTypes,
             fileInstructions,
             questions: activityType === 'quiz' ? questions : undefined,
@@ -95,6 +101,29 @@ export default function QuizTab({ onClose }) {
             if (!isNaN(Date.parse(isoDueDate))) {
                 payload.dueDate = isoDueDate;
             }
+        }
+        // If faculty, show class selection modal before saving
+        if (userRole === 'faculty') {
+            setPendingSavePayload(payload);
+            // Fetch classes if not already fetched
+            if (availableClasses.length === 0) {
+                fetch('http://localhost:5000/classes/my-classes', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                    .then(res => res.json())
+                    .then(data => setAvailableClasses(Array.isArray(data) ? data : []));
+            }
+            setShowClassModal(true);
+            return;
+        }
+        // For non-faculty, just save (should not happen with current routing)
+        await actuallySave(payload);
+    };
+
+    const actuallySave = async (payload) => {
+        const token = localStorage.getItem('token');
+        if (selectedClassIDs.length > 0) {
+            payload.classIDs = selectedClassIDs;
         }
         try {
             const res = await fetch('https://juanlms-webapp-server.onrender.com/assignments', {
@@ -106,7 +135,8 @@ export default function QuizTab({ onClose }) {
                 body: JSON.stringify(payload)
             });
             if (res.ok) {
-                alert(`${activityType === 'quiz' ? 'Quiz' : 'Assignment'} saved!`);
+                setShowSuccess(true);
+                if (typeof onAssignmentCreated === 'function') onAssignmentCreated();
                 onClose && onClose();
             } else {
                 const err = await res.json();
@@ -296,24 +326,43 @@ export default function QuizTab({ onClose }) {
                     </>
                 )}
                 {/* --- FILE UPLOAD REQUIREMENT (like Teams) --- */}
-                <div className="bg-white rounded-xl shadow border border-purple-200 p-6 max-w-2xl mx-auto mt-8">
-                    <label className="flex items-center gap-2 mb-2">
-                        <input type="checkbox" checked={requireFileUpload} onChange={e => setRequireFileUpload(e.target.checked)} />
-                        <span className="font-semibold">Require file upload (e.g., project, code, document)</span>
-                    </label>
-                    {requireFileUpload && (
+                {activityType === "assignment" && alwaysRequireFileUploadForAssignment ? (
+                    <div className="bg-white rounded-xl shadow border border-purple-200 p-6 max-w-2xl mx-auto mt-8">
+                        <label className="flex items-center gap-2 mb-2">
+                            <input type="checkbox" checked disabled />
+                            <span className="font-semibold">File upload is required for assignments</span>
+                        </label>
                         <div className="space-y-2 mt-2">
                             <div>
                                 <label className="block text-sm font-medium mb-1">Allowed file types</label>
-                                <input className="border rounded px-2 py-1 w-full" value={allowedFileTypes} onChange={e => setAllowedFileTypes(e.target.value)} placeholder="e.g. .pdf,.zip,.docx" />
+                                <input className="border rounded px-2 py-1 w-full" value={allowedFileTypes} onChange={e => setAllowedFileTypes(e.target.value)} placeholder="e.g. .pdf,.zip,.docx" required />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-1">File upload instructions (optional)</label>
                                 <textarea className="border rounded px-2 py-1 w-full" value={fileInstructions} onChange={e => setFileInstructions(e.target.value)} placeholder="Describe what students should upload..." />
                             </div>
                         </div>
-                    )}
-                </div>
+                    </div>
+                ) : (
+                    <div className="bg-white rounded-xl shadow border border-purple-200 p-6 max-w-2xl mx-auto mt-8">
+                        <label className="flex items-center gap-2 mb-2">
+                            <input type="checkbox" checked={requireFileUpload} onChange={e => setRequireFileUpload(e.target.checked)} />
+                            <span className="font-semibold">Require file upload (e.g., project, code, document)</span>
+                        </label>
+                        {requireFileUpload && (
+                            <div className="space-y-2 mt-2">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Allowed file types</label>
+                                    <input className="border rounded px-2 py-1 w-full" value={allowedFileTypes} onChange={e => setAllowedFileTypes(e.target.value)} placeholder="e.g. .pdf,.zip,.docx" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">File upload instructions (optional)</label>
+                                    <textarea className="border rounded px-2 py-1 w-full" value={fileInstructions} onChange={e => setFileInstructions(e.target.value)} placeholder="Describe what students should upload..." />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
                 {/* --- DUE DATE FOR ASSIGNMENT TYPE --- */}
                 {activityType === "assignment" && (
                     <div className="bg-white rounded-xl shadow border border-gray-200 p-6 max-w-2xl mx-auto mt-8">
@@ -331,6 +380,55 @@ export default function QuizTab({ onClose }) {
                 <button className="bg-green-600 text-white px-6 py-2 rounded" onClick={handleSave}>Save {activityType === "quiz" ? "Quiz" : "Assignment"}</button>
                 <button className="bg-gray-500 text-white px-6 py-2 rounded" onClick={onClose}>Cancel</button>
             </div>
+            {/* Class selection modal */}
+            {showClassModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white p-8 rounded-xl shadow-xl max-w-md w-full relative">
+                        <button
+                            className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl font-bold"
+                            onClick={() => setShowClassModal(false)}
+                            aria-label="Close"
+                        >
+                            ×
+                        </button>
+                        <h3 className="text-xl font-bold mb-4">Assign to Classes</h3>
+                        <select
+                            multiple
+                            className="w-full border rounded px-3 py-2 h-32 mb-4"
+                            value={selectedClassIDs}
+                            onChange={e => setSelectedClassIDs(Array.from(e.target.selectedOptions).map(opt => opt.value))}
+                        >
+                            {availableClasses.map(cls => (
+                                <option key={cls._id} value={cls.classID}>{cls.className || cls.name}</option>
+                            ))}
+                        </select>
+                        <button
+                            className="bg-blue-900 text-white px-4 py-2 rounded w-full"
+                            onClick={async () => {
+                                setShowClassModal(false);
+                                await actuallySave({ ...pendingSavePayload, classIDs: selectedClassIDs });
+                            }}
+                            disabled={selectedClassIDs.length === 0}
+                        >
+                            Assign & Save
+                        </button>
+                    </div>
+                </div>
+            )}
+            {/* Success confirmation modal */}
+            {showSuccess && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white p-8 rounded-xl shadow-xl max-w-md w-full text-center">
+                        <h3 className="text-xl font-bold mb-4 text-green-600">Activity/Quiz Created!</h3>
+                        <button
+                            className="mt-4 bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded w-full"
+                            onClick={() => setShowSuccess(false)}
+                        >
+                            OK
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 } 

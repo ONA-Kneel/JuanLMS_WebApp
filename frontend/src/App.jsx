@@ -5,6 +5,8 @@ import Login from './component/Login';
 import ForgotPassword from './component/ForgotPassword';
 import PdfViewer from './component/PdfViewer';
 import ProtectedRoute from './component/ProtectedRoute';
+import ActivityCreatePage from './component/ActivityCreatePage';
+import AssignmentDetailPage from './component/AssignmentDetailPage';
 
 // Students Access
 import Student_Dashboard from './component/Student/Student_Dashboard';
@@ -110,6 +112,12 @@ function App() {
         <Route path="/parent_dashboard" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Dashboard/></ProtectedRoute>}/>
         <Route path="/parent_grades" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Grades/></ProtectedRoute>}/>
         <Route path="/parent_progress" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Progress/></ProtectedRoute>}/>
+
+        {/* Shared Activity Creation Page */}
+        <Route path="/create-activity" element={<ProtectedRoute allowedRoles={['faculty','students']}><ActivityCreatePage /></ProtectedRoute>} />
+
+        {/* Assignment/Quiz Detail Page */}
+        <Route path="/assignment/:assignmentId" element={<ProtectedRoute allowedRoles={['faculty','students']}><AssignmentDetailPage /></ProtectedRoute>} />
 
       </Routes>
     </Router>
