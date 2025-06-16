@@ -48,7 +48,7 @@ export default function Admin_AcademicSettings() {
 
   const fetchSchoolYears = async () => {
     try {
-      const res = await fetch('https://juanlms-webapp-server.onrender.com/api/schoolyears');
+      const res = await fetch('http://localhost:5000/api/schoolyears');
       const data = await res.json();
       if (res.ok) {
         setSchoolYears(data);
@@ -63,7 +63,7 @@ export default function Admin_AcademicSettings() {
   const fetchTerms = async (year) => {
     try {
       const schoolYearName = `${year.schoolYearStart}-${year.schoolYearEnd}`;
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/terms/schoolyear/${schoolYearName}`);
+      const res = await fetch(`http://localhost:5000/api/terms/schoolyear/${schoolYearName}`);
       if (res.ok) {
         const data = await res.json();
         setTerms(data);
@@ -124,7 +124,7 @@ export default function Admin_AcademicSettings() {
 
       if (window.confirm("Save changes to this school year?")) {
         try {
-          const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/schoolyears/${editingYear._id}`, {
+          const res = await fetch(`http://localhost:5000/api/schoolyears/${editingYear._id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -165,7 +165,7 @@ export default function Admin_AcademicSettings() {
       }
     } else {
       try {
-        const res = await fetch('https://juanlms-webapp-server.onrender.com/api/schoolyears', {
+        const res = await fetch('http://localhost:5000/api/schoolyears', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -193,15 +193,9 @@ export default function Admin_AcademicSettings() {
   };
 
   const handleDelete = async (year) => {
-    // Check if trying to delete active school year
-    if (year.status === 'active') {
-      alert("Cannot set an active school year to inactive. Please set another year as active first if you want to archive this.");
-      return;
-    }
-
     if (window.confirm("Are you sure you want to set this school year to inactive?")) {
       try {
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/schoolyears/${year._id}`, {
+        const res = await fetch(`http://localhost:5000/api/schoolyears/${year._id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'inactive' })
@@ -249,7 +243,7 @@ export default function Admin_AcademicSettings() {
   const handleArchiveTerm = async (term) => {
     if (window.confirm(`Are you sure you want to archive ${term.termName}?`)) {
       try {
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/terms/${term._id}/archive`, {
+        const res = await fetch(`http://localhost:5000/api/terms/${term._id}/archive`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -258,6 +252,7 @@ export default function Admin_AcademicSettings() {
           const updatedTerm = await res.json();
           setTerms(terms.map(t => t._id === term._id ? updatedTerm : t));
           alert(`${term.termName} has been archived`);
+          fetchTerms(selectedYear);
         } else {
           const data = await res.json();
           setTermError(data.message || 'Failed to archive term');
@@ -265,6 +260,28 @@ export default function Admin_AcademicSettings() {
       } catch (err) {
         setTermError('Error archiving term');
       }
+    }
+  };
+
+  const handleActivateTerm = async (term) => {
+    if (!window.confirm(`Are you sure you want to activate ${term.termName}?`)) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/terms/${term._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'active' })
+      });
+      if (res.ok) {
+        const updatedTerm = await res.json();
+        setTerms(terms.map(t => t._id === term._id ? updatedTerm : t));
+        alert(`${term.termName} has been activated`);
+        fetchTerms(selectedYear);
+      } else {
+        const data = await res.json();
+        setTermError(data.message || 'Failed to activate term');
+      }
+    } catch (err) {
+      setTermError('Error activating term');
     }
   };
 
@@ -283,7 +300,7 @@ export default function Admin_AcademicSettings() {
       }
 
     try {
-      const res = await fetch('https://juanlms-webapp-server.onrender.com/api/terms', {
+      const res = await fetch('http://localhost:5000/api/terms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -299,12 +316,34 @@ export default function Admin_AcademicSettings() {
         setShowAddTermModal(false);
         setTermFormData({ startDate: '', endDate: '' });
         alert('Term created successfully');
+        fetchTerms(selectedYear);
       } else {
         const data = await res.json();
         setTermError(data.message || 'Failed to create term');
       }
     } catch (err) {
       setTermError('Error creating term');
+    }
+  };
+
+  const handleToggleStatus = async (year) => {
+    const newStatus = year.status === 'active' ? 'inactive' : 'active';
+    if (!window.confirm(`Set school year ${year.schoolYearStart}-${year.schoolYearEnd} as ${newStatus}?`)) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/schoolyears/${year._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        fetchSchoolYears();
+        alert(`School year set as ${newStatus}`);
+      } else {
+        const data = await res.json();
+        setError(data.message || 'Failed to update school year status');
+      }
+    } catch (err) {
+      setError('Error updating school year status');
     }
   };
 
@@ -474,11 +513,15 @@ export default function Admin_AcademicSettings() {
                         <td className="p-3 border">{year.schoolYearStart}</td>
                         <td className="p-3 border">{year.schoolYearEnd}</td>
                             <td className="p-3 border">
-                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            year.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                              }`}>
-                            {year.status}
-                              </span>
+                              <button
+                                onClick={() => handleToggleStatus(year)}
+                                className={`px-3 py-1 rounded-full text-xs font-semibold border border-gray-300
+                                  ${year.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 hover:bg-green-200'}
+                                  hover:shadow`}
+                                title={year.status === 'active' ? 'Set as inactive' : 'Set as active'}
+                              >
+                                {year.status === 'active' ? 'Active' : 'Inactive'}
+                              </button>
                             </td>
                             <td className="p-3 border">
                               <div className="inline-flex space-x-2">
@@ -595,14 +638,25 @@ export default function Admin_AcademicSettings() {
                                 >
                                   <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
                                 </button>
-                                <button
-                                onClick={() => handleArchiveTerm(term)}
-                                  className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded"
-                                title="Archive"
-                                disabled={term.status === 'archived'}
-                                >
-                                  <img src={archiveIcon} alt="Archive" className="w-8 h-8 inline-block" />
-                                </button>
+                                {term.status === 'active' ? (
+                                  <button
+                                    onClick={() => handleArchiveTerm(term)}
+                                    className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded"
+                                    title="Archive"
+                                  >
+                                    <img src={archiveIcon} alt="Archive" className="w-8 h-8 inline-block" />
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleActivateTerm(term)}
+                                    className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
+                                    title="Activate"
+                                  >
+                                    <svg className="w-8 h-8 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>

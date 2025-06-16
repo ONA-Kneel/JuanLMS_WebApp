@@ -82,4 +82,42 @@ router.patch('/:termId/archive', async (req, res) => {
   }
 });
 
+// Add this endpoint after the archive endpoint
+router.patch('/:id', async (req, res) => {
+  try {
+    const term = await Term.findById(req.params.id);
+    if (!term) {
+      return res.status(404).json({ message: 'Term not found' });
+    }
+    if (req.body.status === 'active') {
+      // Archive all other terms in the same school year
+      await Term.updateMany(
+        { schoolYear: term.schoolYear, _id: { $ne: term._id } },
+        { status: 'archived' }
+      );
+      term.status = 'active';
+    } else if (req.body.status) {
+      term.status = req.body.status;
+    }
+    // Add other updatable fields if needed
+    const updatedTerm = await term.save();
+    res.json(updatedTerm);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Get a term by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const term = await Term.findById(req.params.id);
+    if (!term) {
+      return res.status(404).json({ message: 'Term not found' });
+    }
+    res.json(term);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
 export default router; 
