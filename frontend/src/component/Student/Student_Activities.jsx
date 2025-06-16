@@ -27,13 +27,13 @@ export default function Student_Activities() {
       try {
         const token = localStorage.getItem('token');
         // Fetch all classes for the student
-        const resClasses = await fetch('http://https://juanlms-webapp-server.onrender.com/classes/my-classes', {
+        const resClasses = await fetch('https://juanlms-webapp-server.onrender.com/classes/my-classes', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const classes = await resClasses.json();
         let allAssignments = [];
         for (const cls of classes) {
-          const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/assignments?classID=${cls._id}`, {
+          const res = await fetch(`https://juanlms-webapp-server.onrender.com/assignments?classID=${cls._id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const data = await res.json();
@@ -160,7 +160,7 @@ export default function Student_Activities() {
                   const formData = new FormData();
                   formData.append('assignmentId', selectedAssignment._id);
                   formData.append('file', submissionFile);
-                  const res = await fetch('http://https://juanlms-webapp-server.onrender.com/submissions', {
+                  const res = await fetch('https://juanlms-webapp-server.onrender.com/submissions', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` },
                     body: formData

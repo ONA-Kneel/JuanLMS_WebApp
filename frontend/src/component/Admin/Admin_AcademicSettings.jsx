@@ -48,7 +48,7 @@ export default function Admin_AcademicSettings() {
 
   const fetchSchoolYears = async () => {
     try {
-      const res = await fetch('http://https://juanlms-webapp-server.onrender.com/api/schoolyears');
+      const res = await fetch('https://juanlms-webapp-server.onrender.com/api/schoolyears');
       const data = await res.json();
       if (res.ok) {
         setSchoolYears(data);
@@ -63,7 +63,7 @@ export default function Admin_AcademicSettings() {
   const fetchTerms = async (year) => {
     try {
       const schoolYearName = `${year.schoolYearStart}-${year.schoolYearEnd}`;
-      const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/api/terms/schoolyear/${schoolYearName}`);
+      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/terms/schoolyear/${schoolYearName}`);
       if (res.ok) {
         const data = await res.json();
         setTerms(data);
@@ -124,7 +124,7 @@ export default function Admin_AcademicSettings() {
 
       if (window.confirm("Save changes to this school year?")) {
         try {
-          const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/api/schoolyears/${editingYear._id}`, {
+          const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/schoolyears/${editingYear._id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -165,7 +165,7 @@ export default function Admin_AcademicSettings() {
       }
     } else {
       try {
-        const res = await fetch('http://https://juanlms-webapp-server.onrender.com/api/schoolyears', {
+        const res = await fetch('https://juanlms-webapp-server.onrender.com/api/schoolyears', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -201,7 +201,7 @@ export default function Admin_AcademicSettings() {
 
     if (window.confirm("Are you sure you want to set this school year to inactive?")) {
       try {
-        const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/api/schoolyears/${year._id}`, {
+        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/schoolyears/${year._id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'inactive' })
@@ -249,7 +249,7 @@ export default function Admin_AcademicSettings() {
   const handleArchiveTerm = async (term) => {
     if (window.confirm(`Are you sure you want to archive ${term.termName}?`)) {
       try {
-        const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/api/terms/${term._id}/archive`, {
+        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/terms/${term._id}/archive`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -283,7 +283,7 @@ export default function Admin_AcademicSettings() {
       }
 
     try {
-      const res = await fetch('http://https://juanlms-webapp-server.onrender.com/api/terms', {
+      const res = await fetch('https://juanlms-webapp-server.onrender.com/api/terms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

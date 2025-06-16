@@ -17,7 +17,7 @@ export default function ProfileMenu() {
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || !user._id) return;
     try {
-      const res = await axios.get(`http://https://juanlms-webapp-server.onrender.com/users/${user._id}`);
+      const res = await axios.get(`https://juanlms-webapp-server.onrender.com/users/${user._id}`);
       setUserInfo(res.data);
       localStorage.setItem('user', JSON.stringify(res.data));
     } catch {
@@ -33,7 +33,7 @@ export default function ProfileMenu() {
   // Helper to get the correct profile image URL
   const getProfileImg = () => {
     if (userInfo.profilePic) {
-      return `http://https://juanlms-webapp-server.onrender.com/uploads/${userInfo.profilePic}`;
+      return `https://juanlms-webapp-server.onrender.com/uploads/${userInfo.profilePic}`;
     }
     return profileicon;
   };

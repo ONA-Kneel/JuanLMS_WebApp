@@ -12,7 +12,7 @@ export default function Admin_Dashboard() {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    fetch("http://https://juanlms-webapp-server.onrender.com/audit-logs?page=1&limit=5", {
+    fetch("https://juanlms-webapp-server.onrender.com/audit-logs?page=1&limit=5", {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -21,7 +21,7 @@ export default function Admin_Dashboard() {
       .then(data => {
         if (data && data.logs) setRecentAuditLogs(data.logs);
       });
-    fetch("http://https://juanlms-webapp-server.onrender.com/user-counts", {
+    fetch("https://juanlms-webapp-server.onrender.com/user-counts", {
       headers: {
         'Authorization': `Bearer ${token}`
       }

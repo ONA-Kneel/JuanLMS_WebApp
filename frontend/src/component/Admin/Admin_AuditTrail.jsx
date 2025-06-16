@@ -98,7 +98,7 @@ export default function Admin_AuditTrail() {
       }
 
       const response = await axios.get(
-        `http://https://juanlms-webapp-server.onrender.com/audit-logs?page=${currentPage}&limit=${logsPerPage}&action=${selectedAction}&role=${selectedRole}`,
+        `https://juanlms-webapp-server.onrender.com/audit-logs?page=${currentPage}&limit=${logsPerPage}&action=${selectedAction}&role=${selectedRole}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`

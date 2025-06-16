@@ -27,7 +27,7 @@ export default function Faculty_Calendar() {
     (async () => {
       setLoadingEvents(true);
       try {
-        const res = await axios.get("http://https://juanlms-webapp-server.onrender.com/events");
+        const res = await axios.get("https://juanlms-webapp-server.onrender.com/events");
         setAdminEvents(res.data.map(ev => ({
           ...ev,
           start: ev.start ? ev.start.slice(0, 16) : '',
@@ -64,7 +64,7 @@ export default function Faculty_Calendar() {
       try {
         const token = localStorage.getItem('token');
         // Fetch all classes the faculty teaches
-        const resClasses = await fetch('http://https://juanlms-webapp-server.onrender.com/classes', {
+        const resClasses = await fetch('https://juanlms-webapp-server.onrender.com/classes', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const classes = await resClasses.json();
@@ -73,7 +73,7 @@ export default function Faculty_Calendar() {
         const myClasses = classes.filter(cls => cls.facultyID === userId || cls.facultyID === userId?.toString());
         let events = [];
         for (const cls of myClasses) {
-          const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/assignments?classID=${cls._id}`, {
+          const res = await fetch(`https://juanlms-webapp-server.onrender.com/assignments?classID=${cls._id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const data = await res.json();

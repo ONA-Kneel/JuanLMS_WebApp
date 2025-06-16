@@ -10,8 +10,8 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      '/uploads': 'http://https://juanlms-webapp-server.onrender.com',
-      '/api': 'http://https://juanlms-webapp-server.onrender.com'
+      '/uploads': 'https://juanlms-webapp-server.onrender.com',
+      '/api': 'https://juanlms-webapp-server.onrender.com'
     }
   }
 })

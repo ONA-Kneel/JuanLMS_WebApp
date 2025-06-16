@@ -30,7 +30,7 @@ export default function Director_AuditTrail() {
         return;
       }
 
-      const response = await axios.get(`http://https://juanlms-webapp-server.onrender.com/audit-logs?page=${currentPage}&limit=${logsPerPage}`, {
+      const response = await axios.get(`https://juanlms-webapp-server.onrender.com/audit-logs?page=${currentPage}&limit=${logsPerPage}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

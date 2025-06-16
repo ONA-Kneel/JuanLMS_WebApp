@@ -33,7 +33,7 @@ function ChangePasswordModal({ userId, onClose }) {
     setSuccess("");
     setLoading(true);
     try {
-      await axios.post(`http://https://juanlms-webapp-server.onrender.com/users/${userId}/request-password-change-otp`);
+      await axios.post(`https://juanlms-webapp-server.onrender.com/users/${userId}/request-password-change-otp`);
       setSuccess("OTP sent to your personal email.");
       setStep(2);
     } catch (err) {
@@ -53,7 +53,7 @@ function ChangePasswordModal({ userId, onClose }) {
     }
     setLoading(true);
     try {
-      await axios.post(`http://https://juanlms-webapp-server.onrender.com/users/${userId}/validate-otp`, { otp });
+      await axios.post(`https://juanlms-webapp-server.onrender.com/users/${userId}/validate-otp`, { otp });
       setStep(3);
     } catch (err) {
       setError(err.response?.data?.message || "Invalid or expired OTP.");
@@ -76,7 +76,7 @@ function ChangePasswordModal({ userId, onClose }) {
     }
     setLoading(true);
     try {
-      await axios.patch(`http://https://juanlms-webapp-server.onrender.com/users/${userId}/change-password`, {
+      await axios.patch(`https://juanlms-webapp-server.onrender.com/users/${userId}/change-password`, {
         currentPassword,
         newPassword
       });
@@ -246,7 +246,7 @@ export default function ProfileModal({
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || !user._id) return;
     try {
-      const res = await axios.get(`http://https://juanlms-webapp-server.onrender.com/users/${user._id}`);
+      const res = await axios.get(`https://juanlms-webapp-server.onrender.com/users/${user._id}`);
       // Only update localStorage if the response has valid fields
       if (res.data && res.data.firstname && res.data.lastname) {
         setUserInfo(res.data);
@@ -333,7 +333,7 @@ export default function ProfileModal({
       const blob = await fetch(croppedImage).then(res => res.blob());
       const formData = new FormData();
       formData.append('image', blob, 'profile.jpg');
-      const uploadResponse = await fetch(`http://https://juanlms-webapp-server.onrender.com/users/${user._id}/upload-profile`, {
+      const uploadResponse = await fetch(`https://juanlms-webapp-server.onrender.com/users/${user._id}/upload-profile`, {
         method: 'POST',
         body: formData,
       });
@@ -384,7 +384,7 @@ export default function ProfileModal({
               className="w-28 h-28 rounded-full bg-gray-600 object-cover"
               src={
                 userInfo.profilePic
-                  ? `http://https://juanlms-webapp-server.onrender.com/uploads/${userInfo.profilePic}`
+                  ? `https://juanlms-webapp-server.onrender.com/uploads/${userInfo.profilePic}`
                   : profileicon
               }
               alt="Avatar"

@@ -97,7 +97,7 @@ export default function QuizTab({ onClose }) {
             }
         }
         try {
-            const res = await fetch('http://https://juanlms-webapp-server.onrender.com/assignments', {
+            const res = await fetch('https://juanlms-webapp-server.onrender.com/assignments', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
