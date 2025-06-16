@@ -28,7 +28,7 @@ export default function FacultyCreateClass() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/users/search?q=${query}`, {
+      const response = await fetch(`http://https://juanlms-webapp-server.onrender.com/users/search?q=${query}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -98,7 +98,7 @@ export default function FacultyCreateClass() {
     };
 
     try {
-      const res = await fetch("http://localhost:5000/classes", {
+      const res = await fetch("http://https://juanlms-webapp-server.onrender.com/classes", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -147,7 +147,7 @@ export default function FacultyCreateClass() {
           continue;
         }
         try {
-          const res = await fetch(`http://localhost:5000/users/search?q=${encodeURIComponent(email)}`);
+          const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/users/search?q=${encodeURIComponent(email)}`);
           const users = await res.json();
           console.log('Searching for:', email, 'Got:', users);
           const found = users.find(

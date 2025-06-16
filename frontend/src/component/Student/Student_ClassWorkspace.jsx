@@ -24,7 +24,7 @@ export default function Student_ClassWorkspace() {
     async function fetchClass() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:5000/classes", {
+        const res = await fetch("http://https://juanlms-webapp-server.onrender.com/classes", {
           headers: {
             "Authorization": `Bearer ${token}`,
           },

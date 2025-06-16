@@ -19,7 +19,7 @@ export default function Director_Calendar() {
     (async () => {
       setLoadingEvents(true);
       try {
-        const res = await axios.get("http://localhost:5000/events");
+        const res = await axios.get("http://https://juanlms-webapp-server.onrender.com/events");
         setAdminEvents(res.data.map(ev => ({
           ...ev,
           start: ev.start ? ev.start.slice(0, 16) : '',

@@ -788,7 +788,7 @@ See https://github.com/adobe-type-tools/cmap-resources
           const lessonId = urlParams.get('lessonId');
           if (!lessonId || !fileUrl) return;
           const token = localStorage.getItem('token');
-          await fetch('http://localhost:5000/lessons/lesson-progress', {
+          await fetch('http://https://juanlms-webapp-server.onrender.com/lessons/lesson-progress', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -810,7 +810,7 @@ See https://github.com/adobe-type-tools/cmap-resources
               const lessonId = urlParams.get('lessonId');
               const token = localStorage.getItem('token');
               if (lessonId && fileUrl && token) {
-                const res = await fetch(`http://localhost:5000/lessons/lesson-progress?lessonId=${lessonId}&fileUrl=${encodeURIComponent(fileUrl)}`, {
+                const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/lessons/lesson-progress?lessonId=${lessonId}&fileUrl=${encodeURIComponent(fileUrl)}`, {
                   headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();

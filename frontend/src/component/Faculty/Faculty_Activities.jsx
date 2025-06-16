@@ -31,7 +31,7 @@ export default function Faculty_Activities() {
     if (showCreateModal) {
       // Fetch classes for this faculty
       const token = localStorage.getItem('token');
-      fetch('http://localhost:5000/classes/my-classes', {
+      fetch('http://https://juanlms-webapp-server.onrender.com/classes/my-classes', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -61,7 +61,7 @@ export default function Faculty_Activities() {
     }
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5000/assignments', {
+      const res = await fetch('http://https://juanlms-webapp-server.onrender.com/assignments', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

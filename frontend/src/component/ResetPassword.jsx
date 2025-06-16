@@ -28,7 +28,7 @@ export default function ResetPassword() {
     }
     setLoading(true);
     try {
-      const response = await axios.post('http://localhost:5000/reset-password', {
+      const response = await axios.post('http://https://juanlms-webapp-server.onrender.com/reset-password', {
         personalemail,
         otp,
         newPassword

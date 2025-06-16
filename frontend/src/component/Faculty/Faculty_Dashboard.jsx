@@ -16,7 +16,7 @@ export default function Faculty_Dashboard() {
     async function fetchClasses() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:5000/classes", {
+        const res = await fetch("http://https://juanlms-webapp-server.onrender.com/classes", {
           headers: {
             "Authorization": `Bearer ${token}`,
           },

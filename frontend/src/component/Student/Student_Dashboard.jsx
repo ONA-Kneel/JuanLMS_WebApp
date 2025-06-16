@@ -23,7 +23,7 @@ export default function Student_Dashboard() {
     async function fetchClasses() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:5000/classes", {
+        const res = await fetch("http://https://juanlms-webapp-server.onrender.com/classes", {
           headers: {
             "Authorization": `Bearer ${token}`,
           },
@@ -37,7 +37,7 @@ export default function Student_Dashboard() {
         const progressMap = {};
         for (const cls of filtered) {
           // Fetch lessons for this class
-          const lessonRes = await fetch(`http://localhost:5000/lessons?classID=${cls.classID}`, {
+          const lessonRes = await fetch(`http://https://juanlms-webapp-server.onrender.com/lessons?classID=${cls.classID}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const lessons = await lessonRes.json();
@@ -48,7 +48,7 @@ export default function Student_Dashboard() {
               for (const file of lesson.files) {
                 // Fetch progress for this file
                 try {
-                  const progRes = await fetch(`http://localhost:5000/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
+                  const progRes = await fetch(`http://https://juanlms-webapp-server.onrender.com/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                   });
                   const prog = await progRes.json();

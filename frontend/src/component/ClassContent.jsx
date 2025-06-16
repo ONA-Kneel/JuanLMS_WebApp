@@ -60,7 +60,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
   useEffect(() => {
     if (!classId) return;
     const token = localStorage.getItem('token');
-    fetch('http://localhost:5000/classes', {
+    fetch('http://https://juanlms-webapp-server.onrender.com/classes', {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -77,7 +77,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setLessonsLoading(true);
       setLessonError(null);
       const token = localStorage.getItem('token');
-      fetch(`http://localhost:5000/lessons?classID=${classId}`, {
+      fetch(`http://https://juanlms-webapp-server.onrender.com/lessons?classID=${classId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -96,7 +96,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (selected === "members") {
       setMembersLoading(true);
       setMembersError(null);
-      fetch(`http://localhost:5000/classes/${classId}/members`)
+      fetch(`http://https://juanlms-webapp-server.onrender.com/classes/${classId}/members`)
         .then(res => res.json())
         .then(data => {
           setFacultyMembers(data.faculty || []);
@@ -117,7 +117,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
           if (lesson.files && lesson.files.length > 0) {
             for (const file of lesson.files) {
               try {
-                const res = await fetch(`http://localhost:5000/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
+                const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
                   headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
@@ -140,7 +140,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setAnnouncementsLoading(true);
       setAnnouncementError(null);
       const token = localStorage.getItem('token');
-      fetch(`http://localhost:5000/announcements?classID=${classId}`, {
+      fetch(`http://https://juanlms-webapp-server.onrender.com/announcements?classID=${classId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -156,7 +156,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setAssignmentsLoading(true);
       setAssignmentError(null);
       const token = localStorage.getItem('token');
-      fetch(`http://localhost:5000/assignments?classID=${realClassId}`, {
+      fetch(`http://https://juanlms-webapp-server.onrender.com/assignments?classID=${realClassId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -174,10 +174,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (userRole === 'faculty') {
       // Fetch assignment with views and class members
       Promise.all([
-        fetch(`http://localhost:5000/assignments/${selectedAssignment._id}`, {
+        fetch(`http://https://juanlms-webapp-server.onrender.com/assignments/${selectedAssignment._id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }).then(res => res.json()),
-        fetch(`http://localhost:5000/classes/${classId}/members`).then(res => res.json())
+        fetch(`http://https://juanlms-webapp-server.onrender.com/classes/${classId}/members`).then(res => res.json())
       ]).then(([assignment, members]) => {
         console.log('Assignment modal members:', members); // Debug
         // Use fetched students, or fallback to studentMembers if empty
@@ -201,7 +201,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       });
     } else {
       // Student: mark as viewed
-      fetch(`http://localhost:5000/assignments/${selectedAssignment._id}/view`, {
+      fetch(`http://https://juanlms-webapp-server.onrender.com/assignments/${selectedAssignment._id}/view`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -225,7 +225,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     const content = form.content.value;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5000/announcements', {
+      const res = await fetch('http://https://juanlms-webapp-server.onrender.com/announcements', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -235,7 +235,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       });
       if (res.ok) {
         setAnnouncementsLoading(true);
-        fetch(`http://localhost:5000/announcements?classID=${classId}`, {
+        fetch(`http://https://juanlms-webapp-server.onrender.com/announcements?classID=${classId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
           .then(res => res.json())
@@ -277,7 +277,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     }
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch("http://localhost:5000/lessons", {
+      const res = await fetch("http://https://juanlms-webapp-server.onrender.com/lessons", {
         method: "POST",
         headers: {
           'Authorization': `Bearer ${token}`
@@ -305,7 +305,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!window.confirm('Are you sure you want to delete this lesson?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/lessons/${lessonId}`, {
+      const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/lessons/${lessonId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -322,7 +322,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!window.confirm('Are you sure you want to delete this file?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/lessons/${lessonId}/file?fileUrl=${encodeURIComponent(fileUrl)}`, {
+      const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/lessons/${lessonId}/file?fileUrl=${encodeURIComponent(fileUrl)}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -341,7 +341,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!newTitle || newTitle === currentTitle) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/lessons/${lessonId}`, {
+      const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/lessons/${lessonId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -364,7 +364,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!window.confirm('Delete this announcement?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/announcements/${id}`, {
+      const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/announcements/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -381,7 +381,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!newContent) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/announcements/${id}`, {
+      const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/announcements/${id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -404,7 +404,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!window.confirm('Delete this assignment?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/assignments/${id}`, {
+      const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/assignments/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -421,7 +421,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!newInstructions) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/assignments/${id}`, {
+      const res = await fetch(`http://https://juanlms-webapp-server.onrender.com/assignments/${id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
