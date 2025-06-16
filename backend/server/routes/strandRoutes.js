@@ -1,5 +1,6 @@
 import express from 'express';
 import Strand from '../models/Strand.js';
+import Term from '../models/Term.js';
 
 const router = express.Router();
 
@@ -7,7 +8,13 @@ const router = express.Router();
 router.get('/track/:trackName', async (req, res) => {
   try {
     const { trackName } = req.params;
-    const strands = await Strand.find({ trackName, status: 'active' });
+    const { schoolYear, termName } = req.query;
+    const strands = await Strand.find({ 
+      trackName, 
+      schoolYear,
+      termName,
+      status: 'active' 
+    });
     res.status(200).json(strands);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -19,16 +26,33 @@ router.post('/', async (req, res) => {
   const { strandName, trackName } = req.body;
 
   if (!strandName || !trackName) {
-    return res.status(400).json({ message: 'All fields are required' });
+    return res.status(400).json({ message: 'Strand name and track name are required' });
   }
 
   try {
-    const existingStrand = await Strand.findOne({ strandName, trackName });
-    if (existingStrand) {
-      return res.status(409).json({ message: 'Strand with this name already exists for this track.' });
+    // Get the current active term
+    const currentTerm = await Term.findOne({ status: 'active' });
+    if (!currentTerm) {
+      return res.status(400).json({ message: 'No active term found' });
     }
 
-    const newStrand = new Strand({ strandName, trackName });
+    // Check for existing strand with same name in the same track, school year, and term
+    const existingStrand = await Strand.findOne({ 
+      strandName: new RegExp(`^${strandName}$`, 'i'),
+      trackName,
+      schoolYear: currentTerm.schoolYear,
+      termName: currentTerm.termName
+    });
+    if (existingStrand) {
+      return res.status(409).json({ message: 'Strand name must be unique within the same track, school year, and term.' });
+    }
+
+    const newStrand = new Strand({ 
+      strandName, 
+      trackName, 
+      schoolYear: currentTerm.schoolYear, 
+      termName: currentTerm.termName 
+    });
     await newStrand.save();
     res.status(201).json(newStrand);
   } catch (error) {
@@ -42,7 +66,7 @@ router.patch('/:id', async (req, res) => {
   const { strandName, trackName } = req.body;
 
   if (!strandName || !trackName) {
-    return res.status(400).json({ message: 'All fields are required' });
+    return res.status(400).json({ message: 'Strand name and track name are required' });
   }
 
   try {
@@ -51,19 +75,28 @@ router.patch('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Strand not found' });
     }
 
-    // Check for duplicate strand name for the same track, excluding the current strand
-    const existingStrand = await Strand.findOne({
-      strandName,
+    // Get the current active term
+    const currentTerm = await Term.findOne({ status: 'active' });
+    if (!currentTerm) {
+      return res.status(400).json({ message: 'No active term found' });
+    }
+
+    // Check for existing strand with same name in the same track, school year, and term, excluding current
+    const existingStrand = await Strand.findOne({ 
+      strandName: new RegExp(`^${strandName}$`, 'i'),
       trackName,
+      schoolYear: currentTerm.schoolYear,
+      termName: currentTerm.termName,
       _id: { $ne: id }
     });
-
     if (existingStrand) {
-      return res.status(409).json({ message: 'Strand with this name already exists for this track.' });
+      return res.status(409).json({ message: 'Strand name must be unique within the same track, school year, and term.' });
     }
 
     strand.strandName = strandName;
     strand.trackName = trackName;
+    strand.schoolYear = currentTerm.schoolYear;
+    strand.termName = currentTerm.termName;
 
     await strand.save();
     res.status(200).json(strand);

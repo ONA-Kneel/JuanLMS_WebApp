@@ -25,6 +25,7 @@ import strandRoutes from './routes/strandRoutes.js';
 import sectionRoutes from './routes/sectionRoutes.js';
 import facultyAssignmentRoutes from './routes/facultyAssignmentRoutes.js';
 import studentAssignmentRoutes from './routes/studentAssignmentRoutes.js';
+import subjectRoutes from './routes/subjectRoutes.js';
 
 dotenv.config({ path: './config.env' });
 
@@ -114,6 +115,7 @@ app.use('/api/strands', strandRoutes);
 app.use('/api/sections', sectionRoutes);
 app.use("/api/faculty-assignments", facultyAssignmentRoutes);
 app.use("/api/student-assignments", studentAssignmentRoutes);
+app.use("/api/subjects", subjectRoutes);
 
 // Start server
 app.listen(PORT, () => {

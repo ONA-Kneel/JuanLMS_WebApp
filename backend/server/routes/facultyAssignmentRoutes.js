@@ -27,6 +27,8 @@ router.get('/', authenticateToken, async (req, res) => {
           trackName: assignment.trackName,
           strandName: assignment.strandName,
           sectionName: assignment.sectionName,
+          subjectName: assignment.subjectName,
+          gradeLevel: assignment.gradeLevel,
           termId: assignment.termId,
           status: assignment.status // Include the status field
         });
@@ -55,7 +57,7 @@ router.get('/term/:termId', authenticateToken, async (req, res) => {
 // Create a new faculty assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { facultyId, trackName, strandName, sectionName, termId } = req.body;
+    const { facultyId, trackName, strandName, sectionName, subjectName, gradeLevel, termId } = req.body;
 
     // Get term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -68,6 +70,8 @@ router.post('/', authenticateToken, async (req, res) => {
       trackName,
       strandName,
       sectionName,
+      subjectName,
+      gradeLevel,
       termId,
       schoolYear: term.schoolYear,
       termName: term.termName
@@ -100,6 +104,42 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     res.json({ message: 'Assignment deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH route for updating faculty assignment
+router.patch('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { trackName, strandName, sectionName, subjectName, gradeLevel, termId } = req.body;
+    const assignment = await FacultyAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+    // Get term details to get schoolYear and termName if termId is provided or original termId
+    const currentTermId = termId || assignment.termId;
+    const term = await Term.findById(currentTermId);
+    if (!term) {
+      return res.status(404).json({ message: 'Term not found' });
+    }
+    assignment.trackName = trackName || assignment.trackName;
+    assignment.strandName = strandName || assignment.strandName;
+    assignment.sectionName = sectionName || assignment.sectionName;
+    assignment.subjectName = subjectName || assignment.subjectName;
+    assignment.gradeLevel = gradeLevel || assignment.gradeLevel;
+    assignment.termId = currentTermId;
+    assignment.schoolYear = term.schoolYear;
+    assignment.termName = term.termName;
+    const updatedAssignment = await assignment.save();
+    const response = updatedAssignment.toObject();
+    delete response.schoolYear;
+    delete response.termName;
+    res.json(response);
+  } catch (err) {
+    if (err.code === 11000) {
+      res.status(400).json({ message: 'This faculty assignment already exists' });
+    } else {
+      res.status(400).json({ message: err.message });
+    }
   }
 });
 

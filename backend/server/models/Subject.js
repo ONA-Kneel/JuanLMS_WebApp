@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
-const sectionSchema = new mongoose.Schema({
-  sectionName: {
+const subjectSchema = new mongoose.Schema({
+  subjectName: {
     type: String,
     required: true,
     trim: true
@@ -9,21 +9,23 @@ const sectionSchema = new mongoose.Schema({
   trackName: {
     type: String,
     required: true,
+    trim: true
   },
   strandName: {
     type: String,
     required: true,
+    trim: true
   },
   gradeLevel: {
     type: String,
     required: true,
     enum: ['Grade 11', 'Grade 12']
   },
-  schoolYear: {
+  termName: {
     type: String,
     required: true
   },
-  termName: {
+  schoolYear: {
     type: String,
     required: true
   },
@@ -36,9 +38,9 @@ const sectionSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Add a compound unique index to prevent duplicate section names within the same track, strand, school year, and term
-sectionSchema.index({ sectionName: 1, trackName: 1, strandName: 1, schoolYear: 1, termName: 1 }, { unique: true });
+// Compound index to ensure unique subjects within a term
+subjectSchema.index({ subjectName: 1, trackName: 1, strandName: 1, gradeLevel: 1, termName: 1, schoolYear: 1 }, { unique: true });
 
-const Section = mongoose.model('Section', sectionSchema);
+const Subject = mongoose.model('Subject', subjectSchema);
 
-export default Section; 
+export default Subject; 

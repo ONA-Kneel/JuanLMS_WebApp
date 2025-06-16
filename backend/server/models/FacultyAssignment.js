@@ -18,6 +18,15 @@ const facultyAssignmentSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  subjectName: {
+    type: String,
+    required: true
+  },
+  gradeLevel: {
+    type: String,
+    enum: ['Grade 11', 'Grade 12'],
+    required: true
+  },
   termId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Term',

@@ -118,7 +118,7 @@ router.post('/bulk', async (req, res) => {
     // Check for existing tracks
     const existingTracks = await Track.find({
       $or: tracks.map(track => ({
-        trackName: track.trackName.trim(),
+        trackName: new RegExp(`^${track.trackName.trim()}$`, 'i'), // Case-insensitive match
         schoolYear: track.schoolYear,
         termName: track.termName
       }))

@@ -24,6 +24,7 @@ router.get('/', authenticateToken, async (req, res) => {
           _id: assignment._id, // ID of the assignment document
           studentId: assignment.studentId._id,
           studentName: `${assignment.studentId.firstname} ${assignment.studentId.lastname}`,
+          gradeLevel: assignment.gradeLevel,
           trackName: assignment.trackName,
           strandName: assignment.strandName,
           sectionName: assignment.sectionName,
@@ -43,7 +44,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create a new student assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { studentId, trackName, strandName, sectionName, termId } = req.body;
+    const { studentId, trackName, strandName, sectionName, gradeLevel, termId } = req.body;
 
     // Get term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -51,11 +52,15 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Term not found' });
     }
 
+    if (!gradeLevel) {
+      return res.status(400).json({ message: 'gradeLevel is required' });
+    }
     const assignment = new StudentAssignment({
       studentId,
       trackName,
       strandName,
       sectionName,
+      gradeLevel,
       termId,
       schoolYear: term.schoolYear,
       termName: term.termName
@@ -79,7 +84,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
   const errors = [];
 
   for (const assignmentData of assignments) {
-    const { studentId, trackName, strandName, sectionName, termId } = assignmentData;
+    const { studentId, trackName, strandName, sectionName, gradeLevel, termId } = assignmentData;
 
     try {
       const term = await Term.findById(termId);
@@ -88,11 +93,16 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         continue;
       }
 
+      if (!gradeLevel) {
+        errors.push({ assignment: assignmentData, message: 'gradeLevel is required' });
+        continue;
+      }
       const newAssignment = new StudentAssignment({
         studentId,
         trackName,
         strandName,
         sectionName,
+        gradeLevel,
         termId,
         schoolYear: term.schoolYear,
         termName: term.termName,
@@ -126,7 +136,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 // Update a student assignment (e.g., if track/strand/section changes)
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
-    const { trackName, strandName, sectionName, termId } = req.body;
+    const { trackName, strandName, sectionName, gradeLevel, termId } = req.body;
 
     const assignment = await StudentAssignment.findById(req.params.id);
     if (!assignment) {
@@ -143,6 +153,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     assignment.trackName = trackName || assignment.trackName;
     assignment.strandName = strandName || assignment.strandName;
     assignment.sectionName = sectionName || assignment.sectionName;
+    if (gradeLevel) assignment.gradeLevel = gradeLevel;
     assignment.termId = currentTermId; // Update termId if provided
     assignment.schoolYear = term.schoolYear;
     assignment.termName = term.termName;

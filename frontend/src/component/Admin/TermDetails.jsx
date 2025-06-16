@@ -1,15 +1,23 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 // Import icons
 import editIcon from "../../assets/editing.png";
 import archiveIcon from "../../assets/archive.png";
+import tracksIcon from "../../assets/tracks.png";
+import strandsIcon from "../../assets/strands.png";
+import sectionsIcon from "../../assets/sections.png";
+import subjectsIcon from "../../assets/subjects.png";
+import facultyIcon from "../../assets/faculty.png";
+import studentIcon from "../../assets/student.png";
+import termDashboardIcon from "../../assets/termdashboard.png"; // Reverted to dashboard.png as per user's last manual change
 import * as XLSX from 'xlsx'; // Add this import for Excel handling
 
 export default function TermDetails() {
   const { termId } = useParams();
   const navigate = useNavigate();
+  const importFileInputRef = useRef(null); // Initialize useRef for the file input
   const [activeTab, setActiveTab] = useState('dashboard');
   const [termDetails, setTermDetails] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -39,7 +47,8 @@ export default function TermDetails() {
   const [sectionFormData, setSectionFormData] = useState({
     trackId: '',
     strandId: '',
-    sectionName: ''
+    sectionName: '',
+    gradeLevel: ''
   });
   const [sections, setSections] = useState([]);
   const [sectionError, setSectionError] = useState('');
@@ -51,7 +60,9 @@ export default function TermDetails() {
     facultyId: '',
     trackId: '',
     strandId: '',
-    sectionIds: [], // Multiple sections can be assigned
+    sectionIds: [],
+    gradeLevel: '',
+    subjectName: '',
   });
   const [facultyAssignments, setFacultyAssignments] = useState([]);
   const [facultyError, setFacultyError] = useState('');
@@ -65,12 +76,19 @@ export default function TermDetails() {
     trackId: '',
     strandId: '',
     sectionIds: [],
+    gradeLevel: ''
   });
   const [studentAssignments, setStudentAssignments] = useState([]);
   const [studentError, setStudentError] = useState('');
   const [isStudentEditMode, setIsStudentEditMode] = useState(false);
   const [editingStudentAssignment, setEditingStudentAssignment] = useState(null);
   const [students, setStudents] = useState([]); // To store student users for dropdown
+
+  // Add state for search functionality for Faculty and Students
+  const [facultySearchTerm, setFacultySearchTerm] = useState('');
+  const [showFacultySuggestions, setShowFacultySuggestions] = useState(false);
+  const [studentSearchTerm, setStudentSearchTerm] = useState('');
+  const [showStudentSuggestions, setShowStudentSuggestions] = useState(false);
 
   const [excelFile, setExcelFile] = useState(null);
   const [excelError, setExcelError] = useState('');
@@ -108,13 +126,56 @@ export default function TermDetails() {
   const [isStudentUploading, setIsStudentUploading] = useState(false);
   const [studentExcelError, setStudentExcelError] = useState('');
 
+  // --- SUBJECTS STATE ---
+  const [subjects, setSubjects] = useState([]);
+  const [subjectFormData, setSubjectFormData] = useState({
+    subjectName: '',
+    trackName: '',
+    strandName: '',
+    gradeLevel: ''
+  });
+  const [subjectError, setSubjectError] = useState('');
+  const [isSubjectEditMode, setIsSubjectEditMode] = useState(false);
+  const [editingSubject, setEditingSubject] = useState(null);
+  // Batch upload state for subjects
+  const [subjectExcelFile, setSubjectExcelFile] = useState(null);
+  const [subjectPreviewModalOpen, setSubjectPreviewModalOpen] = useState(false);
+  const [subjectPreviewData, setSubjectPreviewData] = useState([]);
+  const [subjectValidationStatus, setSubjectValidationStatus] = useState({});
+  const [isSubjectUploading, setIsSubjectUploading] = useState(false);
+  const [subjectExcelError, setSubjectExcelError] = useState('');
+
+  // New state for Term Data Import
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importExcelFile, setImportExcelFile] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [importPreviewData, setImportPreviewData] = useState({
+    tracks: [],
+    strands: [],
+    sections: [],
+    subjects: [],
+    facultyAssignments: [],
+    studentAssignments: []
+  });
+  const [importValidationStatus, setImportValidationStatus] = useState({
+    tracks: [],
+    strands: [],
+    sections: [],
+    subjects: [],
+    facultyAssignments: [],
+    studentAssignments: []
+  });
+  const [activeImportTab, setActiveImportTab] = useState('tracks'); // Default tab for import modal
+
   const tabs = [
-    { id: 'dashboard', label: 'Term Dashboard' },
-    { id: 'tracks', label: 'Tracks' },
-    { id: 'strands', label: 'Strands' },
-    { id: 'sections', label: 'Sections' },
-    { id: 'faculty', label: 'Faculty Assignment' },
-    { id: 'students', label: 'Student Assignment' }
+    { id: 'dashboard', label: 'Term Dashboard', icon: termDashboardIcon },
+    { id: 'tracks', label: 'Tracks', icon: tracksIcon },
+    { id: 'strands', label: 'Strands', icon: strandsIcon },
+    { id: 'sections', label: 'Sections', icon: sectionsIcon },
+    { id: 'subjects', label: 'Subjects', icon: subjectsIcon }, // <-- Move this line here
+    { id: 'faculty', label: 'Faculty Assignment', icon: facultyIcon },
+    { id: 'students', label: 'Student Assignment', icon: studentIcon },
   ];
 
   // In a real application, you would fetch term details here using termId
@@ -190,14 +251,16 @@ export default function TermDetails() {
   const fetchFaculties = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/users`, {
+      const res = await fetch(`http://localhost:5000/users/active`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       if (res.ok) {
         const data = await res.json();
+        console.log("Fetched all active users (faculties potential):", data); // Debug log
         const facultyUsers = data.filter(user => user.role === 'faculty');
+        console.log("Filtered faculty users:", facultyUsers); // Debug log
         setFaculties(facultyUsers);
       } else {
         const data = await res.json();
@@ -211,14 +274,16 @@ export default function TermDetails() {
   const fetchStudents = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/users`, {
+      const res = await fetch(`http://localhost:5000/users/active`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       if (res.ok) {
         const data = await res.json();
+        console.log("Fetched all active users (students potential):", data); // Debug log
         const studentUsers = data.filter(user => user.role === 'students');
+        console.log("Filtered student users:", studentUsers); // Debug log
         setStudents(studentUsers);
       } else {
         const data = await res.json();
@@ -241,7 +306,7 @@ export default function TermDetails() {
     try {
       const allStrands = [];
       for (const track of tracks) {
-        const res = await fetch(`http://localhost:5000/api/strands/track/${track.trackName}`);
+        const res = await fetch(`http://localhost:5000/api/strands/track/${track.trackName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
         if (res.ok) {
           const data = await res.json();
           allStrands.push(...data);
@@ -271,7 +336,7 @@ export default function TermDetails() {
       for (const track of tracks) {
         const strandsInTrack = strands.filter(strand => strand.trackName === track.trackName);
         for (const strand of strandsInTrack) {
-          const res = await fetch(`http://localhost:5000/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
+          const res = await fetch(`http://localhost:5000/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
           if (res.ok) {
             const data = await res.json();
             allSections.push(...data);
@@ -372,6 +437,12 @@ export default function TermDetails() {
   };
 
   const handleDeleteTrack = async (track) => {
+    // Check for associated strands
+    const associatedStrands = strands.filter(strand => strand.trackName === track.trackName);
+    if (associatedStrands.length > 0) {
+      window.alert('Cannot delete track: It has associated strands.');
+      return;
+    }
     if (window.confirm("Are you sure you want to delete this track?")) {
       try {
         const res = await fetch(`http://localhost:5000/api/tracks/${track._id}`, {
@@ -414,6 +485,8 @@ export default function TermDetails() {
         body: JSON.stringify({
           strandName: strandFormData.strandName.trim(),
           trackName: selectedTrack.trackName,
+          schoolYear: termDetails.schoolYear,
+          termName: termDetails.termName
         })
       });
 
@@ -463,6 +536,8 @@ export default function TermDetails() {
           body: JSON.stringify({
             strandName: strandFormData.strandName.trim(),
             trackName: selectedTrack.trackName,
+            schoolYear: termDetails.schoolYear,
+            termName: termDetails.termName
           })
         });
 
@@ -486,6 +561,26 @@ export default function TermDetails() {
   };
 
   const handleDeleteStrand = async (strand) => {
+    // Check for associated sections
+    const associatedSections = sections.filter(section => 
+      section.trackName === strand.trackName && 
+      section.strandName === strand.strandName
+    );
+    if (associatedSections.length > 0) {
+      window.alert('Cannot delete strand: It has associated sections.');
+      return;
+    }
+
+    // Check for associated subjects
+    const associatedSubjects = subjects.filter(subject => 
+      subject.trackName === strand.trackName && 
+      subject.strandName === strand.strandName
+    );
+    if (associatedSubjects.length > 0) {
+      window.alert('Cannot delete strand: It has associated subjects.');
+      return;
+    }
+
     if (window.confirm("Are you sure you want to delete this strand?")) {
       try {
         const res = await fetch(`http://localhost:5000/api/strands/${strand._id}`, {
@@ -510,14 +605,14 @@ export default function TermDetails() {
     e.preventDefault();
     setSectionError('');
 
-    if (!sectionFormData.trackId || !sectionFormData.strandId || !sectionFormData.sectionName.trim()) {
+    if (!sectionFormData.trackId || !sectionFormData.strandId || !sectionFormData.sectionName.trim() || !sectionFormData.gradeLevel) {
       setSectionError('All fields are required.');
       return;
     }
 
     const selectedTrack = tracks.find(track => track._id === sectionFormData.trackId);
     const selectedStrand = strands.find(strand => strand._id === sectionFormData.strandId);
-
+    
     if (!selectedTrack || !selectedStrand) {
       setSectionError('Selected track or strand not found.');
       return;
@@ -531,6 +626,9 @@ export default function TermDetails() {
           sectionName: sectionFormData.sectionName.trim(),
           trackName: selectedTrack.trackName,
           strandName: selectedStrand.strandName,
+          gradeLevel: sectionFormData.gradeLevel,
+          schoolYear: termDetails.schoolYear,
+          termName: termDetails.termName
         })
       });
 
@@ -538,7 +636,7 @@ export default function TermDetails() {
         const newSection = await res.json();
         setSections([...sections, newSection]);
         window.alert('Section added successfully!');
-        setSectionFormData({ trackId: '', strandId: '', sectionName: '' }); // Clear form
+        setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' }); // Clear form
       } else {
         const data = await res.json();
         setSectionError(data.message || 'Failed to add section');
@@ -554,7 +652,8 @@ export default function TermDetails() {
     setSectionFormData({
       trackId: tracks.find(track => track.trackName === section.trackName)?._id || '',
       strandId: strands.find(strand => strand.strandName === section.strandName && strand.trackName === section.trackName)?._id || '',
-      sectionName: section.sectionName
+      sectionName: section.sectionName,
+      gradeLevel: section.gradeLevel || '', // Populate gradeLevel when editing
     });
   };
 
@@ -562,7 +661,7 @@ export default function TermDetails() {
     e.preventDefault();
     setSectionError('');
 
-    if (!sectionFormData.trackId || !sectionFormData.strandId || !sectionFormData.sectionName.trim()) {
+    if (!sectionFormData.trackId || !sectionFormData.strandId || !sectionFormData.sectionName.trim() || !sectionFormData.gradeLevel) {
       setSectionError('All fields are required.');
       return;
     }
@@ -584,6 +683,7 @@ export default function TermDetails() {
             sectionName: sectionFormData.sectionName.trim(),
             trackName: selectedTrack.trackName,
             strandName: selectedStrand.strandName,
+            gradeLevel: sectionFormData.gradeLevel, // Update gradeLevel in the request body
           })
         });
 
@@ -595,7 +695,7 @@ export default function TermDetails() {
           window.alert('Section updated successfully!');
           setIsSectionEditMode(false);
           setEditingSection(null);
-          setSectionFormData({ trackId: '', strandId: '', sectionName: '' });
+          setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' }); // Clear form including gradeLevel
         } else {
           const data = await res.json();
           setSectionError(data.message || 'Failed to update section');
@@ -607,6 +707,28 @@ export default function TermDetails() {
   };
 
   const handleDeleteSection = async (section) => {
+    // Check for associated faculty assignments
+    const associatedFacultyAssignments = facultyAssignments.filter(assignment => 
+      assignment.trackName === section.trackName &&
+      assignment.strandName === section.strandName &&
+      assignment.sectionName === section.sectionName
+    );
+    if (associatedFacultyAssignments.length > 0) {
+      window.alert('Cannot delete section: It has associated faculty assignments.');
+      return;
+    }
+
+    // Check for associated student assignments
+    const associatedStudentAssignments = studentAssignments.filter(assignment => 
+      assignment.trackName === section.trackName &&
+      assignment.strandName === section.strandName &&
+      assignment.sectionName === section.sectionName
+    );
+    if (associatedStudentAssignments.length > 0) {
+      window.alert('Cannot delete section: It has associated student assignments.');
+      return;
+    }
+
     if (window.confirm("Are you sure you want to delete this section?")) {
       try {
         const res = await fetch(`http://localhost:5000/api/sections/${section._id}`, {
@@ -642,7 +764,10 @@ export default function TermDetails() {
   const filteredSectionsForFaculty = sections.filter(section => {
     const selectedTrack = tracks.find(track => track._id === facultyFormData.trackId);
     const selectedStrand = strands.find(strand => strand._id === facultyFormData.strandId);
-    return selectedTrack && selectedStrand && section.trackName === selectedTrack.trackName && section.strandName === selectedStrand.strandName;
+    return selectedTrack && selectedStrand && 
+           section.trackName === selectedTrack.trackName && 
+           section.strandName === selectedStrand.strandName &&
+           section.gradeLevel === facultyFormData.gradeLevel; // Added gradeLevel filter
   });
 
   // Filtered strands based on selected track for Student Assignment form dropdown
@@ -655,15 +780,42 @@ export default function TermDetails() {
   const filteredSectionsForStudent = sections.filter(section => {
     const selectedTrack = tracks.find(track => track._id === studentFormData.trackId);
     const selectedStrand = strands.find(strand => strand._id === studentFormData.strandId);
-    return selectedTrack && selectedStrand && section.trackName === selectedTrack.trackName && section.strandName === selectedStrand.strandName;
+    return selectedTrack && selectedStrand && section.trackName === selectedTrack.trackName && section.strandName === selectedStrand.strandName && 
+           section.gradeLevel === studentFormData.gradeLevel; // Added gradeLevel filter
   });
 
-  const handleChangeFacultyForm = (e) => {
+  // Handle change for Faculty form (updated to include search)
+  const handleChangeFacultyForm = async (e) => {
     const { name, value } = e.target;
+
+    if (name === "facultySearch") {
+      setFacultySearchTerm(value);
+      setShowFacultySuggestions(true);
+      setFacultyFormData(prev => ({ ...prev, facultyId: '' }));
+
+      if (value.trim()) {
+        try {
+          const token = localStorage.getItem('token');
+          const res = await fetch(`http://localhost:5000/users/search?q=${encodeURIComponent(value)}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const facultyUsers = data.filter(user => user.role === 'faculty');
+            setFaculties(facultyUsers);
+          }
+        } catch (err) {
+          console.error("Error searching faculty:", err);
+        }
+      }
+    } else {
     setFacultyFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    }
 
     // Reset strand and section if track changes
     if (name === "trackId") {
@@ -682,12 +834,44 @@ export default function TermDetails() {
     }
   };
 
-  const handleChangeStudentForm = (e) => {
+  // Handle selection of a faculty from suggestions
+  const handleSelectFaculty = (faculty) => {
+    setFacultyFormData(prev => ({ ...prev, facultyId: faculty._id }));
+    setFacultySearchTerm(`${faculty.firstname} ${faculty.lastname}`);
+    setShowFacultySuggestions(false);
+  };
+
+  const handleChangeStudentForm = async (e) => {
     const { name, value } = e.target;
+
+    if (name === "studentSearch") {
+      setStudentSearchTerm(value);
+      setShowStudentSuggestions(true);
+      setStudentFormData(prev => ({ ...prev, studentId: '' }));
+
+      if (value.trim()) {
+        try {
+          const token = localStorage.getItem('token');
+          const res = await fetch(`http://localhost:5000/users/search?q=${encodeURIComponent(value)}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const studentUsers = data.filter(user => user.role === 'students');
+            setStudents(studentUsers);
+          }
+        } catch (err) {
+          console.error("Error searching students:", err);
+        }
+      }
+    } else {
     setStudentFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    }
 
     // Reset strand and section if track changes
     if (name === "trackId") {
@@ -704,6 +888,13 @@ export default function TermDetails() {
         sectionIds: []
       }));
     }
+  };
+
+  // Handle selection of a student from suggestions
+  const handleSelectStudent = (student) => {
+    setStudentFormData(prev => ({ ...prev, studentId: student._id }));
+    setStudentSearchTerm(`${student.firstname} ${student.lastname}`);
+    setShowStudentSuggestions(false);
   };
 
   // Fetch faculty assignments
@@ -777,21 +968,34 @@ export default function TermDetails() {
     }
   }, [students, tracks, strands, sections, termDetails, fetchStudentAssignments]);
 
+  // Handle Add Faculty Assignment (updated to use facultySearchTerm and selected facultyId)
   const handleAddFacultyAssignment = async (e) => {
     e.preventDefault();
     setFacultyError('');
 
-    if (!facultyFormData.facultyId || !facultyFormData.trackId || !facultyFormData.strandId || facultyFormData.sectionIds.length === 0) {
+    // Ensure facultyId is set from selection or if directly typed and matches exactly
+    let facultyToAssign = faculties.find(f => f._id === facultyFormData.facultyId);
+    if (!facultyToAssign && facultySearchTerm) {
+      const exactMatch = faculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === facultySearchTerm.toLowerCase());
+      if (exactMatch) {
+        facultyToAssign = exactMatch;
+        setFacultyFormData(prev => ({ ...prev, facultyId: exactMatch._id }));
+      } else {
+        setFacultyError('Please select a faculty from the suggestions or type a valid faculty name.');
+        return;
+      }
+    }
+
+    if (!facultyToAssign || !facultyFormData.trackId || !facultyFormData.strandId || facultyFormData.sectionIds.length === 0) {
       setFacultyError('All fields are required for faculty assignment.');
       return;
     }
 
-    const facultyToAssign = faculties.find(f => f._id === facultyFormData.facultyId);
     const selectedTrack = tracks.find(track => track._id === facultyFormData.trackId);
     const selectedStrand = strands.find(strand => strand._id === facultyFormData.strandId);
     const selectedSection = sections.find(sec => sec._id === facultyFormData.sectionIds[0]); // Only one section per assignment
 
-    if (!facultyToAssign || !selectedTrack || !selectedStrand || !selectedSection) {
+    if (!selectedTrack || !selectedStrand || !selectedSection) {
       setFacultyError('Invalid selections for faculty assignment.');
       return;
     }
@@ -810,6 +1014,8 @@ export default function TermDetails() {
           trackName: selectedTrack.trackName,
           strandName: selectedStrand.strandName,
           sectionName: selectedSection.sectionName,
+          subjectName: facultyFormData.subjectName,
+          gradeLevel: facultyFormData.gradeLevel,
           termId: termDetails._id, // Add termId to the assignment
         })
       });
@@ -817,7 +1023,8 @@ export default function TermDetails() {
       if (res.ok) {
         window.alert('Faculty assigned successfully!');
         fetchFacultyAssignments(); // Refresh assignments list using the new API
-        setFacultyFormData({ facultyId: '', trackId: '', strandId: '', sectionIds: [] }); // Clear form
+        setFacultyFormData({ facultyId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '', subjectName: '' }); // Clear form
+        setFacultySearchTerm(''); // Clear search term
       } else {
         const data = await res.json();
         setFacultyError(data.message || 'Failed to assign faculty');
@@ -828,6 +1035,7 @@ export default function TermDetails() {
     }
   };
 
+  // Handle Edit Faculty Assignment (updated to populate search term)
   const handleEditFacultyAssignment = (assignment) => {
     setIsFacultyEditMode(true);
     setEditingFacultyAssignment(assignment);
@@ -837,19 +1045,41 @@ export default function TermDetails() {
     const strandId = strands.find(s => s.strandName === assignment.strandName && s.trackName === assignment.trackName)?._id || '';
     const sectionId = sections.find(s => s.sectionName === assignment.sectionName && s.trackName === assignment.trackName && s.strandName === assignment.strandName)?._id || '';
 
+    const faculty = faculties.find(f => f._id === assignment.facultyId);
+    if (faculty) {
+      setFacultySearchTerm(`${faculty.firstname} ${faculty.lastname}`);
+    } else {
+      setFacultySearchTerm('');
+    }
+
     setFacultyFormData({
       facultyId: assignment.facultyId,
       trackId: trackId,
       strandId: strandId,
       sectionIds: sectionId ? [sectionId] : [], // Ensure it's an array for the form
+      gradeLevel: assignment.gradeLevel || '',
+      subjectName: assignment.subjectName || '',
     });
   };
 
+  // Handle Update Faculty Assignment (updated to use facultySearchTerm and selected facultyId)
   const handleUpdateFacultyAssignment = async (e) => {
     e.preventDefault();
     setFacultyError('');
 
-    if (!facultyFormData.facultyId || !facultyFormData.trackId || !facultyFormData.strandId || facultyFormData.sectionIds.length === 0) {
+    let facultyToAssign = faculties.find(f => f._id === facultyFormData.facultyId);
+    if (!facultyToAssign && facultySearchTerm) {
+      const exactMatch = faculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === facultySearchTerm.toLowerCase());
+      if (exactMatch) {
+        facultyToAssign = exactMatch;
+        setFacultyFormData(prev => ({ ...prev, facultyId: exactMatch._id }));
+      } else {
+        setFacultyError('Please select a faculty from the suggestions or type a valid faculty name.');
+        return;
+      }
+    }
+
+    if (!facultyToAssign || !facultyFormData.trackId || !facultyFormData.strandId || facultyFormData.sectionIds.length === 0) {
       setFacultyError('All fields are required for faculty assignment.');
       return;
     }
@@ -874,10 +1104,12 @@ export default function TermDetails() {
             'Authorization': `Bearer ${token}` 
           },
           body: JSON.stringify({
-            facultyId: facultyFormData.facultyId, // Should be same as original
+            facultyId: facultyToAssign._id,
             trackName: selectedTrack.trackName,
             strandName: selectedStrand.strandName,
             sectionName: selectedSection.sectionName,
+            subjectName: facultyFormData.subjectName,
+            gradeLevel: facultyFormData.gradeLevel,
             termId: termDetails._id, // Ensure termId is also passed
           })
         });
@@ -887,7 +1119,8 @@ export default function TermDetails() {
           fetchFacultyAssignments(); // Refresh assignments list
           setIsFacultyEditMode(false);
           setEditingFacultyAssignment(null);
-          setFacultyFormData({ facultyId: '', trackId: '', strandId: '', sectionIds: [] });
+          setFacultyFormData({ facultyId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '', subjectName: '' });
+          setFacultySearchTerm(''); // Clear search term
         } else {
           const data = await res.json();
           setFacultyError(data.message || 'Failed to update faculty assignment');
@@ -929,7 +1162,7 @@ export default function TermDetails() {
     e.preventDefault();
     setStudentError('');
 
-    if (!studentFormData.studentId || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0) {
+    if (!studentFormData.studentId || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
       setStudentError('All fields are required for student assignment.');
       return;
     }
@@ -958,6 +1191,7 @@ export default function TermDetails() {
           trackName: selectedTrack.trackName,
           strandName: selectedStrand.strandName,
           sectionName: selectedSection.sectionName,
+          gradeLevel: studentFormData.gradeLevel, // Add gradeLevel
           termId: termDetails._id,
         })
       });
@@ -965,7 +1199,7 @@ export default function TermDetails() {
       if (res.ok) {
         window.alert('Student assigned successfully!');
         fetchStudentAssignments();
-        setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [] });
+        setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
       } else {
         const data = await res.json();
         setStudentError(data.message || 'Failed to assign student');
@@ -982,13 +1216,21 @@ export default function TermDetails() {
     
     const trackId = tracks.find(t => t.trackName === assignment.trackName)?._id || '';
     const strandId = strands.find(s => s.strandName === assignment.strandName && s.trackName === assignment.trackName)?._id || '';
-    const sectionId = sections.find(s => s.sectionName === assignment.sectionName && s.trackName === assignment.trackName && s.strandName === assignment.strandName)?._id || '';
+    const sectionId = sections.find(s => s.sectionName === assignment.sectionName && s.trackName === assignment.trackName && s.strandName === assignment.strandName && s.gradeLevel === assignment.gradeLevel)?._id || '';
+
+    const student = students.find(s => s._id === assignment.studentId);
+    if (student) {
+      setStudentSearchTerm(`${student.firstname} ${student.lastname}`);
+    } else {
+      setStudentSearchTerm('');
+    }
 
     setStudentFormData({
       studentId: assignment.studentId,
       trackId: trackId,
       strandId: strandId,
       sectionIds: sectionId ? [sectionId] : [],
+      gradeLevel: assignment.gradeLevel || '', // Populate gradeLevel
     });
   };
 
@@ -996,7 +1238,7 @@ export default function TermDetails() {
     e.preventDefault();
     setStudentError('');
 
-    if (!studentFormData.studentId || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0) {
+    if (!studentFormData.studentId || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
       setStudentError('All fields are required for student assignment.');
       return;
     }
@@ -1025,6 +1267,7 @@ export default function TermDetails() {
             trackName: selectedTrack.trackName,
             strandName: selectedStrand.strandName,
             sectionName: selectedSection.sectionName,
+            gradeLevel: studentFormData.gradeLevel, // Update gradeLevel
             termId: termDetails._id,
           })
         });
@@ -1034,7 +1277,7 @@ export default function TermDetails() {
           fetchStudentAssignments();
           setIsStudentEditMode(false);
           setEditingStudentAssignment(null);
-          setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [] });
+          setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
         } else {
           const data = await res.json();
           setStudentError(data.message || 'Failed to update student assignment');
@@ -1269,34 +1512,24 @@ export default function TermDetails() {
   // Add new functions for strand Excel handling
   const downloadStrandTemplate = async () => {
     try {
-      // Create a workbook with three sheets
       const wb = XLSX.utils.book_new();
       
       // Sheet 1: Template for adding new strands
       const templateWs = XLSX.utils.aoa_to_sheet([
-        ['Track Name', 'Strand Name to Add'], // Headers
+        ['Track Name', 'Strand Name to Add'],
       ]);
       XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Strands');
 
       // Sheet 2: Current strands in the system (only active)
-      const allStrands = [];
-      for (const track of tracks) {
-        const res = await fetch(`http://localhost:5000/api/strands/track/${track.trackName}`);
-        if (res.ok) {
-          const data = await res.json();
-          // Only include strands from active tracks and with active status
-          const activeStrands = data.filter(strand => 
-            strand.status === 'active' && 
-            tracks.find(t => t.trackName === strand.trackName)?.status === 'active'
-          );
-          allStrands.push(...activeStrands);
-        }
-      }
+      const currentStrands = strands.filter(s => 
+        s.status === 'active' && 
+        s.schoolYear === termDetails.schoolYear && 
+        s.termName === termDetails.termName
+      );
 
-      // Create headers for current strands sheet
       const currentStrandsData = [
-        ['Object ID', 'Track Name', 'Strand Name', 'Status'], // Headers
-        ...allStrands.map(strand => [
+        ['Object ID', 'Track Name', 'Strand Name', 'Status'],
+        ...currentStrands.map(strand => [
           strand._id,
           strand.trackName,
           strand.strandName,
@@ -1305,22 +1538,22 @@ export default function TermDetails() {
       ];
 
       const currentStrandsWs = XLSX.utils.aoa_to_sheet(currentStrandsData);
-      
-      // Set column widths for better readability
-      const wscols = [
+      currentStrandsWs['!cols'] = [
         {wch: 30}, // Object ID
         {wch: 20}, // Track Name
         {wch: 20}, // Strand Name
         {wch: 10}  // Status
       ];
-      currentStrandsWs['!cols'] = wscols;
-
       XLSX.utils.book_append_sheet(wb, currentStrandsWs, 'Current Strands');
 
       // Sheet 3: Available Tracks (only active)
-      const activeTracks = tracks.filter(track => track.status === 'active');
+      const activeTracks = tracks.filter(track => 
+        track.status === 'active' && 
+        track.schoolYear === termDetails.schoolYear && 
+        track.termName === termDetails.termName
+      );
       const availableTracksData = [
-        ['Track Name', 'Status'], // Headers
+        ['Track Name', 'Status'],
         ...activeTracks.map(track => [
           track.trackName,
           track.status
@@ -1328,17 +1561,12 @@ export default function TermDetails() {
       ];
 
       const availableTracksWs = XLSX.utils.aoa_to_sheet(availableTracksData);
-      
-      // Set column widths for tracks sheet
-      const trackWscols = [
+      availableTracksWs['!cols'] = [
         {wch: 20}, // Track Name
         {wch: 10}  // Status
       ];
-      availableTracksWs['!cols'] = trackWscols;
-
       XLSX.utils.book_append_sheet(wb, availableTracksWs, 'Available Tracks');
       
-      // Generate and download the file
       XLSX.writeFile(wb, 'strands_template.xlsx');
     } catch (error) {
       console.error('Error generating strand template:', error);
@@ -1346,35 +1574,31 @@ export default function TermDetails() {
     }
   };
 
+  // Update: Enforce absolute uniqueness for strand names
   const validateStrands = async (strandsToValidate) => {
     const status = {};
-    const uploadedStrandNamesByTrack = new Set(); // To detect duplicates within the uploaded file
-
-    // Pre-fetch all active tracks and existing strands to minimize API calls
-    const activeTracksMap = new Map(tracks.filter(t => t.status === 'active').map(t => [t.trackName, t]));
-    const existingStrandsInSystem = new Set(); // To store 'track-strand' combinations
-
+    const uploadedStrandNames = new Set();
+    // Fetch all existing strands in the system (for absolute uniqueness)
+    const allStrands = [];
     for (const track of tracks) {
       if (track.status === 'active') {
         try {
           const res = await fetch(`http://localhost:5000/api/strands/track/${track.trackName}`);
           if (res.ok) {
             const fetchedStrands = await res.json();
-            fetchedStrands.filter(s => s.status === 'active').forEach(s => {
-              existingStrandsInSystem.add(`${s.trackName}-${s.strandName}`);
-            });
+            allStrands.push(...fetchedStrands);
           }
         } catch (err) {
-          console.error(`Error fetching existing strands for track ${track.trackName}:`, err);
+          // ignore
         }
       }
     }
+    const allStrandNamesInSystem = new Set(allStrands.map(s => s.strandName.trim().toLowerCase()));
 
     for (let i = 0; i < strandsToValidate.length; i++) {
       const strand = strandsToValidate[i];
       const trackName = strand.trackName?.trim() || '';
       const strandName = strand.strandName?.trim() || '';
-
       let isValid = true;
       let message = 'Valid';
 
@@ -1383,36 +1607,30 @@ export default function TermDetails() {
         isValid = false;
         message = 'Missing Track Name or Strand Name';
       }
-
-      // 2. Check if track exists and is active (if not already invalid)
+      // 2. Absolute uniqueness: check if strand name exists anywhere
       if (isValid) {
-        const trackFound = activeTracksMap.has(trackName);
+        if (allStrandNamesInSystem.has(strandName.toLowerCase())) {
+          isValid = false;
+          message = 'Strand name already exists in the system (must be unique)';
+        }
+      }
+      // 3. Check for duplicates within the uploaded data (absolute uniqueness)
+      if (isValid) {
+        if (uploadedStrandNames.has(strandName.toLowerCase())) {
+          isValid = false;
+          message = 'Duplicate strand name in uploaded file (strand names must be unique)';
+        } else {
+          uploadedStrandNames.add(strandName.toLowerCase());
+        }
+      }
+      // 4. Check if track exists and is active
+      if (isValid) {
+        const trackFound = tracks.find(t => t.status === 'active' && t.trackName === trackName);
         if (!trackFound) {
           isValid = false;
           message = `Track "${trackName}" does not exist or is not active`;
         }
       }
-
-      // 3. Check for duplicates within the uploaded data (if not already invalid)
-      if (isValid) {
-        const key = `${trackName}-${strandName}`;
-        if (uploadedStrandNamesByTrack.has(key)) {
-          isValid = false;
-          message = 'Duplicate strand name in uploaded file for this track';
-        } else {
-          uploadedStrandNamesByTrack.add(key);
-        }
-      }
-
-      // 4. Check for existing strands in the system (if not already invalid)
-      if (isValid) {
-        const key = `${trackName}-${strandName}`;
-        if (existingStrandsInSystem.has(key)) {
-          isValid = false;
-          message = 'Strand already exists in this track';
-        }
-      }
-
       status[i] = { valid: isValid, message: message };
     }
     return status;
@@ -1555,95 +1773,70 @@ export default function TermDetails() {
   // Add new functions for section Excel handling
   const downloadSectionTemplate = async () => {
     try {
-      // Create a workbook with three sheets
       const wb = XLSX.utils.book_new();
       
       // Sheet 1: Template for adding new sections
       const templateWs = XLSX.utils.aoa_to_sheet([
-        ['Track Name', 'Strand Name', 'Section Name to Add'], // Headers
+        ['Track Name', 'Strand Name', 'Section Name to Add', 'Grade Level'],
       ]);
       XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Sections');
 
       // Sheet 2: Current sections in the system (only active)
-      const allSections = [];
-      for (const track of tracks) {
-        if (track.status === 'active') {
-          const strandsRes = await fetch(`http://localhost:5000/api/strands/track/${track.trackName}`);
-          if (strandsRes.ok) {
-            const strands = await strandsRes.json();
-            const activeStrands = strands.filter(strand => strand.status === 'active');
-            
-            for (const strand of activeStrands) {
-              const sectionsRes = await fetch(`http://localhost:5000/api/sections/strand/${strand.strandName}`);
-              if (sectionsRes.ok) {
-                const sections = await sectionsRes.json();
-                const activeSections = sections.filter(section => section.status === 'active');
-                allSections.push(...activeSections);
-              }
-            }
-          }
-        }
-      }
+      const currentSections = sections.filter(s => 
+        s.status === 'active' && 
+        s.schoolYear === termDetails.schoolYear && 
+        s.termName === termDetails.termName &&
+        tracks.find(t => t.trackName === s.trackName && t.status === 'active')
+      );
 
-      // Create headers for current sections sheet
       const currentSectionsData = [
-        ['Object ID', 'Track Name', 'Strand Name', 'Section Name', 'Status'], // Headers
-        ...allSections.map(section => [
+        ['Object ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status'],
+        ...currentSections.map(section => [
           section._id,
           section.trackName,
           section.strandName,
           section.sectionName,
+          section.gradeLevel || '',
           section.status
         ])
       ];
 
       const currentSectionsWs = XLSX.utils.aoa_to_sheet(currentSectionsData);
-      
-      // Set column widths for better readability
-      const wscols = [
+      currentSectionsWs['!cols'] = [
         {wch: 30}, // Object ID
         {wch: 20}, // Track Name
         {wch: 20}, // Strand Name
         {wch: 20}, // Section Name
+        {wch: 15}, // Grade Level
         {wch: 10}  // Status
       ];
-      currentSectionsWs['!cols'] = wscols;
-
       XLSX.utils.book_append_sheet(wb, currentSectionsWs, 'Current Sections');
 
       // Sheet 3: Available Strands (only active)
-      const availableStrandsData = [];
-      for (const track of tracks) {
-        if (track.status === 'active') {
-          const res = await fetch(`http://localhost:5000/api/strands/track/${track.trackName}`);
-          if (res.ok) {
-            const strands = await res.json();
-            const activeStrands = strands.filter(strand => strand.status === 'active');
-            availableStrandsData.push(...activeStrands.map(strand => [
-              track.trackName,
-              strand.strandName,
-              strand.status
-            ]));
-          }
-        }
-      }
+      const availableStrands = strands.filter(s => 
+        s.status === 'active' && 
+        s.schoolYear === termDetails.schoolYear && 
+        s.termName === termDetails.termName &&
+        tracks.find(t => t.trackName === s.trackName && t.status === 'active')
+      );
 
-      const availableStrandsWs = XLSX.utils.aoa_to_sheet([
-        ['Track Name', 'Strand Name', 'Status'], // Headers
-        ...availableStrandsData
-      ]);
-      
-      // Set column widths for strands sheet
-      const strandWscols = [
+      const availableStrandsData = [
+        ['Track Name', 'Strand Name', 'Status'],
+        ...availableStrands.map(strand => [
+          strand.trackName,
+          strand.strandName,
+          strand.status
+        ])
+      ];
+
+      const availableStrandsWs = XLSX.utils.aoa_to_sheet(availableStrandsData);
+      availableStrandsWs['!cols'] = [
         {wch: 20}, // Track Name
         {wch: 20}, // Strand Name
         {wch: 10}  // Status
       ];
-      availableStrandsWs['!cols'] = strandWscols;
-
       XLSX.utils.book_append_sheet(wb, availableStrandsWs, 'Available Strands');
       
-      // Generate and download the file
       XLSX.writeFile(wb, 'sections_template.xlsx');
     } catch (error) {
       console.error('Error generating section template:', error);
@@ -1653,59 +1846,79 @@ export default function TermDetails() {
 
   const validateSections = async (sectionsToValidate) => {
     const status = {};
+    const uploadedSectionCombos = new Set();
+    const existingSectionsInSystem = new Set();
 
-    // Pre-fetch all active tracks, strands, and existing sections to minimize API calls
-    const activeTracksMap = new Map(tracks.filter(t => t.status === 'active').map(t => [t.trackName, t]));
-    const activeStrandsInSystem = []; // To store { trackName, strandName, status }
-    const existingSectionsInSystem = new Set(); // To store 'track-strand-section' combinations
+    // Get all active tracks
+    const activeTracks = tracks.filter(track => track.status === 'active');
+    const activeTracksMap = new Set(activeTracks.map(track => track.trackName));
 
-    for (const track of tracks) {
-      if (track.status === 'active') {
-        try {
-          const strandsRes = await fetch(`http://localhost:5000/api/strands/track/${track.trackName}`);
-          if (strandsRes.ok) {
-            const fetchedStrands = await strandsRes.json();
-            const activeFetchedStrands = fetchedStrands.filter(s => s.status === 'active');
-            activeStrandsInSystem.push(...activeFetchedStrands.map(s => ({ ...s, trackName: track.trackName })));
-
-            for (const strand of activeFetchedStrands) {
-              try {
-                const sectionsRes = await fetch(`http://localhost:5000/api/sections/strand/${strand.strandName}`);
-                if (sectionsRes.ok) {
-                  const fetchedSections = await sectionsRes.json();
-                  fetchedSections.filter(sec => sec.status === 'active').forEach(sec => {
-                    existingSectionsInSystem.add(`${sec.trackName}-${sec.strandName}-${sec.sectionName}`);
-                  });
-                }
-              } catch (err) {
-                console.error(`Error fetching sections for strand ${strand.strandName}:`, err);
-              }
-            }
-          }
-        } catch (err) {
-          console.error(`Error fetching strands for track ${track.trackName}:`, err);
-        }
+    // Get all active strands in the system
+    const activeStrandsInSystem = [];
+    for (const track of activeTracks) {
+      const res = await fetch(`http://localhost:5000/api/strands/track/${track.trackName}`);
+      if (res.ok) {
+        const strands = await res.json();
+        const activeStrands = strands.filter(strand => strand.status === 'active');
+        activeStrandsInSystem.push(...activeStrands);
       }
     }
 
-    const uploadedSectionCombos = new Set(); // To detect duplicates within the uploaded file
+    // Get all existing sections in the system
+    for (const track of activeTracks) {
+      const strandsInTrack = activeStrandsInSystem.filter(s => s.trackName === track.trackName);
+      for (const strand of strandsInTrack) {
+        const res = await fetch(`http://localhost:5000/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
+        if (res.ok) {
+          const sections = await res.json();
+          const activeSections = sections.filter(section => section.status === 'active');
+          activeSections.forEach(section => {
+            existingSectionsInSystem.add(`${section.trackName}-${section.strandName}-${section.sectionName}-${section.gradeLevel}`);
+          });
+            }
+          }
+    }
+
+    // Track section names in the uploaded file for duplicates
+    const uploadedSectionNames = new Set();
 
     for (let i = 0; i < sectionsToValidate.length; i++) {
       const section = sectionsToValidate[i];
       const trackName = section.trackName?.trim() || '';
       const strandName = section.strandName?.trim() || '';
       const sectionName = section.sectionName?.trim() || '';
+      const gradeLevel = section.gradeLevel?.trim() || '';
 
       let isValid = true;
       let message = 'Valid';
 
       // 1. Check for missing required fields
-      if (!trackName || !strandName || !sectionName) {
+      if (!trackName || !strandName || !sectionName || !gradeLevel) {
         isValid = false;
-        message = 'Missing Track Name, Strand Name, or Section Name';
+        message = 'Missing Track Name, Strand Name, Section Name, or Grade Level';
       }
 
-      // 2. Check if track exists and is active (if not already invalid)
+      // 2. Check if section name is already used anywhere in the system (absolute uniqueness)
+      if (isValid) {
+        if (uploadedSectionNames.has(sectionName.toLowerCase())) {
+          isValid = false;
+          message = 'Duplicate section name in uploaded file (section names must be unique)';
+        } else {
+          uploadedSectionNames.add(sectionName.toLowerCase());
+        }
+      }
+
+      // 3. Check for duplicates within the uploaded data (absolute uniqueness)
+      if (isValid) {
+        if (uploadedSectionCombos.has(`${trackName}-${strandName}-${sectionName}-${gradeLevel}`)) {
+          isValid = false;
+          message = 'Duplicate section name in uploaded file for this track-strand-grade level combination';
+        } else {
+          uploadedSectionCombos.add(`${trackName}-${strandName}-${sectionName}-${gradeLevel}`);
+        }
+      }
+
+      // 4. Check if track exists and is active
       if (isValid) {
         const trackFound = activeTracksMap.has(trackName);
         if (!trackFound) {
@@ -1714,7 +1927,7 @@ export default function TermDetails() {
         }
       }
 
-      // 3. Check if strand exists within the active track and is active (if not already invalid)
+      // 5. Check if strand exists within the active track and is active
       if (isValid) {
         const strandFound = activeStrandsInSystem.some(s => s.trackName === trackName && s.strandName === strandName);
         if (!strandFound) {
@@ -1723,23 +1936,11 @@ export default function TermDetails() {
         }
       }
 
-      // 4. Check for duplicates within the uploaded data (if not already invalid)
+      // 6. Check if grade level is valid
       if (isValid) {
-        const currentCombo = `${trackName}-${strandName}-${sectionName}`;
-        if (uploadedSectionCombos.has(currentCombo)) {
+        if (gradeLevel !== 'Grade 11' && gradeLevel !== 'Grade 12') {
           isValid = false;
-          message = 'Duplicate section name in uploaded file for this track-strand combination';
-        } else {
-          uploadedSectionCombos.add(currentCombo);
-        }
-      }
-
-      // 5. Check for existing sections in the system (if not already invalid)
-      if (isValid) {
-        const currentCombo = `${trackName}-${strandName}-${sectionName}`;
-        if (existingSectionsInSystem.has(currentCombo)) {
-          isValid = false;
-          message = 'Section already exists in this track-strand combination';
+          message = 'Grade Level must be either "Grade 11" or "Grade 12"';
         }
       }
 
@@ -1781,7 +1982,8 @@ export default function TermDetails() {
           const sectionsToPreview = jsonData.map(row => ({
             trackName: row['Track Name']?.trim() || '',
             strandName: row['Strand Name']?.trim() || '',
-            sectionName: row['Section Name to Add']?.trim() || ''
+            sectionName: row['Section Name to Add']?.trim() || '',
+            gradeLevel: row['Grade Level']?.trim() || ''
           }));
 
           // Validate sections
@@ -1863,45 +2065,43 @@ export default function TermDetails() {
   const downloadFacultyAssignmentTemplate = async () => {
     try {
       const wb = XLSX.utils.book_new();
-      
       // Sheet 1: Template for adding new faculty assignments
       const templateWs = XLSX.utils.aoa_to_sheet([
-        ['Faculty Name', 'Track Name', 'Strand Name', 'Section Name'], // Headers
+        ['Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject'], // Updated headers
       ]);
       XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Faculty Assignments');
 
       // Sheet 2: Current faculty assignments in the system (only active)
       const currentFacultyAssignments = facultyAssignments.filter(fa => fa.status === 'active');
       const currentFacultyAssignmentsData = [
-        ['Object ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Status'], // Headers
+        ['Object ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject', 'Status'], // Updated headers
         ...currentFacultyAssignments.map(assignment => [
           assignment._id,
           assignment.facultyName,
           assignment.trackName,
           assignment.strandName,
           assignment.sectionName,
+          assignment.gradeLevel || '',
+          assignment.subjectName || '',
           assignment.status
         ])
       ];
-
       const currentFacultyAssignmentsWs = XLSX.utils.aoa_to_sheet(currentFacultyAssignmentsData);
       const faWscols = [
-        {wch: 30}, {wch: 25}, {wch: 20}, {wch: 20}, {wch: 20}, {wch: 10}
+        {wch: 30}, {wch: 25}, {wch: 20}, {wch: 20}, {wch: 20}, {wch: 15}, {wch: 20}, {wch: 10}
       ];
       currentFacultyAssignmentsWs['!cols'] = faWscols;
       XLSX.utils.book_append_sheet(wb, currentFacultyAssignmentsWs, 'Current Assignments');
 
       // Sheet 3: Available Faculty
-      console.log("Faculties in state:", faculties);
-      const activeFaculties = faculties.filter(f => f.role === 'faculty' && !f.isArchived); // Corrected filter
-      console.log("Active faculties for template:", activeFaculties);
+      const activeFaculties = faculties.filter(f => f.role === 'faculty' && !f.isArchived);
       const availableFacultiesData = [
-        ['Object ID', 'Faculty Name', 'Email', 'Status'], // Headers
+        ['Object ID', 'Faculty Name', 'Email', 'Status'],
         ...activeFaculties.map(f => [
           f._id,
           `${f.firstname} ${f.lastname}`,
           f.email,
-          f.isArchived ? 'Archived' : 'Active' // Display status based on isArchived
+          f.isArchived ? 'Archived' : 'Active'
         ])
       ];
       const availableFacultiesWs = XLSX.utils.aoa_to_sheet(availableFacultiesData);
@@ -1927,7 +2127,7 @@ export default function TermDetails() {
       // Sheet 5: Available Strands
       const activeStrandsInSystem = [];
       for (const track of activeTracks) {
-        const res = await fetch(`http://localhost:5000/api/strands/track/${track.trackName}`);
+        const res = await fetch(`http://localhost:5000/api/strands/track/${track.trackName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
         if (res.ok) {
           const fetchedStrands = await res.json();
           activeStrandsInSystem.push(...fetchedStrands.filter(s => s.status === 'active').map(s => ({ ...s, trackName: track.trackName })));
@@ -1944,12 +2144,12 @@ export default function TermDetails() {
       availableStrandsWs['!cols'] = strandWscols;
       XLSX.utils.book_append_sheet(wb, availableStrandsWs, 'Available Strands');
 
-      // Sheet 6: Available Sections
+      // Sheet 6: Available Sections (filtered by active tracks and strands)
       const activeSectionsInSystem = [];
       for (const track of activeTracks) {
         const strandsInTrack = activeStrandsInSystem.filter(s => s.trackName === track.trackName);
         for (const strand of strandsInTrack) {
-          const res = await fetch(`http://localhost:5000/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
+          const res = await fetch(`http://localhost:5000/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
           if (res.ok) {
             const fetchedSections = await res.json();
             activeSectionsInSystem.push(...fetchedSections.filter(sec => sec.status === 'active').map(sec => ({ ...sec, trackName: track.trackName, strandName: strand.strandName })));
@@ -1957,16 +2157,38 @@ export default function TermDetails() {
         }
       }
       const availableSectionsData = [
-        ['Track Name', 'Strand Name', 'Section Name', 'Status'],
-        ...activeSectionsInSystem.map(sec => [sec.trackName, sec.strandName, sec.sectionName, sec.status])
+        ['Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status'],
+        ...activeSectionsInSystem.map(sec => [sec.trackName, sec.strandName, sec.sectionName, sec.gradeLevel || '', sec.status])
       ];
       const availableSectionsWs = XLSX.utils.aoa_to_sheet(availableSectionsData);
       const sectionWscols = [
-        {wch: 20}, {wch: 20}, {wch: 20}, {wch: 10}
+        {wch: 20}, // Track Name
+        {wch: 20}, // Strand Name
+        {wch: 20}, // Section Name
+        {wch: 15}, // Grade Level
+        {wch: 10}  // Status
       ];
       availableSectionsWs['!cols'] = sectionWscols;
       XLSX.utils.book_append_sheet(wb, availableSectionsWs, 'Available Sections');
-      
+
+      // Sheet 7: Available Subjects
+      const availableSubjectsData = [
+        ['Subject Name', 'Track Name', 'Strand Name', 'Grade Level', 'Status'],
+        ...subjects.map(subject => [
+          subject.subjectName,
+          subject.trackName,
+          subject.strandName,
+          subject.gradeLevel,
+          subject.status || 'active',
+        ])
+      ];
+      const availableSubjectsWs = XLSX.utils.aoa_to_sheet(availableSubjectsData);
+      const subjectWscols = [
+        {wch: 25}, {wch: 20}, {wch: 20}, {wch: 15}, {wch: 10}
+      ];
+      availableSubjectsWs['!cols'] = subjectWscols;
+      XLSX.utils.book_append_sheet(wb, availableSubjectsWs, 'Available Subjects');
+
       XLSX.writeFile(wb, 'faculty_assignments_template.xlsx');
     } catch (error) {
       console.error('Error generating faculty assignment template:', error);
@@ -2140,7 +2362,7 @@ export default function TermDetails() {
             }
           }
 
-          const requiredHeaders = ['Faculty Name', 'Track Name', 'Strand Name', 'Section Name'];
+          const requiredHeaders = ['Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject'];
           const missingOrMismatchedHeaders = requiredHeaders.filter(header => !actualHeaders.includes(header));
 
           if (missingOrMismatchedHeaders.length > 0) {
@@ -2157,10 +2379,12 @@ export default function TermDetails() {
           }
 
           const assignmentsToPreview = jsonData.map(row => ({
-            facultyNameInput: String(row[actualHeaders.indexOf('Faculty Name')] || '').trim(), // Now correctly looking for 'Faculty Name'
+            facultyNameInput: String(row[actualHeaders.indexOf('Faculty Name')] || '').trim(),
             trackName: String(row[actualHeaders.indexOf('Track Name')] || '').trim(),
             strandName: String(row[actualHeaders.indexOf('Strand Name')] || '').trim(),
             sectionName: String(row[actualHeaders.indexOf('Section Name')] || '').trim(),
+            gradeLevel: String(row[actualHeaders.indexOf('Grade Level')] || '').trim(),
+            subjectName: String(row[actualHeaders.indexOf('Subject')] || '').trim(),
           }));
 
           const validationResults = await validateFacultyAssignments(assignmentsToPreview);
@@ -2227,6 +2451,8 @@ export default function TermDetails() {
             trackName: assignment.trackName,
             strandName: assignment.strandName,
             sectionName: assignment.sectionName,
+            gradeLevel: assignment.gradeLevel,
+            subjectName: assignment.subjectName,
             termId: termDetails._id,
           })
         });
@@ -2236,7 +2462,7 @@ export default function TermDetails() {
           createdAssignments.push(newAssignment);
         } else {
           const data = await res.json();
-          throw new Error(data.message || `Failed to create assignment for ${assignment.facultyNameInput}`); // Corrected message
+          throw new Error(data.message || `Failed to create assignment for ${assignment.facultyNameInput}`);
         }
       }
 
@@ -2245,7 +2471,7 @@ export default function TermDetails() {
       window.alert(`${createdAssignments.length} faculty assignment(s) uploaded successfully!`);
       setFacultyAssignmentExcelFile(null);
       setFacultyAssignmentPreviewModalOpen(false);
-      document.querySelector('input[type="file"][accept=".xlsx,.xls"]').value = ''; // Reset file input
+      document.querySelector('input[type="file"][accept=".xlsx,.xls"]').value = '';
 
     } catch (err) {
       setFacultyError(err.message || 'Error uploading faculty assignments');
@@ -2262,28 +2488,18 @@ export default function TermDetails() {
 
       // Sheet 1: Template for adding new student assignments
       const templateWs = XLSX.utils.aoa_to_sheet([
-        ['Student Name', 'Track Name', 'Strand Name', 'Section Name'], // Headers
+        ['Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name'], // Headers
       ]);
       XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Student Assignments');
 
       // Sheet 2: Current student assignments in the system
-      // Fetch student assignments again or ensure facultyAssignments is up-to-date
-      const token = localStorage.getItem('token');
-      const studentAssignmentsRes = await fetch(`http://localhost:5000/api/student-assignments?termId=${termDetails._id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      let currentStudentAssignments = [];
-      if (studentAssignmentsRes.ok) {
-        const data = await studentAssignmentsRes.json();
-        currentStudentAssignments = data;
-      }
-      
+      const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
       const currentStudentAssignmentsData = [
-        ['Object ID', 'Student Name', 'Track Name', 'Strand Name', 'Section Name', 'Status'], // Headers
+        ['Object ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'], // Headers
         ...currentStudentAssignments.map(assignment => [
           assignment._id,
           assignment.studentName,
+          assignment.gradeLevel || '',
           assignment.trackName,
           assignment.strandName,
           assignment.sectionName,
@@ -2293,7 +2509,7 @@ export default function TermDetails() {
 
       const currentStudentAssignmentsWs = XLSX.utils.aoa_to_sheet(currentStudentAssignmentsData);
       const saWscols = [
-        {wch: 30}, {wch: 25}, {wch: 20}, {wch: 20}, {wch: 20}, {wch: 10}
+        {wch: 30}, {wch: 25}, {wch: 20}, {wch: 20}, {wch: 20}, {wch: 20}, {wch: 10}
       ];
       currentStudentAssignmentsWs['!cols'] = saWscols;
       XLSX.utils.book_append_sheet(wb, currentStudentAssignmentsWs, 'Current Assignments');
@@ -2317,7 +2533,11 @@ export default function TermDetails() {
       XLSX.utils.book_append_sheet(wb, availableStudentsWs, 'Available Students');
 
       // Sheet 4: Available Tracks
-      const activeTracks = tracks.filter(t => t.status === 'active');
+      const activeTracks = tracks.filter(t => 
+        t.status === 'active' && 
+        t.schoolYear === termDetails.schoolYear && 
+        t.termName === termDetails.termName
+      );
       const availableTracksData = [
         ['Track Name', 'Status'],
         ...activeTracks.map(t => [t.trackName, t.status])
@@ -2329,18 +2549,16 @@ export default function TermDetails() {
       availableTracksWs['!cols'] = trackWscols;
       XLSX.utils.book_append_sheet(wb, availableTracksWs, 'Available Tracks');
 
-      // Sheet 5: Available Strands (filtered by active tracks)
-      const activeStrandsInSystem = [];
-      for (const track of activeTracks) {
-        const res = await fetch(`http://localhost:5000/api/strands/track/${track.trackName}`);
-        if (res.ok) {
-          const fetchedStrands = await res.json();
-          activeStrandsInSystem.push(...fetchedStrands.filter(s => s.status === 'active').map(s => ({ ...s, trackName: track.trackName })));
-        }
-      }
+      // Sheet 5: Available Strands
+      const activeStrands = strands.filter(s => 
+        s.status === 'active' && 
+        s.schoolYear === termDetails.schoolYear && 
+        s.termName === termDetails.termName &&
+        activeTracks.some(t => t.trackName === s.trackName)
+      );
       const availableStrandsData = [
         ['Track Name', 'Strand Name', 'Status'],
-        ...activeStrandsInSystem.map(s => [s.trackName, s.strandName, s.status])
+        ...activeStrands.map(s => [s.trackName, s.strandName, s.status])
       ];
       const availableStrandsWs = XLSX.utils.aoa_to_sheet(availableStrandsData);
       const strandWscols = [
@@ -2349,31 +2567,32 @@ export default function TermDetails() {
       availableStrandsWs['!cols'] = strandWscols;
       XLSX.utils.book_append_sheet(wb, availableStrandsWs, 'Available Strands');
 
-      // Sheet 6: Available Sections (filtered by active tracks and strands)
-      const activeSectionsInSystem = [];
-      for (const track of activeTracks) {
-        const strandsInTrack = activeStrandsInSystem.filter(s => s.trackName === track.trackName);
-        for (const strand of strandsInTrack) {
-          const res = await fetch(`http://localhost:5000/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
-          if (res.ok) {
-            const fetchedSections = await res.json();
-            activeSectionsInSystem.push(...fetchedSections.filter(sec => sec.status === 'active').map(sec => ({ ...sec, trackName: track.trackName, strandName: strand.strandName })));
-          }
-        }
-      }
+      // Sheet 6: Available Sections
+      const activeSections = sections.filter(s => 
+        s.status === 'active' && 
+        s.schoolYear === termDetails.schoolYear && 
+        s.termName === termDetails.termName &&
+        activeTracks.some(t => t.trackName === s.trackName) &&
+        activeStrands.some(str => str.trackName === s.trackName && str.strandName === s.strandName)
+      );
       const availableSectionsData = [
-        ['Track Name', 'Strand Name', 'Section Name', 'Status'],
-        ...activeSectionsInSystem.map(sec => [sec.trackName, sec.strandName, sec.sectionName, sec.status])
+        ['Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status'],
+        ...activeSections.map(s => [
+          s.trackName,
+          s.strandName,
+          s.sectionName,
+          s.gradeLevel || '',
+          s.status
+        ])
       ];
       const availableSectionsWs = XLSX.utils.aoa_to_sheet(availableSectionsData);
       const sectionWscols = [
-        {wch: 20}, {wch: 20}, {wch: 20}, {wch: 10}
+        {wch: 20}, {wch: 20}, {wch: 20}, {wch: 15}, {wch: 10}
       ];
       availableSectionsWs['!cols'] = sectionWscols;
       XLSX.utils.book_append_sheet(wb, availableSectionsWs, 'Available Sections');
 
       XLSX.writeFile(wb, 'student_assignments_template.xlsx');
-
     } catch (error) {
       console.error('Error generating student assignment template:', error);
       setStudentExcelError('Failed to generate template. Please try again.');
@@ -2448,19 +2667,24 @@ export default function TermDetails() {
       const assignment = assignmentsToValidate[i];
       console.log(`Validating assignment ${i + 1}:`, assignment);
       const studentNameInput = assignment['Student Name']?.trim() || '';
+      const gradeLevel = assignment['Grade Level']?.trim() || '';
       const trackName = assignment['Track Name']?.trim() || '';
       const strandName = assignment['Strand Name']?.trim() || '';
       const sectionName = assignment['Section Name']?.trim() || '';
-      console.log(`Extracted: Student: "${studentNameInput}", Track: "${trackName}", Strand: "${strandName}", Section: "${sectionName}"`);
+      console.log(`Extracted: Student: "${studentNameInput}", Grade Level: "${gradeLevel}", Track: "${trackName}", Strand: "${strandName}", Section: "${sectionName}"`);
 
       let isValid = true;
       let message = 'Valid';
       let studentId = ''; // To store the student ID for valid assignments
 
       // 1. Check for missing required fields
-      if (!studentNameInput || !trackName || !strandName || !sectionName) {
+      if (!studentNameInput || !gradeLevel || !trackName || !strandName || !sectionName) {
         isValid = false;
-        message = 'Missing Student Name, Track Name, Strand Name, or Section Name';
+        message = 'Missing Student Name, Grade Level, Track Name, Strand Name, or Section Name';
+      }
+      if (isValid && !['Grade 11', 'Grade 12'].includes(gradeLevel)) {
+        isValid = false;
+        message = 'Grade Level must be "Grade 11" or "Grade 12"';
       }
 
       // 2. Check if student exists and is active
@@ -2564,6 +2788,7 @@ export default function TermDetails() {
       // Define expected headers and create a mapping for flexible matching
       const expectedHeadersMap = {
         'Student Name': '',
+        'Grade Level': '',
         'Track Name': '',
         'Strand Name': '',
         'Section Name': '',
@@ -2657,6 +2882,7 @@ export default function TermDetails() {
           },
           body: JSON.stringify({
             studentId: studentId,
+            gradeLevel: assignment['Grade Level'],
             trackName: assignment['Track Name'],
             strandName: assignment['Strand Name'],
             sectionName: assignment['Section Name'],
@@ -2688,6 +2914,782 @@ export default function TermDetails() {
     }
   };
 
+  // Fetch subjects when term details are loaded
+  useEffect(() => {
+    if (termDetails) {
+      fetchSubjects();
+    }
+  }, [termDetails]);
+
+  const fetchSubjects = async () => {
+    try {
+      setSubjectError('');
+      const res = await fetch(`http://localhost:5000/api/subjects/term/${termDetails.termName}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSubjects(data);
+      } else {
+        const data = await res.json();
+        setSubjectError(data.message || 'Failed to fetch subjects');
+      }
+    } catch (err) {
+      setSubjectError('Error fetching subjects');
+    }
+  };
+
+  const handleChangeSubjectForm = (e) => {
+    const { name, value } = e.target;
+    setSubjectFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddSubject = async (e) => {
+    e.preventDefault();
+    setSubjectError('');
+    if (!subjectFormData.subjectName || !subjectFormData.trackName || !subjectFormData.strandName || !subjectFormData.gradeLevel) {
+      setSubjectError('All fields are required.');
+      return;
+    }
+    try {
+      const res = await fetch('http://localhost:5000/api/subjects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...subjectFormData,
+          schoolYear: termDetails.schoolYear,
+          termName: termDetails.termName
+        })
+      });
+      if (res.ok) {
+        await fetchSubjects();
+        setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' });
+        window.alert('Subject added successfully!');
+      } else {
+        const data = await res.json();
+        setSubjectError(data.message || 'Failed to add subject');
+      }
+    } catch (err) {
+      setSubjectError('Error adding subject');
+    }
+  };
+
+  const handleEditSubject = (subject) => {
+    setIsSubjectEditMode(true);
+    setEditingSubject(subject);
+    setSubjectFormData({
+      subjectName: subject.subjectName,
+      trackName: subject.trackName,
+      strandName: subject.strandName,
+      gradeLevel: subject.gradeLevel
+    });
+  };
+
+  const handleUpdateSubject = async (e) => {
+    e.preventDefault();
+    setSubjectError('');
+    if (!subjectFormData.subjectName || !subjectFormData.trackName || !subjectFormData.strandName || !subjectFormData.gradeLevel) {
+      setSubjectError('All fields are required.');
+      return;
+    }
+    try {
+      const res = await fetch(`http://localhost:5000/api/subjects/${editingSubject._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...subjectFormData,
+          schoolYear: termDetails.schoolYear,
+          termName: termDetails.termName
+        })
+      });
+      if (res.ok) {
+        await fetchSubjects();
+        setIsSubjectEditMode(false);
+        setEditingSubject(null);
+        setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' });
+        window.alert('Subject updated successfully!');
+      } else {
+        const data = await res.json();
+        setSubjectError(data.message || 'Failed to update subject');
+      }
+    } catch (err) {
+      setSubjectError('Error updating subject');
+    }
+  };
+
+  const handleDeleteSubject = async (subject) => {
+    // Check for associated faculty assignments
+    const associatedFacultyAssignments = facultyAssignments.filter(assignment => 
+      assignment.subjectName === subject.subjectName
+    );
+    if (associatedFacultyAssignments.length > 0) {
+      window.alert('Cannot delete subject: It has associated faculty assignments.');
+      return;
+    }
+
+    if (window.confirm('Are you sure you want to delete this subject?')) {
+      try {
+        const res = await fetch(`http://localhost:5000/api/subjects/${subject._id}`, { method: 'DELETE' });
+        if (res.ok) {
+          await fetchSubjects();
+        } else {
+          const data = await res.json();
+          setSubjectError(data.message || 'Failed to delete subject');
+        }
+      } catch (err) {
+        setSubjectError('Error deleting subject');
+      }
+    }
+  };
+
+  // Update: Enforce absolute uniqueness for subject names
+  const validateSubjects = async (subjectsToValidate) => {
+    const status = {};
+    const uploadedSubjectNames = new Set();
+    // Fetch all existing subjects in the system (for absolute uniqueness)
+    let allSubjects = [];
+    try {
+      const res = await fetch(`http://localhost:5000/api/subjects`);
+      if (res.ok) {
+        allSubjects = await res.json();
+      }
+    } catch (err) {
+      // ignore
+    }
+    const allSubjectNamesInSystem = new Set(allSubjects.map(s => s.subjectName.trim().toLowerCase()));
+
+    for (let i = 0; i < subjectsToValidate.length; i++) {
+      const subject = subjectsToValidate[i];
+      const subjectName = subject.subjectName?.trim() || '';
+      let isValid = true;
+      let message = 'Valid';
+
+      // 1. Check for missing required fields
+      if (!subjectName || !subject.trackName || !subject.strandName || !subject.gradeLevel) {
+        isValid = false;
+        message = 'All fields are required.';
+      }
+      // 2. Absolute uniqueness: check if subject name exists anywhere
+      if (isValid) {
+        if (allSubjectNamesInSystem.has(subjectName.toLowerCase())) {
+          isValid = false;
+          message = 'Subject name already exists in the system (must be unique)';
+        }
+      }
+      // 3. Check for duplicates within the uploaded data (absolute uniqueness)
+      if (isValid) {
+        if (uploadedSubjectNames.has(subjectName.toLowerCase())) {
+          isValid = false;
+          message = 'Duplicate subject name in uploaded file (subject names must be unique)';
+        } else {
+          uploadedSubjectNames.add(subjectName.toLowerCase());
+        }
+      }
+      status[i] = { valid: isValid, message: message };
+    }
+    return status;
+  };
+
+  // Download Subject Template
+    const downloadSubjectTemplate = async () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      // Sheet 1: Template for adding new subjects
+      const templateWs = XLSX.utils.aoa_to_sheet([
+        ['Track Name', 'Strand Name', 'Grade Level', 'Subject Name'],
+      ]);
+      XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Subjects');
+      // Sheet 2: Current subjects
+      const currentSubjectsData = [
+        ['Object ID', 'Track Name', 'Strand Name', 'Grade Level', 'Subject Name', 'Status'],
+        ...subjects.map(subject => [
+          subject._id,
+          subject.trackName,
+          subject.strandName,
+          subject.gradeLevel,
+          subject.subjectName,
+          subject.status || 'active',
+        ])
+      ];
+
+      const currentSubjectsWs = XLSX.utils.aoa_to_sheet(currentSubjectsData);
+      currentSubjectsWs['!cols'] = [
+        {wch: 30}, {wch: 20}, {wch: 20}, {wch: 15}, {wch: 25}, {wch: 10}
+      ];
+      XLSX.utils.book_append_sheet(wb, currentSubjectsWs, 'Current Subjects');
+
+      // Sheet 3: Available Strands
+      const activeStrands = strands.filter(s =>
+        s.status === 'active' &&
+        s.schoolYear === termDetails.schoolYear &&
+        s.termName === termDetails.termName &&
+        tracks.find(t => t.trackName === s.trackName && t.status === 'active')
+      );
+
+      // Create data for strands sheet - each strand on its own row
+      const strandsData = [
+        ['Track Name', 'Available Strands'],
+        ...activeStrands.map(strand => [
+          strand.trackName,
+          strand.strandName
+        ])
+      ];
+
+      const availableStrandsWs = XLSX.utils.aoa_to_sheet(strandsData);
+      availableStrandsWs['!cols'] = [
+        {wch: 20}, // Track Name
+        {wch: 40}  // Available Strands
+      ];
+      XLSX.utils.book_append_sheet(wb, availableStrandsWs, 'Available Strands');
+
+      XLSX.writeFile(wb, 'subjects_template.xlsx');
+    } catch (error) {
+      setSubjectExcelError('Failed to generate template. Please try again.');
+    }
+  };
+
+  // Validate Subjects for batch upload (reuse/extend existing validateSubjects)
+  const validateSubjectsBatch = async (subjectsToValidate) => {
+    const status = {};
+    const uploadedSubjectNames = new Set();
+    let allSubjects = [];
+    try {
+      const res = await fetch(`http://localhost:5000/api/subjects`);
+      if (res.ok) {
+        allSubjects = await res.json();
+      }
+    } catch (err) {}
+    const allSubjectNamesInSystem = new Set(allSubjects.map(s => s.subjectName.trim().toLowerCase()));
+    for (let i = 0; i < subjectsToValidate.length; i++) {
+      const subject = subjectsToValidate[i];
+      const subjectName = subject.subjectName?.trim() || '';
+      const trackName = subject.trackName?.trim() || '';
+      const strandName = subject.strandName?.trim() || '';
+      const gradeLevel = subject.gradeLevel?.trim() || '';
+      let isValid = true;
+      let message = 'Valid';
+      if (!subjectName || !trackName || !strandName || !gradeLevel) {
+        isValid = false;
+        message = 'All fields are required.';
+      }
+      if (isValid && allSubjectNamesInSystem.has(subjectName.toLowerCase())) {
+        isValid = false;
+        message = 'Subject name already exists in the system (must be unique)';
+      }
+      if (isValid && uploadedSubjectNames.has(subjectName.toLowerCase())) {
+        isValid = false;
+        message = 'Duplicate subject name in uploaded file (subject names must be unique)';
+      } else if (isValid) {
+        uploadedSubjectNames.add(subjectName.toLowerCase());
+      }
+      // Check if track exists
+      if (isValid && !tracks.find(t => t.trackName === trackName && t.status === 'active')) {
+        isValid = false;
+        message = `Track "${trackName}" does not exist or is not active`;
+      }
+      // Check if strand exists for the track
+      if (isValid && !strands.find(s => s.strandName === strandName && s.trackName === trackName && s.status === 'active')) {
+        isValid = false;
+        message = `Strand "${strandName}" does not exist in track "${trackName}" or is not active`;
+      }
+      // Check grade level
+      if (isValid && gradeLevel !== 'Grade 11' && gradeLevel !== 'Grade 12') {
+        isValid = false;
+        message = 'Grade Level must be either "Grade 11" or "Grade 12"';
+      }
+      status[i] = { valid: isValid, message: message };
+    }
+    return status;
+  };
+
+  // Handle Subject Excel File
+  const handleSubjectExcelFile = async (e) => {
+    const file = e.target.files[0];
+    setSubjectExcelError('');
+    if (!file) return;
+    setSubjectExcelFile(file);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          if (jsonData.length === 0) {
+            setSubjectExcelError('The Excel file is empty');
+            return;
+          }
+          const subjectsToPreview = jsonData.map(row => ({
+            trackName: row['Track Name']?.trim() || '',
+            strandName: row['Strand Name']?.trim() || '',
+            gradeLevel: row['Grade Level']?.trim() || '',
+            subjectName: row['Subject Name']?.trim() || ''
+          }));
+          const validationResults = await validateSubjectsBatch(subjectsToPreview);
+          setSubjectPreviewData(subjectsToPreview);
+          setSubjectValidationStatus(validationResults);
+          setSubjectPreviewModalOpen(true);
+          setSubjectExcelFile(file);
+          const validCount = Object.values(validationResults).filter(v => v.valid).length;
+          const invalidCount = Object.values(validationResults).filter(v => !v.valid).length;
+          if (invalidCount > 0) {
+            setSubjectExcelError(`${invalidCount} subject(s) have validation errors and will be skipped. ${validCount} valid subject(s) will be uploaded.`);
+          }
+        } catch (err) {
+          setSubjectExcelError('Error processing Excel file');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (err) {
+      setSubjectExcelError('Error reading file');
+    }
+  };
+
+  // Confirm Subject Upload
+  const handleConfirmSubjectUpload = async () => {
+    const validSubjects = subjectPreviewData.filter((_, index) => subjectValidationStatus[index]?.valid);
+    if (validSubjects.length === 0) {
+      setSubjectExcelError('No valid subjects to upload');
+      setSubjectPreviewModalOpen(false);
+      return;
+    }
+    setIsSubjectUploading(true);
+    setSubjectExcelError('');
+    try {
+      const createdSubjects = [];
+      for (const subject of validSubjects) {
+        const res = await fetch('http://localhost:5000/api/subjects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...subject,
+            schoolYear: termDetails.schoolYear,
+            termName: termDetails.termName
+          })
+        });
+        if (res.ok) {
+          const newSubject = await res.json();
+          createdSubjects.push(newSubject);
+        } else {
+          const data = await res.json();
+          throw new Error(data.message || 'Failed to create subject');
+        }
+      }
+      await fetchSubjects();
+      window.alert(`${validSubjects.length} subject(s) uploaded successfully!`);
+      setSubjectExcelFile(null);
+      setSubjectPreviewModalOpen(false);
+      document.querySelector('input[type="file"][accept=".xlsx,.xls"]').value = '';
+    } catch (err) {
+      setSubjectExcelError(err.message || 'Error uploading subjects');
+    } finally {
+      setIsSubjectUploading(false);
+    }
+  };
+
+  // New functions for extracting data to Excel
+  const extractTracksToExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      const activeTracks = tracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
+      const tracksData = [
+        ['Object ID', 'Track Name', 'School Year', 'Term Name', 'Status'],
+        ...activeTracks.map(track => [
+          track._id,
+          track.trackName,
+          track.schoolYear,
+          track.termName,
+          track.status
+        ])
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(tracksData);
+      XLSX.utils.book_append_sheet(wb, ws, 'Active Tracks');
+      XLSX.writeFile(wb, 'active_tracks.xlsx');
+    } catch (error) {
+      console.error('Error extracting tracks to Excel:', error);
+      // Optionally, show an alert to the user
+      alert('Failed to extract tracks to Excel. Please try again.');
+    }
+  };
+
+  const extractStrandsToExcel = () => {
+  try {
+    const wb = XLSX.utils.book_new();
+    const currentStrands = strands.filter(s => 
+        s.status === 'active' && 
+        s.schoolYear === termDetails.schoolYear && 
+      s.termName === termDetails.termName
+    );
+    const strandsData = [
+      ['Object ID', 'Track Name', 'Strand Name', 'Status'],
+      ...currentStrands.map(strand => [
+        strand._id,
+        strand.trackName,
+        strand.strandName,
+        strand.status
+      ])
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(strandsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Current Strands');
+    XLSX.writeFile(wb, 'current_strands.xlsx');
+  } catch (error) {
+    console.error('Error extracting strands to Excel:', error);
+    alert('Failed to extract strands to Excel. Please try again.');
+  }
+};
+
+  const extractSectionsToExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      const activeSections = sections.filter(sec => sec.status === 'active' && tracks.find(t => t.trackName === sec.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active'));
+      const sectionsData = [
+        ['Object ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status'],
+        ...activeSections.map(section => [
+          section._id,
+          section.trackName,
+          section.strandName,
+          section.sectionName,
+          section.gradeLevel || '',
+          section.status
+        ])
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(sectionsData);
+      XLSX.utils.book_append_sheet(wb, ws, 'Active Sections');
+      XLSX.writeFile(wb, 'active_sections.xlsx');
+    } catch (error) {
+      console.error('Error extracting sections to Excel:', error);
+      alert('Failed to extract sections to Excel. Please try again.');
+    }
+  };
+
+  const extractSubjectsToExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      const activeSubjects = subjects.filter(sub => sub.status === 'active' && sub.schoolYear === termDetails.schoolYear && sub.termName === termDetails.termName);
+      const subjectsData = [
+        ['Object ID', 'Track Name', 'Strand Name', 'Grade Level', 'Subject Name', 'Status'],
+        ...activeSubjects.map(subject => [
+          subject._id,
+          subject.trackName,
+          subject.strandName,
+          subject.gradeLevel,
+          subject.subjectName,
+          subject.status || 'active',
+        ])
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(subjectsData);
+      XLSX.utils.book_append_sheet(wb, ws, 'Active Subjects');
+      XLSX.writeFile(wb, 'active_subjects.xlsx');
+    } catch (error) {
+      console.error('Error extracting subjects to Excel:', error);
+      alert('Failed to extract subjects to Excel. Please try again.');
+    }
+  };
+
+  const extractFacultiesToExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      const currentFacultyAssignments = facultyAssignments.filter(fa => fa.status === 'active');
+      const facultyAssignmentData = [
+        ['Object ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Grade Level', 'Section Name', 'Subject', 'Status'],
+        ...currentFacultyAssignments.map(assignment => [
+          assignment._id,
+          assignment.facultyName,
+          assignment.trackName,
+          assignment.strandName,
+          assignment.gradeLevel || '',
+          assignment.sectionName,
+          assignment.subjectName || '',
+          assignment.status
+        ])
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(facultyAssignmentData);
+      XLSX.utils.book_append_sheet(wb, ws, 'Active Faculty Assignments');
+      XLSX.writeFile(wb, 'active_faculty_assignments.xlsx');
+    } catch (error) {
+      console.error('Error extracting faculty assignments to Excel:', error);
+      alert('Failed to extract faculty assignments to Excel. Please try again.');
+    }
+  };
+
+  const extractStudentsToExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
+      const studentAssignmentData = [
+        ['Object ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'],
+        ...currentStudentAssignments.map(assignment => [
+          assignment._id,
+          assignment.studentName,
+          assignment.gradeLevel || '',
+          assignment.trackName,
+          assignment.strandName,
+          assignment.sectionName,
+          assignment.status
+        ])
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(studentAssignmentData);
+      XLSX.utils.book_append_sheet(wb, ws, 'Active Student Assignments');
+      XLSX.writeFile(wb, 'active_student_assignments.xlsx');
+    } catch (error) {
+      console.error('Error extracting student assignments to Excel:', error);
+      alert('Failed to extract student assignments to Excel. Please try again.');
+    }
+  };
+
+  const handleImportExcelFile = async (e) => {
+    const file = e.target.files[0];
+    setImportError('');
+    if (!file) {
+      return;
+    }
+
+    if (!file.name.match(/\.(xlsx|xls)$/)) {
+      setImportError('Please upload an Excel file (.xlsx or .xls).');
+      return;
+    }
+
+    setImportLoading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const data = new Uint8Array(event.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+
+          const parsedData = {
+            tracks: [],
+            strands: [],
+            sections: [],
+            subjects: [],
+            facultyAssignments: [],
+            studentAssignments: []
+          };
+
+          const sheetNames = [
+            'Tracks',
+            'Strands',
+            'Sections',
+            'Subjects',
+            'Faculty Assignments',
+            'Student Assignments'
+          ];
+
+          for (const sheetName of sheetNames) {
+            if (workbook.Sheets[sheetName]) {
+              const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+              if (sheetData.length > 1) { // Skip header row
+                const headers = sheetData[0];
+                const rows = sheetData.slice(1);
+
+                const normalizedRows = rows.map(row => {
+                  const obj = {};
+                  headers.forEach((header, index) => {
+                    const key = String(header).trim();
+                    obj[key] = String(row[index] || '').trim();
+                  });
+                  return obj;
+                });
+
+                if (sheetName === 'Tracks') {
+                  parsedData.tracks = normalizedRows.map(row => ({ trackName: row['Track Name'] }));
+                } else if (sheetName === 'Strands') {
+                  parsedData.strands = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'] }));
+                } else if (sheetName === 'Sections') {
+                  parsedData.sections = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], sectionName: row['Section Name'], gradeLevel: row['Grade Level'] }));
+                } else if (sheetName === 'Subjects') {
+                  parsedData.subjects = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], gradeLevel: row['Grade Level'], subjectName: row['Subject Name'] }));
+                } else if (sheetName === 'Faculty Assignments') {
+                  parsedData.facultyAssignments = normalizedRows.map(row => ({
+                    facultyName: row['Faculty Name'],
+                    trackName: row['Track Name'],
+                    strandName: row['Strand Name'],
+                    sectionName: row['Section Name'],
+                    gradeLevel: row['Grade Level'],
+                    subjectName: row['Subject'], // 'Subject' is the column name in the template
+                  }));
+                } else if (sheetName === 'Student Assignments') {
+                  parsedData.studentAssignments = normalizedRows.map(row => ({
+                    studentName: row['Student Name'],
+                    gradeLevel: row['Grade Level'],
+                    trackName: row['Track Name'],
+                    strandName: row['Strand Name'],
+                    sectionName: row['Section Name'],
+                  }));
+                }
+              }
+            }
+          }
+
+          setImportPreviewData(parsedData);
+          setImportExcelFile(file);
+          
+          // Perform validation here (will implement validateImportData function next)
+          const validationResults = await validateImportData(
+            parsedData,
+            {
+              tracks: tracks,
+              strands: strands,
+              sections: sections,
+              subjects: subjects,
+              faculties: faculties,
+              students: students,
+              facultyAssignments: facultyAssignments,
+              studentAssignments: studentAssignments
+            },
+            termDetails
+          );
+          setImportValidationStatus(validationResults);
+
+          setImportModalOpen(true);
+
+        } catch (err) {
+          setImportError(`Error processing Excel file: ${err.message || err}`);
+          console.error(err);
+        } finally {
+          setImportLoading(false);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (err) {
+      setImportError(`Error reading file: ${err.message || err}`);
+      console.error(err);
+      setImportLoading(false);
+    }
+  };
+
+  // Handle Confirm Import Upload (stub for now)
+  const handleConfirmImportUpload = async () => {
+    setImportLoading(true);
+    setImportError('');
+    try {
+      const { tracks, strands, sections, subjects, facultyAssignments, studentAssignments } = importPreviewData;
+      const { tracks: trackValidation, strands: strandValidation, sections: sectionValidation, subjects: subjectValidation, facultyAssignments: facultyAssignmentValidation, studentAssignments: studentAssignmentValidation } = importValidationStatus;
+
+      let importedCount = 0;
+      let skippedCount = 0;
+      const skippedMessages = [];
+
+      // Filter tracks based on validation
+      const validTracks = tracks.filter((track, index) => {
+        if (trackValidation[index] && trackValidation[index].valid) {
+          importedCount++;
+          return true;
+        } else {
+          skippedCount++;
+          skippedMessages.push(`Track '${track.trackName}': ${trackValidation[index].message}`);
+          return false;
+        }
+      });
+
+      // Filter strands based on validation
+      const validStrands = strands.filter((strand, index) => {
+        if (strandValidation[index] && strandValidation[index].valid) {
+          importedCount++;
+          return true;
+        } else {
+          skippedCount++;
+          skippedMessages.push(`Strand '${strand.strandName}' in '${strand.trackName}': ${strandValidation[index].message}`);
+          return false;
+        }
+      });
+
+      // Filter sections based on validation
+      const validSections = sections.filter((section, index) => {
+        if (sectionValidation[index] && sectionValidation[index].valid) {
+          importedCount++;
+          return true;
+        } else {
+          skippedCount++;
+          skippedMessages.push(`Section '${section.sectionName}' (Grade ${section.gradeLevel}) in '${section.trackName}'/'${section.strandName}': ${sectionValidation[index].message}`);
+          return false;
+        }
+      });
+
+      // Filter subjects based on validation
+      const validSubjects = subjects.filter((subject, index) => {
+        if (subjectValidation[index] && subjectValidation[index].valid) {
+          importedCount++;
+          return true;
+        } else {
+          skippedCount++;
+          skippedMessages.push(`Subject '${subject.subjectName}' (Grade ${subject.gradeLevel}) in '${subject.trackName}'/'${subject.strandName}': ${subjectValidation[index].message}`);
+          return false;
+        }
+      });
+
+      // Filter faculty assignments based on validation
+      const validFacultyAssignments = facultyAssignments.filter((assignment, index) => {
+        if (facultyAssignmentValidation[index] && facultyAssignmentValidation[index].valid) {
+          importedCount++;
+          return true;
+        } else {
+          skippedCount++;
+          skippedMessages.push(`Faculty Assignment for '${assignment.facultyName}' - ${assignment.subjectName} in '${assignment.sectionName}'/'${assignment.gradeLevel}'/'${assignment.strandName}'/'${assignment.trackName}': ${facultyAssignmentValidation[index].message}`);
+          return false;
+        }
+      });
+
+      // Filter student assignments based on validation
+      const validStudentAssignments = studentAssignments.filter((assignment, index) => {
+        if (studentAssignmentValidation[index] && studentAssignmentValidation[index].valid) {
+          importedCount++;
+          return true;
+        } else {
+          skippedCount++;
+          skippedMessages.push(`Student Assignment for '${assignment.studentName}' in '${assignment.sectionName}'/'${assignment.gradeLevel}'/'${assignment.strandName}'/'${assignment.trackName}': ${studentAssignmentValidation[index].message}`);
+          return false;
+        }
+      });
+
+      let alertMessage = `Import process complete.
+Successfully processed ${importedCount} new entries.`;
+      if (skippedCount > 0) {
+        alertMessage += `
+Skipped ${skippedCount} duplicate or invalid entries:
+- ${skippedMessages.join('\n- ')}`;
+      }
+      alertMessage += `
+
+Actual import to database is coming soon!`;
+      window.alert(alertMessage);
+
+      // TODO: Here is where the actual API calls for bulk upload would go, using the valid* arrays
+
+      setImportModalOpen(false);
+      setImportExcelFile(null);
+      setImportPreviewData({
+        tracks: [],
+        strands: [],
+        sections: [],
+        subjects: [],
+        facultyAssignments: [],
+        studentAssignments: []
+      });
+      setImportValidationStatus({
+        tracks: [],
+        strands: [],
+        sections: [],
+        subjects: [],
+        facultyAssignments: [],
+        studentAssignments: []
+      });
+      // Refresh all data after successful import
+      fetchTracks();
+      fetchStrands();
+      fetchSections();
+      fetchSubjects();
+      fetchFaculties();
+      fetchStudents();
+      fetchFacultyAssignments();
+      fetchStudentAssignments();
+
+    } catch (err) {
+      setImportError(err.message || 'Error during import.');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
   if (loading) return <div>Loading term details...</div>;
   if (error) return <div>Error: {error}</div>;
   if (!termDetails) return <div>Term not found.</div>;
@@ -2703,7 +3705,7 @@ export default function TermDetails() {
             <h2 className="text-2xl md:text-3xl font-bold">
               {termDetails.termName} ({termDetails.schoolYear})
             </h2>
-            <p className="text-base md:text-lg"> Academic Year and Term here | 
+            <p className="text-base md:text-lg">
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
@@ -2736,12 +3738,9 @@ export default function TermDetails() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 text-sm font-medium whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? 'border-b-2 border-[#00418B] text-[#00418B]'
-                      : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center ${activeTab === tab.id ? 'border-b-2 border-[#00418B] text-[#00418B]' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
+                  {tab.icon && <img src={tab.icon} alt={tab.label} className="w-5 h-5 mr-2" />}
                   {tab.label}
                 </button>
               ))}
@@ -2751,8 +3750,200 @@ export default function TermDetails() {
           {/* Tab Content */}
           <div className="p-4">
             {activeTab === 'dashboard' && (
-              <div className="text-gray-500 text-center py-8">
-                Term Dashboard content will be implemented here
+              <div>
+                {/* Dashboard Summary */}
+                <div className="flex justify-end gap-4 mb-6">
+                  <button
+                    onClick={() => {
+                      // Extract all term data into separate sheets
+                      const wb = XLSX.utils.book_new();
+                      
+                      // Extract Tracks
+                      const activeTracks = tracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
+                      const tracksData = [
+                        ['Object ID', 'Track Name', 'School Year', 'Term Name', 'Status'],
+                        ...activeTracks.map(track => [
+                          track._id,
+                          track.trackName,
+                          track.schoolYear,
+                          track.termName,
+                          track.status
+                        ])
+                      ];
+                      const tracksWs = XLSX.utils.aoa_to_sheet(tracksData);
+                      XLSX.utils.book_append_sheet(wb, tracksWs, 'Tracks');
+
+                      // Extract Strands
+                      const activeStrands = strands.filter(s => s.status === 'active' && tracks.find(t => t.trackName === s.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active'));
+      const strandsData = [
+                        ['Object ID', 'Track Name', 'Strand Name', 'Status'],
+  ...activeStrands.map(strand => [
+                          strand._id,
+    strand.trackName,
+                          strand.strandName,
+                          strand.status
+                        ])
+                      ];
+                      const strandsWs = XLSX.utils.aoa_to_sheet(strandsData);
+                      XLSX.utils.book_append_sheet(wb, strandsWs, 'Strands');
+
+                      // Extract Sections
+                      const activeSections = sections.filter(sec => sec.status === 'active' && tracks.find(t => t.trackName === sec.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active'));
+                      const sectionsData = [
+                        ['Object ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status'],
+                        ...activeSections.map(section => [
+                          section._id,
+                          section.trackName,
+                          section.strandName,
+                          section.sectionName,
+                          section.gradeLevel || '',
+                          section.status
+                        ])
+                      ];
+                      const sectionsWs = XLSX.utils.aoa_to_sheet(sectionsData);
+                      XLSX.utils.book_append_sheet(wb, sectionsWs, 'Sections');
+
+                      // Extract Subjects
+                      const activeSubjects = subjects.filter(sub => sub.status === 'active' && sub.schoolYear === termDetails.schoolYear && sub.termName === termDetails.termName);
+                      const subjectsData = [
+                        ['Object ID', 'Track Name', 'Strand Name', 'Grade Level', 'Subject Name', 'Status'],
+                        ...activeSubjects.map(subject => [
+                          subject._id,
+                          subject.trackName,
+                          subject.strandName,
+                          subject.gradeLevel,
+                          subject.subjectName,
+                          subject.status || 'active'
+                        ])
+                      ];
+                      const subjectsWs = XLSX.utils.aoa_to_sheet(subjectsData);
+                      XLSX.utils.book_append_sheet(wb, subjectsWs, 'Subjects');
+
+                      // Extract Faculty Assignments
+                      const currentFacultyAssignments = facultyAssignments.filter(fa => fa.status === 'active');
+                      const facultyAssignmentData = [
+                        ['Object ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Grade Level', 'Section Name', 'Subject', 'Status'],
+                        ...currentFacultyAssignments.map(assignment => [
+                          assignment._id,
+                          assignment.facultyName,
+                          assignment.trackName,
+                          assignment.strandName,
+                          assignment.gradeLevel || '',
+                          assignment.sectionName,
+                          assignment.subjectName || '',
+                          assignment.status
+                        ])
+                      ];
+                      const facultyWs = XLSX.utils.aoa_to_sheet(facultyAssignmentData);
+                      XLSX.utils.book_append_sheet(wb, facultyWs, 'Faculty Assignments');
+
+                      // Extract Student Assignments
+                      const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
+                      const studentAssignmentData = [
+                        ['Object ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'],
+                        ...currentStudentAssignments.map(assignment => [
+                          assignment._id,
+                          assignment.studentName,
+                          assignment.gradeLevel || '',
+                          assignment.trackName,
+                          assignment.strandName,
+                          assignment.sectionName,
+                          assignment.status
+                        ])
+                      ];
+                      const studentWs = XLSX.utils.aoa_to_sheet(studentAssignmentData);
+                      XLSX.utils.book_append_sheet(wb, studentWs, 'Student Assignments');
+
+                      // Save the workbook
+                      XLSX.writeFile(wb, `${termDetails.schoolYear}_${termDetails.termName}_data.xlsx`);
+                    }}
+                    className="bg-yellow-400 text-white py-2 px-4 rounded-md hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2"
+                  >
+                    Extract Term Data
+                  </button>
+                  {/* Hidden file input for import */}
+                  <input
+                    type="file"
+                    ref={importFileInputRef}
+                    onChange={handleImportExcelFile}
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => importFileInputRef.current.click()} // Trigger file input click
+                    className="bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                  >
+                    Import Term Data
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('tracks')}>
+                    <img src={tracksIcon} alt="Tracks Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
+                    <span className="text-3xl font-bold text-[#00418B]">{tracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName).length}</span>
+                    <span className="text-gray-600 mt-2">Active Tracks</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); extractTracksToExcel(); }}
+                      className="mt-4 px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300"
+                    >
+                      Extract Active Tracks
+                    </button>
+                  </div>
+                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('strands')}>
+                    <img src={strandsIcon} alt="Strands Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
+                    <span className="text-3xl font-bold text-[#00418B]">{strands.filter(s => s.status === 'active' && tracks.find(t => t.trackName === s.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active')).length}</span>
+                    <span className="text-gray-600 mt-2">Active Strands</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); extractStrandsToExcel(); }}
+                      className="mt-4 px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300"
+                    >
+                      Extract to Excel
+                    </button>
+                  </div>
+                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('sections')}>
+                    <img src={sectionsIcon} alt="Sections Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
+                    <span className="text-3xl font-bold text-[#00418B]">{sections.filter(sec => sec.status === 'active' && tracks.find(t => t.trackName === sec.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active')).length}</span>
+                    <span className="text-gray-600 mt-2">Active Sections</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); extractSectionsToExcel(); }}
+                      className="mt-4 px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300"
+                    >
+                      Extract to Excel
+                    </button>
+                  </div>
+                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('subjects')}>
+                    <img src={subjectsIcon} alt="Subjects Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
+                    <span className="text-3xl font-bold text-[#00418B]">{subjects.filter(sub => sub.status === 'active' && sub.schoolYear === termDetails.schoolYear && sub.termName === termDetails.termName).length}</span>
+                    <span className="text-gray-600 mt-2">Active Subjects</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); extractSubjectsToExcel(); }}
+                      className="mt-4 px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300"
+                    >
+                      Extract to Excel
+                    </button>
+                  </div>
+                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('faculty')}>
+                    <img src={facultyIcon} alt="Faculty Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
+                    <span className="text-3xl font-bold text-[#00418B]">{faculties.filter(f => f.role === 'faculty' && !f.isArchived).length}</span>
+                    <span className="text-gray-600 mt-2">Active Faculty</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); extractFacultiesToExcel(); }}
+                      className="mt-4 px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300"
+                    >
+                      Extract to Excel
+                    </button>
+                  </div>
+                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('students')}>
+                    <img src={studentIcon} alt="Student Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
+                    <span className="text-3xl font-bold text-[#00418B]">{students.filter(s => !s.isArchived).length}</span>
+                    <span className="text-gray-600 mt-2">Active Students</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); extractStudentsToExcel(); }}
+                      className="mt-4 px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300"
+                    >
+                      Extract to Excel
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -3162,8 +4353,8 @@ export default function TermDetails() {
                   </div>
 
                   <form onSubmit={isSectionEditMode ? handleUpdateSection : handleAddSection} className="space-y-4 mt-6">
-                    <div className="flex flex-col md:flex-row md:space-x-4 md:space-y-0 mb-4"> {/* This div ensures vertical stacking of inputs */}
-                      <div className="flex-1">
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
                         <label htmlFor="trackNameSection" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
                         <select
                           id="trackNameSection"
@@ -3183,7 +4374,7 @@ export default function TermDetails() {
                           ))}
                         </select>
                       </div>
-                      <div className="flex-1">
+                      <div>
                         <label htmlFor="strandNameSection" className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
                         <select
                           id="strandNameSection"
@@ -3202,7 +4393,22 @@ export default function TermDetails() {
                           ))}
                         </select>
                       </div>
-                      <div className="flex-1">
+                      <div>
+                        <label htmlFor="gradeLevel" className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
+                        <select
+                          id="gradeLevel"
+                          name="gradeLevel"
+                          value={sectionFormData.gradeLevel}
+                          onChange={(e) => setSectionFormData({ ...sectionFormData, gradeLevel: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                        >
+                          <option value="">Select Grade Level</option>
+                          <option value="Grade 11">Grade 11</option>
+                          <option value="Grade 12">Grade 12</option>
+                        </select>
+                      </div>
+                      <div>
                         <label htmlFor="sectionName" className="block text-sm font-medium text-gray-700 mb-1">Section Name</label>
                         <input
                           type="text"
@@ -3229,7 +4435,7 @@ export default function TermDetails() {
                           onClick={() => {
                             setIsSectionEditMode(false);
                             setEditingSection(null);
-                            setSectionFormData({ trackId: '', strandId: '', sectionName: '' });
+                            setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' });
                           }}
                           className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
                         >
@@ -3246,16 +4452,17 @@ export default function TermDetails() {
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                     <thead>
                       <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border w-1/4">Track Name</th>
-                        <th className="p-3 border w-1/4">Strand Name</th>
-                        <th className="p-3 border w-1/4">Section Name</th>
-                        <th className="p-3 border w-1/4">Actions</th>
+                        <th className="p-3 border w-1/5">Track Name</th>
+                        <th className="p-3 border w-1/5">Strand Name</th>
+                        <th className="p-3 border w-1/5">Section Name</th>
+                        <th className="p-3 border w-1/5">Grade Level</th>
+                        <th className="p-3 border w-1/5">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sections.length === 0 ? (
                         <tr>
-                          <td colSpan="4" className="p-3 border text-center text-gray-500">
+                          <td colSpan="5" className="p-3 border text-center text-gray-500">
                             No sections found.
                           </td>
                         </tr>
@@ -3265,6 +4472,7 @@ export default function TermDetails() {
                             <td className="p-3 border">{section.trackName}</td>
                             <td className="p-3 border">{section.strandName}</td>
                             <td className="p-3 border">{section.sectionName}</td>
+                            <td className="p-3 border">{section.gradeLevel}</td>
                             <td className="p-3 border">
                               <div className="inline-flex space-x-2">
                                 <button
@@ -3325,6 +4533,7 @@ export default function TermDetails() {
                               <th className="p-3 border">Track Name</th>
                               <th className="p-3 border">Strand Name</th>
                               <th className="p-3 border">Section Name</th>
+                              <th className="p-3 border">Grade Level</th>
                               <th className="p-3 border">Status</th>
                             </tr>
                           </thead>
@@ -3333,17 +4542,14 @@ export default function TermDetails() {
                               const isValid = sectionValidationStatus[index]?.valid;
                               const message = sectionValidationStatus[index]?.message;
                               return (
-                                <tr key={index} className={isValid ? 'bg-green-50' : 'bg-red-50'}>
-                                  <td className="p-3 border">{section.trackName || <span className="text-red-500">Missing</span>}</td>
-                                  <td className="p-3 border">{section.strandName || <span className="text-red-500">Missing</span>}</td>
-                                  <td className="p-3 border">{section.sectionName || <span className="text-red-500">Missing</span>}</td>
+                                <tr key={index} className={!isValid ? 'bg-red-50' : ''}>
+                                  <td className="p-3 border">{section.trackName}</td>
+                                  <td className="p-3 border">{section.strandName}</td>
+                                  <td className="p-3 border">{section.sectionName}</td>
+                                  <td className="p-3 border">{section.gradeLevel}</td>
                                   <td className="p-3 border">
-                                    <span className={`px-2 py-1 rounded text-sm ${
-                                      isValid 
-                                        ? 'bg-green-100 text-green-800' 
-                                        : 'bg-red-100 text-red-800'
-                                    }`}>
-                                      {isValid ? '✓ Valid' : `✗ ${message}`}
+                                    <span className={`px-2 py-1 rounded text-xs ${isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                      {message}
                                     </span>
                                   </td>
                                 </tr>
@@ -3375,6 +4581,204 @@ export default function TermDetails() {
                           }`}
                         >
                           {isSectionUploading ? 'Uploading...' : `Upload ${Object.values(sectionValidationStatus).filter(v => v.valid).length} Valid Section(s)`}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'subjects' && (
+              <div className="">
+                {/* Batch Upload Subjects Section */}
+                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                  <h3 className="text-xl font-semibold mb-4">Batch Upload Subjects</h3>
+                  <div className="mb-6 p-4 border rounded-lg bg-gray-50">
+                    <h4 className="text-lg font-medium mb-3">Bulk Upload Subjects</h4>
+                    <div className="flex flex-col md:flex-row gap-4 items-end">
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Upload Excel File
+                        </label>
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls"
+                          onChange={handleSubjectExcelFile}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <button
+                        onClick={downloadSubjectTemplate}
+                        className="bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003366] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2"
+                      >
+                        Download Template
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {/* Add Subject Form */}
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <h3 className="text-lg font-semibold mb-4">{isSubjectEditMode ? 'Edit Subject' : 'Add New Subject'}</h3>
+                  <form onSubmit={isSubjectEditMode ? handleUpdateSubject : handleAddSubject} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
+                        <select name="trackName" value={subjectFormData.trackName} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                          <option value="">Select Track</option>
+                          {tracks.map(track => (
+                            <option key={track._id} value={track.trackName}>{track.trackName}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
+                        <select name="strandName" value={subjectFormData.strandName} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                          <option value="">Select Strand</option>
+                          {strands.filter(strand => strand.trackName === subjectFormData.trackName).map(strand => (
+                            <option key={strand._id} value={strand.strandName}>{strand.strandName}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
+                        <select name="gradeLevel" value={subjectFormData.gradeLevel} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                          <option value="">Select Grade Level</option>
+                          <option value="Grade 11">Grade 11</option>
+                          <option value="Grade 12">Grade 12</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Subject Name</label>
+                        <input type="text" name="subjectName" value={subjectFormData.subjectName} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required />
+                    </div>
+                    </div>
+                    {subjectError && <p className="text-red-500 text-sm">{subjectError}</p>}
+                    <div className="flex gap-2 mt-4">
+                      {isSubjectEditMode && (
+                        <button type="button" onClick={() => { setIsSubjectEditMode(false); setEditingSubject(null); setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' }); }} className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md">Cancel</button>
+                      )}
+                      <button type="submit" className="flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">
+                        {isSubjectEditMode ? 'Update Subject' : 'Add Subject'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+                {/* Subjects List */}
+                <div className="mt-8">
+                  <h4 className="text-lg font-semibold mb-2">Subjects List</h4>
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-3 border">Subject Name</th>
+                        <th className="p-3 border">Track Name</th>
+                        <th className="p-3 border">Strand Name</th>
+                        <th className="p-3 border">Grade Level</th>
+                        <th className="p-3 border">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {subjects.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="p-3 border text-center text-gray-500">No subjects found.</td>
+                        </tr>
+                      ) : (
+                        subjects.map(subject => (
+                          <tr key={subject._id}>
+                            <td className="p-3 border">{subject.subjectName}</td>
+                            <td className="p-3 border">{subject.trackName}</td>
+                            <td className="p-3 border">{subject.strandName}</td>
+                            <td className="p-3 border">{subject.gradeLevel}</td>
+                            <td className="p-3 border">
+                              <div className="inline-flex space-x-2">
+                                <button onClick={() => handleEditSubject(subject)} className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded" title="Edit">
+                                  <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
+                                </button>
+                                <button onClick={() => handleDeleteSubject(subject)} className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded" title="Delete">
+                                  <img src={archiveIcon} alt="Delete" className="w-8 h-8 inline-block" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Subject Preview Modal */}
+                {subjectPreviewModalOpen && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-auto">
+                      <h3 className="text-xl font-semibold mb-4">Preview Subjects to Upload</h3>
+                      <div className="mb-4">
+                        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+                          <div className="flex">
+                            <div className="flex-shrink-0">
+                              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-sm text-blue-700">
+                                {Object.values(subjectValidationStatus).filter(v => v.valid).length} subject(s) are valid and will be uploaded.
+                                {Object.values(subjectValidationStatus).filter(v => !v.valid).length > 0 && (
+                                  <span className="block mt-1">
+                                    {Object.values(subjectValidationStatus).filter(v => !v.valid).length} subject(s) have validation errors and will be skipped.
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                          <thead>
+                            <tr className="bg-gray-100 text-left">
+                              <th className="p-3 border">Track Name</th>
+                              <th className="p-3 border">Strand Name</th>
+                              <th className="p-3 border">Grade Level</th>
+                              <th className="p-3 border">Subject Name</th>
+                              <th className="p-3 border">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {subjectPreviewData.map((subject, index) => {
+                              const isValid = subjectValidationStatus[index]?.valid;
+                              const message = subjectValidationStatus[index]?.message;
+                              return (
+                                <tr key={index} className={!isValid ? 'bg-red-50' : ''}>
+                                  <td className="p-3 border">{subject.trackName}</td>
+                                  <td className="p-3 border">{subject.strandName}</td>
+                                  <td className="p-3 border">{subject.gradeLevel}</td>
+                                  <td className="p-3 border">{subject.subjectName}</td>
+                                  <td className="p-3 border">
+                                    <span className={`px-2 py-1 rounded text-xs ${isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{message}</span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mt-6 flex justify-end gap-3">
+                        <button
+                          onClick={() => {
+                            setSubjectPreviewModalOpen(false);
+                            setSubjectPreviewData([]);
+                            setSubjectValidationStatus({});
+                            setSubjectExcelError('');
+                          }}
+                          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleConfirmSubjectUpload}
+                          disabled={isSubjectUploading || !subjectPreviewData.some((_, index) => subjectValidationStatus[index]?.valid)}
+                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!subjectPreviewData.some((_, index) => subjectValidationStatus[index]?.valid) || isSubjectUploading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubjectUploading ? 'Uploading...' : `Upload ${Object.values(subjectValidationStatus).filter(v => v.valid).length} Valid Subject(s)`}
                         </button>
                       </div>
                     </div>
@@ -3426,23 +4830,36 @@ export default function TermDetails() {
                   {/* Manual Assignment Form */}
                   <form onSubmit={isFacultyEditMode ? handleUpdateFacultyAssignment : handleAddFacultyAssignment} className="space-y-4 mt-6">
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="facultyName" className="block text-sm font-medium text-gray-700 mb-1">Faculty Name</label>
-                        <select
-                          id="facultyName"
-                          name="facultyId"
-                          value={facultyFormData.facultyId}
+                      <div className="relative">
+                        <label htmlFor="facultySearch" className="block text-sm font-medium text-gray-700 mb-1">Faculty Name</label>
+                        <input
+                          type="text"
+                          id="facultySearch"
+                          name="facultySearch"
+                          value={facultySearchTerm}
                           onChange={handleChangeFacultyForm}
+                          onFocus={() => setShowFacultySuggestions(true)}
+                          onBlur={() => setTimeout(() => setShowFacultySuggestions(false), 200)} // Delay hiding to allow click
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Search Faculty..."
                           required
-                        >
-                          <option value="">Select Faculty</option>
-                          {faculties.map(faculty => (
-                            <option key={faculty._id} value={faculty._id}>
+                        />
+                        {showFacultySuggestions && facultySearchTerm.length > 0 && (
+                          <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
+                            {faculties.map(faculty => (
+                              <li 
+                                key={faculty._id} 
+                                onClick={() => handleSelectFaculty(faculty)}
+                                className="p-2 hover:bg-gray-100 cursor-pointer"
+                              >
                               {faculty.firstname} {faculty.lastname}
-                            </option>
+                              </li>
                           ))}
-                        </select>
+                            {faculties.length === 0 && (
+                              <li className="p-2 text-gray-500">No matching faculty</li>
+                            )}
+                          </ul>
+                        )}
                       </div>
                       <div>
                         <label htmlFor="trackNameFaculty" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
@@ -3484,6 +4901,23 @@ export default function TermDetails() {
                         </select>
                       </div>
                       <div>
+                        <label htmlFor="gradeLevelFaculty" className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
+                        <select
+                          id="gradeLevelFaculty"
+                          name="gradeLevel"
+                          value={facultyFormData.gradeLevel}
+                          onChange={handleChangeFacultyForm}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                        >
+                          <option value="">Select Grade Level</option>
+                          <option value="Grade 11">Grade 11</option>
+                          <option value="Grade 12">Grade 12</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
                         <label htmlFor="sectionNameFaculty" className="block text-sm font-medium text-gray-700 mb-1">Section</label>
                         <select
                           id="sectionNameFaculty"
@@ -3492,7 +4926,7 @@ export default function TermDetails() {
                           onChange={(e) => setFacultyFormData({ ...facultyFormData, sectionIds: [e.target.value] })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           required
-                          disabled={!facultyFormData.strandId}
+                          disabled={!facultyFormData.strandId || !facultyFormData.gradeLevel} // Updated to also check gradeLevel
                         >
                           <option value="">Select a Section</option>
                           {filteredSectionsForFaculty.map(section => (
@@ -3502,8 +4936,28 @@ export default function TermDetails() {
                           ))}
                         </select>
                       </div>
+                      <div>
+                        <label htmlFor="subjectFaculty" className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                        <select
+                          id="subjectFaculty"
+                          name="subjectName"
+                          value={facultyFormData.subjectName}
+                          onChange={handleChangeFacultyForm}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                          disabled={!(facultyFormData.trackId && facultyFormData.strandId && facultyFormData.gradeLevel)}
+                        >
+                          <option value="">Select Subject</option>
+                          {subjects.filter(subject =>
+                            subject.trackName === (tracks.find(t => t._id === facultyFormData.trackId)?.trackName) &&
+                            subject.strandName === (strands.find(s => s._id === facultyFormData.strandId)?.strandName) &&
+                            subject.gradeLevel === facultyFormData.gradeLevel
+                          ).map(subject => (
+                            <option key={subject._id} value={subject.subjectName}>{subject.subjectName}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-
                     <div className="flex gap-2">
                       <button
                         type="submit"
@@ -3517,7 +4971,7 @@ export default function TermDetails() {
                           onClick={() => {
                             setIsFacultyEditMode(false);
                             setEditingFacultyAssignment(null);
-                            setFacultyFormData({ facultyId: '', trackId: '', strandId: '', sectionIds: [] });
+                            setFacultyFormData({ facultyId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '', subjectName: '' });
                           }}
                           className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
                         >
@@ -3534,17 +4988,19 @@ export default function TermDetails() {
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                     <thead>
                       <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border w-1/5">Faculty Name</th>
-                        <th className="p-3 border w-1/5">Track Name</th>
-                        <th className="p-3 border w-1/5">Strand Name</th>
-                        <th className="p-3 border w-1/5">Section</th>
-                        <th className="p-3 border w-1/5">Actions</th>
+                        <th className="p-3 border w-1/6">Faculty Name</th>
+                        <th className="p-3 border w-1/6">Track Name</th>
+                        <th className="p-3 border w-1/6">Strand Name</th>
+                        <th className="p-3 border w-1/6">Grade Level</th>
+                        <th className="p-3 border w-1/6">Section</th>
+                        <th className="p-3 border w-1/6">Subject</th>
+                        <th className="p-3 border w-1/6">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {facultyAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="5" className="p-3 border text-center text-gray-500">
+                          <td colSpan="7" className="p-3 border text-center text-gray-500">
                             No faculty assignments found.
                           </td>
                         </tr>
@@ -3554,9 +5010,11 @@ export default function TermDetails() {
                             <td className="p-3 border">{assignment.facultyName}</td>
                             <td className="p-3 border">{assignment.trackName}</td>
                             <td className="p-3 border">{assignment.strandName}</td>
+                            <td className="p-3 border">{assignment.gradeLevel}</td>
                             <td className="p-3 border">{assignment.sectionName}</td>
-                            <td className="p-3 border">
-                              <div className="inline-flex space-x-2">
+                            <td className="p-3 border">{assignment.subjectName || ''}</td>
+                            <td className="p-3 border min-w-[120px]">
+                              <div className="flex justify-center gap-2">
                                 <button
                                   onClick={() => handleEditFacultyAssignment(assignment)}
                                   className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded"
@@ -3616,31 +5074,29 @@ export default function TermDetails() {
                               <th className="p-3 border">Track Name</th>
                               <th className="p-3 border">Strand Name</th>
                               <th className="p-3 border">Section Name</th>
+                              <th className="p-3 border">Grade Level</th>
+                              <th className="p-3 border">Subject</th>
                               <th className="p-3 border">Status</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {facultyAssignmentPreviewData.map((assignment, index) => {
-                              const isValid = facultyAssignmentValidationStatus[index]?.valid;
-                              const message = facultyAssignmentValidationStatus[index]?.message;
-                              return (
-                                <tr key={index} className={isValid ? 'bg-green-50' : 'bg-red-50'}>
-                                  <td className="p-3 border">{assignment.facultyNameInput || <span className="text-red-500">Missing</span>}</td>
-                                  <td className="p-3 border">{assignment.trackName || <span className="text-red-500">Missing</span>}</td>
-                                  <td className="p-3 border">{assignment.strandName || <span className="text-red-500">Missing</span>}</td>
-                                  <td className="p-3 border">{assignment.sectionName || <span className="text-red-500">Missing</span>}</td>
-                                  <td className="p-3 border">
-                                    <span className={`px-2 py-1 rounded text-sm ${
-                                      isValid 
-                                        ? 'bg-green-100 text-green-800' 
-                                        : 'bg-red-100 text-red-800'
-                                    }`}>
-                                      {isValid ? '✓ Valid' : `✗ ${message}`}
-                                    </span>
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                            {facultyAssignmentPreviewData.map((assignment, idx) => (
+                              <tr key={idx} className={facultyAssignmentValidationStatus[idx]?.valid ? 'bg-green-50' : 'bg-red-50'}>
+                                <td className="p-3 border">{assignment.facultyNameInput}</td>
+                                <td className="p-3 border">{assignment.trackName}</td>
+                                <td className="p-3 border">{assignment.strandName}</td>
+                                <td className="p-3 border">{assignment.sectionName}</td>
+                                <td className="p-3 border">{assignment.gradeLevel}</td>
+                                <td className="p-3 border">{assignment.subjectName}</td>
+                                <td className="p-3 border">
+                                  {facultyAssignmentValidationStatus[idx]?.valid ? (
+                                    <span className="text-green-700">✓ Valid</span>
+                                  ) : (
+                                    <span className="text-red-700">✗ {facultyAssignmentValidationStatus[idx]?.message}</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
                           </tbody>
                         </table>
                       </div>
@@ -3718,23 +5174,36 @@ export default function TermDetails() {
                   {/* Manual Assignment Form */}
                   <form onSubmit={isStudentEditMode ? handleUpdateStudentAssignment : handleAddStudentAssignment} className="space-y-4 mt-6">
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="studentName" className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
-                        <select
-                          id="studentName"
-                          name="studentId"
-                          value={studentFormData.studentId}
+                      <div className="relative">
+                        <label htmlFor="studentSearch" className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
+                        <input
+                          type="text"
+                          id="studentSearch"
+                          name="studentSearch"
+                          value={studentSearchTerm}
                           onChange={handleChangeStudentForm}
+                          onFocus={() => setShowStudentSuggestions(true)}
+                          onBlur={() => setTimeout(() => setShowStudentSuggestions(false), 200)} // Delay hiding to allow click
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Search Student..."
                           required
-                        >
-                          <option value="">Select Student</option>
-                          {students.filter(s => !s.isArchived).map(s => (
-                            <option key={s._id} value={s._id}>
-                              {s.firstname} {s.lastname}
-                            </option>
-                          ))}
-                        </select>
+                        />
+                        {showStudentSuggestions && studentSearchTerm.length > 0 && (
+                          <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
+                            {students.map(student => (
+                              <li 
+                                key={student._id}
+                                onClick={() => handleSelectStudent(student)}
+                                className="p-2 hover:bg-gray-100 cursor-pointer"
+                              >
+                                {student.firstname} {student.lastname}
+                              </li>
+                            ))}
+                            {students.length === 0 && (
+                              <li className="p-2 text-gray-500">No matching student</li>
+                            )}
+                          </ul>
+                        )}
                       </div>
                       <div>
                         <label htmlFor="trackId" className="block text-sm font-medium text-gray-700 mb-1">Track</label>
@@ -3774,6 +5243,21 @@ export default function TermDetails() {
                         </select>
                       </div>
                       <div>
+                        <label htmlFor="gradeLevel" className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
+                        <select
+                          id="gradeLevel"
+                          name="gradeLevel"
+                          value={studentFormData.gradeLevel || ''}
+                          onChange={handleChangeStudentForm}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                        >
+                          <option value="">Select Grade Level</option>
+                          <option value="Grade 11">Grade 11</option>
+                          <option value="Grade 12">Grade 12</option>
+                        </select>
+                      </div>
+                      <div>
                         <label htmlFor="sectionIds" className="block text-sm font-medium text-gray-700 mb-1">Section</label>
                         <select
                           id="sectionIds"
@@ -3782,7 +5266,7 @@ export default function TermDetails() {
                           onChange={(e) => setStudentFormData(prev => ({ ...prev, sectionIds: [e.target.value] }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           required
-                          disabled={!studentFormData.strandId}
+                          disabled={!studentFormData.strandId || !studentFormData.gradeLevel} // Disable if no strand or grade is selected
                         >
                           <option value="">Select Section</option>
                           {filteredSectionsForStudent.map(section => (
@@ -3806,7 +5290,7 @@ export default function TermDetails() {
                           onClick={() => {
                             setIsStudentEditMode(false);
                             setEditingStudentAssignment(null);
-                            setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [] });
+                            setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
                           }}
                           className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
                         >
@@ -3823,17 +5307,18 @@ export default function TermDetails() {
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                     <thead>
                       <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border w-1/5">Student Name</th>
-                        <th className="p-3 border w-1/5">Track Name</th>
-                        <th className="p-3 border w-1/5">Strand Name</th>
-                        <th className="p-3 border w-1/5">Section</th>
-                        <th className="p-3 border w-1/5">Actions</th>
+                        <th className="p-3 border w-1/6">Student Name</th>
+                        <th className="p-3 border w-1/6">Grade Level</th>
+                        <th className="p-3 border w-1/6">Track Name</th>
+                        <th className="p-3 border w-1/6">Strand Name</th>
+                        <th className="p-3 border w-1/6">Section</th>
+                        <th className="p-3 border w-1/6 min-w-[120px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {studentAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="5" className="p-3 border text-center text-gray-500">
+                          <td colSpan="6" className="p-3 border text-center text-gray-500">
                             No student assignments found.
                           </td>
                         </tr>
@@ -3841,11 +5326,12 @@ export default function TermDetails() {
                         studentAssignments.map((assignment) => (
                           <tr key={assignment._id}>
                             <td className="p-3 border">{assignment.studentName}</td>
+                            <td className="p-3 border">{assignment.gradeLevel || assignment['Grade Level'] || ''}</td>
                             <td className="p-3 border">{assignment.trackName}</td>
                             <td className="p-3 border">{assignment.strandName}</td>
                             <td className="p-3 border">{assignment.sectionName}</td>
-                            <td className="p-3 border">
-                              <div className="inline-flex space-x-2">
+                            <td className="p-3 border min-w-[120px]">
+                              <div className="flex justify-center gap-2">
                                 <button
                                   onClick={() => handleEditStudentAssignment(assignment)}
                                   className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded"
@@ -3902,6 +5388,7 @@ export default function TermDetails() {
                           <thead>
                             <tr className="bg-gray-100 text-left">
                               <th className="p-3 border">Student Name</th>
+                              <th className="p-3 border">Grade Level</th>
                               <th className="p-3 border">Track Name</th>
                               <th className="p-3 border">Strand Name</th>
                               <th className="p-3 border">Section Name</th>
@@ -3914,15 +5401,16 @@ export default function TermDetails() {
                               const message = studentValidationStatus[index]?.message;
                               return (
                                 <tr key={index} className={!isValid ? 'bg-red-50' : ''}>
-                                  <td className="p-3 border">{assignment.studentName}</td>
-                                  <td className="p-3 border">{assignment.trackName}</td>
-                                  <td className="p-3 border">{assignment.strandName}</td>
-                                  <td className="p-3 border">{assignment.sectionName}</td>
+                                  <td className="p-3 border">{assignment['Student Name']}</td>
+                                  <td className="p-3 border">{assignment['Grade Level']}</td>
+                                  <td className="p-3 border">{assignment['Track Name']}</td>
+                                  <td className="p-3 border">{assignment['Strand Name']}</td>
+                                  <td className="p-3 border">{assignment['Section Name']}</td>
                                   <td className="p-3 border">
                                     {isValid ? (
                                       <span className="text-green-600">Valid</span>
                                     ) : (
-                                      <span className="text-red-600" title={message}>Invalid</span>
+                                      <span className="text-red-600">{message}</span>
                                     )}
                                   </td>
                                 </tr>
@@ -4033,6 +5521,521 @@ export default function TermDetails() {
           </div>
         </div>
       )}
+
+      {/* Import Term Data Modal */}
+      {importModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-2xl font-semibold">Import Term Data</h3>
+              <button
+                onClick={() => setImportModalOpen(false)}
+                className="text-gray-500 hover:text-gray-700 text-3xl leading-none"
+              >&times;</button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-grow">
+              {importError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{importError}</div>}
+              {importLoading && <div className="text-blue-700 mb-4">Processing file... Please wait.</div>}
+
+              <div className="mb-4 border-b border-gray-200">
+                <nav className="flex -mb-px" aria-label="Tabs">
+                  <button
+                    onClick={() => setActiveImportTab('tracks')}
+                    className={`whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm ${activeImportTab === 'tracks' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                  >
+                    Tracks ({importPreviewData.tracks.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveImportTab('strands')}
+                    className={`whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm ${activeImportTab === 'strands' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                  >
+                    Strands ({importPreviewData.strands.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveImportTab('sections')}
+                    className={`whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm ${activeImportTab === 'sections' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                  >
+                    Sections ({importPreviewData.sections.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveImportTab('subjects')}
+                    className={`whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm ${activeImportTab === 'subjects' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                  >
+                    Subjects ({importPreviewData.subjects.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveImportTab('facultyAssignments')}
+                    className={`whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm ${activeImportTab === 'facultyAssignments' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                  >
+                    Faculty Assignments ({importPreviewData.facultyAssignments.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveImportTab('studentAssignments')}
+                    className={`whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm ${activeImportTab === 'studentAssignments' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                  >
+                    Student Assignments ({importPreviewData.studentAssignments.length})
+                  </button>
+                </nav>
+              </div>
+
+              {/* Tab Content */}
+              {activeImportTab === 'tracks' && (
+                <div>
+                  <h4 className="text-lg font-medium mb-3">Tracks to Import</h4>
+                  <p className="text-sm text-gray-600 mb-2">Valid: {importValidationStatus.tracks.filter(v => v.valid).length}, Invalid: {importValidationStatus.tracks.filter(v => !v.valid).length}</p>
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-2 border">Track Name</th>
+                        <th className="p-2 border">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreviewData.tracks.map((track, index) => (
+                        <tr key={index} className={importValidationStatus.tracks[index]?.valid ? 'bg-white' : 'bg-red-50'}>
+                          <td className="p-2 border">{track.trackName}</td>
+                          <td className="p-2 border flex items-center gap-1">
+                            {importValidationStatus.tracks[index]?.valid ? (
+                              <span className="text-green-600">✓ Valid</span>
+                            ) : (
+                              <span className="text-red-600">X {importValidationStatus.tracks[index]?.message}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {importPreviewData.tracks.length === 0 && (
+                         <tr><td colSpan="2" className="p-2 text-center text-gray-500">No tracks found in the Excel file.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {activeImportTab === 'strands' && (
+                <div>
+                  <h4 className="text-lg font-medium mb-3">Strands to Import</h4>
+                  <p className="text-sm text-gray-600 mb-2">Valid: {importValidationStatus.strands.filter(v => v.valid).length}, Invalid: {importValidationStatus.strands.filter(v => !v.valid).length}</p>
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-2 border">Track Name</th>
+                        <th className="p-2 border">Strand Name</th>
+                        <th className="p-2 border">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreviewData.strands.map((strand, index) => (
+                        <tr key={index} className={importValidationStatus.strands[index]?.valid ? 'bg-white' : 'bg-red-50'}>
+                          <td className="p-2 border">{strand.trackName}</td>
+                          <td className="p-2 border">{strand.strandName}</td>
+                          <td className="p-2 border flex items-center gap-1">
+                            {importValidationStatus.strands[index]?.valid ? (
+                              <span className="text-green-600">✓ Valid</span>
+                            ) : (
+                              <span className="text-red-600">X {importValidationStatus.strands[index]?.message}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {importPreviewData.strands.length === 0 && (
+                        <tr><td colSpan="3" className="p-2 text-center text-gray-500">No strands found in the Excel file.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {activeImportTab === 'sections' && (
+                <div>
+                  <h4 className="text-lg font-medium mb-3">Sections to Import</h4>
+                  <p className="text-sm text-gray-600 mb-2">Valid: {importValidationStatus.sections.filter(v => v.valid).length}, Invalid: {importValidationStatus.sections.filter(v => !v.valid).length}</p>
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-2 border">Track Name</th>
+                        <th className="p-2 border">Strand Name</th>
+                        <th className="p-2 border">Section Name</th>
+                        <th className="p-2 border">Grade Level</th>
+                        <th className="p-2 border">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreviewData.sections.map((section, index) => (
+                        <tr key={index} className={importValidationStatus.sections[index]?.valid ? 'bg-white' : 'bg-red-50'}>
+                          <td className="p-2 border">{section.trackName}</td>
+                          <td className="p-2 border">{section.strandName}</td>
+                          <td className="p-2 border">{section.sectionName}</td>
+                          <td className="p-2 border">{section.gradeLevel}</td>
+                          <td className="p-2 border flex items-center gap-1">
+                            {importValidationStatus.sections[index]?.valid ? (
+                              <span className="text-green-600">✓ Valid</span>
+                            ) : (
+                              <span className="text-red-600">X {importValidationStatus.sections[index]?.message}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {importPreviewData.sections.length === 0 && (
+                        <tr><td colSpan="5" className="p-2 text-center text-gray-500">No sections found in the Excel file.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {activeImportTab === 'subjects' && (
+                <div>
+                  <h4 className="text-lg font-medium mb-3">Subjects to Import</h4>
+                  <p className="text-sm text-gray-600 mb-2">Valid: {importValidationStatus.subjects.filter(v => v.valid).length}, Invalid: {importValidationStatus.subjects.filter(v => !v.valid).length}</p>
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-2 border">Track Name</th>
+                        <th className="p-2 border">Strand Name</th>
+                        <th className="p-2 border">Grade Level</th>
+                        <th className="p-2 border">Subject Name</th>
+                        <th className="p-2 border">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreviewData.subjects.map((subject, index) => (
+                        <tr key={index} className={importValidationStatus.subjects[index]?.valid ? 'bg-white' : 'bg-red-50'}>
+                          <td className="p-2 border">{subject.trackName}</td>
+                          <td className="p-2 border">{subject.strandName}</td>
+                          <td className="p-2 border">{subject.gradeLevel}</td>
+                          <td className="p-2 border">{subject.subjectName}</td>
+                          <td className="p-2 border flex items-center gap-1">
+                            {importValidationStatus.subjects[index]?.valid ? (
+                              <span className="text-green-600">✓ Valid</span>
+                            ) : (
+                              <span className="text-red-600">X {importValidationStatus.subjects[index]?.message}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {importPreviewData.subjects.length === 0 && (
+                        <tr><td colSpan="5" className="p-2 text-center text-gray-500">No subjects found in the Excel file.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {activeImportTab === 'facultyAssignments' && (
+                <div>
+                  <h4 className="text-lg font-medium mb-3">Faculty Assignments to Import</h4>
+                  <p className="text-sm text-gray-600 mb-2">Valid: {importValidationStatus.facultyAssignments.filter(v => v.valid).length}, Invalid: {importValidationStatus.facultyAssignments.filter(v => !v.valid).length}</p>
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-2 border">Faculty Name</th>
+                        <th className="p-2 border">Track Name</th>
+                        <th className="p-2 border">Strand Name</th>
+                        <th className="p-2 border">Section Name</th>
+                        <th className="p-2 border">Grade Level</th>
+                        <th className="p-2 border">Subject</th>
+                        <th className="p-2 border">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreviewData.facultyAssignments.map((assignment, index) => (
+                        <tr key={index} className={importValidationStatus.facultyAssignments[index]?.valid ? 'bg-white' : 'bg-red-50'}>
+                          <td className="p-2 border">{assignment.facultyName}</td>
+                          <td className="p-2 border">{assignment.trackName}</td>
+                          <td className="p-2 border">{assignment.strandName}</td>
+                          <td className="p-2 border">{assignment.sectionName}</td>
+                          <td className="p-2 border">{assignment.gradeLevel}</td>
+                          <td className="p-2 border">{assignment.subjectName}</td>
+                          <td className="p-2 border flex items-center gap-1">
+                            {importValidationStatus.facultyAssignments[index]?.valid ? (
+                              <span className="text-green-600">✓ Valid</span>
+                            ) : (
+                              <span className="text-red-600">X {importValidationStatus.facultyAssignments[index]?.message}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {importPreviewData.facultyAssignments.length === 0 && (
+                        <tr><td colSpan="7" className="p-2 text-center text-gray-500">No faculty assignments found in the Excel file.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {activeImportTab === 'studentAssignments' && (
+                <div>
+                  <h4 className="text-lg font-medium mb-3">Student Assignments to Import</h4>
+                  <p className="text-sm text-gray-600 mb-2">Valid: {importValidationStatus.studentAssignments.filter(v => v.valid).length}, Invalid: {importValidationStatus.studentAssignments.filter(v => !v.valid).length}</p>
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-2 border">Student Name</th>
+                        <th className="p-2 border">Track Name</th>
+                        <th className="p-2 border">Strand Name</th>
+                        <th className="p-2 border">Section Name</th>
+                        <th className="p-2 border">Grade Level</th>
+                        <th className="p-2 border">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreviewData.studentAssignments.map((assignment, index) => (
+                        <tr key={index} className={importValidationStatus.studentAssignments[index]?.valid ? 'bg-white' : 'bg-red-50'}>
+                          <td className="p-2 border">{assignment.studentName}</td>
+                          <td className="p-2 border">{assignment.trackName}</td>
+                          <td className="p-2 border">{assignment.strandName}</td>
+                          <td className="p-2 border">{assignment.sectionName}</td>
+                          <td className="p-2 border">{assignment.gradeLevel}</td>
+                          <td className="p-2 border flex items-center gap-1">
+                            {importValidationStatus.studentAssignments[index]?.valid ? (
+                              <span className="text-green-600">✓ Valid</span>
+                            ) : (
+                              <span className="text-red-600">X {importValidationStatus.studentAssignments[index]?.message}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {importPreviewData.studentAssignments.length === 0 && (
+                        <tr><td colSpan="6" className="p-2 text-center text-gray-500">No student assignments found in the Excel file.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => setImportModalOpen(false)}
+                className="bg-gray-300 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmImportUpload}
+                disabled={importLoading}
+                className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {importLoading ? 'Importing...' : 'Import Valid Data'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
+
+// --- VALIDATION FUNCTIONS FOR IMPORT ---
+// This function will orchestrate the validation of all sheets
+const validateImportData = async (data, existingData, termDetails) => {
+  const validationResults = {};
+
+  validationResults.tracks = await validateTracksImport(data.tracks, existingData.tracks, termDetails);
+  validationResults.strands = await validateStrandsImport(data.strands, existingData.strands, termDetails);
+  validationResults.sections = await validateSectionsImport(data.sections, existingData.sections, termDetails);
+  validationResults.subjects = await validateSubjectsImport(data.subjects, existingData.subjects, termDetails);
+  validationResults.facultyAssignments = await validateFacultyAssignmentsImport(data.facultyAssignments, existingData.facultyAssignments, existingData.faculties, existingData.tracks, existingData.strands, existingData.sections, existingData.subjects, termDetails);
+  validationResults.studentAssignments = await validateStudentAssignmentsImport(data.studentAssignments, existingData.studentAssignments, existingData.students, existingData.tracks, existingData.strands, existingData.sections, termDetails);
+
+  return validationResults;
+};
+
+// Individual validation functions (stubs for now, will implement logic later)
+const validateTracksImport = async (tracksToValidate, existingTracks, termDetails) => {
+  const results = [];
+  const activeTracks = existingTracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
+  for (const track of tracksToValidate) {
+    if (!track.trackName || track.trackName.trim() === '') {
+      results.push({ valid: false, message: 'Missing Track Name' });
+      continue;
+    }
+    const exists = activeTracks.some(et => et.trackName.toLowerCase() === track.trackName.toLowerCase());
+    if (exists) {
+      results.push({ valid: false, message: 'Track already exists' });
+    } else {
+      results.push({ valid: true });
+    }
+  }
+  return results;
+};
+
+const validateStrandsImport = async (strandsToValidate, existingStrands, termDetails) => {
+  const results = [];
+  const activeStrands = existingStrands.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
+  for (const strand of strandsToValidate) {
+    if (!strand.trackName || strand.trackName.trim() === '' || !strand.strandName || strand.strandName.trim() === '') {
+      results.push({ valid: false, message: 'Missing Track Name or Strand Name' });
+      continue;
+    }
+    const exists = activeStrands.some(es => es.trackName.toLowerCase() === strand.trackName.toLowerCase() && es.strandName.toLowerCase() === strand.strandName.toLowerCase());
+    if (exists) {
+      results.push({ valid: false, message: 'Strand already exists' });
+    } else {
+      results.push({ valid: true });
+    }
+  }
+  return results;
+};
+
+const validateSectionsImport = async (sectionsToValidate, existingSections, termDetails) => {
+  const results = [];
+  const activeSections = existingSections.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
+  for (const section of sectionsToValidate) {
+    if (!section.trackName || section.trackName.trim() === '' || !section.strandName || section.strandName.trim() === '' || !section.sectionName || section.sectionName.trim() === '' || !section.gradeLevel || section.gradeLevel.trim() === '') {
+      results.push({ valid: false, message: 'Missing required fields' });
+      continue;
+    }
+    const exists = activeSections.some(es => es.trackName.toLowerCase() === section.trackName.toLowerCase() && es.strandName.toLowerCase() === section.strandName.toLowerCase() && es.sectionName.toLowerCase() === section.sectionName.toLowerCase() && es.gradeLevel.toLowerCase() === section.gradeLevel.toLowerCase());
+    if (exists) {
+      results.push({ valid: false, message: 'Section already exists' });
+    } else {
+      results.push({ valid: true });
+    }
+  }
+  return results;
+};
+
+const validateSubjectsImport = async (subjectsToValidate, existingSubjects, termDetails) => {
+  const results = [];
+  const activeSubjects = existingSubjects.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
+  for (const subject of subjectsToValidate) {
+    if (!subject.trackName || subject.trackName.trim() === '' || !subject.strandName || subject.strandName.trim() === '' || !subject.gradeLevel || subject.gradeLevel.trim() === '' || !subject.subjectName || subject.subjectName.trim() === '') {
+      results.push({ valid: false, message: 'Missing required fields' });
+      continue;
+    }
+    const exists = activeSubjects.some(es => es.trackName.toLowerCase() === subject.trackName.toLowerCase() && es.strandName.toLowerCase() === subject.strandName.toLowerCase() && es.gradeLevel.toLowerCase() === subject.gradeLevel.toLowerCase() && es.subjectName.toLowerCase() === subject.subjectName.toLowerCase());
+    if (exists) {
+      results.push({ valid: false, message: 'Subject already exists' });
+    } else {
+      results.push({ valid: true });
+    }
+  }
+  return results;
+};
+
+const validateFacultyAssignmentsImport = async (assignmentsToValidate, existingAssignments, allFaculties, allTracks, allStrands, allSections, allSubjects, termDetails) => {
+  const results = [];
+  const activeAssignments = existingAssignments.filter(a => a.status === 'active' && a.schoolYear === termDetails.schoolYear && a.termName === termDetails.termName);
+  const activeFaculties = allFaculties.filter(f => f.status === 'active');
+  const activeTracks = allTracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
+  const activeStrands = allStrands.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
+  const activeSections = allSections.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
+  const activeSubjects = allSubjects.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
+
+  for (const assignment of assignmentsToValidate) {
+    if (!assignment.facultyName || !assignment.trackName || !assignment.strandName || !assignment.sectionName || !assignment.gradeLevel || !assignment.subjectName) {
+      results.push({ valid: false, message: 'Missing required fields' });
+      continue;
+    }
+
+    // Check if faculty exists
+    const faculty = activeFaculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === assignment.facultyName.toLowerCase() && f.role === 'faculty');
+    if (!faculty) {
+      results.push({ valid: false, message: `Faculty '${assignment.facultyName}' not found` });
+      continue;
+    }
+
+    // Check if track exists
+    const track = activeTracks.find(t => t.trackName.toLowerCase() === assignment.trackName.toLowerCase());
+    if (!track) {
+      results.push({ valid: false, message: `Track '${assignment.trackName}' not found for current term` });
+      continue;
+    }
+
+    // Check if strand exists within the track
+    const strand = activeStrands.find(s => s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase());
+    if (!strand) {
+      results.push({ valid: false, message: `Strand '${assignment.strandName}' not found in track '${assignment.trackName}'` });
+      continue;
+    }
+
+    // Check if section exists within the track, strand and grade level
+    const section = activeSections.find(s => s.sectionName.toLowerCase() === assignment.sectionName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase() && s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.gradeLevel.toLowerCase() === assignment.gradeLevel.toLowerCase());
+    if (!section) {
+      results.push({ valid: false, message: `Section '${assignment.sectionName}' not found in track/strand/grade` });
+      continue;
+    }
+
+    // Check if subject exists within the track, strand and grade level
+    const subject = activeSubjects.find(s => s.subjectName.toLowerCase() === assignment.subjectName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase() && s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.gradeLevel.toLowerCase() === assignment.gradeLevel.toLowerCase());
+    if (!subject) {
+      results.push({ valid: false, message: `Subject '${assignment.subjectName}' not found for selected track/strand/grade` });
+      continue;
+    }
+
+    // Check for duplicate assignment
+    const exists = activeAssignments.some(ea => 
+      ea.facultyId === faculty._id &&
+      ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
+      ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
+      ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
+    );
+    if (exists) {
+      results.push({ valid: false, message: 'Assignment already exists' });
+    } else {
+      results.push({ valid: true, facultyId: faculty._id });
+    }
+  }
+  return results;
+};
+
+const validateStudentAssignmentsImport = async (assignmentsToValidate, existingAssignments, allStudents, allTracks, allStrands, allSections, termDetails) => {
+  const results = [];
+  const activeAssignments = existingAssignments.filter(a => a.status === 'active' && a.schoolYear === termDetails.schoolYear && a.termName === termDetails.termName);
+  const activeStudents = allStudents.filter(s => s.status === 'active');
+  const activeTracks = allTracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
+  const activeStrands = allStrands.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
+  const activeSections = allSections.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
+
+  for (const assignment of assignmentsToValidate) {
+    if (!assignment.studentName || !assignment.trackName || !assignment.strandName || !assignment.sectionName || !assignment.gradeLevel) {
+      results.push({ valid: false, message: 'Missing required fields' });
+      continue;
+    }
+
+    // Check if student exists
+    const student = activeStudents.find(s => `${s.firstname} ${s.lastname}`.toLowerCase() === assignment.studentName.toLowerCase() && s.role === 'students');
+    if (!student) {
+      results.push({ valid: false, message: `Student '${assignment.studentName}' not found` });
+      continue;
+    }
+
+    // Check if track exists
+    const track = activeTracks.find(t => t.trackName.toLowerCase() === assignment.trackName.toLowerCase());
+    if (!track) {
+      results.push({ valid: false, message: `Track '${assignment.trackName}' not found for current term` });
+      continue;
+    }
+
+    // Check if strand exists within the track
+    const strand = activeStrands.find(s => s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase());
+    if (!strand) {
+      results.push({ valid: false, message: `Strand '${assignment.strandName}' not found in track '${assignment.trackName}'` });
+      continue;
+    }
+
+    // Check if section exists within the track, strand and grade level
+    const section = activeSections.find(s => s.sectionName.toLowerCase() === assignment.sectionName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase() && s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.gradeLevel.toLowerCase() === assignment.gradeLevel.toLowerCase());
+    if (!section) {
+      results.push({ valid: false, message: `Section '${assignment.sectionName}' not found in track/strand/grade` });
+      continue;
+    }
+
+    // Check for duplicate assignment
+    const exists = activeAssignments.some(ea => 
+      ea.studentId === student._id &&
+      ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
+      ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
+      ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
+    );
+    if (exists) {
+      results.push({ valid: false, message: 'Assignment already exists' });
+    } else {
+      results.push({ valid: true, studentId: student._id });
+    }
+  }
+  return results;
+};
