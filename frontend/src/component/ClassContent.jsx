@@ -112,6 +112,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setAssignmentsLoading(true);
       setAssignmentError(null);
       const token = localStorage.getItem('token');
+      const userRole = localStorage.getItem('role');
+      const userId = localStorage.getItem('userID');
+
+      // First fetch all assignments
       fetch(`${API_BASE}/assignments?classID=${classId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
@@ -121,7 +125,28 @@ export default function ClassContent({ selected, isFaculty = false }) {
           const filtered = Array.isArray(data)
             ? data.filter(a => a.classID === classId || (Array.isArray(a.classIDs) && a.classIDs.includes(classId)))
             : [];
-          setAssignments(filtered);
+
+          // If user is a student, fetch their submissions to filter out completed assignments
+          if (userRole === 'students') {
+            Promise.all(filtered.map(assignment =>
+              fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              }).then(res => res.json())
+            )).then(submissionsArrays => {
+              // Filter out assignments that have been submitted by the student
+              const activeAssignments = filtered.filter((assignment, index) => {
+                const submissions = submissionsArrays[index];
+                const studentSubmission = Array.isArray(submissions) 
+                  ? submissions.find(s => s.student && (s.student._id === userId || s.student === userId))
+                  : null;
+                return !studentSubmission; // Keep only assignments without submissions
+              });
+              setAssignments(activeAssignments);
+            });
+          } else {
+            // For faculty, show all assignments
+            setAssignments(filtered);
+          }
         })
         .catch(() => setAssignmentError("Failed to fetch assignments."))
         .finally(() => setAssignmentsLoading(false));

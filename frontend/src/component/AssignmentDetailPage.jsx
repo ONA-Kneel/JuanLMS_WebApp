@@ -259,26 +259,44 @@ export default function AssignmentDetailPage() {
               {role !== 'faculty' && assignment.fileUploadRequired && (
                 <div className="mb-4">
                   <h2 className="text-lg font-semibold mb-1">Submit Assignment</h2>
-                  {submitSuccess && (
-                    <div className="text-green-700 font-semibold mb-2">Your assignment has been submitted successfully!</div>
-                  )}
-                  {studentSubmission ? (
-                    <div className="text-green-700 font-semibold mb-2">You have submitted this assignment.</div>
+                  {submitSuccess ? (
+                    <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
+                      <strong className="font-bold">Success!</strong>
+                      <p className="block sm:inline"> Your assignment has been submitted successfully. You can now close this page.</p>
+                    </div>
+                  ) : studentSubmission ? (
+                    <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative mb-4">
+                      <strong className="font-bold">Already Submitted!</strong>
+                      <p className="block sm:inline"> You have already submitted this assignment.</p>
+                      {studentSubmission.fileUrl && (
+                        <div className="mt-2">
+                          <span className="font-semibold">Submitted File: </span>
+                          <a href={studentSubmission.fileUrl} className="text-blue-700 underline" target="_blank" rel="noopener noreferrer">
+                            {studentSubmission.fileName}
+                          </a>
+                        </div>
+                      )}
+                      {studentSubmission.grade !== undefined && (
+                        <div className="mt-2">
+                          <span className="font-semibold">Grade: </span>
+                          {studentSubmission.grade}
+                        </div>
+                      )}
+                      {studentSubmission.feedback && (
+                        <div className="mt-2">
+                          <span className="font-semibold">Feedback: </span>
+                          {studentSubmission.feedback}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <form onSubmit={handleStudentSubmit} className="space-y-2" encType="multipart/form-data">
                       <input type="file" className="border rounded px-2 py-1 w-full" accept={assignment.allowedFileTypes || '*'} onChange={e => setFile(e.target.files[0])} required />
-                      <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded" disabled={submitLoading}>{submitLoading ? 'Submitting...' : 'Submit'}</button>
+                      <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded" disabled={submitLoading}>
+                        {submitLoading ? 'Submitting...' : 'Submit'}
+                      </button>
                       {error && <div className="text-red-600 text-sm">{error}</div>}
                     </form>
-                  )}
-                  {studentSubmission && (
-                    <div className="mt-2 text-sm">File: <a href={studentSubmission.fileUrl} className="text-blue-700 underline" target="_blank" rel="noopener noreferrer">{studentSubmission.fileName}</a></div>
-                  )}
-                  {studentSubmission && studentSubmission.grade !== undefined && (
-                    <div className="mt-2 text-green-700">Grade: {studentSubmission.grade}</div>
-                  )}
-                  {studentSubmission && studentSubmission.feedback && (
-                    <div className="mt-2 text-gray-700">Feedback: {studentSubmission.feedback}</div>
                   )}
                 </div>
               )}
