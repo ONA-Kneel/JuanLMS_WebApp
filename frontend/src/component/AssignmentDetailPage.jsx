@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import Student_Navbar from './Student/Student_Navbar';
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function AssignmentDetailPage() {
   const { assignmentId } = useParams();
   const [role, setRole] = useState('');
@@ -26,7 +28,7 @@ export default function AssignmentDetailPage() {
     setRole(localStorage.getItem('role'));
     const token = localStorage.getItem('token');
     setLoading(true);
-    fetch(`http://localhost:5000/assignments/${assignmentId}`, {
+    fetch(`${API_BASE}/assignments/${assignmentId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -42,7 +44,7 @@ export default function AssignmentDetailPage() {
     const token = localStorage.getItem('token');
     if (role === 'faculty' && assignment && assignment.classID) {
       // Fetch class members
-      fetch(`http://localhost:5000/classes/${assignment.classID}/members`, {
+      fetch(`${API_BASE}/classes/${assignment.classID}/members`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -58,7 +60,7 @@ export default function AssignmentDetailPage() {
           }
           setClassMembers(memberList);
           // Fetch submissions
-          fetch(`http://localhost:5000/assignments/${assignmentId}/submissions`, {
+          fetch(`${API_BASE}/assignments/${assignmentId}/submissions`, {
             headers: { 'Authorization': `Bearer ${token}` }
           })
             .then(res => res.json())
@@ -79,7 +81,7 @@ export default function AssignmentDetailPage() {
         });
     } else if (role === 'students') {
       // For students, fetch only their own submission
-      fetch(`http://localhost:5000/assignments/${assignmentId}/submissions`, {
+      fetch(`${API_BASE}/assignments/${assignmentId}/submissions`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -101,7 +103,7 @@ export default function AssignmentDetailPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch(`http://localhost:5000/assignments/${assignmentId}/submit`, {
+      const res = await fetch(`${API_BASE}/assignments/${assignmentId}/submit`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
@@ -125,7 +127,7 @@ export default function AssignmentDetailPage() {
     setGradeError('');
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:5000/assignments/${assignmentId}/grade`, {
+      const res = await fetch(`${API_BASE}/assignments/${assignmentId}/grade`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ submissionId, grade: gradeValue, feedback: feedbackValue })

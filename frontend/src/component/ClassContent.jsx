@@ -6,6 +6,8 @@ import QuizTab from "./QuizTab";
 // import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function ClassContent({ selected, isFaculty = false }) {
   // --- ROUTER PARAMS ---
   const { classId } = useParams();
@@ -35,7 +37,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setAnnouncementsLoading(true);
       setAnnouncementError(null);
       const token = localStorage.getItem('token');
-      fetch(`https://juanlms-webapp-server.onrender.com/lessons?classID=${classId}`, {
+      fetch(`${API_BASE}/lessons?classID=${classId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -60,7 +62,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
           if (lesson.files && lesson.files.length > 0) {
             for (const file of lesson.files) {
               try {
-                const res = await fetch(`https://juanlms-webapp-server.onrender.com/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
+                const res = await fetch(`${API_BASE}/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
                   headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
@@ -83,7 +85,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setAnnouncementsLoading(true);
       setAnnouncementError(null);
       const token = localStorage.getItem('token');
-      fetch(`https://juanlms-webapp-server.onrender.com/announcements?classID=${classId}`, {
+      fetch(`${API_BASE}/announcements?classID=${classId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -99,7 +101,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setAssignmentsLoading(true);
       setAssignmentError(null);
       const token = localStorage.getItem('token');
-      fetch(`http://localhost:5000/assignments?classID=${classId}`, {
+      fetch(`${API_BASE}/assignments?classID=${classId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -125,7 +127,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     const content = form.content.value;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('https://juanlms-webapp-server.onrender.com/announcements', {
+      const res = await fetch(`${API_BASE}/announcements`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -135,7 +137,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       });
       if (res.ok) {
         setAnnouncementsLoading(true);
-        fetch(`https://juanlms-webapp-server.onrender.com/announcements?classID=${classId}`, {
+        fetch(`${API_BASE}/announcements?classID=${classId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
           .then(res => res.json())
@@ -156,7 +158,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!window.confirm('Delete this announcement?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/announcements/${id}`, {
+      const res = await fetch(`${API_BASE}/announcements/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -173,7 +175,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (!newContent) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/announcements/${id}`, {
+      const res = await fetch(`${API_BASE}/announcements/${id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

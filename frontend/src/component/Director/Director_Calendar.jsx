@@ -7,6 +7,8 @@ import interactionPlugin from "@fullcalendar/interaction";
 import ProfileMenu from "../ProfileMenu";
 import Director_Navbar from "./Director_Navbar";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Director_Calendar() {
   const [holidays, setHolidays] = useState([]);
   const [adminEvents, setAdminEvents] = useState([]);
@@ -19,7 +21,7 @@ export default function Director_Calendar() {
     (async () => {
       setLoadingEvents(true);
       try {
-        const res = await axios.get("https://juanlms-webapp-server.onrender.com/events");
+        const res = await axios.get(`${API_BASE}/events`);
         setAdminEvents(res.data.map(ev => ({
           ...ev,
           start: ev.start ? ev.start.slice(0, 16) : '',

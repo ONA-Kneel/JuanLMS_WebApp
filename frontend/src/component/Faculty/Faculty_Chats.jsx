@@ -32,7 +32,7 @@ export default function Faculty_Chats() {
   const socket = useRef(null);
   const navigate = useNavigate();
 
-  const API_URL = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
   const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
 
   const storedUser = localStorage.getItem("user");
@@ -104,7 +104,7 @@ export default function Faculty_Chats() {
     const fetchUsers = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await axios.get(`${API_URL}/users`, {
+        const res = await axios.get(`${API_BASE}/users`, {
           headers: {
             ...(token && { Authorization: `Bearer ${token}` }),
           },
@@ -135,7 +135,7 @@ export default function Faculty_Chats() {
     const fetchMessages = async () => {
       if (!selectedChat) return;
       try {
-        const res = await axios.get(`${API_URL}/messages/${currentUserId}/${selectedChat._id}`);
+        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`);
         setMessages((prev) => {
           const newMessages = { ...prev, [selectedChat._id]: res.data };
           
@@ -187,7 +187,7 @@ export default function Faculty_Chats() {
     }
 
     try {
-      const res = await axios.post(`${API_URL}/messages`, formData, {
+      const res = await axios.post(`${API_BASE}/messages`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -289,7 +289,7 @@ export default function Faculty_Chats() {
         // Only fetch if not already loaded
         if (!newMessages[chat._id] || newMessages[chat._id].length === 0) {
           try {
-            const res = await axios.get(`${API_URL}/messages/${currentUserId}/${chat._id}`);
+            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
             newMessages[chat._id] = res.data;
           } catch (err) {
             newMessages[chat._id] = [];
@@ -354,7 +354,7 @@ export default function Faculty_Chats() {
                       onClick={() => handleSelectChat(user)}
                     >
                       <img
-                        src={user.profilePic ? `${API_URL}/uploads/${user.profilePic}` : defaultAvatar}
+                        src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar}
                         alt="Profile"
                         className="w-8 h-8 rounded-full object-cover border"
                         onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -402,7 +402,7 @@ export default function Faculty_Chats() {
                       >
                         <span className="pr-10 min-w-0 truncate flex items-center gap-2">
                           <img
-                            src={user.profilePic ? `${API_URL}/uploads/${user.profilePic}` : defaultAvatar}
+                            src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar}
                             alt="Profile"
                             className="w-8 h-8 rounded-full object-cover border"
                             onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -457,7 +457,7 @@ export default function Faculty_Chats() {
                 <div className="flex justify-between items-center mb-4 border-b border-black pb-4">
                   <div className="flex items-center gap-3">
                     <img
-                      src={selectedChat.profilePic ? `${API_URL}/uploads/${selectedChat.profilePic}` : defaultAvatar}
+                      src={selectedChat.profilePic ? `${API_BASE}/uploads/${selectedChat.profilePic}` : defaultAvatar}
                       alt="Profile"
                       className="w-10 h-10 rounded-full object-cover border"
                       onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -527,7 +527,7 @@ export default function Faculty_Chats() {
                                 {msg.message && <p>{msg.message}</p>}
                                 {msg.fileUrl && (
                                   <a
-                                    href={`${API_URL}/${msg.fileUrl}`}
+                                    href={`${API_BASE}/${msg.fileUrl}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="underline text-xs block mt-1"
@@ -544,7 +544,7 @@ export default function Faculty_Chats() {
                             {showHeader ? (
                               <>
                                 <img
-                                  src={sender && sender.profilePic ? `${API_URL}/uploads/${sender.profilePic}` : defaultAvatar}
+                                  src={sender && sender.profilePic ? `${API_BASE}/uploads/${sender.profilePic}` : defaultAvatar}
                                   alt="Profile"
                                   className="w-10 h-10 rounded-full object-cover border"
                                   onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -562,7 +562,7 @@ export default function Faculty_Chats() {
                                     {msg.message && <p>{msg.message}</p>}
                                     {msg.fileUrl && (
                                       <a
-                                        href={`${API_URL}/${msg.fileUrl}`}
+                                        href={`${API_BASE}/${msg.fileUrl}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="underline text-xs block mt-1"
@@ -579,7 +579,7 @@ export default function Faculty_Chats() {
                                   {msg.message && <p>{msg.message}</p>}
                                   {msg.fileUrl && (
                                     <a
-                                      href={`${API_URL}/${msg.fileUrl}`}
+                                      href={`${API_BASE}/${msg.fileUrl}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="underline text-xs block mt-1"

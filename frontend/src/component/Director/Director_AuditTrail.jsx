@@ -4,6 +4,8 @@ import ProfileMenu from "../ProfileMenu";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Director_AuditTrail() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +32,7 @@ export default function Director_AuditTrail() {
         return;
       }
 
-      const response = await axios.get(`https://juanlms-webapp-server.onrender.com/audit-logs?page=${currentPage}&limit=${logsPerPage}`, {
+      const response = await axios.get(`${API_BASE}/audit-logs?page=${currentPage}&limit=${logsPerPage}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

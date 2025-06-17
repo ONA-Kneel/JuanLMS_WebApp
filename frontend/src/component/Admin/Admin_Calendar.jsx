@@ -11,6 +11,8 @@ import createEvent from "../../assets/createEvent.png";
 import ProfileModal from "../ProfileModal";
 import interactionPlugin from "@fullcalendar/interaction";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 const PRESET_COLORS = [
   "#1890ff", // blue
   "#52c41a", // green
@@ -53,7 +55,7 @@ export default function Admin_Calendar() {
   const fetchEvents = async () => {
     setLoadingEvents(true);
     try {
-      const res = await axios.get("https://juanlms-webapp-server.onrender.com/events");
+      const res = await axios.get("${API_BASE}/events");
       setEvents(res.data.map(ev => ({
         ...ev,
         id: ev._id,
@@ -114,7 +116,7 @@ export default function Admin_Calendar() {
     e.preventDefault();
     if (!newEvent.title || !newEvent.start) return;
     try {
-      await axios.post("https://juanlms-webapp-server.onrender.com/events", {
+      await axios.post("${API_BASE}/events", {
         title: newEvent.title,
         start: newEvent.start,
         end: newEvent.isRange && newEvent.end ? newEvent.end : undefined,
@@ -156,7 +158,7 @@ export default function Admin_Calendar() {
     const { _id, title, start, end, color, isRange } = editEventData;
     if (!_id || !title || !start) return;
     try {
-      await axios.put(`https://juanlms-webapp-server.onrender.com/events/${_id}`, {
+      await axios.put(`${API_BASE}/events/${_id}`, {
         title,
         start,
         end: isRange && end ? end : undefined,
@@ -174,7 +176,7 @@ export default function Admin_Calendar() {
     const { _id } = editEventData;
     if (!_id) return;
     try {
-      await axios.delete(`https://juanlms-webapp-server.onrender.com/events/${_id}`);
+      await axios.delete(`${API_BASE}/events/${_id}`);
       await fetchEvents();
       setShowEditModal(false);
     } catch {

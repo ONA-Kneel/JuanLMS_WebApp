@@ -6,6 +6,8 @@ import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function ResetPassword() {
   // --- STATE ---
   const [personalemail, setPersonalEmail] = useState('');
@@ -28,7 +30,7 @@ export default function ResetPassword() {
     }
     setLoading(true);
     try {
-      const response = await axios.post('https://juanlms-webapp-server.onrender.com/reset-password', {
+      const response = await axios.post(`${API_BASE}/reset-password`, {
         personalemail,
         otp,
         newPassword

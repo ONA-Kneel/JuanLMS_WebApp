@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const studentAssignmentSchema = new mongoose.Schema({
   studentId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'users',
+    ref: 'User',
     required: true
   },
   trackName: {

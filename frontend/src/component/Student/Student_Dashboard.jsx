@@ -10,6 +10,8 @@ import Login from "../Login";
 import ProfileMenu from "../ProfileMenu";
 import { Link } from 'react-router-dom';
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Student_Dashboard() {
   // Define the classTitles object
   const [classes, setClasses] = useState([]);
@@ -23,7 +25,7 @@ export default function Student_Dashboard() {
     async function fetchClasses() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("https://juanlms-webapp-server.onrender.com/classes", {
+        const res = await fetch(`${API_BASE}/classes`, {
           headers: {
             "Authorization": `Bearer ${token}`,
           },
@@ -37,7 +39,7 @@ export default function Student_Dashboard() {
         const progressMap = {};
         for (const cls of filtered) {
           // Fetch lessons for this class
-          const lessonRes = await fetch(`https://juanlms-webapp-server.onrender.com/lessons?classID=${cls.classID}`, {
+          const lessonRes = await fetch(`${API_BASE}/lessons?classID=${cls.classID}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const lessons = await lessonRes.json();
@@ -48,7 +50,7 @@ export default function Student_Dashboard() {
               for (const file of lesson.files) {
                 // Fetch progress for this file
                 try {
-                  const progRes = await fetch(`https://juanlms-webapp-server.onrender.com/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
+                  const progRes = await fetch(`${API_BASE}/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                   });
                   const prog = await progRes.json();

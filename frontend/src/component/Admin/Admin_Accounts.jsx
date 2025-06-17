@@ -5,6 +5,8 @@ import editIcon from "../../assets/editing.png";
 import archiveIcon from "../../assets/archive.png";
 import axios from "axios";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Admin_Accounts() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -93,7 +95,7 @@ export default function Admin_Accounts() {
   // Fetch users on mount and after successful account creation
   const fetchUsers = async (page = 1, limit = ITEMS_PER_PAGE) => {
     try {
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/users?page=${page}&limit=${limit}`);
+      const res = await fetch(`${API_BASE}/users?page=${page}&limit=${limit}`);
       const data = await res.json();
       if (res.ok) {
         setUsers(data.users);
@@ -144,7 +146,7 @@ export default function Admin_Accounts() {
 
   useEffect(() => {
     if (showArchivedTable) {
-      fetch('https://juanlms-webapp-server.onrender.com/users/archived-users')
+      fetch(`${API_BASE}/users/archived-users`)
         .then(res => res.json())
         .then(data => setArchivedUsers(data));
     }
@@ -255,7 +257,7 @@ export default function Admin_Accounts() {
       const token = localStorage.getItem('token');
 
       try {
-        const res = await axios.post('https://juanlms-webapp-server.onrender.com/users', accountData, {
+        const res = await axios.post(`${API_BASE}/users`, accountData, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -293,7 +295,7 @@ export default function Admin_Accounts() {
         updatedUserID = `${formData.role.charAt(0).toUpperCase()}${randomNum}`;
       }
 
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/users/${editingUser._id}`, {
+      const res = await fetch(`${API_BASE}/users/${editingUser._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -423,7 +425,7 @@ export default function Admin_Accounts() {
       return;
     }
 
-    const res = await fetch(`https://juanlms-webapp-server.onrender.com/users/archive/${userToArchive._id}`, {
+    const res = await fetch(`${API_BASE}/users/archive/${userToArchive._id}`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -442,7 +444,7 @@ export default function Admin_Accounts() {
       setTimeout(() => setShowArchivePasswordModal(false), 2000);
       fetchUsers(); // Refresh the users list from the backend
       if (showArchivedTable) {
-        fetch('https://juanlms-webapp-server.onrender.com/users/archived-users')
+        fetch(`${API_BASE}/users/archived-users`)
           .then(res => res.json())
           .then(data => setArchivedUsers(data));
       }
@@ -460,7 +462,7 @@ export default function Admin_Accounts() {
   };
 
   const handleRecover = async (user) => {
-    const res = await fetch(`https://juanlms-webapp-server.onrender.com/users/archived-users/${user._id}/recover`, {
+    const res = await fetch(`${API_BASE}/users/archived-users/${user._id}/recover`, {
       method: 'POST'
     });
     if (res.ok) {

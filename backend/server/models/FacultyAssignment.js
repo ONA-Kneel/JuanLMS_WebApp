@@ -1,9 +1,10 @@
 import mongoose from 'mongoose';
+import User from './User.js'
 
 const facultyAssignmentSchema = new mongoose.Schema({
   facultyId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'users',
+    ref: 'User',
     required: true
   },
   trackName: {

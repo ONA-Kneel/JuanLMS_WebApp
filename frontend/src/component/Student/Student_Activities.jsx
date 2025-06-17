@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Student_Activities() {
   const [activeTab, setActiveTab] = useState("upcoming");
   const [assignments, setAssignments] = useState([]);
@@ -27,13 +29,13 @@ export default function Student_Activities() {
       try {
         const token = localStorage.getItem('token');
         // Fetch all classes for the student
-        const resClasses = await fetch('https://juanlms-webapp-server.onrender.com/classes/my-classes', {
+        const resClasses = await fetch(`${API_BASE}/classes/my-classes`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const classes = await resClasses.json();
         let allAssignments = [];
         for (const cls of classes) {
-          const res = await fetch(`https://juanlms-webapp-server.onrender.com/assignments?classID=${cls._id}`, {
+          const res = await fetch(`${API_BASE}/assignments?classID=${cls._id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const data = await res.json();
@@ -160,7 +162,7 @@ export default function Student_Activities() {
                   const formData = new FormData();
                   formData.append('assignmentId', selectedAssignment._id);
                   formData.append('file', submissionFile);
-                  const res = await fetch('https://juanlms-webapp-server.onrender.com/submissions', {
+                  const res = await fetch(`${API_BASE}/submissions`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` },
                     body: formData

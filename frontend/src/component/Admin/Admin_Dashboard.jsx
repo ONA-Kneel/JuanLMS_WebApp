@@ -6,13 +6,15 @@ import ProfileModal from "../ProfileModal"; // reuse if you want it for faculty 
 // import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../ProfileMenu";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Admin_Dashboard() {
   const [recentAuditLogs, setRecentAuditLogs] = useState([]);
   const [accountCounts, setAccountCounts] = useState({ admin: 0, faculty: 0, student: 0 });
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    fetch("https://juanlms-webapp-server.onrender.com/audit-logs?page=1&limit=5", {
+    fetch(`${API_BASE}/audit-logs?page=1&limit=5`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -21,7 +23,7 @@ export default function Admin_Dashboard() {
       .then(data => {
         if (data && data.logs) setRecentAuditLogs(data.logs);
       });
-    fetch("https://juanlms-webapp-server.onrender.com/user-counts", {
+    fetch(`${API_BASE}/user-counts`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }

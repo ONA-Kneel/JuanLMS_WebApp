@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function QuizTab({ onClose, onAssignmentCreated, alwaysRequireFileUploadForAssignment = false }) {
     const { classId } = useParams();
     const [activityType, setActivityType] = useState("quiz"); // 'quiz' or 'assignment'
@@ -107,7 +109,7 @@ export default function QuizTab({ onClose, onAssignmentCreated, alwaysRequireFil
             setPendingSavePayload(payload);
             // Fetch classes if not already fetched
             if (availableClasses.length === 0) {
-                fetch('http://localhost:5000/classes/my-classes', {
+                fetch(`${API_BASE}/classes/my-classes`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 })
                     .then(res => res.json())
@@ -126,7 +128,7 @@ export default function QuizTab({ onClose, onAssignmentCreated, alwaysRequireFil
             payload.classIDs = selectedClassIDs;
         }
         try {
-            const res = await fetch('https://juanlms-webapp-server.onrender.com/assignments', {
+            const res = await fetch(`${API_BASE}/assignments`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

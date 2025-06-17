@@ -7,13 +7,11 @@ import interactionPlugin from "@fullcalendar/interaction";
 
 import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
-import generateEvent from "../../assets/generateEvent.png";
-import createEvent from "../../assets/createEvent.png";
-import editEvent from "../../assets/editEvent.png";
 import ProfileModal from "../ProfileModal";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Faculty_Calendar() {
-  const sidebarColor = "#002366";
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [holidays, setHolidays] = useState([]);
   const [adminEvents, setAdminEvents] = useState([]);
@@ -27,7 +25,7 @@ export default function Faculty_Calendar() {
     (async () => {
       setLoadingEvents(true);
       try {
-        const res = await axios.get("https://juanlms-webapp-server.onrender.com/events");
+        const res = await axios.get(`${API_BASE}/events`);
         setAdminEvents(res.data.map(ev => ({
           ...ev,
           start: ev.start ? ev.start.slice(0, 16) : '',
@@ -64,7 +62,7 @@ export default function Faculty_Calendar() {
       try {
         const token = localStorage.getItem('token');
         // Fetch all classes the faculty teaches
-        const resClasses = await fetch('https://juanlms-webapp-server.onrender.com/classes', {
+        const resClasses = await fetch(`${API_BASE}/classes`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const classes = await resClasses.json();
@@ -73,7 +71,7 @@ export default function Faculty_Calendar() {
         const myClasses = classes.filter(cls => cls.facultyID === userId || cls.facultyID === userId?.toString());
         let events = [];
         for (const cls of myClasses) {
-          const res = await fetch(`https://juanlms-webapp-server.onrender.com/assignments?classID=${cls._id}`, {
+          const res = await fetch(`${API_BASE}/assignments?classID=${cls._id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const data = await res.json();

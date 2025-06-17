@@ -6,6 +6,8 @@ import dropdown from "../assets/dropdown.png";
 import ProfileModal from "./ProfileModal";
 import axios from "axios";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function ProfileMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [modalIsOpen, setModalIsOpen] = useState(false);
@@ -17,7 +19,7 @@ export default function ProfileMenu() {
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || !user._id) return;
     try {
-      const res = await axios.get(`https://juanlms-webapp-server.onrender.com/users/${user._id}`);
+      const res = await axios.get(`${API_BASE}/users/${user._id}`);
       setUserInfo(res.data);
       localStorage.setItem('user', JSON.stringify(res.data));
     } catch {
@@ -33,7 +35,7 @@ export default function ProfileMenu() {
   // Helper to get the correct profile image URL
   const getProfileImg = () => {
     if (userInfo.profilePic) {
-      return `https://juanlms-webapp-server.onrender.com/uploads/${userInfo.profilePic}`;
+      return `${API_BASE}/uploads/${userInfo.profilePic}`;
     }
     return profileicon;
   };

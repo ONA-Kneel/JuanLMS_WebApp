@@ -5,6 +5,8 @@ import archiveIcon from "../../assets/archive.png";
 import createEventIcon from "../../assets/createEvent.png";
 import * as XLSX from "xlsx";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function FacultyCreateClass() {
   const [studentName, setStudentName] = useState("");
   const [students, setStudents] = useState([]);
@@ -28,7 +30,7 @@ export default function FacultyCreateClass() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://juanlms-webapp-server.onrender.com/users/search?q=${query}`, {
+      const response = await fetch(`${API_BASE}/users/search?q=${query}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -98,7 +100,7 @@ export default function FacultyCreateClass() {
     };
 
     try {
-      const res = await fetch("https://juanlms-webapp-server.onrender.com/classes", {
+      const res = await fetch(`${API_BASE}/classes`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -147,7 +149,7 @@ export default function FacultyCreateClass() {
           continue;
         }
         try {
-          const res = await fetch(`https://juanlms-webapp-server.onrender.com/users/search?q=${encodeURIComponent(email)}`);
+          const res = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(email)}`);
           const users = await res.json();
           console.log('Searching for:', email, 'Got:', users);
           const found = users.find(

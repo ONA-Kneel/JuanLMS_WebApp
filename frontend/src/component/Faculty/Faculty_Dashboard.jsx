@@ -6,6 +6,8 @@ import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 // import createEvent from "../../assets/createEvent.png";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Faculty_Dashboard() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -16,7 +18,7 @@ export default function Faculty_Dashboard() {
     async function fetchClasses() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("https://juanlms-webapp-server.onrender.com/classes", {
+        const res = await fetch(`${API_BASE}/classes`, {
           headers: {
             "Authorization": `Bearer ${token}`,
           },

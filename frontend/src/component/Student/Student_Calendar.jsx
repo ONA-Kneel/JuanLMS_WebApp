@@ -9,6 +9,8 @@ import "@fullcalendar/common/main.css";
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Student_Calendar() {
   const [adminEvents, setAdminEvents] = useState([]);
   const [holidays, setHolidays] = useState([]);
@@ -22,7 +24,7 @@ export default function Student_Calendar() {
     (async () => {
       setLoadingEvents(true);
       try {
-        const res = await axios.get("https://juanlms-webapp-server.onrender.com/events");
+        const res = await axios.get(`${API_BASE}/events`);
         setAdminEvents(res.data.map(ev => ({
           ...ev,
           start: ev.start ? ev.start.slice(0, 16) : '',

@@ -7,6 +7,8 @@ import editIcon from "../../assets/editing.png";
 import archiveIcon from "../../assets/archive.png";
 import viewIcon from "../../assets/view.png";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Admin_AcademicSettings() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingYear, setEditingYear] = useState(null);
@@ -48,7 +50,7 @@ export default function Admin_AcademicSettings() {
 
   const fetchSchoolYears = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/schoolyears');
+      const res = await fetch(`${API_BASE}/api/schoolyears`);
       const data = await res.json();
       if (res.ok) {
         setSchoolYears(data);
@@ -63,7 +65,7 @@ export default function Admin_AcademicSettings() {
   const fetchTerms = async (year) => {
     try {
       const schoolYearName = `${year.schoolYearStart}-${year.schoolYearEnd}`;
-      const res = await fetch(`http://localhost:5000/api/terms/schoolyear/${schoolYearName}`);
+      const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`);
       if (res.ok) {
         const data = await res.json();
         setTerms(data);
@@ -124,7 +126,7 @@ export default function Admin_AcademicSettings() {
 
       if (window.confirm("Save changes to this school year?")) {
         try {
-          const res = await fetch(`http://localhost:5000/api/schoolyears/${editingYear._id}`, {
+          const res = await fetch(`${API_BASE}/api/schoolyears/${editingYear._id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -165,7 +167,7 @@ export default function Admin_AcademicSettings() {
       }
     } else {
       try {
-        const res = await fetch('http://localhost:5000/api/schoolyears', {
+        const res = await fetch(`${API_BASE}/api/schoolyears`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -195,7 +197,7 @@ export default function Admin_AcademicSettings() {
   const handleDelete = async (year) => {
     if (window.confirm("Are you sure you want to set this school year to inactive?")) {
       try {
-        const res = await fetch(`http://localhost:5000/api/schoolyears/${year._id}`, {
+        const res = await fetch(`${API_BASE}/api/schoolyears/${year._id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'inactive' })
@@ -243,7 +245,7 @@ export default function Admin_AcademicSettings() {
   const handleArchiveTerm = async (term) => {
     if (window.confirm(`Are you sure you want to archive ${term.termName}?`)) {
       try {
-        const res = await fetch(`http://localhost:5000/api/terms/${term._id}/archive`, {
+        const res = await fetch(`${API_BASE}/api/terms/${term._id}/archive`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -266,7 +268,7 @@ export default function Admin_AcademicSettings() {
   const handleActivateTerm = async (term) => {
     if (!window.confirm(`Are you sure you want to activate ${term.termName}?`)) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/terms/${term._id}`, {
+      const res = await fetch(`${API_BASE}/api/terms/${term._id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'active' })
@@ -300,7 +302,7 @@ export default function Admin_AcademicSettings() {
       }
 
     try {
-      const res = await fetch('http://localhost:5000/api/terms', {
+      const res = await fetch(`${API_BASE}/api/terms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -330,7 +332,7 @@ export default function Admin_AcademicSettings() {
     const newStatus = year.status === 'active' ? 'inactive' : 'active';
     if (!window.confirm(`Set school year ${year.schoolYearStart}-${year.schoolYearEnd} as ${newStatus}?`)) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/schoolyears/${year._id}`, {
+      const res = await fetch(`${API_BASE}/api/schoolyears/${year._id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })

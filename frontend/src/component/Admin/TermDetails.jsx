@@ -2,6 +2,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 // Import icons
 import editIcon from "../../assets/editing.png";
 import archiveIcon from "../../assets/archive.png";
@@ -185,7 +188,7 @@ export default function TermDetails() {
       try {
         setLoading(true);
 
-        const response = await fetch(`http://localhost:5000/api/terms/${termId}`);
+        const response = await fetch(`${API_BASE}/api/terms/${termId}`);
         const data = await response.json();
         setTermDetails(data);
 
@@ -213,7 +216,7 @@ export default function TermDetails() {
 
   const fetchTracks = async () => {
     try {
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/tracks/term/${termDetails.termName}`);
+      const res = await fetch(`${API_BASE}/api/tracks/term/${termDetails.termName}`);
       if (res.ok) {
         const data = await res.json();
         setTracks(data);
@@ -229,7 +232,7 @@ export default function TermDetails() {
   const fetchFaculties = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/users/active`, {
+      const res = await fetch(`${API_BASE}/users/active`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -252,7 +255,7 @@ export default function TermDetails() {
   const fetchStudents = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/users/active`, {
+      const res = await fetch(`${API_BASE}/users/active`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -284,7 +287,7 @@ export default function TermDetails() {
     try {
       const allStrands = [];
       for (const track of tracks) {
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/strands/track/${track.trackName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
+        const res = await fetch(`${API_BASE}/api/strands/track/${track.trackName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
         if (res.ok) {
           const data = await res.json();
           allStrands.push(...data);
@@ -314,7 +317,7 @@ export default function TermDetails() {
       for (const track of tracks) {
         const strandsInTrack = strands.filter(strand => strand.trackName === track.trackName);
         for (const strand of strandsInTrack) {
-          const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
+          const res = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
           if (res.ok) {
             const data = await res.json();
             allSections.push(...data);
@@ -343,7 +346,7 @@ export default function TermDetails() {
     }
 
     try {
-      const res = await fetch('https://juanlms-webapp-server.onrender.com/api/tracks', {
+      const res = await fetch(`${API_BASE}/api/tracks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -387,7 +390,7 @@ export default function TermDetails() {
 
     if (window.confirm("Save changes to this track?")) {
       try {
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/tracks/${editingTrack._id}`, {
+        const res = await fetch(`${API_BASE}/api/tracks/${editingTrack._id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -426,7 +429,7 @@ export default function TermDetails() {
     }
     if (window.confirm("Are you sure you want to delete this track?")) {
       try {
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/tracks/${track._id}`, {
+        const res = await fetch(`${API_BASE}/api/tracks/${track._id}`, {
           method: 'DELETE'
         });
 
@@ -461,7 +464,7 @@ export default function TermDetails() {
     }
 
     try {
-      const res = await fetch('https://juanlms-webapp-server.onrender.com/api/strands', {
+      const res = await fetch(`${API_BASE}/api/strands`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -513,7 +516,7 @@ export default function TermDetails() {
 
     if (window.confirm("Save changes to this strand?")) {
       try {
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/strands/${editingStrand._id}`, {
+        const res = await fetch(`${API_BASE}/api/strands/${editingStrand._id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -567,7 +570,7 @@ export default function TermDetails() {
 
     if (window.confirm("Are you sure you want to delete this strand?")) {
       try {
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/strands/${strand._id}`, {
+        const res = await fetch(`${API_BASE}/api/strands/${strand._id}`, {
           method: 'DELETE'
         });
 
@@ -603,7 +606,7 @@ export default function TermDetails() {
     }
 
     try {
-      const res = await fetch('https://juanlms-webapp-server.onrender.com/api/sections', {
+      const res = await fetch(`${API_BASE}/api/sections`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -660,7 +663,7 @@ export default function TermDetails() {
 
     if (window.confirm("Save changes to this section?")) {
       try {
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/sections/${editingSection._id}`, {
+        const res = await fetch(`${API_BASE}/api/sections/${editingSection._id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -715,7 +718,7 @@ export default function TermDetails() {
 
     if (window.confirm("Are you sure you want to delete this section?")) {
       try {
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/sections/${section._id}`, {
+        const res = await fetch(`${API_BASE}/api/sections/${section._id}`, {
           method: 'DELETE'
         });
 
@@ -780,7 +783,7 @@ export default function TermDetails() {
       if (value.trim()) {
         try {
           const token = localStorage.getItem('token');
-          const res = await fetch(`https://juanlms-webapp-server.onrender.com/users/search?q=${encodeURIComponent(value)}`, {
+          const res = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(value)}`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
@@ -836,7 +839,7 @@ export default function TermDetails() {
       if (value.trim()) {
         try {
           const token = localStorage.getItem('token');
-          const res = await fetch(`https://juanlms-webapp-server.onrender.com/users/search?q=${encodeURIComponent(value)}`, {
+          const res = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(value)}`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
@@ -890,7 +893,7 @@ export default function TermDetails() {
       setFacultyError('');
       const token = localStorage.getItem('token');
 
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/faculty-assignments?termId=${termDetails._id}`, {
+      const res = await fetch(`${API_BASE}/api/faculty-assignments?termId=${termDetails._id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -920,7 +923,7 @@ export default function TermDetails() {
       const token = localStorage.getItem('token');
 
       // Assuming a new endpoint for student assignments: /api/student-assignments
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/student-assignments?termId=${termDetails._id}`, {
+      const res = await fetch(`${API_BASE}/api/student-assignments?termId=${termDetails._id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -987,7 +990,7 @@ export default function TermDetails() {
     try {
       const token = localStorage.getItem('token');
 
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/faculty-assignments`, {
+      const res = await fetch(`${API_BASE}/api/faculty-assignments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1081,7 +1084,7 @@ export default function TermDetails() {
       try {
         const token = localStorage.getItem('token');
 
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/faculty-assignments/${editingFacultyAssignment._id}`, {
+        const res = await fetch(`${API_BASE}/api/faculty-assignments/${editingFacultyAssignment._id}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -1121,7 +1124,7 @@ export default function TermDetails() {
       try {
         const token = localStorage.getItem('token');
 
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/faculty-assignments/${assignment._id}`, {
+        const res = await fetch(`${API_BASE}/api/faculty-assignments/${assignment._id}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -1164,7 +1167,7 @@ export default function TermDetails() {
     try {
       const token = localStorage.getItem('token');
 
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/student-assignments`, {
+      const res = await fetch(`${API_BASE}/api/student-assignments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1240,7 +1243,7 @@ export default function TermDetails() {
       try {
         const token = localStorage.getItem('token');
 
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/student-assignments/${editingStudentAssignment._id}`, {
+        const res = await fetch(`${API_BASE}/api/student-assignments/${editingStudentAssignment._id}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -1278,7 +1281,7 @@ export default function TermDetails() {
       try {
         const token = localStorage.getItem('token');
 
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/student-assignments/${assignment._id}`, {
+        const res = await fetch(`${API_BASE}/api/student-assignments/${assignment._id}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -1366,7 +1369,7 @@ export default function TermDetails() {
 
     // Check for existing tracks in the system
     try {
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/tracks/term/${termDetails.termName}`);
+      const res = await fetch(`${API_BASE}/api/tracks/term/${termDetails.termName}`);
       if (res.ok) {
         const existingTracks = await res.json();
         tracksToValidate.forEach((track, index) => {
@@ -1467,7 +1470,7 @@ export default function TermDetails() {
     setExcelError('');
 
     try {
-      const res = await fetch('https://juanlms-webapp-server.onrender.com/api/tracks/bulk', {
+      const res = await fetch(`${API_BASE}/api/tracks/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tracks: validTracks })
@@ -1567,7 +1570,7 @@ export default function TermDetails() {
     for (const track of tracks) {
       if (track.status === 'active') {
         try {
-          const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/strands/track/${track.trackName}`);
+          const res = await fetch(`${API_BASE}/api/strands/track/${track.trackName}`);
           if (res.ok) {
             const fetchedStrands = await res.json();
             allStrands.push(...fetchedStrands);
@@ -1725,7 +1728,7 @@ export default function TermDetails() {
       // Create strands one by one since they're dependent on tracks
       const createdStrands = [];
       for (const strand of validStrands) {
-        const res = await fetch('https://juanlms-webapp-server.onrender.com/api/strands', {
+        const res = await fetch(`${API_BASE}/api/strands`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(strand)
@@ -1840,7 +1843,7 @@ export default function TermDetails() {
     // Get all active strands in the system
     const activeStrandsInSystem = [];
     for (const track of activeTracks) {
-      const res = await fetch(`https://juanlms-webapp-server.onrender.coms-webapp-server.onrender.com/api/strands/track/${track.trackName}`);
+      const res = await fetch(`${API_BASE}/api/strands/track/${track.trackName}`);
       if (res.ok) {
         const strands = await res.json();
         const activeStrands = strands.filter(strand => strand.status === 'active');
@@ -1852,7 +1855,7 @@ export default function TermDetails() {
     for (const track of activeTracks) {
       const strandsInTrack = activeStrandsInSystem.filter(s => s.trackName === track.trackName);
       for (const strand of strandsInTrack) {
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
+        const res = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
         if (res.ok) {
           const sections = await res.json();
           const activeSections = sections.filter(section => section.status === 'active');
@@ -2016,7 +2019,7 @@ export default function TermDetails() {
       // Create sections one by one since they're dependent on strands
       const createdSections = [];
       for (const section of validSections) {
-        const res = await fetch('https://juanlms-webapp-server.onrender.com/api/sections', {
+        const res = await fetch(`${API_BASE}/api/sections`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(section)
@@ -2111,7 +2114,7 @@ export default function TermDetails() {
       // Sheet 5: Available Strands
       const activeStrandsInSystem = [];
       for (const track of activeTracks) {
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/strands/track/${track.trackName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
+        const res = await fetch(`${API_BASE}/api/strands/track/${track.trackName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
         if (res.ok) {
           const fetchedStrands = await res.json();
           activeStrandsInSystem.push(...fetchedStrands.filter(s => s.status === 'active').map(s => ({ ...s, trackName: track.trackName })));
@@ -2133,7 +2136,7 @@ export default function TermDetails() {
       for (const track of activeTracks) {
         const strandsInTrack = activeStrandsInSystem.filter(s => s.trackName === track.trackName);
         for (const strand of strandsInTrack) {
-          const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
+          const res = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
           if (res.ok) {
             const fetchedSections = await res.json();
             activeSectionsInSystem.push(...fetchedSections.filter(sec => sec.status === 'active').map(sec => ({ ...sec, trackName: track.trackName, strandName: strand.strandName })));
@@ -2193,13 +2196,13 @@ export default function TermDetails() {
     for (const track of tracks) {
       if (track.status === 'active') {
         try {
-          const strandsRes = await fetch(`https://juanlms-webapp-server.onrender.com/api/strands/track/${track.trackName}`);
+          const strandsRes = await fetch(`${API_BASE}/api/strands/track/${track.trackName}`);
           if (strandsRes.ok) {
             const fetchedStrands = await strandsRes.json();
             for (const strand of fetchedStrands.filter(s => s.status === 'active')) {
               activeStrandsMap.set(`${track.trackName}-${strand.strandName}`, strand);
               try {
-                const sectionsRes = await fetch(`https://juanlms-webapp-server.onrender.com/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
+                const sectionsRes = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
                 if (sectionsRes.ok) {
                   const fetchedSections = await sectionsRes.json();
                   for (const section of fetchedSections.filter(sec => sec.status === 'active')) {
@@ -2221,7 +2224,7 @@ export default function TermDetails() {
     const existingAssignmentsInSystem = new Set();
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/faculty-assignments?termId=${termDetails._id}`, {
+      const res = await fetch(`${API_BASE}/api/faculty-assignments?termId=${termDetails._id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -2424,7 +2427,7 @@ export default function TermDetails() {
           continue;
         }
 
-        const res = await fetch('https://juanlms-webapp-server.onrender.com/api/faculty-assignments', {
+        const res = await fetch(`${API_BASE}/api/faculty-assignments`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -2598,13 +2601,13 @@ export default function TermDetails() {
     for (const track of tracks) {
       if (track.status === 'active') {
         try {
-          const strandsRes = await fetch(`https://juanlms-webapp-server.onrender.com/api/strands/track/${track.trackName}`);
+          const strandsRes = await fetch(`${API_BASE}/api/strands/track/${track.trackName}`);
           if (strandsRes.ok) {
             const fetchedStrands = await strandsRes.json();
             for (const strand of fetchedStrands.filter(s => s.status === 'active')) {
               activeStrandsMap.set(`${track.trackName}-${strand.strandName}`, strand);
               try {
-                const sectionsRes = await fetch(`https://juanlms-webapp-server.onrender.com/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
+                const sectionsRes = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
                 if (sectionsRes.ok) {
                   const fetchedSections = await sectionsRes.json();
                   for (const section of fetchedSections.filter(sec => sec.status === 'active')) {
@@ -2630,7 +2633,7 @@ export default function TermDetails() {
     const existingAssignmentsInSystem = new Set();
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/student-assignments?termId=${termDetails._id}`, {
+      const res = await fetch(`${API_BASE}/api/student-assignments?termId=${termDetails._id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -2858,7 +2861,7 @@ export default function TermDetails() {
           continue;
         }
 
-        const res = await fetch('https://juanlms-webapp-server.onrender.coms-webapp-server.onrender.com/api/student-assignments', {
+        const res = await fetch('${API_BASE}/api/student-assignments', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -2908,7 +2911,7 @@ export default function TermDetails() {
   const fetchSubjects = async () => {
     try {
       setSubjectError('');
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/subjects/term/${termDetails.termName}`);
+      const res = await fetch(`${API_BASE}/api/subjects/term/${termDetails.termName}`);
       if (res.ok) {
         const data = await res.json();
         setSubjects(data);
@@ -2934,7 +2937,7 @@ export default function TermDetails() {
       return;
     }
     try {
-      const res = await fetch('https://juanlms-webapp-server.onrender.com/api/subjects', {
+      const res = await fetch(`${API_BASE}/api/subjects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2975,7 +2978,7 @@ export default function TermDetails() {
       return;
     }
     try {
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/subjects/${editingSubject._id}`, {
+      const res = await fetch(`${API_BASE}/api/subjects/${editingSubject._id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3011,7 +3014,7 @@ export default function TermDetails() {
 
     if (window.confirm('Are you sure you want to delete this subject?')) {
       try {
-        const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/subjects/${subject._id}`, { method: 'DELETE' });
+        const res = await fetch(`${API_BASE}/api/subjects/${subject._id}`, { method: 'DELETE' });
         if (res.ok) {
           await fetchSubjects();
         } else {
@@ -3031,7 +3034,7 @@ export default function TermDetails() {
     // Fetch all existing subjects in the system (for absolute uniqueness)
     let allSubjects = [];
     try {
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/subjects`);
+      const res = await fetch(`${API_BASE}/api/subjects`);
       if (res.ok) {
         allSubjects = await res.json();
       }
@@ -3136,7 +3139,7 @@ export default function TermDetails() {
     const uploadedSubjectNames = new Set();
     let allSubjects = [];
     try {
-      const res = await fetch(`https://juanlms-webapp-server.onrender.com/api/subjects`);
+      const res = await fetch(`${API_BASE}/api/subjects`);
       if (res.ok) {
         allSubjects = await res.json();
       }
@@ -3241,7 +3244,7 @@ export default function TermDetails() {
     try {
       const createdSubjects = [];
       for (const subject of validSubjects) {
-        const res = await fetch('https://juanlms-webapp-server.onrender.com/api/subjects', {
+        const res = await fetch(`${API_BASE}/api/subjects`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -4770,14 +4773,13 @@ Actual import to database is coming soon!`;
                       <div>
                         <label htmlFor="strandNameFaculty" className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
                         <select
-                          disabled={termDetails.status === 'archived'}
                           id="strandNameFaculty"
                           name="strandId"
                           value={facultyFormData.strandId}
                           onChange={handleChangeFacultyForm}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           required
-                          disabled={!facultyFormData.trackId}
+                          disabled={!facultyFormData.trackId || termDetails.status === 'archived'}
                         >
                           <option value="">Select a Strand</option>
                           {filteredStrandsForFaculty.map(strand => (

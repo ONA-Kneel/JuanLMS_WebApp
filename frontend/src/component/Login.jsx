@@ -10,6 +10,8 @@ import axios from 'axios';
 import { Eye, EyeOff } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Login() {
   const navigate = useNavigate();
 
@@ -50,7 +52,7 @@ export default function Login() {
   // --- HANDLER: Auto-login using stored credentials ---
   const handleAutoLogin = async (email, password) => {
     try {
-      const response = await axios.post('https://juanlms-webapp-server.onrender.com/login', { email, password });
+      const response = await axios.post(`${API_BASE}/login`, { email, password });
       const { token } = response.data;
   
       // Decode JWT to extract user info and role
@@ -58,7 +60,7 @@ export default function Login() {
       const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
   
       // If user has a profile picture, build the image URL
-      const imageUrl = profilePic ? `https://juanlms-webapp-server.onrender.com/uploads/${profilePic}` : null;
+      const imageUrl = profilePic ? `${API_BASE}/uploads/${profilePic}` : null;
   
       // Store user info and token in localStorage
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
@@ -114,7 +116,7 @@ export default function Login() {
     const password = e.target.elements[1].value;
   
     try {
-      const response = await axios.post('https://juanlms-webapp-server.onrender.com/login', { email, password });
+      const response = await axios.post(`${API_BASE}/login`, { email, password });
       const { token } = response.data;
   
       // Reset failed attempts on successful login
@@ -124,7 +126,7 @@ export default function Login() {
       const decoded = jwtDecode(token);
       const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
   
-      const imageUrl = profilePic ? `https://juanlms-webapp-server.onrender.com/uploads/${profilePic}` : null;
+      const imageUrl = profilePic ? `${API_BASE}/uploads/${profilePic}` : null;
   
       // Store user info and token in localStorage
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));

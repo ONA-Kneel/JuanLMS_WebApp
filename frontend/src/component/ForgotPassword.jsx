@@ -6,6 +6,8 @@ import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function ForgotPassword() {
   // --- STATE ---
   const [email, setEmail] = useState('');
@@ -25,7 +27,7 @@ export default function ForgotPassword() {
     setError('');
     setMessage('');
     try {
-      const response = await axios.post('https://juanlms-webapp-server.onrender.com/forgot-password', { email });
+      const response = await axios.post(`${API_BASE}/forgot-password`, { email });
       setMessage(response.data.message || 'If your email is registered, a reset link or OTP has been sent.');
       setStep(2); // Move to next step
     } catch (err) {
@@ -42,7 +44,7 @@ export default function ForgotPassword() {
     setError('');
     setMessage('');
     try {
-      await axios.post('https://juanlms-webapp-server.onrender.com/validate-otp', {
+      await axios.post(`${API_BASE}/validate-otp`, {
         personalemail: email,
         otp,
       });
@@ -67,7 +69,7 @@ export default function ForgotPassword() {
       return;
     }
     try {
-      const response = await axios.post('https://juanlms-webapp-server.onrender.com/reset-password', {
+      const response = await axios.post(`${API_BASE}/reset-password`, {
         personalemail: email,
         otp,
         newPassword,

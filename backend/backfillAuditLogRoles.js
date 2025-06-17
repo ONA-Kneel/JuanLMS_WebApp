@@ -42,7 +42,7 @@ async function main() {
   await client.connect();
   const db = client.db(dbName);
   const auditLogs = db.collection("AuditLogs");
-  const users = db.collection("Users");
+  const users = db.collection("users");
 
   // Process every log in the collection
   const cursor = auditLogs.find({});
