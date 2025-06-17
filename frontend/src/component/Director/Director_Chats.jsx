@@ -12,6 +12,8 @@ import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Director_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -26,17 +28,19 @@ export default function Director_Chats() {
     const stored = localStorage.getItem("recentChats_director");
     return stored ? JSON.parse(stored) : [];
   });
+  const [lastMessage, setLastMessage] = useState(null);
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
-  const navigate = useNavigate();
 
-  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const API_URL = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
   const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
 
   const storedUser = localStorage.getItem("user");
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!currentUserId) {
@@ -103,20 +107,10 @@ export default function Director_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const res = await axios.get(`${API_BASE}/users`, {
-          headers: {
-            ...(token && { Authorization: `Bearer ${token}` }),
-          },
-        });
-        if (!Array.isArray(res.data)) {
-          setUsers([]);
-          setSelectedChat(null);
-          localStorage.removeItem("selectedChatId_director");
-          return;
-        }
-        const otherUsers = res.data.filter((user) => user._id !== currentUserId);
-        setUsers(otherUsers);
+        const res = await axios.get(`${API_BASE}/users`);
+        // Support both array and paginated object
+        const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
+        setUsers(userArray);
         setSelectedChat(null);
         localStorage.removeItem("selectedChatId_director");
       } catch (err) {
@@ -261,21 +255,12 @@ export default function Director_Chats() {
       if (lastMsg) {
         let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
         let text = (lastMsg.message) ? lastMsg.message : (lastMsg.fileUrl ? "File sent" : "");
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: { prefix, text }
-        }));
+        setLastMessage({ prefix, text });
       } else {
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: null
-        }));
+        setLastMessage(null);
       }
     } else {
-      setLastMessages(prev => ({
-        ...prev,
-        [selectedChat?._id]: null
-      }));
+      setLastMessage(null);
     }
   }, [selectedChat, messages, currentUserId]);
 
@@ -467,10 +452,6 @@ export default function Director_Chats() {
                         {selectedChat.lastname}, {selectedChat.firstname}
                       </h3>
                     </div>
-                  </div>
-                  <div className="flex space-x-3">
-                    <img src={videocall} alt="Video Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
-                    <img src={voicecall} alt="Voice Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
                   </div>
                 </div>
 

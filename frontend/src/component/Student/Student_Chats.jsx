@@ -19,12 +19,14 @@ export default function Student_Chats() {
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
     const stored = localStorage.getItem("recentChats_student");
     return stored ? JSON.parse(stored) : [];
   });
+  const [lastMessage, setLastMessage] = useState(null);
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -54,7 +56,7 @@ export default function Student_Chats() {
     socket.current.emit("addUser", currentUserId);
 
     socket.current.on("getUsers", (users) => {
-      setUsers(users);
+      setOnlineUsers(users);
     });
 
     socket.current.on("getMessage", (data) => {
@@ -102,27 +104,17 @@ export default function Student_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const res = await axios.get(`${API_BASE}/users`, {
-          headers: {
-            ...(token && { Authorization: `Bearer ${token}` }),
-          },
-        });
-        if (!Array.isArray(res.data)) {
-          setUsers([]);
-          setSelectedChat(null);
-          localStorage.removeItem("selectedChatId_student");
-          return;
-        }
-        const otherUsers = res.data.filter((user) => user._id !== currentUserId);
-        setUsers(otherUsers);
+        const res = await axios.get(`${API_BASE}/users`);
+        // Support both array and paginated object
+        const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
+        setUsers(userArray);
         setSelectedChat(null);
         localStorage.removeItem("selectedChatId_student");
-      } catch (error) {
-        if (error.response && error.response.status === 401) {
+      } catch (err) {
+        if (err.response && err.response.status === 401) {
           window.location.href = '/';
         } else {
-          console.error("Error fetching users:", error);
+          console.error("Error fetching users:", err);
         }
       }
     };
@@ -260,21 +252,12 @@ export default function Student_Chats() {
       if (lastMsg) {
         let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
         let text = (lastMsg.message) ? lastMsg.message : (lastMsg.fileUrl ? "File sent" : "");
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: { prefix, text }
-        }));
+        setLastMessage({ prefix, text });
       } else {
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: null
-        }));
+        setLastMessage(null);
       }
     } else {
-      setLastMessages(prev => ({
-        ...prev,
-        [selectedChat?._id]: null
-      }));
+      setLastMessage(null);
     }
   }, [selectedChat, messages, currentUserId]);
 
@@ -466,10 +449,6 @@ export default function Student_Chats() {
                         {selectedChat.lastname}, {selectedChat.firstname}
                       </h3>
                     </div>
-                  </div>
-                  <div className="flex space-x-3">
-                    <img src={videocall} alt="Video Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
-                    <img src={voicecall} alt="Voice Call" className="w-6 h-6 cursor-pointer hover:opacity-75" />
                   </div>
                 </div>
 
