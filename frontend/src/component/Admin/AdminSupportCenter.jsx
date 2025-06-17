@@ -3,6 +3,8 @@ import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import { getAllTickets, replyToTicket } from '../../services/ticketService';
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function AdminSupportCenter() {
   const [tickets, setTickets] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -11,6 +13,8 @@ export default function AdminSupportCenter() {
   const [reply, setReply] = useState('');
   const [replyLoading, setReplyLoading] = useState(false);
   const [replyError, setReplyError] = useState('');
+  const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   useEffect(() => {
     async function fetchTickets() {
@@ -25,6 +29,31 @@ export default function AdminSupportCenter() {
       setLoading(false);
     }
     fetchTickets();
+  }, []);
+
+  useEffect(() => {
+    async function fetchAcademicYearAndTerm() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (termRes.ok) {
+          const term = await termRes.json();
+          setCurrentTerm(term);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year or term", err);
+      }
+    }
+    fetchAcademicYearAndTerm();
   }, []);
 
   async function handleReply(ticketId) {
@@ -51,7 +80,9 @@ export default function AdminSupportCenter() {
         <div className="flex justify-between items-center mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Support Center</h2>
-            <p className="text-base md:text-lg"> Academic Year and Term here | 
+            <p className="text-base md:text-lg">
+              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+              {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",

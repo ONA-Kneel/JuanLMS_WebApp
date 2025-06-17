@@ -20,6 +20,8 @@ export default function Faculty_Calendar() {
   const [showDayModal, setShowDayModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
   const [assignmentEvents, setAssignmentEvents] = useState([]);
+  const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -99,6 +101,31 @@ export default function Faculty_Calendar() {
     fetchAssignments();
   }, []);
 
+  useEffect(() => {
+    async function fetchAcademicYearAndTerm() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (termRes.ok) {
+          const term = await termRes.json();
+          setCurrentTerm(term);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year or term", err);
+      }
+    }
+    fetchAcademicYearAndTerm();
+  }, []);
+
   const allEvents = [...adminEvents, ...holidays, ...assignmentEvents];
 
   const handleDateClick = (arg) => {
@@ -121,7 +148,9 @@ export default function Faculty_Calendar() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
             <div>
               <h2 className="text-2xl md:text-3xl font-bold">Calendar</h2>
-              <p className="text-base md:text-lg"> Academic Year and Term here | 
+              <p className="text-base md:text-lg">
+                {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+                {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
                 {new Date().toLocaleDateString("en-US", {
                   weekday: "long",
                   year: "numeric",

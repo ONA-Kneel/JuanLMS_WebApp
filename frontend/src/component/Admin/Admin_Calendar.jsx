@@ -41,6 +41,8 @@ export default function Admin_Calendar() {
   const [selectedDayEvents, setSelectedDayEvents] = useState([]);
   const [showDayModal, setShowDayModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
+  const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   const formattedDate = today.toLocaleDateString("en-US", {
     weekday: "long",
@@ -217,7 +219,11 @@ export default function Admin_Calendar() {
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Calendar</h2>
-            <p className="text-base md:text-lg"> Academic Year and Term here | {formattedDate}</p>
+            <p className="text-base md:text-lg">
+              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+              {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
+              {formattedDate}
+            </p>
           </div>
           <ProfileMenu onOpen={() => setShowProfileModal(true)} />
         </div>

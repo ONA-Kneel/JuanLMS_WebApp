@@ -1,14 +1,42 @@
 import Director_Navbar from "./Director_Navbar";
-// import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import ProfileModal from "../ProfileModal";
-// import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import compClassesIcon from "../../assets/compClassesIcon.png";
-// import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Director_Dashboard() {
-  
+  const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
+
+  useEffect(() => {
+    async function fetchAcademicYearAndTerm() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (termRes.ok) {
+          const term = await termRes.json();
+          setCurrentTerm(term);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year or term", err);
+      }
+    }
+    fetchAcademicYearAndTerm();
+  }, []);
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr">
       <Director_Navbar />
@@ -17,7 +45,9 @@ export default function Director_Dashboard() {
         <div className="flex justify-between items-center mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Director Dashboard</h2>
-            <p className="text-base md:text-lg"> Academic Year and Term here | 
+            <p className="text-base md:text-lg">
+              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+              {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",

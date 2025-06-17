@@ -120,4 +120,17 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Get the current active term
+router.get('/active', async (req, res) => {
+  try {
+    const activeTerm = await Term.findOne({ status: 'active' });
+    if (!activeTerm) {
+      return res.status(404).json({ message: 'No active term found' });
+    }
+    res.json(activeTerm);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 export default router; 

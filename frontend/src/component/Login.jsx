@@ -243,7 +243,10 @@ export default function Login() {
                 Remember Me
               </label>
               <Link to="/forgot-password" className="text-blue-600 hover:underline font-poppinsr text-sm">
-                Forgot Password?
+                Forgot Password?  
+              </Link>
+              <Link to="/register" className="text-blue-600 hover:underline font-poppinsr text-sm">
+                No Account?
               </Link>
             </div>
 

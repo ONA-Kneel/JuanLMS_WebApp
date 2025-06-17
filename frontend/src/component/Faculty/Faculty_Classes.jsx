@@ -1,5 +1,5 @@
 // Faculty_Classes.jsx
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
@@ -12,6 +12,8 @@ export default function Faculty_Classes() {
   const navigate = useNavigate();
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   const currentFacultyID = localStorage.getItem("userID");
 
@@ -36,6 +38,31 @@ export default function Faculty_Classes() {
     fetchClasses();
   }, [currentFacultyID]);
 
+  useEffect(() => {
+    async function fetchAcademicYearAndTerm() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (termRes.ok) {
+          const term = await termRes.json();
+          setCurrentTerm(term);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year or term", err);
+      }
+    }
+    fetchAcademicYearAndTerm();
+  }, []);
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Faculty_Navbar />
@@ -45,7 +72,9 @@ export default function Faculty_Classes() {
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Classes</h2>
-            <p className="text-base md:text-lg"> Academic Year and Term here | 
+            <p className="text-base md:text-lg">
+              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+              {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",

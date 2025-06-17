@@ -29,6 +29,8 @@ export default function Faculty_Chats() {
     return stored ? JSON.parse(stored) : [];
   });
   const [lastMessage, setLastMessage] = useState(null);
+  const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -299,6 +301,31 @@ export default function Faculty_Chats() {
     // eslint-disable-next-line
   }, [recentChats, currentUserId]);
 
+  useEffect(() => {
+    async function fetchAcademicYearAndTerm() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (termRes.ok) {
+          const term = await termRes.json();
+          setCurrentTerm(term);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year or term", err);
+      }
+    }
+    fetchAcademicYearAndTerm();
+  }, []);
+
   return (
     <div className="flex min-h-screen h-screen max-h-screen">
       <Faculty_Navbar />
@@ -306,7 +333,9 @@ export default function Faculty_Chats() {
         <div className="flex flex-col md:flex-row justify-between items-center px-10 py-10">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Chats</h2>
-            <p className="text-base md:text-lg"> Academic Year and Term here | 
+            <p className="text-base md:text-lg">
+              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+              {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",

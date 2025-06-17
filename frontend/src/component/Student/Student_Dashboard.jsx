@@ -1,7 +1,4 @@
 import React, { useEffect, useState } from "react";
-import compClassesIcon from "../../assets/compClassesIcon.png";
-import compAssignsIcon from "../../assets/compAssignsIcon.png";
-import dueAssignsIcon from "../../assets/dueAssignsIcon.png";
 import arrowRight from "../../assets/arrowRight.png";
 
 import Student_Navbar from "./Student_Navbar";
@@ -13,13 +10,41 @@ import { Link } from 'react-router-dom';
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Student_Dashboard() {
-  // Define the classTitles object
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [classProgress, setClassProgress] = useState({}); // { classID: percent }
+  const [currentTerm, setCurrentTerm] = useState(null);
+  const [academicYear, setAcademicYear] = useState(null);
 
   // Get current userID (adjust as needed for your auth)
   const currentUserID = localStorage.getItem("userID");
+
+  useEffect(() => {
+    async function fetchAcademicYearAndTerm() {
+      try {
+        const token = localStorage.getItem("token");
+        // Fetch active academic year
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+        // Fetch active term
+        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (termRes.ok) {
+          const term = await termRes.json();
+          setCurrentTerm(term);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year or term", err);
+      }
+    }
+    fetchAcademicYearAndTerm();
+  }, []);
 
   useEffect(() => {
     async function fetchClasses() {
@@ -89,7 +114,9 @@ export default function Student_Dashboard() {
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Student Dashboard</h2>
-            <p className="text-base md:text-lg"> Academic Year and Term here | 
+            <p className="text-base md:text-lg">
+              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+              {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
@@ -99,24 +126,6 @@ export default function Student_Dashboard() {
             </p>
           </div>
           <ProfileMenu />
-        </div>
-
-        {/* Overview Section */}
-        <h3 className="text-lg md:text-xl font-semibold mb-3">Overview</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {[
-            { icon: compClassesIcon, value: "0%", label: "Completed Classes", bg: "bg-gray-300", text: "text-black" },
-            { icon: compAssignsIcon, value: "0%", label: "Completed Assignments", bg: "bg-[#00418b]", text: "text-white" },
-            { icon: dueAssignsIcon, value: "You're good mah dude! :3 No due assignments", label: "", bg: "bg-gray-300", text: "text-black" },
-          ].map((item, index) => (
-            <div key={index} className={`${item.bg} rounded-2xl p-4 md:p-6 flex items-start space-x-4 hover:scale-105 transform transition`}>
-              <img src={item.icon} alt={item.label} className="w-10 h-10" />
-              <div>
-                <p className={`text-base font-bold ${item.text}`}>{item.value}</p>
-                <p className={`text-sm ${item.text}`}>{item.label}</p>
-              </div>
-            </div>
-          ))}
         </div>
 
         {/* Recent Classes Section */}

@@ -27,6 +27,8 @@ export default function FacultyCreateClass() {
   const [selectedSubject, setSelectedSubject] = useState("");
   const [sections, setSections] = useState([]);
   const [selectedSection, setSelectedSection] = useState("");
+  const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   // Fetch all school years on mount
   useEffect(() => {
