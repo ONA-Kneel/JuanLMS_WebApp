@@ -192,7 +192,7 @@ export default function Login() {
                 required
                 disabled={isLocked}
                 className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900"
-                placeholder="username@gmail.com"
+                placeholder="School E-mail"
               />
             </div>
 
@@ -244,9 +244,6 @@ export default function Login() {
               </label>
               <Link to="/forgot-password" className="text-blue-600 hover:underline font-poppinsr text-sm">
                 Forgot Password?  
-              </Link>
-              <Link to="/register" className="text-blue-600 hover:underline font-poppinsr text-sm">
-                No Account?
               </Link>
             </div>
 

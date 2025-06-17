@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Faculty_Navbar from "./Faculty_Navbar";
 
-import compClassesIcon from "../../assets/compClassesIcon.png";
 import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 // import createEvent from "../../assets/createEvent.png";
@@ -82,22 +81,6 @@ export default function Faculty_Dashboard() {
             </p>
           </div>
           <ProfileMenu/>
-        </div>
-
-        <h3 className="text-lg md:text-xl font-semibold mb-3">Overview</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {[
-            { icon: compClassesIcon, value: "0%", label: "Class Completion", bg: "bg-gray-300", text: "text-black" },
-            { value: "Urgent Meeting", label: "https://www./......", bg: "bg-[#00418b]", text: "text-white" }
-          ].map((item, index) => (
-            <div key={index} className={`${item.bg} rounded-2xl p-4 md:p-6 flex items-start space-x-4 hover:scale-105 transform transition`}>
-              <img src={item.icon} alt={item.label} className="w-10 h-10" />
-              <div>
-                <p className={`text-base font-bold ${item.text}`}>{item.value}</p>
-                <p className={`text-sm ${item.text}`}>{item.label}</p>
-              </div>
-            </div>
-          ))}
         </div>
 
         <h3 className="text-lg md:text-4xl font-bold mb-3">Current Term Classes</h3>

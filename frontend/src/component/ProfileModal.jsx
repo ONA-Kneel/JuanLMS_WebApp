@@ -27,6 +27,20 @@ function ChangePasswordModal({ userId, onClose }) {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Add useEffect for cooldown timer
+  useEffect(() => {
+    let timer;
+    if (cooldown > 0) {
+      timer = setInterval(() => {
+        setCooldown(prev => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [cooldown]);
 
   // --- Request OTP Handler ---
   const handleRequestOTP = async (e) => {
@@ -38,6 +52,7 @@ function ChangePasswordModal({ userId, onClose }) {
       await axios.post(`${API_BASE}/users/${userId}/request-password-change-otp`);
       setSuccess("OTP sent to your personal email.");
       setStep(2);
+      setCooldown(20); // Start 20 second cooldown
     } catch (err) {
       setError(err.response?.data?.message || "Failed to send OTP.");
     }
@@ -134,6 +149,22 @@ function ChangePasswordModal({ userId, onClose }) {
               onClick={handleValidateOTP}
             >
               Next
+            </button>
+            <button
+              type="button"
+              className={`w-full p-3 rounded-lg transition mb-2 ${
+                cooldown > 0 || loading
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+              onClick={handleRequestOTP}
+              disabled={cooldown > 0 || loading}
+            >
+              {cooldown > 0 
+                ? `Resend OTP in ${cooldown}s` 
+                : loading 
+                  ? 'Sending OTP...' 
+                  : 'Resend OTP'}
             </button>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={onClose} className="px-4 py-2 rounded bg-gray-300">Cancel</button>
