@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Student_Activities() {
   const [activeTab, setActiveTab] = useState("upcoming");

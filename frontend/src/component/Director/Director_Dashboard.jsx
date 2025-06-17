@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import compClassesIcon from "../../assets/compClassesIcon.png";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Director_Dashboard() {
   const [academicYear, setAcademicYear] = useState(null);

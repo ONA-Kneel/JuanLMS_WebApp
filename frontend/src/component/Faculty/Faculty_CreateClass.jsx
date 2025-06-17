@@ -5,7 +5,7 @@ import archiveIcon from "../../assets/archive.png";
 import createEventIcon from "../../assets/createEvent.png";
 import * as XLSX from "xlsx";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function FacultyCreateClass() {
   const [studentName, setStudentName] = useState("");

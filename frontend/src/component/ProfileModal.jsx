@@ -12,7 +12,7 @@ import profileicon from "../assets/profileicon (1).svg";
 
 Modal.setAppElement('#root');
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 // ===================== ChangePasswordModal =====================
 function ChangePasswordModal({ userId, onClose }) {

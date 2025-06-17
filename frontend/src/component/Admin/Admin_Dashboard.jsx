@@ -6,7 +6,7 @@ import ProfileModal from "../ProfileModal"; // reuse if you want it for faculty 
 // import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Admin_Dashboard() {
   const [recentAuditLogs, setRecentAuditLogs] = useState([]);

@@ -4,7 +4,7 @@ export default function PdfViewer() {
   const query = new URLSearchParams(useLocation().search);
   const fileUrl = query.get('file');
 
-  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
   // If fileUrl is not absolute, prefix with API_BASE
   const resolvedFileUrl = fileUrl && !/^https?:\/\//.test(fileUrl) ? `${API_BASE}/${fileUrl.replace(/^\/+/, "")}` : fileUrl;
 
