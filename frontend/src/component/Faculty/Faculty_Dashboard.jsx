@@ -79,17 +79,16 @@ export default function Faculty_Dashboard() {
             <p>No classes found.</p>
           ) : (
             classes.map(cls => (
-              <div
+              <a
+                href={`/faculty_class/${cls.classID}`}
                 key={cls.classID}
                 className="relative bg-[#00418b] text-white p-4 md:p-6 rounded-2xl hover:bg-[#002b5c] transition flex flex-col justify-between"
+                style={{ textDecoration: 'none' }}
               >
                 <h4 className="text-base md:text-lg font-semibold">{cls.className}</h4>
-                <p className="text-sm mt-1">0% progress</p>
-                <div className="w-full bg-gray-300 rounded-full h-2 mt-2">
-                  <div className="bg-blue-500 h-full rounded-full w-[0%]"></div>
-                </div>
+                
                 <img src={arrowRight} alt="Arrow" className="absolute top-4 right-4 w-5 h-5" />
-              </div>
+              </a>
             ))
           )}
         </div>

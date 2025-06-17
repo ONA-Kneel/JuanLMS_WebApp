@@ -83,10 +83,6 @@ export default function Faculty_Classes() {
                 onClick={() => navigate(`/faculty_class/${cls.classID}`)}
               >
                 <h4 className="text-base md:text-lg font-semibold">{cls.className}</h4>
-                <p className="text-sm mt-1">0% progress</p>
-                <div className="w-full bg-gray-300 rounded-full h-2 mt-2">
-                  <div className="bg-blue-500 h-full rounded-full w-[0%]"></div>
-                </div>
                 <img src={arrowRight} alt="Arrow" className="absolute top-4 right-4 w-5 h-5" />
               </div>
             ))

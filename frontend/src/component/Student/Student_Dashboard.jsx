@@ -136,15 +136,12 @@ export default function Student_Dashboard() {
               >
                 <h4 className="text-base md:text-lg font-semibold">{cls.className}</h4>
                 <p className="text-sm mt-1">
-                  {classProgress[cls.classID] === 100
+                  {/* {classProgress[cls.classID] === 100
                     ? 'Completed'
                     : classProgress[cls.classID] > 0
                       ? `${classProgress[cls.classID]}% Resume`
-                      : '0%'}
+                      : '0%'} */}
                 </p>
-                <div className="w-full bg-gray-300 rounded-full h-2 mt-2">
-                  <div className="bg-blue-500 h-full rounded-full" style={{ width: `${classProgress[cls.classID] || 0}%` }}></div>
-                </div>
                 <img src={arrowRight} alt="Arrow" className="absolute top-4 right-4 w-5 h-5" />
               </Link>
             ))

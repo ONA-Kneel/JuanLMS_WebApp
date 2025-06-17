@@ -31,6 +31,17 @@ export default function ClassContent({ selected, isFaculty = false }) {
   // { [lessonId_fileUrl]: { lastPage, totalPages } }
   // Remove unused: fileProgress
 
+  // Members state (faculty and students)
+  const [members, setMembers] = useState({ faculty: [], students: [] });
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState(null);
+
+  // Restore lesson upload state and handler
+  const [showLessonForm, setShowLessonForm] = useState(false);
+  const [lessonTitle, setLessonTitle] = useState("");
+  const [lessonFiles, setLessonFiles] = useState([]);
+  const [uploading, setUploading] = useState(false);
+
   // Fetch lessons from backend
   useEffect(() => {
     if (selected === "materials") {
@@ -114,6 +125,22 @@ export default function ClassContent({ selected, isFaculty = false }) {
         })
         .catch(() => setAssignmentError("Failed to fetch assignments."))
         .finally(() => setAssignmentsLoading(false));
+    }
+  }, [selected, classId]);
+
+  // Fetch members when "members" tab is selected
+  useEffect(() => {
+    if (selected === "members" && classId) {
+      setMembersLoading(true);
+      setMembersError(null);
+      const token = localStorage.getItem('token');
+      fetch(`${API_BASE}/classes/${classId}/members`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => setMembers(data && typeof data === 'object' ? data : { faculty: [], students: [] }))
+        .catch(() => setMembersError("Failed to fetch members."))
+        .finally(() => setMembersLoading(false));
     }
   }, [selected, classId]);
 
@@ -206,6 +233,44 @@ export default function ClassContent({ selected, isFaculty = false }) {
       </div>
     );
   }
+
+  // --- HANDLERS FOR LESSON UPLOAD ---
+  const handleLessonUpload = async (e) => {
+    e.preventDefault();
+    if (!lessonTitle || lessonFiles.length === 0) {
+      alert("Please provide a title and at least one PDF file.");
+      return;
+    }
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("classID", classId);
+    formData.append("title", lessonTitle);
+    for (let file of lessonFiles) {
+      formData.append("files", file);
+    }
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${API_BASE}/lessons`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (res.ok) {
+        setShowLessonForm(false);
+        setLessonTitle("");
+        setLessonFiles([]);
+        // Optionally, refresh lessons list
+        window.location.reload();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to upload lesson.");
+      }
+    } catch {
+      alert("Failed to upload lesson.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // --- MAIN RENDER ---
   return (
@@ -311,6 +376,162 @@ export default function ClassContent({ selected, isFaculty = false }) {
             )}
           </div>
         </>
+      )}
+
+      {/* --- CLASS MATERIALS TAB: Lessons --- */}
+      {selected === "materials" && (
+        <>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">Class Materials</h2>
+            {isFaculty && (
+              <>
+                <button
+                  className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm"
+                  onClick={() => setShowLessonForm(true)}
+                >
+                  + Add Material
+                </button>
+                {showLessonForm && (
+                  <form
+                    onSubmit={handleLessonUpload}
+                    className="bg-blue-50 p-4 rounded-lg border border-blue-200 mt-4 flex flex-col gap-2"
+                    style={{ maxWidth: 400 }}
+                  >
+                    <label className="font-semibold">Lesson Title</label>
+                    <input
+                      type="text"
+                      value={lessonTitle}
+                      onChange={e => setLessonTitle(e.target.value)}
+                      className="border rounded px-2 py-1"
+                      required
+                    />
+                    <label className="font-semibold">PDF Files</label>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      multiple
+                      onChange={e => setLessonFiles([...e.target.files])}
+                      className="border rounded px-2 py-1"
+                      required
+                    />
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        type="submit"
+                        className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm"
+                        disabled={uploading}
+                      >
+                        {uploading ? "Uploading..." : "Upload"}
+                      </button>
+                      <button
+                        type="button"
+                        className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-sm"
+                        onClick={() => setShowLessonForm(false)}
+                        disabled={uploading}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </>
+            )}
+          </div>
+          {/* Card/Table style for lessons */}
+          {backendLessons.length > 0 ? (
+            backendLessons.map(lesson => (
+              <div key={lesson._id} className="rounded-xl shadow border border-gray-200 mb-6 overflow-hidden">
+                {/* Blue header */}
+                <div className="bg-blue-900 text-white px-6 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">📄</span>
+                    <span className="font-bold text-lg">{lesson.title}</span>
+                  </div>
+                  
+                </div>
+                {/* Table */}
+                <div className="bg-white">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="px-6 py-2 font-semibold">Section</th>
+                        
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lesson.files && lesson.files.length > 0 ? (
+                        lesson.files.map(file => {
+                          // Ensure fileUrl is absolute (starts with http) or prefix with API_BASE
+                          const fileUrl = file.fileUrl.startsWith('http') ? file.fileUrl : `${API_BASE}/${file.fileUrl.replace(/^\/+/, '')}`;
+                          return (
+                            <tr key={file.fileUrl} className="border-b hover:bg-gray-50">
+                              <td className="px-6 py-2 flex items-center gap-2">
+                                <span className="text-blue-700">📄</span>
+                                <a
+                                  href={fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-700 underline"
+                                >
+                                  {file.fileName}
+                                </a>
+                              </td>
+                              
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td className="px-6 py-2" colSpan={2}>No files uploaded.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-gray-700">No materials yet.</p>
+          )}
+        </>
+      )}
+
+      {/* --- MEMBERS TAB --- */}
+      {selected === "members" && (
+        <div>
+          <h2 className="text-2xl font-bold mb-4">Members</h2>
+          {membersLoading ? (
+            <p className="text-blue-700">Loading members...</p>
+          ) : membersError ? (
+            <p className="text-red-600">{membersError}</p>
+          ) : (
+            <>
+              <h3 className="font-semibold text-blue-900 mt-2 mb-1">Faculty</h3>
+              {members.faculty.length > 0 ? (
+                <ul>
+                  {members.faculty.map(f => (
+                    <li key={f._id}>
+                      {f.firstname} {f.lastname} (Faculty)
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-700">No faculty found.</p>
+              )}
+              <h3 className="font-semibold text-blue-900 mt-4 mb-1">Students</h3>
+              {members.students.length > 0 ? (
+                <ul>
+                  {members.students.map(s => (
+                    <li key={s._id}>
+                      {s.firstname} {s.lastname} (Student)
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-700">No students found.</p>
+              )}
+            </>
+          )}
+        </div>
       )}
     </div>
   );
