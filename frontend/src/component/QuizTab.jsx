@@ -156,6 +156,12 @@ export default function QuizTab({ onClose, onAssignmentCreated, alwaysRequireFil
         }
     };
 
+    const getMinDueDate = () => {
+        const now = new Date();
+        now.setSeconds(0, 0); // Removes seconds/milliseconds for compatibility
+        return now.toISOString().slice(0, 16);
+    };
+
     return (
         <div className="p-0">
             <div className="bg-white rounded-t-xl px-8 pt-8 pb-4 border-b">
@@ -376,11 +382,18 @@ export default function QuizTab({ onClose, onAssignmentCreated, alwaysRequireFil
                 {activityType === "assignment" && (
                     <div className="bg-white rounded-xl shadow border border-gray-200 p-6 max-w-2xl mx-auto mt-8">
                         <label className="block text-sm font-medium mb-1">Due Date</label>
+                        {/* <input
+                            type="datetime-local"
+                            className="border rounded px-2 py-1 w-full"
+                            value={dueDate}
+                            onChange={e => setDueDate(e.target.value)}
+                        /> */}
                         <input
                             type="datetime-local"
                             className="border rounded px-2 py-1 w-full"
                             value={dueDate}
                             onChange={e => setDueDate(e.target.value)}
+                            min={getMinDueDate()}
                         />
                     </div>
                 )}
