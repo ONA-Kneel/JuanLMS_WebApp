@@ -13,17 +13,16 @@ export default function Student_Dashboard() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [classProgress, setClassProgress] = useState({}); // { classID: percent }
-  const [currentTerm, setCurrentTerm] = useState(null);
   const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   // Get current userID (adjust as needed for your auth)
   const currentUserID = localStorage.getItem("userID");
 
   useEffect(() => {
-    async function fetchAcademicYearAndTerm() {
+    async function fetchAcademicYear() {
       try {
         const token = localStorage.getItem("token");
-        // Fetch active academic year
         const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
@@ -31,20 +30,35 @@ export default function Student_Dashboard() {
           const year = await yearRes.json();
           setAcademicYear(year);
         }
-        // Fetch active term
-        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (termRes.ok) {
-          const term = await termRes.json();
-          setCurrentTerm(term);
-        }
       } catch (err) {
-        console.error("Failed to fetch academic year or term", err);
+        console.error("Failed to fetch academic year", err);
       }
     }
-    fetchAcademicYearAndTerm();
+    fetchAcademicYear();
   }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
 
   useEffect(() => {
     async function fetchClasses() {

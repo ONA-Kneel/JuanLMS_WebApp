@@ -57,7 +57,7 @@ export default function Admin_AcademicSettings() {
   }, [selectedYear]);
 
   useEffect(() => {
-    async function fetchAcademicYearAndTerm() {
+    async function fetchAcademicYear() {
       try {
         const token = localStorage.getItem("token");
         const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
@@ -67,19 +67,32 @@ export default function Admin_AcademicSettings() {
           const year = await yearRes.json();
           setAcademicYear(year);
         }
-        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (termRes.ok) {
-          const term = await termRes.json();
-          setCurrentTerm(term);
-        }
       } catch (err) {
-        console.error("Failed to fetch academic year or term", err);
+        console.error("Failed to fetch academic year", err);
       }
     }
-    fetchAcademicYearAndTerm();
+    fetchAcademicYear();
   }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`);
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
 
   const fetchSchoolYears = async () => {
     try {
@@ -144,208 +157,100 @@ export default function Admin_AcademicSettings() {
     }
   };
 
-  // const handleSubmit = async (e) => {
-  //   e.preventDefault();
-  //   setError("");
-  //   setSuccess("");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
 
-  //   if (!formData.schoolYearStart) {
-  //     setError("Please enter a school year start");
-  //     return;
-  //   }
-
-  //   const startYear = parseInt(formData.schoolYearStart);
-  //   if (startYear < 1900 || startYear > 2100) {
-  //     setError("School year must be between 1900 and 2100");
-  //     return;
-  //   }
-
-  //   // Check if school year already exists
-  //   const yearExists = schoolYears.some(year => 
-  //     year.schoolYearStart === startYear && 
-  //     (!isEditMode || year._id !== editingYear?._id)
-  //   );
-
-  //   if (yearExists) {
-  //     setError("This school year already exists");
-  //     return;
-  //   }
-
-  //   if (isEditMode) {
-  //     // Validate if any changes were made
-  //     const hasChanges = 
-  //       formData.schoolYearStart !== editingYear.schoolYearStart.toString() ||
-  //       formData.status !== editingYear.status;
-
-  //     if (!hasChanges) {
-  //       setError("No changes were made to the school year.");
-  //     return;
-  //   }
-
-  //     if (window.confirm("Save changes to this school year?")) {
-  //       try {
-  //         const res = await fetch(`${API_BASE}/api/schoolyears/${editingYear._id}`, {
-  //           method: 'PATCH',
-  //           headers: { 'Content-Type': 'application/json' },
-  //         body: JSON.stringify({
-  //             schoolYearStart: parseInt(formData.schoolYearStart),
-  //             status: formData.status
-  //           })
-  //         });
-
-  //         if (res.ok) {
-  //           alert("School year updated successfully");
-  //           // Update the school years array with the edited year
-  //           setSchoolYears(prevYears => 
-  //             prevYears.map(year => 
-  //               year._id === editingYear._id 
-  //                 ? { 
-  //                     ...year, 
-  //                     schoolYearStart: parseInt(formData.schoolYearStart),
-  //                     schoolYearEnd: parseInt(formData.schoolYearStart) + 1,
-  //                     status: formData.status 
-  //                   }
-  //                 : year
-  //             )
-  //           );
-            
-  //           setIsEditMode(false);
-  //           setEditingYear(null);
-  //           setFormData({
-  //             schoolYearStart: "",
-  //             status: "inactive"
-  //           });
-  //         } else {
-  //           const data = await res.json();
-  //           setError(data.message || "Failed to update school year");
-  //         }
-  //       } catch (err) {
-  //         setError("Error updating school year");
-  //       }
-  //     }
-  //   } else {
-  //     try {
-  //       const res = await fetch(`${API_BASE}/api/schoolyears`, {
-  //         method: 'POST',
-  //         headers: { 'Content-Type': 'application/json' },
-  //         body: JSON.stringify({
-  //           schoolYearStart: parseInt(formData.schoolYearStart),
-  //           status: formData.status
-  //         })
-  //       });
-
-  //       if (res.ok) {
-  //         alert("School year created successfully");
-  //         // Clear form after successful creation
-  //         setFormData({
-  //           schoolYearStart: "",
-  //           status: "inactive"
-  //         });
-  //         fetchSchoolYears();
-  //     } else {
-  //         const data = await res.json();
-  //         setError(data.message || "Failed to create school year");
-  //       }
-  //     } catch (err) {
-  //       setError("Error creating school year");
-  //     }
-  //   }
-  // };
-
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError("");
-  setSuccess("");
-
-  if (!formData.schoolYearStart) {
-    setError("Please enter a school year start");
-    return;
-  }
-
-  const startYear = parseInt(formData.schoolYearStart);
-  if (startYear < 1900 || startYear > 2100) {
-    setError("School year must be between 1900 and 2100");
-    return;
-  }
-
-  const yearExists = schoolYears.some(year =>
-    year.schoolYearStart === startYear &&
-    (!isEditMode || year._id !== editingYear?._id)
-  );
-
-  if (yearExists) {
-    setError("This school year already exists");
-    return;
-  }
-
-  // ✏️ Edit Mode
-  if (isEditMode) {
-    const hasChanges =
-      formData.schoolYearStart !== editingYear.schoolYearStart.toString() ||
-      formData.status !== editingYear.status;
-
-    if (!hasChanges) {
-      setError("No changes were made to the school year.");
+    if (!formData.schoolYearStart) {
+      setError("Please enter a school year start");
       return;
     }
 
-    // Optional: Replace with a custom edit confirmation modal if needed
-    const confirmEdit = window.confirm("Save changes to this school year?");
-    if (!confirmEdit) return;
-
-    try {
-      const res = await fetch(`${API_BASE}/api/schoolyears/${editingYear._id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          schoolYearStart: startYear,
-          status: formData.status
-        })
-      });
-
-      if (res.ok) {
-        alert("School year updated successfully");
-        setSchoolYears(prevYears =>
-          prevYears.map(year =>
-            year._id === editingYear._id
-              ? {
-                  ...year,
-                  schoolYearStart: startYear,
-                  schoolYearEnd: startYear + 1,
-                  status: formData.status
-                }
-              : year
-          )
-        );
-        setIsEditMode(false);
-        setEditingYear(null);
-        setFormData({ schoolYearStart: "", status: "inactive" });
-      } else {
-        const data = await res.json();
-        setError(data.message || "Failed to update school year");
-      }
-    } catch (err) {
-      setError("Error updating school year");
+    const startYear = parseInt(formData.schoolYearStart);
+    if (startYear < 1900 || startYear > 2100) {
+      setError("School year must be between 1900 and 2100");
+      return;
     }
 
-    return;
-  }
+    const yearExists = schoolYears.some(year =>
+      year.schoolYearStart === startYear &&
+      (!isEditMode || year._id !== editingYear?._id)
+    );
 
-  // ➕ Create Mode
-  const activeYearExists = schoolYears.some(year => year.status === 'active');
-  if (activeYearExists) {
-    // Show modal asking if the user wants to activate this new year
-    setPendingSchoolYear({
-      schoolYearStart: startYear,
-      schoolYearEnd: startYear + 1
-    });
-    setShowActivateModal(true);
-    return;
-  }
+    if (yearExists) {
+      setError("This school year already exists");
+      return;
+    }
 
-  // If no active year, proceed immediately
-  createSchoolYear(startYear, true);
-};
+    // ✏️ Edit Mode
+    if (isEditMode) {
+      const hasChanges =
+        formData.schoolYearStart !== editingYear.schoolYearStart.toString() ||
+        formData.status !== editingYear.status;
+
+      if (!hasChanges) {
+        setError("No changes were made to the school year.");
+        return;
+      }
+
+      // Optional: Replace with a custom edit confirmation modal if needed
+      const confirmEdit = window.confirm("Save changes to this school year?");
+      if (!confirmEdit) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/schoolyears/${editingYear._id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            schoolYearStart: startYear,
+            status: formData.status
+          })
+        });
+
+        if (res.ok) {
+          alert("School year updated successfully");
+          setSchoolYears(prevYears =>
+            prevYears.map(year =>
+              year._id === editingYear._id
+                ? {
+                    ...year,
+                    schoolYearStart: startYear,
+                    schoolYearEnd: startYear + 1,
+                    status: formData.status
+                  }
+                : year
+            )
+          );
+          setIsEditMode(false);
+          setEditingYear(null);
+          setFormData({ schoolYearStart: "", status: "inactive" });
+        } else {
+          const data = await res.json();
+          setError(data.message || "Failed to update school year");
+        }
+      } catch (err) {
+        setError("Error updating school year");
+      }
+
+      return;
+    }
+
+    // ➕ Create Mode
+    const activeYearExists = schoolYears.some(year => year.status === 'active');
+    if (activeYearExists) {
+      // Show modal asking if the user wants to activate this new year
+      setPendingSchoolYear({
+        schoolYearStart: startYear,
+        schoolYearEnd: startYear + 1
+      });
+      setShowActivateModal(true);
+      return;
+    }
+
+    // If no active year, proceed immediately
+    createSchoolYear(startYear, true);
+  };
 
   const handleEdit = (year) => {
     setIsEditMode(true);
@@ -501,7 +406,7 @@ const handleSubmit = async (e) => {
               </h2>
               <p className="text-base md:text-lg">
                 {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
-                {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
+                {currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
                 {new Date().toLocaleDateString("en-US", {
                   weekday: "long",
                   year: "numeric",
@@ -721,11 +626,17 @@ const handleSubmit = async (e) => {
                               {new Date(term.endDate).toLocaleDateString()}
                             </td>
                             <td className="p-3 border">
-                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                term.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                              }`}>
-                                {term.status}
-                              </span>
+                              {selectedYear.status !== 'active' ? (
+                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                  inactive
+                                </span>
+                              ) : (
+                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                  term.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {term.status}
+                                </span>
+                              )}
                             </td>
                             <td className="p-3 border">
                               <div className="inline-flex space-x-2">
@@ -761,15 +672,27 @@ const handleSubmit = async (e) => {
                                       </svg>
                                     </button>
                                   ) : (
-                                    <button
-                                      onClick={() => handleActivateTerm(term)}
-                                      className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
-                                      title="Activate"
-                                    >
-                                      <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    </button>
+                                    selectedYear.status === 'active' ? (
+                                      <button
+                                        onClick={() => handleActivateTerm(term)}
+                                        className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
+                                        title="Activate"
+                                      >
+                                        <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        disabled
+                                        className="bg-gray-300 text-gray-500 px-2 py-1 text-xs rounded cursor-not-allowed"
+                                        title="Only the active school year can activate a term"
+                                      >
+                                        <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      </button>
+                                    )
                                   )}
                                 </div>
                               </td>

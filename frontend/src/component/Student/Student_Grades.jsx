@@ -14,7 +14,7 @@ export default function Student_Grades() {
   const [currentTerm, setCurrentTerm] = useState(null);
 
   useEffect(() => {
-    async function fetchAcademicYearAndTerm() {
+    async function fetchAcademicYear() {
       try {
         const token = localStorage.getItem("token");
         const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
@@ -24,19 +24,35 @@ export default function Student_Grades() {
           const year = await yearRes.json();
           setAcademicYear(year);
         }
-        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (termRes.ok) {
-          const term = await termRes.json();
-          setCurrentTerm(term);
-        }
       } catch (err) {
-        console.error("Failed to fetch academic year or term", err);
+        console.error("Failed to fetch academic year", err);
       }
     }
-    fetchAcademicYearAndTerm();
+    fetchAcademicYear();
   }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
