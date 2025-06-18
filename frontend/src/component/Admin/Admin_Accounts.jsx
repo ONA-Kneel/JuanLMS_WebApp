@@ -500,6 +500,8 @@ export default function Admin_Accounts() {
     fetchAcademicYearAndTerm();
   }, []);
 
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
   return (
     <>
       <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -521,137 +523,43 @@ export default function Admin_Accounts() {
             </div>
             <ProfileMenu />
           </div>
-
-          {/* Move New Account form to the top */}
-          <div className="bg-white p-6 rounded-xl shadow mb-10">
-            <h3 className="text-xl font-semibold mb-4">{isEditMode ? 'Edit Account' : 'New Account'}</h3>
-            <form className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleSubmit}>
-              <input
-                type="text"
-                name="firstname"
-                value={formData.firstname}
-                onChange={handleChange}
-                placeholder="First Name"
-                className="border rounded p-2"
-                required
-              />
-              <input
-                type="text"
-                name="middlename"
-                value={formData.middlename}
-                onChange={handleChange}
-                placeholder="Middle Name"
-                className="border rounded p-2"
-              />
-              <input
-                type="text"
-                name="lastname"
-                value={formData.lastname}
-                onChange={handleChange}
-                placeholder="Last Name"
-                className="border rounded p-2"
-                required
-              />
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                readOnly
-                placeholder="School Email (auto-generated)"
-                className="border rounded p-2 bg-gray-100 cursor-not-allowed"
-                required
-              />
-              <input
-                type="email"
-                name="personalemail"
-                value={formData.personalemail}
-                onChange={handleChange}
-                placeholder="Personal Email"
-                className="border rounded p-2"
-                required
-              />
-              <input
-                type="text"
-                name="contactno"
-                value={formData.contactno}
-                onChange={handleChange}
-                placeholder="Contact Number (Optional)"
-                className="border rounded p-2"
-                required
-              />
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  name="password"
-                  value={formData.password}
-                  readOnly
-                  placeholder="Password"
-                  className="border rounded p-2 flex-1 bg-gray-100 cursor-not-allowed"
-                />
-              </div>
-              <select
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                className="border rounded p-2"
-                required
-              >
-                <option value="students">Students</option>
-                <option value="faculty">Faculty</option>
-                <option value="parent">Parent</option>
-                <option value="admin">Admin</option>
-                <option value="director">Director</option>
-              </select>
-              <div className="col-span-1 md:col-span-2 flex gap-2">
-                <button
-                  type="submit"
-                  disabled={!formData.password}
-                  className={`flex-1 text-white rounded p-2 mt-2 ${
-                    formData.password 
-                      ? 'bg-blue-600 hover:bg-blue-700' 
-                      : 'bg-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  {isEditMode ? 'Save Edited Account' : 'Create Account'}
-                </button>
-                {isEditMode && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsEditMode(false);
-                      setEditingUser(null);
-                      setFormData({
-                        firstname: "",
-                        middlename: "",
-                        lastname: "",
-                        email: "",
-                        personalemail: "",
-                        contactno: "",
-                        password: "",
-                        role: "students",
-                        userID: "",
-                      });
-                    }}
-                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white rounded p-2 mt-2"
-                  >
-                    Cancel Edit
-                  </button>
-                )}
-              </div>
-            </form>
-          </div>
+          {/* Add Create New Account button */}
+          {/* <div className="mb-4">
+            <button
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+              onClick={() => setShowCreateModal(true)}
+            >
+              Create New Account
+            </button>
+          </div> */}
           {/* Button to view archived accounts */}
-          <div className="mb-4">
+          {/* <div className="mb-4">
             <button
               className="bg-gray-700 hover:bg-gray-900 text-white px-4 py-2 rounded"
               onClick={() => setShowPasswordModal(true)}
             >
               View Archived Accounts
             </button>
-          </div>
+          </div> */}
           {/* Users section (with tabs and table) below */}
           <div className="mt-8">
-            <h4 className="text-lg font-semibold mb-2">Users</h4>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2 gap-2">
+              <h4 className="text-xl md:text-2xl font-semibold">Users</h4>
+              <div className="flex gap-2">
+                <button
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                  onClick={() => setShowCreateModal(true)}
+                >
+                  Create New Account
+                </button>
+                <button
+                  className="bg-gray-700 hover:bg-gray-900 text-white px-4 py-2 rounded"
+                  onClick={() => setShowPasswordModal(true)}
+                >
+                  View Archived Accounts
+                </button>
+              </div>
+            </div>
             <div className="bg-white p-4 rounded-xl shadow mb-4">
               {/* Tabs for roles (inside the table card) */}
               <div className="flex gap-2 mb-4">
@@ -941,6 +849,137 @@ export default function Admin_Accounts() {
                     >
                       Archive
                     </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+          {/* Modal for New Account Form */}
+          {showCreateModal && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-10 rounded-2xl shadow-2xl max-w-4xl w-full relative">
+                
+                <button
+                  className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-3xl font-bold"
+                  onClick={() => setShowCreateModal(false)}
+                  aria-label="Close"
+                >
+                  &times;
+                </button>
+                <h3 className="text-2xl font-bold mb-6">{isEditMode ? 'Edit Account' : 'Create New Account'}</h3>
+                <form className="grid grid-cols-1 md:grid-cols-2 gap-6" onSubmit={handleSubmit}>
+                  <input
+                    type="text"
+                    name="firstname"
+                    value={formData.firstname}
+                    onChange={handleChange}
+                    placeholder="First Name"
+                    className="border rounded p-4 text-lg"
+                    required
+                  />
+                  <input
+                    type="text"
+                    name="middlename"
+                    value={formData.middlename}
+                    onChange={handleChange}
+                    placeholder="Middle Name"
+                    className="border rounded p-4 text-lg"
+                  />
+                  <input
+                    type="text"
+                    name="lastname"
+                    value={formData.lastname}
+                    onChange={handleChange}
+                    placeholder="Last Name"
+                    className="border rounded p-4 text-lg"
+                    required
+                  />
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    readOnly
+                    placeholder="School Email (auto-generated)"
+                    className="border rounded p-4 text-lg bg-gray-100 cursor-not-allowed"
+                    required
+                  />
+                  <input
+                    type="email"
+                    name="personalemail"
+                    value={formData.personalemail}
+                    onChange={handleChange}
+                    placeholder="Personal Email"
+                    className="border rounded p-4 text-lg"
+                    required
+                  />
+                  <input
+                    type="text"
+                    name="contactno"
+                    value={formData.contactno}
+                    onChange={handleChange}
+                    placeholder="Contact Number (Optional)"
+                    className="border rounded p-4 text-lg"
+                    required
+                  />
+                  <div className="flex gap-2 col-span-1 md:col-span-2">
+                    <input
+                      type="text"
+                      name="password"
+                      value={formData.password}
+                      readOnly
+                      placeholder="Password"
+                      className="border rounded p-4 text-lg flex-1 bg-gray-100 cursor-not-allowed"
+                    />
+                  </div>
+                  <select
+                    name="role"
+                    value={formData.role}
+                    onChange={handleChange}
+                    className="border rounded p-4 text-lg"
+                    required
+                  >
+                    <option value="students">Students</option>
+                    <option value="faculty">Faculty</option>
+                    <option value="parent">Parent</option>
+                    <option value="admin">Admin</option>
+                    <option value="director">Director</option>
+                  </select>
+                  <div className="col-span-1 md:col-span-2 flex gap-2">
+                    <button
+                      type="submit"
+                      disabled={!formData.password}
+                      className={`flex-1 text-white rounded p-4 text-lg mt-2 ${
+                        formData.password 
+                          ? 'bg-blue-600 hover:bg-blue-700' 
+                          : 'bg-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {isEditMode ? 'Save Edited Account' : 'Create Account'}
+                    </button>
+                    {isEditMode && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditMode(false);
+                          setEditingUser(null);
+                          setFormData({
+                            firstname: "",
+                            middlename: "",
+                            lastname: "",
+                            email: "",
+                            personalemail: "",
+                            contactno: "",
+                            password: "",
+                            role: "students",
+                            userID: "",
+                          });
+                          setShowCreateModal(false);
+                        }}
+                        className="flex-1 bg-gray-500 hover:bg-gray-600 text-white rounded p-4 text-lg mt-2"
+                      >
+                        Cancel Edit
+                      </button>
+                    )}
                   </div>
                 </form>
               </div>
