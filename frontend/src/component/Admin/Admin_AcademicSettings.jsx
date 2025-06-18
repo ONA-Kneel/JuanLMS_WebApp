@@ -373,6 +373,23 @@ export default function Admin_AcademicSettings() {
       if (res.ok) {
         fetchSchoolYears();
         alert(`School year set as ${newStatus}`);
+
+        // If set to inactive, archive all terms for this SY
+        if (newStatus === 'inactive') {
+          const schoolYearName = `${year.schoolYearStart}-${year.schoolYearEnd}`;
+          const termsRes = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`);
+          if (termsRes.ok) {
+            const terms = await termsRes.json();
+            for (const term of terms) {
+              if (term.status !== 'archived') {
+                await fetch(`${API_BASE}/api/terms/${term._id}/archive`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+            }
+          }
+        }
       } else {
         const data = await res.json();
         setError(data.message || 'Failed to update school year status');
@@ -660,7 +677,28 @@ export default function Admin_AcademicSettings() {
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                                     </svg>
                                   </button>
-                                  {term.status === 'active' ? (
+                                  {term.status === 'archived' && selectedYear.status === 'active' ? (
+                                    <button
+                                      onClick={() => handleActivateTerm(term)}
+                                      className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
+                                      title="Activate"
+                                    >
+                                      <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    </button>
+                                  ) : selectedYear.status !== 'active' || term.status === 'archived' ? (
+                                    <button
+                                      disabled
+                                      className="p-1 rounded bg-gray-200 text-green-600 cursor-not-allowed"
+                                      title="Archived"
+                                    >
+                                      {/* Heroicons Check (green) */}
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-green-600">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                      </svg>
+                                    </button>
+                                  ) : term.status === 'active' ? (
                                     <button
                                       onClick={() => handleArchiveTerm(term)}
                                       className="p-1 rounded hover:bg-red-100 group relative"
@@ -672,27 +710,15 @@ export default function Admin_AcademicSettings() {
                                       </svg>
                                     </button>
                                   ) : (
-                                    selectedYear.status === 'active' ? (
-                                      <button
-                                        onClick={() => handleActivateTerm(term)}
-                                        className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
-                                        title="Activate"
-                                      >
-                                        <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                      </button>
-                                    ) : (
-                                      <button
-                                        disabled
-                                        className="bg-gray-300 text-gray-500 px-2 py-1 text-xs rounded cursor-not-allowed"
-                                        title="Only the active school year can activate a term"
-                                      >
-                                        <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                      </button>
-                                    )
+                                    <button
+                                      onClick={() => handleActivateTerm(term)}
+                                      className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
+                                      title="Activate"
+                                    >
+                                      <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    </button>
                                   )}
                                 </div>
                               </td>
