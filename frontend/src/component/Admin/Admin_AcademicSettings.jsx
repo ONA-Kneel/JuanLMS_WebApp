@@ -33,6 +33,9 @@ export default function Admin_AcademicSettings() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
 
+  const [showActivateModal, setShowActivateModal] = useState(false);
+  const [pendingSchoolYear, setPendingSchoolYear] = useState(null);
+
   const [formData, setFormData] = useState({
     schoolYearStart: "",
     status: "inactive"
@@ -109,145 +112,240 @@ export default function Admin_AcademicSettings() {
   };
 
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? (checked ? 'active' : 'inactive') : value
-    }));
-  };
+      const { name, value, type, checked } = e.target;
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? (checked ? 'active' : 'inactive') : value
+      }));
+    };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
+    const createSchoolYear = async (startYear, setAsActive) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/schoolyears`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schoolYearStart: startYear,
+          setAsActive
+        })
+      });
 
-    if (!formData.schoolYearStart) {
-      setError("Please enter a school year start");
-      return;
-    }
-
-    const startYear = parseInt(formData.schoolYearStart);
-    if (startYear < 1900 || startYear > 2100) {
-      setError("School year must be between 1900 and 2100");
-      return;
-    }
-
-    // Check if school year already exists
-    const yearExists = schoolYears.some(year => 
-      year.schoolYearStart === startYear && 
-      (!isEditMode || year._id !== editingYear?._id)
-    );
-
-    if (yearExists) {
-      setError("This school year already exists");
-      return;
-    }
-
-    if (isEditMode) {
-      // Validate if any changes were made
-      const hasChanges = 
-        formData.schoolYearStart !== editingYear.schoolYearStart.toString() ||
-        formData.status !== editingYear.status;
-
-      if (!hasChanges) {
-        setError("No changes were made to the school year.");
-      return;
-    }
-
-      if (window.confirm("Save changes to this school year?")) {
-        try {
-          const res = await fetch(`${API_BASE}/api/schoolyears/${editingYear._id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-              schoolYearStart: parseInt(formData.schoolYearStart),
-              status: formData.status
-            })
-          });
-
-          if (res.ok) {
-            alert("School year updated successfully");
-            // Update the school years array with the edited year
-            setSchoolYears(prevYears => 
-              prevYears.map(year => 
-                year._id === editingYear._id 
-                  ? { 
-                      ...year, 
-                      schoolYearStart: parseInt(formData.schoolYearStart),
-                      schoolYearEnd: parseInt(formData.schoolYearStart) + 1,
-                      status: formData.status 
-                    }
-                  : year
-              )
-            );
-            
-            setIsEditMode(false);
-            setEditingYear(null);
-            setFormData({
-              schoolYearStart: "",
-              status: "inactive"
-            });
-          } else {
-            const data = await res.json();
-            setError(data.message || "Failed to update school year");
-          }
-        } catch (err) {
-          setError("Error updating school year");
-        }
-      }
-    } else {
-      try {
-        const res = await fetch(`${API_BASE}/api/schoolyears`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            schoolYearStart: parseInt(formData.schoolYearStart),
-            status: formData.status
-          })
-        });
-
-        if (res.ok) {
-          alert("School year created successfully");
-          // Clear form after successful creation
-          setFormData({
-            schoolYearStart: "",
-            status: "inactive"
-          });
-          fetchSchoolYears();
+      if (res.ok) {
+        alert("School year created successfully");
+        setFormData({ schoolYearStart: "", status: "inactive" });
+        fetchSchoolYears();
+        setShowActivateModal(false);
       } else {
-          const data = await res.json();
-          setError(data.message || "Failed to create school year");
-        }
-      } catch (err) {
-        setError("Error creating school year");
+        const data = await res.json();
+        setError(data.message || "Failed to create school year");
       }
+    } catch (err) {
+      setError("Error creating school year");
     }
   };
 
-  const handleDelete = async (year) => {
-    if (window.confirm("Are you sure you want to set this school year to inactive?")) {
-      try {
-        const res = await fetch(`${API_BASE}/api/schoolyears/${year._id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'inactive' })
-        });
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+  //   setError("");
+  //   setSuccess("");
 
-        if (res.ok) {
-          const updatedYear = await res.json();
-          setSchoolYears(prevYears =>
-            prevYears.map(sy => (sy._id === updatedYear._id ? updatedYear : sy))
-          );
-          alert("School year status set to inactive successfully");
-          } else {
-          const data = await res.json();
-          setError(data.message || "Failed to set school year status to inactive");
-        }
-      } catch (err) {
-        setError("Error setting school year status to inactive");
-      }
+  //   if (!formData.schoolYearStart) {
+  //     setError("Please enter a school year start");
+  //     return;
+  //   }
+
+  //   const startYear = parseInt(formData.schoolYearStart);
+  //   if (startYear < 1900 || startYear > 2100) {
+  //     setError("School year must be between 1900 and 2100");
+  //     return;
+  //   }
+
+  //   // Check if school year already exists
+  //   const yearExists = schoolYears.some(year => 
+  //     year.schoolYearStart === startYear && 
+  //     (!isEditMode || year._id !== editingYear?._id)
+  //   );
+
+  //   if (yearExists) {
+  //     setError("This school year already exists");
+  //     return;
+  //   }
+
+  //   if (isEditMode) {
+  //     // Validate if any changes were made
+  //     const hasChanges = 
+  //       formData.schoolYearStart !== editingYear.schoolYearStart.toString() ||
+  //       formData.status !== editingYear.status;
+
+  //     if (!hasChanges) {
+  //       setError("No changes were made to the school year.");
+  //     return;
+  //   }
+
+  //     if (window.confirm("Save changes to this school year?")) {
+  //       try {
+  //         const res = await fetch(`${API_BASE}/api/schoolyears/${editingYear._id}`, {
+  //           method: 'PATCH',
+  //           headers: { 'Content-Type': 'application/json' },
+  //         body: JSON.stringify({
+  //             schoolYearStart: parseInt(formData.schoolYearStart),
+  //             status: formData.status
+  //           })
+  //         });
+
+  //         if (res.ok) {
+  //           alert("School year updated successfully");
+  //           // Update the school years array with the edited year
+  //           setSchoolYears(prevYears => 
+  //             prevYears.map(year => 
+  //               year._id === editingYear._id 
+  //                 ? { 
+  //                     ...year, 
+  //                     schoolYearStart: parseInt(formData.schoolYearStart),
+  //                     schoolYearEnd: parseInt(formData.schoolYearStart) + 1,
+  //                     status: formData.status 
+  //                   }
+  //                 : year
+  //             )
+  //           );
+            
+  //           setIsEditMode(false);
+  //           setEditingYear(null);
+  //           setFormData({
+  //             schoolYearStart: "",
+  //             status: "inactive"
+  //           });
+  //         } else {
+  //           const data = await res.json();
+  //           setError(data.message || "Failed to update school year");
+  //         }
+  //       } catch (err) {
+  //         setError("Error updating school year");
+  //       }
+  //     }
+  //   } else {
+  //     try {
+  //       const res = await fetch(`${API_BASE}/api/schoolyears`, {
+  //         method: 'POST',
+  //         headers: { 'Content-Type': 'application/json' },
+  //         body: JSON.stringify({
+  //           schoolYearStart: parseInt(formData.schoolYearStart),
+  //           status: formData.status
+  //         })
+  //       });
+
+  //       if (res.ok) {
+  //         alert("School year created successfully");
+  //         // Clear form after successful creation
+  //         setFormData({
+  //           schoolYearStart: "",
+  //           status: "inactive"
+  //         });
+  //         fetchSchoolYears();
+  //     } else {
+  //         const data = await res.json();
+  //         setError(data.message || "Failed to create school year");
+  //       }
+  //     } catch (err) {
+  //       setError("Error creating school year");
+  //     }
+  //   }
+  // };
+
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError("");
+  setSuccess("");
+
+  if (!formData.schoolYearStart) {
+    setError("Please enter a school year start");
+    return;
+  }
+
+  const startYear = parseInt(formData.schoolYearStart);
+  if (startYear < 1900 || startYear > 2100) {
+    setError("School year must be between 1900 and 2100");
+    return;
+  }
+
+  const yearExists = schoolYears.some(year =>
+    year.schoolYearStart === startYear &&
+    (!isEditMode || year._id !== editingYear?._id)
+  );
+
+  if (yearExists) {
+    setError("This school year already exists");
+    return;
+  }
+
+  // ✏️ Edit Mode
+  if (isEditMode) {
+    const hasChanges =
+      formData.schoolYearStart !== editingYear.schoolYearStart.toString() ||
+      formData.status !== editingYear.status;
+
+    if (!hasChanges) {
+      setError("No changes were made to the school year.");
+      return;
     }
-  };
+
+    // Optional: Replace with a custom edit confirmation modal if needed
+    const confirmEdit = window.confirm("Save changes to this school year?");
+    if (!confirmEdit) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/schoolyears/${editingYear._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schoolYearStart: startYear,
+          status: formData.status
+        })
+      });
+
+      if (res.ok) {
+        alert("School year updated successfully");
+        setSchoolYears(prevYears =>
+          prevYears.map(year =>
+            year._id === editingYear._id
+              ? {
+                  ...year,
+                  schoolYearStart: startYear,
+                  schoolYearEnd: startYear + 1,
+                  status: formData.status
+                }
+              : year
+          )
+        );
+        setIsEditMode(false);
+        setEditingYear(null);
+        setFormData({ schoolYearStart: "", status: "inactive" });
+      } else {
+        const data = await res.json();
+        setError(data.message || "Failed to update school year");
+      }
+    } catch (err) {
+      setError("Error updating school year");
+    }
+
+    return;
+  }
+
+  // ➕ Create Mode
+  const activeYearExists = schoolYears.some(year => year.status === 'active');
+  if (activeYearExists) {
+    // Show modal asking if the user wants to activate this new year
+    setPendingSchoolYear({
+      schoolYearStart: startYear,
+      schoolYearEnd: startYear + 1
+    });
+    setShowActivateModal(true);
+    return;
+  }
+
+  // If no active year, proceed immediately
+  createSchoolYear(startYear, true);
+};
 
   const handleEdit = (year) => {
     setIsEditMode(true);
@@ -816,6 +914,37 @@ export default function Admin_AcademicSettings() {
                     )}
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {showActivateModal && pendingSchoolYear && (
+            <div className="fixed inset-0 backdrop-blur-sm bg-white/10 flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+                <h2 className="text-xl font-semibold mb-4">Activate New School Year</h2>
+                <p className="text-gray-700 mb-6">
+                  Do you want to activate the new school year <strong>{pendingSchoolYear.schoolYearStart}-{pendingSchoolYear.schoolYearEnd}</strong>? 
+                  The currently active school year will be archived.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
+                    onClick={() => {
+                      setShowActivateModal(false);
+                      setPendingSchoolYear(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                    onClick={() => {
+                      createSchoolYear(pendingSchoolYear.schoolYearStart, true);
+                    }}
+                  >
+                    Yes, Activate
+                  </button>
+                </div>
               </div>
             </div>
           )}

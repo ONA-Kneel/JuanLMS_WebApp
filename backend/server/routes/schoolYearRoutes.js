@@ -17,34 +17,72 @@ router.get('/', async (req, res) => {
 });
 
 // Create a new school year
+// router.post('/', async (req, res) => {
+//   try {
+//     const { schoolYearStart } = req.body;
+    
+//     // Validate start year
+//     if (!schoolYearStart || schoolYearStart < 1900 || schoolYearStart > 2100) {
+//       return res.status(400).json({ message: 'Invalid school year start' });
+//     }
+
+//     // Check if a school year with this start year already exists
+//     const existingSchoolYear = await SchoolYear.findOne({ schoolYearStart });
+//     if (existingSchoolYear) {
+//       return res.status(400).json({ message: 'A school year with this start year already exists.' });
+//     }
+
+//     // Deactivate all existing school years before creating a new active one
+//     await SchoolYear.updateMany({}, { status: 'inactive' });
+
+//     const schoolYear = new SchoolYear({
+//       schoolYearStart,
+//       schoolYearEnd: schoolYearStart + 1,
+//       status: 'active' // Automatically set to active
+//     });
+
+//     const newSchoolYear = await schoolYear.save();
+//     res.status(201).json(newSchoolYear);
+//   } catch (error) {
+//     res.status(400).json({ message: error.message });
+//   }
+// });
+
 router.post('/', async (req, res) => {
   try {
-    const { schoolYearStart } = req.body;
-    
-    // Validate start year
+    const { schoolYearStart, setAsActive } = req.body;
+
+    // Basic validation
     if (!schoolYearStart || schoolYearStart < 1900 || schoolYearStart > 2100) {
       return res.status(400).json({ message: 'Invalid school year start' });
     }
 
-    // Check if a school year with this start year already exists
-    const existingSchoolYear = await SchoolYear.findOne({ schoolYearStart });
-    if (existingSchoolYear) {
-      return res.status(400).json({ message: 'A school year with this start year already exists.' });
+    // Check for duplicates
+    const existing = await SchoolYear.findOne({ schoolYearStart });
+    if (existing) {
+      return res.status(400).json({ message: 'A school year with this start already exists.' });
     }
 
-    // Deactivate all existing school years before creating a new active one
-    await SchoolYear.updateMany({}, { status: 'inactive' });
+    // Prevent multiple active years if setAsActive is true
+    if (setAsActive) {
+      const activeYear = await SchoolYear.findOne({ status: 'active' });
+      if (activeYear) {
+        return res.status(400).json({
+          message: `Cannot activate this year. ${activeYear.schoolYearStart}-${activeYear.schoolYearEnd} is currently active.`
+        });
+      }
+    }
 
     const schoolYear = new SchoolYear({
       schoolYearStart,
       schoolYearEnd: schoolYearStart + 1,
-      status: 'active' // Automatically set to active
+      status: setAsActive ? 'active' : 'inactive'
     });
 
-    const newSchoolYear = await schoolYear.save();
-    res.status(201).json(newSchoolYear);
+    const savedYear = await schoolYear.save();
+    res.status(201).json(savedYear);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(500).json({ message: error.message });
   }
 });
 
