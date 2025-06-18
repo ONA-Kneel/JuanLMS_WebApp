@@ -10,7 +10,7 @@ import axios from 'axios';
 import { Eye, EyeOff } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Login() {
   const navigate = useNavigate();

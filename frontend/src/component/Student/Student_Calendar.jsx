@@ -9,7 +9,7 @@ import "@fullcalendar/common/main.css";
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Student_Calendar() {
   const [adminEvents, setAdminEvents] = useState([]);
@@ -89,13 +89,13 @@ export default function Student_Calendar() {
     const fetchAssignments = async () => {
       try {
         const token = localStorage.getItem('token');
-        const resClasses = await fetch('https://juanlms-webapp-server.onrender.com/classes/my-classes', {
+        const resClasses = await fetch('http://localhost:5000/classes/my-classes', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const classes = await resClasses.json();
         let events = [];
         for (const cls of classes) {
-          const res = await fetch(`https://juanlms-webapp-server.onrender.com/assignments?classID=${cls._id}`, {
+          const res = await fetch(`http://localhost:5000/assignments?classID=${cls._id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const data = await res.json();

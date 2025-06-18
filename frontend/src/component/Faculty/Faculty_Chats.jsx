@@ -12,7 +12,7 @@ import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Faculty_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
@@ -36,7 +36,7 @@ export default function Faculty_Chats() {
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
 
-  const API_URL = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
   const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
 
   const storedUser = localStorage.getItem("user");

@@ -11,7 +11,7 @@ import createEvent from "../../assets/createEvent.png";
 import ProfileModal from "../ProfileModal";
 import interactionPlugin from "@fullcalendar/interaction";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const PRESET_COLORS = [
   "#1890ff", // blue

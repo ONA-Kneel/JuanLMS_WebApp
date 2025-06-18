@@ -7,7 +7,7 @@ import editIcon from "../../assets/editing.png";
 import archiveIcon from "../../assets/archive.png";
 import viewIcon from "../../assets/view.png";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Admin_AcademicSettings() {
   const [isEditMode, setIsEditMode] = useState(false);
