@@ -6,6 +6,7 @@ import Student_Navbar from './Student/Student_Navbar';
 
 export default function ActivityCreatePage() {
   const [role, setRole] = useState('');
+  const [totalPoints, setTotalPoints] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -41,7 +42,14 @@ export default function ActivityCreatePage() {
           <h2 className="text-2xl md:text-3xl font-bold">Create Activity or Quiz</h2>
         </div>
         <div className="bg-white rounded-xl shadow-xl p-6 md:p-10">
-          <QuizTab alwaysRequireFileUploadForAssignment={true} />
+          {/* <QuizTab alwaysRequireFileUploadForAssignment={true} /> */}
+          <QuizTab
+            alwaysRequireFileUploadForAssignment={true}
+            onPointsChange={(points) => setTotalPoints(points)}
+          />
+          <div className="text-right font-semibold text-lg text-gray-700 mt-4">
+            Total Points: {totalPoints}
+          </div>
         </div>
       </div>
     </div>

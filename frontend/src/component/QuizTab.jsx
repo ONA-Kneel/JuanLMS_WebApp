@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-export default function QuizTab({ onClose, onAssignmentCreated, alwaysRequireFileUploadForAssignment = false }) {
+export default function QuizTab({ onClose, onAssignmentCreated, alwaysRequireFileUploadForAssignment = false, onPointsChange }) {
     const { classId } = useParams();
     const [activityType, setActivityType] = useState("quiz"); // 'quiz' or 'assignment'
     const [title, setTitle] = useState("");
@@ -40,6 +40,13 @@ export default function QuizTab({ onClose, onAssignmentCreated, alwaysRequireFil
         identificationAnswer: "",
         trueFalseAnswer: true,
     });
+
+    useEffect(() => {
+        const total = questions.reduce((sum, q) => sum + (q.points || 0), 0);
+        if (typeof onPointsChange === 'function') {
+            onPointsChange(total);
+        }
+    }, [questions, onPointsChange]);
 
     const handleAddOrUpdate = () => {
         let q = {
