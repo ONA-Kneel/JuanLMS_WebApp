@@ -38,6 +38,9 @@ export default function Admin_AcademicSettings() {
     status: "inactive"
   });
 
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [searchTerms, setSearchTerms] = useState({ start: '', end: '' });
+
   // Fetch school years on mount
   useEffect(() => {
       fetchSchoolYears();
@@ -387,341 +390,323 @@ export default function Admin_AcademicSettings() {
   ];
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
-      <Admin_Navbar />
+    <>
+      <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+        <Admin_Navbar />
 
-      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-          <div>
-            <h2 className="text-2xl md:text-3xl font-bold">
-              {showView ? `School Year ${selectedYear?.schoolYearStart}-${selectedYear?.schoolYearEnd}` : 'Academic Settings'}
-            </h2>
-            <p className="text-base md:text-lg">
-              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
-              {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
+        <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+          {/* Header Section */}
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-bold">
+                {showView ? `School Year ${selectedYear?.schoolYearStart}-${selectedYear?.schoolYearEnd}` : 'Academic Settings'}
+              </h2>
+              <p className="text-base md:text-lg">
+                {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+                {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
+                {new Date().toLocaleDateString("en-US", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </p>
+            </div>
+            <ProfileMenu />
           </div>
-          <ProfileMenu />
-        </div>
 
-        {showView ? (
-          // View Section
-          <div className="bg-white rounded-lg shadow-md">
-            {/* Back Button */}
-            <div className="p-4 border-b">
-              <button
-                onClick={handleBack}
-                className="flex items-center text-gray-600 hover:text-gray-800"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                Back to School Years
-              </button>
-        </div>
+          {showView ? (
+            // View Section
+            <div className="bg-white rounded-lg shadow-md">
+              {/* Back Button */}
+              <div className="p-4 border-b">
+                <button
+                  onClick={handleBack}
+                  className="flex items-center text-gray-600 hover:text-gray-800"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Back to School Years
+                </button>
+              </div>
 
-        {/* Tabs */}
-            <div className="border-b">
-              <div className="flex overflow-x-auto">
-                {tabs.map(tab => (
+              {/* Tabs */}
+              <div className="border-b">
+                <div className="flex overflow-x-auto">
+                  {tabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`px-4 py-2 text-sm font-medium whitespace-nowrap ${
+                        activeTab === tab.id
+                          ? 'border-b-2 border-[#00418B] text-[#00418B]'
+                          : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tab Content */}
+              <div className="p-4">
+                {/* Content will be added later */}
+                <div className="text-gray-500 text-center py-8">
+                  {activeTab} content will be implemented here
+                </div>
+              </div>
+            </div>
+          ) : (
+            // Original School Year Management Section
+            <>
+              {/* School Years List */}
+              <div className="bg-white p-4 rounded-xl shadow mb-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2 gap-2">
+                  <h4 className="text-xl md:text-2xl font-semibold">School Years</h4>
                   <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-                    className={`px-4 py-2 text-sm font-medium whitespace-nowrap ${
-                      activeTab === tab.id
-                        ? 'border-b-2 border-[#00418B] text-[#00418B]'
-                        : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-            >
-              {tab.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Tab Content */}
-            <div className="p-4">
-              {/* Content will be added later */}
-              <div className="text-gray-500 text-center py-8">
-                {activeTab} content will be implemented here
-                  </div>
-            </div>
-          </div>
-        ) : (
-          // Original School Year Management Section
-          <>
-            {/* School Year Form */}
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h3 className="text-xl font-semibold mb-4">{isEditMode ? 'Edit School Year' : 'Add New School Year'}</h3>
-              {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
-              {success && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">{success}</div>}
-              
-              <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    School Year Start
-                    </label>
-                    <input
-                    type="number"
-                    name="schoolYearStart"
-                    value={formData.schoolYearStart}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    min="1900"
-                    max="2100"
-                      required
-                    />
-                  <p className="mt-1 text-sm text-gray-500">
-                    School year will be {formData.schoolYearStart}-{formData.schoolYearStart ? parseInt(formData.schoolYearStart) + 1 : ''}
-                  </p>
-                  </div>
-
-                    <div className="flex items-center">
-                      <input
-                        type="hidden"
-                        id="active"
-                        name="status"
-                        value="active"
-                      />
-                    </div>
-
-                    <div className="flex gap-2">
-                    <button
-                      type="submit"
-                    className="flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
-                    >
-                    {isEditMode ? 'Save Changes' : 'Add School Year'}
-                    </button>
-                    {isEditMode && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                          setIsEditMode(false);
-                        setEditingYear(null);
-                        setFormData({
-                          schoolYearStart: "",
-                          status: "inactive"
-                        });
-                      }}
-                      className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
-                        >
-                          Cancel Edit
-                        </button>
-                      )}
-                  </div>
-                </form>
-              </div>
-
-            {/* School Years List */}
-              <div className="mt-8">
-                <h4 className="text-lg font-semibold mb-2">School Years</h4>
-              <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
-                    <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border">Start Year</th>
-                        <th className="p-3 border">End Year</th>
-                        <th className="p-3 border">Status</th>
-                        <th className="p-3 border">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                  {schoolYears.length === 0 ? (
-                    <tr>
-                      <td colSpan="4" className="p-3 border text-center text-gray-500">
-                        No school years found
-                          </td>
-                        </tr>
-                  ) : (
-                    schoolYears.map((year) => (
-                      <tr key={year._id}>
-                        <td className="p-3 border">{year.schoolYearStart}</td>
-                        <td className="p-3 border">{year.schoolYearEnd}</td>
-                            <td className="p-3 border">
-                              <button
-                                onClick={() => handleToggleStatus(year)}
-                                className={`px-3 py-1 rounded-full text-xs font-semibold border border-gray-300
-                                  ${year.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 hover:bg-green-200'}
-                                  hover:shadow`}
-                                title={year.status === 'active' ? 'Set as inactive' : 'Set as active'}
-                              >
-                                {year.status === 'active' ? 'Active' : 'Inactive'}
-                              </button>
-                            </td>
-                            <td className="p-3 border">
-                              <div className="inline-flex space-x-2">
-                                <button
-                              onClick={() => handleEdit(year)}
-                                  className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded"
-                              title="Edit"
-                                >
-                                  <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
-                                </button>
-                                <button
-                              onClick={() => handleView(year)}
-                              className="bg-blue-400 hover:bg-blue-500 text-white px-2 py-1 text-xs rounded"
-                              title="View"
-                                >
-                              <img src={viewIcon} alt="View" className="w-8 h-8 inline-block" />
-                                </button>
-                      <button
-                              onClick={() => handleDelete(year)}
-                                  className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded"
-                              title="Delete"
-                                >
-                              <img src={archiveIcon} alt="Delete" className="w-8 h-8 inline-block" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-              </div>
-          </>
-          )}
-
-        {/* View Modal */}
-        {showViewModal && selectedYear && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl w-11/12 max-w-6xl max-h-[90vh] flex flex-col">
-              {/* Modal Header */}
-              <div className="p-4 border-b flex justify-between items-center">
-                <h3 className="text-xl font-semibold">
-                  School Year {selectedYear.schoolYearStart}-{selectedYear.schoolYearEnd}
-                </h3>
-                <div className="flex items-center gap-4">
-                      <button
-                    onClick={() => setShowAddTermModal(true)}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded"
+                    onClick={() => setShowCreateModal(true)}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Term
-                      </button>
-                    <button
-                    onClick={() => setShowViewModal(false)}
-                    className="text-gray-500 hover:text-gray-700"
-                    >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    </button>
-                  </div>
-              </div>
-
-              {/* Terms Table */}
-              <div className="flex-1 overflow-y-auto p-4">
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
-                    <thead>
-                      <tr className="bg-gray-100 text-left">
-                      <th className="p-3 border">Term Name</th>
-                      <th className="p-3 border">Start Date</th>
-                      <th className="p-3 border">End Date</th>
+                    Add New School Year
+                  </button>
+                </div>
+                <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                  <thead>
+                    <tr className="bg-gray-100 text-left">
+                      <th className="p-3 border">Start Year</th>
+                      <th className="p-3 border">End Year</th>
                       <th className="p-3 border">Status</th>
-                        <th className="p-3 border">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                    {terms.length === 0 ? (
+                      <th className="p-3 border">Actions</th>
+                    </tr>
+                    <tr className="bg-white text-left">
+                      <th className="p-2 border-b">
+                        <input type="text" placeholder="Search Start Year" className="w-full border rounded px-2 py-1 text-sm" value={searchTerms.start} onChange={e => setSearchTerms(prev => ({ ...prev, start: e.target.value }))} />
+                      </th>
+                      <th className="p-2 border-b">
+                        <input type="text" placeholder="Search End Year" className="w-full border rounded px-2 py-1 text-sm" value={searchTerms.end} onChange={e => setSearchTerms(prev => ({ ...prev, end: e.target.value }))} />
+                      </th>
+                      <th className="p-2 border-b"></th>
+                      <th className="p-2 border-b"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schoolYears.filter(year =>
+                      (searchTerms.start === '' || year.schoolYearStart.toString().includes(searchTerms.start)) &&
+                      (searchTerms.end === '' || year.schoolYearEnd.toString().includes(searchTerms.end))
+                    ).length === 0 ? (
                       <tr>
-                        <td colSpan="5" className="p-3 border text-center text-gray-500">
-                          No terms found
-                          </td>
-                        </tr>
+                        <td colSpan="4" className="p-3 border text-center text-gray-500">
+                          No school years found
+                        </td>
+                      </tr>
                     ) : (
-                      terms.map((term) => (
-                        <tr key={term._id}>
-                          <td className="p-3 border">{term.termName}</td>
+                      schoolYears.filter(year =>
+                        (searchTerms.start === '' || year.schoolYearStart.toString().includes(searchTerms.start)) &&
+                        (searchTerms.end === '' || year.schoolYearEnd.toString().includes(searchTerms.end))
+                      ).map((year) => (
+                        <tr key={year._id} className="hover:bg-gray-50 transition">
+                          <td className="p-3 border">{year.schoolYearStart}</td>
+                          <td className="p-3 border">{year.schoolYearEnd}</td>
                           <td className="p-3 border">
-                            {new Date(term.startDate).toLocaleDateString()}
-                          </td>
-                          <td className="p-3 border">
-                            {new Date(term.endDate).toLocaleDateString()}
-                          </td>
-                          <td className="p-3 border">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              term.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {term.status}
-                            </span>
+                            <button
+                              onClick={() => handleToggleStatus(year)}
+                              className={`px-3 py-1 rounded-full text-xs font-semibold border border-gray-300
+                                ${year.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 hover:bg-green-200'}
+                                hover:shadow`}
+                              title={year.status === 'active' ? 'Set as inactive' : 'Set as active'}
+                            >
+                              {year.status === 'active' ? 'Active' : 'Inactive'}
+                            </button>
                           </td>
                           <td className="p-3 border">
                             <div className="inline-flex space-x-2">
-                      <button
-                                onClick={() => handleViewTerm(term)}
-                                className="bg-blue-400 hover:bg-blue-500 text-white px-2 py-1 text-xs rounded"
+                              <button
+                                onClick={() => { handleEdit(year); setShowCreateModal(true); }}
+                                className="p-1 rounded hover:bg-yellow-100 group relative"
+                                title="Edit"
+                              >
+                                {/* Heroicons Pencil Square (black) */}
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleView(year)}
+                                className="p-1 rounded hover:bg-blue-100 group relative"
                                 title="View"
                               >
-                                <img src={viewIcon} alt="View" className="w-8 h-8 inline-block" />
+                                {/* Heroicons Eye (black) */}
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12Z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleDelete(year)}
+                                className="p-1 rounded hover:bg-red-100 group relative"
+                                title="Archive"
+                              >
+                                {/* Heroicons Trash (red) */}
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                </svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {/* View Modal */}
+          {showViewModal && selectedYear && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg shadow-xl w-11/12 max-w-6xl max-h-[90vh] flex flex-col">
+                {/* Modal Header */}
+                <div className="p-4 border-b flex justify-between items-center">
+                  <h3 className="text-xl font-semibold">
+                    School Year {selectedYear.schoolYearStart}-{selectedYear.schoolYearEnd}
+                  </h3>
+                  <div className="flex items-center gap-4">
+                        <button
+                      onClick={() => setShowAddTermModal(true)}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                      </svg>
+                        </button>
+                      <button
+                      onClick={() => setShowViewModal(false)}
+                      className="text-gray-500 hover:text-gray-700"
+                      >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                       </button>
-                    <button
-                                  className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded"
-                                title="Edit"
-                                >
-                                  <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
-                                </button>
-                                {term.status === 'active' ? (
-                                  <button
-                                    onClick={() => handleArchiveTerm(term)}
-                                    className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded"
-                                    title="Archive"
-                                  >
-                                    <img src={archiveIcon} alt="Archive" className="w-8 h-8 inline-block" />
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleActivateTerm(term)}
-                                    className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
-                                    title="Activate"
-                                  >
-                                    <svg className="w-8 h-8 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  </button>
-                                )}
-                              </div>
+                    </div>
+                </div>
+
+                {/* Terms Table */}
+                <div className="flex-1 overflow-y-auto p-4">
+                    <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                      <thead>
+                        <tr className="bg-gray-100 text-left">
+                        <th className="p-3 border">Term Name</th>
+                        <th className="p-3 border">Start Date</th>
+                        <th className="p-3 border">End Date</th>
+                        <th className="p-3 border">Status</th>
+                          <th className="p-3 border">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                      {terms.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="p-3 border text-center text-gray-500">
+                            No terms found
                             </td>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-              </div>
-            </div>
-                    </div>
-        )}
-
-        {/* Add Term Modal */}
-        {showAddTermModal && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl w-96 p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Add New Term</h3>
-                                  <button
-                  onClick={() => setShowAddTermModal(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                      ) : (
+                        terms.map((term) => (
+                          <tr key={term._id}>
+                            <td className="p-3 border">{term.termName}</td>
+                            <td className="p-3 border">
+                              {new Date(term.startDate).toLocaleDateString()}
+                            </td>
+                            <td className="p-3 border">
+                              {new Date(term.endDate).toLocaleDateString()}
+                            </td>
+                            <td className="p-3 border">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                term.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {term.status}
+                              </span>
+                            </td>
+                            <td className="p-3 border">
+                              <div className="inline-flex space-x-2">
+                        <button
+                                  onClick={() => handleViewTerm(term)}
+                                  className="p-1 rounded hover:bg-blue-100 group relative"
+                                  title="View"
+                                >
+                                  {/* Heroicons Eye (black) */}
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12Z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+                                  </svg>
+                        </button>
+                      <button
+                                    className="p-1 rounded hover:bg-yellow-100 group relative"
+                                  title="Edit"
+                                  >
+                                    {/* Heroicons Pencil Square (black) */}
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                    </svg>
                                   </button>
+                                  {term.status === 'active' ? (
+                                    <button
+                                      onClick={() => handleArchiveTerm(term)}
+                                      className="p-1 rounded hover:bg-red-100 group relative"
+                                      title="Archive"
+                                    >
+                                      {/* Heroicons Trash (red) */}
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                      </svg>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleActivateTerm(term)}
+                                      className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
+                                      title="Activate"
+                                    >
+                                      <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    </button>
+                                  )}
                                 </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                </div>
+              </div>
+                      </div>
+          )}
 
-              <form onSubmit={handleAddTerm}>
-                  <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Date
-                  </label>
-                    <input
+          {/* Add Term Modal */}
+          {showAddTermModal && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg shadow-xl w-96 p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Add New Term</h3>
+                                    <button
+                    onClick={() => setShowAddTermModal(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                                    </button>
+                                  </div>
+
+                <form onSubmit={handleAddTerm}>
+                    <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Start Date
+                    </label>
+                      <input
                     type="date"
                     value={termFormData.startDate}
                     onChange={(e) => setTermFormData({ ...termFormData, startDate: e.target.value })}
@@ -769,6 +754,73 @@ export default function Admin_AcademicSettings() {
                         </div>
                 )}
               </div>
-    </div>
+
+          {showCreateModal && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-10 rounded-2xl shadow-2xl max-w-2xl w-full relative">
+                <button
+                  className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-3xl font-bold"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setIsEditMode(false);
+                    setEditingYear(null);
+                    setFormData({ schoolYearStart: '', status: 'inactive' });
+                  }}
+                  aria-label="Close"
+                >
+                  &times;
+                </button>
+                <h3 className="text-2xl font-bold mb-6">{isEditMode ? 'Edit School Year' : 'Add New School Year'}</h3>
+                {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
+                {success && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">{success}</div>}
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-lg font-medium text-gray-700 mb-1">
+                      School Year Start
+                    </label>
+                    <input
+                      type="number"
+                      name="schoolYearStart"
+                      value={formData.schoolYearStart}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                      min="1900"
+                      max="2100"
+                      required
+                    />
+                    <p className="mt-1 text-base text-gray-500">
+                      School year will be {formData.schoolYearStart}-{formData.schoolYearStart ? parseInt(formData.schoolYearStart) + 1 : ''}
+                    </p>
+                  </div>
+                  <input type="hidden" id="active" name="status" value="active" />
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      className="flex-1 bg-emerald-600 text-white py-3 px-4 rounded-md text-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                    >
+                      {isEditMode ? 'Save Changes' : 'Add School Year'}
+                    </button>
+                    {isEditMode && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditMode(false);
+                          setEditingYear(null);
+                          setFormData({ schoolYearStart: '', status: 'inactive' });
+                          setShowCreateModal(false);
+                        }}
+                        className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 px-4 rounded-md text-lg"
+                      >
+                        Cancel Edit
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      
+    </>
   );
 } 

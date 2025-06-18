@@ -250,7 +250,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={isLocked}
-              className={`w-full p-3 mt-10 rounded-lg transition font-poppinsr text-base ${
+              className={`w-full p-3 mt-5 rounded-lg transition font-poppinsr text-base ${
                 isLocked 
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-blue-900 text-white hover:bg-blue-950'

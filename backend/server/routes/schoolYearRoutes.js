@@ -1,5 +1,8 @@
 import express from 'express';
 import SchoolYear from '../models/SchoolYear.js';
+import StudentAssignment from '../models/StudentAssignment.js';
+import FacultyAssignment from '../models/FacultyAssignment.js';
+import Term from '../models/Term.js';
 
 const router = express.Router();
 
@@ -59,11 +62,18 @@ router.patch('/:id', async (req, res) => {
     }
     
     schoolYear.status = req.body.status;
-
     const updatedSchoolYear = await schoolYear.save();
+
+    // Archive all terms and assignments for this school year if archiving
+    if (req.body.status === 'archived' || req.body.status === 'inactive') {
+      const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
+      await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
+      await StudentAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
+      await FacultyAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
+    }
+
     res.json(updatedSchoolYear);
   } catch (error) {
-    // Remove specific active school year error check, as updateMany handles it implicitly
     res.status(400).json({ message: error.message });
   }
 });

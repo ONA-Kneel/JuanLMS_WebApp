@@ -31,7 +31,7 @@ export default function Admin_Accounts() {
     lastname: "",
     email: "",
     personalemail: "",
-    contactno: "",
+    schoolID: "",
     password: "",
     role: "students",
     userID: "", // invisible field
@@ -154,13 +154,17 @@ export default function Admin_Accounts() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-  
-    // For contact number: allow only digits, max 11, must start with 09
-    if (name === "contactno") {
-      let digitsOnly = value.replace(/\D/g, ""); // remove non-digits
-      if (digitsOnly.length > 11) digitsOnly = digitsOnly.slice(0, 11);
-      if (digitsOnly && !digitsOnly.startsWith("09")) digitsOnly = "09";
-      setFormData((prev) => ({ ...prev, [name]: digitsOnly }));
+    if (name === "schoolID") {
+      let newValue = value.replace(/[^\d-]/g, "");
+      if (formData.role === "students") {
+        newValue = newValue.replace(/\D/g, "").slice(0, 12);
+      } else {
+        newValue = newValue.replace(/[^\d-]/g, "").slice(0, 7);
+        if (newValue.length > 2 && newValue[2] !== '-') {
+          newValue = newValue.slice(0, 2) + '-' + newValue.slice(2, 6);
+        }
+      }
+      setFormData((prev) => ({ ...prev, [name]: newValue }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
@@ -196,10 +200,17 @@ export default function Admin_Accounts() {
         return;
       }
     }
-    // Contact number validation for all roles
-    if (!/^09\d{9}$/.test(formData.contactno)) {
-      alert("Contact number must be a valid PH mobile number (11 digits, starts with 09)");
-      return;
+    // SchoolID validation for all roles
+    if (formData.role === "students") {
+      if (!/^\d{12}$/.test(formData.schoolID)) {
+        alert("Student LRN must be a 12-digit number");
+        return;
+      }
+    } else {
+      if (!/^\d{2}-\d{4}$/.test(formData.schoolID)) {
+        alert("School ID must be in the format NN-NNNN for non-students");
+        return;
+      }
     }
     if (isEditMode) {
       // Validate if any changes were made
@@ -207,7 +218,7 @@ export default function Admin_Accounts() {
         formData.firstname !== editingUser.firstname ||
         formData.middlename !== (editingUser.middlename || "") ||
         formData.lastname !== editingUser.lastname ||
-        formData.contactno !== (editingUser.contactno || "") ||
+        formData.schoolID !== (editingUser.schoolID || "") ||
         formData.role !== editingUser.role;
 
       if (!hasChanges) {
@@ -270,7 +281,7 @@ export default function Admin_Accounts() {
             lastname: '',
             email: '',
             personalemail: '',
-            contactno: '',
+            schoolID: '',
             password: generatePassword(),
             role: 'students',
             userID: '',
@@ -303,7 +314,7 @@ export default function Admin_Accounts() {
           middlename: formData.middlename,
           lastname: formData.lastname,
           email: formData.email.toLowerCase(),
-          contactno: formData.contactno,
+          schoolID: formData.schoolID,
           password: formData.password,
           personalemail: formData.personalemail,
           role: formData.role,
@@ -337,7 +348,7 @@ export default function Admin_Accounts() {
             lastname: "",
             email: "",
             personalemail: "",
-            contactno: "",
+            schoolID: "",
             password: "",
             role: "students",
             userID: "",
@@ -394,7 +405,7 @@ export default function Admin_Accounts() {
       lastname: user.lastname,
       email: user.email,
       personalemail: user.personalemail || "",
-      contactno: user.contactno || "",
+      schoolID: user.schoolID || "",
       password: user.password,
       role: user.role,
       userID: user.userID
@@ -587,17 +598,17 @@ export default function Admin_Accounts() {
               <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                 <thead>
                   <tr className="bg-gray-50 text-left">
-                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("userID")}>User ID {sortConfig.key === "userID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("schoolID")}>School ID {sortConfig.key === "schoolID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
                     <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
                     <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
                     <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border-b w-1/6 font-semibold text-gray-700">Role</th>
-                    <th className="p-3 border-b w-1/6 font-semibold text-gray-700">Actions</th>
+                    <th className="p-3 border-b font-semibold text-gray-700">Role</th>
+                    <th className="p-3 border-b font-semibold text-gray-700">Actions</th>
                   </tr>
                   {/* New row for search inputs */}
                   <tr className="bg-white text-left">
                     <th className="p-2 border-b">
-                      <input type="text" placeholder="Search User ID" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, userID: e.target.value }))} />
+                      <input type="text" placeholder="Search School ID" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, schoolID: e.target.value }))} />
                     </th>
                     <th className="p-2 border-b">
                       <input type="text" placeholder="Search Last Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, lastname: e.target.value }))} />
@@ -631,7 +642,7 @@ export default function Admin_Accounts() {
                   ) : (
                     tabFilteredUsers.map((user, idx) => (
                       <tr key={user._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
-                        <td className="p-3 border-b">{user.userID || '-'}</td>
+                        <td className="p-3 border-b">{user.schoolID || '-'}</td>
                         <td className="p-3 border-b">{user.lastname}</td>
                         <td className="p-3 border-b">{user.firstname}</td>
                         <td className="p-3 border-b">{user.middlename}</td>
@@ -651,7 +662,10 @@ export default function Admin_Accounts() {
                               className="p-1 rounded hover:bg-yellow-100 group relative"
                               title="Edit"
                             >
-                              <img src={editIcon} alt="Edit" className="w-6 h-6 inline-block" />
+                              {/* Heroicons Pencil Square */}
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                              </svg>
                               <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Edit</span>
                             </button>
                             <button
@@ -659,7 +673,10 @@ export default function Admin_Accounts() {
                               className="p-1 rounded hover:bg-red-100 group relative"
                               title="Archive"
                             >
-                              <img src={archiveIcon} alt="Archive" className="w-6 h-6 inline-block" />
+                              {/* Heroicons Trash (archive) */}
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                              </svg>
                               <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Archive</span>
                             </button>
                           </div>
@@ -914,10 +931,10 @@ export default function Admin_Accounts() {
                   />
                   <input
                     type="text"
-                    name="contactno"
-                    value={formData.contactno}
+                    name="schoolID"
+                    value={formData.schoolID}
                     onChange={handleChange}
-                    placeholder="Contact Number (Optional)"
+                    placeholder={formData.role === 'students' ? "Student LRN (12 digits)" : "School ID (NN-NNNN)"}
                     className="border rounded p-4 text-lg"
                     required
                   />
@@ -968,7 +985,7 @@ export default function Admin_Accounts() {
                             lastname: "",
                             email: "",
                             personalemail: "",
-                            contactno: "",
+                            schoolID: "",
                             password: "",
                             role: "students",
                             userID: "",
@@ -1003,7 +1020,7 @@ export default function Admin_Accounts() {
               <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                 <thead>
                   <tr className="bg-gray-50 text-left">
-                    <th className="p-3 border">User ID</th>
+                    <th className="p-3 border">School ID</th>
                     <th className="p-3 border">Last Name</th>
                     <th className="p-3 border">First Name</th>
                     <th className="p-3 border">Middle Name</th>

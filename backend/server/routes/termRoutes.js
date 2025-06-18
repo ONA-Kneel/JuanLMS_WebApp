@@ -1,6 +1,8 @@
 import express from 'express';
 import Term from '../models/Term.js';
 import SchoolYear from '../models/SchoolYear.js';
+import StudentAssignment from '../models/StudentAssignment.js';
+import FacultyAssignment from '../models/FacultyAssignment.js';
 
 const router = express.Router();
 
@@ -75,6 +77,10 @@ router.patch('/:termId/archive', async (req, res) => {
 
     term.status = 'archived';
     await term.save();
+
+    // Archive all assignments for this term
+    await StudentAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } });
+    await FacultyAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } });
     
     res.json(term);
   } catch (err) {

@@ -13,6 +13,10 @@ import { encrypt, decrypt } from "../utils/encryption.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import SchoolYear from '../models/SchoolYear.js';
+import Term from '../models/Term.js';
+import StudentAssignment from '../models/StudentAssignment.js';
+import FacultyAssignment from '../models/FacultyAssignment.js';
 // import bcrypt from "bcryptjs"; // If you want to use hashing in the future
 
 const userRoutes = e.Router();
@@ -60,7 +64,7 @@ userRoutes.get("/users/search", authenticateToken, async (req, res) => {
     const decryptedUsers = users.map(user => ({
         ...user.toObject(),
         email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
-        contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+        schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
         personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
         middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
         firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
@@ -85,7 +89,7 @@ userRoutes.get("/users", async (req, res) => {
         const decryptedUsers = users.map(user => ({
             ...user.toObject(),
             email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
-            contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+            schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
             personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
             profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
             password: undefined,
@@ -112,7 +116,7 @@ userRoutes.get("/users/active", async (req, res) => {
         const decryptedUsers = users.map(user => ({
             ...user.toObject(),
             email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
-            contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+            schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
             personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
             profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
             password: undefined,
@@ -122,6 +126,42 @@ userRoutes.get("/users/active", async (req, res) => {
         console.error(err);
         res.status(500).json({ error: "Failed to fetch active users" });
     }
+});
+
+// Add GET /user-counts for dashboard stats
+userRoutes.get('/user-counts', authenticateToken, async (req, res) => {
+  try {
+    // 1. Get active school year
+    const activeYear = await SchoolYear.findOne({ status: 'active' });
+    if (!activeYear) return res.json({ admin: 0, faculty: 0, student: 0 });
+
+    const schoolYearName = `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`;
+
+    // 2. Get active term
+    const activeTerm = await Term.findOne({ status: 'active', schoolYear: schoolYearName });
+    if (!activeTerm) return res.json({ admin: 0, faculty: 0, student: 0 });
+
+    // 3. Count students assigned for this year/term
+    const studentCount = await StudentAssignment.countDocuments({
+      schoolYear: schoolYearName,
+      termName: activeTerm.termName,
+      status: 'active'
+    });
+
+    // 4. Count faculty assigned for this year/term
+    const facultyCount = await FacultyAssignment.countDocuments({
+      schoolYear: schoolYearName,
+      termName: activeTerm.termName,
+      status: 'active'
+    });
+
+    // 5. Count admins (not tied to year/term)
+    const adminCount = await User.countDocuments({ role: 'admin', isArchived: { $ne: true } });
+
+    res.json({ admin: adminCount, faculty: facultyCount, student: studentCount });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user counts' });
+  }
 });
 
 // Get all archived users
@@ -141,7 +181,7 @@ userRoutes.route("/users/:id").get(async (req, res) => {
         const decryptedUser = {
             ...user.toObject(),
             email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
-            contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+            schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
             personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
             profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
             password: undefined, // Never send password!
@@ -165,7 +205,7 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
         middlename,
         lastname,
         email,
-        contactno,
+        schoolID,
         password,
         personalemail,
         profilePic,
@@ -176,8 +216,19 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
     } = req.body;
 
     // Simple server-side validation (backend safety)
-    if (!firstname || !lastname || !email || !password || !role) {
+    if (!firstname || !lastname || !email || !password || !role || !schoolID) {
         return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Validate schoolID format
+    if (role === 'students') {
+        if (!/^\d{12}$/.test(schoolID)) {
+            return res.status(400).json({ error: "Student LRN must be a 12-digit number." });
+        }
+    } else {
+        if (!/^\d{2}-\d{4}$/.test(schoolID)) {
+            return res.status(400).json({ error: "School ID must be in the format NN-NNNN for non-students." });
+        }
     }
 
     // Check for duplicate email (unencrypted, before saving)
@@ -205,7 +256,7 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
             middlename,
             lastname,
             email: email.toLowerCase(),
-            contactno,
+            schoolID,
             password,
             personalemail,
             profilePic,
@@ -286,11 +337,21 @@ userRoutes.route("/users/:id").patch(authenticateToken, async (req, res) => {
 
         // Update only allowed fields
         [
-            "firstname", "middlename", "lastname", "email", "contactno",
+            "firstname", "middlename", "lastname", "email", "schoolID",
             "password", "personalemail", "profilePic", "userID", "role"
         ].forEach(field => {
             if (req.body[field] !== undefined) user[field] = req.body[field];
         });
+        // Validate schoolID format on update
+        if (user.role === 'students') {
+            if (!/^\d{12}$/.test(user.schoolID)) {
+                return res.status(400).json({ error: "Student LRN must be a 12-digit number." });
+            }
+        } else {
+            if (!/^\d{2}-\d{4}$/.test(user.schoolID)) {
+                return res.status(400).json({ error: "School ID must be in the format NN-NNNN for non-students." });
+            }
+        }
 
         await user.save(); // Triggers pre-save hook
 
@@ -704,7 +765,7 @@ userRoutes.post('/login', async (req, res) => {
         id: user._id,
         name: `${user.firstname} ${user.lastname}`,
         email: email, // original email
-        phone: user.getDecryptedContactNo ? user.getDecryptedContactNo() : undefined,
+        schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
         role: user.role,
         _id: user._id,
         profilePic: user.profilePic || null,

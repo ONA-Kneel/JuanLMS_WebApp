@@ -87,7 +87,7 @@ router.get('/:classID/members', async (req, res) => {
     const decryptedFaculty = faculty.map(user => ({
       ...user.toObject(),
       email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
-      contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+      schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
       personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
       middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
       firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
@@ -98,7 +98,7 @@ router.get('/:classID/members', async (req, res) => {
     const decryptedStudents = students.map(user => ({
       ...user.toObject(),
       email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
-      contactno: user.getDecryptedContactNo ? user.getDecryptedContactNo() : user.contactno,
+      schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
       personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
       middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
       firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,

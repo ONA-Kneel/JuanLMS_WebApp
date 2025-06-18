@@ -148,6 +148,14 @@ export default function TermDetails() {
   const [isSubjectUploading, setIsSubjectUploading] = useState(false);
   const [subjectExcelError, setSubjectExcelError] = useState('');
 
+  // SHOW TRACK MODAL
+  const [showTrackModal, setShowTrackModal] = useState(false);
+  const [showStrandModal, setShowStrandModal] = useState(false);
+  const [showSectionModal, setShowSectionModal] = useState(false);
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [showFacultyModal, setShowFacultyModal] = useState(false);
+  const [showStudentModal, setShowStudentModal] = useState(false);
+
   // New state for Term Data Import
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importExcelFile, setImportExcelFile] = useState(null);
@@ -3949,6 +3957,15 @@ Actual import to database is coming soon!`;
                     This term is archived. Editing is disabled.
                   </div>
                 )}
+                {/* <div className="flex justify-end mb-4">
+                  <button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded"
+                    onClick={() => setShowTrackModal(true)}
+                  >
+                    Add New Track
+                  </button>
+                </div> */}
+
                 <form onSubmit={handleAddTrack} className="space-y-4 mt-6">
                   <div className="flex flex-col md:flex-row md:space-x-4 md:space-y-0 mb-4">
                     <div className="flex-1">
@@ -4010,23 +4027,27 @@ Actual import to database is coming soon!`;
                         tracks.map((track) => (
                           <tr key={track._id}>
                             <td className="p-3 border">{track.trackName}</td>
-                            <td className="p-3 border">
+                               <td className="p-3 border">
                               <div className="inline-flex space-x-2">
                                 <button
                                   onClick={() => handleEditTrack(track)}
-                                  className="bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="p-1 rounded hover:bg-yellow-100 group relative"
                                   title="Edit"
-                                  disabled={termDetails.status === 'archived'}
                                 >
-                                  <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
+                                  {/* Heroicons Pencil Square (black) */}
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                  </svg>
                                 </button>
                                 <button
                                   onClick={() => handleDeleteTrack(track)}
-                                  className="bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="p-1 rounded hover:bg-red-100 group relative"
                                   title="Delete"
-                                  disabled={termDetails.status === 'archived'}
                                 >
-                                  <img src={archiveIcon} alt="Delete" className="w-8 h-8 inline-block" />
+                                  {/* Heroicons Trash (red) */}
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                  </svg>
                                 </button>
                               </div>
                             </td>
@@ -4429,8 +4450,8 @@ Actual import to database is coming soon!`;
                           onClick={handleConfirmSectionUpload}
                           disabled={isSectionUploading || !sectionPreviewData.some((_, index) => sectionValidationStatus[index]?.valid)}
                           className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!sectionPreviewData.some((_, index) => sectionValidationStatus[index]?.valid) || isSectionUploading)
-                              ? 'opacity-50 cursor-not-allowed'
-                              : ''
+                            ? 'opacity-50 cursor-not-allowed'
+                            : ''
                             }`}
                         >
                           {isSectionUploading ? 'Uploading...' : `Upload ${Object.values(sectionValidationStatus).filter(v => v.valid).length} Valid Section(s)`}
@@ -5011,8 +5032,8 @@ Actual import to database is coming soon!`;
                           onClick={handleConfirmFacultyAssignmentUpload}
                           disabled={isFacultyAssignmentUploading || !facultyAssignmentPreviewData.some((_, index) => facultyAssignmentValidationStatus[index]?.valid)}
                           className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!facultyAssignmentPreviewData.some((_, index) => facultyAssignmentValidationStatus[index]?.valid) || isFacultyAssignmentUploading)
-                              ? 'opacity-50 cursor-not-allowed'
-                              : ''
+                            ? 'opacity-50 cursor-not-allowed'
+                            : ''
                             }`}
                         >
                           {isFacultyAssignmentUploading ? 'Uploading...' : `Upload ${Object.values(facultyAssignmentValidationStatus).filter(v => v.valid).length} Valid Assignment(s)`}
@@ -5366,8 +5387,8 @@ Actual import to database is coming soon!`;
                       <td className="p-3 border">{track.termName}</td>
                       <td className="p-3 border">
                         <span className={`px-2 py-1 rounded text-sm ${validationStatus[index]?.valid
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
                           }`}>
                           {validationStatus[index]?.message}
                         </span>
@@ -5393,8 +5414,8 @@ Actual import to database is coming soon!`;
                 onClick={handleConfirmUpload}
                 disabled={isUploading || !previewTracks.some((_, index) => validationStatus[index]?.valid)}
                 className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!previewTracks.some((_, index) => validationStatus[index]?.valid) || isUploading)
-                    ? 'opacity-50 cursor-not-allowed'
-                    : ''
+                  ? 'opacity-50 cursor-not-allowed'
+                  : ''
                   }`}
               >
                 {isUploading ? 'Uploading...' : 'Confirm Upload'}
@@ -5601,6 +5622,51 @@ Actual import to database is coming soon!`;
                       )}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {showTrackModal && (
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+                  <div className="bg-white p-10 rounded-2xl shadow-2xl max-w-md w-full relative">
+                    <button
+                      className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-3xl font-bold"
+                      onClick={() => setShowTrackModal(false)}
+                      aria-label="Close"
+                    >
+                      &times;
+                    </button>
+                    <h3 className="text-2xl font-bold mb-6">Add New Track</h3>
+                    <form onSubmit={handleAddTrack} className="space-y-4">
+                      <div>
+                        <label className="block text-lg font-medium text-gray-700 mb-1">
+                          Track Name
+                        </label>
+                        <input
+                          type="text"
+                          name="trackName"
+                          value={trackFormData.trackName}
+                          onChange={handleTrackFormChange}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                          required
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="submit"
+                          className="flex-1 bg-emerald-600 text-white py-3 px-4 rounded-md text-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                        >
+                          Add Track
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowTrackModal(false)}
+                          className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 px-4 rounded-md text-lg"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               )}
 

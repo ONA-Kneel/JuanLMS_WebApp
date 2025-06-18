@@ -13,7 +13,7 @@ const userSchema = new mongoose.Schema({
   emailHash: String,
   personalemail: String,
   personalemailHash: String,
-  contactno: String,
+  schoolID: String,
   password: String,
   role: String,
   userID: String,
@@ -38,8 +38,18 @@ userSchema.pre("save", async function (next) {
     this.emailHash = crypto.createHash('sha256').update(this.email.toLowerCase()).digest('hex');
     this.email = encrypt(this.email);
   }
-  if (this.isModified("contactno")) {
-    this.contactno = encrypt(this.contactno);
+  if (this.isModified("schoolID")) {
+    // Validation based on role
+    if (this.role === 'students') {
+      if (!/^\d{12}$/.test(this.schoolID)) {
+        return next(new Error('Student LRN must be a 12-digit number.'));
+      }
+    } else {
+      if (!/^\d{2}-\d{4}$/.test(this.schoolID)) {
+        return next(new Error('School ID must be in the format NN-NNNN for non-students.'));
+      }
+    }
+    this.schoolID = encrypt(this.schoolID);
   }
   if (this.isModified("personalemail")) {
     this.personalemailHash = crypto.createHash('sha256').update(this.personalemail.toLowerCase()).digest('hex');
@@ -55,8 +65,8 @@ userSchema.pre("save", async function (next) {
 userSchema.methods.getDecryptedEmail = function () {
   return decrypt(this.email);
 };
-userSchema.methods.getDecryptedContactNo = function () {
-  return decrypt(this.contactno);
+userSchema.methods.getDecryptedSchoolID = function () {
+  return decrypt(this.schoolID);
 };
 userSchema.methods.getDecryptedPersonalEmail = function () {
   return decrypt(this.personalemail);
