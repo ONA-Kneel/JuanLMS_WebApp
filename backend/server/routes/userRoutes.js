@@ -20,6 +20,25 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here"; // 👈 use
 
 // ------------------ CRUD ROUTES ------------------
 
+// Get user counts for Admin, Faculty, and Students
+userRoutes.get('/user-counts', authenticateToken, async (req, res) => {
+  try {
+    const adminCount = await User.countDocuments({ role: 'admin', isArchived: { $ne: true } });
+    const facultyCount = await User.countDocuments({ role: 'faculty', isArchived: { $ne: true } });
+    const studentCount = await User.countDocuments({ role: 'students', isArchived: { $ne: true } });
+
+    res.json({
+      admin: adminCount,
+      faculty: facultyCount,
+      students: studentCount,
+    });
+  } catch (err) {
+    console.error("Failed to fetch user counts:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
 // Search students by name (must be before /users/:id)
 userRoutes.get("/users/search", authenticateToken, async (req, res) => {
     const query = req.query.q || "";

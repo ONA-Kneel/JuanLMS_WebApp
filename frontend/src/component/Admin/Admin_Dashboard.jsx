@@ -6,6 +6,9 @@ import ProfileModal from "../ProfileModal"; // reuse if you want it for faculty 
 // import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../ProfileMenu";
 
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
+
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Admin_Dashboard() {
@@ -13,38 +16,45 @@ export default function Admin_Dashboard() {
   const [accountCounts, setAccountCounts] = useState({ admin: 0, faculty: 0, student: 0 });
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [holidays, setHolidays] = useState([]); 
+  const [classDates, setClassDates] = useState([]); 
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    fetch(`${API_BASE}/audit-logs?page=1&limit=5`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+useEffect(() => {
+  const token = localStorage.getItem('token');
+
+  // Fetch recent audit logs
+  fetch(`${API_BASE}/audit-logs?page=1&limit=5`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data?.logs) setRecentAuditLogs(data.logs);
+    });
+
+  // Fetch account counts
+  fetch(`${API_BASE}/user-counts`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data) setAccountCounts(data);
     })
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.logs) setRecentAuditLogs(data.logs);
+    .catch(() => {});
+
+  // Fetch academic year and term, then compute holidays and class days
+  async function fetchAcademicYearAndTerm() {
+    try {
+      const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
-    fetch(`${API_BASE}/user-counts`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data) setAccountCounts(data);
-      })
-      .catch(() => {});
+      if (yearRes.ok) {
+        const year = await yearRes.json();
+        setAcademicYear(year);
 
-    async function fetchAcademicYearAndTerm() {
-      try {
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (yearRes.ok) {
-          const year = await yearRes.json();
-          setAcademicYear(year);
-        }
         const termRes = await fetch(`${API_BASE}/api/terms/active`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
@@ -52,12 +62,70 @@ export default function Admin_Dashboard() {
           const term = await termRes.json();
           setCurrentTerm(term);
         }
-      } catch (err) {
-        console.error("Failed to fetch academic year or term", err);
-      }
+
+        // Fetch Philippine holidays from Nager.Date API
+    const today = new Date();
+    const schoolYearStart = year?.schoolYearStart || today.getFullYear();
+    const schoolYearEnd = year?.schoolYearEnd || (today.getMonth() > 4 ? today.getFullYear() + 1 : today.getFullYear());
+
+    // Fetch holidays from Nager.Date API
+    const [holidaysStart, holidaysEnd] = await Promise.all([
+      fetch(`https://date.nager.at/api/v3/PublicHolidays/${schoolYearStart}/PH`).then(r => r.json()),
+      fetch(`https://date.nager.at/api/v3/PublicHolidays/${schoolYearEnd}/PH`).then(r => r.json()),
+    ]);
+
+    // ✅ Skip Date conversion, just use API dates as strings
+    const formattedHolidaysStart = holidaysStart.map(h => h.date); // 'YYYY-MM-DD'
+    const formattedHolidaysEnd = holidaysEnd.map(h => h.date);     // 'YYYY-MM-DD'
+
+    // Fallback critical holidays
+    const fallbackHolidays = [
+      `${schoolYearStart}-06-12`, // Independence Day
+      `${schoolYearStart}-12-25`, // Christmas
+      `${schoolYearStart}-01-01`, // New Year
+    ];
+
+    // ✅ Merge + remove duplicates
+    const allHolidays = Array.from(new Set([
+      ...formattedHolidaysStart,
+      ...formattedHolidaysEnd,
+      ...fallbackHolidays
+    ]));
+
+    // Build class days (excluding weekends & holidays)
+    const start = new Date(`${year.schoolYearStart}-06-01`);
+    const end = new Date(`${year.schoolYearEnd}-04-30`);
+    console.log("📅 School Year Start Date:", start);
+    console.log("📅 School Year End Date:", end);
+
+    const tempClassDates = [];
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+
+      // Skip weekends
+      if (d.getDay() === 0 || d.getDay() === 6) continue;
+
+      // Skip holidays
+      if (allHolidays.includes(dateStr)) continue;
+
+      tempClassDates.push(dateStr);
     }
-    fetchAcademicYearAndTerm();
-  }, []);
+
+    console.log("✅ Valid classDates:", tempClassDates);
+    setHolidays(allHolidays);
+    setClassDates(tempClassDates);
+
+
+      }
+    } catch (err) {
+      console.error("Failed to fetch academic year, term, or holidays", err);
+    }
+  }
+
+  fetchAcademicYearAndTerm();
+}, []);
+
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -69,6 +137,23 @@ export default function Admin_Dashboard() {
       second: '2-digit'
     });
   };
+
+  const calculateSchoolYearProgress = () => {
+    if (!academicYear) return 0;
+
+    const startDate = new Date(academicYear.startDate || `${academicYear.schoolYearStart}-06-01`);
+    const endDate = new Date(academicYear.endDate || `${academicYear.schoolYearEnd}-04-30`);
+    const today = new Date();
+
+    if (today < startDate) return 0;
+    if (today > endDate) return 100;
+
+    const totalDuration = endDate - startDate;
+    const elapsed = today - startDate;
+    return Math.floor((elapsed / totalDuration) * 100);
+  };
+
+  const schoolYearProgress = calculateSchoolYearProgress();
 
   return (
     <div className="flex flex-col min-h-screen overflow-hidden font-poppinsr ">
@@ -114,11 +199,52 @@ export default function Admin_Dashboard() {
             </div>
 
             {/* Graph/Chart Placeholder */}
-            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center mb-4 min-h-[220px]">
+            {/* <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center mb-4 min-h-[220px]">
               <span className="text-lg font-bold text-gray-800 mb-2">User Registrations Over Time</span>
               <div className="w-full h-40 flex items-center justify-center text-gray-400">
-                {/* Chart.js or Recharts graph can go here */}
                 <span>(Graph coming soon)</span>
+              </div>
+            </div> */}
+
+            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center mb-4 min-h-[220px] w-full">
+              <span className="text-lg font-bold text-gray-800 mb-4">School Year Progress</span>
+              <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden shadow-inner">
+                <div
+                  className="bg-indigo-600 h-6 text-white text-sm font-semibold text-center"
+                  style={{ width: `${schoolYearProgress}%` }}
+                >
+                  {schoolYearProgress}%
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">
+                {academicYear?.startDate && academicYear?.endDate
+                  ? `From ${new Date(academicYear.startDate).toLocaleDateString()} to ${new Date(academicYear.endDate).toLocaleDateString()}`
+                  : `Estimating from June 1, ${academicYear?.schoolYearStart} to April 30, ${academicYear?.schoolYearEnd}`}
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl shadow p-6 flex flex-col mb-2">
+              <span className="text-lg font-bold text-gray-800 mb-4">Academic Calendar</span>
+                <Calendar
+                  tileClassName={({ date }) => {
+                    const y = date.getFullYear();
+                    const m = String(date.getMonth() + 1).padStart(2, '0');
+                    const d = String(date.getDate()).padStart(2, '0');
+                    const dateStr = `${y}-${m}-${d}`;
+
+                    const isHoliday = holidays.includes(dateStr);
+                    const isClassDay = classDates.includes(dateStr);
+                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+                    if (isHoliday) return '!bg-red-300 !text-white !font-bold';
+                    if (isClassDay) return '!bg-green-200 !text-black !font-semibold';
+                    if (isWeekend) return '!text-black';
+                    return '';
+                  }}
+                />
+              <div className="mt-4 text-sm">
+                <div><span className="inline-block w-3 h-3 bg-red-300 mr-2 rounded-full"></span> Holiday</div>
+                <div><span className="inline-block w-3 h-3 bg-green-200 mr-2 rounded-full"></span> Class Day</div>
               </div>
             </div>
 

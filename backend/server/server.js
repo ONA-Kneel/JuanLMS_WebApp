@@ -96,6 +96,24 @@ app.post("/users/:id/upload-profile", upload.single("image"), async (req, res) =
   }
 });
 
+app.get('/user-counts', async (req, res) => {
+  try {
+    const adminCount = await User.countDocuments({ role: 'admin' });
+    const facultyCount = await User.countDocuments({ role: 'faculty' });
+    const studentCount = await User.countDocuments({ role: 'students' });
+
+    res.json({
+      admin: adminCount,
+      faculty: facultyCount,
+      student: studentCount,
+    });
+  } catch (err) {
+    console.error("Failed to fetch user counts:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
 // ✅ Routes
 app.use('/', userRoutes);
 app.use('/messages', messageRoutes);
