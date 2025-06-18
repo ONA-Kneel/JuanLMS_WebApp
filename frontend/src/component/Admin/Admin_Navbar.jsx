@@ -10,7 +10,8 @@ import calendarIcon from "../../assets/calendar.png";
 import logo5 from "../../assets/logo/Logo5.svg";
 import acadSettingsIcon from "../../assets/acadsettings.png"
 import logo6 from "../../assets/logo/SJDD Logo.svg";
-import { Menu, X, HelpCircle } from 'lucide-react';
+import { Menu, X, HelpCircle, Users } from 'lucide-react';
+import studentIcon from '../../assets/student.png';
 
 const Admin_Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -24,6 +25,7 @@ const Admin_Navbar = () => {
         { path: "/admin_chats", icon: chatsIcon, label: "CHATS" },
         { path: "/admin_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
         { path: "/admin_calendar", icon: calendarIcon, label: "CALENDAR" },
+        { path: "/admin_registrants", icon: studentIcon, label: "REGISTRANTS" },
     ];
 
     return (

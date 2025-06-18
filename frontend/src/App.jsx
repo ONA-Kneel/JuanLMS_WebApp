@@ -7,6 +7,7 @@ import PdfViewer from './component/PdfViewer';
 import ProtectedRoute from './component/ProtectedRoute';
 import ActivityCreatePage from './component/ActivityCreatePage';
 import AssignmentDetailPage from './component/AssignmentDetailPage';
+import Registration from './component/Registration';
 
 // Students Access
 import Student_Dashboard from './component/Student/Student_Dashboard';
@@ -50,6 +51,7 @@ import Admin_AuditTrail from './component/Admin/Admin_AuditTrail';
 import { AdminSupportCenter } from './component/Admin';
 import Admin_AcademicSettings from './component/Admin/Admin_AcademicSettings';
 import TermDetails from './component/Admin/TermDetails';
+import Admin_Registrants from './component/Admin/Admin_Registrants';
 
 // Parent Access
 import Parent_Dashboard from './component/Parent/Parent_Dashboard';
@@ -107,6 +109,7 @@ function App() {
         <Route path="/admin_audit_trail" element={<ProtectedRoute allowedRoles={['admin']}><Admin_AuditTrail /></ProtectedRoute>}/>
         <Route path="/admin/support-center" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupportCenter /></ProtectedRoute>} />
         <Route path="/admin/academic-settings/terms/:termId" element={<ProtectedRoute allowedRoles={['admin']}><TermDetails /></ProtectedRoute>} />
+        <Route path="/admin_registrants" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Registrants /></ProtectedRoute>} />
 
         {/* Parent */}
         <Route path="/parent_dashboard" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Dashboard/></ProtectedRoute>}/>
@@ -118,6 +121,9 @@ function App() {
 
         {/* Assignment/Quiz Detail Page */}
         <Route path="/assignment/:assignmentId" element={<ProtectedRoute allowedRoles={['faculty','students']}><AssignmentDetailPage /></ProtectedRoute>} />
+
+        {/* Registration Page */}
+        <Route path="/register" element={<Registration />} />
 
       </Routes>
     </Router>

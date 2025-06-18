@@ -250,7 +250,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={isLocked}
-              className={`w-full p-3 mt-5 rounded-lg transition font-poppinsr text-base ${
+              className={`w-full p-3 rounded-t-lg transition font-poppinsr text-base ${
                 isLocked 
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-blue-900 text-white hover:bg-blue-950'
@@ -258,6 +258,11 @@ export default function Login() {
             >
               {isLocked ? `Locked (${lockoutTime}s)` : 'Login'}
             </button>
+            {/* Register Link - directly below the button, no margin */}
+            <div className="text-center text-sm">
+              <span className="text-gray-700">No account? </span>
+              <Link to="/register" className="text-blue-600 hover:underline font-poppinsr">Register Here</Link>
+            </div>
           </form>
         </div>
 
