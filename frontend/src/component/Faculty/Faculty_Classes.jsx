@@ -13,7 +13,6 @@ export default function Faculty_Classes() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [academicYear, setAcademicYear] = useState(null);
-  const [currentTerm, setCurrentTerm] = useState(null);
 
   const currentFacultyID = localStorage.getItem("userID");
 
@@ -39,7 +38,7 @@ export default function Faculty_Classes() {
   }, [currentFacultyID]);
 
   useEffect(() => {
-    async function fetchAcademicYearAndTerm() {
+    async function fetchAcademicYear() {
       try {
         const token = localStorage.getItem("token");
         const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
@@ -49,19 +48,32 @@ export default function Faculty_Classes() {
           const year = await yearRes.json();
           setAcademicYear(year);
         }
-        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (termRes.ok) {
-          const term = await termRes.json();
-          setCurrentTerm(term);
-        }
       } catch (err) {
-        console.error("Failed to fetch academic year or term", err);
+        console.error("Failed to fetch academic year", err);
       }
     }
-    fetchAcademicYearAndTerm();
+    fetchAcademicYear();
   }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+        } else {
+        }
+      } catch {
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -74,7 +86,6 @@ export default function Faculty_Classes() {
             <h2 className="text-2xl md:text-3xl font-bold">Classes</h2>
             <p className="text-base md:text-lg">
               {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
-              {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",

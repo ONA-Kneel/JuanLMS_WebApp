@@ -45,87 +45,48 @@ useEffect(() => {
     })
     .catch(() => {});
 
-  // Fetch academic year and term, then compute holidays and class days
-  async function fetchAcademicYearAndTerm() {
+  // Fetch academic year only
+  async function fetchAcademicYear() {
     try {
+      const token = localStorage.getItem("token");
       const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (yearRes.ok) {
         const year = await yearRes.json();
         setAcademicYear(year);
-
-        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (termRes.ok) {
-          const term = await termRes.json();
-          setCurrentTerm(term);
-        }
-
-        // Fetch Philippine holidays from Nager.Date API
-    const today = new Date();
-    const schoolYearStart = year?.schoolYearStart || today.getFullYear();
-    const schoolYearEnd = year?.schoolYearEnd || (today.getMonth() > 4 ? today.getFullYear() + 1 : today.getFullYear());
-
-    // Fetch holidays from Nager.Date API
-    const [holidaysStart, holidaysEnd] = await Promise.all([
-      fetch(`https://date.nager.at/api/v3/PublicHolidays/${schoolYearStart}/PH`).then(r => r.json()),
-      fetch(`https://date.nager.at/api/v3/PublicHolidays/${schoolYearEnd}/PH`).then(r => r.json()),
-    ]);
-
-    // ✅ Skip Date conversion, just use API dates as strings
-    const formattedHolidaysStart = holidaysStart.map(h => h.date); // 'YYYY-MM-DD'
-    const formattedHolidaysEnd = holidaysEnd.map(h => h.date);     // 'YYYY-MM-DD'
-
-    // Fallback critical holidays
-    const fallbackHolidays = [
-      `${schoolYearStart}-06-12`, // Independence Day
-      `${schoolYearStart}-12-25`, // Christmas
-      `${schoolYearStart}-01-01`, // New Year
-    ];
-
-    // ✅ Merge + remove duplicates
-    const allHolidays = Array.from(new Set([
-      ...formattedHolidaysStart,
-      ...formattedHolidaysEnd,
-      ...fallbackHolidays
-    ]));
-
-    // Build class days (excluding weekends & holidays)
-    const start = new Date(`${year.schoolYearStart}-06-01`);
-    const end = new Date(`${year.schoolYearEnd}-04-30`);
-    console.log("📅 School Year Start Date:", start);
-    console.log("📅 School Year End Date:", end);
-
-    const tempClassDates = [];
-
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().split('T')[0];
-
-      // Skip weekends
-      if (d.getDay() === 0 || d.getDay() === 6) continue;
-
-      // Skip holidays
-      if (allHolidays.includes(dateStr)) continue;
-
-      tempClassDates.push(dateStr);
-    }
-
-    console.log("✅ Valid classDates:", tempClassDates);
-    setHolidays(allHolidays);
-    setClassDates(tempClassDates);
-
-
       }
     } catch (err) {
-      console.error("Failed to fetch academic year, term, or holidays", err);
+      console.error("Failed to fetch academic year", err);
     }
   }
 
-  fetchAcademicYearAndTerm();
+  fetchAcademicYear();
 }, []);
 
+// Fetch current term when academicYear changes
+useEffect(() => {
+  async function fetchActiveTermForYear() {
+    if (!academicYear) return;
+    try {
+      const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const terms = await res.json();
+        const active = terms.find(term => term.status === 'active');
+        setCurrentTerm(active || null);
+      } else {
+        setCurrentTerm(null);
+      }
+    } catch {
+      setCurrentTerm(null);
+    }
+  }
+  fetchActiveTermForYear();
+}, [academicYear]);
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -165,7 +126,7 @@ useEffect(() => {
             <h2 className="text-2xl md:text-3xl font-bold">Admin Dashboard</h2>
             <p className="text-base md:text-lg">
               {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
-              {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
+              {currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",

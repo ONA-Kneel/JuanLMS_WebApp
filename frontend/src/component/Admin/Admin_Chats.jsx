@@ -29,6 +29,8 @@ export default function Admin_Chats() {
     return stored ? JSON.parse(stored) : [];
   });
   const [lastMessage, setLastMessage] = useState(null);
+  const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -299,6 +301,47 @@ export default function Admin_Chats() {
     // eslint-disable-next-line
   }, [recentChats, currentUserId]);
 
+  useEffect(() => {
+    async function fetchAcademicYear() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year", err);
+      }
+    }
+    fetchAcademicYear();
+  }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
+
   return (
     <div className="flex min-h-screen h-screen max-h-screen">
       <Admin_Navbar />
@@ -307,6 +350,8 @@ export default function Admin_Chats() {
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Chats</h2>
             <p className="text-base md:text-lg">
+              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+              {currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",

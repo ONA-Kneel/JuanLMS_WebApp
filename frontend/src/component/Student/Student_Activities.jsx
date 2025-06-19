@@ -15,6 +15,8 @@ export default function Student_Activities() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submissionFile, setSubmissionFile] = useState(null);
+  const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   const tabs = [
     { id: "upcoming", label: "Upcoming" },
@@ -52,6 +54,47 @@ export default function Student_Activities() {
     };
     fetchAssignments();
   }, []);
+
+  useEffect(() => {
+    async function fetchAcademicYear() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year", err);
+      }
+    }
+    fetchAcademicYear();
+  }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
 
   return (
     <>

@@ -102,7 +102,7 @@ export default function Faculty_Calendar() {
   }, []);
 
   useEffect(() => {
-    async function fetchAcademicYearAndTerm() {
+    async function fetchAcademicYear() {
       try {
         const token = localStorage.getItem("token");
         const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
@@ -112,19 +112,35 @@ export default function Faculty_Calendar() {
           const year = await yearRes.json();
           setAcademicYear(year);
         }
-        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (termRes.ok) {
-          const term = await termRes.json();
-          setCurrentTerm(term);
-        }
       } catch (err) {
-        console.error("Failed to fetch academic year or term", err);
+        console.error("Failed to fetch academic year", err);
       }
     }
-    fetchAcademicYearAndTerm();
+    fetchAcademicYear();
   }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
 
   const allEvents = [...adminEvents, ...holidays, ...assignmentEvents];
 
@@ -150,7 +166,7 @@ export default function Faculty_Calendar() {
               <h2 className="text-2xl md:text-3xl font-bold">Calendar</h2>
               <p className="text-base md:text-lg">
                 {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
-                {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
+                {currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
                 {new Date().toLocaleDateString("en-US", {
                   weekday: "long",
                   year: "numeric",

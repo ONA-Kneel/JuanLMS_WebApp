@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
-import videocall from "../../assets/videocall.png";
-import voicecall from "../../assets/voicecall.png";
 import uploadfile from "../../assets/uploadfile.png";
 import closeIcon from "../../assets/close.png";
 import Faculty_Navbar from "./Faculty_Navbar";
@@ -21,14 +19,12 @@ export default function Faculty_Chats() {
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
-  const [onlineUsers, setOnlineUsers] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
     const stored = localStorage.getItem("recentChats_faculty");
     return stored ? JSON.parse(stored) : [];
   });
-  const [lastMessage, setLastMessage] = useState(null);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
 
@@ -59,10 +55,6 @@ export default function Faculty_Chats() {
     });
 
     socket.current.emit("addUser", currentUserId);
-
-    socket.current.on("getUsers", (users) => {
-      setOnlineUsers(users);
-    });
 
     socket.current.on("getMessage", (data) => {
       const incomingMessage = {
@@ -257,12 +249,21 @@ export default function Faculty_Chats() {
       if (lastMsg) {
         let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
         let text = (lastMsg.message) ? lastMsg.message : (lastMsg.fileUrl ? "File sent" : "");
-        setLastMessage({ prefix, text });
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix, text }
+        }));
       } else {
-        setLastMessage(null);
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: null
+        }));
       }
     } else {
-      setLastMessage(null);
+      setLastMessages(prev => ({
+        ...prev,
+        [selectedChat?._id]: null
+      }));
     }
   }, [selectedChat, messages, currentUserId]);
 
@@ -302,7 +303,7 @@ export default function Faculty_Chats() {
   }, [recentChats, currentUserId]);
 
   useEffect(() => {
-    async function fetchAcademicYearAndTerm() {
+    async function fetchAcademicYear() {
       try {
         const token = localStorage.getItem("token");
         const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
@@ -312,19 +313,35 @@ export default function Faculty_Chats() {
           const year = await yearRes.json();
           setAcademicYear(year);
         }
-        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (termRes.ok) {
-          const term = await termRes.json();
-          setCurrentTerm(term);
-        }
       } catch (err) {
-        console.error("Failed to fetch academic year or term", err);
+        console.error("Failed to fetch academic year", err);
       }
     }
-    fetchAcademicYearAndTerm();
+    fetchAcademicYear();
   }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
 
   return (
     <div className="flex min-h-screen h-screen max-h-screen">
@@ -392,19 +409,19 @@ export default function Faculty_Chats() {
                     // Find the latest message between current user and this user
                     const chatMessages = messages[user._id] || [];
                     const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
-                    let lastMsgPrefix = "";
-                    let lastMsgText = "";
+                    let dateLabel;
                     if (lastMsg) {
-                      if (lastMsg.senderId === currentUserId) {
-                        lastMsgPrefix = "You: ";
-                      } else {
-                        lastMsgPrefix = `${user.lastname}, ${user.firstname}: `;
-                      }
-                      if (lastMsg.message) {
-                        lastMsgText = lastMsg.message;
-                      } else if (lastMsg.fileUrl) {
-                        lastMsgText = "File sent";
-                      }
+                      const msgDate = new Date(lastMsg.createdAt || lastMsg.updatedAt);
+                      const now = new Date();
+                      const isToday = msgDate.toDateString() === now.toDateString();
+                      const isYesterday = (() => {
+                        const yesterday = new Date();
+                        yesterday.setDate(now.getDate() - 1);
+                        return msgDate.toDateString() === yesterday.toDateString();
+                      })();
+                      if (isToday) dateLabel = "Today";
+                      else if (isYesterday) dateLabel = "Yesterday";
+                      else dateLabel = msgDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
                     }
                     return (
                       <div

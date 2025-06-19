@@ -140,6 +140,47 @@ export default function FacultyCreateClass() {
     if (!uniqueSections.includes(selectedSection)) setSelectedSection("");
   }, [filteredAssignments, selectedSubject]);
 
+  useEffect(() => {
+    async function fetchAcademicYear() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year", err);
+      }
+    }
+    fetchAcademicYear();
+  }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
+
   const handleSearch = async (e) => {
     const query = e.target.value;
     setStudentName(query);
@@ -301,14 +342,12 @@ export default function FacultyCreateClass() {
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Classes</h2>
-            <p className="text-base md:text-lg"> Academic Year and Term here | 
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
+            <p className="text-base md:text-lg"> AY: {academicYear?.schoolYearStart}-{academicYear?.schoolYearEnd} | {currentTerm?.termName} | {new Date().toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}</p>
           </div>
 
           <ProfileMenu />

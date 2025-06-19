@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import ProfileMenu from "../ProfileMenu";
 import Admin_Navbar from "./Admin_Navbar";
-import editIcon from "../../assets/editing.png";
-import archiveIcon from "../../assets/archive.png";
 import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -487,7 +485,7 @@ export default function Admin_Accounts() {
   const [currentTerm, setCurrentTerm] = useState(null);
 
   useEffect(() => {
-    async function fetchAcademicYearAndTerm() {
+    async function fetchAcademicYear() {
       try {
         const token = localStorage.getItem("token");
         const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
@@ -497,19 +495,35 @@ export default function Admin_Accounts() {
           const year = await yearRes.json();
           setAcademicYear(year);
         }
-        const termRes = await fetch(`${API_BASE}/api/terms/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (termRes.ok) {
-          const term = await termRes.json();
-          setCurrentTerm(term);
-        }
       } catch (err) {
-        console.error("Failed to fetch academic year or term", err);
+        console.error("Failed to fetch academic year", err);
       }
     }
-    fetchAcademicYearAndTerm();
+    fetchAcademicYear();
   }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -523,7 +537,7 @@ export default function Admin_Accounts() {
               <h2 className="text-2xl md:text-3xl font-bold">Create Accounts</h2>
               <p className="text-base md:text-lg">
                 {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
-                {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
+                {currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
                 {new Date().toLocaleDateString("en-US", {
                   weekday: "long",
                   year: "numeric",
