@@ -260,7 +260,7 @@ export default function Login() {
             </button>
             {/* Register Link - directly below the button, no margin */}
             <div className="text-center text-sm">
-              <span className="text-gray-700">No account? </span>
+              <span className="text-gray-700">New Student? </span>
               <Link to="/register" className="text-blue-600 hover:underline font-poppinsr">Register Here</Link>
             </div>
           </form>

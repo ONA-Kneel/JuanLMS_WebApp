@@ -508,10 +508,10 @@ export default function ProfileModal({
               </a>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <span className="material-icons text-black">phone</span>
+              {/* <span className="material-icons text-black">phone</span>
               <a href={`tel:${userInfo.contactno || ''}`} className="text-blue-600 hover:underline">
                 {userInfo.contactno || 'No phone'}
-              </a>
+              </a> */}
             </div>
           </div>
         </div>
