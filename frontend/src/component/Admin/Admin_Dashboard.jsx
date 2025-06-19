@@ -6,8 +6,10 @@ import ProfileModal from "../ProfileModal"; // reuse if you want it for faculty 
 // import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../ProfileMenu";
 
-import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+// import '@fullcalendar/core/main.css';
+// import '@fullcalendar/daygrid/main.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -116,6 +118,44 @@ useEffect(() => {
 
   const schoolYearProgress = calculateSchoolYearProgress();
 
+  // Helper to map holidays to FullCalendar events
+  const holidayEvents = holidays.map(date => {
+    // Try to find a label for the holiday (if you have a mapping)
+    let title = '';
+    if (date.includes('06-12')) title = 'Araw ng Kalayaan';
+    else if (date.includes('06-06')) title = "Eid'l Adha";
+    else title = 'Holiday';
+    return { title, date, color: '#f87171' };
+  });
+
+  function renderEventContent(eventInfo) {
+    return (
+      <div style={{
+        background: eventInfo.event.backgroundColor,
+        color: 'white',
+        borderRadius: '4px',
+        padding: '2px 6px',
+        fontSize: '0.85em',
+        marginTop: '2px',
+        display: 'inline-block',
+        maxWidth: '100%',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}>
+        {eventInfo.event.title}
+      </div>
+    );
+  }
+
+  // Helper to format date as YYYY-MM-DD
+  function formatDateYMD(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
   return (
     <div className="flex flex-col min-h-screen overflow-hidden font-poppinsr ">
       <Admin_Navbar />
@@ -184,31 +224,6 @@ useEffect(() => {
               </p>
             </div>
 
-            <div className="bg-white rounded-xl shadow p-6 flex flex-col mb-2">
-              <span className="text-lg font-bold text-gray-800 mb-4">Academic Calendar</span>
-                <Calendar
-                  tileClassName={({ date }) => {
-                    const y = date.getFullYear();
-                    const m = String(date.getMonth() + 1).padStart(2, '0');
-                    const d = String(date.getDate()).padStart(2, '0');
-                    const dateStr = `${y}-${m}-${d}`;
-
-                    const isHoliday = holidays.includes(dateStr);
-                    const isClassDay = classDates.includes(dateStr);
-                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-
-                    if (isHoliday) return '!bg-red-300 !text-white !font-bold';
-                    if (isClassDay) return '!bg-green-200 !text-black !font-semibold';
-                    if (isWeekend) return '!text-black';
-                    return '';
-                  }}
-                />
-              <div className="mt-4 text-sm">
-                <div><span className="inline-block w-3 h-3 bg-red-300 mr-2 rounded-full"></span> Holiday</div>
-                <div><span className="inline-block w-3 h-3 bg-green-200 mr-2 rounded-full"></span> Class Day</div>
-              </div>
-            </div>
-
             {/* Active Users Today (Placeholder) */}
             <div className="bg-white rounded-xl shadow p-6 flex flex-col mb-2">
               <span className="text-lg font-bold text-gray-800 mb-2">Active Users Today</span>
@@ -264,6 +279,67 @@ useEffect(() => {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Academic Calendar using FullCalendar */}
+            <div
+              className="bg-white rounded-xl shadow p-4 flex flex-col mb-4"
+              style={{ maxWidth: 400, fontSize: '13px', maxHeight: ""}}
+            >
+              <span className="text-lg font-bold text-gray-800 mb-2">Academic Calendar</span>
+              <FullCalendar
+                plugins={[dayGridPlugin]}
+                initialView="dayGridMonth"
+                headerToolbar={{
+                  left: 'today prev,next',
+                  center: 'title',
+                  right: ''
+                }}
+                events={holidayEvents}
+                height={280}
+                dayMaxEventRows={2}
+                eventDisplay="block"
+                eventContent={renderEventContent}
+                dayCellDidMount={info => {
+                  // For FullCalendar v6+, shade the .fc-daygrid-day-frame
+                  const dateStr = formatDateYMD(info.date);
+                  const frame = info.el.querySelector('.fc-daygrid-day-frame') || info.el;
+                  if (holidays.includes(dateStr)) {
+                    frame.style.background = '#fca5a5'; // red-300
+                  } else if (classDates.includes(dateStr)) {
+                    frame.style.background = '#bbf7d0'; // green-200
+                  } else {
+                    frame.style.background = '';
+                  }
+                }}
+              />
+              <style>
+                {`
+                  .fc .fc-toolbar-title {
+                    font-size: 1.1rem;
+                    font-weight: 600;
+                  }
+                  .fc .fc-button, .fc .fc-button-primary {
+                    font-size: 0.8rem !important;
+                    padding: 2px 8px !important;
+                    min-width: 0 !important;
+                    height: 28px !important;
+                    border-radius: 6px !important;
+                  }
+                  .fc .fc-button-group {
+                    gap: 2px;
+                  }
+                  .fc .fc-daygrid-day-frame {
+                    min-height: 32px;
+                  }
+                  .fc .fc-daygrid-day-number {
+                    font-size: 0.85em;
+                  }
+                  .fc .fc-scrollgrid {
+                    border-radius: 8px;
+                  }
+                `}
+              </style>
             </div>
 
             {/* Recent Logins (Placeholder) */}
