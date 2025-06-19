@@ -42,6 +42,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [lessonFiles, setLessonFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
 
+  const [allStudents, setAllStudents] = useState([]);
+  const [editingMembers, setEditingMembers] = useState(false);
+  const [newStudentIDs, setNewStudentIDs] = useState([]);
+
   // Fetch lessons from backend
   useEffect(() => {
     if (selected === "materials") {
@@ -154,20 +158,47 @@ export default function ClassContent({ selected, isFaculty = false }) {
   }, [selected, classId]);
 
   // Fetch members when "members" tab is selected
+  // useEffect(() => {
+  //   if (selected === "members" && classId) {
+  //     setMembersLoading(true);
+  //     setMembersError(null);
+  //     const token = localStorage.getItem('token');
+  //     fetch(`${API_BASE}/classes/${classId}/members`, {
+  //       headers: { 'Authorization': `Bearer ${token}` }
+  //     })
+  //       .then(res => res.json())
+  //       .then(data => setMembers(data && typeof data === 'object' ? data : { faculty: [], students: [] }))
+  //       .catch(() => setMembersError("Failed to fetch members."))
+  //       .finally(() => setMembersLoading(false));
+  //   }
+  // }, [selected, classId]);
+
   useEffect(() => {
-    if (selected === "members" && classId) {
-      setMembersLoading(true);
-      setMembersError(null);
-      const token = localStorage.getItem('token');
-      fetch(`${API_BASE}/classes/${classId}/members`, {
+  if (selected === "members" && classId) {
+    setMembersLoading(true);
+    setMembersError(null);
+    const token = localStorage.getItem('token');
+
+    // Step 1: Fetch members of the class
+    fetch(`${API_BASE}/classes/${classId}/members`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => setMembers(data && typeof data === 'object' ? data : { faculty: [], students: [] }))
+      .catch(() => setMembersError("Failed to fetch members."))
+      .finally(() => setMembersLoading(false));
+
+    // Step 2: Fetch all students only if the user is faculty
+    if (isFaculty) {
+      fetch(`${API_BASE}/users/students`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
-        .then(data => setMembers(data && typeof data === 'object' ? data : { faculty: [], students: [] }))
-        .catch(() => setMembersError("Failed to fetch members."))
-        .finally(() => setMembersLoading(false));
+        .then(data => setAllStudents(Array.isArray(data) ? data : []))
+        .catch(() => setMembersError("Failed to fetch students."));
     }
-  }, [selected, classId]);
+  }
+}, [selected, classId]);
 
   // --- HANDLERS FOR ADDING CONTENT (Faculty only) ---
 
@@ -521,7 +552,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       )}
 
       {/* --- MEMBERS TAB --- */}
-      {selected === "members" && (
+      {/* {selected === "members" && (
         <div>
           <h2 className="text-2xl font-bold mb-4">Members</h2>
           {membersLoading ? (
@@ -553,6 +584,119 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 </ul>
               ) : (
                 <p className="text-gray-700">No students found.</p>
+              )}
+            </>
+          )}
+        </div>
+      )} */}
+
+      {selected === "members" && (
+        <div>
+          <h2 className="text-2xl font-bold mb-4">Members</h2>
+          {membersLoading ? (
+            <p className="text-blue-700">Loading members...</p>
+          ) : membersError ? (
+            <p className="text-red-600">{membersError}</p>
+          ) : (
+            <>
+              <h3 className="font-semibold text-blue-900 mt-2 mb-1">
+                Faculty
+              </h3>
+              {members.faculty.length > 0 ? (
+                <ul>
+                  {members.faculty.map(f => (
+                    <li key={f._id}>
+                      {f.firstname} {f.lastname} (Faculty)
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-700">No faculty found.</p>
+              )}
+
+              <h3 className="font-semibold text-blue-900 mt-4 mb-1 flex items-center gap-2">
+                Students
+                {isFaculty && (
+                  <button
+                    className="text-sm text-blue-700 underline"
+                    onClick={() => {
+                      setEditingMembers(true);
+                      setNewStudentIDs(members.students.map(s => s.userID));
+                    }}
+                  >
+                    Edit Members
+                  </button>
+                )}
+              </h3>
+
+              {editingMembers ? (
+                <div className="mt-2">
+                  <label className="font-medium text-blue-800">Select Students</label>
+                  <select
+                    multiple
+                    className="w-full border rounded px-2 py-2 mt-1"
+                    value={newStudentIDs}
+                    onChange={(e) => {
+                      const selectedOptions = Array.from(e.target.selectedOptions).map(opt => opt.value);
+                      setNewStudentIDs(selectedOptions);
+                    }}
+                  >
+                    {allStudents.map(student => (
+                      <option key={student.userID} value={student.userID}>
+                        {student.firstname} {student.lastname}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="flex gap-3 mt-3">
+                    <button
+                      onClick={async () => {
+                        const token = localStorage.getItem('token');
+                        try {
+                          const res = await fetch(`${API_BASE}/classes/${classId}/members`, {
+                            method: 'PATCH',
+                            headers: {
+                              'Authorization': `Bearer ${token}`,
+                              'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ members: newStudentIDs })
+                          });
+                          if (res.ok) {
+                            alert('Class members updated!');
+                            const updated = await res.json();
+                            setMembers(updated);
+                            setEditingMembers(false);
+                          } else {
+                            alert('Failed to update members');
+                          }
+                        } catch {
+                          alert('Error updating members');
+                        }
+                      }}
+                      className="bg-green-600 text-white px-3 py-1 rounded"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingMembers(false)}
+                      className="bg-gray-400 text-white px-3 py-1 rounded"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                members.students.length > 0 ? (
+                  <ul>
+                    {members.students.map(s => (
+                      <li key={s._id}>
+                        {s.firstname} {s.lastname} (Student)
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-700">No students found.</p>
+                )
               )}
             </>
           )}

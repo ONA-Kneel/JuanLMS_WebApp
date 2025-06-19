@@ -113,6 +113,95 @@ router.get('/:classID/members', async (req, res) => {
   }
 });
 
+router.post('/:classID/members/students', authenticateToken, async (req, res) => {
+  try {
+    const { classID } = req.params;
+    const { userIdentifier } = req.body;
+
+    if (!userIdentifier) return res.status(400).json({ error: 'Missing student identifier' });
+
+    const student = await User.findOne({ $or: [{ userID: userIdentifier }, { email: userIdentifier }] });
+    if (!student || student.role !== 'students') return res.status(404).json({ error: 'Student not found' });
+
+    const updatedClass = await Class.findOneAndUpdate(
+      { classID },
+      { $addToSet: { members: student.userID } }, // prevent duplicates
+      { new: true }
+    );
+
+    if (!updatedClass) return res.status(404).json({ error: 'Class not found' });
+
+    res.json(student); // send back student object for frontend list
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to add student' });
+  }
+});
+
+router.delete('/:classID/members/students/:studentID', authenticateToken, async (req, res) => {
+  try {
+    const { classID, studentID } = req.params;
+
+    const updatedClass = await Class.findOneAndUpdate(
+      { classID },
+      { $pull: { members: studentID } },
+      { new: true }
+    );
+
+    if (!updatedClass) return res.status(404).json({ error: 'Class not found' });
+
+    res.json({ success: true, message: 'Student removed' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to remove student' });
+  }
+});
+
+router.post('/:classID/members/faculty', authenticateToken, async (req, res) => {
+  try {
+    const { classID } = req.params;
+    const { userIdentifier } = req.body;
+
+    if (!userIdentifier) return res.status(400).json({ error: 'Missing faculty identifier' });
+
+    const faculty = await User.findOne({ $or: [{ userID: userIdentifier }, { email: userIdentifier }] });
+    if (!faculty || faculty.role !== 'faculty') return res.status(404).json({ error: 'Faculty not found' });
+
+    const updatedClass = await Class.findOneAndUpdate(
+      { classID },
+      { facultyID: faculty.userID },
+      { new: true }
+    );
+
+    if (!updatedClass) return res.status(404).json({ error: 'Class not found' });
+
+    res.json(faculty);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to add faculty' });
+  }
+});
+
+router.delete('/:classID/members/faculty/:facultyID', authenticateToken, async (req, res) => {
+  try {
+    const { classID, facultyID } = req.params;
+
+    const updatedClass = await Class.findOneAndUpdate(
+      { classID, facultyID },
+      { $unset: { facultyID: "" } },
+      { new: true }
+    );
+
+    if (!updatedClass) return res.status(404).json({ error: 'Class not found or faculty mismatch' });
+
+    res.json({ success: true, message: 'Faculty unassigned' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to remove faculty' });
+  }
+});
+
+
 // Get all classes for the logged-in user (student or faculty)
 router.get('/my-classes', authenticateToken, async (req, res) => {
   try {

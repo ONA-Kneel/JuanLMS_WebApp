@@ -24,6 +24,30 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here"; // 👈 use
 
 // ------------------ CRUD ROUTES ------------------
 
+// Get all active (non-archived) students
+userRoutes.get('/users/students', authenticateToken, async (req, res) => {
+  try {
+    const students = await User.find({ role: 'students', isArchived: { $ne: true } });
+
+    const decryptedStudents = students.map(user => ({
+      ...user.toObject(),
+      email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+      schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
+      personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+      middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
+      firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
+      lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
+      profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+      password: undefined,
+    }));
+
+    res.json(decryptedStudents);
+  } catch (err) {
+    console.error('Failed to fetch students:', err);
+    res.status(500).json({ error: 'Failed to fetch students' });
+  }
+});
+
 // Get user counts for Admin, Faculty, and Students
 userRoutes.get('/user-counts', authenticateToken, async (req, res) => {
   try {
