@@ -27,6 +27,8 @@ import facultyAssignmentRoutes from './routes/facultyAssignmentRoutes.js';
 import studentAssignmentRoutes from './routes/studentAssignmentRoutes.js';
 import subjectRoutes from './routes/subjectRoutes.js';
 import registrantRoutes from './routes/registrantRoutes.js';
+import classDateRoutes  from './routes/classDateRoutes.js';
+
 
 dotenv.config({ path: './config.env' });
 
@@ -136,6 +138,7 @@ app.use("/api/faculty-assignments", facultyAssignmentRoutes);
 app.use("/api/student-assignments", studentAssignmentRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use('/api/registrants', registrantRoutes);
+app.use('/api/class-dates', classDateRoutes);
 
 // Start server
 app.listen(PORT, () => {

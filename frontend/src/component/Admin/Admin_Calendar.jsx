@@ -1,3 +1,4 @@
+//ADMIN CALENDAR
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import FullCalendar from "@fullcalendar/react";
@@ -43,6 +44,7 @@ export default function Admin_Calendar() {
   const [selectedDate, setSelectedDate] = useState('');
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [classDates, setClassDates] = useState([]);
 
   const formattedDate = today.toLocaleDateString("en-US", {
     weekday: "long",
@@ -57,7 +59,7 @@ export default function Admin_Calendar() {
   const fetchEvents = async () => {
     setLoadingEvents(true);
     try {
-      const res = await axios.get("${API_BASE}/events");
+      const res = await axios.get(`${API_BASE}/events`);
       setEvents(res.data.map(ev => ({
         ...ev,
         id: ev._id,
@@ -73,6 +75,22 @@ export default function Admin_Calendar() {
 
   useEffect(() => {
     fetchEvents();
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch(`${API_BASE}/api/class-dates`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setClassDates(data);
+        } else {
+          console.error("❌ Unexpected response format", data);
+        }
+      })
+      .catch(err => console.error("❌ Failed to fetch class dates", err));
   }, []);
 
   // Fetch holidays
@@ -98,7 +116,13 @@ export default function Admin_Calendar() {
   const allEvents = [
     ...events.map(ev => ({ ...ev, className: 'cursor-pointer' })),
     ...holidays.map(ev => ({ ...ev, className: 'fc-holiday-event' })),
+    ...classDates.map(date => ({
+      start: date.start,
+      display: 'background',
+      backgroundColor: '#93c5fd'  // light blue background for class days
+    })),
   ];
+
 
   // Modal handlers
   const openEventModal = () => {
@@ -118,7 +142,7 @@ export default function Admin_Calendar() {
     e.preventDefault();
     if (!newEvent.title || !newEvent.start) return;
     try {
-      await axios.post("${API_BASE}/events", {
+      await axios.post(`${API_BASE}/events`, {
         title: newEvent.title,
         start: newEvent.start,
         end: newEvent.isRange && newEvent.end ? newEvent.end : undefined,
@@ -261,8 +285,8 @@ export default function Admin_Calendar() {
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Calendar</h2>
             <p className="text-base md:text-lg">
-              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
-              {currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
+              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} |
+              {currentTerm ? `${currentTerm.termName}` : "Loading..."} |
               {formattedDate}
             </p>
           </div>
@@ -287,86 +311,88 @@ export default function Admin_Calendar() {
 
         {/* Add Event Modal */}
         {showEventModal && (
-          <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="absolute inset-0 bg-black/50 filter backdrop-blur-sm" onClick={closeEventModal}></div>
-            <form onSubmit={handleAddEvent} className="relative bg-white rounded-lg shadow-lg p-8 z-10 w-80">
-              <h3 className="text-xl font-bold mb-4">Add Event</h3>
-              <label className="block mb-2 font-medium">Title</label>
-              <input
-                type="text"
-                name="title"
-                value={newEvent.title}
-                onChange={handleInputChange}
-                className="w-full border rounded px-3 py-2 mb-4"
-                required
-              />
-              <label className="block mb-2 font-medium">Event Type</label>
-              <div className="flex gap-2 mb-4">
-                <label className="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    name="isRange"
-                    checked={newEvent.isRange}
-                    onChange={handleInputChange}
-                  />
-                  Range
-                </label>
-              </div>
-              <label className="block mb-2 font-medium">{newEvent.isRange ? 'Start' : 'Date & Time'}</label>
-              <input
-                type="datetime-local"
-                name="start"
-                value={newEvent.start}
-                onChange={handleInputChange}
-                className="w-full border rounded px-3 py-2 mb-4"
-                required
-              />
-              {newEvent.isRange && (
-                <>
-                  <label className="block mb-2 font-medium">End</label>
-                  <input
-                    type="datetime-local"
-                    name="end"
-                    value={newEvent.end}
-                    onChange={handleInputChange}
-                    className="w-full border rounded px-3 py-2 mb-4"
-                    required
-                  />
-                </>
-              )}
-              <label className="block mb-2 font-medium">Color</label>
-              <div className="flex gap-2 mb-4">
-                {PRESET_COLORS.map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    className="w-8 h-8 rounded-full border-2"
-                    style={{ backgroundColor: preset, borderColor: newEvent.color === preset ? 'black' : '#e5e7eb' }}
-                    onClick={() => setNewEvent((prev) => ({ ...prev, color: preset }))}
-                    aria-label={`Choose color ${preset}`}
-                  />
-                ))}
-              </div>
-              <input
-                type="color"
-                name="color"
-                value={newEvent.color}
-                onChange={handleInputChange}
-                className="w-12 h-8 mb-4 border-none"
-                style={{ background: 'none' }}
-              />
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={closeEventModal} className="px-4 py-2 rounded bg-gray-300">Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white">Add</button>
-              </div>
-            </form>
+          <div className="fixed inset-0 flex items-center justify-center z-50" >
+            <div className="absolute inset-0 bg-black/50 filter backdrop-blur-sm"></div>
+            
+              <form onSubmit={handleAddEvent} className="relative bg-white rounded-lg shadow-lg p-8 z-10 w-80" >
+                <h3 className="text-xl font-bold mb-4">Add Event</h3>
+                <label className="block mb-2 font-medium">Title</label>
+                <input
+                  type="text"
+                  name="title"
+                  value={newEvent.title}
+                  onChange={handleInputChange}
+                  className="w-full border rounded px-3 py-2 mb-4"
+                  required
+                />
+                <label className="block mb-2 font-medium">Event Type</label>
+                <div className="flex gap-2 mb-4">
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      name="isRange"
+                      checked={newEvent.isRange}
+                      onChange={handleInputChange}
+                    />
+                    Range
+                  </label>
+                </div>
+                <label className="block mb-2 font-medium">{newEvent.isRange ? 'Start' : 'Date & Time'}</label>
+                <input
+                  type="datetime-local"
+                  name="start"
+                  value={newEvent.start}
+                  onChange={handleInputChange}
+                  className="w-full border rounded px-3 py-2 mb-4"
+                  required
+                />
+                {newEvent.isRange && (
+                  <>
+                    <label className="block mb-2 font-medium">End</label>
+                    <input
+                      type="datetime-local"
+                      name="end"
+                      value={newEvent.end}
+                      onChange={handleInputChange}
+                      className="w-full border rounded px-3 py-2 mb-4"
+                      required
+                    />
+                  </>
+                )}
+                <label className="block mb-2 font-medium">Color</label>
+                <div className="flex gap-2 mb-4">
+                  {PRESET_COLORS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      className="w-8 h-8 rounded-full border-2"
+                      style={{ backgroundColor: preset, borderColor: newEvent.color === preset ? 'black' : '#e5e7eb' }}
+                      onClick={() => setNewEvent((prev) => ({ ...prev, color: preset }))}
+                      aria-label={`Choose color ${preset}`}
+                    />
+                  ))}
+                </div>
+                <input
+                  type="color"
+                  name="color"
+                  value={newEvent.color}
+                  onChange={handleInputChange}
+                  className="w-12 h-8 mb-4 border-none"
+                  style={{ background: 'none' }}
+                />
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={closeEventModal} className="px-4 py-2 rounded bg-gray-300">Cancel</button>
+                  <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white">Add</button>
+                </div>
+              </form>
+            
           </div>
         )}
 
         {/* Edit Event Modal */}
         {showEditModal && (
           <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="absolute inset-0 bg-black/50 filter backdrop-blur-sm" onClick={closeEditModal}></div>
+            <div className="absolute inset-0 bg-black/50 filter backdrop-blur-sm" ></div>
             <form onSubmit={handleEditEvent} className="relative bg-white rounded-lg shadow-lg p-8 z-10 w-80">
               <h3 className="text-xl font-bold mb-4">Edit Event</h3>
               <label className="block mb-2 font-medium">Title</label>
@@ -485,9 +511,17 @@ export default function Admin_Calendar() {
 
         {/* Day Events Modal */}
         {showDayModal && (
-          <div className="fixed inset-0 flex items-center justify-center z-50 ">
-            <div className="absolute inset-0 bg-black/50" onClick={() => setShowDayModal(false)}></div>
-            <div className="relative bg-white rounded-lg shadow-lg p-8 z-10 w-96">
+          <div className="fixed inset-0 flex items-center justify-center z-50">
+            {/* BACKDROP ONLY handles the close click */}
+            <div
+              className="absolute inset-0 bg-black/50"
+            ></div>
+
+            {/* MODAL CONTENT stops propagation */}
+            <div
+              className="relative bg-white rounded-lg shadow-lg p-8 z-10 w-96"
+              onClick={(e) => e.stopPropagation()}
+            >
               <h3 className="text-xl font-bold mb-4">
                 Events for {new Date(selectedDate).toLocaleDateString()}
               </h3>
@@ -515,11 +549,17 @@ export default function Admin_Calendar() {
                 </ul>
               )}
               <div className="flex justify-end mt-4">
-                <button onClick={() => setShowDayModal(false)} className="px-4 py-2 rounded bg-gray-300">Close</button>
+                <button
+                  onClick={() => setShowDayModal(false)}
+                  className="px-4 py-2 rounded bg-gray-300"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
         )}
+
       </div>
     </div>
   );
