@@ -22,6 +22,7 @@ export default function Faculty_Calendar() {
   const [assignmentEvents, setAssignmentEvents] = useState([]);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [classDates, setClassDates] = useState([]);
 
   useEffect(() => {
     (async () => {
@@ -142,7 +143,32 @@ export default function Faculty_Calendar() {
     fetchActiveTermForYear();
   }, [academicYear]);
 
-  const allEvents = [...adminEvents, ...holidays, ...assignmentEvents];
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch(`${API_BASE}/api/class-dates`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setClassDates(data);
+        } else {
+          console.error("❌ Unexpected response format", data);
+        }
+      })
+      .catch(err => console.error("❌ Failed to fetch class dates", err));
+  }, []);
+
+  const allEvents = [
+    ...adminEvents,
+    ...holidays,
+    ...assignmentEvents,
+    ...classDates.map(date => ({
+      start: date.start,
+      display: 'background',
+      backgroundColor: '#93c5fd'
+    })),
+  ];
 
   const handleDateClick = (arg) => {
     const clickedDate = arg.dateStr;
