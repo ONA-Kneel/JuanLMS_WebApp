@@ -96,7 +96,10 @@ router.patch('/:id', async (req, res) => {
 
     // If setting to active, deactivate all others
     if (req.body.status === 'active') {
-      await SchoolYear.updateMany({ _id: { $ne: req.params.id } }, { status: 'inactive' });
+      await SchoolYear.updateMany(
+        { _id: { $ne: req.params.id }, status: 'active' },
+        { status: 'inactive' }
+      );
     }
     
     schoolYear.status = req.body.status;

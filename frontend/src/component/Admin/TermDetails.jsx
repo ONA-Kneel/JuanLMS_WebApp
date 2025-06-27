@@ -45,6 +45,7 @@ export default function TermDetails() {
   const [strandError, setStrandError] = useState('');
   const [isStrandEditMode, setIsStrandEditMode] = useState(false);
   const [editingStrand, setEditingStrand] = useState(null);
+  const [isStrandModalOpen, setIsStrandModalOpen] = useState(false);
 
   // State for Sections management
   const [sectionFormData, setSectionFormData] = useState({
@@ -57,6 +58,7 @@ export default function TermDetails() {
   const [sectionError, setSectionError] = useState('');
   const [isSectionEditMode, setIsSectionEditMode] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
+  const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
 
   // State for Faculty Assignment management
   const [facultyFormData, setFacultyFormData] = useState({
@@ -72,6 +74,7 @@ export default function TermDetails() {
   const [isFacultyEditMode, setIsFacultyEditMode] = useState(false);
   const [editingFacultyAssignment, setEditingFacultyAssignment] = useState(null);
   const [faculties, setFaculties] = useState([]); // To store faculty users for dropdown
+  const [isFacultyModalOpen, setIsFacultyModalOpen] = useState(false);
 
   // State for Student Assignment management
   const [studentFormData, setStudentFormData] = useState({
@@ -86,6 +89,7 @@ export default function TermDetails() {
   const [isStudentEditMode, setIsStudentEditMode] = useState(false);
   const [editingStudentAssignment, setEditingStudentAssignment] = useState(null);
   const [students, setStudents] = useState([]); // To store student users for dropdown
+  const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
 
   // Add state for search functionality for Faculty and Students
   const [facultySearchTerm, setFacultySearchTerm] = useState('');
@@ -105,7 +109,6 @@ export default function TermDetails() {
   const [strandPreviewModalOpen, setStrandPreviewModalOpen] = useState(false);
   const [strandPreviewData, setStrandPreviewData] = useState([]);
   const [strandValidationStatus, setStrandValidationStatus] = useState({});
-  const [isStrandUploading, setIsStrandUploading] = useState(false);
 
   // Add new state for section Excel handling
   const [sectionExcelFile, setSectionExcelFile] = useState(null);
@@ -140,6 +143,8 @@ export default function TermDetails() {
   const [subjectError, setSubjectError] = useState('');
   const [isSubjectEditMode, setIsSubjectEditMode] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
+  const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
+  
   // Batch upload state for subjects
   const [subjectExcelFile, setSubjectExcelFile] = useState(null);
   const [subjectPreviewModalOpen, setSubjectPreviewModalOpen] = useState(false);
@@ -155,6 +160,7 @@ export default function TermDetails() {
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [showFacultyModal, setShowFacultyModal] = useState(false);
   const [showStudentModal, setShowStudentModal] = useState(false);
+  
 
   // New state for Term Data Import
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -369,6 +375,7 @@ export default function TermDetails() {
         setTracks([...tracks, newTrack]);
         window.alert('Track added successfully!');
         setTrackFormData({ trackName: '' }); // Clear form
+        setShowTrackModal(false); // Close modal
       } else {
         const data = await res.json();
         setTrackError(data.message || 'Failed to add track');
@@ -384,6 +391,7 @@ export default function TermDetails() {
     setTrackFormData({
       trackName: track.trackName
     });
+    setShowTrackModal(true);
   };
 
   const handleUpdateTrack = async (e) => {
@@ -417,6 +425,7 @@ export default function TermDetails() {
           setIsEditMode(false);
           setEditingTrack(null);
           setTrackFormData({ trackName: '' });
+          setShowTrackModal(false); // Close modal
         } else {
           const data = await res.json();
           setTrackError(data.message || 'Failed to update track');
@@ -488,6 +497,7 @@ export default function TermDetails() {
         setStrands([...strands, newStrand]);
         window.alert('Strand added successfully!');
         setStrandFormData({ trackId: '', strandName: '' }); // Clear form
+        setIsStrandModalOpen(false); // Close modal
       } else {
         const data = await res.json();
         setStrandError(data.message || 'Failed to add strand');
@@ -500,10 +510,8 @@ export default function TermDetails() {
   const handleEditStrand = (strand) => {
     setIsStrandEditMode(true);
     setEditingStrand(strand);
-    setStrandFormData({
-      trackId: tracks.find(track => track.trackName === strand.trackName)?._id || '',
-      strandName: strand.strandName
-    });
+    setStrandFormData({ trackId: strand.trackId, strandName: strand.strandName });
+    setIsStrandModalOpen(true);
   };
 
   const handleUpdateStrand = async (e) => {
@@ -544,6 +552,7 @@ export default function TermDetails() {
           setIsStrandEditMode(false);
           setEditingStrand(null);
           setStrandFormData({ trackId: '', strandName: '' });
+          setIsStrandModalOpen(false); // Close modal
         } else {
           const data = await res.json();
           setStrandError(data.message || 'Failed to update strand');
@@ -650,6 +659,7 @@ export default function TermDetails() {
       sectionName: section.sectionName,
       gradeLevel: section.gradeLevel || '', // Populate gradeLevel when editing
     });
+    setIsSectionModalOpen(true);
   };
 
   const handleUpdateSection = async (e) => {
@@ -1055,6 +1065,7 @@ export default function TermDetails() {
       gradeLevel: assignment.gradeLevel || '',
       subjectName: assignment.subjectName || '',
     });
+    setIsFacultyModalOpen(true);
   };
 
   // Handle Update Faculty Assignment (updated to use facultySearchTerm and selected facultyId)
@@ -1729,7 +1740,6 @@ export default function TermDetails() {
       return;
     }
 
-    setIsStrandUploading(true);
     setStrandError('');
 
     try {
@@ -1760,8 +1770,6 @@ export default function TermDetails() {
     } catch (err) {
       setStrandError(err.message || 'Error uploading strands');
       console.error(err);
-    } finally {
-      setIsStrandUploading(false);
     }
   };
 
@@ -2976,6 +2984,7 @@ export default function TermDetails() {
       strandName: subject.strandName,
       gradeLevel: subject.gradeLevel
     });
+    setIsSubjectModalOpen(true);
   };
 
   const handleUpdateSubject = async (e) => {
@@ -3691,9 +3700,34 @@ Actual import to database is coming soon!`;
 
   console.log('termDetails.status:', termDetails?.status);
 
+  // Add these helper functions near the top of the component, after useState declarations
+  function getFacultyCount(termDetails, facultyAssignments) {
+    // If no term details yet, show 0
+    if (!termDetails) return 0;
+    // If term is archived/inactive
+    if (termDetails.status === 'archived') {
+      // If there are any assignments for this term, show the count
+      const count = facultyAssignments.filter(fa => fa.termId === termDetails._id).length;
+      return count > 0 ? count : 0;
+    }
+    // If term is active, show the count
+    return facultyAssignments.filter(fa => fa.termId === termDetails._id).length;
+  }
+
+  function getStudentCount(termDetails, studentAssignments) {
+    if (!termDetails) return 0;
+    if (termDetails.status === 'archived') {
+      const count = studentAssignments.filter(sa => sa.termId === termDetails._id).length;
+      return count > 0 ? count : 0;
+    }
+    return studentAssignments.filter(sa => sa.termId === termDetails._id).length;
+  }
+
   return (
+    
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Admin_Navbar />
+      
 
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
         {/* Header Section */}
@@ -3876,7 +3910,9 @@ Actual import to database is coming soon!`;
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('tracks')}>
                     <img src={tracksIcon} alt="Tracks Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
-                    <span className="text-3xl font-bold text-[#00418B]">{tracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName).length}</span>
+                    <span className="text-3xl font-bold text-[#00418B]">{
+                      tracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName).length
+                    }</span>
                     <span className="text-gray-600 mt-2">Active Tracks</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); extractTracksToExcel(); }}
@@ -3888,7 +3924,9 @@ Actual import to database is coming soon!`;
                   </div>
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('strands')}>
                     <img src={strandsIcon} alt="Strands Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
-                    <span className="text-3xl font-bold text-[#00418B]">{strands.filter(s => s.status === 'active' && tracks.find(t => t.trackName === s.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active')).length}</span>
+                    <span className="text-3xl font-bold text-[#00418B]">{
+                      strands.filter(s => s.status === 'active' && tracks.find(t => t.trackName === s.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active')).length
+                    }</span>
                     <span className="text-gray-600 mt-2">Active Strands</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); extractStrandsToExcel(); }}
@@ -3900,7 +3938,9 @@ Actual import to database is coming soon!`;
                   </div>
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('sections')}>
                     <img src={sectionsIcon} alt="Sections Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
-                    <span className="text-3xl font-bold text-[#00418B]">{sections.filter(sec => sec.status === 'active' && tracks.find(t => t.trackName === sec.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active')).length}</span>
+                    <span className="text-3xl font-bold text-[#00418B]">{
+                      sections.filter(sec => sec.status === 'active' && tracks.find(t => t.trackName === sec.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active')).length
+                    }</span>
                     <span className="text-gray-600 mt-2">Active Sections</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); extractSectionsToExcel(); }}
@@ -3912,7 +3952,9 @@ Actual import to database is coming soon!`;
                   </div>
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('subjects')}>
                     <img src={subjectsIcon} alt="Subjects Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
-                    <span className="text-3xl font-bold text-[#00418B]">{subjects.filter(sub => sub.status === 'active' && sub.schoolYear === termDetails.schoolYear && sub.termName === termDetails.termName).length}</span>
+                    <span className="text-3xl font-bold text-[#00418B]">{
+                      subjects.filter(sub => sub.status === 'active' && sub.schoolYear === termDetails.schoolYear && sub.termName === termDetails.termName).length
+                    }</span>
                     <span className="text-gray-600 mt-2">Active Subjects</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); extractSubjectsToExcel(); }}
@@ -3924,7 +3966,9 @@ Actual import to database is coming soon!`;
                   </div>
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('faculty')}>
                     <img src={facultyIcon} alt="Faculty Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
-                    <span className="text-3xl font-bold text-[#00418B]">{faculties.filter(f => f.role === 'faculty' && !f.isArchived).length}</span>
+                    <span className="text-3xl font-bold text-[#00418B]">{
+                      facultyAssignments.filter(fa => fa.status === 'active').length
+                    }</span>
                     <span className="text-gray-600 mt-2">Active Faculty</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); extractFacultiesToExcel(); }}
@@ -3936,7 +3980,9 @@ Actual import to database is coming soon!`;
                   </div>
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('students')}>
                     <img src={studentIcon} alt="Student Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
-                    <span className="text-3xl font-bold text-[#00418B]">{students.filter(s => !s.isArchived).length}</span>
+                    <span className="text-3xl font-bold text-[#00418B]">{
+                      studentAssignments.filter(sa => sa.status === 'active').length
+                    }</span>
                     <span className="text-gray-600 mt-2">Active Students</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); extractStudentsToExcel(); }}
@@ -3949,24 +3995,23 @@ Actual import to database is coming soon!`;
                 </div>
               </div>
             )}
-
-            {activeTab === 'tracks' && (
-              <div>
-                {termDetails.status === 'archived' && (
-                  <div className="mb-4 p-3 bg-yellow-100 text-yellow-800 rounded text-center font-semibold">
-                    This term is archived. Editing is disabled.
-                  </div>
-                )}
-                {/* <div className="flex justify-end mb-4">
-                  <button
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded"
-                    onClick={() => setShowTrackModal(true)}
-                  >
-                    Add New Track
-                  </button>
-                </div> */}
-
-                <form onSubmit={handleAddTrack} className="space-y-4 mt-6">
+            
+            {/* TRACKS ALL */}
+            {showTrackModal && (
+     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+       <div className="bg-white rounded-lg shadow-lg p-6 min-w-[500px] max-w-[500px] relative">
+         <button
+           className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
+                      onClick={() => {
+                        setShowTrackModal(false);
+                        setIsEditMode(false);
+                        setEditingTrack(null);
+                        setTrackFormData({ trackName: '' });
+                      }}
+         >
+           ×
+         </button>
+         <form onSubmit={handleAddTrack} className="space-y-4 mt-6">
                   <div className="flex flex-col md:flex-row md:space-x-4 md:space-y-0 mb-4">
                     <div className="flex-1">
                       <label htmlFor="trackName" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
@@ -4006,20 +4051,48 @@ Actual import to database is coming soon!`;
                     )}
                   </div>
                 </form>
+       </div>
+     </div>
+   )}
+
+            {activeTab === 'tracks' && (
+              <div>
+                {termDetails.status === 'archived' && (
+                  <div className="mb-4 p-3 bg-yellow-100 text-yellow-800 rounded text-center font-semibold">
+                    This term is archived. Editing is disabled.
+                  </div>
+                )}
+                
                 {/* Tracks List Table */}
-                <div className="mt-8">
-                  <h4 className="text-lg font-semibold mb-2">Tracks List</h4>
+                <div className="mt-5">
+                  <div className="flex justify-between items-center"> 
+                  <h4 className="text-2xl font-semibold mb-2 ">Tracks List</h4>
+                    <div className="flex justify-end mb-4">
+                    <button
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded"
+                      onClick={() => {
+                        setShowTrackModal(true);
+                        setIsEditMode(false);
+                        setEditingTrack(null);
+                        setTrackFormData({ trackName: '' });
+                      }}
+                    >
+                      Add New Track
+                    </button>
+                  </div>
+                  </div>
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                     <thead>
                       <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border w-2/3">Track Name</th>
-                        <th className="p-3 border w-1/3">Actions</th>
+                        <th className="p-3 border w-2/5">Track Name</th>
+                        <th className="p-3 border w-1/5">Status</th>
+                        <th className="p-3 border w-2/5">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {tracks.length === 0 ? (
                         <tr>
-                          <td colSpan="2" className="p-3 border text-center text-gray-500">
+                          <td colSpan="3" className="p-3 border text-center text-gray-500">
                             No tracks found.
                           </td>
                         </tr>
@@ -4027,12 +4100,14 @@ Actual import to database is coming soon!`;
                         tracks.map((track) => (
                           <tr key={track._id}>
                             <td className="p-3 border">{track.trackName}</td>
-                               <td className="p-3 border">
+                            <td className="p-3 border">{track.status}</td>
+                            <td className="p-3 border">
                               <div className="inline-flex space-x-2">
                                 <button
                                   onClick={() => handleEditTrack(track)}
                                   className="p-1 rounded hover:bg-yellow-100 group relative"
                                   title="Edit"
+                                  disabled={termDetails.status === 'archived'}
                                 >
                                   {/* Heroicons Pencil Square (black) */}
                                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
@@ -4043,6 +4118,7 @@ Actual import to database is coming soon!`;
                                   onClick={() => handleDeleteTrack(track)}
                                   className="p-1 rounded hover:bg-red-100 group relative"
                                   title="Delete"
+                                  disabled={termDetails.status === 'archived'}
                                 >
                                   {/* Heroicons Trash (red) */}
                                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
@@ -4060,6 +4136,7 @@ Actual import to database is coming soon!`;
               </div>
             )}
 
+            {/* STRANDS tab */}
             {activeTab === 'strands' && (
               <div>
                 {termDetails.status === 'archived' && (
@@ -4067,8 +4144,39 @@ Actual import to database is coming soon!`;
                     This term is archived. Editing is disabled.
                   </div>
                 )}
-                {/* Add/Edit Strand Form */}
-                <form onSubmit={isStrandEditMode ? handleUpdateStrand : handleAddStrand} className="space-y-4 mt-6">
+                
+                {/* Modal for Add/Edit Strand */}
+                {isStrandModalOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 ">
+                    <div className="bg-white rounded-lg shadow-lg w-[1000px] max-w-lg p-6 relative">
+                      <button
+                        className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
+                        onClick={() => {
+                          setIsStrandModalOpen(false);
+                          setIsStrandEditMode(false);
+                          setEditingStrand(null);
+                          setStrandFormData({ trackId: '', strandName: '' });
+                        }}
+                      >
+                        &times;
+                      </button>
+                      <form
+                        onSubmit={async (e) => {
+                          if (isStrandEditMode) {
+                            await handleUpdateStrand(e);
+                          } else {
+                            await handleAddStrand(e);
+                          }
+                          // Only close modal if no error
+                          if (!strandError) {
+                            setIsStrandModalOpen(false);
+                            setIsStrandEditMode(false);
+                            setEditingStrand(null);
+                            setStrandFormData({ trackId: '', strandName: '' });
+                          }
+                        }}
+                        className="space-y-4"
+                      >
                   <div className="flex flex-col md:flex-row md:space-x-4 md:space-y-0 mb-4">
                     <div className="flex-1">
                       <label htmlFor="trackName" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
@@ -4118,6 +4226,7 @@ Actual import to database is coming soon!`;
                           setIsStrandEditMode(false);
                           setEditingStrand(null);
                           setStrandFormData({ trackId: '', strandName: '' });
+                                setIsStrandModalOpen(false);
                         }}
                         className="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
                         disabled={termDetails.status === 'archived'}
@@ -4127,58 +4236,86 @@ Actual import to database is coming soon!`;
                     )}
                   </div>
                 </form>
+                    </div>
+                  </div>
+                )}
                 {/* Strands List Table */}
-                <div className="mt-8">
-                  <h4 className="text-lg font-semibold mb-2">Strands List</h4>
+                <div className="mt-5">
+                  <div className="flex justify-between items-center"> 
+                  <h4 className="text-2xl font-semibold mb-2 ">Strands List</h4>
+                  {/* Add New Strand Button */}
+                  <div className="flex justify-end mb-4">
+                  <button
+                    type="button"
+                    className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                    onClick={() => {
+                      setIsStrandModalOpen(true);
+                      setIsStrandEditMode(false);
+                      setEditingStrand(null);
+                      setStrandFormData({ trackId: '', strandName: '' });
+                    }}
+                    disabled={termDetails.status === 'archived'}
+                  >
+                    Add New Strand
+                  </button>
+                  </div>
+                  </div>
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
-                    <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border">Track Name</th>
-                        <th className="p-3 border">Strand Name</th>
-                        <th className="p-3 border">Actions</th>
+                  <thead>
+                    <tr className="bg-gray-100 text-left">
+                      <th className="p-3 border">Track Name</th>
+                      <th className="p-3 border">Strand Name</th>
+                      <th className="p-3 border">Status</th>
+                      <th className="p-3 border">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {strands.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="p-3 border text-center text-gray-500">
+                          No strands found.
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {strands.length === 0 ? (
-                        <tr>
-                          <td colSpan="3" className="p-3 border text-center text-gray-500">
-                            No strands found.
+                    ) : (
+                      strands.map((strand) => (
+                        <tr key={strand._id}>
+                          <td className="p-3 border">{strand.trackName}</td>
+                          <td className="p-3 border">{strand.strandName}</td>
+                          <td className="p-3 border">{strand.status}</td>
+                          <td className="p-3 border">
+                            <div className="inline-flex space-x-2">
+                              <button
+                                onClick={termDetails.status === 'archived' ? undefined : () => handleEditStrand(strand)}
+                          className="p-1 rounded hover:bg-yellow-100 group relative"
+                                title="Edit"
+                                disabled={termDetails.status === 'archived'}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                  </svg>
+                              </button>
+                              <button
+                                onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteStrand(strand)}
+                          className="p-1 rounded hover:bg-red-100 group relative"
+                                title="Delete"
+                                disabled={termDetails.status === 'archived'}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                  </svg>
+                              </button>
+                            </div>
                           </td>
                         </tr>
-                      ) : (
-                        strands.map((strand) => (
-                          <tr key={strand._id}>
-                            <td className="p-3 border">{strand.trackName}</td>
-                            <td className="p-3 border">{strand.strandName}</td>
-                            <td className="p-3 border">
-                              <div className="inline-flex space-x-2">
-                                <button
-                                  onClick={termDetails.status === 'archived' ? undefined : () => handleEditStrand(strand)}
-                                  className={`bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  title="Edit"
-                                  disabled={termDetails.status === 'archived'}
-                                >
-                                  <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
-                                </button>
-                                <button
-                                  onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteStrand(strand)}
-                                  className={`bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  title="Delete"
-                                  disabled={termDetails.status === 'archived'}
-                                >
-                                  <img src={archiveIcon} alt="Delete" className="w-8 h-8 inline-block" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
+                      ))
+                    )}
+                  </tbody>
                   </table>
                 </div>
               </div>
             )}
 
+            {/* SECTIONS tab */}
             {activeTab === 'sections' && (
               <div className="">
                 {termDetails.status === 'archived' && (
@@ -4186,9 +4323,23 @@ Actual import to database is coming soon!`;
                     This term is archived. Editing is disabled.
                   </div>
                 )}
-                {/* New Section Form */}
-                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                  <h3 className="text-xl font-semibold mb-4">Add New Section</h3>
+                
+                {/* Modal for Add/Edit Section */}
+                {isSectionModalOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 ">
+                    <div className="bg-white rounded-lg shadow-lg w-[1000px] max-w-lg p-6 relative">
+                      <button
+                        className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
+                        onClick={() => {
+                          setIsSectionModalOpen(false);
+                          setIsSectionEditMode(false);
+                          setEditingSection(null);
+                          setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' });
+                        }}
+                      >
+                        &times;
+                      </button>
+                      <h3 className="text-xl font-semibold mb-4">{isSectionEditMode ? 'Edit Section' : 'Add New Section'}</h3>
                   {sectionError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{sectionError}</div>}
                   {/* Excel Upload Section */}
                   <div className="mb-6 p-4 border rounded-lg bg-gray-50">
@@ -4223,7 +4374,23 @@ Actual import to database is coming soon!`;
                       <span className="px-2 bg-white text-gray-500">Or add manually</span>
                     </div>
                   </div>
-                  <form onSubmit={isSectionEditMode ? handleUpdateSection : handleAddSection} className="space-y-4 mt-6">
+                      <form
+                        onSubmit={async (e) => {
+                          if (isSectionEditMode) {
+                            await handleUpdateSection(e);
+                          } else {
+                            await handleAddSection(e);
+                          }
+                          // Only close modal if no error
+                          if (!sectionError) {
+                            setIsSectionModalOpen(false);
+                            setIsSectionEditMode(false);
+                            setEditingSection(null);
+                            setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' });
+                          }
+                        }}
+                        className="space-y-4 mt-6"
+                      >
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div>
                         <label htmlFor="trackNameSection" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
@@ -4255,7 +4422,7 @@ Actual import to database is coming soon!`;
                           onChange={(e) => setSectionFormData({ ...sectionFormData, strandId: e.target.value })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           required
-                          disabled={!sectionFormData.trackId || termDetails.status === 'archived'}
+                              disabled={termDetails.status === 'archived'}
                         >
                           <option value="">Select a Strand</option>
                           {filteredStrandsForSection.map(strand => (
@@ -4310,6 +4477,7 @@ Actual import to database is coming soon!`;
                             setIsSectionEditMode(false);
                             setEditingSection(null);
                             setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' });
+                                setIsSectionModalOpen(false);
                           }}
                           className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
                           disabled={termDetails.status === 'archived'}
@@ -4320,57 +4488,83 @@ Actual import to database is coming soon!`;
                     </div>
                   </form>
                 </div>
+                  </div>
+                )}
                 {/* Sections List */}
-                <div className="mt-8">
-                  <h4 className="text-lg font-semibold mb-2">Sections List</h4>
+                <div className="mt-5">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-2xl font-semibold mb-2">Sections List</h4>
+                    {/* Add New Section Button */}
+                    <div className="flex justify-end">
+                    <button
+                      type="button"
+                      className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                      onClick={() => {
+                        setIsSectionModalOpen(true);
+                        setIsSectionEditMode(false);
+                        setEditingSection(null);
+                        setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' });
+                      }}
+                      disabled={termDetails.status === 'archived'}
+                    >
+                    Add New Section
+                    </button>
+                    </div>
+                  </div>
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
-                    <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border w-1/5">Track Name</th>
-                        <th className="p-3 border w-1/5">Strand Name</th>
-                        <th className="p-3 border w-1/5">Section Name</th>
-                        <th className="p-3 border w-1/5">Grade Level</th>
-                        <th className="p-3 border w-1/5">Actions</th>
+                  <thead>
+                    <tr className="bg-gray-100 text-left">
+                      <th className="p-3 border w-1/6">Track Name</th>
+                      <th className="p-3 border w-1/6">Strand Name</th>
+                      <th className="p-3 border w-1/6">Section Name</th>
+                      <th className="p-3 border w-1/6">Grade Level</th>
+                      <th className="p-3 border w-1/6">Status</th>
+                      <th className="p-3 border w-1/6">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sections.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="p-3 border text-center text-gray-500">
+                          No sections found.
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {sections.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" className="p-3 border text-center text-gray-500">
-                            No sections found.
+                    ) : (
+                      sections.map((section) => (
+                        <tr key={section._id}>
+                          <td className="p-3 border">{section.trackName}</td>
+                          <td className="p-3 border">{section.strandName}</td>
+                          <td className="p-3 border">{section.sectionName}</td>
+                          <td className="p-3 border">{section.gradeLevel}</td>
+                          <td className="p-3 border">{section.status}</td>
+                          <td className="p-3 border">
+                            <div className="inline-flex space-x-2">
+                              <button
+                                onClick={termDetails.status === 'archived' ? undefined : () => handleEditSection(section)}
+                                title="Edit"
+                                className="p-1 rounded hover:bg-yellow-100 group relative"
+                                disabled={termDetails.status === 'archived'}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                  </svg>
+                              </button>
+                              <button
+                                onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteSection(section)}
+                                className="p-1 rounded hover:bg-red-100 group relative"
+                                title="Delete"
+                                disabled={termDetails.status === 'archived'}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                  </svg>
+                              </button>
+                            </div>
                           </td>
                         </tr>
-                      ) : (
-                        sections.map((section) => (
-                          <tr key={section._id}>
-                            <td className="p-3 border">{section.trackName}</td>
-                            <td className="p-3 border">{section.strandName}</td>
-                            <td className="p-3 border">{section.sectionName}</td>
-                            <td className="p-3 border">{section.gradeLevel}</td>
-                            <td className="p-3 border">
-                              <div className="inline-flex space-x-2">
-                                <button
-                                  onClick={termDetails.status === 'archived' ? undefined : () => handleEditSection(section)}
-                                  className={`bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  title="Edit"
-                                  disabled={termDetails.status === 'archived'}
-                                >
-                                  <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
-                                </button>
-                                <button
-                                  onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteSection(section)}
-                                  className={`bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  title="Delete"
-                                  disabled={termDetails.status === 'archived'}
-                                >
-                                  <img src={archiveIcon} alt="Delete" className="w-8 h-8 inline-block" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
+                      ))
+                    )}
+                  </tbody>
                   </table>
                 </div>
                 {/* Section Preview Modal */}
@@ -4384,7 +4578,7 @@ Actual import to database is coming soon!`;
                           <div className="flex">
                             <div className="flex-shrink-0">
                               <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                               </svg>
                             </div>
                             <div className="ml-3">
@@ -4463,6 +4657,7 @@ Actual import to database is coming soon!`;
               </div>
             )}
 
+            {/* SUBJECTS */}
             {activeTab === 'subjects' && (
               <div>
                 {termDetails.status === 'archived' && (
@@ -4470,224 +4665,214 @@ Actual import to database is coming soon!`;
                     This term is archived. Editing is disabled.
                   </div>
                 )}
-                {/* Add/Edit Subject Form */}
-                <form onSubmit={isSubjectEditMode ? handleUpdateSubject : handleAddSubject} className="space-y-4 mt-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
-                      <select name="trackName" value={subjectFormData.trackName} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required disabled={termDetails.status === 'archived'}>
-                        <option value="">Select Track</option>
-                        {tracks.map(track => (
-                          <option key={track._id} value={track.trackName}>{track.trackName}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
-                      <select name="strandName" value={subjectFormData.strandName} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required disabled={termDetails.status === 'archived'}>
-                        <option value="">Select Strand</option>
-                        {strands.filter(strand => strand.trackName === subjectFormData.trackName).map(strand => (
-                          <option key={strand._id} value={strand.strandName}>{strand.strandName}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
-                      <select name="gradeLevel" value={subjectFormData.gradeLevel} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required disabled={termDetails.status === 'archived'}>
-                        <option value="">Select Grade Level</option>
-                        <option value="Grade 11">Grade 11</option>
-                        <option value="Grade 12">Grade 12</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Subject Name</label>
-                      <input type="text" name="subjectName" value={subjectFormData.subjectName} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required disabled={termDetails.status === 'archived'} />
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-4">
+                {/* Add New Subject Button */}
+                <div className="flex justify-between items-center mt-5 mb-4">
+                  <h4 className="text-2xl font-semibold mb-2">Subjects List</h4>
+                  <div className="flex justify-end">
                     <button
-                      type="submit"
-                      className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      type="button"
+                      className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                      onClick={() => {
+                        setIsSubjectModalOpen(true);
+                        setIsSubjectEditMode(false);
+                        setEditingSubject(null);
+                        setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' });
+                      }}
                       disabled={termDetails.status === 'archived'}
                     >
-                      {isSubjectEditMode ? 'Save Changes' : 'Add New Subject'}
+                      Add New Subject
                     </button>
-                    {isSubjectEditMode && (
+                  </div>
+                </div>
+                {/* Modal for Add/Edit Subject */}
+                {isSubjectModalOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 ">
+                    <div className="bg-white rounded-lg shadow-lg w-[1000px] max-w-lg p-6 relative">
                       <button
-                        type="button"
+                        className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
                         onClick={() => {
+                          setIsSubjectModalOpen(false);
                           setIsSubjectEditMode(false);
                           setEditingSubject(null);
-                          setSubjectFormData({ trackName: '', strandName: '', gradeLevel: '', subjectName: '' });
+                          setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' });
                         }}
-                        className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
-                        disabled={termDetails.status === 'archived'}
                       >
-                        Cancel Edit
+                        &times;
                       </button>
-                    )}
-                  </div>
-                </form>
-                {/* Subjects List */}
-                <div className="mt-8">
-                  <h4 className="text-lg font-semibold mb-2">Subjects List</h4>
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
-                    <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border">Track Name</th>
-                        <th className="p-3 border">Strand Name</th>
-                        <th className="p-3 border">Grade Level</th>
-                        <th className="p-3 border">Subject Name</th>
-                        <th className="p-3 border">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {subjects.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" className="p-3 border text-center text-gray-500">
-                            No subjects found.
-                          </td>
-                        </tr>
-                      ) : (
-                        subjects.map((subject) => (
-                          <tr key={subject._id}>
-                            <td className="p-3 border">{subject.trackName}</td>
-                            <td className="p-3 border">{subject.strandName}</td>
-                            <td className="p-3 border">{subject.gradeLevel}</td>
-                            <td className="p-3 border">{subject.subjectName}</td>
-                            <td className="p-3 border">
-                              <div className="inline-flex space-x-2">
-                                <button
-                                  onClick={termDetails.status === 'archived' ? undefined : () => handleEditSubject(subject)}
-                                  className={`bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  title="Edit"
-                                  disabled={termDetails.status === 'archived'}
-                                >
-                                  <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
-                                </button>
-                                <button
-                                  onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteSubject(subject)}
-                                  className={`bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  title="Delete"
-                                  disabled={termDetails.status === 'archived'}
-                                >
-                                  <img src={archiveIcon} alt="Delete" className="w-8 h-8 inline-block" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                {/* Batch Upload Section for Subjects */}
-                <div className="mb-6 p-4 border rounded-lg bg-gray-50">
-                  <h4 className="text-lg font-medium mb-3">Bulk Upload Subjects</h4>
-                  <div className="flex flex-col md:flex-row gap-4 items-end">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Upload Excel File
-                      </label>
-                      <input
-                        type="file"
-                        accept=".xlsx,.xls"
-                        onChange={handleSubjectExcelFile}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={termDetails.status === 'archived'}
-                      />
-                    </div>
-                    <button
-                      onClick={downloadSubjectTemplate}
-                      className="bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003366] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2"
-                      disabled={termDetails.status === 'archived'}
-                    >
-                      Download Template
-                    </button>
-                  </div>
-                </div>
-                {/* Preview Modal for Subjects Batch Upload */}
-                {subjectPreviewModalOpen && (
-                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-auto">
-                      <h3 className="text-xl font-semibold mb-4">Preview Subjects to Upload</h3>
-                      <div className="mb-4">
-                        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
-                          <div className="flex">
-                            <div className="flex-shrink-0">
-                              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                              </svg>
-                            </div>
-                            <div className="ml-3">
-                              <p className="text-sm text-blue-700">
-                                {Object.values(subjectValidationStatus).filter(v => v.valid).length} subject(s) are valid and will be uploaded.
-                                {Object.values(subjectValidationStatus).filter(v => !v.valid).length > 0 && (
-                                  <span className="block mt-1">
-                                    {Object.values(subjectValidationStatus).filter(v => !v.valid).length} subject(s) have validation errors and will be skipped.
-                                  </span>
-                                )}
-                              </p>
-                            </div>
+                      <h3 className="text-xl font-semibold mb-4">{isSubjectEditMode ? 'Edit Subject' : 'Add New Subject'}</h3>
+                      {subjectError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{subjectError}</div>}
+                      {/* Excel Upload Section */}
+                      <div className="mb-6 p-4 border rounded-lg bg-gray-50">
+                        <h4 className="text-lg font-medium mb-3">Bulk Upload Subjects</h4>
+                        <div className="flex flex-col md:flex-row gap-4 items-end">
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Upload Excel File
+                            </label>
+                            <input
+                              type="file"
+                              accept=".xlsx,.xls"
+                              onChange={handleSubjectExcelFile}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              disabled={termDetails.status === 'archived'}
+                            />
                           </div>
+                          <button
+                            onClick={downloadSubjectTemplate}
+                            className="bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003366] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2"
+                            disabled={termDetails.status === 'archived'}
+                          >
+                            Download Template
+                          </button>
                         </div>
                       </div>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
-                          <thead>
-                            <tr className="bg-gray-100 text-left">
-                              <th className="p-3 border">Track Name</th>
-                              <th className="p-3 border">Strand Name</th>
-                              <th className="p-3 border">Grade Level</th>
-                              <th className="p-3 border">Subject Name</th>
-                              <th className="p-3 border">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {subjectPreviewData.map((subject, index) => {
-                              const isValid = subjectValidationStatus[index]?.valid;
-                              const message = subjectValidationStatus[index]?.message;
-                              return (
-                                <tr key={index} className={!isValid ? 'bg-red-50' : ''}>
-                                  <td className="p-3 border">{subject.trackName}</td>
-                                  <td className="p-3 border">{subject.strandName}</td>
-                                  <td className="p-3 border">{subject.gradeLevel}</td>
-                                  <td className="p-3 border">{subject.subjectName}</td>
-                                  <td className="p-3 border">
-                                    <span className={`px-2 py-1 rounded text-xs ${isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{message}</span>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                          <span className="px-2 bg-white text-gray-500">Or add manually</span>
+                        </div>
                       </div>
-                      <div className="mt-6 flex justify-end gap-3">
-                        <button
-                          onClick={() => {
-                            setSubjectPreviewModalOpen(false);
-                            setSubjectPreviewData([]);
-                            setSubjectValidationStatus({});
-                            setSubjectExcelError('');
-                          }}
-                          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleConfirmSubjectUpload}
-                          disabled={isSubjectUploading || !subjectPreviewData.some((_, index) => subjectValidationStatus[index]?.valid) || termDetails.status === 'archived'}
-                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!subjectPreviewData.some((_, index) => subjectValidationStatus[index]?.valid) || isSubjectUploading || termDetails.status === 'archived') ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                          {isSubjectUploading ? 'Uploading...' : `Upload ${Object.values(subjectValidationStatus).filter(v => v.valid).length} Valid Subject(s)`}
-                        </button>
-                      </div>
+                      <form
+                        onSubmit={async (e) => {
+                          if (isSubjectEditMode) {
+                            await handleUpdateSubject(e);
+                          } else {
+                            await handleAddSubject(e);
+                          }
+                          // Only close modal if no error
+                          if (!subjectError) {
+                            setIsSubjectModalOpen(false);
+                            setIsSubjectEditMode(false);
+                            setEditingSubject(null);
+                            setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' });
+                          }
+                        }}
+                        className="space-y-4 mt-6"
+                      >
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
+                            <select name="trackName" value={subjectFormData.trackName} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required disabled={termDetails.status === 'archived'}>
+                              <option value="">Select Track</option>
+                              {tracks.map(track => (
+                                <option key={track._id} value={track.trackName}>{track.trackName}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
+                            <select name="strandName" value={subjectFormData.strandName} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required disabled={termDetails.status === 'archived'}>
+                              <option value="">Select Strand</option>
+                              {strands.filter(strand => strand.trackName === subjectFormData.trackName).map(strand => (
+                                <option key={strand._id} value={strand.strandName}>{strand.strandName}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
+                            <select name="gradeLevel" value={subjectFormData.gradeLevel} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required disabled={termDetails.status === 'archived'}>
+                              <option value="">Select Grade Level</option>
+                              <option value="Grade 11">Grade 11</option>
+                              <option value="Grade 12">Grade 12</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Subject Name</label>
+                            <input type="text" name="subjectName" value={subjectFormData.subjectName} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required disabled={termDetails.status === 'archived'} />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-4">
+                          <button
+                            type="submit"
+                            className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={termDetails.status === 'archived'}
+                          >
+                            {isSubjectEditMode ? 'Save Changes' : 'Add New Subject'}
+                          </button>
+                          {isSubjectEditMode && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsSubjectEditMode(false);
+                                setEditingSubject(null);
+                                setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' });
+                                setIsSubjectModalOpen(false);
+                              }}
+                              className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
+                              disabled={termDetails.status === 'archived'}
+                            >
+                              Cancel Edit
+                            </button>
+                          )}
+                        </div>
+                      </form>
                     </div>
                   </div>
                 )}
+                {/* Subjects List */}
+                <div className="mt-8">
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                  <thead>
+                    <tr className="bg-gray-100 text-left">
+                      <th className="p-3 border">Track Name</th>
+                      <th className="p-3 border">Strand Name</th>
+                      <th className="p-3 border">Grade Level</th>
+                      <th className="p-3 border">Subject Name</th>
+                      <th className="p-3 border">Status</th>
+                      <th className="p-3 border">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subjects.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="p-3 border text-center text-gray-500">
+                          No subjects found.
+                        </td>
+                      </tr>
+                    ) : (
+                      subjects.map((subject) => (
+                        <tr key={subject._id}>
+                          <td className="p-3 border">{subject.trackName}</td>
+                          <td className="p-3 border">{subject.strandName}</td>
+                          <td className="p-3 border">{subject.gradeLevel}</td>
+                          <td className="p-3 border">{subject.subjectName}</td>
+                          <td className="p-3 border">{subject.status}</td>
+                          <td className="p-3 border">
+                            <div className="inline-flex space-x-2">
+                              <button
+                              onClick={termDetails.status === 'archived' ? undefined : () => handleEditSubject(subject)}
+                        title="Edit"
+                              className="p-1 rounded hover:bg-yellow-100 group relative"
+                              disabled={termDetails.status === 'archived'}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                  </svg>
+                              </button>
+                              <button
+                                onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteSubject(subject)}
+                        className="p-1 rounded hover:bg-red-100 group relative"
+                                title="Delete"
+                                disabled={termDetails.status === 'archived'}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                  </svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
+            {/* FACULTY TAB */}
             {activeTab === 'faculty' && (
               <div className="">
                 {termDetails.status === 'archived' && (
@@ -4695,225 +4880,271 @@ Actual import to database is coming soon!`;
                     This term is archived. Editing is disabled.
                   </div>
                 )}
-                {/* New Faculty Assignment Form */}
-                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                  <h3 className="text-xl font-semibold mb-4">Assign Faculty</h3>
-                  {facultyError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{facultyError}</div>}
-
-                  {/* Excel Upload Section */}
-                  <div className="mb-6 p-4 border rounded-lg bg-gray-50">
-                    <h4 className="text-lg font-medium mb-3">Bulk Assign Faculty</h4>
-                    <div className="flex flex-col md:flex-row gap-4 items-end">
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Upload Excel File
-                        </label>
-                        <input
-                          type="file"
-                          accept=".xlsx,.xls"
-                          onChange={handleFacultyAssignmentExcelFile}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          disabled={termDetails.status === 'archived'}
-                        />
-                      </div>
+                {/* Assign Faculty Button */}
+                <div className="flex justify-between items-center mt-5 mb-4">
+                  <h4 className="text-2xl font-semibold mb-2">Faculty Assignments</h4>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                      onClick={() => {
+                        setIsFacultyModalOpen(true);
+                        setIsFacultyEditMode(false);
+                        setEditingFacultyAssignment(null);
+                        setFacultyFormData({ facultyId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '', subjectName: '' });
+                        setFacultySearchTerm('');
+                      }}
+                      disabled={termDetails.status === 'archived'}
+                    >
+                      Assign Faculty
+                    </button>
+                  </div>
+                </div>
+                {/* Modal for Assign/Edit Faculty */}
+                {isFacultyModalOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 ">
+                    <div className="bg-white rounded-lg shadow-lg w-[1000px] max-w-lg p-6 relative">
                       <button
-                        onClick={downloadFacultyAssignmentTemplate}
-                        className="bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003366] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2"
-                        disabled={termDetails.status === 'archived'}
+                        className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
+                        onClick={() => {
+                          setIsFacultyModalOpen(false);
+                          setIsFacultyEditMode(false);
+                          setEditingFacultyAssignment(null);
+                          setFacultyFormData({ facultyId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '', subjectName: '' });
+                          setFacultySearchTerm('');
+                        }}
                       >
-                        Download Template
+                        &times;
                       </button>
-                    </div>
-                  </div>
-
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-300"></div>
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="px-2 bg-white text-gray-500">Or assign manually</span>
-                    </div>
-                  </div>
-
-                  {/* Manual Assignment Form */}
-                  <form onSubmit={isFacultyEditMode ? handleUpdateFacultyAssignment : handleAddFacultyAssignment} className="space-y-4 mt-6">
-                    <div className="grid grid-cols-2 gap-4">
+                      <h3 className="text-xl font-semibold mb-4">{isFacultyEditMode ? 'Edit Faculty Assignment' : 'Assign Faculty'}</h3>
+                      {facultyError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{facultyError}</div>}
+                      {/* Excel Upload Section */}
+                      <div className="mb-6 p-4 border rounded-lg bg-gray-50">
+                        <h4 className="text-lg font-medium mb-3">Bulk Assign Faculty</h4>
+                        <div className="flex flex-col md:flex-row gap-4 items-end">
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Upload Excel File
+                            </label>
+                            <input
+                              type="file"
+                              accept=".xlsx,.xls"
+                              onChange={handleFacultyAssignmentExcelFile}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              disabled={termDetails.status === 'archived'}
+                            />
+                          </div>
+                          <button
+                            onClick={downloadFacultyAssignmentTemplate}
+                            className="bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003366] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2"
+                            disabled={termDetails.status === 'archived'}
+                          >
+                            Download Template
+                          </button>
+                        </div>
+                      </div>
                       <div className="relative">
-                        <label htmlFor="facultySearch" className="block text-sm font-medium text-gray-700 mb-1">Faculty Name</label>
-                        <input
-                          type="text"
-                          id="facultySearch"
-                          name="facultySearch"
-                          value={facultySearchTerm}
-                          onChange={handleChangeFacultyForm}
-                          onFocus={() => setShowFacultySuggestions(true)}
-                          onBlur={() => setTimeout(() => setShowFacultySuggestions(false), 200)} // Delay hiding to allow click
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="Search Faculty..."
-                          required
-                          disabled={termDetails.status === 'archived'}
-                        />
-                        {showFacultySuggestions && facultySearchTerm.length > 0 && (
-                          <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
-                            {faculties.map(faculty => (
-                              <li
-                                key={faculty._id}
-                                onClick={() => handleSelectFaculty(faculty)}
-                                className="p-2 hover:bg-gray-100 cursor-pointer"
-                              >
-                                {faculty.firstname} {faculty.lastname}
-                              </li>
-                            ))}
-                            {faculties.length === 0 && (
-                              <li className="p-2 text-gray-500">No matching faculty</li>
-                            )}
-                          </ul>
-                        )}
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                          <span className="px-2 bg-white text-gray-500">Or assign manually</span>
+                        </div>
                       </div>
-                      <div>
-                        <label htmlFor="trackNameFaculty" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
-                        <select
-                          disabled={termDetails.status === 'archived'}
-                          id="trackNameFaculty"
-                          name="trackId"
-                          value={facultyFormData.trackId}
-                          onChange={handleChangeFacultyForm}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          required
-                        >
-                          <option value="">Select a Track</option>
-                          {tracks.map(track => (
-                            <option key={track._id} value={track._id}>
-                              {track.trackName}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="strandNameFaculty" className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
-                        <select
-                          id="strandNameFaculty"
-                          name="strandId"
-                          value={facultyFormData.strandId}
-                          onChange={handleChangeFacultyForm}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          required
-                          disabled={!facultyFormData.trackId || termDetails.status === 'archived'}
-                        >
-                          <option value="">Select a Strand</option>
-                          {filteredStrandsForFaculty.map(strand => (
-                            <option key={strand._id} value={strand._id}>
-                              {strand.strandName}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="gradeLevelFaculty" className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
-                        <select
-                          disabled={termDetails.status === 'archived'}
-                          id="gradeLevelFaculty"
-                          name="gradeLevel"
-                          value={facultyFormData.gradeLevel}
-                          onChange={handleChangeFacultyForm}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          required
-                        >
-                          <option value="">Select Grade Level</option>
-                          <option value="Grade 11">Grade 11</option>
-                          <option value="Grade 12">Grade 12</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="sectionNameFaculty" className="block text-sm font-medium text-gray-700 mb-1">Section</label>
-                        <select
-                          id="sectionNameFaculty"
-                          name="sectionIds"
-                          value={facultyFormData.sectionIds[0] || ''}
-                          onChange={(e) => setFacultyFormData({ ...facultyFormData, sectionIds: [e.target.value] })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          required
-                          disabled={!facultyFormData.strandId || !facultyFormData.gradeLevel || termDetails.status === "archived"} // Updated to also check gradeLevel
-                        >
-                          <option value="">Select a Section</option>
-                          {filteredSectionsForFaculty.map(section => (
-                            <option key={section._id} value={section._id}>
-                              {section.sectionName}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="subjectFaculty" className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                        <select
-                          id="subjectFaculty"
-                          name="subjectName"
-                          value={facultyFormData.subjectName}
-                          onChange={handleChangeFacultyForm}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          required
-                          disabled={!(facultyFormData.trackId && facultyFormData.strandId && facultyFormData.gradeLevel)}
-                        >
-                          <option value="">Select Subject</option>
-                          {subjects.filter(subject =>
-                            subject.trackName === (tracks.find(t => t._id === facultyFormData.trackId)?.trackName) &&
-                            subject.strandName === (strands.find(s => s._id === facultyFormData.strandId)?.strandName) &&
-                            subject.gradeLevel === facultyFormData.gradeLevel
-                          ).map(subject => (
-                            <option key={subject._id} value={subject.subjectName}>{subject.subjectName}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="submit"
-                        className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        disabled={termDetails.status === 'archived'}
-                      >
-                        {isFacultyEditMode ? 'Save Changes' : 'Assign Faculty'}
-                      </button>
-                      {isFacultyEditMode && (
-                        <button
-                          type="button"
-                          onClick={() => {
+                      <form
+                        onSubmit={async (e) => {
+                          if (isFacultyEditMode) {
+                            await handleUpdateFacultyAssignment(e);
+                          } else {
+                            await handleAddFacultyAssignment(e);
+                          }
+                          // Only close modal if no error
+                          if (!facultyError) {
+                            setIsFacultyModalOpen(false);
                             setIsFacultyEditMode(false);
                             setEditingFacultyAssignment(null);
                             setFacultyFormData({ facultyId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '', subjectName: '' });
-                          }}
-                          disabled={termDetails.status === 'archived'}
-                          className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
-                        >
-                          Cancel Edit
-                        </button>
-                      )}
+                            setFacultySearchTerm('');
+                          }
+                        }}
+                        className="space-y-4 mt-6"
+                      >
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="relative">
+                            <label htmlFor="facultySearch" className="block text-sm font-medium text-gray-700 mb-1">Faculty Name</label>
+                            <input
+                              type="text"
+                              id="facultySearch"
+                              name="facultySearch"
+                              value={facultySearchTerm}
+                              onChange={handleChangeFacultyForm}
+                              onFocus={() => setShowFacultySuggestions(true)}
+                              onBlur={() => setTimeout(() => setShowFacultySuggestions(false), 200)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Search Faculty..."
+                              required
+                              disabled={termDetails.status === 'archived'}
+                            />
+                            {showFacultySuggestions && facultySearchTerm.length > 0 && (
+                              <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
+                                {faculties.map(faculty => (
+                                  <li
+                                    key={faculty._id}
+                                    onClick={() => handleSelectFaculty(faculty)}
+                                    className="p-2 hover:bg-gray-100 cursor-pointer"
+                                  >
+                                    {faculty.firstname} {faculty.lastname}
+                                  </li>
+                                ))}
+                                {faculties.length === 0 && (
+                                  <li className="p-2 text-gray-500">No matching faculty</li>
+                                )}
+                              </ul>
+                            )}
+                          </div>
+                          <div>
+                            <label htmlFor="trackNameFaculty" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
+                            <select
+                              disabled={termDetails.status === 'archived'}
+                              id="trackNameFaculty"
+                              name="trackId"
+                              value={facultyFormData.trackId}
+                              onChange={handleChangeFacultyForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                            >
+                              <option value="">Select a Track</option>
+                              {tracks.map(track => (
+                                <option key={track._id} value={track._id}>
+                                  {track.trackName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="strandNameFaculty" className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
+                            <select
+                              id="strandNameFaculty"
+                              name="strandId"
+                              value={facultyFormData.strandId}
+                              onChange={handleChangeFacultyForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                              disabled={!facultyFormData.trackId || termDetails.status === 'archived'}
+                            >
+                              <option value="">Select a Strand</option>
+                              {filteredStrandsForFaculty.map(strand => (
+                                <option key={strand._id} value={strand._id}>
+                                  {strand.strandName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label htmlFor="gradeLevelFaculty" className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
+                            <select
+                              disabled={termDetails.status === 'archived'}
+                              id="gradeLevelFaculty"
+                              name="gradeLevel"
+                              value={facultyFormData.gradeLevel}
+                              onChange={handleChangeFacultyForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                            >
+                              <option value="">Select Grade Level</option>
+                              <option value="Grade 11">Grade 11</option>
+                              <option value="Grade 12">Grade 12</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="sectionNameFaculty" className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+                            <select
+                              id="sectionNameFaculty"
+                              name="sectionIds"
+                              value={facultyFormData.sectionIds[0] || ''}
+                              onChange={e => setFacultyFormData({ ...facultyFormData, sectionIds: [e.target.value] })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                              disabled={!facultyFormData.strandId || !facultyFormData.gradeLevel || termDetails.status === 'archived'}
+                            >
+                              <option value="">Select a Section</option>
+                              {filteredSectionsForFaculty.map(section => (
+                                <option key={section._id} value={section._id}>
+                                  {section.sectionName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label htmlFor="subjectNameFaculty" className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                            <select
+                              id="subjectNameFaculty"
+                              name="subjectName"
+                              value={facultyFormData.subjectName}
+                              onChange={handleChangeFacultyForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                              disabled={termDetails.status === 'archived'}
+                            >
+                              <option value="">Select Subject</option>
+                              {subjects.filter(subject => subject.trackName === tracks.find(track => track._id === facultyFormData.trackId)?.trackName && subject.strandName === strands.find(strand => strand._id === facultyFormData.strandId)?.strandName && subject.gradeLevel === facultyFormData.gradeLevel).map(subject => (
+                                <option key={subject._id} value={subject.subjectName}>{subject.subjectName}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-4">
+                          <button
+                            type="submit"
+                            className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={termDetails.status === 'archived'}
+                          >
+                            {isFacultyEditMode ? 'Save Changes' : 'Assign Faculty'}
+                          </button>
+                          {isFacultyEditMode && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsFacultyEditMode(false);
+                                setEditingFacultyAssignment(null);
+                                setFacultyFormData({ facultyId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '', subjectName: '' });
+                                setFacultySearchTerm('');
+                                setIsFacultyModalOpen(false);
+                              }}
+                              className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
+                              disabled={termDetails.status === 'archived'}
+                            >
+                              Cancel Edit
+                            </button>
+                          )}
+                        </div>
+                      </form>
                     </div>
-                  </form>
-                </div>
-
-                {/* Faculty Assignment List */}
+                  </div>
+                )}
+                {/* Faculty Assignments List */}
                 <div className="mt-8">
-                  <h4 className="text-lg font-semibold mb-2">Faculty Assignments List</h4>
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
-                    <thead>
+                  <thead>
                       <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border w-1/6">Faculty Name</th>
-                        <th className="p-3 border w-1/6">Track Name</th>
-                        <th className="p-3 border w-1/6">Strand Name</th>
-                        <th className="p-3 border w-1/6">Grade Level</th>
-                        <th className="p-3 border w-1/6">Section</th>
-                        <th className="p-3 border w-1/6">Subject</th>
-                        <th className="p-3 border w-1/6">Actions</th>
+                        <th className="p-3 border w-1/8">Faculty Name</th>
+                        <th className="p-3 border w-1/8">Track Name</th>
+                        <th className="p-3 border w-1/8">Strand Name</th>
+                        <th className="p-3 border w-1/8">Grade Level</th>
+                        <th className="p-3 border w-1/8">Section</th>
+                        <th className="p-3 border w-1/8">Subject</th>
+                        <th className="p-3 border w-1/8">Status</th>
+                        <th className="p-3 border w-1/8">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {facultyAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="7" className="p-3 border text-center text-gray-500">
+                          <td colSpan="8" className="p-3 border text-center text-gray-500">
                             No faculty assignments found.
                           </td>
                         </tr>
@@ -4926,23 +5157,34 @@ Actual import to database is coming soon!`;
                             <td className="p-3 border">{assignment.gradeLevel}</td>
                             <td className="p-3 border">{assignment.sectionName}</td>
                             <td className="p-3 border">{assignment.subjectName || ''}</td>
+                            <td className="p-3 border">
+                              {assignment.status === 'archived' ? (
+                                <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
+                              ) : (
+                                <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Active</span>
+                              )}
+                            </td>
                             <td className="p-3 border min-w-[120px]">
                               <div className="flex justify-center gap-2">
                                 <button
                                   onClick={() => handleEditFacultyAssignment(assignment)}
-                                  className={`bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  title="Edit"
+                           title="Edit"
                                   disabled={termDetails.status === 'archived'}
+                                  className="p-1 rounded hover:bg-yellow-100 group relative"
                                 >
-                                  <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                  </svg>
                                 </button>
                                 <button
                                   onClick={() => handleDeleteFacultyAssignment(assignment)}
-                                  className={`bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          className="p-1 rounded hover:bg-red-100 group relative"
                                   title="Delete"
                                   disabled={termDetails.status === 'archived'}
                                 >
-                                  <img src={archiveIcon} alt="Delete" className="w-8 h-8 inline-block" />
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                  </svg>
                                 </button>
                               </div>
                             </td>
@@ -4952,99 +5194,10 @@ Actual import to database is coming soon!`;
                     </tbody>
                   </table>
                 </div>
-
-                {/* Faculty Assignment Preview Modal */}
-                {facultyAssignmentPreviewModalOpen && (
-                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-auto">
-                      <h3 className="text-xl font-semibold mb-4">Preview Faculty Assignments to Upload</h3>
-
-                      <div className="mb-4">
-                        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
-                          <div className="flex">
-                            <div className="flex-shrink-0">
-                              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                              </svg>
-                            </div>
-                            <div className="ml-3">
-                              <p className="text-sm text-blue-700">
-                                {Object.values(facultyAssignmentValidationStatus).filter(v => v.valid).length} faculty assignment(s) are valid and will be uploaded.
-                                {Object.values(facultyAssignmentValidationStatus).filter(v => !v.valid).length > 0 && (
-                                  <span className="block mt-1">
-                                    {Object.values(facultyAssignmentValidationStatus).filter(v => !v.valid).length} faculty assignment(s) have validation errors and will be skipped.
-                                  </span>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
-                          <thead>
-                            <tr className="bg-gray-100 text-left">
-                              <th className="p-3 border">Faculty Name</th>
-                              <th className="p-3 border">Track Name</th>
-                              <th className="p-3 border">Strand Name</th>
-                              <th className="p-3 border">Section Name</th>
-                              <th className="p-3 border">Grade Level</th>
-                              <th className="p-3 border">Subject</th>
-                              <th className="p-3 border">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {facultyAssignmentPreviewData.map((assignment, idx) => (
-                              <tr key={idx} className={facultyAssignmentValidationStatus[idx]?.valid ? 'bg-green-50' : 'bg-red-50'}>
-                                <td className="p-3 border">{assignment.facultyNameInput}</td>
-                                <td className="p-3 border">{assignment.trackName}</td>
-                                <td className="p-3 border">{assignment.strandName}</td>
-                                <td className="p-3 border">{assignment.sectionName}</td>
-                                <td className="p-3 border">{assignment.gradeLevel}</td>
-                                <td className="p-3 border">{assignment.subjectName}</td>
-                                <td className="p-3 border">
-                                  {facultyAssignmentValidationStatus[idx]?.valid ? (
-                                    <span className="text-green-700">✓ Valid</span>
-                                  ) : (
-                                    <span className="text-red-700">✗ {facultyAssignmentValidationStatus[idx]?.message}</span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <div className="mt-6 flex justify-end gap-3">
-                        <button
-                          onClick={() => {
-                            setFacultyAssignmentPreviewModalOpen(false);
-                            setFacultyAssignmentPreviewData([]);
-                            setFacultyAssignmentValidationStatus({});
-                            setFacultyError('');
-                          }}
-                          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleConfirmFacultyAssignmentUpload}
-                          disabled={isFacultyAssignmentUploading || !facultyAssignmentPreviewData.some((_, index) => facultyAssignmentValidationStatus[index]?.valid)}
-                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!facultyAssignmentPreviewData.some((_, index) => facultyAssignmentValidationStatus[index]?.valid) || isFacultyAssignmentUploading)
-                            ? 'opacity-50 cursor-not-allowed'
-                            : ''
-                            }`}
-                        >
-                          {isFacultyAssignmentUploading ? 'Uploading...' : `Upload ${Object.values(facultyAssignmentValidationStatus).filter(v => v.valid).length} Valid Assignment(s)`}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
-
+          
+            {/* STUDENTS TAB */}
             {activeTab === 'students' && (
               <div className="">
                 {termDetails.status === 'archived' && (
@@ -5052,307 +5205,309 @@ Actual import to database is coming soon!`;
                     This term is archived. Editing is disabled.
                   </div>
                 )}
-                {/* New Student Assignment Form */}
-                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                  <h3 className="text-xl font-semibold mb-4">Assign Student</h3>
-                  {studentError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{studentError}</div>}
-                  {/* Excel Upload Section */}
-                  <div className="mb-6 p-4 border rounded-lg bg-gray-50">
-                    <h4 className="text-lg font-medium mb-3">Bulk Assign Students</h4>
-                    <div className="flex flex-col md:flex-row gap-4 items-end">
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Upload Excel File
-                        </label>
-                        <input
-                          type="file"
-                          accept=".xlsx,.xls"
-                          onChange={handleStudentAssignmentExcelFile}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          disabled={termDetails.status === 'archived'}
-                        />
-                      </div>
-                      <button
-                        onClick={downloadStudentAssignmentTemplate}
-                        className="bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003366] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2"
-                        disabled={termDetails.status === 'archived'}
-                      >
-                        Download Template
-                      </button>
-                    </div>
+                {/* Assign Student Button */}
+                <div className="flex justify-between items-center mt-5 mb-4">
+                  <h4 className="text-2xl font-semibold mb-2">Student Assignments</h4>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                      onClick={() => {
+                        setIsStudentModalOpen(true);
+                        setIsStudentEditMode(false);
+                        setEditingStudentAssignment(null);
+                        setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+                        setStudentSearchTerm('');
+                      }}
+                      disabled={termDetails.status === 'archived'}
+                    >
+                      Assign Student
+                    </button>
                   </div>
-                  {/* Preview Modal for Students Batch Upload */}
-                  {studentPreviewModalOpen && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                      <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-auto">
-                        <h3 className="text-xl font-semibold mb-4">Preview Student Assignments to Upload</h3>
-                        <div className="mb-4">
-                          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
-                            <div className="flex">
-                              <div className="flex-shrink-0">
-                                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                                </svg>
-                              </div>
-                              <div className="ml-3">
-                                <p className="text-sm text-blue-700">
-                                  {Object.values(studentValidationStatus).filter(v => v.valid).length} assignment(s) are valid and will be uploaded.
-                                  {Object.values(studentValidationStatus).filter(v => !v.valid).length > 0 && (
-                                    <span className="block mt-1">
-                                      {Object.values(studentValidationStatus).filter(v => !v.valid).length} assignment(s) have validation errors and will be skipped.
-                                    </span>
-                                  )}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
-                            <thead>
-                              <tr className="bg-gray-100 text-left">
-                                <th className="p-3 border">Student Name</th>
-                                <th className="p-3 border">Grade Level</th>
-                                <th className="p-3 border">Track Name</th>
-                                <th className="p-3 border">Strand Name</th>
-                                <th className="p-3 border">Section Name</th>
-                                <th className="p-3 border">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {studentPreviewData.map((assignment, index) => {
-                                const isValid = studentValidationStatus[index]?.valid;
-                                const message = studentValidationStatus[index]?.message;
-                                return (
-                                  <tr key={index} className={!isValid ? 'bg-red-50' : ''}>
-                                    <td className="p-3 border">{assignment.studentName}</td>
-                                    <td className="p-3 border">{assignment.gradeLevel}</td>
-                                    <td className="p-3 border">{assignment.trackName}</td>
-                                    <td className="p-3 border">{assignment.strandName}</td>
-                                    <td className="p-3 border">{assignment.sectionName}</td>
-                                    <td className="p-3 border">
-                                      <span className={`px-2 py-1 rounded text-xs ${isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{message}</span>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                        <div className="mt-6 flex justify-end gap-3">
-                          <button
-                            onClick={() => {
-                              setStudentPreviewModalOpen(false);
-                              setStudentPreviewData([]);
-                              setStudentValidationStatus({});
-                              setStudentExcelError('');
-                            }}
-                            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={handleConfirmStudentUpload}
-                            disabled={isStudentUploading || !studentPreviewData.some((_, index) => studentValidationStatus[index]?.valid) || termDetails.status === 'archived'}
-                            className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!studentPreviewData.some((_, index) => studentValidationStatus[index]?.valid) || isStudentUploading || termDetails.status === 'archived') ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          >
-                            {isStudentUploading ? 'Uploading...' : `Upload ${Object.values(studentValidationStatus).filter(v => v.valid).length} Valid Assignment(s)`}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {/* Manual Assignment Form */}
-                  <form onSubmit={isStudentEditMode ? handleUpdateStudentAssignment : handleAddStudentAssignment} className="space-y-4 mt-6">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="relative">
-                        <label htmlFor="studentSearch" className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
-                        <input
-                          type="text"
-                          id="studentSearch"
-                          name="studentSearch"
-                          value={studentSearchTerm}
-                          onChange={handleChangeStudentForm}
-                          onFocus={() => setShowStudentSuggestions(true)}
-                          onBlur={() => setTimeout(() => setShowStudentSuggestions(false), 200)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="Search Student..."
-                          required
-                          disabled={termDetails.status === 'archived'}
-                        />
-                        {showStudentSuggestions && studentSearchTerm.length > 0 && (
-                          <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
-                            {students.map(student => (
-                              <li
-                                key={student._id}
-                                onClick={() => handleSelectStudent(student)}
-                                className="p-2 hover:bg-gray-100 cursor-pointer"
-                              >
-                                {student.firstname} {student.lastname}
-                              </li>
-                            ))}
-                            {students.length === 0 && (
-                              <li className="p-2 text-gray-500">No matching student</li>
-                            )}
-                          </ul>
-                        )}
-                      </div>
-                      <div>
-                        <label htmlFor="trackId" className="block text-sm font-medium text-gray-700 mb-1">Track</label>
-                        <select
-                          id="trackId"
-                          name="trackId"
-                          value={studentFormData.trackId}
-                          onChange={handleChangeStudentForm}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          required
-                          disabled={termDetails.status === 'archived'}
-                        >
-                          <option value="">Select Track</option>
-                          {tracks.map(track => (
-                            <option key={track._id} value={track._id}>
-                              {track.trackName}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="strandId" className="block text-sm font-medium text-gray-700 mb-1">Strand</label>
-                        <select
-                          id="strandId"
-                          name="strandId"
-                          value={studentFormData.strandId}
-                          onChange={handleChangeStudentForm}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          required
-                          disabled={!studentFormData.trackId || termDetails.status === 'archived'}
-                        >
-                          <option value="">Select Strand</option>
-                          {filteredStrandsForStudent.map(strand => (
-                            <option key={strand._id} value={strand._id}>
-                              {strand.strandName}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="gradeLevel" className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
-                        <select
-                          id="gradeLevel"
-                          name="gradeLevel"
-                          value={studentFormData.gradeLevel || ''}
-                          onChange={handleChangeStudentForm}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          required
-                          disabled={termDetails.status === 'archived'}
-                        >
-                          <option value="">Select Grade Level</option>
-                          <option value="Grade 11">Grade 11</option>
-                          <option value="Grade 12">Grade 12</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="sectionIds" className="block text-sm font-medium text-gray-700 mb-1">Section</label>
-                        <select
-                          id="sectionIds"
-                          name="sectionIds"
-                          value={studentFormData.sectionIds[0] || ''}
-                          onChange={(e) => setStudentFormData(prev => ({ ...prev, sectionIds: [e.target.value] }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          required
-                          disabled={!studentFormData.strandId || !studentFormData.gradeLevel || termDetails.status === 'archived'}
-                        >
-                          <option value="">Select Section</option>
-                          {filteredSectionsForStudent.map(section => (
-                            <option key={section._id} value={section._id}>
-                              {section.sectionName}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
+                </div>
+                {/* Modal for Assign/Edit Student */}
+                {isStudentModalOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 ">
+                    <div className="bg-white rounded-lg shadow-lg w-[1000px] max-w-lg p-6 relative">
                       <button
-                        type="submit"
-                        className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        disabled={termDetails.status === 'archived'}
+                        className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
+                        onClick={() => {
+                          setIsStudentModalOpen(false);
+                          setIsStudentEditMode(false);
+                          setEditingStudentAssignment(null);
+                          setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+                          setStudentSearchTerm('');
+                        }}
                       >
-                        {isStudentEditMode ? 'Save Changes' : 'Assign Student'}
+                        &times;
                       </button>
-                      {isStudentEditMode && (
-                        <button
-                          type="button"
-                          onClick={() => {
+                      <h3 className="text-xl font-semibold mb-4">{isStudentEditMode ? 'Edit Student Assignment' : 'Assign Student'}</h3>
+                      {studentError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{studentError}</div>}
+                      {/* Excel Upload Section */}
+                      <div className="mb-6 p-4 border rounded-lg bg-gray-50">
+                        <h4 className="text-lg font-medium mb-3">Bulk Assign Students</h4>
+                        <div className="flex flex-col md:flex-row gap-4 items-end">
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Upload Excel File
+                            </label>
+                            <input
+                              type="file"
+                              accept=".xlsx,.xls"
+                              onChange={handleStudentAssignmentExcelFile}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              disabled={termDetails.status === 'archived'}
+                            />
+                          </div>
+                          <button
+                            onClick={downloadStudentAssignmentTemplate}
+                            className="bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003366] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2"
+                            disabled={termDetails.status === 'archived'}
+                          >
+                            Download Template
+                          </button>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                          <span className="px-2 bg-white text-gray-500">Or assign manually</span>
+                        </div>
+                      </div>
+                      <form
+                        onSubmit={async (e) => {
+                          if (isStudentEditMode) {
+                            await handleUpdateStudentAssignment(e);
+                          } else {
+                            await handleAddStudentAssignment(e);
+                          }
+                          // Only close modal if no error
+                          if (!studentError) {
+                            setIsStudentModalOpen(false);
                             setIsStudentEditMode(false);
                             setEditingStudentAssignment(null);
                             setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
-                          }}
-                          className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
-                          disabled={termDetails.status === 'archived'}
-                        >
-                          Cancel Edit
-                        </button>
-                      )}
+                            setStudentSearchTerm('');
+                          }
+                        }}
+                        className="space-y-4 mt-6"
+                      >
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="relative">
+                            <label htmlFor="studentSearch" className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
+                            <input
+                              type="text"
+                              id="studentSearch"
+                              name="studentSearch"
+                              value={studentSearchTerm}
+                              onChange={handleChangeStudentForm}
+                              onFocus={() => setShowStudentSuggestions(true)}
+                              onBlur={() => setTimeout(() => setShowStudentSuggestions(false), 200)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Search Student..."
+                              required
+                              disabled={termDetails.status === 'archived'}
+                            />
+                            {showStudentSuggestions && studentSearchTerm.length > 0 && (
+                              <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
+                                {students.map(student => (
+                                  <li
+                                    key={student._id}
+                                    onClick={() => handleSelectStudent(student)}
+                                    className="p-2 hover:bg-gray-100 cursor-pointer"
+                                  >
+                                    {student.firstname} {student.lastname}
+                                  </li>
+                                ))}
+                                {students.length === 0 && (
+                                  <li className="p-2 text-gray-500">No matching students</li>
+                                )}
+                              </ul>
+                            )}
+                          </div>
+                          <div>
+                            <label htmlFor="trackNameStudent" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
+                            <select
+                              disabled={termDetails.status === 'archived'}
+                              id="trackNameStudent"
+                              name="trackId"
+                              value={studentFormData.trackId}
+                              onChange={handleChangeStudentForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                            >
+                              <option value="">Select a Track</option>
+                              {tracks.map(track => (
+                                <option key={track._id} value={track._id}>
+                                  {track.trackName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="strandNameStudent" className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
+                            <select
+                              id="strandNameStudent"
+                              name="strandId"
+                              value={studentFormData.strandId}
+                              onChange={handleChangeStudentForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                              disabled={!studentFormData.trackId || termDetails.status === 'archived'}
+                            >
+                              <option value="">Select a Strand</option>
+                              {filteredStrandsForStudent.map(strand => (
+                                <option key={strand._id} value={strand._id}>
+                                  {strand.strandName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label htmlFor="gradeLevelStudent" className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
+                            <select
+                              disabled={termDetails.status === 'archived'}
+                              id="gradeLevelStudent"
+                              name="gradeLevel"
+                              value={studentFormData.gradeLevel}
+                              onChange={handleChangeStudentForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                            >
+                              <option value="">Select Grade Level</option>
+                              <option value="Grade 11">Grade 11</option>
+                              <option value="Grade 12">Grade 12</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="sectionNameStudent" className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+                            <select
+                              id="sectionNameStudent"
+                              name="sectionIds"
+                              value={studentFormData.sectionIds[0] || ''}
+                              onChange={e => setStudentFormData({ ...studentFormData, sectionIds: [e.target.value] })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                              disabled={!studentFormData.strandId || !studentFormData.gradeLevel || termDetails.status === 'archived'}
+                            >
+                              <option value="">Select a Section</option>
+                              {filteredSectionsForStudent.map(section => (
+                                <option key={section._id} value={section._id}>
+                                  {section.sectionName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-4">
+                          <button
+                            type="submit"
+                            className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={termDetails.status === 'archived'}
+                          >
+                            {isStudentEditMode ? 'Save Changes' : 'Assign Student'}
+                          </button>
+                          {isStudentEditMode && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsStudentEditMode(false);
+                                setEditingStudentAssignment(null);
+                                setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+                                setStudentSearchTerm('');
+                                setIsStudentModalOpen(false);
+                              }}
+                              className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
+                              disabled={termDetails.status === 'archived'}
+                            >
+                              Cancel Edit
+                            </button>
+                          )}
+                        </div>
+                      </form>
                     </div>
-                  </form>
-                </div>
-                {/* Student Assignment List */}
+                  </div>
+                )}
+                {/* Student Assignments List */}
                 <div className="mt-8">
-                  <h4 className="text-lg font-semibold mb-2">Student Assignments List</h4>
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                     <thead>
                       <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border w-1/6">Student Name</th>
-                        <th className="p-3 border w-1/6">Grade Level</th>
-                        <th className="p-3 border w-1/6">Track Name</th>
-                        <th className="p-3 border w-1/6">Strand Name</th>
-                        <th className="p-3 border w-1/6">Section</th>
-                        <th className="p-3 border w-1/6 min-w-[120px]">Actions</th>
+                        <th className="p-3 border">Student Name</th>
+                        <th className="p-3 border">Track Name</th>
+                        <th className="p-3 border">Strand Name</th>
+                        <th className="p-3 border">Grade Level</th>
+                        <th className="p-3 border">Section</th>
+                        <th className="p-3 border">Status</th>
+                        <th className="p-3 border">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {studentAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="6" className="p-3 border text-center text-gray-500">
+                          <td colSpan="7" className="p-3 border text-center text-gray-500">
                             No student assignments found.
                           </td>
                         </tr>
                       ) : (
-                        studentAssignments.map((assignment) => (
-                          <tr key={assignment._id}>
-                            <td className="p-3 border">{assignment.studentName}</td>
-                            <td className="p-3 border">{assignment.gradeLevel || assignment['Grade Level'] || ''}</td>
-                            <td className="p-3 border">{assignment.trackName}</td>
-                            <td className="p-3 border">{assignment.strandName}</td>
-                            <td className="p-3 border">{assignment.sectionName}</td>
-                            <td className="p-3 border min-w-[120px]">
-                              <div className="flex justify-center gap-2">
-                                <button
-                                  onClick={termDetails.status === 'archived' ? undefined : () => handleEditStudentAssignment(assignment)}
-                                  className={`bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-1 text-xs rounded ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  title="Edit"
-                                  disabled={termDetails.status === 'archived'}
-                                >
-                                  <img src={editIcon} alt="Edit" className="w-8 h-8 inline-block" />
-                                </button>
-                                <button
-                                  onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteStudentAssignment(assignment)}
-                                  className={`bg-red-500 hover:bg-red-800 text-white px-2 py-1 text-xs rounded ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  title="Delete"
-                                  disabled={termDetails.status === 'archived'}
-                                >
-                                  <img src={archiveIcon} alt="Delete" className="w-8 h-8 inline-block" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
+                        studentAssignments.map((assignment) => {
+                          const student = students.find(s => s._id === assignment.studentId);
+                          return (
+                            <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
+                              <td className="p-3 border">{student ? `${student.firstname} ${student.lastname}` : 'Unknown'}</td>
+                              <td className="p-3 border">{assignment.trackName}</td>
+                              <td className="p-3 border">{assignment.strandName}</td>
+                              <td className="p-3 border">{assignment.gradeLevel}</td>
+                              <td className="p-3 border">{assignment.sectionName}</td>
+                              <td className="p-3 border">
+                                {assignment.status === 'archived' ? (
+                                  <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
+                                ) : (
+                                  <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Active</span>
+                                )}
+                              </td>
+                              <td className="p-3 border">
+                                <div className="inline-flex space-x-2">
+                                  <button
+                                    onClick={termDetails.status === 'archived' ? undefined : () => handleEditStudentAssignment(assignment)}
+                                    title="Edit"
+                                    className="p-1 rounded hover:bg-yellow-100 group relative"
+                                    disabled={termDetails.status === 'archived'}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteStudentAssignment(assignment)}
+                                    className="p-1 rounded hover:bg-red-100 group relative"
+                                    title="Delete"
+                                    disabled={termDetails.status === 'archived'}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
+          
+            
+            
           </div>
         </div>
       </div>
@@ -5625,51 +5780,6 @@ Actual import to database is coming soon!`;
                 </div>
               )}
 
-              {showTrackModal && (
-                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-                  <div className="bg-white p-10 rounded-2xl shadow-2xl max-w-md w-full relative">
-                    <button
-                      className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-3xl font-bold"
-                      onClick={() => setShowTrackModal(false)}
-                      aria-label="Close"
-                    >
-                      &times;
-                    </button>
-                    <h3 className="text-2xl font-bold mb-6">Add New Track</h3>
-                    <form onSubmit={handleAddTrack} className="space-y-4">
-                      <div>
-                        <label className="block text-lg font-medium text-gray-700 mb-1">
-                          Track Name
-                        </label>
-                        <input
-                          type="text"
-                          name="trackName"
-                          value={trackFormData.trackName}
-                          onChange={handleTrackFormChange}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
-                          required
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="submit"
-                          className="flex-1 bg-emerald-600 text-white py-3 px-4 rounded-md text-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
-                        >
-                          Add Track
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowTrackModal(false)}
-                          className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 px-4 rounded-md text-lg"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              )}
-
               {activeImportTab === 'facultyAssignments' && (
                 <div>
                   <h4 className="text-lg font-medium mb-3">Faculty Assignments to Import</h4>
@@ -5695,17 +5805,11 @@ Actual import to database is coming soon!`;
                           <td className="p-2 border">{assignment.sectionName}</td>
                           <td className="p-2 border">{assignment.gradeLevel}</td>
                           <td className="p-2 border">{assignment.subjectName}</td>
-                          <td className="p-2 border flex items-center gap-1">
-                            {importValidationStatus.facultyAssignments[index]?.valid ? (
-                              <span className="text-green-600">✓ Valid</span>
-                            ) : (
-                              <span className="text-red-600">X {importValidationStatus.facultyAssignments[index]?.message}</span>
-                            )}
-                          </td>
+                          <td className="p-2 border">{assignment.status}</td>
                         </tr>
                       ))}
                       {importPreviewData.facultyAssignments.length === 0 && (
-                        <tr><td colSpan="7" className="p-2 text-center text-gray-500">No faculty assignments found in the Excel file.</td></tr>
+                        <tr><td colSpan="8" className="p-2 text-center text-gray-500">No faculty assignments found in the Excel file.</td></tr>
                       )}
                     </tbody>
                   </table>

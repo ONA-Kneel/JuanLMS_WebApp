@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { termId } = req.query;
-    let query = { status: 'active' };
+    let query = {};
     if (termId) {
       query.termId = termId;
     }
