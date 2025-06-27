@@ -2,10 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
-import axios from 'axios';
 import editIcon from "../../assets/editing.png";
 import archiveIcon from "../../assets/archive.png";
-import viewIcon from "../../assets/view.png";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -99,7 +97,7 @@ export default function Admin_AcademicSettings() {
       const res = await fetch(`${API_BASE}/api/schoolyears`);
       const data = await res.json();
       if (res.ok) {
-        setSchoolYears(data);
+        setSchoolYears(data.filter(year => year.status !== 'archived'));
       } else {
         setError("Failed to fetch school years");
       }
@@ -211,16 +209,18 @@ export default function Admin_AcademicSettings() {
         if (res.ok) {
           alert("School year updated successfully");
           setSchoolYears(prevYears =>
-            prevYears.map(year =>
-              year._id === editingYear._id
-                ? {
-                    ...year,
-                    schoolYearStart: startYear,
-                    schoolYearEnd: startYear + 1,
-                    status: formData.status
-                  }
-                : year
-            )
+            prevYears
+              .map(year =>
+                year._id === editingYear._id
+                  ? {
+                      ...year,
+                      schoolYearStart: startYear,
+                      schoolYearEnd: startYear + 1,
+                      status: formData.status
+                    }
+                  : year
+              )
+              .filter(year => year.status !== 'archived')
           );
           setIsEditMode(false);
           setEditingYear(null);
@@ -399,6 +399,27 @@ export default function Admin_AcademicSettings() {
     }
   };
 
+  // Archive (delete) a school year
+  const handleDelete = async (year) => {
+    if (!window.confirm(`Are you sure you want to archive school year ${year.schoolYearStart}-${year.schoolYearEnd}? This will also archive all its terms and assignments.`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/schoolyears/${year._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'archived' })
+      });
+      if (res.ok) {
+        fetchSchoolYears();
+        alert(`School year ${year.schoolYearStart}-${year.schoolYearEnd} archived.`);
+      } else {
+        const data = await res.json();
+        setError(data.message || 'Failed to archive school year');
+      }
+    } catch (err) {
+      setError('Error archiving school year');
+    }
+  };
+
   const tabs = [
     { id: 'dashboard', label: 'School Year Dashboard' },
     { id: 'terms', label: 'Term/Semester' },
@@ -512,71 +533,77 @@ export default function Admin_AcademicSettings() {
                     </tr>
                   </thead>
                   <tbody>
-                    {schoolYears.filter(year =>
-                      (searchTerms.start === '' || year.schoolYearStart.toString().includes(searchTerms.start)) &&
-                      (searchTerms.end === '' || year.schoolYearEnd.toString().includes(searchTerms.end))
-                    ).length === 0 ? (
+                    {schoolYears
+                      .filter(year => year.status !== 'archived')
+                      .filter(year =>
+                        (searchTerms.start === '' || year.schoolYearStart.toString().includes(searchTerms.start)) &&
+                        (searchTerms.end === '' || year.schoolYearEnd.toString().includes(searchTerms.end))
+                      )
+                      .length === 0 ? (
                       <tr>
                         <td colSpan="4" className="p-3 border text-center text-gray-500">
                           No school years found
                         </td>
                       </tr>
                     ) : (
-                      schoolYears.filter(year =>
-                        (searchTerms.start === '' || year.schoolYearStart.toString().includes(searchTerms.start)) &&
-                        (searchTerms.end === '' || year.schoolYearEnd.toString().includes(searchTerms.end))
-                      ).map((year) => (
-                        <tr key={year._id} className="hover:bg-gray-50 transition">
-                          <td className="p-3 border">{year.schoolYearStart}</td>
-                          <td className="p-3 border">{year.schoolYearEnd}</td>
-                          <td className="p-3 border">
-                            <button
-                              onClick={() => handleToggleStatus(year)}
-                              className={`px-3 py-1 rounded-full text-xs font-semibold border border-gray-300
-                                ${year.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 hover:bg-green-200'}
-                                hover:shadow`}
-                              title={year.status === 'active' ? 'Set as inactive' : 'Set as active'}
-                            >
-                              {year.status === 'active' ? 'Active' : 'Inactive'}
-                            </button>
-                          </td>
-                          <td className="p-3 border">
-                            <div className="inline-flex space-x-2">
+                      schoolYears
+                        .filter(year => year.status !== 'archived')
+                        .filter(year =>
+                          (searchTerms.start === '' || year.schoolYearStart.toString().includes(searchTerms.start)) &&
+                          (searchTerms.end === '' || year.schoolYearEnd.toString().includes(searchTerms.end))
+                        )
+                        .map((year) => (
+                          <tr key={year._id} className="hover:bg-gray-50 transition">
+                            <td className="p-3 border">{year.schoolYearStart}</td>
+                            <td className="p-3 border">{year.schoolYearEnd}</td>
+                            <td className="p-3 border">
                               <button
-                                onClick={() => { handleEdit(year); setShowCreateModal(true); }}
-                                className="p-1 rounded hover:bg-yellow-100 group relative"
-                                title="Edit"
+                                onClick={() => handleToggleStatus(year)}
+                                className={`px-3 py-1 rounded-full text-xs font-semibold border border-gray-300
+                                  ${year.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 hover:bg-green-200'}
+                                  hover:shadow`}
+                                title={year.status === 'active' ? 'Set as inactive' : 'Set as active'}
                               >
-                                {/* Heroicons Pencil Square (black) */}
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
-                                </svg>
+                                {year.status === 'active' ? 'Active' : 'Inactive'}
                               </button>
-                              <button
-                                onClick={() => handleView(year)}
-                                className="p-1 rounded hover:bg-blue-100 group relative"
-                                title="View"
-                              >
-                                {/* Heroicons Eye (black) */}
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12Z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => handleDelete(year)}
-                                className="p-1 rounded hover:bg-red-100 group relative"
-                                title="Archive"
-                              >
-                                {/* Heroicons Trash (red) */}
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                </svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+                            </td>
+                            <td className="p-3 border">
+                              <div className="inline-flex space-x-2">
+                                <button
+                                  onClick={() => { handleEdit(year); setShowCreateModal(true); }}
+                                  className="p-1 rounded hover:bg-yellow-100 group relative"
+                                  title="Edit"
+                                >
+                                  {/* Heroicons Pencil Square (black) */}
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleView(year)}
+                                  className="p-1 rounded hover:bg-blue-100 group relative"
+                                  title="View"
+                                >
+                                  {/* Heroicons Eye (black) */}
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12Z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(year)}
+                                  className="p-1 rounded hover:bg-red-100 group relative"
+                                  title="Archive"
+                                >
+                                  {/* Heroicons Trash (red) */}
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
                     )}
                   </tbody>
                 </table>
