@@ -71,7 +71,7 @@ export default function Login() {
       // Navigate to dashboard based on user role
       if (role === 'students') navigate('/student_dashboard');
       else if (role === 'faculty') navigate('/faculty_dashboard');
-      else if (role === 'parent') navigate('/parent_dashboard');
+      else if (role === 'vice president of education') navigate('/parent_dashboard');
       else if (role === 'admin') navigate('/admin_dashboard');
       else if (role === 'director') navigate('/director_dashboard');
       else alert('Unknown role');
@@ -147,7 +147,7 @@ export default function Login() {
       // Navigate to dashboard based on user role
       if (role === 'students') navigate('/student_dashboard');
       else if (role === 'faculty') navigate('/faculty_dashboard');
-      else if (role === 'parent') navigate('/parent_dashboard');
+      else if (role === 'vice president of education') navigate('/parent_dashboard');
       else if (role === 'admin') navigate('/admin_dashboard');
       else if (role === 'director') navigate('/director_dashboard');
       else alert('Unknown role');

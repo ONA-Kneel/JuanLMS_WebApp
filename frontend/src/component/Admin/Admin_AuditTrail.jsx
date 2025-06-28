@@ -57,7 +57,7 @@ export default function Admin_AuditTrail() {
     student: 'Student',
     faculty: 'Faculty',
     director: 'Director',
-    parent: 'Parent',
+    'vice president of education': 'Vice President of Education',
     admin: 'Admin'
   };
 

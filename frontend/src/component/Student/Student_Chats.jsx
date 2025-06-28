@@ -284,7 +284,7 @@ export default function Student_Chats() {
   }, [recentChats]);
 
   const filteredUsers = users.filter((u) =>
-    `${u.firstname} ${u.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) && u.role !== "parent"
+    `${u.firstname} ${u.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) && u.role !== "vice president of education"
   );
 
   // ================= RENDER =================

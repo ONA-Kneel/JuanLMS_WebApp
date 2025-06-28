@@ -822,7 +822,7 @@ userRoutes.post('/login', async (req, res) => {
 function getRoleFromEmail(email) {
     const normalized = email.toLowerCase();
     if (normalized.endsWith('@students.sjddef.edu.ph')) return 'students';
-    if (normalized.endsWith('@parent.sjddef.edu.ph')) return 'parent';
+    if (normalized.endsWith('@VPE.sjddef.edu.ph')) return 'vice president of education';
     if (normalized.endsWith('@admin.sjddef.edu.ph')) return 'admin';
     if (normalized.endsWith('@director.sjddef.edu.ph')) return 'director';
     if (normalized.endsWith('@sjddef.edu.ph') && !normalized.includes('@students.') && !normalized.includes('@parent.') && !normalized.includes('@admin.') && !normalized.includes('@director.')) return 'faculty';

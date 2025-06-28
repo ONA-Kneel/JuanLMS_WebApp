@@ -112,9 +112,9 @@ function App() {
         <Route path="/admin_registrants" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Registrants /></ProtectedRoute>} />
 
         {/* Parent */}
-        <Route path="/parent_dashboard" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Dashboard/></ProtectedRoute>}/>
-        <Route path="/parent_grades" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Grades/></ProtectedRoute>}/>
-        <Route path="/parent_progress" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Progress/></ProtectedRoute>}/>
+        <Route path="/parent_dashboard" element={<ProtectedRoute allowedRoles={['vice president of education']}><Parent_Dashboard/></ProtectedRoute>}/>
+        <Route path="/parent_grades" element={<ProtectedRoute allowedRoles={['vice president of education']}><Parent_Grades/></ProtectedRoute>}/>
+        <Route path="/parent_progress" element={<ProtectedRoute allowedRoles={['vice president of education']}><Parent_Progress/></ProtectedRoute>}/>
 
         {/* Shared Activity Creation Page */}
         <Route path="/create-activity" element={<ProtectedRoute allowedRoles={['faculty','students']}><ActivityCreatePage /></ProtectedRoute>} />

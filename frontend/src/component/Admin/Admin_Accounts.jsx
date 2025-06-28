@@ -180,9 +180,16 @@ export default function Admin_Accounts() {
         .replace(/[^a-z]/g, ""); // remove non-letters
 
     if (firstname && lastname) {
-      const generatedEmail = role === "faculty" 
-        ? `${clean(firstname)}.${clean(lastname)}@sjddef.edu.ph`
-        : `${clean(firstname)}.${clean(lastname)}@${role}.sjddef.edu.ph`;
+      let emailDomain;
+      if (role === "faculty") {
+        emailDomain = "sjddef.edu.ph";
+      } else if (role === "vice president of education") {
+        emailDomain = "VPE.sjddef.edu.ph";
+      } else {
+        emailDomain = `${role}.sjddef.edu.ph`;
+      }
+      
+      const generatedEmail = `${clean(firstname)}.${clean(lastname)}@${emailDomain}`;
       setFormData((prev) => ({ ...prev, email: generatedEmail }));
     } else {
       setFormData((prev) => ({ ...prev, email: "" }));
@@ -592,7 +599,7 @@ export default function Admin_Accounts() {
                   { label: 'All', value: 'all' },
                   { label: 'Students', value: 'students' },
                   { label: 'Faculty', value: 'faculty' },
-                  { label: 'Parent', value: 'parent' },
+                  { label: 'Vice President of Education', value: 'vice president of education' },
                   { label: 'Admin', value: 'admin' },
                   { label: 'Director', value: 'director' },
                 ].map(tab => (
@@ -638,7 +645,7 @@ export default function Admin_Accounts() {
                         <option value="">All Roles</option>
                         <option value="students">Students</option>
                         <option value="faculty">Faculty</option>
-                        <option value="parent">Parent</option>
+                        <option value="vice president of education">Vice President of Education</option>
                         <option value="admin">Admin</option>
                         <option value="director">Director</option>
                       </select>
@@ -666,8 +673,8 @@ export default function Admin_Accounts() {
                               user.role === 'faculty' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
                               user.role === 'admin' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
                               user.role === 'director' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
-                              user.role === 'parent' ? 'bg-pink-100 text-pink-700 border border-pink-300' :
-                              'bg-gray-100 text-gray-700 border border-gray-300'}`}>{user.role}</span>
+                              user.role === 'vice president of education' ? 'bg-pink-100 text-pink-700 border border-pink-300' :
+                              'bg-gray-100 text-gray-700 border border-gray-300'}`}>{user.role === 'vice president of education' ? 'Vice President of Education' : user.role}</span>
                         </td>
                         <td className="p-3 border-b">
                           <div className="inline-flex space-x-2">
@@ -765,12 +772,15 @@ export default function Admin_Accounts() {
 
           {/* Create Success Message */}
           {showCreateSuccess && (
-            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-60">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
                 <h3 className="text-xl font-semibold mb-2 text-green-600">Account Created Successfully</h3>
                 <p className="text-gray-600 mb-4">The new account has been created and added to the system.</p>
                 <button
-                  onClick={() => setShowCreateSuccess(false)}
+                  onClick={() => {
+                    setShowCreateSuccess(false);
+                    setShowCreateModal(false);
+                  }}
                   className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full"
                 >
                   OK
@@ -971,7 +981,7 @@ export default function Admin_Accounts() {
                   >
                     <option value="students">Students</option>
                     <option value="faculty">Faculty</option>
-                    <option value="parent">Parent</option>
+                    <option value="vice president of education">Vice President of Education</option>
                     <option value="admin">Admin</option>
                     <option value="director">Director</option>
                   </select>
@@ -1064,8 +1074,8 @@ export default function Admin_Accounts() {
                               user.role === 'faculty' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
                               user.role === 'admin' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
                               user.role === 'director' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
-                              user.role === 'parent' ? 'bg-pink-100 text-pink-700 border border-pink-300' :
-                              'bg-gray-100 text-gray-700 border border-gray-300'}`}>{user.role}</span>
+                              user.role === 'vice president of education' ? 'bg-pink-100 text-pink-700 border border-pink-300' :
+                              'bg-gray-100 text-gray-700 border border-gray-300'}`}>{user.role === 'vice president of education' ? 'Vice President of Education' : user.role}</span>
                         </td>
                         <td className="p-3 border-b">{user.archivedAt ? new Date(user.archivedAt).toLocaleDateString() : '-'}</td>
                         <td className="p-3 border-b">{user.deletedAt ? getDaysLeft(user.deletedAt) : '-'}</td>
