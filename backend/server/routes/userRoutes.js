@@ -326,7 +326,7 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
 
             let sendSmtpEmail = {
                 to: [{ email: personalemail, name: firstname || '' }],
-                sender: { email: 'nicolettecborre@gmail.com', name: 'JuanLMS Support' },
+                sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
                 subject: 'Welcome to JuanLMS!',
                 textContent:
                   `Hello ${firstname || ''},\n\n` +
@@ -521,7 +521,7 @@ userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
     let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
     let sendSmtpEmail = {
         to: [{ email: decryptedPersonalEmail, name: user.firstname || '' }],
-        sender: { email: 'nicolettecborre@gmail.com', name: 'JuanLMS Support' },
+        sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
         subject: 'Your JuanLMS Password Change OTP',
         textContent: `Hello ${user.firstname || ''},\n\nYour OTP for password change is: ${otp}\n\nIf you did not request this, please ignore this email.\n\nThank you,\nJuanLMS Team`
     };
@@ -613,7 +613,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
         // Use a plain object for sendSmtpEmail
         let sendSmtpEmail = {
             to: [{ email: decryptedPersonalEmail, name: user.firstname || '' }],
-            sender: { email: 'nicolettecborre@gmail.com', name: 'JuanLMS Support' },
+            sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
             subject: 'Your JuanLMS Password Reset OTP',
             textContent: `Hello ${user.firstname || ''},\n\nYour OTP for password reset is: ${otp}\n\nIf you did not request this, please ignore this email.\n\nThank you,\nJuanLMS Team`
         };
