@@ -19,7 +19,7 @@ export default function FacultyCreateClass() {
   const [selectedSchoolYear, setSelectedSchoolYear] = useState("");
   const [terms, setTerms] = useState([]);
   const [selectedTerm, setSelectedTerm] = useState("");
-  const [gradeLevels] = useState(["Grade 11", "Grade 12"]);
+  const [gradeLevels, setGradeLevels] = useState(["Grade 11", "Grade 12"]);
   const [selectedGradeLevel, setSelectedGradeLevel] = useState("");
   const [facultyAssignments, setFacultyAssignments] = useState([]);
   const [filteredAssignments, setFilteredAssignments] = useState([]);
@@ -92,53 +92,50 @@ export default function FacultyCreateClass() {
     }
   }
 
-  // Filter assignments when filters change
+  // When academicYear and currentTerm are loaded, filter assignments for those
   useEffect(() => {
-    // Debug: log all assignments and current filters
-    console.log('All facultyAssignments:', facultyAssignments);
-    if (facultyAssignments.length > 0) {
-      console.log('Sample facultyAssignment:', facultyAssignments[0]);
-      console.log('Assignment schoolYear:', facultyAssignments[0].schoolYear);
-      console.log('Assignment termId:', facultyAssignments[0].termId);
-    }
-    console.log('Current filters:', {
-      userMongoId,
-      selectedSchoolYear,
-      selectedTerm,
-      selectedGradeLevel
-    });
-    let filtered = facultyAssignments.filter(a =>
-      (
-        String(a.facultyId) === String(userMongoId) ||
-        (a.facultyId && a.facultyId.$oid && String(a.facultyId.$oid) === String(userMongoId))
-      ) &&
-      (!selectedSchoolYear || String(a.schoolYear) === String(selectedSchoolYear)) &&
-      (
-        !selectedTerm ||
-        String(a.termId) === String(selectedTerm) ||
-        (a.termId && a.termId.$oid && String(a.termId.$oid) === String(selectedTerm))
-      ) &&
-      (!selectedGradeLevel || String(a.gradeLevel) === String(selectedGradeLevel))
+    if (!academicYear || !currentTerm) return;
+    // Filter assignments for current year and term
+    const yearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+    const filtered = facultyAssignments.filter(a =>
+      String(a.schoolYear) === String(yearName) &&
+      (String(a.termId) === String(currentTerm._id) || (a.termId && a.termId.$oid && String(a.termId.$oid) === String(currentTerm._id)))
     );
-    // Debug: log filtered assignments
-    console.log('Filtered assignments:', filtered);
     setFilteredAssignments(filtered);
-    // Subjects
-    const uniqueSubjects = [...new Set(filtered.map(a => a.subjectName))];
-    setSubjects(uniqueSubjects);
+    // Get unique grade levels for this faculty in this year/term
+    const uniqueGradeLevels = [...new Set(filtered.map(a => a.gradeLevel))];
+    setGradeLevels(uniqueGradeLevels);
+    // If only one grade level, auto-select it
+    if (uniqueGradeLevels.length === 1) {
+      setSelectedGradeLevel(uniqueGradeLevels[0]);
+    } else {
+      setSelectedGradeLevel("");
+    }
     // Reset subject/section if not in filtered
-    if (!uniqueSubjects.includes(selectedSubject)) setSelectedSubject("");
-  }, [facultyAssignments, selectedSchoolYear, selectedTerm, selectedGradeLevel]);
+    setSelectedSubject("");
+    setSelectedSection("");
+  }, [academicYear, currentTerm, facultyAssignments]);
 
-  // Filter sections when subject changes
+  // When grade level changes, update subjects
   useEffect(() => {
     const filtered = filteredAssignments.filter(a =>
+      !selectedGradeLevel || String(a.gradeLevel) === String(selectedGradeLevel)
+    );
+    const uniqueSubjects = [...new Set(filtered.map(a => a.subjectName))];
+    setSubjects(uniqueSubjects);
+    if (!uniqueSubjects.includes(selectedSubject)) setSelectedSubject("");
+  }, [filteredAssignments, selectedGradeLevel]);
+
+  // When subject changes, update sections
+  useEffect(() => {
+    const filtered = filteredAssignments.filter(a =>
+      (!selectedGradeLevel || String(a.gradeLevel) === String(selectedGradeLevel)) &&
       (!selectedSubject || a.subjectName === selectedSubject)
     );
     const uniqueSections = [...new Set(filtered.map(a => a.sectionName))];
     setSections(uniqueSections);
     if (!uniqueSections.includes(selectedSection)) setSelectedSection("");
-  }, [filteredAssignments, selectedSubject]);
+  }, [filteredAssignments, selectedGradeLevel, selectedSubject]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -354,38 +351,27 @@ export default function FacultyCreateClass() {
         <h3 className="text-4xl font-bold mt-5">Create Class</h3>
 
         <div className="mt-6 flex flex-col space-y-6 ml-5">
-          {/* School Year Dropdown */}
+          {/* School Year Dropdown (locked) */}
           <label className="text-xl font-bold">School Year</label>
-          <select
-            className="w-1/2 px-3 py-2 border rounded"
-            value={selectedSchoolYear}
-            onChange={e => setSelectedSchoolYear(e.target.value)}
-          >
-            <option value="">Select School Year</option>
-            {schoolYears.map(sy => (
-              <option key={sy._id} value={`${sy.schoolYearStart}-${sy.schoolYearEnd}`}>{sy.schoolYearStart}-{sy.schoolYearEnd}</option>
-            ))}
-          </select>
-          {/* Term Dropdown */}
+          <input
+            className="w-1/2 px-3 py-2 border rounded bg-gray-200 cursor-not-allowed"
+            value={academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''}
+            disabled
+          />
+          {/* Term Dropdown (locked) */}
           <label className="text-xl font-bold">Term</label>
-          <select
-            className="w-1/2 px-3 py-2 border rounded"
-            value={selectedTerm}
-            onChange={e => setSelectedTerm(e.target.value)}
-            disabled={!selectedSchoolYear}
-          >
-            <option value="">Select Term</option>
-            {terms.map(term => (
-              <option key={term._id} value={term._id}>{term.termName}</option>
-            ))}
-          </select>
-          {/* Grade Level Dropdown */}
+          <input
+            className="w-1/2 px-3 py-2 border rounded bg-gray-200 cursor-not-allowed"
+            value={currentTerm ? currentTerm.termName : ''}
+            disabled
+          />
+          {/* Grade Level Dropdown (selectable if multiple) */}
           <label className="text-xl font-bold">Grade Level</label>
           <select
             className="w-1/2 px-3 py-2 border rounded"
             value={selectedGradeLevel}
             onChange={e => setSelectedGradeLevel(e.target.value)}
-            disabled={!selectedTerm}
+            disabled={gradeLevels.length === 1}
           >
             <option value="">Select Grade Level</option>
             {gradeLevels.map(g => (

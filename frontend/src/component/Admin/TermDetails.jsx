@@ -1749,7 +1749,11 @@ export default function TermDetails() {
         const res = await fetch(`${API_BASE}/api/strands`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(strand)
+          body: JSON.stringify({
+            ...strand,
+            schoolYear: termDetails.schoolYear,
+            termName: termDetails.termName
+          })
         });
 
         if (res.ok) {
@@ -3723,6 +3727,14 @@ Actual import to database is coming soon!`;
     return studentAssignments.filter(sa => sa.termId === termDetails._id).length;
   }
 
+  // Place after all useState/useEffect, before return
+  const filteredTracks = tracks.filter(
+    t => t.schoolYear === termDetails?.schoolYear && t.termName === termDetails?.termName
+  );
+  const filteredSubjects = subjects.filter(
+    s => s.schoolYear === termDetails?.schoolYear && s.termName === termDetails?.termName
+  );
+
   return (
     
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -3911,7 +3923,7 @@ Actual import to database is coming soon!`;
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('tracks')}>
                     <img src={tracksIcon} alt="Tracks Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
-                      tracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName).length
+                      filteredTracks.filter(t => t.status === 'active').length
                     }</span>
                     <span className="text-gray-600 mt-2">Active Tracks</span>
                     <button
@@ -3925,7 +3937,7 @@ Actual import to database is coming soon!`;
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('strands')}>
                     <img src={strandsIcon} alt="Strands Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
-                      strands.filter(s => s.status === 'active' && tracks.find(t => t.trackName === s.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active')).length
+                      strands.filter(s => s.status === 'active' && filteredTracks.find(t => t.trackName === s.trackName && t.status === 'active')).length
                     }</span>
                     <span className="text-gray-600 mt-2">Active Strands</span>
                     <button
@@ -3939,7 +3951,7 @@ Actual import to database is coming soon!`;
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('sections')}>
                     <img src={sectionsIcon} alt="Sections Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
-                      sections.filter(sec => sec.status === 'active' && tracks.find(t => t.trackName === sec.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active')).length
+                      sections.filter(sec => sec.status === 'active' && filteredTracks.find(t => t.trackName === sec.trackName && t.status === 'active')).length
                     }</span>
                     <span className="text-gray-600 mt-2">Active Sections</span>
                     <button
@@ -3953,7 +3965,7 @@ Actual import to database is coming soon!`;
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('subjects')}>
                     <img src={subjectsIcon} alt="Subjects Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
-                      subjects.filter(sub => sub.status === 'active' && sub.schoolYear === termDetails.schoolYear && sub.termName === termDetails.termName).length
+                      filteredSubjects.filter(sub => sub.status === 'active').length
                     }</span>
                     <span className="text-gray-600 mt-2">Active Subjects</span>
                     <button
@@ -4090,14 +4102,14 @@ Actual import to database is coming soon!`;
                       </tr>
                     </thead>
                     <tbody>
-                      {tracks.length === 0 ? (
+                      {filteredTracks.length === 0 ? (
                         <tr>
                           <td colSpan="3" className="p-3 border text-center text-gray-500">
                             No tracks found.
                           </td>
                         </tr>
                       ) : (
-                        tracks.map((track) => (
+                        filteredTracks.map(track => (
                           <tr key={track._id}>
                             <td className="p-3 border">{track.trackName}</td>
                             <td className="p-3 border">{track.status}</td>
@@ -4190,7 +4202,7 @@ Actual import to database is coming soon!`;
                         disabled={termDetails.status === 'archived'}
                       >
                         <option value="">Select a Track</option>
-                        {tracks.map(track => (
+                        {filteredTracks.map(track => (
                           <option key={track._id} value={track._id}>
                             {track.trackName}
                           </option>
@@ -4406,7 +4418,7 @@ Actual import to database is coming soon!`;
                           disabled={termDetails.status === 'archived'}
                         >
                           <option value="">Select a Track</option>
-                          {tracks.map(track => (
+                          {filteredTracks.map(track => (
                             <option key={track._id} value={track._id}>
                               {track.trackName}
                             </option>
@@ -4756,7 +4768,7 @@ Actual import to database is coming soon!`;
                             <label className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
                             <select name="trackName" value={subjectFormData.trackName} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required disabled={termDetails.status === 'archived'}>
                               <option value="">Select Track</option>
-                              {tracks.map(track => (
+                              {filteredTracks.map(track => (
                                 <option key={track._id} value={track.trackName}>{track.trackName}</option>
                               ))}
                             </select>
@@ -4825,14 +4837,14 @@ Actual import to database is coming soon!`;
                     </tr>
                   </thead>
                   <tbody>
-                    {subjects.length === 0 ? (
+                    {filteredSubjects.length === 0 ? (
                       <tr>
                         <td colSpan="6" className="p-3 border text-center text-gray-500">
                           No subjects found.
                         </td>
                       </tr>
                     ) : (
-                      subjects.map((subject) => (
+                      filteredSubjects.map((subject) => (
                         <tr key={subject._id}>
                           <td className="p-3 border">{subject.trackName}</td>
                           <td className="p-3 border">{subject.strandName}</td>
@@ -5014,7 +5026,7 @@ Actual import to database is coming soon!`;
                               required
                             >
                               <option value="">Select a Track</option>
-                              {tracks.map(track => (
+                              {filteredTracks.map(track => (
                                 <option key={track._id} value={track._id}>
                                   {track.trackName}
                                 </option>
@@ -5091,7 +5103,7 @@ Actual import to database is coming soon!`;
                               disabled={termDetails.status === 'archived'}
                             >
                               <option value="">Select Subject</option>
-                              {subjects.filter(subject => subject.trackName === tracks.find(track => track._id === facultyFormData.trackId)?.trackName && subject.strandName === strands.find(strand => strand._id === facultyFormData.strandId)?.strandName && subject.gradeLevel === facultyFormData.gradeLevel).map(subject => (
+                              {filteredSubjects.filter(subject => subject.trackName === tracks.find(track => track._id === facultyFormData.trackId)?.trackName && subject.strandName === strands.find(strand => strand._id === facultyFormData.strandId)?.strandName && subject.gradeLevel === facultyFormData.gradeLevel).map(subject => (
                                 <option key={subject._id} value={subject.subjectName}>{subject.subjectName}</option>
                               ))}
                             </select>
@@ -5339,7 +5351,7 @@ Actual import to database is coming soon!`;
                               required
                             >
                               <option value="">Select a Track</option>
-                              {tracks.map(track => (
+                              {filteredTracks.map(track => (
                                 <option key={track._id} value={track._id}>
                                   {track.trackName}
                                 </option>

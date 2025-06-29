@@ -23,25 +23,19 @@ router.get('/track/:trackName', async (req, res) => {
 
 // Create a new strand
 router.post('/', async (req, res) => {
-  const { strandName, trackName } = req.body;
+  const { strandName, trackName, schoolYear, termName } = req.body;
 
-  if (!strandName || !trackName) {
-    return res.status(400).json({ message: 'Strand name and track name are required' });
+  if (!strandName || !trackName || !schoolYear || !termName) {
+    return res.status(400).json({ message: 'Strand name, track name, school year, and term name are required' });
   }
 
   try {
-    // Get the current active term
-    const currentTerm = await Term.findOne({ status: 'active' });
-    if (!currentTerm) {
-      return res.status(400).json({ message: 'No active term found' });
-    }
-
     // Check for existing strand with same name in the same track, school year, and term
     const existingStrand = await Strand.findOne({ 
       strandName: new RegExp(`^${strandName}$`, 'i'),
       trackName,
-      schoolYear: currentTerm.schoolYear,
-      termName: currentTerm.termName
+      schoolYear,
+      termName
     });
     if (existingStrand) {
       return res.status(409).json({ message: 'Strand name must be unique within the same track, school year, and term.' });
@@ -50,8 +44,8 @@ router.post('/', async (req, res) => {
     const newStrand = new Strand({ 
       strandName, 
       trackName, 
-      schoolYear: currentTerm.schoolYear, 
-      termName: currentTerm.termName 
+      schoolYear, 
+      termName 
     });
     await newStrand.save();
     res.status(201).json(newStrand);
