@@ -313,12 +313,11 @@ export default function FacultyCreateClass() {
           continue;
         }
         try {
-          const res = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(email)}`);
+          const res = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(email)}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          });
           const users = await res.json();
-          console.log('Searching for:', email, 'Got:', users);
-          const found = users.find(
-            (u) => u.email.toLowerCase() === email.toLowerCase()
-          );
+          const found = users[0]; // Use the first user returned
           if (found && !selectedStudents.some(s => s._id === found._id)) {
             setSelectedStudents(prev => [...prev, found]);
             added++;

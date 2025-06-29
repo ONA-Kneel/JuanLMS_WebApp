@@ -72,7 +72,9 @@ userRoutes.get("/users/search", authenticateToken, async (req, res) => {
     const query = req.query.q || "";
     let users = [];
     if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(query)) {
-        users = await User.find({ email: query.toLowerCase(), isArchived: { $ne: true } });
+        // Search by emailHash
+        const emailHash = crypto.createHash('sha256').update(query.toLowerCase()).digest('hex');
+        users = await User.find({ emailHash, isArchived: { $ne: true } });
     } else {
         users = await User.find({
             isArchived: { $ne: true },
