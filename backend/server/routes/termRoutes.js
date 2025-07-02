@@ -96,9 +96,9 @@ router.patch('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Term not found' });
     }
     if (req.body.status === 'active') {
-      // Archive all other terms in the same school year
+      // Archive all other terms, regardless of school year
       await Term.updateMany(
-        { schoolYear: term.schoolYear, _id: { $ne: term._id } },
+        { _id: { $ne: term._id } },
         { status: 'archived' }
       );
       term.status = 'active';
