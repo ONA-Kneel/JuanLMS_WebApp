@@ -63,14 +63,9 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'A school year with this start already exists.' });
     }
 
-    // Prevent multiple active years if setAsActive is true
+    // Deactivate all existing school years if setAsActive is true
     if (setAsActive) {
-      const activeYear = await SchoolYear.findOne({ status: 'active' });
-      if (activeYear) {
-        return res.status(400).json({
-          message: `Cannot activate this year. ${activeYear.schoolYearStart}-${activeYear.schoolYearEnd} is currently active.`
-        });
-      }
+      await SchoolYear.updateMany({ status: 'active' }, { status: 'inactive' });
     }
 
     const schoolYear = new SchoolYear({
