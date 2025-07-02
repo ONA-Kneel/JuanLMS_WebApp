@@ -3735,6 +3735,21 @@ Actual import to database is coming soon!`;
     s => s.schoolYear === termDetails?.schoolYear && s.termName === termDetails?.termName
   );
 
+  // Before rendering the strands table, filter out duplicate strands by _id
+  const filteredStrands = strands.filter(
+    strand => strand.schoolYear === termDetails.schoolYear && strand.termName === termDetails.termName
+  );
+
+  const uniqueStrands = filteredStrands.filter(
+    (strand, index, self) =>
+      index === self.findIndex((s) => s._id === strand._id)
+  );
+
+  // Update: Enforce absolute uniqueness for strand names
+  const uniqueStrandNames = Array.from(
+    new Set(filteredStrands.map(strand => strand.strandName))
+  );
+
   return (
     
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -4282,14 +4297,14 @@ Actual import to database is coming soon!`;
                     </tr>
                   </thead>
                   <tbody>
-                    {strands.length === 0 ? (
+                    {uniqueStrands.length === 0 ? (
                       <tr>
                         <td colSpan="4" className="p-3 border text-center text-gray-500">
                           No strands found.
                         </td>
                       </tr>
                     ) : (
-                      strands.map((strand) => (
+                      uniqueStrands.map((strand) => (
                         <tr key={strand._id}>
                           <td className="p-3 border">{strand.trackName}</td>
                           <td className="p-3 border">{strand.strandName}</td>
