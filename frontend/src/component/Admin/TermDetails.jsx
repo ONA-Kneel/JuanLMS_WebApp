@@ -4452,7 +4452,7 @@ Actual import to database is coming soon!`;
                               disabled={termDetails.status === 'archived'}
                         >
                           <option value="">Select a Strand</option>
-                          {filteredStrandsForSection.map(strand => (
+                          {[...new Map(filteredStrandsForSection.map(strand => [strand.strandName, strand])).values()].map(strand => (
                             <option key={strand._id} value={strand._id}>
                               {strand.strandName}
                             </option>
@@ -4792,7 +4792,7 @@ Actual import to database is coming soon!`;
                             <label className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
                             <select name="strandName" value={subjectFormData.strandName} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required disabled={termDetails.status === 'archived'}>
                               <option value="">Select Strand</option>
-                              {strands.filter(strand => strand.trackName === subjectFormData.trackName).map(strand => (
+                              {[...new Map(strands.filter(strand => strand.trackName === subjectFormData.trackName).map(strand => [strand.strandName, strand])).values()].map(strand => (
                                 <option key={strand._id} value={strand.strandName}>{strand.strandName}</option>
                               ))}
                             </select>
@@ -5062,7 +5062,7 @@ Actual import to database is coming soon!`;
                               disabled={!facultyFormData.trackId || termDetails.status === 'archived'}
                             >
                               <option value="">Select a Strand</option>
-                              {filteredStrandsForFaculty.map(strand => (
+                              {[...new Map(filteredStrandsForFaculty.map(strand => [strand.strandName, strand])).values()].map(strand => (
                                 <option key={strand._id} value={strand._id}>
                                   {strand.strandName}
                                 </option>
@@ -5387,7 +5387,7 @@ Actual import to database is coming soon!`;
                               disabled={!studentFormData.trackId || termDetails.status === 'archived'}
                             >
                               <option value="">Select a Strand</option>
-                              {filteredStrandsForStudent.map(strand => (
+                              {[...new Map(filteredStrandsForStudent.map(strand => [strand.strandName, strand])).values()].map(strand => (
                                 <option key={strand._id} value={strand._id}>
                                   {strand.strandName}
                                 </option>

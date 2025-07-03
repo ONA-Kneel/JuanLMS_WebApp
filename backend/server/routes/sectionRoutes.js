@@ -40,14 +40,16 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'No active term found' });
     }
 
-    // Check for existing section with same name in the same school year and term
+    // Check for existing section with same name in the same track, strand, school year, and term
     const existingSection = await Section.findOne({ 
       sectionName: new RegExp(`^${sectionName}$`, 'i'),
+      trackName,
+      strandName,
       schoolYear: currentTerm.schoolYear,
       termName: currentTerm.termName
     });
     if (existingSection) {
-      return res.status(409).json({ message: 'Section name must be unique within the same school year and term.' });
+      return res.status(409).json({ message: 'Section name must be unique within the same track, strand, school year, and term.' });
     }
 
     const newSection = new Section({ 
