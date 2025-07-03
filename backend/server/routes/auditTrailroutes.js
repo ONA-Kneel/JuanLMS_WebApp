@@ -1,5 +1,5 @@
 // auditTrailroutes.js
-// Handles audit log creation and retrieval for JuanLMS. Only admin/director can view logs.
+// Handles audit log creation and retrieval for JuanLMS. Only admin/principal can view logs.
 // Uses MongoDB for storage and includes pagination and authentication middleware.
 
 import express from 'express';
@@ -19,19 +19,19 @@ router.use((req, res, next) => {
   next();
 });
 
-// --- GET /audit-logs - Get all audit logs (admin/director only, paginated) ---
+// --- GET /audit-logs - Get all audit logs (admin/principal only, paginated) ---
 router.get('/audit-logs', authenticateToken, async (req, res) => {
   try {
     // Check authentication and role
-    // Only admin and director can access audit logs for security reasons
+    // Only admin and principal can access audit logs for security reasons
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
     }
     if (!req.user.role) {
       return res.status(403).json({ message: 'User role not found' });
     }
-    if (req.user.role !== 'admin' && req.user.role !== 'director') {
-      return res.status(403).json({ message: 'Access denied. Admin/Director only.' });
+    if (req.user.role !== 'admin' && req.user.role !== 'principal') {
+      return res.status(403).json({ message: 'Access denied. Admin/Principal only.' });
     }
 
     // Pagination parameters

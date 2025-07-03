@@ -5,11 +5,11 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import "@fullcalendar/common/main.css";
 import interactionPlugin from "@fullcalendar/interaction";
 import ProfileMenu from "../ProfileMenu";
-import Director_Navbar from "./Director_Navbar";
+import Principal_Navbar from "./Principal_Navbar";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-export default function Director_Calendar() {
+export default function Principal_Calendar() {
   const [holidays, setHolidays] = useState([]);
   const [adminEvents, setAdminEvents] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
@@ -137,7 +137,7 @@ export default function Director_Calendar() {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
-      <Director_Navbar />
+      <Principal_Navbar />
 
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
         {/* Header */}

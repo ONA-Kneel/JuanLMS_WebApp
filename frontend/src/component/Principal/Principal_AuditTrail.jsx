@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import Director_Navbar from "./Director_Navbar";
+import Principal_Navbar from "./Principal_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-export default function Director_AuditTrail() {
+export default function Principal_AuditTrail() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -19,7 +19,7 @@ export default function Director_AuditTrail() {
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
-    if (!user || (user.role !== 'admin' && user.role !== 'director')) {
+    if (!user || (user.role !== 'admin' && user.role !== 'principal')) {
       navigate('/login');
       return;
     }
@@ -95,7 +95,11 @@ export default function Director_AuditTrail() {
       } else if (err.response?.status === 500) {
         setError('Server error. Please try again later.');
       } else {
-        setError(err.response?.data?.message || 'Failed to fetch audit logs');
+        let errMsg = err.response?.data?.message || 'Failed to fetch audit logs';
+        if (typeof errMsg === 'string' && errMsg.includes('Admin/Director only')) {
+          errMsg = errMsg.replace('Admin/Director only', 'Admin/Principal only');
+        }
+        setError(errMsg);
       }
       setAuditLogs([]);
       setTotalPages(1);
@@ -117,7 +121,7 @@ export default function Director_AuditTrail() {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
-      <Director_Navbar />
+      <Principal_Navbar />
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">

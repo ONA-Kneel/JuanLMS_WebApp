@@ -826,8 +826,8 @@ function getRoleFromEmail(email) {
     if (normalized.endsWith('@students.sjddef.edu.ph')) return 'students';
     if (normalized.endsWith('@VPE.sjddef.edu.ph')) return 'vice president of education';
     if (normalized.endsWith('@admin.sjddef.edu.ph')) return 'admin';
-    if (normalized.endsWith('@director.sjddef.edu.ph')) return 'director';
-    if (normalized.endsWith('@sjddef.edu.ph') && !normalized.includes('@students.') && !normalized.includes('@parent.') && !normalized.includes('@admin.') && !normalized.includes('@director.')) return 'faculty';
+    if (normalized.endsWith('@principal.sjddef.edu.ph')) return 'principal';
+    if (normalized.endsWith('@sjddef.edu.ph') && !normalized.includes('@students.') && !normalized.includes('@parent.') && !normalized.includes('@admin.') && !normalized.includes('@principal.')) return 'faculty';
     return 'unknown';
 }
 

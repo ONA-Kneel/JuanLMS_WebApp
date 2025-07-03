@@ -601,7 +601,7 @@ export default function Admin_Accounts() {
                   { label: 'Faculty', value: 'faculty' },
                   { label: 'Vice President of Education', value: 'vice president of education' },
                   { label: 'Admin', value: 'admin' },
-                  { label: 'Director', value: 'director' },
+                  { label: 'Principal', value: 'principal' },
                 ].map(tab => (
                   <button
                     key={tab.value}
@@ -647,7 +647,7 @@ export default function Admin_Accounts() {
                         <option value="faculty">Faculty</option>
                         <option value="vice president of education">Vice President of Education</option>
                         <option value="admin">Admin</option>
-                        <option value="director">Director</option>
+                        <option value="principal">Principal</option>
                       </select>
                     </th>
                     <th className="p-2 border-b"></th>
@@ -672,7 +672,7 @@ export default function Admin_Accounts() {
                             ${user.role === 'students' ? 'bg-green-100 text-green-700 border border-green-300' :
                               user.role === 'faculty' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
                               user.role === 'admin' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
-                              user.role === 'director' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
+                              user.role === 'principal' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
                               user.role === 'vice president of education' ? 'bg-pink-100 text-pink-700 border border-pink-300' :
                               'bg-gray-100 text-gray-700 border border-gray-300'}`}>{user.role === 'vice president of education' ? 'Vice President of Education' : user.role}</span>
                         </td>
@@ -983,7 +983,7 @@ export default function Admin_Accounts() {
                     <option value="faculty">Faculty</option>
                     <option value="vice president of education">Vice President of Education</option>
                     <option value="admin">Admin</option>
-                    <option value="director">Director</option>
+                    <option value="principal">Principal</option>
                   </select>
                   <div className="col-span-1 md:col-span-2 flex gap-2">
                     <button
@@ -1073,7 +1073,7 @@ export default function Admin_Accounts() {
                             ${user.role === 'students' ? 'bg-green-100 text-green-700 border border-green-300' :
                               user.role === 'faculty' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
                               user.role === 'admin' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
-                              user.role === 'director' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
+                              user.role === 'principal' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
                               user.role === 'vice president of education' ? 'bg-pink-100 text-pink-700 border border-pink-300' :
                               'bg-gray-100 text-gray-700 border border-gray-300'}`}>{user.role === 'vice president of education' ? 'Vice President of Education' : user.role}</span>
                         </td>

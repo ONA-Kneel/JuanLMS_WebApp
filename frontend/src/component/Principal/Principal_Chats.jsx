@@ -1,4 +1,4 @@
-//Director_Chats.jsx
+//Principal_Chats.jsx
 
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
@@ -7,14 +7,14 @@ import videocall from "../../assets/videocall.png";
 import voicecall from "../../assets/voicecall.png";
 import uploadfile from "../../assets/uploadfile.png";
 import closeIcon from "../../assets/close.png";
-import Director_Navbar from "./Director_Navbar";
+import Principal_Navbar from "./Principal_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-export default function Director_Chats() {
+export default function Principal_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [users, setUsers] = useState([]);
@@ -25,7 +25,7 @@ export default function Director_Chats() {
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
-    const stored = localStorage.getItem("recentChats_director");
+    const stored = localStorage.getItem("recentChats_principal");
     return stored ? JSON.parse(stored) : [];
   });
   const [lastMessage, setLastMessage] = useState(null);
@@ -114,7 +114,7 @@ export default function Director_Chats() {
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
         setSelectedChat(null);
-        localStorage.removeItem("selectedChatId_director");
+        localStorage.removeItem("selectedChatId_principal");
       } catch (err) {
         if (err.response && err.response.status === 401) {
           window.location.href = '/';
@@ -229,20 +229,20 @@ export default function Director_Chats() {
 
   const handleSelectChat = (user) => {
     setSelectedChat(user);
-    localStorage.setItem("selectedChatId_director", user._id);
+    localStorage.setItem("selectedChatId_principal", user._id);
     // Add to recent chats if not already present
     setRecentChats((prev) => {
       const exists = prev.find((u) => u._id === user._id);
       if (exists) return prev;
       const updated = [user, ...prev].slice(0, 10); // Keep max 10 recent
-      localStorage.setItem("recentChats_director", JSON.stringify(updated));
+      localStorage.setItem("recentChats_principal", JSON.stringify(updated));
       return updated;
     });
   };
 
   // Keep recentChats in sync with localStorage
   useEffect(() => {
-    localStorage.setItem("recentChats_director", JSON.stringify(recentChats));
+    localStorage.setItem("recentChats_principal", JSON.stringify(recentChats));
   }, [recentChats]);
 
   const filteredUsers = users.filter((u) =>
@@ -344,7 +344,7 @@ export default function Director_Chats() {
 
   return (
     <div className="flex min-h-screen h-screen max-h-screen">
-      <Director_Navbar />
+      <Principal_Navbar />
       <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
         <div className="flex flex-col md:flex-row justify-between items-center px-10 py-10">
           <div>
@@ -453,7 +453,7 @@ export default function Director_Chats() {
                             e.stopPropagation();
                             setRecentChats(prev => {
                               const updated = prev.filter(u => u._id !== user._id);
-                              localStorage.setItem('recentChats_director', JSON.stringify(updated));
+                              localStorage.setItem('recentChats_principal', JSON.stringify(updated));
                               return updated;
                             });
                           }}

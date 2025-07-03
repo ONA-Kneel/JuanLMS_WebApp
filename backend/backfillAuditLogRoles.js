@@ -14,14 +14,14 @@ async function inferRoleFromDetails(details, userName, userEmail) {
            !email.includes("@students.") && 
            !email.includes("@VPE.") && 
            !email.includes("@admin.") && 
-           !email.includes("@director.");
+           !email.includes("@principal.");
   };
 
   if (details) {
     if (details.includes("@students.sjddef.edu.ph")) return "student";
     if (details.includes("@VPE.sjddef.edu.ph")) return "vice president of education";
     if (details.includes("@admin.sjddef.edu.ph")) return "admin";
-    if (details.includes("@director.sjddef.edu.ph")) return "director";
+    if (details.includes("@principal.sjddef.edu.ph")) return "principal";
     if (isFacultyEmail(details)) return "faculty";
   }
 
@@ -30,7 +30,7 @@ async function inferRoleFromDetails(details, userName, userEmail) {
     if (userEmail.endsWith("@students.sjddef.edu.ph")) return "student";
     if (userEmail.endsWith("@VPE.sjddef.edu.ph")) return "vice president of education";
     if (userEmail.endsWith("@admin.sjddef.edu.ph")) return "admin";
-    if (userEmail.endsWith("@director.sjddef.edu.ph")) return "director";
+    if (userEmail.endsWith("@principal.sjddef.edu.ph")) return "principal";
     if (isFacultyEmail(userEmail)) return "faculty";
   }
   

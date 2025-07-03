@@ -35,10 +35,8 @@ export default function Admin_AuditTrail() {
     'STUDENT_ADD_CLASS': 'Add Class',
     'FACULTY_UPLOAD_MATERIAL': 'Upload Material',
     'FACULTY_ADD_CLASS': 'Add Class',
-    'DIRECTOR_UPLOAD_MATERIAL': 'Upload Material',
-    'DIRECTOR_ADD_CLASS': 'Add Class',
-    'PARENT_UPLOAD_MATERIAL': 'Upload Material',
-    'PARENT_ADD_CLASS': 'Add Class',
+    'PRINCIPAL_UPLOAD_MATERIAL': 'Upload Material',
+    'PRINCIPAL_ADD_CLASS': 'Add Class',
   };
 
   // All possible actions for the filter
@@ -56,7 +54,7 @@ export default function Admin_AuditTrail() {
     all: 'All Roles',
     student: 'Student',
     faculty: 'Faculty',
-    director: 'Director',
+    principal: 'Principal',
     'vice president of education': 'Vice President of Education',
     admin: 'Admin'
   };
@@ -71,22 +69,20 @@ export default function Admin_AuditTrail() {
       'Upload Material',
       'STUDENT_UPLOAD_MATERIAL',
       'FACULTY_UPLOAD_MATERIAL',
-      'DIRECTOR_UPLOAD_MATERIAL',
-      'PARENT_UPLOAD_MATERIAL',
+      'PRINCIPAL_UPLOAD_MATERIAL',
     ],
     'Add Class': [
       'Add Class',
       'STUDENT_ADD_CLASS',
       'FACULTY_ADD_CLASS',
-      'DIRECTOR_ADD_CLASS',
-      'PARENT_ADD_CLASS',
+      'PRINCIPAL_ADD_CLASS',
     ],
     'Upload': ['Upload', 'ADMIN_UPLOAD'],
   };
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
-    if (!user || (user.role !== 'admin' && user.role !== 'director')) {
+    if (!user || (user.role !== 'admin' && user.role !== 'principal')) {
       navigate('/login');
       return;
     }

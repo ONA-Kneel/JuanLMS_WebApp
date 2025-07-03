@@ -31,13 +31,12 @@ import Faculty_CreateClass from './component/Faculty/Faculty_CreateClass';
 import Faculty_ClassWorkspace from './component/Faculty/Faculty_ClassWorkspace';
 import Faculty_Meeting from './component/Faculty/Faculty_Meeting';
 
-// Director Access
-import Director_Dashboard from './component/Director/Director_Dashboard';
-import Director_Chats from './component/Director/Director_Chats';
-import Director_Grades from './component/Director/Director_Grades';
-import Director_Calendar from './component/Director/Director_Calendar';
-import Director_AuditTrail from './component/Director/Director_AuditTrail';
-
+// Principal Access
+import Principal_Dashboard from './component/Principal/Principal_Dashboard';
+import Principal_Chats from './component/Principal/Principal_Chats';
+import Principal_Grades from './component/Principal/Principal_Grades';
+import Principal_Calendar from './component/Principal/Principal_Calendar';
+import Principal_AuditTrail from './component/Principal/Principal_AuditTrail';
 
 // Admin Access
 import Admin_Dashboard from './component/Admin/Admin_Dashboard';
@@ -90,12 +89,12 @@ function App() {
         <Route path="/faculty_meeting" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Meeting /></ProtectedRoute>} />
 
 
-        {/* Director */}
-        <Route path="/director_dashboard" element={<ProtectedRoute allowedRoles={['director']}><Director_Dashboard/></ProtectedRoute>}/>
-        <Route path="/director_chats" element={<ProtectedRoute allowedRoles={['director']}><Director_Chats /></ProtectedRoute>}/>
-        <Route path="/director_grades" element={<ProtectedRoute allowedRoles={['director']}><Director_Grades /></ProtectedRoute>}/>
-        <Route path="/director_calendar" element={<ProtectedRoute allowedRoles={['director']}><Director_Calendar /></ProtectedRoute>}/> 
-        <Route path="/director_audit_trail" element={<ProtectedRoute allowedRoles={['director']}><Director_AuditTrail/></ProtectedRoute>}/>
+        {/* Principal */}
+        <Route path="/principal_dashboard" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Dashboard/></ProtectedRoute>}/>
+        <Route path="/principal_chats" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Chats /></ProtectedRoute>}/>
+        <Route path="/principal_grades" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Grades /></ProtectedRoute>}/>
+        <Route path="/principal_calendar" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Calendar /></ProtectedRoute>}/>
+        <Route path="/principal_audit_trail" element={<ProtectedRoute allowedRoles={['principal']}><Principal_AuditTrail/></ProtectedRoute>}/>
 
         {/* Admin */}
         <Route path="/admin_dashboard" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Dashboard/></ProtectedRoute>}/>

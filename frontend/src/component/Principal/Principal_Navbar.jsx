@@ -11,18 +11,18 @@ import logo5 from "../../assets/logo/Logo5.svg";
 import logo6 from "../../assets/logo/SJDD Logo.svg";
 import { Menu, X } from 'lucide-react';
 
-const Director_Navbar = () => {
+const Principal_Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
 
     const navItems = [
 
-        { path: "/director_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
-        { path: "/director_calendar", icon: calendarIcon, label: "CALENDAR" },
-        { path: "/director_grades", icon: gradesIcon, label: "GRADES" },
-        { path: "/director_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
-        { path: "/director_chats", icon: chatsIcon, label: "CHATS" },
+        { path: "/principal_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
+        { path: "/principal_calendar", icon: calendarIcon, label: "CALENDAR" },
+        { path: "/principal_grades", icon: gradesIcon, label: "GRADES" },
+        { path: "/principal_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
+        { path: "/principal_chats", icon: chatsIcon, label: "CHATS" },
     ];
 
     return (
@@ -72,4 +72,4 @@ const Director_Navbar = () => {
     );
 };
 
-export default Director_Navbar;
+export default Principal_Navbar;

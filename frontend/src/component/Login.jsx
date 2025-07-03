@@ -73,7 +73,7 @@ export default function Login() {
       else if (role === 'faculty') navigate('/faculty_dashboard');
       else if (role === 'vice president of education') navigate('/parent_dashboard');
       else if (role === 'admin') navigate('/admin_dashboard');
-      else if (role === 'director') navigate('/director_dashboard');
+      else if (role === 'principal') navigate('/principal_dashboard');
       else alert('Unknown role');
     } catch (error) {
       console.log(error);
@@ -149,7 +149,7 @@ export default function Login() {
       else if (role === 'faculty') navigate('/faculty_dashboard');
       else if (role === 'vice president of education') navigate('/parent_dashboard');
       else if (role === 'admin') navigate('/admin_dashboard');
-      else if (role === 'director') navigate('/director_dashboard');
+      else if (role === 'principal') navigate('/principal_dashboard');
       else alert('Unknown role');
   
     } catch (error) {

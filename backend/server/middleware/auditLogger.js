@@ -13,9 +13,9 @@ export const AUDIT_ACTIONS = {
   FACULTY_UPLOAD_MATERIAL: 'Upload Material',
   FACULTY_ADD_CLASS: 'Add Class',
   
-  // Director actions
-  DIRECTOR_UPLOAD_MATERIAL: 'Upload Material',
-  DIRECTOR_ADD_CLASS: 'Add Class',
+  // Principal actions
+  PRINCIPAL_UPLOAD_MATERIAL: 'Upload Material',
+  PRINCIPAL_ADD_CLASS: 'Add Class',
   
   // Parent actions
   PARENT_UPLOAD_MATERIAL: 'Upload Material',

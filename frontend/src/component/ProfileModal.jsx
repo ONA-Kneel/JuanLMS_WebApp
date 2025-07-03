@@ -269,7 +269,7 @@ export default function ProfileModal({
   const roleDescriptions = {
     student: "Student | (To implement soon)",
     faculty: "Faculty | (To implement soon)",
-    director: "Dean | (To implement soon)",
+    principal: "Dean | (To implement soon)",
     admin: "Administrator | (To implement soon)",
     parent: "Parent | Guardian",
   };

@@ -1,4 +1,4 @@
-import Director_Navbar from "./Director_Navbar";
+import Principal_Navbar from "./Principal_Navbar";
 import { useState, useEffect } from "react";
 
 import ProfileModal from "../ProfileModal";
@@ -8,7 +8,7 @@ import ProfileMenu from "../ProfileMenu";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-export default function Director_Dashboard() {
+export default function Principal_Dashboard() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -74,13 +74,13 @@ export default function Director_Dashboard() {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr">
-      <Director_Navbar />
+      <Principal_Navbar />
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64 flex flex-col md:flex-row gap-6">
         {/* Main Content */}
         <div className="flex-1">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h2 className="text-2xl md:text-3xl font-bold">Director Dashboard</h2>
+              <h2 className="text-2xl md:text-3xl font-bold">Principal Dashboard</h2>
               <p className="text-base md:text-lg">
                 {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
                 {currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
