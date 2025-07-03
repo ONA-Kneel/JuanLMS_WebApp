@@ -21,6 +21,23 @@ router.get('/track/:trackName', async (req, res) => {
   }
 });
 
+// Get all strands for a specific school year and term
+router.get('/schoolyear/:schoolYear/term/:termName', async (req, res) => {
+  try {
+    const { schoolYear, termName } = req.params;
+    const strands = await Strand.find({ schoolYear, termName, status: 'active' });
+    // Deduplicate by strandName, trackName, schoolYear, termName
+    const unique = new Map();
+    for (const s of strands) {
+      const key = `${s.strandName}|${s.trackName}|${s.schoolYear}|${s.termName}`;
+      if (!unique.has(key)) unique.set(key, s);
+    }
+    res.json(Array.from(unique.values()));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Create a new strand
 router.post('/', async (req, res) => {
   const { strandName, trackName, schoolYear, termName } = req.body;

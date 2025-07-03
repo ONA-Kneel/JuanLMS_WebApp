@@ -299,19 +299,14 @@ export default function TermDetails() {
   const fetchStrands = async () => {
     setStrandError('');
     try {
-      const allStrands = [];
-      for (const track of tracks) {
-        const res = await fetch(`${API_BASE}/api/strands/track/${track.trackName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
-        if (res.ok) {
-          const data = await res.json();
-          allStrands.push(...data);
-        } else {
-          const data = await res.json();
-          setStrandError(data.message || `Failed to fetch strands for track ${track.trackName}`);
-          return;
-        }
+      const res = await fetch(`${API_BASE}/api/strands/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}`);
+      if (res.ok) {
+        const data = await res.json();
+        setStrands(data);
+      } else {
+        const data = await res.json();
+        setStrandError(data.message || 'Failed to fetch strands');
       }
-      setStrands(allStrands);
     } catch (err) {
       setStrandError('Error fetching strands');
     }
@@ -2931,7 +2926,7 @@ export default function TermDetails() {
   const fetchSubjects = async () => {
     try {
       setSubjectError('');
-      const res = await fetch(`${API_BASE}/api/subjects/term/${termDetails.termName}`);
+      const res = await fetch(`${API_BASE}/api/subjects/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}`);
       if (res.ok) {
         const data = await res.json();
         setSubjects(data);

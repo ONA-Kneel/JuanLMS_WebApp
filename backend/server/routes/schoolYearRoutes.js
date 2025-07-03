@@ -100,9 +100,10 @@ router.patch('/:id', async (req, res) => {
     schoolYear.status = req.body.status;
     const updatedSchoolYear = await schoolYear.save();
 
-    // Archive all terms and assignments for this school year if archiving
+    // Archive all terms and assignments for this school year if archiving or inactivating
     if (req.body.status === 'archived' || req.body.status === 'inactive') {
       const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
+      // Archive all terms for this school year
       await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
       await StudentAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
       await FacultyAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });

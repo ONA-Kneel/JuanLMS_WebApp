@@ -7,8 +7,17 @@ const router = express.Router();
 router.get('/term/:termId', async (req, res) => {
   try {
     const { termId } = req.params;
-    const subjects = await Subject.find({ termName: termId, status: 'active' });
-    res.json(subjects);
+    const { schoolYear } = req.query;
+    const filter = { termName: termId, status: 'active' };
+    if (schoolYear) filter.schoolYear = schoolYear;
+    const subjects = await Subject.find(filter);
+    // Deduplicate by subjectName, trackName, strandName, gradeLevel, schoolYear, termName
+    const unique = new Map();
+    for (const s of subjects) {
+      const key = `${s.subjectName}|${s.trackName}|${s.strandName}|${s.gradeLevel}|${s.schoolYear}|${s.termName}`;
+      if (!unique.has(key)) unique.set(key, s);
+    }
+    res.json(Array.from(unique.values()));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -152,6 +161,33 @@ router.post('/bulk', async (req, res) => {
     } else {
       res.status(400).json({ message: error.message });
     }
+  }
+});
+
+// Get all subjects
+router.get('/', async (req, res) => {
+  try {
+    const subjects = await Subject.find();
+    res.status(200).json(subjects);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get all subjects for a specific school year and term
+router.get('/schoolyear/:schoolYear/term/:termName', async (req, res) => {
+  try {
+    const { schoolYear, termName } = req.params;
+    const subjects = await Subject.find({ schoolYear, termName, status: 'active' });
+    // Deduplicate by subjectName, trackName, strandName, gradeLevel, schoolYear, termName
+    const unique = new Map();
+    for (const s of subjects) {
+      const key = `${s.subjectName}|${s.trackName}|${s.strandName}|${s.gradeLevel}|${s.schoolYear}|${s.termName}`;
+      if (!unique.has(key)) unique.set(key, s);
+    }
+    res.json(Array.from(unique.values()));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
