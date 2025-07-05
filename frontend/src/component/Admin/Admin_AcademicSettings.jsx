@@ -48,6 +48,9 @@ export default function Admin_AcademicSettings() {
   const [promptSchoolYear, setPromptSchoolYear] = useState(null);
   const [selectedPromptTerm, setSelectedPromptTerm] = useState("");
 
+  // Add state for pending add as inactive
+  const [pendingAddInactive, setPendingAddInactive] = useState(false);
+
   // Generate years for dropdown (from 1900 to current year + 10)
   const generateYearOptions = () => {
     const currentYear = new Date().getFullYear();
@@ -468,6 +471,20 @@ export default function Admin_AcademicSettings() {
       }
     } catch (err) {
       setError('Error archiving school year');
+    }
+  };
+
+  // Add a function to handle adding the school year as inactive
+  const handleAddSchoolYearInactive = async () => {
+    if (!pendingSchoolYear) return;
+    try {
+      await createSchoolYear(pendingSchoolYear.schoolYearStart, false); // false = not active
+      setShowActivateModal(false);
+      setPendingSchoolYear(null);
+      setPendingAddInactive(false);
+      alert('School year added as inactive.');
+    } catch (err) {
+      setError('Failed to add school year as inactive.');
     }
   };
 
@@ -910,7 +927,7 @@ export default function Admin_AcademicSettings() {
                       className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
                       required
                     >
-                      <option value="" disabled={!!formData.schoolYearStart}>Select School Year Start</option>
+                      <option value="" disabled>Select School Year Start</option>
                       {generateYearOptions().map(year => (
                         <option key={year} value={year}>{year}</option>
                       ))}
@@ -949,21 +966,27 @@ export default function Admin_AcademicSettings() {
 
           {showActivateModal && pendingSchoolYear && (
             <div className="fixed inset-0 backdrop-blur-sm bg-white/10 flex items-center justify-center z-50">
-              <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
-                <h2 className="text-xl font-semibold mb-4">Activate New School Year</h2>
-                <p className="text-gray-700 mb-6">
-                  Do you want to activate the new school year <strong>{pendingSchoolYear.schoolYearStart}-{pendingSchoolYear.schoolYearEnd}</strong>? 
-                  The currently active school year will be archived.
+              <div className="bg-white p-6 rounded-lg shadow-lg max-w-xl min-w-[500px] w-full">
+                <h2 className="text-xl font-semibold mb-4">Add the School Year?</h2>
+                <p className="text-gray-700 mb-6 text-center">
+                  Are you sure you want to add the School Year <strong>{pendingSchoolYear.schoolYearStart}-{pendingSchoolYear.schoolYearEnd}</strong>?
                 </p>
-                <div className="flex justify-end gap-3">
+                <div className="flex justify-center gap-3">
                   <button
                     className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
                     onClick={() => {
                       setShowActivateModal(false);
                       setPendingSchoolYear(null);
+                      setPendingAddInactive(false);
                     }}
                   >
                     Cancel
+                  </button>
+                  <button
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    onClick={handleAddSchoolYearInactive}
+                  >
+                    Add as Inactive SY
                   </button>
                   <button
                     className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"
@@ -971,7 +994,7 @@ export default function Admin_AcademicSettings() {
                       createSchoolYear(pendingSchoolYear.schoolYearStart, true);
                     }}
                   >
-                    Yes, Activate
+                    Add and set is as Active SY
                   </button>
                 </div>
               </div>
