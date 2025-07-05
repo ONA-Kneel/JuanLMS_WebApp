@@ -13,9 +13,13 @@ const router = express.Router();
 // POST /api/registrants/register
 router.post('/register', async (req, res) => {
   try {
-    const { firstName, middleName, lastName, personalEmail, contactNo } = req.body;
-    if (!firstName || !lastName || !personalEmail || !contactNo) {
+    const { firstName, middleName, lastName, personalEmail, contactNo, schoolID } = req.body;
+    if (!firstName || !lastName || !personalEmail || !contactNo || !schoolID) {
       return res.status(400).json({ message: 'Please fill in all required fields.' });
+    }
+    // Validate schoolID format
+    if (!/^\d{2}-\d{5}$/.test(schoolID) && !/^F00/.test(schoolID) && !/^A00/.test(schoolID)) {
+      return res.status(400).json({ message: 'Invalid School ID format. Use YY-00000 for students, F00... for faculty, or A00... for admin.' });
     }
     // Validate contactNo: must be 11 digits and only numbers
     if (!/^\d{11}$/.test(contactNo)) {
@@ -32,6 +36,7 @@ router.post('/register', async (req, res) => {
       lastName,
       personalEmail,
       contactNo,
+      schoolID,
     });
     await registrant.save();
     res.status(201).json({ message: 'Registration successful.' });
@@ -75,6 +80,7 @@ router.post('/:id/approve', async (req, res) => {
       personalemail: registrant.personalEmail,
       email: registrant.personalEmail, // or generate school email
       contactNo: registrant.contactNo,
+      schoolID: registrant.schoolID, // Pass the correct schoolID
       password: tempPassword, // Generate/send real password in production
       role: 'students',
     });

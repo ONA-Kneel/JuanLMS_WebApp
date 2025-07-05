@@ -18,6 +18,16 @@ const userSchema = new mongoose.Schema({
   role: String,
   userID: String,
   profilePic: { type: String, default: null },
+  contactNo: {
+    type: String,
+    required: true,
+    validate: {
+      validator: function(v) {
+        return /^\d{11}$/.test(v);
+      },
+      message: 'Contact number must be exactly 11 digits and contain only numbers.'
+    }
+  },
 
   // Archive & Recovery fields
   isArchived: { type: Boolean, default: false },
@@ -41,12 +51,20 @@ userSchema.pre("save", async function (next) {
   if (this.isModified("schoolID")) {
     // Validation based on role
     if (this.role === 'students') {
-      if (!/^\d{12}$/.test(this.schoolID)) {
-        return next(new Error('Student LRN must be a 12-digit number.'));
+      if (!/^\d{2}-\d{5}$/.test(this.schoolID)) {
+        return next(new Error('Student Number must be in the format YY-00000.'));
       }
-    } else {
-      if (!/^\d{2}-\d{4}$/.test(this.schoolID)) {
-        return next(new Error('School ID must be in the format NN-NNNN for non-students.'));
+    } else if (this.role === 'faculty') {
+      if (!/^F00/.test(this.schoolID)) {
+        return next(new Error('Faculty ID must start with F00.'));
+      }
+    } else if (this.role === 'admin') {
+      if (!/^A00/.test(this.schoolID)) {
+        return next(new Error('Admin ID must start with A00.'));
+      }
+    } else if (this.role === 'vice president of education' || this.role === 'principal') {
+      if (!/^N00/.test(this.schoolID)) {
+        return next(new Error('VP/Principal ID must start with N00.'));
       }
     }
     this.schoolID = encrypt(this.schoolID);

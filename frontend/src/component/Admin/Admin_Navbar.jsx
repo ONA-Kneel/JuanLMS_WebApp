@@ -2,10 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import dashboardIcon from "../../assets/dashboard.png";
 import classesIcon from "../../assets/classes.png";
-import activitiesIcon from "../../assets/activities.png";
 import chatsIcon from "../../assets/chats.png";
 import progressIcon from "../../assets/progress.png";
-import gradesIcon from "../../assets/grades.png";
 import calendarIcon from "../../assets/calendar.png";
 import logo5 from "../../assets/logo/Logo5.svg";
 import acadSettingsIcon from "../../assets/acadsettings.png"
@@ -65,7 +63,7 @@ const Admin_Navbar = () => {
                             className={`text-lg flex items-center p-2 w-full rounded-lg transition-colors 
                             ${location.pathname === item.path ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"}`}
                         >
-                            <img src={item.icon} alt={item.label} className="w-6 h-6" />
+                            <img src={item.icon} alt={item.label} className={`w-6 h-6 ${item.label === 'REGISTRANTS' ? 'filter-white' : ''}`} style={item.label === 'REGISTRANTS' ? { filter: 'brightness(0) invert(1)' } : {}} />
                             <span className="flex items-center ml-3">{item.label}</span>
                         </button>
                     ))}

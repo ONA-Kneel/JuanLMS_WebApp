@@ -239,22 +239,33 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
         userID,
         programAssigned,
         courseAssigned,
+        contactNo,
     } = req.body;
 
     // Simple server-side validation (backend safety)
-    if (!firstname || !lastname || !email || !password || !role || !schoolID) {
+    if (!firstname || !lastname || !email || !password || !role || !schoolID || !contactNo) {
         return res.status(400).json({ error: "Missing required fields" });
     }
+    // Validate contactNo
+    if (!/^\d{11}$/.test(contactNo)) {
+        return res.status(400).json({ error: "Contact number must be exactly 11 digits and contain only numbers." });
+    }
 
-    // Validate schoolID format
-    if (role === 'students') {
-        if (!/^\d{12}$/.test(schoolID)) {
-            return res.status(400).json({ error: "Student LRN must be a 12-digit number." });
+    // SchoolID validation for all roles
+    if (role === 'faculty') {
+        if (!/^F00/.test(schoolID)) {
+            return res.status(400).json({ error: "Faculty ID must start with F00." });
         }
-    } else {
-        if (!/^\d{2}-\d{4}$/.test(schoolID)) {
-            return res.status(400).json({ error: "School ID must be in the format NN-NNNN for non-students." });
+    } else if (role === 'admin') {
+        if (!/^A00/.test(schoolID)) {
+            return res.status(400).json({ error: "Admin ID must start with A00." });
         }
+    } else if (role === 'vice president of education' || role === 'principal') {
+        if (!/^N00/.test(schoolID)) {
+            return res.status(400).json({ error: "VP/Principal ID must start with N00." });
+        }
+    } else if (role === 'students') {
+        return res.status(400).json({ error: "Student accounts can only be registered through the public registration form." });
     }
 
     // Check for duplicate email (unencrypted, before saving)
@@ -290,6 +301,7 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
             userID,
             programAssigned: programAssigned,
             courseAssigned: courseAssigned,
+            contactNo,
             isArchived: false,
             archivedAt: null,
             deletedAt: null,
@@ -364,7 +376,8 @@ userRoutes.route("/users/:id").patch(authenticateToken, async (req, res) => {
         // Update only allowed fields
         [
             "firstname", "middlename", "lastname", "email", "schoolID",
-            "password", "personalemail", "profilePic", "userID", "role"
+            "password", "personalemail", "profilePic", "userID", "role",
+            "contactNo"
         ].forEach(field => {
             if (req.body[field] !== undefined) user[field] = req.body[field];
         });
@@ -377,6 +390,10 @@ userRoutes.route("/users/:id").patch(authenticateToken, async (req, res) => {
             if (!/^\d{2}-\d{4}$/.test(user.schoolID)) {
                 return res.status(400).json({ error: "School ID must be in the format NN-NNNN for non-students." });
             }
+        }
+        // Validate contactNo on update
+        if (user.contactNo && !/^\d{11}$/.test(user.contactNo)) {
+            return res.status(400).json({ error: "Contact number must be exactly 11 digits and contain only numbers." });
         }
 
         await user.save(); // Triggers pre-save hook

@@ -11,6 +11,22 @@ const statusColors = {
   rejected: 'bg-red-100 text-red-800',
 };
 
+function maskEmail(email) {
+  if (!email || typeof email !== 'string') return '';
+  const [user, domain] = email.split('@');
+  if (!user || !domain) return email;
+  if (user.length <= 1) return '*@' + domain;
+  return user[0] + '*'.repeat(Math.max(1, user.length - 1)) + '@' + domain;
+}
+
+function formatSchoolId(schoolId) {
+  if (!schoolId) return '-';
+  if (/^\d{2}-\d{5}$/.test(schoolId)) return `${schoolId} (Student Number)`;
+  if (/^F00/.test(schoolId)) return `${schoolId} (Faculty)`;
+  if (/^A00/.test(schoolId)) return `${schoolId} (Admin)`;
+  return schoolId;
+}
+
 export default function Admin_Registrants() {
   const [registrants, setRegistrants] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
@@ -195,25 +211,25 @@ export default function Admin_Registrants() {
             <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
               <thead>
                 <tr className="bg-gray-50 text-left">
+                  <th className="p-3 border-b font-semibold text-gray-700">School ID</th>
                   <th className="p-3 border-b font-semibold text-gray-700">First Name</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Middle Name</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Last Name</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Email</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Personal Email</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Contact No.</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Date</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Status</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Note</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Actions</th>
                 </tr>
                 <tr className="bg-white text-left">
+                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search School ID" /></th>
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search First Name" /></th>
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Middle Name" /></th>
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Last Name" /></th>
-                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Email" /></th>
+                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Personal Email" /></th>
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Contact No." /></th>
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Date" /></th>
                   <th className="p-2 border-b"><select className="w-full border rounded px-2 py-1 text-sm"><option>All Status</option><option>Pending</option><option>Approved</option><option>Rejected</option></select></th>
-                  <th className="p-2 border-b"></th>
                   <th className="p-2 border-b"></th>
                 </tr>
               </thead>
@@ -223,14 +239,14 @@ export default function Admin_Registrants() {
                 ) : (
                   filtered.map((r, idx) => (
                     <tr key={r._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
+                      <td className="p-3 border-b align-middle">{formatSchoolId(r.schoolID)}</td>
                       <td className="p-3 border-b align-middle">{r.firstName}</td>
                       <td className="p-3 border-b align-middle">{r.middleName}</td>
                       <td className="p-3 border-b align-middle">{r.lastName}</td>
-                      <td className="p-3 border-b align-middle">{r.personalEmail}</td>
+                      <td className="p-3 border-b align-middle">{maskEmail(r.personalEmail)}</td>
                       <td className="p-3 border-b align-middle">{r.contactNo}</td>
                       <td className="p-3 border-b align-middle">{r.registrationDate ? r.registrationDate.slice(0, 10) : ''}</td>
                       <td className={`p-3 border-b align-middle font-semibold ${statusColors[r.status]}`}>{r.status}</td>
-                      <td className="p-3 border-b align-middle">{r.note || '-'}</td>
                       <td className="p-3 border-b align-middle">
                         <div className="inline-flex space-x-2">
                           {r.status === 'pending' && (
@@ -255,7 +271,7 @@ export default function Admin_Registrants() {
                                 title="Reject"
                               >
                                 {/* Heroicons Trash (reject) */}
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                                 <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Reject</span>

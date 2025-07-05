@@ -31,8 +31,9 @@ export default function Admin_Accounts() {
     personalemail: "",
     schoolID: "",
     password: "",
-    role: "students",
+    role: "faculty",
     userID: "", // invisible field
+    contactNo: "",
   });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [users, setUsers] = useState([]);
@@ -153,15 +154,22 @@ export default function Admin_Accounts() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === "schoolID") {
-      let newValue = value.replace(/[^\d-]/g, "");
-      if (formData.role === "students") {
-        newValue = newValue.replace(/\D/g, "").slice(0, 12);
-      } else {
-        newValue = newValue.replace(/[^\d-]/g, "").slice(0, 7);
-        if (newValue.length > 2 && newValue[2] !== '-') {
-          newValue = newValue.slice(0, 2) + '-' + newValue.slice(2, 6);
-        }
+      let newValue = value;
+      if (formData.role === "faculty") {
+        newValue = newValue.replace(/[^F0-9]/gi, "").toUpperCase();
+        if (!newValue.startsWith("F00")) newValue = "F00" + newValue.replace(/^F00/, "");
+      } else if (formData.role === "admin") {
+        newValue = newValue.replace(/[^A0-9]/gi, "").toUpperCase();
+        if (!newValue.startsWith("A00")) newValue = "A00" + newValue.replace(/^A00/, "");
+      } else if (formData.role === "vice president of education" || formData.role === "principal") {
+        newValue = newValue.replace(/[^N0-9]/gi, "").toUpperCase();
+        if (!newValue.startsWith("N00")) newValue = "N00" + newValue.replace(/^N00/, "");
       }
+      setFormData((prev) => ({ ...prev, [name]: newValue }));
+    } else if (name === "contactNo") {
+      // Only allow numbers, max 11 digits, must start with 09
+      let newValue = value.replace(/[^0-9]/g, "");
+      if (newValue.length > 11) newValue = newValue.slice(0, 11);
       setFormData((prev) => ({ ...prev, [name]: newValue }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
@@ -170,52 +178,57 @@ export default function Admin_Accounts() {
 
   // Auto-generate school email when firstname, lastname, or role changes
   useEffect(() => {
-    const { firstname, lastname, role } = formData;
-
+    const { firstname, lastname } = formData;
     const clean = (str) =>
       str
         .toLowerCase()
         .trim()
         .replace(/\s+/g, "") // remove spaces
         .replace(/[^a-z]/g, ""); // remove non-letters
-
     if (firstname && lastname) {
-      let emailDomain;
-      if (role === "faculty") {
-        emailDomain = "sjddef.edu.ph";
-      } else if (role === "vice president of education") {
-        emailDomain = "VPE.sjddef.edu.ph";
-      } else {
-        emailDomain = `${role}.sjddef.edu.ph`;
-      }
-      
+      const emailDomain = "sjddef.edu.ph"; // Always use this domain
       const generatedEmail = `${clean(firstname)}.${clean(lastname)}@${emailDomain}`;
       setFormData((prev) => ({ ...prev, email: generatedEmail }));
     } else {
       setFormData((prev) => ({ ...prev, email: "" }));
     }
-  }, [formData.firstname, formData.lastname, formData.role]);
+  }, [formData.firstname, formData.lastname]);
 
   const handleSubmit = async (e, overrideEmail = null) => {
     if (e && e.preventDefault) e.preventDefault();
-    const requiredFields = ["firstname", "lastname", "email", "password", "role"];
+    const requiredFields = ["firstname", "lastname", "email", "password", "role", "schoolID", "contactNo"];
     for (const field of requiredFields) {
       if (!formData[field]) {
         alert(`Please fill in ${field}.`);
         return;
       }
     }
-    // SchoolID validation for all roles
+    // Prevent admin from creating student accounts
     if (formData.role === "students") {
-      if (!/^\d{12}$/.test(formData.schoolID)) {
-        alert("Student LRN must be a 12-digit number");
+      alert("Student accounts can only be registered through the public registration form.");
+      return;
+    }
+    // SchoolID validation for all roles
+    if (formData.role === "faculty") {
+      if (!/^F00/.test(formData.schoolID)) {
+        alert("Faculty ID must start with F00.");
         return;
       }
-    } else {
-      if (!/^\d{2}-\d{4}$/.test(formData.schoolID)) {
-        alert("School ID must be in the format NN-NNNN for non-students");
+    } else if (formData.role === "admin") {
+      if (!/^A00/.test(formData.schoolID)) {
+        alert("Admin ID must start with A00.");
         return;
       }
+    } else if (formData.role === "vice president of education" || formData.role === "principal") {
+      if (!/^N00/.test(formData.schoolID)) {
+        alert("VP/Principal ID must start with N00.");
+        return;
+      }
+    }
+    // Contact number validation: must be 11 digits and start with 09
+    if (!/^09\d{9}$/.test(formData.contactNo)) {
+      alert("Contact number must be exactly 11 digits and start with 09 (e.g., 09000000000)");
+      return;
     }
     if (isEditMode) {
       // Validate if any changes were made
@@ -288,8 +301,9 @@ export default function Admin_Accounts() {
             personalemail: '',
             schoolID: '',
             password: generatePassword(),
-            role: 'students',
+            role: 'faculty',
             userID: '',
+            contactNo: '',
           });
           fetchUsers();
         } else {
@@ -327,6 +341,7 @@ export default function Admin_Accounts() {
           trackAssigned: formData.trackAssigned || [],
           strandAssigned: formData.strandAssigned || [],
           sectionAssigned: formData.sectionAssigned || [],
+          contactNo: formData.contactNo,
         }),
       });
 
@@ -355,8 +370,9 @@ export default function Admin_Accounts() {
             personalemail: "",
             schoolID: "",
             password: "",
-            role: "students",
+            role: "faculty",
             userID: "",
+            contactNo: '',
           });
         }, 2000);
       } else {
@@ -413,7 +429,8 @@ export default function Admin_Accounts() {
       schoolID: user.schoolID || "",
       password: user.password,
       role: user.role,
-      userID: user.userID
+      userID: user.userID,
+      contactNo: user.contactNo || '',
     });
   };
 
@@ -534,6 +551,14 @@ export default function Admin_Accounts() {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  function formatSchoolId(schoolId) {
+    if (!schoolId) return '-';
+    if (/^\d{2}-\d{5}$/.test(schoolId)) return `${schoolId} (Student Number)`;
+    if (/^F00/.test(schoolId)) return `${schoolId} (Faculty)`;
+    if (/^A00/.test(schoolId)) return `${schoolId} (Admin)`;
+    return schoolId;
+  }
+
   return (
     <>
       <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -623,6 +648,7 @@ export default function Admin_Accounts() {
                     <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
                     <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
                     <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b font-semibold text-gray-700">Contact No.</th>
                     <th className="p-3 border-b font-semibold text-gray-700">Role</th>
                     <th className="p-3 border-b font-semibold text-gray-700">Actions</th>
                   </tr>
@@ -640,16 +666,8 @@ export default function Admin_Accounts() {
                     <th className="p-2 border-b">
                       <input type="text" placeholder="Search Middle Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, middlename: e.target.value }))} />
                     </th>
-                    <th className="p-2 border-b">
-                      <select className="w-full border rounded px-2 py-1 text-sm" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-                        <option value="">All Roles</option>
-                        <option value="students">Students</option>
-                        <option value="faculty">Faculty</option>
-                        <option value="vice president of education">Vice President of Education</option>
-                        <option value="admin">Admin</option>
-                        <option value="principal">Principal</option>
-                      </select>
-                    </th>
+                    <th className="p-2 border-b"></th>
+                    <th className="p-2 border-b"></th>
                     <th className="p-2 border-b"></th>
                   </tr>
                 </thead>
@@ -663,10 +681,11 @@ export default function Admin_Accounts() {
                   ) : (
                     tabFilteredUsers.map((user, idx) => (
                       <tr key={user._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
-                        <td className="p-3 border-b">{user.schoolID || '-'}</td>
+                        <td className="p-3 border-b">{formatSchoolId(user.schoolID)}</td>
                         <td className="p-3 border-b">{user.lastname}</td>
                         <td className="p-3 border-b">{user.firstname}</td>
                         <td className="p-3 border-b">{user.middlename}</td>
+                        <td className="p-3 border-b">{user.contactNo}</td>
                         <td className="p-3 border-b">
                           <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold
                             ${user.role === 'students' ? 'bg-green-100 text-green-700 border border-green-300' :
@@ -958,7 +977,21 @@ export default function Admin_Accounts() {
                     name="schoolID"
                     value={formData.schoolID}
                     onChange={handleChange}
-                    placeholder={formData.role === 'students' ? "Student LRN (12 digits)" : "School ID (NN-NNNN)"}
+                    placeholder={
+                      formData.role === 'faculty' ? 'Faculty ID (F00...)' :
+                      formData.role === 'admin' ? 'Admin ID (A00...)' :
+                      (formData.role === 'vice president of education' || formData.role === 'principal') ? 'VP/Principal ID (N00...)' :
+                      'School ID'
+                    }
+                    className="border rounded p-4 text-lg"
+                    required
+                  />
+                  <input
+                    type="text"
+                    name="contactNo"
+                    value={formData.contactNo || ''}
+                    onChange={handleChange}
+                    placeholder="Contact Number"
                     className="border rounded p-4 text-lg"
                     required
                   />
@@ -979,7 +1012,7 @@ export default function Admin_Accounts() {
                     className="border rounded p-4 text-lg"
                     required
                   >
-                    <option value="students">Students</option>
+                    {/* Only allow non-student roles, default to faculty */}
                     <option value="faculty">Faculty</option>
                     <option value="vice president of education">Vice President of Education</option>
                     <option value="admin">Admin</option>
@@ -1011,8 +1044,9 @@ export default function Admin_Accounts() {
                             personalemail: "",
                             schoolID: "",
                             password: "",
-                            role: "students",
+                            role: "faculty",
                             userID: "",
+                            contactNo: '',
                           });
                           setShowCreateModal(false);
                         }}
@@ -1064,7 +1098,7 @@ export default function Admin_Accounts() {
                   ) : (
                     archivedUsers.map((user, idx) => (
                       <tr key={user._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
-                        <td className="p-3 border-b">{user.userID || '-'}</td>
+                        <td className="p-3 border-b">{formatSchoolId(user.userID)}</td>
                         <td className="p-3 border-b">{user.lastname}</td>
                         <td className="p-3 border-b">{user.firstname}</td>
                         <td className="p-3 border-b">{user.middlename}</td>

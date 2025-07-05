@@ -10,7 +10,9 @@ export default function Registration() {
     middleName: '',
     lastName: '',
     personalEmail: '',
-    contactNo: ''
+    contactNo: '',
+    schoolID: '',
+    role: 'students',
   });
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
@@ -21,10 +23,23 @@ export default function Registration() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  function getSchoolIdPlaceholder() {
+    return 'Student Number (e.g., 25-00001)';
+  }
+
+  function isValidSchoolId(schoolID) {
+    return /^\d{2}-\d{5}$/.test(schoolID); // Student Number YY-00000
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    if (!isValidSchoolId(form.schoolID)) {
+      setError('Student Number must be in the format YY-00000 (e.g., 25-00001).');
+      setLoading(false);
+      return;
+    }
     try {
       const res = await axios.post(`${API_BASE}/api/registrants/register`, form);
       if (res.status === 201) {
@@ -120,6 +135,19 @@ export default function Registration() {
               value={form.contactNo}
               onChange={handleChange}
               disabled={loading}
+            />
+          </div>
+          <div>
+            <label className="block text-base mb-2">School ID<span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              name="schoolID"
+              required
+              className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900"
+              value={form.schoolID}
+              onChange={handleChange}
+              disabled={loading}
+              placeholder={getSchoolIdPlaceholder()}
             />
           </div>
           {error && <div className="text-red-600 text-sm">{error}</div>}
