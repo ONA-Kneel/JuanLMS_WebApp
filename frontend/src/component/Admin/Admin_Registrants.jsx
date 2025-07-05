@@ -21,9 +21,6 @@ function maskEmail(email) {
 
 function formatSchoolId(schoolId) {
   if (!schoolId) return '-';
-  if (/^\d{2}-\d{5}$/.test(schoolId)) return `${schoolId} (Student Number)`;
-  if (/^F00/.test(schoolId)) return `${schoolId} (Faculty)`;
-  if (/^A00/.test(schoolId)) return `${schoolId} (Admin)`;
   return schoolId;
 }
 
@@ -178,7 +175,7 @@ export default function Admin_Registrants() {
       <Admin_Navbar />
       <div className="flex-1 p-4 sm:p-6 md:p-10 md:ml-64 font-poppinsr">
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Registrants</h2>
             <p className="text-base md:text-lg">
@@ -249,12 +246,12 @@ export default function Admin_Registrants() {
                       <td className={`p-3 border-b align-middle font-semibold ${statusColors[r.status]}`}>{r.status}</td>
                       <td className="p-3 border-b align-middle">
                         <div className="inline-flex space-x-2">
-                          {r.status === 'pending' && (
-                            <>
-                              <button
+                      {r.status === 'pending' && (
+                        <>
+                          <button
                                 className="p-1 rounded hover:bg-yellow-100 group relative"
-                                onClick={() => handleApprove(r._id)}
-                                disabled={actionLoading === r._id}
+                            onClick={() => handleApprove(r._id)}
+                            disabled={actionLoading === r._id}
                                 title="Approve"
                               >
                                 {/* Heroicons Check Circle */}
@@ -263,11 +260,11 @@ export default function Admin_Registrants() {
                                   <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" fill="none" />
                                 </svg>
                                 <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Approve</span>
-                              </button>
-                              <button
+                          </button>
+                          <button
                                 className="p-1 rounded hover:bg-red-100 group relative"
-                                onClick={() => handleReject(r._id)}
-                                disabled={actionLoading === r._id}
+                            onClick={() => handleReject(r._id)}
+                            disabled={actionLoading === r._id}
                                 title="Reject"
                               >
                                 {/* Heroicons Trash (reject) */}
@@ -275,12 +272,12 @@ export default function Admin_Registrants() {
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                                 <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Reject</span>
-                              </button>
-                            </>
-                          )}
+                          </button>
+                        </>
+                      )}
                         </div>
-                      </td>
-                    </tr>
+                    </td>
+                  </tr>
                   ))
                 )}
               </tbody>

@@ -71,17 +71,19 @@ router.post('/:id/approve', async (req, res) => {
     const registrant = await Registrant.findById(req.params.id);
     if (!registrant) return res.status(404).json({ message: 'Registrant not found' });
     if (registrant.status !== 'pending') return res.status(400).json({ message: 'Already processed' });
-    // Create user (stub, add more fields as needed)
+    // Generate school email: firstname.lastname@students.sjddef.edu.ph
+    const clean = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@students.sjddef.edu.ph`;
     const tempPassword = 'changeme123';
     const user = new User({
       firstname: registrant.firstName,
       middlename: registrant.middleName,
       lastname: registrant.lastName,
       personalemail: registrant.personalEmail,
-      email: registrant.personalEmail, // or generate school email
+      email: schoolEmail, // use generated school email
       contactNo: registrant.contactNo,
-      schoolID: registrant.schoolID, // Pass the correct schoolID
-      password: tempPassword, // Generate/send real password in production
+      schoolID: registrant.schoolID,
+      password: tempPassword,
       role: 'students',
     });
     await user.save();
@@ -96,7 +98,7 @@ router.post('/:id/approve', async (req, res) => {
         toName: `${registrant.firstName} ${registrant.lastName}`,
         subject: 'Admission Offer - Welcome to San Juan De Dios Educational Foundation Inc',
         textContent:
-`Dear ${registrant.firstName} ${registrant.lastName},\n\nCongratulations! We are pleased to inform you that you have been accepted into our academic institution for the upcoming academic year. Your application demonstrated outstanding qualifications and potential, and we are excited to welcome you into our community.\n\nAs part of your enrollment, your official school credentials have been generated:\n\n- School Email: ${registrant.personalEmail}\n- Temporary Password: ${tempPassword}\n\nPlease use these credentials to log in to the student portal and complete your onboarding tasks.\n\nWe look forward to seeing the great things you will accomplish here.\n\nWarm regards,\nAdmissions Office`
+`Dear ${registrant.firstName} ${registrant.lastName},\n\nCongratulations! We are pleased to inform you that you have been accepted into our academic institution for the upcoming academic year. Your application demonstrated outstanding qualifications and potential, and we are excited to welcome you into our community.\n\nAs part of your enrollment, your official school credentials have been generated:\n\n- School Email: ${schoolEmail}\n- Temporary Password: ${tempPassword}\n\nPlease use these credentials to log in to the student portal and complete your onboarding tasks.\n\nWe look forward to seeing the great things you will accomplish here.\n\nWarm regards,\nAdmissions Office`
       });
       console.log('Acceptance email sent to', registrant.personalEmail);
     } catch (emailErr) {
@@ -141,7 +143,7 @@ router.post('/:id/reject', async (req, res) => {
       let applicantName = `${registrant.firstName} ${registrant.lastName}`;
       let sendSmtpEmail = {
         to: [{ email: registrant.personalEmail, name: applicantName }],
-        sender: { email: 'nicolettecborre@gmail.com', name: 'JuanLMS Support' },
+        sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
         subject: 'Admission Decision',
         textContent:
 `Dear ${applicantName},\n\nThank you for your interest in joining our academic institution. After careful consideration of your application, we regret to inform you that we are unable to offer you admission at this time.\n\n${registrant.note}\n\nIf you would like clarification regarding this decision or would like to discuss alternative pathways, we encourage you to contact the Registrar's Office at your convenience.\n\nWe appreciate the effort you put into your application and wish you success in your academic journey.\n\nSincerely,\nAdmissions Office`
@@ -226,8 +228,8 @@ router.post('/test-email', async (req, res) => {
     apiKey.apiKey = process.env.BREVO_API_KEY;
     let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
     let sendSmtpEmail = {
-      to: [{ email: to }],
-      sender: { email: 'nicolettecborre@gmail.com', name: 'JuanLMS Support' },
+      to: [{ email: registrant.personalEmail, name: applicantName }],
+      sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
       subject: subject || 'Test Email from JuanLMS',
       textContent: text || 'This is a test email from JuanLMS.'
     };

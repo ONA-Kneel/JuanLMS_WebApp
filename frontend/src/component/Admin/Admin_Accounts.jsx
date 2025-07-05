@@ -37,7 +37,6 @@ export default function Admin_Accounts() {
   });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [users, setUsers] = useState([]);
-  const [roleFilter, setRoleFilter] = useState(""); // "" means show all
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const ITEMS_PER_PAGE = 10;
@@ -119,9 +118,8 @@ export default function Admin_Accounts() {
     const matchesFirst = (user.firstname || "").toLowerCase().includes(searchTerms.firstname.toLowerCase());
     const matchesLast = (user.lastname || "").toLowerCase().includes(searchTerms.lastname.toLowerCase());
     const matchesMiddle = (user.middlename || "").toLowerCase().includes(searchTerms.middlename.toLowerCase());
-    const matchesRole = roleFilter === "" || (user.role || "") === roleFilter;
     const matchesUserID = searchTerms.userID === "" || (user.userID || "").toLowerCase().includes(searchTerms.userID.toLowerCase());
-    return matchesFirst && matchesLast && matchesMiddle && matchesRole && matchesUserID;
+    return matchesFirst && matchesLast && matchesMiddle && matchesUserID;
   });
   
   const paginatedUsers = [...filteredUsers].sort((a, b) => {
@@ -553,9 +551,6 @@ export default function Admin_Accounts() {
 
   function formatSchoolId(schoolId) {
     if (!schoolId) return '-';
-    if (/^\d{2}-\d{5}$/.test(schoolId)) return `${schoolId} (Student Number)`;
-    if (/^F00/.test(schoolId)) return `${schoolId} (Faculty)`;
-    if (/^A00/.test(schoolId)) return `${schoolId} (Admin)`;
     return schoolId;
   }
 
@@ -644,13 +639,13 @@ export default function Admin_Accounts() {
               <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                 <thead>
                   <tr className="bg-gray-50 text-left">
-                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("schoolID")}>School ID {sortConfig.key === "schoolID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border-b font-semibold text-gray-700">Contact No.</th>
-                    <th className="p-3 border-b font-semibold text-gray-700">Role</th>
-                    <th className="p-3 border-b font-semibold text-gray-700">Actions</th>
+                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("schoolID")}>School ID {sortConfig.key === "schoolID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b font-semibold text-gray-700 whitespace-nowrap">Contact No.</th>
+                    <th className="p-3 border-b font-semibold text-gray-700 whitespace-nowrap">Role</th>
+                    <th className="p-3 border-b font-semibold text-gray-700 whitespace-nowrap">Actions</th>
                   </tr>
                   {/* New row for search inputs */}
                   <tr className="bg-white text-left">
@@ -687,7 +682,7 @@ export default function Admin_Accounts() {
                         <td className="p-3 border-b">{user.middlename}</td>
                         <td className="p-3 border-b">{user.contactNo}</td>
                         <td className="p-3 border-b">
-                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold
+                          <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
                             ${user.role === 'students' ? 'bg-green-100 text-green-700 border border-green-300' :
                               user.role === 'faculty' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
                               user.role === 'admin' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
@@ -1103,7 +1098,7 @@ export default function Admin_Accounts() {
                         <td className="p-3 border-b">{user.firstname}</td>
                         <td className="p-3 border-b">{user.middlename}</td>
                         <td className="p-3 border-b">
-                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold
+                          <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
                             ${user.role === 'students' ? 'bg-green-100 text-green-700 border border-green-300' :
                               user.role === 'faculty' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
                               user.role === 'admin' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :

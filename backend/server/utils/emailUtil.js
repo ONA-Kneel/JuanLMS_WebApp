@@ -11,7 +11,7 @@ import SibApiV3Sdk from 'sib-api-v3-sdk';
  * @param {string} [options.senderName] - Sender name (default: from config)
  * @returns {Promise<void>}
  */
-export async function sendEmail({ toEmail, toName, subject, textContent, senderEmail = 'nicolettecborre@gmail.com', senderName = 'JuanLMS Support' }) {
+export async function sendEmail({ toEmail, toName, subject, textContent, senderEmail = 'juanlms.sjddefi@gmail.com', senderName = 'JuanLMS Support' }) {
   if (!process.env.BREVO_API_KEY) {
     throw new Error('BREVO_API_KEY is not set in environment variables.');
   }
