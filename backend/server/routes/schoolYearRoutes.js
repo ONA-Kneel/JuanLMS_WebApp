@@ -95,6 +95,13 @@ router.patch('/:id', async (req, res) => {
         { _id: { $ne: req.params.id }, status: 'active' },
         { status: 'inactive' }
       );
+      // Do not activate any terms automatically
+      // Instead, return the list of terms for this school year in the response
+      schoolYear.status = req.body.status;
+      const updatedSchoolYear = await schoolYear.save();
+      const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
+      const terms = await Term.find({ schoolYear: schoolYearName });
+      return res.json({ schoolYear: updatedSchoolYear, terms });
     }
     
     schoolYear.status = req.body.status;
