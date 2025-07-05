@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import Admin_Navbar from './Admin_Navbar';
+import ProfileMenu from '../ProfileMenu';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -20,6 +21,8 @@ export default function Admin_Registrants() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(null); // id of row being processed
+  const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   // Fetch registrants from backend
   const fetchRegistrants = async () => {
@@ -37,6 +40,47 @@ export default function Admin_Registrants() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    async function fetchAcademicYear() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year", err);
+      }
+    }
+    fetchAcademicYear();
+  }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
 
   useEffect(() => {
     fetchRegistrants();
@@ -114,11 +158,23 @@ export default function Admin_Registrants() {
   const filtered = registrants;
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100">
+    <div className="flex flex-col min-h-screen bg-gray-100 font-poppinsr">
       <Admin_Navbar />
-      <div className="flex-1 p-4 sm:p-6 md:p-10 md:ml-64">
+      <div className="flex-1 p-4 sm:p-6 md:p-10 md:ml-64 font-poppinsr">
+        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-          <h2 className="text-2xl md:text-3xl font-bold">Registrants</h2>
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold">Registrants</h2>
+            <p className="text-base md:text-lg">
+              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} |
+              {currentTerm ? `${currentTerm.termName}` : "Loading..."} |
+              {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+            </p>
+          </div>
+          <ProfileMenu />
+        </div>
+        {/* Filters and Actions */}
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div className="flex gap-2 items-center">
             <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border rounded px-2 py-1" />
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="border rounded px-2 py-1">
@@ -136,56 +192,81 @@ export default function Admin_Registrants() {
           <div className="text-center py-8">Loading...</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full bg-white rounded shadow">
+            <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
               <thead>
-                <tr className="bg-gray-200">
-                  <th className="py-2 px-4">First Name</th>
-                  <th className="py-2 px-4">Middle Name</th>
-                  <th className="py-2 px-4">Last Name</th>
-                  <th className="py-2 px-4">Email</th>
-                  <th className="py-2 px-4">Contact No.</th>
-                  <th className="py-2 px-4">Date</th>
-                  <th className="py-2 px-4">Status</th>
-                  <th className="py-2 px-4">Note</th>
-                  <th className="py-2 px-4">Actions</th>
+                <tr className="bg-gray-50 text-left">
+                  <th className="p-3 border-b font-semibold text-gray-700">First Name</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Middle Name</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Last Name</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Email</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Contact No.</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Date</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Status</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Note</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Actions</th>
+                </tr>
+                <tr className="bg-white text-left">
+                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search First Name" /></th>
+                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Middle Name" /></th>
+                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Last Name" /></th>
+                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Email" /></th>
+                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Contact No." /></th>
+                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Date" /></th>
+                  <th className="p-2 border-b"><select className="w-full border rounded px-2 py-1 text-sm"><option>All Status</option><option>Pending</option><option>Approved</option><option>Rejected</option></select></th>
+                  <th className="p-2 border-b"></th>
+                  <th className="p-2 border-b"></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 && (
-                  <tr><td colSpan={9} className="text-center py-4">No registrants found.</td></tr>
+                {filtered.length === 0 ? (
+                  <tr><td colSpan={9} className="text-center p-4 text-gray-500">No registrants found.</td></tr>
+                ) : (
+                  filtered.map((r, idx) => (
+                    <tr key={r._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
+                      <td className="p-3 border-b align-middle">{r.firstName}</td>
+                      <td className="p-3 border-b align-middle">{r.middleName}</td>
+                      <td className="p-3 border-b align-middle">{r.lastName}</td>
+                      <td className="p-3 border-b align-middle">{r.personalEmail}</td>
+                      <td className="p-3 border-b align-middle">{r.contactNo}</td>
+                      <td className="p-3 border-b align-middle">{r.registrationDate ? r.registrationDate.slice(0, 10) : ''}</td>
+                      <td className={`p-3 border-b align-middle font-semibold ${statusColors[r.status]}`}>{r.status}</td>
+                      <td className="p-3 border-b align-middle">{r.note || '-'}</td>
+                      <td className="p-3 border-b align-middle">
+                        <div className="inline-flex space-x-2">
+                          {r.status === 'pending' && (
+                            <>
+                              <button
+                                className="p-1 rounded hover:bg-yellow-100 group relative"
+                                onClick={() => handleApprove(r._id)}
+                                disabled={actionLoading === r._id}
+                                title="Approve"
+                              >
+                                {/* Heroicons Check Circle */}
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-green-600">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+                                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                                </svg>
+                                <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Approve</span>
+                              </button>
+                              <button
+                                className="p-1 rounded hover:bg-red-100 group relative"
+                                onClick={() => handleReject(r._id)}
+                                disabled={actionLoading === r._id}
+                                title="Reject"
+                              >
+                                {/* Heroicons Trash (reject) */}
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Reject</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
                 )}
-                {filtered.map(r => (
-                  <tr key={r._id} className="border-b">
-                    <td className="py-2 px-4">{r.firstName}</td>
-                    <td className="py-2 px-4">{r.middleName}</td>
-                    <td className="py-2 px-4">{r.lastName}</td>
-                    <td className="py-2 px-4">{r.personalEmail}</td>
-                    <td className="py-2 px-4">{r.contactNo}</td>
-                    <td className="py-2 px-4">{r.registrationDate ? r.registrationDate.slice(0, 10) : ''}</td>
-                    <td className={`py-2 px-4 font-semibold ${statusColors[r.status]}`}>{r.status}</td>
-                    <td className="py-2 px-4">{r.note || '-'}</td>
-                    <td className="py-2 px-4">
-                      {r.status === 'pending' && (
-                        <>
-                          <button
-                            className="bg-green-600 text-white px-2 py-1 rounded mr-2 hover:bg-green-700 disabled:opacity-50"
-                            onClick={() => handleApprove(r._id)}
-                            disabled={actionLoading === r._id}
-                          >
-                            {actionLoading === r._id ? 'Approving...' : 'Approve'}
-                          </button>
-                          <button
-                            className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 disabled:opacity-50"
-                            onClick={() => handleReject(r._id)}
-                            disabled={actionLoading === r._id}
-                          >
-                            Reject
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
               </tbody>
             </table>
           </div>
