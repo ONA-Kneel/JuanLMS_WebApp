@@ -31,7 +31,7 @@ export default function Admin_Accounts() {
     personalemail: "",
     schoolID: "",
     password: "",
-    role: "faculty",
+    role: "",
     userID: "", // invisible field
     contactNo: "",
   });
@@ -404,6 +404,24 @@ export default function Admin_Accounts() {
     // eslint-disable-next-line
   }, [isEditMode]);
 
+  useEffect(() => {
+    if (!isEditMode) {
+      const requiredFields = [
+        'firstname',
+        'lastname',
+        'email',
+        'role',
+        'schoolID',
+        'contactNo',
+        'personalemail'
+      ];
+      const allFilled = requiredFields.every(field => formData[field] && formData[field].toString().trim() !== '');
+      if (allFilled && !formData.password) {
+        setFormData(prev => ({ ...prev, password: generatePassword() }));
+      }
+    }
+  }, [formData.firstname, formData.lastname, formData.email, formData.role, formData.schoolID, formData.contactNo, formData.personalemail, isEditMode]);
+
   const handleSort = (key) => {
     setSortConfig((prev) => {
       if (prev.key === key) {
@@ -553,6 +571,36 @@ export default function Admin_Accounts() {
     if (!schoolId) return '-';
     return schoolId;
   }
+
+  const getRolePrefix = (role) => {
+    if (role === 'faculty') return 'F';
+    if (role === 'admin') return 'A';
+    if (role === 'principal' || role === 'vice president of education') return 'N';
+    return '';
+  };
+
+  // Update the useEffect for School ID generation to remove dependency on isEditMode and generate as soon as role is selected.
+  useEffect(() => {
+    if (formData.role) {
+      const fetchCountAndSetID = async () => {
+        try {
+          const res = await axios.get(`${API_BASE}/users/active`);
+          if (res.status === 200) {
+            const users = res.data;
+            const roleUsers = users.filter(u => u.role === formData.role);
+            const prefix = getRolePrefix(formData.role);
+            const nextNum = (roleUsers.length + 1).toString().padStart(3, '0');
+            setFormData(prev => ({ ...prev, schoolID: `${prefix}${nextNum}` }));
+          }
+        } catch {
+          setFormData(prev => ({ ...prev, schoolID: '' }));
+        }
+      };
+      fetchCountAndSetID();
+    }
+  }, [formData.role]);
+
+  const isFormValid = formData.role !== "" && formData.firstname && formData.lastname && formData.email && formData.schoolID && formData.contactNo && formData.personalemail && formData.password;
 
   return (
     <>
@@ -912,143 +960,93 @@ export default function Admin_Accounts() {
           {/* Modal for New Account Form */}
           {showCreateModal && (
             <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-              <div className="bg-white p-10 rounded-2xl shadow-2xl max-w-4xl w-full relative">
+              <div className="bg-white p-12 rounded-2xl shadow-2xl max-w-6xl w-full relative flex flex-col items-center">
                 
                 <button
                   className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-3xl font-bold"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setIsEditMode(false);
+                    setEditingUser(null);
+                    setFormData({
+                      firstname: "",
+                      middlename: "",
+                      lastname: "",
+                      email: "",
+                      personalemail: "",
+                      schoolID: "",
+                      password: "",
+                      role: "",
+                      userID: "",
+                      contactNo: "",
+                    });
+                  }}
                   aria-label="Close"
                 >
                   &times;
                 </button>
                 <h3 className="text-2xl font-bold mb-6">{isEditMode ? 'Edit Account' : 'Create New Account'}</h3>
-                <form className="grid grid-cols-1 md:grid-cols-2 gap-6" onSubmit={handleSubmit}>
-                  <input
-                    type="text"
-                    name="firstname"
-                    value={formData.firstname}
-                    onChange={handleChange}
-                    placeholder="First Name"
-                    className="border rounded p-4 text-lg"
-                    required
-                  />
-                  <input
-                    type="text"
-                    name="middlename"
-                    value={formData.middlename}
-                    onChange={handleChange}
-                    placeholder="Middle Name"
-                    className="border rounded p-4 text-lg"
-                  />
-                  <input
-                    type="text"
-                    name="lastname"
-                    value={formData.lastname}
-                    onChange={handleChange}
-                    placeholder="Last Name"
-                    className="border rounded p-4 text-lg"
-                    required
-                  />
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    readOnly
-                    placeholder="School Email (auto-generated)"
-                    className="border rounded p-4 text-lg bg-gray-100 cursor-not-allowed"
-                    required
-                  />
-                  <input
-                    type="email"
-                    name="personalemail"
-                    value={formData.personalemail}
-                    onChange={handleChange}
-                    placeholder="Personal Email"
-                    className="border rounded p-4 text-lg"
-                    required
-                  />
-                  <input
-                    type="text"
-                    name="schoolID"
-                    value={formData.schoolID}
-                    onChange={handleChange}
-                    placeholder={
-                      formData.role === 'faculty' ? 'Faculty ID (F00...)' :
-                      formData.role === 'admin' ? 'Admin ID (A00...)' :
-                      (formData.role === 'vice president of education' || formData.role === 'principal') ? 'VP/Principal ID (N00...)' :
-                      'School ID'
-                    }
-                    className="border rounded p-4 text-lg"
-                    required
-                  />
-                  <input
-                    type="text"
-                    name="contactNo"
-                    value={formData.contactNo || ''}
-                    onChange={handleChange}
-                    placeholder="Contact Number"
-                    className="border rounded p-4 text-lg"
-                    required
-                  />
-                  <div className="flex gap-2 col-span-1 md:col-span-2">
-                    <input
-                      type="text"
-                      name="password"
-                      value={formData.password}
-                      readOnly
-                      placeholder="Password"
-                      className="border rounded p-4 text-lg flex-1 bg-gray-100 cursor-not-allowed"
-                    />
+                <form className="space-y-6 w-full" style={{maxWidth: '1100px'}} onSubmit={handleSubmit}>
+                  {/* Row 1: Name fields */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-2">
+                    <div>
+                      <label className="block font-semibold mb-1" htmlFor="firstname">First Name</label>
+                      <input id="firstname" type="text" name="firstname" value={formData.firstname} onChange={handleChange} placeholder="First Name" className="border rounded p-4 text-lg w-full" required />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1" htmlFor="middlename">Middle Name</label>
+                      <input id="middlename" type="text" name="middlename" value={formData.middlename} onChange={handleChange} placeholder="Middle Name" className="border rounded p-4 text-lg w-full" />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1" htmlFor="lastname">Last Name</label>
+                      <input id="lastname" type="text" name="lastname" value={formData.lastname} onChange={handleChange} placeholder="Last Name" className="border rounded p-4 text-lg w-full" required />
+                    </div>
                   </div>
-                  <select
-                    name="role"
-                    value={formData.role}
-                    onChange={handleChange}
-                    className="border rounded p-4 text-lg"
-                    required
-                  >
-                    {/* Only allow non-student roles, default to faculty */}
-                    <option value="faculty">Faculty</option>
-                    <option value="vice president of education">Vice President of Education</option>
-                    <option value="admin">Admin</option>
-                    <option value="principal">Principal</option>
-                  </select>
-                  <div className="col-span-1 md:col-span-2 flex gap-2">
-                    <button
-                      type="submit"
-                      disabled={!formData.password}
-                      className={`flex-1 text-white rounded p-4 text-lg mt-2 ${
-                        formData.password 
-                          ? 'bg-blue-600 hover:bg-blue-700' 
-                          : 'bg-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      {isEditMode ? 'Save Edited Account' : 'Create Account'}
-                    </button>
+                  {/* Row 2: School Email, Personal Email, School ID */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-2">
+                    <div>
+                      <label className="block font-semibold mb-1" htmlFor="email">School Email</label>
+                      <input id="email" type="email" name="email" value={formData.email} readOnly placeholder="School Email (auto-generated)" className="border rounded p-4 text-lg w-full bg-gray-100 cursor-not-allowed" required />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1" htmlFor="personalemail">Personal Email</label>
+                      <input id="personalemail" type="email" name="personalemail" value={formData.personalemail} onChange={handleChange} placeholder="Personal Email" className="border rounded p-4 text-lg w-full" required />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1" htmlFor="schoolID">School ID</label>
+                      <input id="schoolID" type="text" name="schoolID" value={formData.schoolID} readOnly placeholder={formData.role === 'faculty' ? 'Faculty ID (auto-generated)' : formData.role === 'admin' ? 'Admin ID (auto-generated)' : (formData.role === 'vice president of education' || formData.role === 'principal') ? 'VP/Principal ID (auto-generated)' : 'School ID (auto-generated)'} className="border rounded p-4 text-lg w-full bg-gray-100 cursor-not-allowed" required />
+                    </div>
+                  </div>
+                  {/* Row 3: Contact Number, Role, Password */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-2">
+                    <div>
+                      <label className="block font-semibold mb-1" htmlFor="contactNo">Contact Number</label>
+                      <input id="contactNo" type="text" name="contactNo" value={formData.contactNo || ''} onChange={handleChange} placeholder="Contact Number" className="border rounded p-4 text-lg w-full" required />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1" htmlFor="role">Role</label>
+                      <select id="role" name="role" value={formData.role} onChange={handleChange} className="border rounded p-4 text-lg w-full" required>
+                        <option value="" disabled>Select Role</option>
+                        <option value="faculty">Faculty</option>
+                        <option value="vice president of education">Vice President of Education</option>
+                        <option value="admin">Admin</option>
+                        <option value="principal">Principal</option>
+                      </select>
+                    </div>
+                    <div>
+                      {formData.password && formData.role !== "" ? (
+                        <>
+                          <label className="block font-semibold mb-1" htmlFor="password">Password</label>
+                          <input id="password" type="text" name="password" value={formData.password} readOnly placeholder="Password" className="border rounded p-4 text-lg w-full bg-gray-100 cursor-not-allowed" />
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                  {/* Submit button row */}
+                  <div className="col-span-1 md:col-span-3 flex gap-2 mt-4">
+                    <button type="submit" disabled={!isFormValid} className={`flex-1 text-white rounded p-4 text-lg ${isFormValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'}`}>{isEditMode ? 'Save Edited Account' : 'Create Account'}</button>
                     {isEditMode && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsEditMode(false);
-                          setEditingUser(null);
-                          setFormData({
-                            firstname: "",
-                            middlename: "",
-                            lastname: "",
-                            email: "",
-                            personalemail: "",
-                            schoolID: "",
-                            password: "",
-                            role: "faculty",
-                            userID: "",
-                            contactNo: '',
-                          });
-                          setShowCreateModal(false);
-                        }}
-                        className="flex-1 bg-gray-500 hover:bg-gray-600 text-white rounded p-4 text-lg mt-2"
-                      >
-                        Cancel Edit
-                      </button>
+                      <button type="button" onClick={() => { setIsEditMode(false); setEditingUser(null); setFormData({ firstname: "", middlename: "", lastname: "", email: "", personalemail: "", schoolID: "", password: "", role: "faculty", userID: "", contactNo: '' }); setShowCreateModal(false); }} className="flex-1 bg-gray-500 hover:bg-gray-600 text-white rounded p-4 text-lg">Cancel Edit</button>
                     )}
                   </div>
                 </form>

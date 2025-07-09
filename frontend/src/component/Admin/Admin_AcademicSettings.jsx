@@ -42,25 +42,6 @@ export default function Admin_AcademicSettings() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchTerms, setSearchTerms] = useState({ start: '', end: '' });
 
-  // Add state for the prompt
-  const [showTermActivationPrompt, setShowTermActivationPrompt] = useState(false);
-  const [promptTerms, setPromptTerms] = useState([]);
-  const [promptSchoolYear, setPromptSchoolYear] = useState(null);
-  const [selectedPromptTerm, setSelectedPromptTerm] = useState("");
-
-  // Add state for pending add as inactive
-  const [pendingAddInactive, setPendingAddInactive] = useState(false);
-
-  // Generate years for dropdown (from 1900 to current year + 10)
-  const generateYearOptions = () => {
-    const currentYear = new Date().getFullYear();
-    const years = [];
-    for (let year = 1900; year <= currentYear + 10; year++) {
-      years.push(year);
-    }
-    return years;
-  };
-
   // Fetch school years on mount
   useEffect(() => {
       fetchSchoolYears();
@@ -180,7 +161,7 @@ export default function Admin_AcademicSettings() {
     setSuccess("");
 
     if (!formData.schoolYearStart) {
-      setError("Please select a school year start");
+      setError("Please enter a school year start");
       return;
     }
 
@@ -348,19 +329,10 @@ export default function Admin_AcademicSettings() {
       return;
     }
 
-    // Validate term dates are within school year bounds
-    if (selectedYear) {
-      const schoolYearStart = selectedYear.schoolYearStart;
-      const schoolYearEnd = selectedYear.schoolYearEnd;
-      const startDate = new Date(termFormData.startDate);
-      const endDate = new Date(termFormData.endDate);
-      const minDate = new Date(`${schoolYearStart}-01-01`);
-      const maxDate = new Date(`${schoolYearEnd}-12-31`);
-      if (startDate < minDate || startDate > maxDate || endDate < minDate || endDate > maxDate) {
-        setTermError(`Term dates must be within the school year bounds (${schoolYearStart} to ${schoolYearEnd}).`);
+    if (new Date(termFormData.endDate) <= new Date(termFormData.startDate)) {
+      setTermError('End date must be after start date');
         return;
       }
-    }
 
     try {
       const res = await fetch(`${API_BASE}/api/terms`, {
@@ -399,21 +371,25 @@ export default function Admin_AcademicSettings() {
         body: JSON.stringify({ status: newStatus })
       });
       if (res.ok) {
-        // If activating, check for terms in the response
-        if (newStatus === 'active') {
-          const data = await res.json();
-          if (data.terms && data.terms.length > 0) {
-            setPromptTerms(data.terms);
-            setPromptSchoolYear(data.schoolYear);
-            setShowTermActivationPrompt(true);
-            return; // Wait for admin to choose
-          }
-        } else {
-          fetchSchoolYears();
-          alert(`School year set as ${newStatus}`);
-        }
-        // If no terms or not activating, just refresh
         fetchSchoolYears();
+        alert(`School year set as ${newStatus}`);
+
+        // If set to inactive, archive all terms for this SY
+        if (newStatus === 'inactive') {
+          const schoolYearName = `${year.schoolYearStart}-${year.schoolYearEnd}`;
+          const termsRes = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`);
+          if (termsRes.ok) {
+            const terms = await termsRes.json();
+            for (const term of terms) {
+              if (term.status !== 'archived') {
+                await fetch(`${API_BASE}/api/terms/${term._id}/archive`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+            }
+          }
+        }
       } else {
         const data = await res.json();
         setError(data.message || 'Failed to update school year status');
@@ -421,36 +397,6 @@ export default function Admin_AcademicSettings() {
     } catch (err) {
       setError('Error updating school year status');
     }
-  };
-
-  // Handler for activating a term from the prompt
-  const handleActivatePromptTerm = async () => {
-    if (!selectedPromptTerm) return;
-    try {
-      await fetch(`${API_BASE}/api/terms/${selectedPromptTerm}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'active' })
-      });
-      setShowTermActivationPrompt(false);
-      setPromptTerms([]);
-      setPromptSchoolYear(null);
-      setSelectedPromptTerm("");
-      fetchSchoolYears();
-      alert('Term activated successfully.');
-    } catch (err) {
-      setError('Failed to activate term.');
-    }
-  };
-
-  // Handler for keeping all terms inactive
-  const handleKeepTermsInactive = () => {
-    setShowTermActivationPrompt(false);
-    setPromptTerms([]);
-    setPromptSchoolYear(null);
-    setSelectedPromptTerm("");
-    fetchSchoolYears();
-    alert('School year activated. All terms remain inactive.');
   };
 
   // Archive (delete) a school year
@@ -471,20 +417,6 @@ export default function Admin_AcademicSettings() {
       }
     } catch (err) {
       setError('Error archiving school year');
-    }
-  };
-
-  // Add a function to handle adding the school year as inactive
-  const handleAddSchoolYearInactive = async () => {
-    if (!pendingSchoolYear) return;
-    try {
-      await createSchoolYear(pendingSchoolYear.schoolYearStart, false); // false = not active
-      setShowActivateModal(false);
-      setPendingSchoolYear(null);
-      setPendingAddInactive(false);
-      alert('School year added as inactive.');
-    } catch (err) {
-      setError('Failed to add school year as inactive.');
     }
   };
 
@@ -920,19 +852,17 @@ export default function Admin_AcademicSettings() {
                     <label className="block text-lg font-medium text-gray-700 mb-1">
                       School Year Start
                     </label>
-                    <select
+                    <input
+                      type="number"
                       name="schoolYearStart"
                       value={formData.schoolYearStart}
                       onChange={handleChange}
                       className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                      min="1900"
+                      max="2100"
                       required
-                    >
-                      <option value="" disabled>Select School Year Start</option>
-                      {generateYearOptions().map(year => (
-                        <option key={year} value={year}>{year}</option>
-                      ))}
-                    </select>
-                    <p className="mt-1 text-base text-blue-600 font-bold">
+                    />
+                    <p className="mt-1 text-base text-gray-500">
                       School year will be {formData.schoolYearStart}-{formData.schoolYearStart ? parseInt(formData.schoolYearStart) + 1 : ''}
                     </p>
                   </div>
@@ -966,27 +896,21 @@ export default function Admin_AcademicSettings() {
 
           {showActivateModal && pendingSchoolYear && (
             <div className="fixed inset-0 backdrop-blur-sm bg-white/10 flex items-center justify-center z-50">
-              <div className="bg-white p-6 rounded-lg shadow-lg max-w-xl min-w-[500px] w-full">
-                <h2 className="text-xl font-semibold mb-4">Add the School Year?</h2>
-                <p className="text-gray-700 mb-6 text-center">
-                  Are you sure you want to add the School Year <strong>{pendingSchoolYear.schoolYearStart}-{pendingSchoolYear.schoolYearEnd}</strong>?
+              <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+                <h2 className="text-xl font-semibold mb-4">Activate New School Year</h2>
+                <p className="text-gray-700 mb-6">
+                  Do you want to activate the new school year <strong>{pendingSchoolYear.schoolYearStart}-{pendingSchoolYear.schoolYearEnd}</strong>? 
+                  The currently active school year will be archived.
                 </p>
-                <div className="flex justify-center gap-3">
+                <div className="flex justify-end gap-3">
                   <button
                     className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
                     onClick={() => {
                       setShowActivateModal(false);
                       setPendingSchoolYear(null);
-                      setPendingAddInactive(false);
                     }}
                   >
                     Cancel
-                  </button>
-                  <button
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                    onClick={handleAddSchoolYearInactive}
-                  >
-                    Add as Inactive SY
                   </button>
                   <button
                     className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"
@@ -994,41 +918,7 @@ export default function Admin_AcademicSettings() {
                       createSchoolYear(pendingSchoolYear.schoolYearStart, true);
                     }}
                   >
-                    Add and set is as Active SY
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {showTermActivationPrompt && (
-            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-              <div className="bg-white p-8 rounded-xl shadow-xl max-w-md w-full">
-                <h2 className="text-xl font-bold mb-4">Activate a Term</h2>
-                <p className="mb-4">This school year has existing terms. Would you like to set one as active, or keep all terms inactive?</p>
-                <select
-                  className="w-full border rounded px-3 py-2 mb-4"
-                  value={selectedPromptTerm}
-                  onChange={e => setSelectedPromptTerm(e.target.value)}
-                >
-                  <option value="">Select a term to activate</option>
-                  {promptTerms.map(term => (
-                    <option key={term._id} value={term._id}>{term.termName}</option>
-                  ))}
-                </select>
-                <div className="flex gap-2">
-                  <button
-                    className="flex-1 bg-emerald-600 text-white py-2 px-4 rounded hover:bg-emerald-700"
-                    onClick={handleActivatePromptTerm}
-                    disabled={!selectedPromptTerm}
-                  >
-                    Activate Selected Term
-                  </button>
-                  <button
-                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600"
-                    onClick={handleKeepTermsInactive}
-                  >
-                    Keep All Inactive
+                    Yes, Activate
                   </button>
                 </div>
               </div>
