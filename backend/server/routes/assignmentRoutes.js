@@ -171,7 +171,12 @@ router.post('/:id/grade', authenticateToken, async (req, res) => {
     const { submissionId, grade, feedback } = req.body;
     const submission = await Submission.findById(submissionId);
     if (!submission) return res.status(404).json({ error: 'Submission not found' });
-    submission.grade = grade;
+    // Enforce max score of 100
+    let finalGrade = grade;
+    if (typeof finalGrade === 'number' && finalGrade > 100) {
+      finalGrade = 100;
+    }
+    submission.grade = finalGrade;
     submission.feedback = feedback;
     submission.status = 'graded';
     await submission.save();
