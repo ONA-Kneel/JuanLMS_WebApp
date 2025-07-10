@@ -29,16 +29,9 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB per file
+  // Accept all file types for lesson materials
   fileFilter: (req, file, cb) => {
-    // Only allow PDF files for lesson materials
-    const allowed = [
-      'application/pdf'
-    ];
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only PDF files are allowed!'));
-    }
+    cb(null, true);
   }
 });
 
@@ -98,9 +91,6 @@ router.get('/', authenticateToken, async (req, res) => {
 router.use((err, req, res, next) => {
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: 'File too large. Max size is 100MB per file.' });
-  }
-  if (err.message && err.message.includes('Only PDF files are allowed!')) {
-    return res.status(400).json({ error: err.message });
   }
   next(err);
 });
@@ -184,6 +174,28 @@ router.put('/:lessonId', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update lesson' });
+  }
+});
+
+// PATCH /lessons/:lessonId/files - add new files to an existing lesson (faculty only)
+router.patch('/:lessonId/files', authenticateToken, upload.array('files', 5), async (req, res) => {
+  try {
+    if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
+    const { lessonId } = req.params;
+    const lesson = await Lesson.findById(lessonId);
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+    if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
+    // Map uploaded files to file info objects
+    const newFiles = req.files.map(file => ({
+      fileUrl: `/uploads/lessons/${file.filename}`,
+      fileName: file.originalname
+    }));
+    lesson.files.push(...newFiles);
+    await lesson.save();
+    res.json({ success: true, lesson });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to add files to lesson' });
   }
 });
 

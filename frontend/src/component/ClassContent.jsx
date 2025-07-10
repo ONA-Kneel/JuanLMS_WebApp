@@ -294,7 +294,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const handleLessonUpload = async (e) => {
     e.preventDefault();
     if (!lessonTitle || lessonFiles.length === 0) {
-      alert("Please provide a title and at least one PDF file.");
+      alert("Please provide a title and at least one file.");
       return;
     }
     setUploading(true);
@@ -325,6 +325,104 @@ export default function ClassContent({ selected, isFaculty = false }) {
       alert("Failed to upload lesson.");
     } finally {
       setUploading(false);
+    }
+  };
+
+  // --- HANDLERS FOR LESSON DELETE/EDIT (Faculty only) ---
+  const [editingLessonId, setEditingLessonId] = useState(null);
+  const [editingLessonTitle, setEditingLessonTitle] = useState("");
+  const [newFiles, setNewFiles] = useState([]);
+
+  // Show edit form for lesson
+  const handleEditLessonFiles = (lessonId, currentTitle) => {
+    setEditingLessonId(lessonId);
+    setEditingLessonTitle(currentTitle);
+    setNewFiles([]);
+  };
+
+  // Save lesson title change
+  const handleSaveLessonTitle = async (lessonId) => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/lessons/${lessonId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ title: editingLessonTitle })
+      });
+      if (res.ok) {
+        setBackendLessons(backendLessons.map(l => l._id === lessonId ? { ...l, title: editingLessonTitle } : l));
+        alert('Lesson title updated!');
+      } else {
+        alert('Failed to update lesson title.');
+      }
+    } catch {
+      alert('Failed to update lesson title.');
+    }
+  };
+
+  // Upload new files to lesson (requires backend PATCH/POST endpoint, not currently implemented)
+  const handleAddFilesToLesson = async (lessonId) => {
+    if (newFiles.length === 0) return;
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    for (let file of newFiles) {
+      formData.append('files', file);
+    }
+    try {
+      const res = await fetch(`${API_BASE}/lessons/${lessonId}/files`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBackendLessons(backendLessons.map(l => l._id === lessonId ? data.lesson : l));
+        setNewFiles([]);
+        alert('Files uploaded!');
+      } else {
+        alert('Failed to upload new files.');
+      }
+    } catch {
+      alert('Failed to upload new files.');
+    }
+  };
+
+  const handleDeleteLessonFile = async (lessonId, fileUrl) => {
+    if (!window.confirm('Delete this file from the material?')) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/lessons/${lessonId}/file?fileUrl=${encodeURIComponent(fileUrl)}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setBackendLessons(backendLessons.map(l => l._id === lessonId ? { ...l, files: l.files.filter(f => f.fileUrl !== fileUrl) } : l));
+      } else {
+        alert('Failed to delete file.');
+      }
+    } catch {
+      alert('Failed to delete file.');
+    }
+  };
+
+  const handleDeleteLesson = async (lessonId) => {
+    if (!window.confirm('Delete this material and all its files?')) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/lessons/${lessonId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setBackendLessons(backendLessons.filter(l => l._id !== lessonId));
+      } else {
+        alert('Failed to delete material.');
+      }
+    } catch {
+      alert('Failed to delete material.');
     }
   };
 
@@ -439,59 +537,75 @@ export default function ClassContent({ selected, isFaculty = false }) {
         <>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold">Class Materials</h2>
-            {isFaculty && (
-              <>
-                <button
-                  className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm"
-                  onClick={() => setShowLessonForm(true)}
-                >
-                  + Add Material
-                </button>
-                {showLessonForm && (
-                  <form
-                    onSubmit={handleLessonUpload}
-                    className="bg-blue-50 p-4 rounded-lg border border-blue-200 mt-4 flex flex-col gap-2"
-                    style={{ maxWidth: 400 }}
-                  >
-                    <label className="font-semibold">Lesson Title</label>
-                    <input
-                      type="text"
-                      value={lessonTitle}
-                      onChange={e => setLessonTitle(e.target.value)}
-                      className="border rounded px-2 py-1"
-                      required
-                    />
-                    <label className="font-semibold">PDF Files</label>
-                    <input
-                      type="file"
-                      accept="application/pdf"
-                      multiple
-                      onChange={e => setLessonFiles([...e.target.files])}
-                      className="border rounded px-2 py-1"
-                      required
-                    />
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        type="submit"
-                        className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm"
-                        disabled={uploading}
-                      >
-                        {uploading ? "Uploading..." : "Upload"}
-                      </button>
-                      <button
-                        type="button"
-                        className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-sm"
-                        onClick={() => setShowLessonForm(false)}
-                        disabled={uploading}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </>
+            {isFaculty && !showLessonForm && (
+              <button
+                className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm"
+                onClick={() => setShowLessonForm(true)}
+              >
+                + Add Material
+              </button>
             )}
           </div>
+        {isFaculty && showLessonForm && (
+          <form
+            onSubmit={handleLessonUpload}
+            className="bg-blue-50 p-6 rounded-lg border border-blue-200 mb-6 flex flex-col gap-4 w-full max-w-3xl"
+            style={{ minWidth: 600 }}
+          >
+            <div className="flex flex-col gap-1">
+              <label className="font-semibold">Lesson Title</label>
+              <input
+                type="text"
+                value={lessonTitle}
+                onChange={e => setLessonTitle(e.target.value)}
+                className="border rounded px-3 py-2 w-full"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="font-semibold">Files</label>
+              <input
+                type="file"
+                multiple
+                onChange={e => setLessonFiles([...lessonFiles, ...Array.from(e.target.files)])}
+                className="border rounded px-3 py-2 w-full"
+              />
+              {lessonFiles.length > 0 && (
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {lessonFiles.map((file, idx) => (
+                    <li key={idx} className="bg-gray-100 px-3 py-1 rounded flex items-center gap-2">
+                      <span>{file.name}</span>
+                      <button
+                        type="button"
+                        className="text-red-600 hover:text-red-800 text-xs font-bold"
+                        onClick={() => setLessonFiles(lessonFiles.filter((_, i) => i !== idx))}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button
+                type="submit"
+                className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm"
+                disabled={uploading || lessonFiles.length === 0}
+              >
+                {uploading ? "Uploading..." : "Save Module"}
+              </button>
+              <button
+                type="button"
+                className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-sm"
+                onClick={() => setShowLessonForm(false)}
+                disabled={uploading}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
           {/* Card/Table style for lessons */}
           {backendLessons.length > 0 ? (
             backendLessons.map(lesson => (
@@ -502,7 +616,18 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     <span className="text-2xl">📄</span>
                     <span className="font-bold text-lg">{lesson.title}</span>
                   </div>
-                  
+                  {isFaculty && (
+                    <div className="flex gap-2">
+                      {editingLessonId !== lesson._id && (
+                        <button
+                          className="bg-yellow-400 hover:bg-yellow-500 text-xs px-2 py-1 rounded font-bold"
+                          onClick={() => handleEditLessonFiles(lesson._id, lesson.title)}
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {/* Table */}
                 <div className="bg-white">
@@ -510,14 +635,13 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     <thead>
                       <tr className="border-b">
                         <th className="px-6 py-2 font-semibold">Section</th>
-                        
+                        {isFaculty && <th className="px-6 py-2 font-semibold">Actions</th>}
                       </tr>
                     </thead>
                     <tbody>
                       {lesson.files && lesson.files.length > 0 ? (
                         lesson.files.map(file => {
-                          // Ensure fileUrl is absolute (starts with http) or prefix with API_BASE
-                          const fileUrl = file.fileUrl.startsWith('http') ? file.fileUrl : `${API_BASE}/${file.fileUrl.replace(/^\/+/, '')}`;
+                          const fileUrl = file.fileUrl.startsWith('http') ? file.fileUrl : `${API_BASE}/${file.fileUrl.replace(/^\/+/,'')}`;
                           return (
                             <tr key={file.fileUrl} className="border-b hover:bg-gray-50">
                               <td className="px-6 py-2 flex items-center gap-2">
@@ -531,13 +655,77 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                   {file.fileName}
                                 </a>
                               </td>
-                              
+                              {isFaculty && editingLessonId === lesson._id && (
+                                <td className="px-6 py-2">
+                                  <button
+                                    className="bg-red-500 hover:bg-red-700 text-xs px-2 py-1 rounded text-white font-bold"
+                                    onClick={() => handleDeleteLessonFile(lesson._id, file.fileUrl)}
+                                  >
+                                    Remove
+                                  </button>
+                                </td>
+                              )}
+                              {isFaculty && editingLessonId !== lesson._id && <td className="px-6 py-2"></td>}
                             </tr>
                           );
                         })
                       ) : (
                         <tr>
-                          <td className="px-6 py-2" colSpan={2}>No files uploaded.</td>
+                          <td className="px-6 py-2" colSpan={isFaculty ? 2 : 1}>No files uploaded.</td>
+                        </tr>
+                      )}
+                      {/* Add new files UI if editing this lesson */}
+                      {isFaculty && editingLessonId === lesson._id && (
+                        <tr>
+                          <td className="px-6 py-2" colSpan={2}>
+                            <div className="mb-2 flex items-center gap-2">
+                              <label className="block text-xs font-semibold mb-1">Lesson Title</label>
+                              <input
+                                type="text"
+                                value={editingLessonTitle}
+                                onChange={e => setEditingLessonTitle(e.target.value)}
+                                className="border rounded px-2 py-1 w-full"
+                              />
+                              <button
+                                className="bg-green-700 text-white px-3 py-1 rounded text-xs"
+                                onClick={() => handleSaveLessonTitle(lesson._id)}
+                              >
+                                Save Title
+                              </button>
+                            </div>
+                            <input
+                              type="file"
+                              multiple
+                              onChange={e => setNewFiles([...newFiles, ...Array.from(e.target.files)])}
+                              className="border rounded px-2 py-1"
+                            />
+                            <button
+                              className="bg-blue-900 text-white px-3 py-1 rounded ml-2 text-xs"
+                              onClick={() => handleAddFilesToLesson(lesson._id)}
+                            >
+                              Upload New Files
+                            </button>
+                            <div className="mt-4 flex justify-end gap-2">
+                              <button
+                                className="bg-blue-700 text-white px-4 py-2 rounded text-sm font-semibold"
+                                onClick={() => setEditingLessonId(null)}
+                              >
+                                Save
+                              </button>
+                              <button
+                                className="bg-gray-400 text-white px-4 py-2 rounded text-sm font-semibold"
+                                onClick={() => setEditingLessonId(null)}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                className="bg-red-600 hover:bg-red-700 text-sm px-4 py-2 rounded font-semibold text-white"
+                                onClick={() => handleDeleteLesson(lesson._id)}
+                              >
+                                Delete Module
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       )}
                     </tbody>
