@@ -8,24 +8,45 @@ import database from '../connect.cjs';
 import { ObjectId } from 'mongodb';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import User from '../models/User.js';
+import multer from 'multer';
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
+// Multer setup for class images
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, '..', 'uploads'));
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-class-' + file.originalname.replace(/\s+/g, ''));
+  }
+});
+const upload = multer({ storage });
 
 const router = express.Router();
 
-// --- POST / - Create a new class ---
-router.post('/', authenticateToken, async (req, res) => {
+// --- POST / - Create a new class with image upload ---
+router.post('/', authenticateToken, upload.single('image'), async (req, res) => {
   try {
     const { classID, className, classCode, classDesc, members, facultyID } = req.body;
-    
+    let membersArr = members;
+    if (typeof members === 'string') {
+      try { membersArr = JSON.parse(members); } catch { membersArr = [members]; }
+    }
     // Validate required fields
-    if (!classID || !className || !classCode || !classDesc || !members || !Array.isArray(members) || !facultyID) {
+    if (!classID || !className || !classCode || !classDesc || !membersArr || !Array.isArray(membersArr) || !facultyID) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-
+    let imagePath = '';
+    if (req.file) {
+      imagePath = `/uploads/${req.file.filename}`;
+    }
     // Create new class
-    const newClass = new Class({ classID, className, classCode, classDesc, members, facultyID });
+    const newClass = new Class({ classID, className, classCode, classDesc, members: membersArr, facultyID, image: imagePath });
     await newClass.save();
-
     // Create audit log for class creation
     const db = database.getDb();
     await db.collection('AuditLogs').insertOne({
@@ -33,11 +54,10 @@ router.post('/', authenticateToken, async (req, res) => {
       userName: `${req.user.firstname} ${req.user.lastname}`,
       userRole: req.user.role,
       action: `${req.user.role.toUpperCase()}_ADD_CLASS`,
-      details: `Created new class "${className}" (${classCode})`,
+      details: `Created new class \"${className}\" (${classCode})`,
       ipAddress: req.ip || req.connection.remoteAddress,
       timestamp: new Date()
     });
-
     res.status(201).json({ success: true, class: newClass });
   } catch (err) {
     console.error(err);

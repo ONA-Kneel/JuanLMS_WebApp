@@ -15,11 +15,6 @@ export default function FacultyCreateClass() {
   const [classDesc, setClassDesc] = useState("");
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchMessage, setBatchMessage] = useState('');
-  const [schoolYears, setSchoolYears] = useState([]);
-  const [selectedSchoolYear, setSelectedSchoolYear] = useState("");
-  const [terms, setTerms] = useState([]);
-  const [selectedTerm, setSelectedTerm] = useState("");
-  const [gradeLevels, setGradeLevels] = useState(["Grade 11", "Grade 12"]);
   const [selectedGradeLevel, setSelectedGradeLevel] = useState("");
   const [facultyAssignments, setFacultyAssignments] = useState([]);
   const [filteredAssignments, setFilteredAssignments] = useState([]);
@@ -29,35 +24,7 @@ export default function FacultyCreateClass() {
   const [selectedSection, setSelectedSection] = useState("");
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-
-  // Fetch all school years on mount
-  useEffect(() => {
-    async function fetchSchoolYears() {
-      try {
-        const res = await fetch(`${API_BASE}/api/schoolyears`);
-        const data = await res.json();
-        setSchoolYears(data);
-      } catch {
-        setSchoolYears([]);
-      }
-    }
-    fetchSchoolYears();
-  }, []);
-
-  // Fetch terms when school year changes
-  useEffect(() => {
-    async function fetchTerms() {
-      if (!selectedSchoolYear) return setTerms([]);
-      try {
-        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${selectedSchoolYear}`);
-        const data = await res.json();
-        setTerms(data);
-      } catch {
-        setTerms([]);
-      }
-    }
-    fetchTerms();
-  }, [selectedSchoolYear]);
+  const [classImage, setClassImage] = useState(null);
 
   // Fetch faculty assignments on mount
   useEffect(() => {
@@ -104,7 +71,7 @@ export default function FacultyCreateClass() {
     setFilteredAssignments(filtered);
     // Get unique grade levels for this faculty in this year/term
     const uniqueGradeLevels = [...new Set(filtered.map(a => a.gradeLevel))];
-    setGradeLevels(uniqueGradeLevels);
+    setSelectedGradeLevel(uniqueGradeLevels[0]); // Auto-select the first one
     // If only one grade level, auto-select it
     if (uniqueGradeLevels.length === 1) {
       setSelectedGradeLevel(uniqueGradeLevels[0]);
@@ -251,23 +218,24 @@ export default function FacultyCreateClass() {
       return;
     }
 
-    const classData = {
-      classID,
-      className: selectedSubject,
-      classCode: selectedSection,
-      classDesc,
-      members,
-      facultyID, // <-- include this
-    };
+    const formData = new FormData();
+    formData.append('classID', classID);
+    formData.append('className', selectedSubject);
+    formData.append('classCode', selectedSection);
+    formData.append('classDesc', classDesc);
+    formData.append('members', JSON.stringify(members));
+    formData.append('facultyID', facultyID);
+    if (classImage) {
+      formData.append('image', classImage);
+    }
 
     try {
       const res = await fetch(`${API_BASE}/classes`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           ...(token && { Authorization: `Bearer ${token}` })
         },
-        body: JSON.stringify(classData),
+        body: formData,
       });
       if (res.ok) {
         alert("Class created successfully!");
@@ -275,6 +243,7 @@ export default function FacultyCreateClass() {
         setSelectedSection("");
         setClassDesc("");
         setSelectedStudents([]);
+        setClassImage(null);
       } else {
         const data = await res.json();
         alert("Error: " + (data.error || "Failed to create class"));
@@ -351,33 +320,14 @@ export default function FacultyCreateClass() {
         <h3 className="text-4xl font-bold mt-5">Create Class</h3>
 
         <div className="mt-6 flex flex-col space-y-6 ml-5">
-          {/* School Year Dropdown (locked) */}
-          <label className="text-xl font-bold">School Year</label>
+          {/* Add image upload field above the subject dropdown */}
+          <label className="text-xl font-bold">Class Image</label>
           <input
-            className="w-1/2 px-3 py-2 border rounded bg-gray-200 cursor-not-allowed"
-            value={academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''}
-            disabled
-          />
-          {/* Term Dropdown (locked) */}
-          <label className="text-xl font-bold">Term</label>
-          <input
-            className="w-1/2 px-3 py-2 border rounded bg-gray-200 cursor-not-allowed"
-            value={currentTerm ? currentTerm.termName : ''}
-            disabled
-          />
-          {/* Grade Level Dropdown (selectable if multiple) */}
-          <label className="text-xl font-bold">Grade Level</label>
-          <select
+            type="file"
+            accept="image/*"
             className="w-1/2 px-3 py-2 border rounded"
-            value={selectedGradeLevel}
-            onChange={e => setSelectedGradeLevel(e.target.value)}
-            disabled={gradeLevels.length === 1}
-          >
-            <option value="">Select Grade Level</option>
-            {gradeLevels.map(g => (
-              <option key={g} value={g}>{g}</option>
-            ))}
-          </select>
+            onChange={e => setClassImage(e.target.files[0])}
+          />
           {/* Subject Dropdown (Class Name) */}
           <label className="text-xl font-bold">Class Name (Subject)</label>
           <select

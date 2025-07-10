@@ -21,6 +21,9 @@ function maskEmail(email) {
 
 function formatSchoolId(schoolId) {
   if (!schoolId) return '-';
+  if (/^\d{2}-\d{5}$/.test(schoolId)) return `${schoolId} (Student Number)`;
+  if (/^F00/.test(schoolId)) return `${schoolId} (Faculty)`;
+  if (/^A00/.test(schoolId)) return `${schoolId} (Admin)`;
   return schoolId;
 }
 
