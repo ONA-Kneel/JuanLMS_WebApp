@@ -5,6 +5,8 @@ import connect from "./connect.cjs";
 import express from "express";
 import cors from "cors";
 import messageRoutes from "./routes/messages.js";
+import groupChatRoutes from "./routes/groupChats.js";
+import groupMessageRoutes from "./routes/groupMessages.js";
 import multer from "multer";
 import fs from "fs";
 import mongoose from "mongoose";
@@ -120,6 +122,8 @@ app.get('/user-counts', async (req, res) => {
 // ✅ Routes
 app.use('/', userRoutes);
 app.use('/messages', messageRoutes);
+app.use('/group-chats', groupChatRoutes);
+app.use('/group-messages', groupMessageRoutes);
 app.use('/uploads', express.static('uploads'));
 app.use("/events", eventRoutes);
 app.use("/classes", classRoutes);

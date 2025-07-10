@@ -30,6 +30,17 @@ export default function Student_Chats() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
 
+  // Group chat states
+  const [activeTab, setActiveTab] = useState("individual");
+  const [groups, setGroups] = useState([]);
+  const [groupMessages, setGroupMessages] = useState({});
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [showJoinGroupModal, setShowJoinGroupModal] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [selectedGroupMembers, setSelectedGroupMembers] = useState([]);
+  const [joinGroupCode, setJoinGroupCode] = useState("");
+  const [isGroupChat, setIsGroupChat] = useState(false);
+
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
@@ -138,6 +149,36 @@ export default function Student_Chats() {
       });
     });
 
+    // Group chat socket events
+    socket.current.on("groupMessage", (data) => {
+      const incomingGroupMessage = {
+        senderId: data.senderId,
+        groupId: data.groupId,
+        message: data.text,
+        fileUrl: data.fileUrl || null,
+        senderName: data.senderName,
+        timestamp: new Date(),
+      };
+
+      setGroupMessages((prev) => ({
+        ...prev,
+        [data.groupId]: [...(prev[data.groupId] || []), incomingGroupMessage],
+      }));
+    });
+
+    socket.current.on("groupCreated", (group) => {
+      setGroups((prev) => [...prev, group]);
+      setShowCreateGroupModal(false);
+      setNewGroupName("");
+      setSelectedGroupMembers([]);
+    });
+
+    socket.current.on("groupJoined", (group) => {
+      setGroups((prev) => [...prev, group]);
+      setShowJoinGroupModal(false);
+      setJoinGroupCode("");
+    });
+
     return () => {
       socket.current.disconnect();
     };
@@ -162,6 +203,19 @@ export default function Student_Chats() {
       }
     };
     fetchUsers();
+  }, [currentUserId]);
+
+  // ================= FETCH GROUPS =================
+  useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
+        setGroups(res.data);
+      } catch (err) {
+        console.error("Error fetching groups:", err);
+      }
+    };
+    fetchGroups();
   }, [currentUserId]);
 
   // ================= FETCH MESSAGES =================
@@ -200,8 +254,28 @@ export default function Student_Chats() {
     fetchMessages();
   }, [selectedChat, currentUserId, recentChats]);
 
+  // ================= FETCH GROUP MESSAGES =================
+  useEffect(() => {
+    const fetchGroupMessages = async () => {
+      if (!selectedChat || !isGroupChat) return;
+      try {
+        const res = await axios.get(`${API_BASE}/group-chats/${selectedChat._id}/messages`);
+        setGroupMessages((prev) => ({
+          ...prev,
+          [selectedChat._id]: res.data,
+        }));
+      } catch (err) {
+        console.error("Error fetching group messages:", err);
+      }
+    };
+
+    fetchGroupMessages();
+  }, [selectedChat, isGroupChat]);
+
   // Auto-scroll
-  const selectedChatMessages = messages[selectedChat?._id] || [];
+  const selectedChatMessages = isGroupChat 
+    ? (groupMessages[selectedChat?._id] || [])
+    : (messages[selectedChat?._id] || []);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [selectedChatMessages]);
@@ -212,37 +286,75 @@ export default function Student_Chats() {
     if (!newMessage.trim() && !selectedFile) return;
     if (!selectedChat) return;
 
-    const formData = new FormData();
-    formData.append("senderId", currentUserId);
-    formData.append("receiverId", selectedChat._id);
-    formData.append("message", newMessage);
-    if (selectedFile) {
-      formData.append("file", selectedFile);
-    }
+    if (isGroupChat) {
+      // Send group message
+      const formData = new FormData();
+      formData.append("senderId", currentUserId);
+      formData.append("groupId", selectedChat._id);
+      formData.append("message", newMessage);
+      if (selectedFile) {
+        formData.append("file", selectedFile);
+      }
 
-    try {
-      const res = await axios.post(`${API_BASE}/messages`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      try {
+        const res = await axios.post(`${API_BASE}/group-chats/messages`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
 
-      const sentMessage = res.data;
+        const sentMessage = res.data;
 
-      socket.current.emit("sendMessage", {
-        senderId: currentUserId,
-        receiverId: selectedChat._id,
-        text: sentMessage.message,
-        fileUrl: sentMessage.fileUrl || null,
-      });
+        socket.current.emit("sendGroupMessage", {
+          senderId: currentUserId,
+          groupId: selectedChat._id,
+          text: sentMessage.message,
+          fileUrl: sentMessage.fileUrl || null,
+          senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
+        });
 
-      setMessages((prev) => ({
-        ...prev,
-        [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
-      }));
+        setGroupMessages((prev) => ({
+          ...prev,
+          [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
+        }));
 
-      setNewMessage("");
-      setSelectedFile(null);
-    } catch (err) {
-      console.error("Error sending message:", err);
+        setNewMessage("");
+        setSelectedFile(null);
+      } catch (err) {
+        console.error("Error sending group message:", err);
+      }
+    } else {
+      // Send individual message
+      const formData = new FormData();
+      formData.append("senderId", currentUserId);
+      formData.append("receiverId", selectedChat._id);
+      formData.append("message", newMessage);
+      if (selectedFile) {
+        formData.append("file", selectedFile);
+      }
+
+      try {
+        const res = await axios.post(`${API_BASE}/messages`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        const sentMessage = res.data;
+
+        socket.current.emit("sendMessage", {
+          senderId: currentUserId,
+          receiverId: selectedChat._id,
+          text: sentMessage.message,
+          fileUrl: sentMessage.fileUrl || null,
+        });
+
+        setMessages((prev) => ({
+          ...prev,
+          [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
+        }));
+
+        setNewMessage("");
+        setSelectedFile(null);
+      } catch (err) {
+        console.error("Error sending message:", err);
+      }
     }
   };
 
@@ -257,25 +369,62 @@ export default function Student_Chats() {
     const file = e.target.files[0];
     if (file) {
       setSelectedFile(file);
-      e.target.value = null;
     }
   };
 
   const openFilePicker = () => {
-    fileInputRef.current.click();
+    fileInputRef.current?.click();
   };
 
   const handleSelectChat = (user) => {
     setSelectedChat(user);
+    setIsGroupChat(false);
     localStorage.setItem("selectedChatId_student", user._id);
-    // Add to recent chats if not already present
-    setRecentChats((prev) => {
-      const exists = prev.find((u) => u._id === user._id);
-      if (exists) return prev;
-      const updated = [user, ...prev].slice(0, 10); // Keep max 10 recent
-      localStorage.setItem("recentChats_student", JSON.stringify(updated));
-      return updated;
-    });
+  };
+
+  const handleSelectGroup = (group) => {
+    setSelectedChat(group);
+    setIsGroupChat(true);
+    localStorage.setItem("selectedChatId_student", group._id);
+  };
+
+  const handleCreateGroup = async () => {
+    if (!newGroupName.trim() || selectedGroupMembers.length === 0) return;
+
+    try {
+      const res = await axios.post(`${API_BASE}/group-chats`, {
+        name: newGroupName,
+        creatorId: currentUserId,
+        memberIds: [...selectedGroupMembers, currentUserId],
+      });
+
+      socket.current.emit("createGroup", res.data);
+    } catch (err) {
+      console.error("Error creating group:", err);
+    }
+  };
+
+  const handleJoinGroup = async () => {
+    if (!joinGroupCode.trim()) return;
+
+    try {
+      const res = await axios.post(`${API_BASE}/group-chats/join`, {
+        groupCode: joinGroupCode,
+        userId: currentUserId,
+      });
+
+      socket.current.emit("joinGroup", res.data);
+    } catch (err) {
+      console.error("Error joining group:", err);
+    }
+  };
+
+  const toggleMemberSelection = (userId) => {
+    setSelectedGroupMembers((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId]
+    );
   };
 
   // Keep recentChats in sync with localStorage
@@ -283,14 +432,14 @@ export default function Student_Chats() {
     localStorage.setItem("recentChats_student", JSON.stringify(recentChats));
   }, [recentChats]);
 
-  const filteredUsers = users.filter((u) =>
-    `${u.firstname} ${u.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) && u.role !== "vice president of education"
-  );
+
 
   // ================= RENDER =================
   useEffect(() => {
     if (selectedChat) {
-      const chatMessages = messages[selectedChat._id] || [];
+      const chatMessages = isGroupChat 
+        ? (groupMessages[selectedChat._id] || [])
+        : (messages[selectedChat._id] || []);
       const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
       if (lastMsg) {
         let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
@@ -302,7 +451,7 @@ export default function Student_Chats() {
     } else {
       setLastMessage(null);
     }
-  }, [selectedChat, messages, currentUserId]);
+  }, [selectedChat, messages, currentUserId, groupMessages, isGroupChat]);
 
   // Preload last messages for all users in recentChats
   useEffect(() => {
@@ -339,6 +488,14 @@ export default function Student_Chats() {
     // eslint-disable-next-line
   }, [recentChats, currentUserId]);
 
+  // Filter users based on search term
+  const filteredUsers = users.filter(
+    (user) =>
+      user._id !== currentUserId &&
+      (user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.lastname?.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
   return (
     <div className="flex min-h-screen h-screen max-h-screen">
       <Student_Navbar />
@@ -363,136 +520,209 @@ export default function Student_Chats() {
         <div className="flex flex-1 overflow-hidden h-full">
           {/* LEFT PANEL */}
           <div className="w-full md:w-1/3 p-4 overflow-hidden flex flex-col h-full">
-            <input
-              type="text"
-              placeholder="Search users..."
-              className="w-full mb-4 p-2 border rounded-lg"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            {/* Search Results */}
-            {searchTerm.trim() !== "" && (
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                {filteredUsers.length > 0 ? (
-                  filteredUsers.map((user) => (
-                    <div
-                      key={user._id}
-                      className={`p-3 rounded-lg cursor-pointer shadow-sm transition-all bg-gray-100 hover:bg-gray-300 flex items-center gap-2`}
-                      onClick={() => handleSelectChat(user)}
-                    >
-                      <img
-                        src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar}
-                        alt="Profile"
-                        className="w-8 h-8 rounded-full object-cover border"
-                        onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
-                      />
-                      <strong>{user.lastname}, {user.firstname}</strong>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-gray-400 text-center mt-10 select-none">
-                    No users found
-                  </div>
-                )}
-              </div>
-            )}
-            {/* Recent Chats */}
-            {searchTerm.trim() === "" && recentChats.length > 0 && (
-              <div className="mt-2">
-                <div className="text-xs text-gray-500 mb-2 pl-1">Recent Chats</div>
-                <div className="space-y-2">
-                  {recentChats.map((user) => {
-                    // Find the latest message between current user and this user
-                    const chatMessages = messages[user._id] || [];
-                    const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
-                    let lastMsgPrefix = "";
-                    let lastMsgText = "";
-                    if (lastMsg) {
-                      if (lastMsg.senderId === currentUserId) {
-                        lastMsgPrefix = "You: ";
-                      } else {
-                        lastMsgPrefix = `${user.lastname}, ${user.firstname}: `;
-                      }
-                      if (lastMsg.message) {
-                        lastMsgText = lastMsg.message;
-                      } else if (lastMsg.fileUrl) {
-                        lastMsgText = "File sent";
-                      }
-                    }
-                    return (
-                      <div
-                        key={user._id}
-                        className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                          selectedChat?._id === user._id ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
-                        }`}
-                        onClick={() => handleSelectChat(user)}
-                      >
-                        <span className="pr-10 min-w-0 truncate flex items-center gap-2">
+            {/* Tab Navigation */}
+            <div className="flex mb-4 border-b border-gray-300">
+              <button
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === "individual"
+                    ? "text-blue-900 border-b-2 border-blue-900"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+                onClick={() => setActiveTab("individual")}
+              >
+                Individual Chats
+              </button>
+              <button
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === "group"
+                    ? "text-blue-900 border-b-2 border-blue-900"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+                onClick={() => setActiveTab("group")}
+              >
+                Group Chats
+              </button>
+            </div>
+
+            {/* Search and Actions */}
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                placeholder={activeTab === "individual" ? "Search users..." : "Search groups..."}
+                className="flex-1 p-2 border rounded-lg text-sm"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {activeTab === "group" && (
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setShowCreateGroupModal(true)}
+                    className="px-3 py-2 bg-blue-900 text-white rounded-lg text-xs hover:bg-blue-800"
+                  >
+                    Create
+                  </button>
+                  <button
+                    onClick={() => setShowJoinGroupModal(true)}
+                    className="px-3 py-2 bg-green-600 text-white rounded-lg text-xs hover:bg-green-700"
+                  >
+                    Join
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Content based on active tab */}
+            {activeTab === "individual" ? (
+              <>
+                {/* Search Results */}
+                {searchTerm.trim() !== "" && (
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                    {filteredUsers.length > 0 ? (
+                      filteredUsers.map((user) => (
+                        <div
+                          key={user._id}
+                          className={`p-3 rounded-lg cursor-pointer shadow-sm transition-all bg-gray-100 hover:bg-gray-300 flex items-center gap-2`}
+                          onClick={() => handleSelectChat(user)}
+                        >
                           <img
                             src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar}
                             alt="Profile"
                             className="w-8 h-8 rounded-full object-cover border"
                             onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
                           />
-                          <div className="flex flex-col min-w-0">
-                            <strong className="truncate">{user.lastname}, {user.firstname}</strong>
-                            {lastMessages[user._id] && (
-                              <span className="text-xs text-gray-500 truncate">
-                                {lastMessages[user._id].prefix}{lastMessages[user._id].text}
-                              </span>
-                            )}
-                          </div>
-                        </span>
-                        <button
-                          className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity"
-                          title="Remove from recent chats"
-                          onClick={e => {
-                            e.stopPropagation();
-                            setRecentChats(prev => {
-                              const updated = prev.filter(u => u._id !== user._id);
-                              localStorage.setItem('recentChats_student', JSON.stringify(updated));
-                              return updated;
-                            });
-                          }}
-                          style={{ padding: 0, border: 'none', background: 'none', lineHeight: 0 }}
-                          tabIndex={-1}
-                          aria-label="Remove from recent chats"
-                        >
-                          <img src={closeIcon} alt="Remove" className="w-3 h-3" />
-                        </button>
+                          <strong className="text-sm">{user.lastname}, {user.firstname}</strong>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-gray-400 text-center mt-10 select-none">
+                        No users found
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            {/* If no search and no recent chats, show message */}
-            {searchTerm.trim() === "" && recentChats.length === 0 && (
-              <div className="p-3 rounded-lg bg-gray-100">
-                <p className="text-gray-600 text-center">No users available</p>
+                    )}
+                  </div>
+                )}
+                {/* Recent Chats */}
+                {searchTerm.trim() === "" && recentChats.length > 0 && (
+                  <div className="mt-2">
+                    <div className="text-xs text-gray-500 mb-2 pl-1">Recent Chats</div>
+                    <div className="space-y-2">
+                      {recentChats.map((user) => (
+                        <div
+                          key={user._id}
+                          className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
+                            selectedChat?._id === user._id && !isGroupChat ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                          }`}
+                          onClick={() => handleSelectChat(user)}
+                        >
+                          <span className="pr-10 min-w-0 truncate flex items-center gap-2">
+                            <img
+                              src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar}
+                              alt="Profile"
+                              className="w-8 h-8 rounded-full object-cover border"
+                              onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                            />
+                            <div className="flex flex-col min-w-0">
+                              <strong className="truncate text-sm">{user.lastname}, {user.firstname}</strong>
+                              {lastMessages[user._id] && (
+                                <span className="text-xs text-gray-500 truncate">
+                                  {lastMessages[user._id].prefix}{lastMessages[user._id].text}
+                                </span>
+                              )}
+                            </div>
+                          </span>
+                          <button
+                            className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity"
+                            title="Remove from recent chats"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setRecentChats(prev => {
+                                const updated = prev.filter(u => u._id !== user._id);
+                                localStorage.setItem('recentChats_student', JSON.stringify(updated));
+                                return updated;
+                              });
+                            }}
+                            style={{ padding: 0, border: 'none', background: 'none', lineHeight: 0 }}
+                            tabIndex={-1}
+                            aria-label="Remove from recent chats"
+                          >
+                            <img src={closeIcon} alt="Remove" className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* If no search and no recent chats, show message */}
+                {searchTerm.trim() === "" && recentChats.length === 0 && (
+                  <div className="p-3 rounded-lg bg-gray-100">
+                    <p className="text-gray-600 text-center text-sm">No users available</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Group Chats Tab */
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                {groups.length > 0 ? (
+                  groups.map((group) => (
+                    <div
+                      key={group._id}
+                      className={`p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
+                        selectedChat?._id === group._id && isGroupChat ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                      }`}
+                      onClick={() => handleSelectGroup(group)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-blue-900 text-white flex items-center justify-center text-xs font-bold">
+                          {group.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <strong className="truncate text-sm">{group.name}</strong>
+                          <span className="text-xs text-gray-500">
+                            {group.members?.length || 0} members
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-gray-400 text-center mt-10 select-none">
+                    <p className="text-sm">No groups available</p>
+                    <p className="text-xs mt-2">Create a new group or join an existing one</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Divider - Always show */}
+          {/* Divider */}
           <div className="w-px bg-black" />
 
-          {/* RIGHT PANEL - Always show */}
+          {/* RIGHT PANEL */}
           <div className="w-full md:w-2/3 flex flex-col p-4 overflow-hidden h-full">
-            {selectedChat && users.some(u => u._id === selectedChat._id) ? (
+            {selectedChat ? (
               <>
                 <div className="flex justify-between items-center mb-4 border-b border-black pb-4">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={selectedChat.profilePic ? `${API_BASE}/uploads/${selectedChat.profilePic}` : defaultAvatar}
-                      alt="Profile"
-                      className="w-10 h-10 rounded-full object-cover border"
-                      onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
-                    />
+                    {isGroupChat ? (
+                      <div className="w-10 h-10 rounded-full bg-blue-900 text-white flex items-center justify-center text-lg font-bold">
+                        {selectedChat.name.charAt(0).toUpperCase()}
+                      </div>
+                    ) : (
+                      <img
+                        src={selectedChat.profilePic ? `${API_BASE}/uploads/${selectedChat.profilePic}` : defaultAvatar}
+                        alt="Profile"
+                        className="w-10 h-10 rounded-full object-cover border"
+                        onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                      />
+                    )}
                     <div className="flex flex-col">
                       <h3 className="text-lg font-semibold">
-                        {selectedChat.lastname}, {selectedChat.firstname}
+                        {isGroupChat ? selectedChat.name : `${selectedChat.lastname}, ${selectedChat.firstname}`}
                       </h3>
+                      {isGroupChat && (
+                        <span className="text-xs text-gray-500">
+                          {selectedChat.members?.length || 0} members
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -680,6 +910,105 @@ export default function Student_Chats() {
             )}
           </div>
         </div>
+
+        {/* Create Group Modal */}
+        {showCreateGroupModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-semibold mb-4">Create New Group</h3>
+              <input
+                type="text"
+                placeholder="Group name"
+                className="w-full p-2 border rounded-lg mb-4"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+              />
+              <div className="max-h-40 overflow-y-auto mb-4">
+                <p className="text-sm text-gray-600 mb-2">Select members:</p>
+                {users
+                  .filter((user) => user._id !== currentUserId)
+                  .map((user) => (
+                    <label key={user._id} className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedGroupMembers.includes(user._id)}
+                        onChange={() => toggleMemberSelection(user._id)}
+                        className="rounded"
+                      />
+                      <img
+                        src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar}
+                        alt="Profile"
+                        className="w-6 h-6 rounded-full object-cover"
+                        onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                      />
+                      <span className="text-sm">{user.lastname}, {user.firstname}</span>
+                    </label>
+                  ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCreateGroup}
+                  disabled={!newGroupName.trim() || selectedGroupMembers.length === 0}
+                  className={`flex-1 py-2 rounded-lg text-sm ${
+                    newGroupName.trim() && selectedGroupMembers.length > 0
+                      ? "bg-blue-900 text-white"
+                      : "bg-gray-400 text-white cursor-not-allowed"
+                  }`}
+                >
+                  Create Group
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreateGroupModal(false);
+                    setNewGroupName("");
+                    setSelectedGroupMembers([]);
+                  }}
+                  className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Join Group Modal */}
+        {showJoinGroupModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-semibold mb-4">Join Group</h3>
+              <input
+                type="text"
+                placeholder="Enter group code"
+                className="w-full p-2 border rounded-lg mb-4"
+                value={joinGroupCode}
+                onChange={(e) => setJoinGroupCode(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleJoinGroup}
+                  disabled={!joinGroupCode.trim()}
+                  className={`flex-1 py-2 rounded-lg text-sm ${
+                    joinGroupCode.trim()
+                      ? "bg-green-600 text-white"
+                      : "bg-gray-400 text-white cursor-not-allowed"
+                  }`}
+                >
+                  Join Group
+                </button>
+                <button
+                  onClick={() => {
+                    setShowJoinGroupModal(false);
+                    setJoinGroupCode("");
+                  }}
+                  className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
