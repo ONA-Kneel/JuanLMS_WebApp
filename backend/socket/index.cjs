@@ -65,10 +65,10 @@ io.on("connection", (socket) => {
     socket.on("disconnect", () => {
         const user = activeUsers.find(user => user.socketId === socket.id);
         if (user) {
-            activeUsers = activeUsers.filter(user => user.socketId !== socket.id);
+        activeUsers = activeUsers.filter(user => user.socketId !== socket.id);
             // Clean up user groups
             delete userGroups[user.userId];
-            io.emit("getUsers", activeUsers);
+        io.emit("getUsers", activeUsers);
         }
     });
 })
