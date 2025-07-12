@@ -100,23 +100,41 @@ export default function Faculty_Dashboard() {
         </div>
 
         <h3 className="text-lg md:text-4xl font-bold mb-3">Current Term Classes</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {loading ? (
             <p>Loading...</p>
           ) : classes.length === 0 ? (
             <p>No classes found.</p>
           ) : (
             classes.map(cls => (
-              <a
-                href={`/faculty_class/${cls.classID}`}
+              <div
                 key={cls.classID}
-                className="relative bg-[#00418b] text-white p-4 md:p-6 rounded-2xl hover:bg-[#002b5c] transition flex flex-col justify-between"
-                style={{ textDecoration: 'none' }}
+                className="relative bg-white rounded-2xl shadow-md flex flex-col justify-baseline cursor-pointer overflow-hidden"
+                style={{ minHeight: '240px', borderRadius: '28px' }}
+                onClick={() => window.location.href = `/faculty_class/${cls.classID}`}
               >
-                <h4 className="text-base md:text-lg font-semibold">{cls.className}</h4>
-                
-                <img src={arrowRight} alt="Arrow" className="absolute top-4 right-4 w-5 h-5" />
-              </a>
+                {/* Image section */}
+                <div className="flex items-center justify-center bg-gray-500" style={{ height: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px' }}>
+                  {cls.image ? (
+                    <img
+                      src={cls.image.startsWith('/uploads/') ? `${API_BASE}${cls.image}` : cls.image}
+                      alt="Class"
+                      className="object-cover w-full h-full"
+                      style={{ maxHeight: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}
+                    />
+                  ) : (
+                    <span className="text-white text-xl font-bold">image</span>
+                  )}
+                </div>
+                {/* Info section */}
+                <div className="flex items-center justify-between bg-[#00418b] px-6 py-4" style={{ borderRadius: 0, borderBottomLeftRadius: '28px', borderBottomRightRadius: '28px', marginTop: 0 }}>
+                  <div>
+                    <div className="text-lg font-bold text-white">{cls.className || 'Subject Name'}</div>
+                    <div className="text-white text-base">{cls.classCode || 'Section Name'}</div>
+                  </div>
+                  <img src={arrowRight} alt="Arrow" className="w-6 h-6" />
+                </div>
+              </div>
             ))
           )}
         </div>

@@ -9,19 +9,26 @@ const router = express.Router();
 // Get all student assignments (can be filtered by termId)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { termId } = req.query;
+    const { termId, sectionName, status, schoolYear, studentId } = req.query;
     let query = {};
-    if (termId) {
-      query.termId = termId;
-    }
+    if (termId) query.termId = termId;
+    if (sectionName) query.sectionName = sectionName;
+    if (status) query.status = status;
+    if (schoolYear) query.schoolYear = schoolYear;
+    if (studentId) query.studentId = studentId;
+
     const assignments = await StudentAssignment.find(query).populate('studentId');
 
     // Transform data to include student names directly
     const transformedAssignments = [];
     assignments.forEach(assignment => {
-      if (assignment.studentId) { // Ensure studentId is populated
+      if (
+        assignment.studentId &&
+        assignment.studentId.firstname &&
+        assignment.studentId.lastname
+      ) {
         transformedAssignments.push({
-          _id: assignment._id, // ID of the assignment document
+          _id: assignment._id,
           studentId: assignment.studentId._id,
           studentName: `${assignment.studentId.firstname} ${assignment.studentId.lastname}`,
           gradeLevel: assignment.gradeLevel,
@@ -29,7 +36,12 @@ router.get('/', authenticateToken, async (req, res) => {
           strandName: assignment.strandName,
           sectionName: assignment.sectionName,
           termId: assignment.termId,
-          status: assignment.status // Include the status field
+          status: assignment.status,
+          schoolID: assignment.studentId.schoolID,
+          email: assignment.studentId.email,
+          middlename: assignment.studentId.middlename,
+          firstname: assignment.studentId.firstname,
+          lastname: assignment.studentId.lastname,
         });
       }
     });

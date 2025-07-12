@@ -119,18 +119,18 @@ export default function Faculty_Classes() {
             classes.map(cls => (
               <div
                 key={cls.classID}
-                className="relative bg-white rounded-2xl shadow-md flex flex-col justify-between cursor-pointer overflow-hidden"
+                className="relative bg-white rounded-2xl shadow-md flex flex-col justify-baseline cursor-pointer overflow-hidden"
                 style={{ minHeight: '240px', borderRadius: '28px' }}
                 onClick={() => navigate(`/faculty_class/${cls.classID}`)}
               >
                 {/* Image section */}
-                <div className="flex items-center justify-center bg-gray-500" style={{ height: '120px' }}>
+                <div className="flex items-center justify-center bg-gray-500" style={{ height: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px' }}>
                   {cls.image ? (
                     <img
                       src={cls.image.startsWith('/uploads/') ? `${API_BASE}${cls.image}` : cls.image}
                       alt="Class"
                       className="object-cover w-full h-full"
-                      style={{ maxHeight: '120px' }}
+                      style={{ height: '100%', width: '100%', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', borderBottomLeftRadius: 0, borderBottomRightRadius: 0, display: 'block' }}
                     />
                   ) : (
                     <span className="text-white text-xl font-bold">image</span>

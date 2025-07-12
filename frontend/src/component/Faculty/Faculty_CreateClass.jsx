@@ -12,7 +12,6 @@ export default function FacultyCreateClass() {
   const [students, setStudents] = useState([]);
   const [error, setError] = useState("");
   const [selectedStudents, setSelectedStudents] = useState([]);
-  const [classDesc, setClassDesc] = useState("");
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchMessage, setBatchMessage] = useState('');
   const [selectedGradeLevel, setSelectedGradeLevel] = useState("");
@@ -145,6 +144,27 @@ export default function FacultyCreateClass() {
     fetchActiveTermForYear();
   }, [academicYear]);
 
+  useEffect(() => {
+    async function fetchSectionStudents() {
+      if (!selectedSection || !currentTerm || !academicYear) {
+        setSelectedStudents([]);
+        return;
+      }
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `${API_BASE}/api/student-assignments?termId=${currentTerm._id}&sectionName=${selectedSection}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}&status=active`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.ok) {
+        const assignments = await res.json();
+        setSelectedStudents(assignments.map(a => a.studentId));
+      } else {
+        setSelectedStudents([]);
+      }
+    }
+    fetchSectionStudents();
+  }, [selectedSection, currentTerm, academicYear]);
+
   const handleSearch = async (e) => {
     const query = e.target.value;
     setStudentName(query);
@@ -194,10 +214,29 @@ export default function FacultyCreateClass() {
     }
   };
 
-  const handleAddStudent = (student) => {
-    setSelectedStudents(prev => [...prev, student]);
-    setStudentName("");
-    setStudents([]);
+  // Helper to check if a student is assigned to the selected section
+  async function isStudentAssignedToSection(studentId) {
+    if (!selectedSection || !currentTerm || !academicYear) return false;
+    const token = localStorage.getItem('token');
+    const res = await fetch(
+      `${API_BASE}/api/student-assignments?studentId=${studentId}&termId=${currentTerm._id}&sectionName=${selectedSection}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}&status=active`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const assignments = await res.json();
+    return assignments.length > 0;
+  }
+
+  // Update handleAddStudent to check assignment
+  const handleAddStudent = async (student) => {
+    const assigned = await isStudentAssignedToSection(student._id);
+    if (assigned) {
+      setSelectedStudents(prev => [...prev, student]);
+      setStudentName("");
+      setStudents([]);
+      setError("");
+    } else {
+      setError("Student is not assigned to this section.");
+    }
   };
 
   const handleRemoveStudent = (studentId) => {
@@ -208,12 +247,13 @@ export default function FacultyCreateClass() {
     // Generate classID: C + 3 random digits
     const randomNum = Math.floor(100 + Math.random() * 900);
     const classID = `C${randomNum}`;
-    const members = selectedStudents.map(s => s.userID);
+    // Use userID if present, otherwise _id, and filter out any falsy values
+    const members = selectedStudents.map(s => s.userID || s._id).filter(Boolean);
     const facultyID = localStorage.getItem("userID"); // get the faculty's userID
     const token = localStorage.getItem("token"); // or whatever you use for auth
 
     // Use dropdown values for className and classCode
-    if (!selectedSubject || !selectedSection || !classDesc || members.length === 0) {
+    if (!selectedSubject || !selectedSection || members.length === 0) {
       alert("Please fill in all fields and add at least one member.");
       return;
     }
@@ -222,7 +262,6 @@ export default function FacultyCreateClass() {
     formData.append('classID', classID);
     formData.append('className', selectedSubject);
     formData.append('classCode', selectedSection);
-    formData.append('classDesc', classDesc);
     formData.append('members', JSON.stringify(members));
     formData.append('facultyID', facultyID);
     if (classImage) {
@@ -241,7 +280,6 @@ export default function FacultyCreateClass() {
         alert("Class created successfully!");
         setSelectedSubject("");
         setSelectedSection("");
-        setClassDesc("");
         setSelectedStudents([]);
         setClassImage(null);
       } else {
@@ -254,6 +292,7 @@ export default function FacultyCreateClass() {
     }
   };
 
+  // Update batch upload logic
   const handleBatchUpload = async (e) => {
     setBatchLoading(true);
     setBatchMessage('');
@@ -272,10 +311,11 @@ export default function FacultyCreateClass() {
       const json = XLSX.utils.sheet_to_json(worksheet);
 
       let added = 0;
+      let skipped = 0;
+      let skippedNames = [];
       for (const row of json) {
         const email = (row.Email || row["email"] || row["School Email"] || row["school email"] || "").trim();
         if (!email) {
-          console.log('No email found in row:', row);
           continue;
         }
         try {
@@ -283,19 +323,27 @@ export default function FacultyCreateClass() {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
           const users = await res.json();
-          const found = users[0]; // Use the first user returned
+          const found = users[0];
           if (found && !selectedStudents.some(s => s._id === found._id)) {
-            setSelectedStudents(prev => [...prev, found]);
-            added++;
-          } else {
-            console.log('No match for:', email, 'in', users);
+            const assigned = await isStudentAssignedToSection(found._id);
+            if (assigned) {
+              setSelectedStudents(prev => [...prev, found]);
+              added++;
+            } else {
+              skipped++;
+              skippedNames.push(`${found.lastname}, ${found.firstname}`);
+            }
           }
         } catch {
-          console.error("Error searching for user:");
+          // skip on error
         }
       }
       setBatchLoading(false);
-      setBatchMessage(added > 0 ? `${added} member(s) added from Excel.` : 'No matching users found.');
+      let msg = added > 0 ? `${added} member(s) added from Excel.` : '';
+      if (skipped > 0) {
+        msg += ` ${skipped} not added (not assigned to this section): ${skippedNames.join(', ')}`;
+      }
+      setBatchMessage(msg);
     };
     reader.readAsBinaryString(file);
   };
@@ -319,144 +367,168 @@ export default function FacultyCreateClass() {
         </div>
         <h3 className="text-4xl font-bold mt-5">Create Class</h3>
 
-        <div className="mt-6 flex flex-col space-y-6 ml-5">
-          {/* Add image upload field above the subject dropdown */}
-          <label className="text-xl font-bold">Class Image</label>
-          <input
-            type="file"
-            accept="image/*"
-            className="w-1/2 px-3 py-2 border rounded"
-            onChange={e => setClassImage(e.target.files[0])}
-          />
-          {/* Subject Dropdown (Class Name) */}
-          <label className="text-xl font-bold">Class Name (Subject)</label>
-          <select
-            className="w-1/2 px-3 py-2 border rounded"
-            value={selectedSubject}
-            onChange={e => setSelectedSubject(e.target.value)}
-            disabled={!selectedGradeLevel}
-          >
-            <option value="">Select Subject</option>
-            {subjects.map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          {/* Section Dropdown (Class Code) */}
-          <label className="text-xl font-bold">Class Code (Section)</label>
-          <select
-            className="w-1/2 px-3 py-2 border rounded"
-            value={selectedSection}
-            onChange={e => setSelectedSection(e.target.value)}
-            disabled={!selectedSubject}
-          >
-            <option value="">Select Section</option>
-            {sections.map(sec => (
-              <option key={sec} value={sec}>{sec}</option>
-            ))}
-          </select>
-          {/* Class Description */}
-          <label className="text-4xl font-bold mt-5" htmlFor="classDescription">Class Description</label>
-          <textarea
-            id="classDescription"
-            placeholder="Enter class description..."
-            className="w-1/2 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#00418b] text-base resize-none"
-            rows={3}
-            value={classDesc}
-            onChange={e => setClassDesc(e.target.value)}
-          />
-
-          <h3 className="text-4xl font-bold mt-5">Members</h3>
-          {/* Batch Upload Input */}
-          <p className=" font-bold ">
-            Batch Upload Members (Excel File)
-            {batchLoading && <p className="text-blue-600">Processing batch upload...</p>}
-            {batchMessage && <p className="text-green-600">{batchMessage}</p>}
+        {/* Responsive form layout to reduce right white space */}
+        <div className="mt-6 flex flex-col md:flex-row md:space-x-8 space-y-6 md:space-y-0 ml-5">
+          {/* Left column: image upload and batch upload */}
+          <div className="flex-1 flex flex-col space-y-6">
+            <label className="text-xl font-bold">Class Image</label>
             <input
               type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleBatchUpload}
-              className="mb-4 pl-2 bg-blue-950 font-normal text-white rounded-md"
-              
+              accept="image/*"
+              className="w-full px-3 py-2 border rounded"
+              onChange={e => setClassImage(e.target.files[0])}
             />
-          </p>
-
-          <input
-            type="text"
-            placeholder="Enter Student Name"
-            className="w-1/2 px-0 pb-2 text-xl border-b-2 border-black focus:outline-none transition-colors"
-            value={studentName}
-            onChange={handleSearch}
-            onFocus={(e) => (e.target.style.borderBottomColor = "#00418b")}
-            onBlur={(e) => (e.target.style.borderBottomColor = "black")}
-          />
-
-          <div className="mt-4 w-1/2">
-            {error && <p className="text-red-500">{error}</p>}
-            <ul className="space-y-2 w-full">
-              {students.map((student) => (
-                <li
-                  key={student._id}
-                  className="flex items-center bg-gray-300 hover:bg-gray-400 transition-colors cursor-pointer px-4 py-2 rounded font-poppinsr"
-                  onClick={() => handleAddStudent(student)}
-                >
-                  <span className="font-bold mr-2">{student.lastname}, {student.firstname}</span>
-                </li>
+            <label className="text-xl font-bold">Class Code (Section)</label>
+            <select
+              className="w-full px-3 py-2 border rounded"
+              value={selectedSection}
+              onChange={e => setSelectedSection(e.target.value)}
+              disabled={!selectedSubject}
+            >
+              <option value="">Select Section</option>
+              {sections.map(sec => (
+                <option key={sec} value={sec}>{sec}</option>
               ))}
-            </ul>
+            </select>
           </div>
-
-          {selectedStudents.length > 0 && (
-            <div className="mt-4">
-              <h4 className="font-semibold mb-4">Class Members:</h4>
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="p-3 border w-1/6">User ID</th>
-                      <th className="p-3 border w-1/6">Last Name</th>
-                      <th className="p-3 border w-1/6">First Name</th>
-                      <th className="p-3 border w-1/6">Middle Name</th>
-                      <th className="p-3 border w-1/6">Email</th>
-                      <th className="p-3 border w-1/6">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedStudents.map((student) => (
-                      <tr key={student._id}>
-                        <td className="p-3 border">{student.userID || '-'}</td>
-                        <td className="p-3 border">{student.lastname}</td>
-                        <td className="p-3 border">{student.firstname}</td>
-                        <td className="p-3 border">{student.middlename}</td>
-                        <td className="p-3 border">{student.email}</td>
-                        <td className="p-3 border">
-                          <button
-                            onClick={() => handleRemoveStudent(student._id)}
-                            className="bg-white hover:bg-gray-200 text-red-600 rounded px-2 py-1 text-xs"
-                            style={{ transition: 'background 0.2s' }}
-                          >
-                            <img src={archiveIcon} alt="Remove" className="w-8 h-8 inline-block" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          {/* Right column: selects */}
+          <div className="flex-1 flex flex-col space-y-6">
+            <label className="text-xl font-bold">Class Name (Subject)</label>
+            <select
+              className="w-full px-3 py-2 border rounded"
+              value={selectedSubject}
+              onChange={e => setSelectedSubject(e.target.value)}
+              disabled={!selectedGradeLevel}
+            >
+              <option value="">Select Subject</option>
+              {subjects.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            
+          </div>
         </div>
-      </div>
-      <div className="fixed bottom-8 right-8 z-50 flex flex-col items-center">
-        <button
-          className="bg-blue-900 hover:bg-blue-800 rounded-full w-20 h-20 flex items-center justify-center shadow-lg transition-colors"
+
+          <h3 className="text-4xl font-bold mt-10 mb-7">Members</h3>
+          {/* Batch Upload Input - restyled to match Bulk Assign Students UI */}
+          <div className="md:space-x-8 space-y-6 md:space-y-0 ml-5">
+
+          
+            <div className="border rounded-lg p-4 bg-white mb-4 w-full ">
+              <div className="font-bold mb-2">Bulk Assign Students</div>
+              <div className="text-sm text-gray-600 mb-2">Upload Excel File</div>
+              <div className="flex items-center gap-4 mb-2">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleBatchUpload}
+                  className="border rounded px-2 py-1 text-sm w-full"
+                />
+                <button
+                  type="button"
+                  className="bg-blue-900 hover:bg-blue-800 text-white font-semibold rounded px-4 py-2 text-sm"
+                  onClick={() => window.open('/path/to/template.xlsx', '_blank')}
+                >
+                  Download Template
+                </button>
+              </div>
+              {batchLoading && <span className="text-blue-600 block mt-2">Processing batch upload...</span>}
+              {batchMessage && <span className="text-green-600 block mt-2">{batchMessage}</span>}
+              
+            </div>
+            <div className="flex items-center my-4">
+                <div className="flex-grow border-t border-gray-300"></div>
+                <span className="mx-4 text-gray-400 text-sm">Or assign manually</span>
+                <div className="flex-grow border-t border-gray-300"></div>
+              </div>
+
+            {/* Manual Student Name Input - styled */}
+            <label className="block text-gray-700 text-sm font-semibold mb-1 mt-2">Student Name</label>
+            <input
+              type="text"
+              placeholder="Search Student..."
+              className="w-full px-3 py-2 rounded border border-gray-300 bg-gray-50 text-base focus:outline-none focus:ring-2 focus:ring-[#00418b] mb-4"
+              value={studentName}
+              onChange={handleSearch}
+            />
+
+              <div className="mt-4 w-1/2">
+                {error && <p className="text-red-500">{error}</p>}
+                <ul className="space-y-2 w-full">
+                  {students.map((student) => (
+                    <li
+                      key={student._id}
+                      className="flex items-center bg-gray-300 hover:bg-gray-400 transition-colors cursor-pointer px-4 py-2 rounded font-poppinsr"
+                      onClick={() => handleAddStudent(student)}
+                    >
+                      <span className="font-bold mr-2">{student.lastname}, {student.firstname}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {selectedStudents.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-semibold mb-4">Class Members:</h4>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="p-3 border w-1/6">School ID</th>
+                          <th className="p-3 border w-1/6">Last Name</th>
+                          <th className="p-3 border w-1/6">First Name</th>
+                          <th className="p-3 border w-1/6">Middle Name</th>
+                          <th className="p-3 border w-1/6">Section</th>
+                          <th className="p-3 border w-1/6">Email</th>
+                          <th className="p-3 border w-1/6">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedStudents
+                          .filter(student => student && student.firstname && student.lastname)
+                          .map(student => (
+                            <tr key={student._id}>
+                              <td className="p-3 border">{student.schoolID || '-'}</td>
+                              <td className="p-3 border">{student.lastname}</td>
+                              <td className="p-3 border">{student.firstname}</td>
+                              <td className="p-3 border">{student.middlename}</td>
+                              <td className="p-3 border">{selectedSection || '-'}</td>
+                              <td className="p-3 border">{student.email}</td>
+                              <td className="p-3 border">
+                                <button
+                                  onClick={() => handleRemoveStudent(student._id)}
+                                  className="bg-white hover:bg-gray-200 text-red-600 rounded px-2 py-1 text-xs"
+                                  style={{ transition: 'background 0.2s' }}
+                                >
+                                  <img src={archiveIcon} alt="Remove" className="w-8 h-8 inline-block" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          <button
+          className="bg-blue-900 hover:bg-blue-800 rounded-2xl  w-full h-15 flex items-center justify-center shadow-lg transition-colors mt-10"
           style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
           onClick={handleCreateClass}
           disabled={batchLoading}
         >
-          <img src={createEventIcon} alt="Create" className="w-10 h-10" />
+          <img src={createEventIcon} alt="Create" className="w-7 h-7 mr-2" />
+          <span className="mt-2 font-semibold text-white">Create</span>
         </button>
-        <span className="mt-2 font-semibold text-blue-900">Create</span>
+        
+        </div>
+
+        
+      
+        
+
       </div>
-    </div>
+      
+
   );
 }

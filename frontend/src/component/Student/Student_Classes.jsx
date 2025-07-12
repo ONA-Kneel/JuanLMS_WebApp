@@ -111,12 +111,31 @@ export default function Student_Classes() {
             classes.map(cls => (
               <div
                 key={cls.classID}
-                className="relative bg-[#00418b] text-white p-4 md:p-6 rounded-2xl hover:bg-[#002b5c] transition flex flex-col justify-between cursor-pointer"
+                className="relative bg-white rounded-2xl shadow-md flex flex-col justify-baseline cursor-pointer overflow-hidden"
+                style={{ minHeight: '240px', borderRadius: '28px' }}
                 onClick={() => navigate(`/student_class/${cls.classID}`)}
               >
-                <h4 className="text-base md:text-lg font-semibold">{cls.className}</h4>
-                <p className="text-sm mt-1">{cls.classCode}</p>
-                <img src={arrowRight} alt="Arrow" className="absolute top-4 right-4 w-5 h-5" />
+                {/* Image section */}
+                <div className="flex items-center justify-center bg-gray-500" style={{ height: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px' }}>
+                  {cls.image ? (
+                    <img
+                      src={cls.image.startsWith('/uploads/') ? `${API_BASE}${cls.image}` : cls.image}
+                      alt="Class"
+                      className="object-cover w-full h-full"
+                      style={{ maxHeight: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}
+                    />
+                  ) : (
+                    <span className="text-white text-xl font-bold">image</span>
+                  )}
+                </div>
+                {/* Info section */}
+                <div className="flex items-center justify-between bg-[#00418b] px-6 py-4" style={{ borderRadius: 0, borderBottomLeftRadius: '28px', borderBottomRightRadius: '28px', marginTop: 0 }}>
+                  <div>
+                    <div className="text-lg font-bold text-white">{cls.className || 'Subject Name'}</div>
+                    <div className="text-white text-base">{cls.classCode || 'Section Name'}</div>
+                  </div>
+                  <img src={arrowRight} alt="Arrow" className="w-6 h-6" />
+                </div>
               </div>
             ))
           )}
