@@ -18,7 +18,7 @@ export default function Admin_Chats() {
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [lastMessages, setLastMessages] = useState({});
-  const [recentChats] = useState(() => {
+  const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
     const stored = localStorage.getItem("recentChats_admin");
     return stored ? JSON.parse(stored) : [];
@@ -40,6 +40,10 @@ export default function Admin_Chats() {
   // Add state for member search
   const [memberSearchTerm, setMemberSearchTerm] = useState("");
   const [users, setUsers] = useState([]);
+
+  // Add state for new individual chat
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [userSearchTerm, setUserSearchTerm] = useState("");
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -150,8 +154,23 @@ export default function Admin_Chats() {
 
   // ================= FETCH USERS =================
   useEffect(() => {
-    setSelectedChat(null);
-    localStorage.removeItem("selectedChatId_admin");
+    const fetchUsers = async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/users`);
+        // Support both array and paginated object
+        const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
+        setUsers(userArray);
+        setSelectedChat(null);
+        localStorage.removeItem("selectedChatId_admin");
+      } catch (err) {
+        if (err.response && err.response.status === 401) {
+          window.location.href = '/';
+        } else {
+          console.error("Error fetching users:", err);
+        }
+      }
+    };
+    fetchUsers();
   }, [currentUserId]);
 
   // ================= FETCH MESSAGES =================
@@ -253,6 +272,19 @@ export default function Admin_Chats() {
 
   const openFilePicker = () => {
     fileInputRef.current.click();
+  };
+
+  // Handle starting a new chat with a user
+  const handleStartNewChat = (user) => {
+    setSelectedChat(user);
+    // Add to recentChats if not already present
+    if (!recentChats.some(c => c._id === user._id)) {
+      const updated = [user, ...recentChats];
+      setRecentChats(updated);
+      localStorage.setItem("recentChats_admin", JSON.stringify(updated));
+    }
+    setShowNewChatModal(false);
+    setUserSearchTerm("");
   };
 
   // Keep recentChats in sync with localStorage
@@ -504,7 +536,7 @@ export default function Admin_Chats() {
 
       const sentMessage = res.data;
 
-      socket.current?.emit("sendGroupMessage", {
+      socket.current.emit("sendGroupMessage", {
         senderId: currentUserId,
         groupId: selectedChat._id,
         text: sentMessage.message,
@@ -523,13 +555,7 @@ export default function Admin_Chats() {
     }
   };
 
-  const toggleParticipant = (userId) => {
-    setSelectedParticipants(prev => 
-      prev.includes(userId) 
-        ? prev.filter(id => id !== userId)
-        : [...prev, userId]
-    );
-  };
+
 
   // Merge recentChats and userGroups into a single unified list
   const unifiedChats = [
@@ -543,17 +569,38 @@ export default function Admin_Chats() {
     return new Date(bTime) - new Date(aTime);
   });
 
-  // Update search to filter both users and groups
-  const filteredUnifiedChats = searchTerm.trim() === '' ? unifiedChats : unifiedChats.filter(chat => {
-    if (chat.type === 'individual') {
-      return (
-        chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    } else {
-      return chat.name?.toLowerCase().includes(searchTerm.toLowerCase());
-    }
-  });
+  // Enhanced search that includes all users and existing chats
+  const searchResults = searchTerm.trim() === '' ? [] : [
+    // First show existing chats/groups that match
+    ...unifiedChats.filter(chat => {
+      if (chat.type === 'individual') {
+        return (
+          chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      } else {
+        return chat.name?.toLowerCase().includes(searchTerm.toLowerCase());
+      }
+    }),
+    // Then show users not in recent chats that match
+    ...users
+      .filter(user => user._id !== currentUserId)
+      .filter(user => !recentChats.some(chat => chat._id === user._id))
+      .filter(user =>
+        user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
+  ];
+
+  // Filter users for new chat modal
+  const filteredUsersForNewChat = users
+    .filter(user => user._id !== currentUserId)
+    .filter(user => !recentChats.some(chat => chat._id === user._id))
+    .filter(user =>
+      user.firstname?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+      user.lastname?.toLowerCase().includes(userSearchTerm.toLowerCase())
+    );
 
   // Unified chat interface with tabs, left/right panels, and modals
   return (
@@ -617,60 +664,140 @@ export default function Admin_Chats() {
                 )}
               </div>
             </div>
+
+            {/* New Chat Button */}
+            <div className="mb-4">
+              <button
+                onClick={() => setShowNewChatModal(true)}
+                className="w-full bg-blue-900 text-white py-2 px-4 rounded-lg hover:bg-blue-800 transition-colors text-sm"
+              >
+                Start New Chat
+              </button>
+            </div>
+
             {/* Unified Chat List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {filteredUnifiedChats.length > 0 ? (
-                filteredUnifiedChats.map((chat) => (
-                  <div
-                    key={chat._id}
-                    className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                      selectedChat?._id === chat._id && ((selectedChat.isGroup && chat.type === 'group') || (!selectedChat.isGroup && chat.type === 'individual')) ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
-                    }`}
-                    onClick={() => {
-                      if (chat.type === 'group') {
-                        setSelectedChat({ ...chat, isGroup: true });
-                        localStorage.setItem("selectedChatId_admin", chat._id);
-                      } else {
-                        setSelectedChat(chat);
-                        localStorage.setItem("selectedChatId_admin", chat._id);
-                      }
-                    }}
-                  >
-                    {chat.type === 'group' ? (
-                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                        <span className="material-icons">groups</span>
-                      </div>
-                    ) : (
-                      <img
-                        src={chat.profilePic ? `${API_BASE}/uploads/${chat.profilePic}` : defaultAvatar}
-                        alt="Profile"
-                        className="w-8 h-8 rounded-full object-cover border"
-                        onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
-                      />
-                    )}
-                    <div className="flex flex-col min-w-0 ml-2">
-                      <strong className="truncate text-sm">
-                        {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
-                      </strong>
+              {searchTerm.trim() === '' ? (
+                // Show normal chat list when not searching
+                unifiedChats.length > 0 ? (
+                  unifiedChats.map((chat) => (
+                    <div
+                      key={chat._id}
+                      className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
+                        selectedChat?._id === chat._id && ((selectedChat.isGroup && chat.type === 'group') || (!selectedChat.isGroup && chat.type === 'individual')) ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                      }`}
+                      onClick={() => {
+                        if (chat.type === 'group') {
+                          setSelectedChat({ ...chat, isGroup: true });
+                          localStorage.setItem("selectedChatId_admin", chat._id);
+                        } else {
+                          setSelectedChat(chat);
+                          localStorage.setItem("selectedChatId_admin", chat._id);
+                        }
+                      }}
+                    >
                       {chat.type === 'group' ? (
-                        <span className="text-xs text-gray-500">{chat.participants?.length || 0} participants</span>
+                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                          <span className="material-icons">groups</span>
+                        </div>
                       ) : (
-                        lastMessages[chat._id] && (
-                          <span className="text-xs text-gray-500 truncate">
-                            {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
-                          </span>
-                        )
+                        <img
+                          src={chat.profilePic ? `${API_BASE}/uploads/${chat.profilePic}` : defaultAvatar}
+                          alt="Profile"
+                          className="w-8 h-8 rounded-full object-cover border"
+                          onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                        />
+                      )}
+                      <div className="flex flex-col min-w-0 ml-2">
+                        <strong className="truncate text-sm">
+                          {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
+                        </strong>
+                        {chat.type === 'group' ? (
+                          <span className="text-xs text-gray-500">{chat.participants?.length || 0} participants</span>
+                        ) : (
+                          lastMessages[chat._id] && (
+                            <span className="text-xs text-gray-500 truncate">
+                              {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
+                            </span>
+                          )
+                        )}
+                      </div>
+                      {chat.type === 'group' && (
+                        <span className="ml-2 text-blue-900 text-xs font-bold">Group</span>
                       )}
                     </div>
-                    {chat.type === 'group' && (
-                      <span className="ml-2 text-blue-900 text-xs font-bold">Group</span>
-                    )}
+                  ))
+                ) : (
+                  <div className="text-gray-400 text-center mt-10 select-none">
+                    No chats found
                   </div>
-                ))
+                )
               ) : (
-                <div className="text-gray-400 text-center mt-10 select-none">
-                  No chats found
-                </div>
+                // Show search results when searching
+                searchResults.length > 0 ? (
+                  searchResults.map((item) => (
+                    <div
+                      key={item._id}
+                      className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
+                        selectedChat?._id === item._id ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                      }`}
+                      onClick={() => {
+                        if (item.isNewUser) {
+                          // Start new chat with this user
+                          handleStartNewChat(item);
+                          setSearchTerm(""); // Clear search after selecting
+                        } else if (item.type === 'group') {
+                          setSelectedChat({ ...item, isGroup: true });
+                          localStorage.setItem("selectedChatId_admin", item._id);
+                          setSearchTerm(""); // Clear search after selecting
+                        } else {
+                          setSelectedChat(item);
+                          localStorage.setItem("selectedChatId_admin", item._id);
+                          setSearchTerm(""); // Clear search after selecting
+                        }
+                      }}
+                    >
+                      {item.type === 'group' ? (
+                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                          <span className="material-icons">groups</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={item.profilePic ? `${API_BASE}/uploads/${item.profilePic}` : defaultAvatar}
+                          alt="Profile"
+                          className="w-8 h-8 rounded-full object-cover border"
+                          onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                        />
+                      )}
+                      <div className="flex flex-col min-w-0 ml-2">
+                        <strong className="truncate text-sm">
+                          {item.type === 'group' ? item.name : `${item.lastname}, ${item.firstname}`}
+                        </strong>
+                        {item.isNewUser ? (
+                          <span className="text-xs text-blue-600">Click to start new chat</span>
+                        ) : item.type === 'group' ? (
+                          <span className="text-xs text-gray-500">{item.participants?.length || 0} participants</span>
+                        ) : (
+                          lastMessages[item._id] && (
+                            <span className="text-xs text-gray-500 truncate">
+                              {lastMessages[item._id].prefix}{lastMessages[item._id].text}
+                            </span>
+                          )
+                        )}
+                      </div>
+                      {item.type === 'group' && (
+                        <span className="ml-2 text-blue-900 text-xs font-bold">Group</span>
+                      )}
+                      {item.isNewUser && (
+                        <span className="ml-2 text-green-600 text-xs font-bold">New</span>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-gray-400 text-center mt-10 select-none">
+                    No users or groups found
+                  </div>
+                )
               )}
             </div>
           </div>
@@ -822,6 +949,59 @@ export default function Admin_Chats() {
           </div>
         </div>
 
+        {/* New Chat Modal */}
+        {showNewChatModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-semibold mb-4">Start New Chat</h3>
+              <input
+                type="text"
+                placeholder="Search users by name..."
+                className="w-full p-2 border rounded-lg mb-4"
+                value={userSearchTerm}
+                onChange={(e) => setUserSearchTerm(e.target.value)}
+              />
+              <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg">
+                {filteredUsersForNewChat.length === 0 ? (
+                  <div className="text-gray-400 text-center p-4 text-sm">
+                    {userSearchTerm.trim() === "" ? "Start typing to search users" : "No users found"}
+                  </div>
+                ) : (
+                  filteredUsersForNewChat.map(user => (
+                    <div
+                      key={user._id}
+                      className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded cursor-pointer border-b border-gray-100"
+                      onClick={() => handleStartNewChat(user)}
+                    >
+                      <img
+                        src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar}
+                        alt="Profile"
+                        className="w-10 h-10 rounded-full object-cover border"
+                        onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                      />
+                      <div>
+                        <div className="font-semibold text-sm">{user.lastname}, {user.firstname}</div>
+                        <div className="text-xs text-gray-500 capitalize">{user.role}</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => {
+                    setShowNewChatModal(false);
+                    setUserSearchTerm("");
+                  }}
+                  className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Create Group Modal */}
         {showCreateGroup && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -900,6 +1080,7 @@ export default function Admin_Chats() {
                     }
                   </div>
                 )}
+                
                 <div className="flex gap-2">
                   <button
                     onClick={handleCreateGroup}

@@ -9,6 +9,7 @@ let userGroups = {}; // Track which groups each user is in
 
 io.on("connection", (socket) => {
     socket.on("addUser", (userId) => {
+        socket.userId = userId; // Store userId on socket for later use
         if (!activeUsers.some(user => user.userId === userId)) {
             activeUsers.push({ 
                 userId, 
@@ -60,6 +61,38 @@ io.on("connection", (socket) => {
             text,
             fileUrl
         });
+    });
+
+    // Handle group creation
+    socket.on("createGroup", (groupData) => {
+        // Join the group room for the creator
+        socket.join(groupData._id);
+        if (!userGroups[socket.userId]) {
+            userGroups[socket.userId] = [];
+        }
+        if (!userGroups[socket.userId].includes(groupData._id)) {
+            userGroups[socket.userId].push(groupData._id);
+        }
+        
+        // Emit groupCreated event to the creator
+        socket.emit("groupCreated", groupData);
+        console.log(`Group created: ${groupData._id}`);
+    });
+
+    // Handle group joining
+    socket.on("joinGroup", (groupData) => {
+        // Join the group room
+        socket.join(groupData._id);
+        if (!userGroups[socket.userId]) {
+            userGroups[socket.userId] = [];
+        }
+        if (!userGroups[socket.userId].includes(groupData._id)) {
+            userGroups[socket.userId].push(groupData._id);
+        }
+        
+        // Emit groupJoined event to the joiner
+        socket.emit("groupJoined", groupData);
+        console.log(`User joined group: ${groupData._id}`);
     });
 
     socket.on("disconnect", () => {

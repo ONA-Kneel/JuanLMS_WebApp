@@ -256,6 +256,45 @@ router.post('/:groupId/remove-admin', async (req, res) => {
   }
 });
 
+// --- POST /:groupId/remove-member - Remove a member (only group creator can do this) ---
+router.post('/:groupId/remove-member', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { userId, memberId } = req.body;
+
+    const groupChat = await GroupChat.findById(groupId);
+    if (!groupChat || !groupChat.isActive) {
+      return res.status(404).json({ error: 'Group chat not found' });
+    }
+
+    if (groupChat.getDecryptedCreatedBy() !== userId) {
+      return res.status(403).json({ error: 'Only the group creator can remove members' });
+    }
+
+    if (memberId === groupChat.getDecryptedCreatedBy()) {
+      return res.status(400).json({ error: 'Cannot remove the group creator' });
+    }
+
+    if (!groupChat.isParticipant(memberId)) {
+      return res.status(400).json({ error: 'User is not a participant' });
+    }
+
+    if (!groupChat.removeParticipant(memberId)) {
+      return res.status(400).json({ error: 'Failed to remove member' });
+    }
+
+    await groupChat.save();
+    res.json({
+      message: 'Member removed successfully',
+      participants: groupChat.getDecryptedParticipants(),
+      admins: groupChat.getDecryptedAdmins(),
+    });
+  } catch (err) {
+    console.error('Error removing member:', err);
+    res.status(500).json({ error: 'Server error removing member' });
+  }
+});
+
 // --- DELETE /:groupId - Delete group chat (only creator can do this) ---
 router.delete('/:groupId', async (req, res) => {
   try {

@@ -19,7 +19,7 @@ export default function Faculty_Chats() {
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [lastMessages, setLastMessages] = useState({});
-  const [recentChats] = useState(() => {
+  const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
     const stored = localStorage.getItem("recentChats_faculty");
     return stored ? JSON.parse(stored) : [];
@@ -40,6 +40,18 @@ export default function Faculty_Chats() {
 
   // Add state for member search
   const [memberSearchTerm, setMemberSearchTerm] = useState("");
+  
+  // Add state for leave group confirmation
+  const [showLeaveGroupModal, setShowLeaveGroupModal] = useState(false);
+  const [groupToLeave, setGroupToLeave] = useState(null);
+
+  // Add state for creator leave error
+  const [showCreatorLeaveError, setShowCreatorLeaveError] = useState(false);
+
+  // Add state for members modal
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState(null);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -106,7 +118,7 @@ export default function Faculty_Chats() {
     });
 
     // Group chat socket events
-    socket.current.on("groupMessage", (data) => {
+    socket.current.on("getGroupMessage", (data) => {
       const incomingGroupMessage = {
         senderId: data.senderId,
         groupId: data.groupId,
@@ -215,7 +227,7 @@ export default function Faculty_Chats() {
     const fetchGroupMessages = async () => {
       if (!selectedChat || !isGroupChat) return;
       try {
-        const res = await axios.get(`${API_BASE}/group-chats/${selectedChat._id}/messages`);
+        const res = await axios.get(`${API_BASE}/group-messages/${selectedChat._id}?userId=${currentUserId}`);
         setGroupMessages((prev) => ({
           ...prev,
           [selectedChat._id]: res.data,
@@ -253,7 +265,7 @@ export default function Faculty_Chats() {
       }
 
       try {
-        const res = await axios.post(`${API_BASE}/group-chats/messages`, formData, {
+        const res = await axios.post(`${API_BASE}/group-messages`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
 
@@ -332,6 +344,18 @@ export default function Faculty_Chats() {
     fileInputRef.current?.click();
   };
 
+  // Handle starting a new chat with a user
+  const handleStartNewChat = (user) => {
+    setSelectedChat(user);
+    setIsGroupChat(false);
+    // Add to recentChats if not already present
+    if (!recentChats.some(c => c._id === user._id)) {
+      const updated = [user, ...recentChats];
+      setRecentChats(updated);
+      localStorage.setItem("recentChats_faculty", JSON.stringify(updated));
+    }
+  };
+
   const handleCreateGroup = async () => {
     if (!newGroupName.trim() || selectedGroupMembers.length === 0) return;
 
@@ -342,7 +366,16 @@ export default function Faculty_Chats() {
         participants: [...selectedGroupMembers, currentUserId],
       });
 
-      socket.current.emit("createGroup", res.data);
+      const newGroup = { ...res.data, type: 'group' };
+      setGroups(prev => [newGroup, ...prev]);
+      setSelectedChat(newGroup);
+      setIsGroupChat(true);
+      setShowCreateGroupModal(false);
+      setNewGroupName("");
+      setSelectedGroupMembers([]);
+
+      // Join the group in socket
+      socket.current?.emit("joinGroup", { userId: currentUserId, groupId: newGroup._id });
     } catch (err) {
       console.error("Error creating group:", err);
     }
@@ -352,15 +385,64 @@ export default function Faculty_Chats() {
     if (!joinGroupCode.trim()) return;
 
     try {
-      const res = await axios.post(`${API_BASE}/group-chats/join`, {
-        groupCode: joinGroupCode,
+      await axios.post(`${API_BASE}/group-chats/${joinGroupCode}/join`, {
         userId: currentUserId,
       });
 
-      socket.current.emit("joinGroup", res.data);
+      // Refresh user groups
+      const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
+      setGroups(res.data);
+      setShowJoinGroupModal(false);
+      setJoinGroupCode("");
     } catch (err) {
       console.error("Error joining group:", err);
     }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!groupToLeave) return;
+
+    try {
+      await axios.post(`${API_BASE}/group-chats/${groupToLeave._id}/leave`, {
+        userId: currentUserId,
+      });
+
+      // Remove group from state
+      setGroups(prev => prev.filter(g => g._id !== groupToLeave._id));
+      
+      // If this was the selected chat, clear it
+      if (selectedChat && selectedChat._id === groupToLeave._id) {
+        setSelectedChat(null);
+        setIsGroupChat(false);
+        localStorage.removeItem("selectedChatId_faculty");
+      }
+      
+      // Remove group messages
+      setGroupMessages(prev => {
+        const newMessages = { ...prev };
+        delete newMessages[groupToLeave._id];
+        return newMessages;
+      });
+
+      // Leave the group in socket
+      socket.current?.emit("leaveGroup", { userId: currentUserId, groupId: groupToLeave._id });
+      
+      // Close modal and reset
+      setShowLeaveGroupModal(false);
+      setGroupToLeave(null);
+    } catch (err) {
+      console.error("Error leaving group:", err);
+    }
+  };
+
+  // Update confirmLeaveGroup to check if user is creator
+  const confirmLeaveGroup = (group) => {
+    if (group.createdBy === currentUserId) {
+      setShowCreatorLeaveError(true);
+      return;
+    }
+    setGroupToLeave(group);
+    setShowLeaveGroupModal(true);
   };
 
   // Keep recentChats in sync with localStorage
@@ -487,17 +569,29 @@ export default function Faculty_Chats() {
     const bTime = b.type === 'group' ? (groupMessages[b._id]?.slice(-1)[0]?.createdAt || 0) : (messages[b._id]?.slice(-1)[0]?.createdAt || 0);
     return new Date(bTime) - new Date(aTime);
   });
-  // 4. Update search to filter both users and groups
-  const filteredUnifiedChats = searchTerm.trim() === '' ? unifiedChats : unifiedChats.filter(chat => {
-    if (chat.type === 'individual') {
-      return (
-        chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    } else {
-      return chat.name?.toLowerCase().includes(searchTerm.toLowerCase());
-    }
-  });
+  // Enhanced search that includes all users and existing chats
+  const searchResults = searchTerm.trim() === '' ? [] : [
+    // First show existing chats/groups that match
+    ...unifiedChats.filter(chat => {
+      if (chat.type === 'individual') {
+        return (
+          chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      } else {
+        return chat.name?.toLowerCase().includes(searchTerm.toLowerCase());
+      }
+    }),
+    // Then show users not in recent chats that match
+    ...users
+      .filter(user => user._id !== currentUserId)
+      .filter(user => !recentChats.some(chat => chat._id === user._id))
+      .filter(user =>
+        user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
+  ];
 
   return (
     <div className="flex min-h-screen h-screen max-h-screen">
@@ -560,60 +654,135 @@ export default function Faculty_Chats() {
             </div>
             {/* Unified Chat List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {filteredUnifiedChats.length > 0 ? (
-                filteredUnifiedChats.map((chat) => (
-                  <div
-                    key={chat._id}
-                    className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                      selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')) ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
-                    }`}
-                    onClick={() => {
-                      if (chat.type === 'group') {
-                        setSelectedChat(chat);
-                        setIsGroupChat(true);
-                        localStorage.setItem("selectedChatId_faculty", chat._id);
-                      } else {
-                        setSelectedChat(chat);
-                        setIsGroupChat(false);
-                        localStorage.setItem("selectedChatId_faculty", chat._id);
-                      }
-                    }}
-                  >
-                    {chat.type === 'group' ? (
-                      <div className="w-8 h-8 rounded-full bg-blue-900 text-white flex items-center justify-center text-xs font-bold">
-                        <span className="material-icons">groups</span>
-                      </div>
-                    ) : (
-                      <img
-                        src={chat.profilePic ? `${API_BASE}/uploads/${chat.profilePic}` : defaultAvatar}
-                        alt="Profile"
-                        className="w-8 h-8 rounded-full object-cover border"
-                        onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
-                      />
-                    )}
-                    <div className="flex flex-col min-w-0 ml-2">
-                      <strong className="truncate text-sm">
-                        {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
-                      </strong>
+              {searchTerm.trim() === '' ? (
+                // Show normal chat list when not searching
+                unifiedChats.length > 0 ? (
+                  unifiedChats.map((chat) => (
+                    <div
+                      key={chat._id}
+                      className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
+                        selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')) ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                      }`}
+                      onClick={() => {
+                        if (chat.type === 'group') {
+                          setSelectedChat(chat);
+                          setIsGroupChat(true);
+                          localStorage.setItem("selectedChatId_faculty", chat._id);
+                        } else {
+                          setSelectedChat(chat);
+                          setIsGroupChat(false);
+                          localStorage.setItem("selectedChatId_faculty", chat._id);
+                        }
+                      }}
+                    >
                       {chat.type === 'group' ? (
-                        <span className="text-xs text-gray-500">{chat.members?.length || 0} members</span>
+                        <div className="w-8 h-8 rounded-full bg-blue-900 text-white flex items-center justify-center text-xs font-bold">
+                          <span className="material-icons">groups</span>
+                        </div>
                       ) : (
-                        lastMessages[chat._id] && (
+                        <img
+                          src={chat.profilePic ? `${API_BASE}/uploads/${chat.profilePic}` : defaultAvatar}
+                          alt="Profile"
+                          className="w-8 h-8 rounded-full object-cover border"
+                          onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                        />
+                      )}
+                      <div className="flex flex-col min-w-0 ml-2">
+                        <strong className="truncate text-sm">
+                          {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
+                        </strong>
+                        {chat.type === 'group' ? (
                           <span className="text-xs text-gray-500 truncate">
-                            {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
+                            {lastMessages[chat._id] && (
+                              <span className="text-xs text-gray-500 truncate">
+                                {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
+                              </span>
+                            )}
                           </span>
-                        )
+                        ) : (
+                          lastMessages[chat._id] && (
+                            <span className="text-xs text-gray-500 truncate">
+                              {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
+                            </span>
+                          )
+                        )}
+                      </div>
+                      {chat.type === 'group' && (
+                        <span className="ml-2 text-blue-900 text-xs font-bold">Group</span>
                       )}
                     </div>
-                    {chat.type === 'group' && (
-                      <span className="ml-2 text-blue-900 text-xs font-bold">Group</span>
-                    )}
+                  ))
+                ) : (
+                  <div className="text-gray-400 text-center mt-10 select-none">
+                    No chats found
                   </div>
-                ))
+                )
               ) : (
-                <div className="text-gray-400 text-center mt-10 select-none">
-                  No chats found
-                </div>
+                // Show search results when searching
+                searchResults.length > 0 ? (
+                  searchResults.map((item) => (
+                    <div
+                      key={item._id}
+                      className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
+                        selectedChat?._id === item._id ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                      }`}
+                      onClick={() => {
+                        if (item.isNewUser) {
+                          // Start new chat with this user
+                          handleStartNewChat(item);
+                          setSearchTerm(""); // Clear search after selecting
+                        } else if (item.type === 'group') {
+                          setSelectedChat({ ...item, isGroup: true });
+                          localStorage.setItem("selectedChatId_faculty", item._id);
+                          setSearchTerm(""); // Clear search after selecting
+                        } else {
+                          setSelectedChat(item);
+                          localStorage.setItem("selectedChatId_faculty", item._id);
+                          setSearchTerm(""); // Clear search after selecting
+                        }
+                      }}
+                    >
+                      {item.type === 'group' ? (
+                        <div className="w-8 h-8 rounded-full bg-blue-900 text-white flex items-center justify-center text-xs font-bold">
+                          <span className="material-icons">groups</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={item.profilePic ? `${API_BASE}/uploads/${item.profilePic}` : defaultAvatar}
+                          alt="Profile"
+                          className="w-8 h-8 rounded-full object-cover border"
+                          onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                        />
+                      )}
+                      <div className="flex flex-col min-w-0 ml-2">
+                        <strong className="truncate text-sm">
+                          {item.type === 'group' ? item.name : `${item.lastname}, ${item.firstname}`}
+                        </strong>
+                        {item.isNewUser ? (
+                          <span className="text-xs text-blue-600">Click to start new chat</span>
+                        ) : item.type === 'group' ? (
+                          <span className="text-xs text-gray-500">{item.participants?.length || 0} participants</span>
+                        ) : (
+                          lastMessages[item._id] && (
+                            <span className="text-xs text-gray-500 truncate">
+                              {lastMessages[item._id].prefix}{lastMessages[item._id].text}
+                            </span>
+                          )
+                        )}
+                      </div>
+                      {item.type === 'group' && (
+                        <span className="ml-2 text-blue-900 text-xs font-bold">Group</span>
+                      )}
+                      {item.isNewUser && (
+                        <span className="ml-2 text-green-600 text-xs font-bold">New</span>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-gray-400 text-center mt-10 select-none">
+                    No users or groups found
+                  </div>
+                )
               )}
             </div>
           </div>
@@ -639,23 +808,39 @@ export default function Faculty_Chats() {
                         onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
                       />
                     )}
+                    {/* In chat header, below the group name/title, show member count and dropdown for group chats only: */}
                     <div className="flex flex-col">
                       <h3 className="text-lg font-semibold">
                         {isGroupChat ? selectedChat.name : `${selectedChat.lastname}, ${selectedChat.firstname}`}
                       </h3>
                       {isGroupChat && (
-                        <span className="text-xs text-gray-500">
-                          {selectedChat.members?.length || 0} members
+                        <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                          {(selectedChat?.participants?.length || 0)} members
+                          <button
+                            className="ml-1 text-gray-700 hover:text-blue-900 focus:outline-none"
+                            onClick={() => setShowMembersModal(true)}
+                            title="Show members"
+                          >
+                            <span style={{fontSize: '1.1em'}}>&#9660;</span>
+                          </button>
                         </span>
                       )}
                     </div>
                   </div>
+                  {isGroupChat && (
+                    <button
+                      onClick={() => confirmLeaveGroup(selectedChat)}
+                      className="px-3 py-1 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                    >
+                      Leave Group
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
                   {selectedChatMessages.map((msg, index) => {
                     const isRecipient = msg.senderId !== currentUserId;
-                    const sender = isRecipient ? users.find(u => u._id === msg.senderId) : null;
+                    const sender = users.find(u => u._id === msg.senderId);
                     const prevMsg = selectedChatMessages[index - 1];
                     const showHeader =
                       index === 0 ||
@@ -972,6 +1157,134 @@ export default function Faculty_Chats() {
                     setShowJoinGroupModal(false);
                     setJoinGroupCode("");
                   }}
+                  className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Leave Group Confirmation Modal */}
+        {showLeaveGroupModal && groupToLeave && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-semibold mb-4">Leave Group</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to leave <strong>"{groupToLeave.name}"</strong>?
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                You will no longer be able to send or receive messages in this group.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleLeaveGroup}
+                  className="flex-1 py-2 rounded-lg text-sm bg-red-500 text-white hover:bg-red-600"
+                >
+                  Leave Group
+                </button>
+                <button
+                  onClick={() => {
+                    setShowLeaveGroupModal(false);
+                    setGroupToLeave(null);
+                  }}
+                  className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Creator Leave Error Modal */}
+        {showCreatorLeaveError && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-semibold mb-4 text-red-600">Action Not Allowed</h3>
+              <p className="text-gray-600 mb-6">
+                The creator of the group cannot leave the group chat.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowCreatorLeaveError(false)}
+                  className="flex-1 py-2 rounded-lg text-sm bg-blue-900 text-white"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Members Modal */}
+        {showMembersModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-semibold mb-4">Group Members</h3>
+              <ul className="mb-4 max-h-60 overflow-y-auto divide-y">
+                {(selectedChat?.participants || []).map(userId => {
+                  const user = users.find(u => u._id === userId);
+                  if (!user) return null;
+                  const isCreator = selectedChat?.createdBy === userId;
+                  return (
+                    <li key={userId} className="flex items-center justify-between py-2">
+                      <span>{user.lastname}, {user.firstname} {isCreator && <span className="text-xs text-blue-700">(Creator)</span>}</span>
+                      {selectedChat?.createdBy === currentUserId && !isCreator && (
+                        <button
+                          className="text-red-500 hover:text-red-700 text-xs px-2 py-1 border border-red-300 rounded"
+                          onClick={() => { setMemberToRemove(user); setShowRemoveConfirm(true); }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowMembersModal(false)}
+                  className="flex-1 py-2 rounded-lg text-sm bg-blue-900 text-white"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Remove Member Confirmation Modal */}
+        {showRemoveConfirm && memberToRemove && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-semibold mb-4 text-red-600">Remove Member</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to remove <strong>{memberToRemove.lastname}, {memberToRemove.firstname}</strong> from the group?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      await axios.post(`${API_BASE}/group-chats/${selectedChat._id}/remove-member`, {
+                        userId: currentUserId,
+                        memberId: memberToRemove._id,
+                      });
+                      // Remove from UI
+                      setGroups(prev => prev.map(g => g._id === selectedChat._id ? { ...g, participants: g.participants.filter(id => id !== memberToRemove._id) } : g));
+                      setShowRemoveConfirm(false);
+                      setMemberToRemove(null);
+                    } catch (err) {
+                      alert(err.response?.data?.error || 'Error removing member');
+                    }
+                  }}
+                  className="flex-1 py-2 rounded-lg text-sm bg-red-500 text-white hover:bg-red-600"
+                >
+                  Remove
+                </button>
+                <button
+                  onClick={() => { setShowRemoveConfirm(false); setMemberToRemove(null); }}
                   className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
                 >
                   Cancel
