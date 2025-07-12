@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import dashboardIcon from "../../assets/dashboard.png";
 import classesIcon from "../../assets/classes.png";
 import activitiesIcon from "../../assets/activities.png";
@@ -13,7 +13,6 @@ import logo6 from "../../assets/logo/SJDD Logo.svg";
 
 const Faculty_Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
-    const navigate = useNavigate();
     const location = useLocation();
 
     const navItems = [
@@ -57,7 +56,7 @@ const Faculty_Navbar = () => {
                         <button
                             key={index}
                             onClick={() => {
-                                navigate(item.path);
+                                location.pathname !== item.path && window.location.assign(item.path);
                                 setIsOpen(false);
                             }}
                             className={`text-lg flex items-center space-x-3 p-2 w-full rounded-lg transition-colors 

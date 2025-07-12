@@ -13,6 +13,7 @@ export default function Faculty_Classes() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   const currentFacultyID = localStorage.getItem("userID");
 
@@ -67,9 +68,12 @@ export default function Faculty_Classes() {
         if (res.ok) {
           // const terms = await res.json();
           // const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+          setCurrentTerm(null);
         }
       } catch {
         // Optionally log error if needed
+        setCurrentTerm(null);
       }
     }
     fetchActiveTermForYear();
@@ -83,9 +87,10 @@ export default function Faculty_Classes() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold">Classes</h2>
-            <p className="text-base md:text-lg">
-              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+            <h2 className="text-2xl md:text-3xl font-bold mb-1">Classes</h2>
+            <p className="text-base md:text-lg font-medium">
+              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} |
+              {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} |
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
@@ -94,7 +99,6 @@ export default function Faculty_Classes() {
               })}
             </p>
           </div>
-
           <ProfileMenu />
         </div>
         {/* Create Class Button */}
