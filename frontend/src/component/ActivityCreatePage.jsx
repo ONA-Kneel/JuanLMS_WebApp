@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import QuizTab from './QuizTab';
+import ActivityTab from './ActivityTab';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import Student_Navbar from './Student/Student_Navbar';
 
@@ -43,7 +43,7 @@ export default function ActivityCreatePage() {
         </div>
         <div className="bg-white rounded-xl shadow-xl p-6 md:p-10">
           {/* <QuizTab alwaysRequireFileUploadForAssignment={true} /> */}
-          <QuizTab
+          <ActivityTab
             alwaysRequireFileUploadForAssignment={true}
             onPointsChange={(points) => setTotalPoints(points)}
           />

@@ -195,7 +195,7 @@ export default function Student_Activities() {
             {selectedAssignment.dueDate && <div className="mb-2 text-xs text-gray-500">Due: {new Date(selectedAssignment.dueDate).toLocaleString()}</div>}
             {selectedAssignment.points && <div className="mb-2 text-xs text-gray-500">Points: {selectedAssignment.points}</div>}
             {/* File upload for assignment */}
-            {selectedAssignment.fileUploadRequired && (
+            {selectedAssignment.type !== 'quiz' && (
               <form className="mb-4" onSubmit={async e => {
                 e.preventDefault();
                 setSubmitLoading(true);

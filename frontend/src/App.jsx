@@ -56,6 +56,8 @@ import Admin_Registrants from './component/Admin/Admin_Registrants';
 import Parent_Dashboard from './component/Parent/Parent_Dashboard';
 import Parent_Grades from './component/Parent/Parent_Grades';
 import Parent_Progress from './component/Parent/Parent_Progress';
+import ActivityTab from './component/ActivityTab';
+import QuizTab from './component/QuizTab';
 
 function App() {
   return (
@@ -115,8 +117,10 @@ function App() {
         <Route path="/parent_grades" element={<ProtectedRoute allowedRoles={['vice president of education']}><Parent_Grades/></ProtectedRoute>}/>
         <Route path="/parent_progress" element={<ProtectedRoute allowedRoles={['vice president of education']}><Parent_Progress/></ProtectedRoute>}/>
 
-        {/* Shared Activity Creation Page */}
-        <Route path="/create-activity" element={<ProtectedRoute allowedRoles={['faculty','students']}><ActivityCreatePage /></ProtectedRoute>} />
+        {/* Assignment Creation Page */}
+        <Route path="/create-assignment" element={<ProtectedRoute allowedRoles={['faculty']}><ActivityTab /></ProtectedRoute>} />
+        {/* Quiz Creation Page */}
+        <Route path="/create-quiz" element={<ProtectedRoute allowedRoles={['faculty']}><QuizTab /></ProtectedRoute>} />
 
         {/* Assignment/Quiz Detail Page */}
         <Route path="/assignment/:assignmentId" element={<ProtectedRoute allowedRoles={['faculty','students']}><AssignmentDetailPage /></ProtectedRoute>} />

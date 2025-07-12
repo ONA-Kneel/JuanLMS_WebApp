@@ -23,16 +23,35 @@ const upload = multer({ storage });
 // Get all assignments for a class
 router.get('/', authenticateToken, async (req, res) => {
   const { classID } = req.query;
+  const userId = req.user.userID; // Use userID (school ID) for filtering
+  const role = req.user.role;
   console.log('GET /assignments classID:', classID); // Debug log
-  const assignments = await Assignment.find({ classID }).sort({ createdAt: -1 });
+  let assignments = await Assignment.find({ classID }).sort({ createdAt: -1 });
+  // Only filter for students
+  if (role === 'students') {
+    assignments = assignments.filter(a => {
+      if (!a.assignedTo || a.assignedTo.length === 0) return false; // hide if not set
+      const entry = a.assignedTo.find(e => e.classID === classID);
+      if (!entry) return false;
+      if (entry.studentIDs === 'all') return true;
+      return Array.isArray(entry.studentIDs) && entry.studentIDs.includes(userId);
+    });
+  }
   console.log('Assignments found:', assignments.length); // Debug log
   res.json(assignments);
 });
 
 // Create assignment or quiz
-router.post('/', authenticateToken, async (req, res) => {
-  const { classIDs, classID, title, instructions, type, description, dueDate, points, fileUploadRequired, allowedFileTypes, fileInstructions, questions } = req.body;
+router.post('/', authenticateToken, upload.single('attachmentFile'), async (req, res) => {
+  let { classIDs, classID, title, instructions, type, description, dueDate, points, fileUploadRequired, allowedFileTypes, fileInstructions, questions, assignedTo, attachmentLink } = req.body;
   const createdBy = req.user._id;
+  // Parse arrays/objects if sent as FormData
+  if (typeof classIDs === 'string') classIDs = JSON.parse(classIDs);
+  if (typeof assignedTo === 'string') assignedTo = JSON.parse(assignedTo);
+  let attachmentFile = '';
+  if (req.file) {
+    attachmentFile = `/uploads/submissions/${req.file.filename}`;
+  }
   try {
     let assignments = [];
     if (Array.isArray(classIDs) && classIDs.length > 0) {
@@ -49,7 +68,10 @@ router.post('/', authenticateToken, async (req, res) => {
           allowedFileTypes,
           fileInstructions,
           questions,
-          createdBy
+          createdBy,
+          assignedTo,
+          attachmentLink,
+          attachmentFile
         });
         await assignment.save();
         assignments.push(assignment);
@@ -68,7 +90,10 @@ router.post('/', authenticateToken, async (req, res) => {
         allowedFileTypes,
         fileInstructions,
         questions,
-        createdBy
+        createdBy,
+        assignedTo,
+        attachmentLink,
+        attachmentFile
       });
       await assignment.save();
       return res.status(201).json([assignment]);

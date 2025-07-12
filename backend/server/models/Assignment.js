@@ -14,6 +14,12 @@ const assignmentSchema = new mongoose.Schema({
   fileInstructions: { type: String },
   questions: { type: Array },
   status: { type: String, enum: ['upcoming', 'past-due', 'completed'], default: 'upcoming' },
-  views: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+  views: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  assignedTo: [{
+    classID: String,
+    studentIDs: [String]
+  }],
+  attachmentLink: { type: String },
+  attachmentFile: { type: String }
 });
 export default mongoose.model("Assignment", assignmentSchema, "Assignments"); 

@@ -21,7 +21,10 @@ export default function AssignmentDetailPage() {
   const [gradeError, setGradeError] = useState('');
   const [gradeValue, setGradeValue] = useState('');
   const [feedbackValue, setFeedbackValue] = useState('');
-  const [classMembers, setClassMembers] = useState([]);
+  // Removed unused classMembers state
+  const [submissionType, setSubmissionType] = useState('file'); // 'file' or 'link'
+  const [link, setLink] = useState('');
+  const [gradingSubmission, setGradingSubmission] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -58,7 +61,7 @@ export default function AssignmentDetailPage() {
           } else {
             console.error('No valid members array found:', members);
           }
-          setClassMembers(memberList);
+          // setClassMembers(memberList); // This line is removed
           // Fetch submissions
           fetch(`${API_BASE}/assignments/${assignmentId}/submissions`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -102,7 +105,11 @@ export default function AssignmentDetailPage() {
     const token = localStorage.getItem('token');
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      if (submissionType === 'file') {
+        formData.append('file', file);
+      } else if (submissionType === 'link') {
+        formData.append('link', link);
+      }
       const res = await fetch(`${API_BASE}/assignments/${assignmentId}/submit`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
@@ -111,6 +118,7 @@ export default function AssignmentDetailPage() {
       if (res.ok) {
         setSubmitSuccess(true);
         setFile(null);
+        setLink('');
       } else {
         setError('Failed to submit.');
       }
@@ -152,9 +160,33 @@ export default function AssignmentDetailPage() {
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       {role === 'faculty' ? <Faculty_Navbar /> : <Student_Navbar />}
-      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64 flex flex-col items-center">
-        <div className="w-full max-w-4xl bg-white rounded-xl shadow-xl p-10 mt-8">
+      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+        <div className="w-full p-0 mt-0">
           <button className="mb-6 text-blue-900 hover:underline" onClick={() => navigate(-1)}>&larr; Back</button>
+          {/* Assignment Creation/Edit UI - modern style */}
+          {role === 'faculty' && !assignment && (
+            <form className="space-y-6">
+              <input
+                type="text"
+                placeholder="Title"
+                className="w-full border-b-2 border-blue-300 focus:border-blue-900 text-2xl font-bold px-2 py-2 outline-none bg-transparent"
+                // value, onChange handlers as needed
+              />
+              <textarea
+                placeholder="Instructions (optional)"
+                className="w-full bg-gray-100 rounded-lg border border-gray-200 px-4 py-3 text-base min-h-[100px] resize-y focus:outline-none focus:ring-2 focus:ring-blue-200"
+                // value, onChange handlers as needed
+              />
+              <div className="flex gap-4 mt-4">
+                <button type="button" className="flex items-center gap-2 border border-blue-900 text-blue-900 px-4 py-2 rounded hover:bg-blue-50">
+                  <span className="material-icons">attach_file</span> Add
+                </button>
+                <button type="submit" className="flex items-center gap-2 bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-800">
+                  <span className="material-icons">add</span> Create
+                </button>
+              </div>
+            </form>
+          )}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2">
             <h1 className="text-3xl font-bold text-blue-900 mb-2 md:mb-0">{assignment.title}</h1>
             <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${assignment.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{assignment.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
@@ -216,11 +248,16 @@ export default function AssignmentDetailPage() {
                             <td className="p-3 border">{member.submission && member.submission.feedback ? member.submission.feedback : "-"}</td>
                             <td className="p-3 border">
                               {member.submission && member.submission.status === 'turned-in' ? (
-                                <form onSubmit={e => { e.preventDefault(); handleGrade(member.submission._id); }} className="flex gap-2 items-center">
-                                  <input type="number" className="border rounded px-2 py-1 w-16" placeholder="Grade" value={gradeValue} onChange={e => setGradeValue(e.target.value)} required />
-                                  <input type="text" className="border rounded px-2 py-1 w-32" placeholder="Feedback" value={feedbackValue} onChange={e => setFeedbackValue(e.target.value)} />
-                                  <button type="submit" className="bg-green-700 text-white px-2 py-1 rounded" disabled={gradeLoading}>Grade</button>
-                                </form>
+                                <button
+                                  className="bg-green-700 text-white px-2 py-1 rounded"
+                                  onClick={() => {
+                                    setGradingSubmission(member.submission._id);
+                                    setGradeValue(member.submission.grade !== undefined ? member.submission.grade : '');
+                                    setFeedbackValue(member.submission.feedback || '');
+                                  }}
+                                >
+                                  Grade
+                                </button>
                               ) : member.submission && member.submission.status === 'graded' ? (
                                 <span className="text-green-700 font-semibold">Graded</span>
                               ) : "-"}
@@ -243,20 +280,8 @@ export default function AssignmentDetailPage() {
                 <h2 className="text-lg font-semibold mb-1">Instructions</h2>
                 <div className="text-gray-800 whitespace-pre-line">{assignment.instructions}</div>
               </div>
-              {assignment.description && (
-                <div className="mb-4">
-                  <h2 className="text-lg font-semibold mb-1">Description</h2>
-                  <div className="text-gray-700 whitespace-pre-line">{assignment.description}</div>
-                </div>
-              )}
-              {assignment.fileUploadRequired && (
-                <div className="mb-4">
-                  <h2 className="text-lg font-semibold mb-1">File Upload Required</h2>
-                  <div className="text-gray-700">Allowed file types: {assignment.allowedFileTypes}</div>
-                  {assignment.fileInstructions && <div className="text-gray-700 mt-1">{assignment.fileInstructions}</div>}
-                </div>
-              )}
-              {role !== 'faculty' && assignment.fileUploadRequired && (
+              {/* Always show submit UI for assignments (not quizzes) */}
+              {assignment.type !== 'quiz' && (
                 <div className="mb-4">
                   <h2 className="text-lg font-semibold mb-1">Submit Assignment</h2>
                   {submitSuccess ? (
@@ -276,6 +301,14 @@ export default function AssignmentDetailPage() {
                           </a>
                         </div>
                       )}
+                      {studentSubmission.link && (
+                        <div className="mt-2">
+                          <span className="font-semibold">Submitted Link: </span>
+                          <a href={studentSubmission.link} className="text-blue-700 underline" target="_blank" rel="noopener noreferrer">
+                            {studentSubmission.link}
+                          </a>
+                        </div>
+                      )}
                       {studentSubmission.grade !== undefined && (
                         <div className="mt-2">
                           <span className="font-semibold">Grade: </span>
@@ -291,7 +324,20 @@ export default function AssignmentDetailPage() {
                     </div>
                   ) : (
                     <form onSubmit={handleStudentSubmit} className="space-y-2" encType="multipart/form-data">
-                      <input type="file" className="border rounded px-2 py-1 w-full" accept={assignment.allowedFileTypes || '*'} onChange={e => setFile(e.target.files[0])} required />
+                      <label className="block text-sm font-medium mb-1">Submission Type</label>
+                      <select
+                        className="border rounded px-2 py-1 w-full mb-2"
+                        value={submissionType}
+                        onChange={e => setSubmissionType(e.target.value)}
+                      >
+                        <option value="file">File</option>
+                        <option value="link">Link</option>
+                      </select>
+                      {submissionType === 'file' ? (
+                        <input type="file" className="border rounded px-2 py-1 w-full" accept="*" onChange={e => setFile(e.target.files[0])} required />
+                      ) : (
+                        <input type="url" className="border rounded px-2 py-1 w-full" placeholder="Paste your link here (e.g. Google Drive, GitHub, etc.)" value={link} onChange={e => setLink(e.target.value)} required />
+                      )}
                       <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded" disabled={submitLoading}>
                         {submitLoading ? 'Submitting...' : 'Submit'}
                       </button>
@@ -304,6 +350,33 @@ export default function AssignmentDetailPage() {
           )}
         </div>
       </div>
+      {/* Grading Modal */}
+      {gradingSubmission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+            <h3 className="text-xl font-semibold mb-4 text-blue-900">Grade Submission</h3>
+            <form onSubmit={e => {
+              e.preventDefault();
+              handleGrade(gradingSubmission);
+              setGradingSubmission(null);
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Grade</label>
+                <input type="number" className="border rounded px-2 py-1 w-full" placeholder="Grade" value={gradeValue} onChange={e => setGradeValue(e.target.value)} required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Feedback</label>
+                <input type="text" className="border rounded px-2 py-1 w-full" placeholder="Feedback" value={feedbackValue} onChange={e => setFeedbackValue(e.target.value)} />
+              </div>
+              {gradeError && <div className="text-red-600 text-sm">{gradeError}</div>}
+              <div className="flex gap-2 justify-end">
+                <button type="button" className="bg-gray-300 text-gray-800 px-4 py-2 rounded" onClick={() => setGradingSubmission(null)}>Cancel</button>
+                <button type="submit" className="bg-green-700 text-white px-4 py-2 rounded" disabled={gradeLoading}>{gradeLoading ? 'Grading...' : 'Submit'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

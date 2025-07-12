@@ -1,8 +1,8 @@
 // ClassContent.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { FiFile, FiBook, FiMessageSquare } from "react-icons/fi";
-import QuizTab from "./QuizTab";
+import QuizTab from "./ActivityTab";
 // import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
@@ -427,6 +427,19 @@ export default function ClassContent({ selected, isFaculty = false }) {
   };
 
   // --- MAIN RENDER ---
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef();
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
     <div className="bg-white rounded-2xl shadow p-6 md:p-8 ">
       {/* --- HOME TAB: Announcements --- */}
@@ -495,12 +508,31 @@ export default function ClassContent({ selected, isFaculty = false }) {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold">Classwork</h2>
             {isFaculty && (
-              <button
-                className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm"
-                onClick={() => navigate('/create-activity')}
-              >
-                + Create Assignment or Quiz
-              </button>
+              <div className="relative inline-block" ref={dropdownRef}>
+                <button
+                  className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm flex items-center gap-2"
+                  onClick={() => setShowDropdown((prev) => !prev)}
+                >
+                  + Create
+                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {showDropdown && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white border rounded shadow-lg z-10">
+                    <button
+                      className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
+                      onClick={() => { setShowDropdown(false); navigate('/create-assignment'); }}
+                    >
+                      <span className="material-icons">assignment</span> Assignment
+                    </button>
+                    <button
+                      className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
+                      onClick={() => { setShowDropdown(false); navigate('/create-quiz'); }}
+                    >
+                      <span className="material-icons">assignment</span> Quiz assignment
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
           {/* Assignment/Quiz list (Teams-style cards, clickable) */}

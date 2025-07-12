@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 import Faculty_Navbar from "./Faculty_Navbar";
@@ -16,6 +16,8 @@ export default function Faculty_Activities() {
   ];
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef();
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -58,6 +60,16 @@ export default function Faculty_Activities() {
     fetchActiveTermForYear();
   }, [academicYear]);
 
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Faculty_Navbar />
@@ -99,13 +111,30 @@ export default function Faculty_Activities() {
         </ul>
 
         {/* Add Create Activity/Quiz Button */}
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end mb-4 relative" ref={dropdownRef}>
           <button
-            className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950"
-            onClick={() => navigate('/create-activity')}
+            className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 flex items-center gap-2"
+            onClick={() => setShowDropdown((prev) => !prev)}
           >
-            + Create Activity/Quiz
+            + Create
+            <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
           </button>
+          {showDropdown && (
+            <div className="absolute right-0 mt-2 w-48 bg-white border rounded shadow-lg z-10">
+              <button
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
+                onClick={() => { setShowDropdown(false); navigate('/create-assignment'); }}
+              >
+                <span className="material-icons">assignment</span> Assignment
+              </button>
+              <button
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
+                onClick={() => { setShowDropdown(false); navigate('/create-quiz'); }}
+              >
+                <span className="material-icons">assignment</span> Quiz assignment
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Content */}
