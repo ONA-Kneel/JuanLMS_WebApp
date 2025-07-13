@@ -30,22 +30,45 @@ export default function Student_Activities() {
       setError(null);
       try {
         const token = localStorage.getItem('token');
-        // Fetch all classes for the student
-        const resClasses = await fetch(`${API_BASE}/classes/my-classes`, {
+        // Use the general assignments endpoint which applies proper filtering
+        const res = await fetch(`${API_BASE}/assignments`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        const classes = await resClasses.json();
-        let allAssignments = [];
-        for (const cls of classes) {
-          const res = await fetch(`${API_BASE}/assignments?classID=${cls._id}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          const data = await res.json();
-          if (Array.isArray(data)) {
-            allAssignments = allAssignments.concat(data.map(a => ({ ...a, className: cls.className || cls.name || 'Class' })));
-          }
+        const data = await res.json();
+        
+        if (Array.isArray(data)) {
+          // Add class names to assignments
+          const assignmentsWithClassNames = await Promise.all(
+            data.map(async (assignment) => {
+              // Get class info for this assignment
+              const classIDs = assignment.classIDs || [assignment.classID];
+              const classNames = [];
+              
+              for (const classID of classIDs) {
+                try {
+                  const classRes = await fetch(`${API_BASE}/classes/${classID}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  if (classRes.ok) {
+                    const classData = await classRes.json();
+                    classNames.push(classData.className || classData.name || 'Class');
+                  }
+                } catch {
+                  classNames.push('Class');
+                }
+              }
+              
+              return {
+                ...assignment,
+                className: classNames.join(', ')
+              };
+            })
+          );
+          
+          setAssignments(assignmentsWithClassNames);
+        } else {
+          setAssignments([]);
         }
-        setAssignments(allAssignments);
       } catch {
         setError('Failed to fetch assignments.');
       } finally {

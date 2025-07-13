@@ -117,10 +117,11 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setAssignmentError(null);
       const token = localStorage.getItem('token');
       const userRole = localStorage.getItem('role');
-      const userId = localStorage.getItem('userID');
+      // Removed unused userId
 
-      // First fetch all assignments
-      fetch(`${API_BASE}/assignments?classID=${classId}`, {
+      // Always include classID in the assignments request for students
+      const assignmentsUrl = `${API_BASE}/assignments?classID=${classId}`;
+      fetch(assignmentsUrl, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -137,23 +138,23 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 headers: { 'Authorization': `Bearer ${token}` }
               }).then(res => res.json())
             )).then(submissionsArrays => {
-              // Filter out assignments that have been submitted by the student
-              const activeAssignments = filtered.filter((assignment, index) => {
-                const submissions = submissionsArrays[index];
-                const studentSubmission = Array.isArray(submissions) 
-                  ? submissions.find(s => s.student && (s.student._id === userId || s.student === userId))
-                  : null;
-                return !studentSubmission; // Keep only assignments without submissions
-              });
-              setAssignments(activeAssignments);
+              // Filter out assignments the student has already submitted
+              const assignmentsWithSubmission = filtered.map((assignment, i) => ({
+                ...assignment,
+                hasSubmitted: submissionsArrays[i] && submissionsArrays[i].length > 0
+              }));
+              setAssignments(assignmentsWithSubmission);
+              setAssignmentsLoading(false);
             });
           } else {
-            // For faculty, show all assignments
             setAssignments(filtered);
+            setAssignmentsLoading(false);
           }
         })
-        .catch(() => setAssignmentError("Failed to fetch assignments."))
-        .finally(() => setAssignmentsLoading(false));
+        .catch(() => {
+          setAssignmentError('Failed to fetch assignments');
+          setAssignmentsLoading(false);
+        });
     }
   }, [selected, classId]);
 

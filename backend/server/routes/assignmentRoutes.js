@@ -25,25 +25,58 @@ router.get('/', authenticateToken, async (req, res) => {
   const { classID } = req.query;
   const userId = req.user.userID; // Use userID (school ID) for filtering
   const role = req.user.role;
-  console.log('GET /assignments classID:', classID); // Debug log
-  let assignments = await Assignment.find({ classID }).sort({ createdAt: -1 });
-  // Only filter for students
+
+  let assignments;
+  if (classID) {
+    // Always filter by classID if provided
+    assignments = await Assignment.find({ classID }).sort({ createdAt: -1 });
+  } else if (role === 'faculty') {
+    // Optionally: show all assignments created by this faculty
+    assignments = await Assignment.find({ createdBy: req.user._id }).sort({ createdAt: -1 });
+  } else {
+    // If no classID and not faculty, return empty
+    assignments = [];
+  }
+
+  // Debug log before filtering
+  console.log('[DEBUG] Role:', role, 'Assignments before filter:', assignments ? assignments.length : 'undefined', 'classID:', classID, 'userId:', userId);
+
   if (role === 'students') {
+    const now = new Date();
     assignments = assignments.filter(a => {
+      // Debug log for scheduling
+      console.log('DEBUG_ASSIGNMENT_SCHEDULE', {
+        title: a.title,
+        postAt: a.postAt,
+        now: now,
+        assignedTo: a.assignedTo,
+        classID: classID,
+        userId: userId,
+        assignedToEntry: a.assignedTo.find(e => e.classID === classID),
+        studentIDs: a.assignedTo.find(e => e.classID === classID)?.studentIDs
+      });
+      if (a.postAt && new Date(a.postAt) > now) return false;
       if (!a.assignedTo || a.assignedTo.length === 0) return false; // hide if not set
       const entry = a.assignedTo.find(e => e.classID === classID);
       if (!entry) return false;
-      if (entry.studentIDs === 'all') return true;
       return Array.isArray(entry.studentIDs) && entry.studentIDs.includes(userId);
     });
+  } else {
+    // Debug log if not students or assignments empty
+    console.log('[DEBUG] Not a student or no assignments to filter. Role:', role, 'Assignments:', assignments ? assignments.length : 'undefined');
   }
-  console.log('Assignments found:', assignments.length); // Debug log
+  console.log('FINAL assignments for user', userId, 'role', role, ':', assignments.map(a => ({
+    title: a.title,
+    classID: a.classID,
+    assignedTo: a.assignedTo,
+    postAt: a.postAt
+  })));
   res.json(assignments);
 });
 
 // Create assignment or quiz
 router.post('/', authenticateToken, upload.single('attachmentFile'), async (req, res) => {
-  let { classIDs, classID, title, instructions, type, description, dueDate, points, fileUploadRequired, allowedFileTypes, fileInstructions, questions, assignedTo, attachmentLink } = req.body;
+  let { classIDs, classID, title, instructions, type, description, dueDate, points, fileUploadRequired, allowedFileTypes, fileInstructions, questions, assignedTo, attachmentLink, postAt } = req.body;
   const createdBy = req.user._id;
   // Parse arrays/objects if sent as FormData
   if (typeof classIDs === 'string') classIDs = JSON.parse(classIDs);
@@ -71,7 +104,8 @@ router.post('/', authenticateToken, upload.single('attachmentFile'), async (req,
           createdBy,
           assignedTo,
           attachmentLink,
-          attachmentFile
+          attachmentFile,
+          postAt
         });
         await assignment.save();
         assignments.push(assignment);
@@ -93,7 +127,8 @@ router.post('/', authenticateToken, upload.single('attachmentFile'), async (req,
         createdBy,
         assignedTo,
         attachmentLink,
-        attachmentFile
+        attachmentFile,
+        postAt
       });
       await assignment.save();
       return res.status(201).json([assignment]);

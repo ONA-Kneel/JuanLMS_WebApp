@@ -21,6 +21,9 @@ export default function ActivityTab({ onAssignmentCreated }) {
     const fileInputRef = useRef(null);
     const [showLinkModal, setShowLinkModal] = useState(false);
     const [pendingLink, setPendingLink] = useState('');
+    const [schedulePost, setSchedulePost] = useState(false);
+    const [postAt, setPostAt] = useState("");
+    const FAR_FUTURE_DATE = "2099-12-31T23:59";
 
     // Fetch available classes on mount
     useEffect(() => {
@@ -120,6 +123,25 @@ export default function ActivityTab({ onAssignmentCreated }) {
             // attachmentDrive removed
             attachmentLink,
         };
+        if (schedulePost && postAt) {
+            // Treat the input as PH time (UTC+8), convert to UTC before saving
+            // postAt is in 'YYYY-MM-DDTHH:mm' (local), treat as Asia/Manila
+            const [datePart, timePart] = postAt.split('T');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hour, minute] = timePart.split(':').map(Number);
+            // Create a Date object treating the input as Philippines time (UTC+8)
+            // To convert PH time to UTC, we subtract 8 hours
+            const utcDate = new Date(Date.UTC(year, month - 1, day, hour - 8, minute));
+            const isoPostAt = utcDate.toISOString();
+            if (!isNaN(Date.parse(isoPostAt))) {
+                payload.postAt = isoPostAt;
+            }
+        } else {
+            // If not scheduled, set postAt to far future so students never see it
+            const local = new Date(FAR_FUTURE_DATE);
+            const utc = new Date(local.getTime() - local.getTimezoneOffset() * 60000);
+            payload.postAt = utc.toISOString();
+        }
         if (dueDate) {
             const isoDueDate = new Date(dueDate).toISOString();
             if (!isNaN(Date.parse(isoDueDate))) {
@@ -153,6 +175,8 @@ export default function ActivityTab({ onAssignmentCreated }) {
         setShowAddDropdown(false);
         setShowLinkModal(false);
         setPendingLink("");
+        setSchedulePost(false);
+        setPostAt("");
     };
 
     const actuallySave = async (payload, isFormData = false) => {
@@ -408,6 +432,27 @@ export default function ActivityTab({ onAssignmentCreated }) {
                         })}
                     </div>
                 </div>
+                {/* Schedule Post Toggle and DateTime Picker */}
+                <div className="mb-4 flex flex-col gap-2">
+                    <label className="flex items-center gap-2 font-poppins">
+                        <input type="checkbox" checked={schedulePost} onChange={e => setSchedulePost(e.target.checked)} />
+                        Schedule Post
+                    </label>
+                    {schedulePost && (
+                        <input
+                            type="datetime-local"
+                            className="border rounded px-2 py-1 font-poppins"
+                            value={postAt}
+                            onChange={e => setPostAt(e.target.value)}
+                            min={getMinDueDate()}
+                        />
+                    )}
+                </div>
+                {/* Placeholder for edit/delete icons for assignments (to be implemented in assignment list/table) */}
+                {/* <div className="flex gap-2 items-center">
+                    <button className="text-blue-900 hover:text-blue-700"><span className="material-icons">edit</span></button>
+                    <button className="text-red-600 hover:text-red-800"><span className="material-icons">delete</span></button>
+                </div> */}
             </div>
         </div>
     );

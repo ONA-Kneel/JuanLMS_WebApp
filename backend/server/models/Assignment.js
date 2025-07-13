@@ -20,6 +20,7 @@ const assignmentSchema = new mongoose.Schema({
     studentIDs: [String]
   }],
   attachmentLink: { type: String },
-  attachmentFile: { type: String }
+  attachmentFile: { type: String },
+  postAt: { type: Date }
 });
 export default mongoose.model("Assignment", assignmentSchema, "Assignments"); 
