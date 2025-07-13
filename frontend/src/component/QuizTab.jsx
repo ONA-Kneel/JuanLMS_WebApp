@@ -34,7 +34,7 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
     const [quizPoints, setQuizPoints] = useState(100);
     const [environment, setEnvironment] = useState('Environment 1');
     const [studentGroup, setStudentGroup] = useState('All students');
-    
+    const [schedulePost, setSchedulePost] = useState(false);
     // Validation modal state
     const [validationModal, setValidationModal] = useState({
         isOpen: false,
@@ -42,6 +42,24 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
         title: '',
         message: ''
     });
+    const [showGrading, setShowGrading] = useState(false);
+    const [gradeToPass, setGradeToPass] = useState(0);
+    const [attemptsAllowed, setAttemptsAllowed] = useState('Unlimited');
+
+    const [showTiming, setShowTiming] = useState(false);
+    const [timingOpenEnabled, setTimingOpenEnabled] = useState(false);
+    const [timingOpen, setTimingOpen] = useState("");
+    const [timingCloseEnabled, setTimingCloseEnabled] = useState(false);
+    const [timingClose, setTimingClose] = useState("");
+    const [timingLimitEnabled, setTimingLimitEnabled] = useState(false);
+    const [timingLimit, setTimingLimit] = useState(0);
+    const [timingExpire, setTimingExpire] = useState("Open attempts are submitted automatically");
+
+    const [showQuestionBehaviour, setShowQuestionBehaviour] = useState(false);
+    const [shuffleQuestions, setShuffleQuestions] = useState("Yes");
+
+    const [showSafeExam, setShowSafeExam] = useState(false);
+    const [safeExamRequired, setSafeExamRequired] = useState("No");
 
     const resetForm = () => setForm({
         type: "multiple",
@@ -82,13 +100,9 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                     setTitle(data.title || "");
                     setDescription(data.instructions || data.description || "");
                     setQuizPoints(data.points || 100);
-                    
-                    // Set questions if they exist
                     if (data.questions && Array.isArray(data.questions)) {
                         setQuestions(data.questions);
                     }
-                    
-                    // Set due date if it exists
                     if (data.dueDate) {
                         const dueDateLocal = new Date(data.dueDate);
                         const year = dueDateLocal.getFullYear();
@@ -98,8 +112,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                         const minutes = String(dueDateLocal.getMinutes()).padStart(2, '0');
                         setDueDate(`${year}-${month}-${day}T${hours}:${minutes}`);
                     }
-                    
-                    // Set class IDs
                     if (data.classID) {
                         setSelectedClassIDs([data.classID]);
                     } else if (data.classIDs && Array.isArray(data.classIDs)) {
@@ -109,7 +121,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                 .catch(err => {
                     console.error('Failed to load quiz:', err);
                     let errorMessage = 'Failed to load quiz data. Please try again.';
-                    
                     if (err.message.includes('404')) {
                         errorMessage = 'Quiz not found. It may have been deleted or you may not have permission to view it.';
                     } else if (err.message.includes('403')) {
@@ -119,7 +130,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                     } else if (err.message.includes('400')) {
                         errorMessage = 'Invalid quiz ID. Please check the URL and try again.';
                     }
-                    
                     setValidationModal({
                         isOpen: true,
                         type: 'error',
@@ -132,7 +142,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
     }, [editAssignmentId]);
 
     const handleAddOrUpdate = () => {
-        // Validate question form
         if (!form.question.trim()) {
             setValidationModal({
                 isOpen: true,
@@ -142,7 +151,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             });
             return;
         }
-
         if (form.points < 1) {
             setValidationModal({
                 isOpen: true,
@@ -152,7 +160,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             });
             return;
         }
-
         if (form.type === "multiple") {
             const validChoices = form.choices.filter(choice => choice.trim() !== '');
             if (validChoices.length < 2) {
@@ -174,7 +181,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                 return;
             }
         }
-
         if (form.type === "identification" && !form.identificationAnswer.trim()) {
             setValidationModal({
                 isOpen: true,
@@ -184,7 +190,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             });
             return;
         }
-
         let q = {
             type: form.type,
             question: form.question,
@@ -227,7 +232,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
     const handleDuplicate = idx => setQuestions([...questions, { ...questions[idx] }]);
 
     const handleSave = async () => {
-        // Validate required fields
         if (!title.trim()) {
             setValidationModal({
                 isOpen: true,
@@ -237,7 +241,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             });
             return;
         }
-
         if (questions.length === 0) {
             setValidationModal({
                 isOpen: true,
@@ -247,7 +250,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             });
             return;
         }
-
         if (quizPoints < 1 || quizPoints > 100) {
             setValidationModal({
                 isOpen: true,
@@ -257,7 +259,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             });
             return;
         }
-
         const token = localStorage.getItem('token');
         const userRole = localStorage.getItem('role');
         const payload = {
@@ -275,10 +276,11 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                 payload.dueDate = isoDueDate;
             }
         }
-        // If faculty, show class selection modal before saving
+        if (schedulePost) {
+            payload.schedulePost = true;
+        }
         if (userRole === 'faculty') {
             setPendingSavePayload(payload);
-            // Fetch classes if not already fetched
             if (availableClasses.length === 0) {
                 fetch(`${API_BASE}/classes/my-classes`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -289,7 +291,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             setShowClassModal(true);
             return;
         }
-        // For non-faculty, just save (should not happen with current routing)
         await actuallySave(payload);
     };
 
@@ -301,7 +302,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
         try {
             const url = isEditMode ? `${API_BASE}/assignments/${editAssignmentId}` : `${API_BASE}/assignments`;
             const method = isEditMode ? 'PUT' : 'POST';
-            
             const res = await fetch(url, {
                 method,
                 headers: {
@@ -310,7 +310,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                 },
                 body: JSON.stringify(payload)
             });
-            
             if (res.ok) {
                 setShowSuccess(true);
                 if (typeof onQuizCreated === 'function') onQuizCreated();
@@ -319,8 +318,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                 const err = await res.json();
                 let errorMessage = err.error || `HTTP ${res.status}: ${res.statusText}`;
                 let errorTitle = isEditMode ? 'Update Failed' : 'Save Failed';
-                
-                // Handle specific error cases
                 if (res.status === 400) {
                     errorTitle = 'Validation Error';
                 } else if (res.status === 401) {
@@ -336,7 +333,6 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                     errorTitle = 'Server Error';
                     errorMessage = 'A server error occurred. Please try again later.';
                 }
-                
                 setValidationModal({
                     isOpen: true,
                     type: 'error',
@@ -373,29 +369,33 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
     }
 
     return (
-        <div className="flex flex-row p-0">
+        <div className="flex flex-row min-h-screen bg-gray-50">
             {/* Main Content */}
-            <div className="flex-1">
-                <div className="bg-white rounded-t-xl px-8 pt-8 pb-4 border-b">
+            <div className="flex-1 p-10 font-poppinsr">
+                <h1 className="text-2xl font-bold mb-8">Create a Quiz</h1>
+                <div className="bg-white rounded-xl shadow p-8 mb-8">
+                    <label className="block font-bold text-lg mb-1">Title of Quiz</label>
                     <input
-                        className="text-2xl font-bold w-full mb-2 border-b focus:outline-none focus:border-blue-600 bg-transparent"
-                        placeholder={isEditMode ? "Quiz title" : "Untitled quiz"}
+                        className="w-full border-b text-lg font-semibold focus:outline-none focus:border-blue-600 bg-transparent mb-4"
+                        placeholder="Title"
                         value={title}
                         onChange={e => setTitle(e.target.value)}
                     />
+                    <label className="block font-bold text-lg mb-1 mt-4">Instructions <span className="font-normal text-base text-gray-500">(optional)</span></label>
                     <textarea
-                        className="w-full mb-2 border-b focus:outline-none focus:border-blue-400 bg-transparent min-h-[80px] resize-y"
-                        placeholder="Instructions (optional)"
+                        className="w-full border-b focus:outline-none focus:border-blue-400 bg-transparent min-h-[80px] resize-y mb-4"
+                        placeholder="Instructions here"
                         value={description}
                         onChange={e => setDescription(e.target.value)}
                     />
-                    {isEditMode && (
-                        <p className="text-gray-600 text-sm">You are editing an existing quiz. Changes will be saved when you click "Save Quiz".</p>
-                    )}
+                    <button className="border border-gray-400 rounded px-4 py-2 text-left hover:bg-gray-100 mb-4">Add Attachment</button>
                 </div>
-                <div className="px-8 py-6 bg-gray-50 min-h-[60vh]">
+                {/* Questions List */}
+                <div className="bg-white rounded-xl shadow p-8 mb-8">
+                    <label className="block font-bold text-lg mb-4">Questions</label>
+                    {questions.length === 0 && <div className="text-gray-500 mb-4">No questions added yet.</div>}
                     {questions.map((q, idx) => (
-                        <div key={idx} className="bg-white rounded-xl shadow border border-gray-200 mb-8 p-6 relative">
+                        <div key={idx} className="bg-gray-50 rounded-lg border border-gray-200 mb-6 p-4 relative">
                             <div className="flex gap-2 items-center mb-2">
                                 <span className="text-lg font-semibold">{idx + 1}.</span>
                                 <span className="font-bold">{q.question}</span>
@@ -434,42 +434,43 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                             </div>
                         </div>
                     ))}
-                    {/* --- QUESTION FORM --- */}
-                    <div className="bg-white rounded-xl shadow border border-blue-200 p-6 max-w-2xl mx-auto">
-                        <div className="flex gap-4 mb-2">
+                    {/* Add/Edit Question Form */}
+                    <div className="bg-white rounded-xl border-2 border-blue-400 shadow-lg p-6 max-w-4xl w-full mx-auto mt-8">
+                        <div className="flex gap-4 mb-2 items-center">
                             <input
-                                className="flex-1 border-b text-lg font-semibold focus:outline-none focus:border-blue-600 bg-transparent"
+                                className="flex-1 border-b text-lg font-semibold focus:outline-none focus:border-blue-600 bg-transparent py-2 px-3"
                                 placeholder="Question"
                                 value={form.question}
                                 onChange={e => setForm(f => ({ ...f, question: e.target.value }))}
                             />
-                            <select
-                                className="border rounded px-2 py-1"
-                                value={form.type}
-                                onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                            >
-                                <option value="multiple">Multiple choice</option>
-                                <option value="truefalse">True or False</option>
-                                <option value="identification">Identification</option>
-                            </select>
+                            <div className="flex flex-col ml-2">
+                                <label className="block text-sm font-medium mb-1 text-right">Points</label>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    className="border rounded px-3 py-2 w-20"
+                                    value={form.points}
+                                    onChange={e => setForm(f => ({ ...f, points: Number(e.target.value) }))}
+                                />
+                            </div>
                         </div>
-                        <div className="mb-2">
-                            <label className="block text-sm font-medium mb-1">Points</label>
-                            <input
-                                type="number"
-                                min={1}
-                                className="border rounded px-2 py-1 w-20"
-                                value={form.points}
-                                onChange={e => setForm(f => ({ ...f, points: Number(e.target.value) }))}
-                            />
-                        </div>
+                        <select
+                            className="border rounded px-3 py-2 w-60 mt-2 mb-2"
+                            value={form.type}
+                            onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                        >
+                            <option value="multiple">Multiple choice</option>
+                            <option value="truefalse">True or False</option>
+                            <option value="identification">Identification</option>
+                        </select>
                         {form.type === "multiple" && (
-                            <div className="mb-2">
+                            <div className="mb-3">
                                 <label className="block text-sm font-medium mb-1">Choices</label>
+                                <div className="flex flex-col gap-2">
                                 {form.choices.map((choice, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 mb-1">
+                                    <div key={idx} className="flex items-center gap-3 mb-1 w-full">
                                         <input
-                                            className="border rounded px-2 py-1 flex-1"
+                                            className="border rounded px-3 py-2 flex-1 w-full"
                                             value={choice}
                                             onChange={e => setForm(f => ({ ...f, choices: f.choices.map((c, i) => i === idx ? e.target.value : c) }))}
                                         />
@@ -480,18 +481,19 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                                                 if (e.target.checked) setForm(f => ({ ...f, correctAnswers: [...f.correctAnswers, idx] }));
                                                 else setForm(f => ({ ...f, correctAnswers: f.correctAnswers.filter(i => i !== idx) }));
                                             }}
-                                        /> Correct
-                                        <button type="button" className="text-red-600" onClick={() => setForm(f => ({ ...f, choices: f.choices.filter((_, i) => i !== idx), correctAnswers: f.correctAnswers.filter(i => i !== idx) }))}>Remove</button>
+                                        /> <span className="text-base">Correct</span>
+                                        <button type="button" className="text-red-600 text-base font-semibold ml-2" onClick={() => setForm(f => ({ ...f, choices: f.choices.filter((_, i) => i !== idx), correctAnswers: f.correctAnswers.filter(i => i !== idx) }))}>Remove</button>
                                     </div>
                                 ))}
-                                <button type="button" className="bg-gray-200 px-2 py-1 rounded mt-1" onClick={() => setForm(f => ({ ...f, choices: [...f.choices, ""] }))}>Add Option</button>
+                                </div>
+                                <button type="button" className="bg-gray-200 px-3 py-2 rounded mt-2 text-base font-semibold w-full" onClick={() => setForm(f => ({ ...f, choices: [...f.choices, ""] }))}>Add Option</button>
                             </div>
                         )}
                         {form.type === "truefalse" && (
-                            <div className="mb-2">
+                            <div className="mb-3">
                                 <label className="block text-sm font-medium mb-1">Correct Answer</label>
                                 <select
-                                    className="border rounded px-2 py-1"
+                                    className="border rounded px-3 py-2 w-60"
                                     value={form.trueFalseAnswer ? "true" : "false"}
                                     onChange={e => setForm(f => ({ ...f, trueFalseAnswer: e.target.value === "true" }))}
                                 >
@@ -501,16 +503,16 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                             </div>
                         )}
                         {form.type === "identification" && (
-                            <div className="mb-2">
+                            <div className="mb-3">
                                 <label className="block text-sm font-medium mb-1">Correct Answer</label>
                                 <input
-                                    className="border rounded px-2 py-1 w-full"
+                                    className="border rounded px-3 py-2 w-full"
                                     value={form.identificationAnswer}
                                     onChange={e => setForm(f => ({ ...f, identificationAnswer: e.target.value }))}
                                 />
                             </div>
                         )}
-                        <div className="flex items-center gap-4 mt-2">
+                        <div className="flex items-center gap-4 mt-3">
                             <label className="flex items-center gap-2">
                                 <input
                                     type="checkbox"
@@ -519,27 +521,29 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                                 />
                                 Required
                             </label>
-                            <button
-                                type="button"
-                                className="bg-blue-700 text-white px-4 py-2 rounded shadow"
-                                onClick={handleAddOrUpdate}
-                            >
-                                {editingIndex !== null ? "Update Question" : "Add Question"}
-                            </button>
-                            {editingIndex !== null && (
-                                <button
-                                    type="button"
-                                    className="bg-gray-400 text-white px-4 py-2 rounded"
-                                    onClick={() => { setEditingIndex(null); resetForm(); }}
-                                >
-                                    Cancel
-                                </button>
-                            )}
                         </div>
                     </div>
+                    <div className="flex items-center gap-4 mt-4 max-w-4xl w-full mx-auto">
+                        <button
+                            type="button"
+                            className="bg-blue-700 text-white px-4 py-2 rounded shadow"
+                            onClick={handleAddOrUpdate}
+                        >
+                            {editingIndex !== null ? "Update Question" : "Add Question"}
+                        </button>
+                        {editingIndex !== null && (
+                            <button
+                                type="button"
+                                className="bg-gray-400 text-white px-4 py-2 rounded"
+                                onClick={() => { setEditingIndex(null); resetForm(); }}
+                            >
+                                Cancel
+                            </button>
+                        )}
+                    </div>
                 </div>
-                <div className="flex gap-2 mt-4 px-8 pb-8">
-                    <button className="bg-green-600 text-white px-6 py-2 rounded" onClick={handleSave}>
+                <div className="flex gap-4 mt-8 justify-end">
+                    <button className="bg-blue-700 text-white px-6 py-2 rounded" onClick={handleSave}>
                         {isEditMode ? 'Update Quiz' : 'Save Quiz'}
                     </button>
                     <button className="bg-gray-500 text-white px-6 py-2 rounded" onClick={onClose}>Cancel</button>
@@ -595,7 +599,7 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                 )}
             </div>
             {/* Sidebar */}
-            <div className="w-80 min-w-[320px] bg-white border-l px-6 py-8 flex flex-col gap-6">
+            <div className="w-96 min-w-[320px] bg-white border-l px-8 py-10 flex flex-col gap-8">
                 <div>
                     <label className="block text-sm font-medium mb-1">Points</label>
                     <input
@@ -615,6 +619,30 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                         onChange={e => setDueDate(e.target.value)}
                         min={getMinDueDate()}
                     />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium mb-1">Class(es)</label>
+                    {/* Example: Replace with dynamic class list if needed */}
+                    <div className="flex flex-col gap-2">
+                        {availableClasses.length > 0 ? (
+                            availableClasses.map(cls => (
+                                <label key={cls._id} className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedClassIDs.includes(cls.classID)}
+                                        onChange={e => {
+                                            if (e.target.checked) setSelectedClassIDs(ids => [...ids, cls.classID]);
+                                            else setSelectedClassIDs(ids => ids.filter(id => id !== cls.classID));
+                                        }}
+                                    />
+                                    <span className="font-semibold">{cls.className || cls.name}</span>
+                                    <span className="text-xs text-gray-500">{cls.section || cls.classCode}</span>
+                                </label>
+                            ))
+                        ) : (
+                            <span className="text-gray-400 text-sm">No classes available</span>
+                        )}
+                    </div>
                 </div>
                 <div>
                     <label className="block text-sm font-medium mb-1">For</label>
@@ -637,10 +665,178 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                     </select>
                 </div>
                 <div>
-                    <button type="button" className="border border-gray-400 rounded px-4 py-2 w-full text-left hover:bg-gray-100">+ Rubric</button>
+                    <label className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            checked={schedulePost}
+                            onChange={e => setSchedulePost(e.target.checked)}
+                        />
+                        Schedule Post
+                    </label>
+                </div>
+                {/* Timing Collapsible Section */}
+                <div className="border rounded mb-2">
+                    <button
+                        type="button"
+                        className="w-full flex items-center justify-between px-4 py-3 font-semibold text-left text-lg focus:outline-none"
+                        onClick={() => setShowTiming(v => !v)}
+                    >
+                        <span>Timing</span>
+                        <span>{showTiming ? '▲' : '▼'}</span>
+                    </button>
+                    {showTiming && (
+                        <div className="px-4 pb-4 pt-2 flex flex-col gap-2">
+                            <div className="mb-2">
+                                <label className="block text-sm font-medium mb-1">Open the quiz</label>
+                                <input
+                                    type="datetime-local"
+                                    className="border rounded px-2 py-1 w-full max-w-full"
+                                    value={timingOpen}
+                                    onChange={e => setTimingOpen(e.target.value)}
+                                    disabled={!timingOpenEnabled}
+                                />
+                                <label className="flex items-center gap-1 mt-1">
+                                    <input type="checkbox" checked={timingOpenEnabled} onChange={e => setTimingOpenEnabled(e.target.checked)} /> Enable
+                                </label>
+                            </div>
+                            <div className="mb-2">
+                                <label className="block text-sm font-medium mb-1">Close the quiz</label>
+                                <input
+                                    type="datetime-local"
+                                    className="border rounded px-2 py-1 w-full max-w-full"
+                                    value={timingClose}
+                                    onChange={e => setTimingClose(e.target.value)}
+                                    disabled={!timingCloseEnabled}
+                                />
+                                <label className="flex items-center gap-1 mt-1">
+                                    <input type="checkbox" checked={timingCloseEnabled} onChange={e => setTimingCloseEnabled(e.target.checked)} /> Enable
+                                </label>
+                            </div>
+                            <div className="mb-2">
+                                <label className="block text-sm font-medium mb-1">Time limit</label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        className="border rounded px-2 py-1 w-20"
+                                        value={timingLimit}
+                                        onChange={e => setTimingLimit(e.target.value)}
+                                        disabled={!timingLimitEnabled}
+                                    />
+                                    <span>minutes</span>
+                                </div>
+                                <label className="flex items-center gap-1 mt-1">
+                                    <input type="checkbox" checked={timingLimitEnabled} onChange={e => setTimingLimitEnabled(e.target.checked)} /> Enable
+                                </label>
+                            </div>
+                            <div className="mb-2">
+                                <label className="block text-sm font-medium mb-1">When time expires</label>
+                                <select
+                                    className="border rounded px-2 py-1 w-full max-w-full"
+                                    value={timingExpire}
+                                    onChange={e => setTimingExpire(e.target.value)}
+                                >
+                                    <option>Open attempts are submitted automatically</option>
+                                    <option>Attempts must be submitted before time expires</option>
+                                    <option>There is a grace period</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                {/* Question Behaviour Collapsible Section */}
+                <div className="border rounded mb-2">
+                    <button
+                        type="button"
+                        className="w-full flex items-center justify-between px-4 py-3 font-semibold text-left text-lg focus:outline-none"
+                        onClick={() => setShowQuestionBehaviour(v => !v)}
+                    >
+                        <span>Question Behaviour</span>
+                        <span>{showQuestionBehaviour ? '▲' : '▼'}</span>
+                    </button>
+                    {showQuestionBehaviour && (
+                        <div className="px-4 pb-4 pt-2 flex flex-col gap-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Shuffle within questions</label>
+                                <select
+                                    className="border rounded px-2 py-1 w-full"
+                                    value={shuffleQuestions}
+                                    onChange={e => setShuffleQuestions(e.target.value)}
+                                >
+                                    <option>Yes</option>
+                                    <option>No</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                {/* Safe Exam Browser Collapsible Section */}
+                <div className="border rounded mb-2">
+                    <button
+                        type="button"
+                        className="w-full flex items-center justify-between px-4 py-3 font-semibold text-left text-lg focus:outline-none"
+                        onClick={() => setShowSafeExam(v => !v)}
+                    >
+                        <span>Safe Exam Browser</span>
+                        <span>{showSafeExam ? '▲' : '▼'}</span>
+                    </button>
+                    {showSafeExam && (
+                        <div className="px-4 pb-4 pt-2 flex flex-col gap-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Require the use of Safe Exam Browser</label>
+                                <select
+                                    className="border rounded px-2 py-1 w-full"
+                                    value={safeExamRequired}
+                                    onChange={e => setSafeExamRequired(e.target.value)}
+                                >
+                                    <option>No</option>
+                                    <option>Yes</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                {/* Grading Collapsible Section */}
+                <div className="border rounded mb-2">
+                    <button
+                        type="button"
+                        className="w-full flex items-center justify-between px-4 py-3 font-semibold text-left text-lg focus:outline-none"
+                        onClick={() => setShowGrading(v => !v)}
+                    >
+                        <span>Grading</span>
+                        <span>{showGrading ? '▲' : '▼'}</span>
+                    </button>
+                    {showGrading && (
+                        <div className="px-4 pb-4 pt-2 flex flex-col gap-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Grade to pass</label>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    className="border rounded px-2 py-1 w-full"
+                                    value={gradeToPass}
+                                    onChange={e => setGradeToPass(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Attempts allowed</label>
+                                <select
+                                    className="border rounded px-2 py-1 w-full"
+                                    value={attemptsAllowed}
+                                    onChange={e => setAttemptsAllowed(e.target.value)}
+                                >
+                                    <option value="Unlimited">Unlimited</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
-
             {/* Validation Modal */}
             <ValidationModal
                 isOpen={validationModal.isOpen}

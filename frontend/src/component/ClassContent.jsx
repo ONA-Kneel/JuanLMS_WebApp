@@ -721,13 +721,13 @@ export default function ClassContent({ selected, isFaculty = false }) {
                       className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
                       onClick={() => { setShowDropdown(false); navigate('/create-assignment'); }}
                     >
-                      <span className="material-icons">assignment</span> Assignment
+                      <span className="material-icons">Assignment</span> 
                     </button>
                     <button
                       className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
                       onClick={() => { setShowDropdown(false); navigate('/create-quiz'); }}
                     >
-                      <span className="material-icons">assignment</span> Quiz assignment
+                      <span className="material-icons">Quiz</span>
                     </button>
                   </div>
                 )}
