@@ -567,18 +567,16 @@ export default function FacultyCreateClass() {
 
         
       
-        
-
-      </div>
-      
-      <ValidationModal
+        <ValidationModal
         isOpen={validationModal.isOpen}
         onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
         type={validationModal.type}
         title={validationModal.title}
         message={validationModal.message}
       />
-      
 
+      </div>
+      
+      
   );
 }
