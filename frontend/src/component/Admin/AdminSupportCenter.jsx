@@ -24,7 +24,31 @@ export default function AdminSupportCenter() {
         const data = await getAllTickets();
         setTickets(data);
       } catch (err) {
-        setError('Failed to fetch tickets');
+        console.error('Error fetching tickets:', err);
+        let errorMessage = 'Failed to fetch tickets. Please try again.';
+        
+        if (err.response) {
+          const status = err.response.status;
+          const data = err.response.data;
+          
+          if (status === 401) {
+            errorMessage = 'Your session has expired. Please log in again.';
+          } else if (status === 403) {
+            errorMessage = 'You do not have permission to view support tickets.';
+          } else if (status === 404) {
+            errorMessage = 'Support tickets not found.';
+          } else if (status >= 500) {
+            errorMessage = 'Server error occurred. Please try again later.';
+          } else {
+            errorMessage = data.message || `Failed to fetch tickets (${status}).`;
+          }
+        } else if (err.request) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else {
+          errorMessage = err.message || 'An unexpected error occurred.';
+        }
+        
+        setError(errorMessage);
       }
       setLoading(false);
     }

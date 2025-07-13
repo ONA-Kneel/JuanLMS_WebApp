@@ -31,14 +31,39 @@ export default function AssignmentDetailPage() {
     setRole(localStorage.getItem('role'));
     const token = localStorage.getItem('token');
     setLoading(true);
+    setError('');
+    
     fetch(`${API_BASE}/assignments/${assignmentId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+        }
+        return res.json();
+      })
       .then(data => {
         setAssignment(data);
       })
-      .catch(() => setError('Failed to fetch assignment.'))
+      .catch(err => {
+        console.error('Failed to fetch assignment:', err);
+        let errorMessage = 'Failed to fetch assignment. Please try again.';
+        
+        if (err.message.includes('404')) {
+          errorMessage = 'Assignment not found. It may have been deleted or you may not have permission to view it.';
+        } else if (err.message.includes('403')) {
+          errorMessage = 'You do not have permission to view this assignment.';
+        } else if (err.message.includes('401')) {
+          errorMessage = 'Your session has expired. Please log in again.';
+        } else if (err.message.includes('400')) {
+          errorMessage = 'Invalid assignment ID. Please check the URL and try again.';
+        } else if (err.message.includes('500')) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        }
+        
+        setError(errorMessage);
+      })
       .finally(() => setLoading(false));
   }, [assignmentId]);
 
@@ -134,21 +159,48 @@ export default function AssignmentDetailPage() {
     setGradeLoading(true);
     setGradeError('');
     const token = localStorage.getItem('token');
+    
+    // Validate grade input
+    if (!gradeValue || gradeValue < 0 || gradeValue > 100) {
+      setGradeError('Please enter a valid grade between 0 and 100.');
+      setGradeLoading(false);
+      return;
+    }
+    
     try {
       const res = await fetch(`${API_BASE}/assignments/${assignmentId}/grade`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ submissionId, grade: gradeValue, feedback: feedbackValue })
       });
+      
       if (res.ok) {
         setGradeValue('');
         setFeedbackValue('');
         setSubmitSuccess(true); // trigger refresh
+        setGradeError('');
       } else {
-        setGradeError('Failed to grade.');
+        const err = await res.json();
+        let errorMessage = err.error || `HTTP ${res.status}: ${res.statusText}`;
+        
+        // Handle specific error cases
+        if (res.status === 400) {
+          errorMessage = 'Invalid grade value or submission data.';
+        } else if (res.status === 401) {
+          errorMessage = 'Your session has expired. Please log in again.';
+        } else if (res.status === 403) {
+          errorMessage = 'You do not have permission to grade this submission.';
+        } else if (res.status === 404) {
+          errorMessage = 'Submission not found.';
+        } else if (res.status >= 500) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        }
+        
+        setGradeError(errorMessage);
       }
-    } catch {
-      setGradeError('Failed to grade.');
+    } catch (err) {
+      console.error('Grading error:', err);
+      setGradeError('Network error. Please check your connection and try again.');
     } finally {
       setGradeLoading(false);
     }

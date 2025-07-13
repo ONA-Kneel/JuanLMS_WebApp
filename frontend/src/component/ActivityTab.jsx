@@ -1,10 +1,14 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import ValidationModal from './ValidationModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function ActivityTab({ onAssignmentCreated }) {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const editAssignmentId = searchParams.get('edit');
+    
     // Removed unused classId
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
@@ -24,6 +28,16 @@ export default function ActivityTab({ onAssignmentCreated }) {
     const [schedulePost, setSchedulePost] = useState(false);
     const [postAt, setPostAt] = useState("");
     const FAR_FUTURE_DATE = "2099-12-31T23:59";
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [loading, setLoading] = useState(false);
+    
+    // Validation modal state
+    const [validationModal, setValidationModal] = useState({
+        isOpen: false,
+        type: 'error',
+        title: '',
+        message: ''
+    });
 
     // Fetch available classes on mount
     useEffect(() => {
@@ -34,6 +48,87 @@ export default function ActivityTab({ onAssignmentCreated }) {
             .then(res => res.json())
             .then(data => setAvailableClasses(Array.isArray(data) ? data : []));
     }, []);
+
+    // Load assignment data if in edit mode
+    useEffect(() => {
+        if (editAssignmentId) {
+            setIsEditMode(true);
+            setLoading(true);
+            const token = localStorage.getItem('token');
+            
+            fetch(`${API_BASE}/assignments/${editAssignmentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+                .then(async res => {
+                    if (!res.ok) {
+                        const errorData = await res.json();
+                        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    setTitle(data.title || "");
+                    setDescription(data.instructions || data.description || "");
+                    setActivityPoints(data.points || 100);
+                    setAttachmentLink(data.attachmentLink || "");
+                    
+                    // Set due date if it exists
+                    if (data.dueDate) {
+                        const dueDateLocal = new Date(data.dueDate);
+                        const year = dueDateLocal.getFullYear();
+                        const month = String(dueDateLocal.getMonth() + 1).padStart(2, '0');
+                        const day = String(dueDateLocal.getDate()).padStart(2, '0');
+                        const hours = String(dueDateLocal.getHours()).padStart(2, '0');
+                        const minutes = String(dueDateLocal.getMinutes()).padStart(2, '0');
+                        setDueDate(`${year}-${month}-${day}T${hours}:${minutes}`);
+                    }
+                    
+                    // Set post date if it exists and is not far future
+                    if (data.postAt) {
+                        const postDate = new Date(data.postAt);
+                        const farFuture = new Date(FAR_FUTURE_DATE);
+                        if (postDate < farFuture) {
+                            setSchedulePost(true);
+                            const year = postDate.getFullYear();
+                            const month = String(postDate.getMonth() + 1).padStart(2, '0');
+                            const day = String(postDate.getDate()).padStart(2, '0');
+                            const hours = String(postDate.getHours() + 8).padStart(2, '0'); // Convert back to PH time
+                            const minutes = String(postDate.getMinutes()).padStart(2, '0');
+                            setPostAt(`${year}-${month}-${day}T${hours}:${minutes}`);
+                        }
+                    }
+                    
+                    // Set class IDs
+                    if (data.classID) {
+                        setSelectedClassIDs([data.classID]);
+                    } else if (data.classIDs && Array.isArray(data.classIDs)) {
+                        setSelectedClassIDs(data.classIDs);
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load assignment:', err);
+                    let errorMessage = 'Failed to load assignment data. Please try again.';
+                    
+                    if (err.message.includes('404')) {
+                        errorMessage = 'Assignment not found. It may have been deleted or you may not have permission to view it.';
+                    } else if (err.message.includes('403')) {
+                        errorMessage = 'You do not have permission to edit this assignment.';
+                    } else if (err.message.includes('401')) {
+                        errorMessage = 'Your session has expired. Please log in again.';
+                    } else if (err.message.includes('400')) {
+                        errorMessage = 'Invalid assignment ID. Please check the URL and try again.';
+                    }
+                    
+                    setValidationModal({
+                        isOpen: true,
+                        type: 'error',
+                        title: 'Load Failed',
+                        message: errorMessage
+                    });
+                })
+                .finally(() => setLoading(false));
+        }
+    }, [editAssignmentId]);
 
     // Fetch students for each selected class
     useEffect(() => {
@@ -89,10 +184,37 @@ export default function ActivityTab({ onAssignmentCreated }) {
     };
 
     const handleSave = async () => {
-        if (!selectedClassIDs.length) {
-            alert('Please select at least one class to post this assignment.');
+        // Validate required fields
+        if (!title.trim()) {
+            setValidationModal({
+                isOpen: true,
+                type: 'warning',
+                title: 'Missing Title',
+                message: 'Please enter a title for the assignment.'
+            });
             return;
         }
+
+        if (!selectedClassIDs.length) {
+            setValidationModal({
+                isOpen: true,
+                type: 'warning',
+                title: 'No Classes Selected',
+                message: 'Please select at least one class to post this assignment.'
+            });
+            return;
+        }
+
+        if (activityPoints < 1 || activityPoints > 100) {
+            setValidationModal({
+                isOpen: true,
+                type: 'warning',
+                title: 'Invalid Points',
+                message: 'Points must be between 1 and 100.'
+            });
+            return;
+        }
+
         // Build assignedTo array
         const assignedTo = selectedClassIDs.map(classID => {
             const entry = classStudentMap[classID];
@@ -182,14 +304,18 @@ export default function ActivityTab({ onAssignmentCreated }) {
     const actuallySave = async (payload, isFormData = false) => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_BASE}/assignments`, {
-                method: 'POST',
+            const url = isEditMode ? `${API_BASE}/assignments/${editAssignmentId}` : `${API_BASE}/assignments`;
+            const method = isEditMode ? 'PUT' : 'POST';
+            
+            const res = await fetch(url, {
+                method,
                 headers: isFormData ? { 'Authorization': `Bearer ${token}` } : {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: isFormData ? payload : JSON.stringify(payload)
             });
+            
             if (res.ok) {
                 resetForm();
                 setShowSuccess(true);
@@ -204,10 +330,41 @@ export default function ActivityTab({ onAssignmentCreated }) {
                 }, 800);
             } else {
                 const err = await res.json();
-                alert('Failed to save: ' + (err.error || res.status));
+                let errorMessage = err.error || `HTTP ${res.status}: ${res.statusText}`;
+                let errorTitle = isEditMode ? 'Update Failed' : 'Save Failed';
+                
+                // Handle specific error cases
+                if (res.status === 400) {
+                    errorTitle = 'Validation Error';
+                } else if (res.status === 401) {
+                    errorTitle = 'Authentication Error';
+                    errorMessage = 'Your session has expired. Please log in again.';
+                } else if (res.status === 403) {
+                    errorTitle = 'Permission Denied';
+                    errorMessage = 'You do not have permission to ' + (isEditMode ? 'edit' : 'create') + ' this assignment.';
+                } else if (res.status === 404) {
+                    errorTitle = 'Not Found';
+                    errorMessage = 'Assignment not found. It may have been deleted.';
+                } else if (res.status >= 500) {
+                    errorTitle = 'Server Error';
+                    errorMessage = 'A server error occurred. Please try again later.';
+                }
+                
+                setValidationModal({
+                    isOpen: true,
+                    type: 'error',
+                    title: errorTitle,
+                    message: errorMessage
+                });
             }
-        } catch {
-            alert('Failed to save (network error)');
+        } catch (err) {
+            console.error('Network error:', err);
+            setValidationModal({
+                isOpen: true,
+                type: 'error',
+                title: 'Network Error',
+                message: 'Failed to ' + (isEditMode ? 'update' : 'save') + ' due to network error. Please check your connection and try again.'
+            });
         }
     };
 
@@ -217,13 +374,28 @@ export default function ActivityTab({ onAssignmentCreated }) {
         return now.toISOString().slice(0, 16);
     };
 
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading assignment data...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-row p-0 font-poppinsr">
             {/* Main Content */}
             <div className="flex-1">
                 <div className="bg-white rounded-t-xl px-8 pt-8 pb-4 border-b">
-                    <h1 className="text-3xl font-bold mb-2 font-poppins">Create an Assignment</h1>
-                    
+                    <h1 className="text-3xl font-bold mb-2 font-poppins">
+                        {isEditMode ? 'Edit Assignment' : 'Create an Assignment'}
+                    </h1>
+                    {isEditMode && (
+                        <p className="text-gray-600 text-sm">You are editing an existing assignment. Changes will be saved when you click "Save Assignment".</p>
+                    )}
                 </div>
                 <div className="px-8 py-6 bg-gray-50 min-h-[60vh]">
 
@@ -322,7 +494,9 @@ export default function ActivityTab({ onAssignmentCreated }) {
                 {showSuccess && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
                         <div className="bg-white p-8 rounded-xl shadow-xl max-w-md w-full text-center">
-                            <h3 className="text-xl font-bold mb-4 text-green-600">Activity/Quiz Created!</h3>
+                            <h3 className="text-xl font-bold mb-4 text-green-600">
+                                {isEditMode ? 'Assignment Updated!' : 'Activity/Quiz Created!'}
+                            </h3>
                             <button
                                 className="mt-4 bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded w-full"
                                 onClick={() => setShowSuccess(false)}
@@ -454,6 +628,15 @@ export default function ActivityTab({ onAssignmentCreated }) {
                     <button className="text-red-600 hover:text-red-800"><span className="material-icons">delete</span></button>
                 </div> */}
             </div>
+
+            {/* Validation Modal */}
+            <ValidationModal
+                isOpen={validationModal.isOpen}
+                onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+                type={validationModal.type}
+                title={validationModal.title}
+                message={validationModal.message}
+            />
         </div>
     );
 } 

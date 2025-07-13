@@ -8,6 +8,7 @@ import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
+import ValidationModal from "../ValidationModal";
 
 export default function Student_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
@@ -52,6 +53,13 @@ export default function Student_Chats() {
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -1263,7 +1271,12 @@ export default function Student_Chats() {
                       setShowRemoveConfirm(false);
                       setMemberToRemove(null);
                     } catch (err) {
-                      alert(err.response?.data?.error || 'Error removing member');
+                      setValidationModal({
+                        isOpen: true,
+                        type: 'error',
+                        title: 'Remove Failed',
+                        message: err.response?.data?.error || 'Error removing member'
+                      });
                     }
                   }}
                   className="flex-1 py-2 rounded-lg text-sm bg-red-500 text-white hover:bg-red-600"
@@ -1281,6 +1294,13 @@ export default function Student_Chats() {
           </div>
         )}
       </div>
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
+      />
     </div>
   );
 }

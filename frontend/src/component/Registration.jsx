@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import ValidationModal from './ValidationModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -15,8 +16,13 @@ export default function Registration() {
     role: 'students',
   });
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -33,24 +39,82 @@ export default function Registration() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
+    
+    // Validate school ID format
     if (!isValidSchoolId(form.schoolID)) {
-      setError('Student Number must be in the format YY-00000 (e.g., 25-00001).');
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Invalid Student Number',
+        message: 'Student Number must be in the format YY-00000 (e.g., 25-00001).'
+      });
       setLoading(false);
       return;
     }
+    
+    // Validate required fields
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.personalEmail.trim()) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Please fill in all required fields.'
+      });
+      setLoading(false);
+      return;
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.personalEmail)) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Invalid Email',
+        message: 'Please enter a valid email address.'
+      });
+      setLoading(false);
+      return;
+    }
+    
     try {
       const res = await axios.post(`${API_BASE}/api/registrants/register`, form);
       if (res.status === 201) {
         setSubmitted(true);
       }
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.message) {
-        setError(err.response.data.message);
+      console.error('Registration error:', err);
+      
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (err.response) {
+        const status = err.response.status;
+        const data = err.response.data;
+        
+        if (status === 400) {
+          errorMessage = data.message || 'Invalid input data. Please check your information.';
+        } else if (status === 409) {
+          errorMessage = data.message || 'Student Number or email already exists.';
+        } else if (status === 422) {
+          errorMessage = data.message || 'Invalid data format.';
+        } else if (status >= 500) {
+          errorMessage = 'Server error. Please try again later.';
+        } else {
+          errorMessage = data.message || `Registration failed (${status}).`;
+        }
+      } else if (err.request) {
+        errorMessage = 'Network error. Please check your connection and try again.';
       } else {
-        setError('Registration failed. Please try again.');
+        errorMessage = err.message || 'An unexpected error occurred.';
       }
+      
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Registration Failed',
+        message: errorMessage
+      });
     } finally {
       setLoading(false);
     }
@@ -150,7 +214,6 @@ export default function Registration() {
               placeholder={getSchoolIdPlaceholder()}
             />
           </div>
-          {error && <div className="text-red-600 text-sm">{error}</div>}
           <button
             type="submit"
             className="w-full bg-blue-900 text-white p-3 rounded-lg hover:bg-blue-950 transition"
@@ -159,13 +222,14 @@ export default function Registration() {
             {loading ? 'Registering...' : 'Register'}
           </button>
         </form>
-        <button
-          className="mt-6 text-blue-700 hover:underline w-full"
-          onClick={() => navigate('/')}
-          disabled={loading}
-        >
-          Go Back
-        </button>
+        
+        <ValidationModal
+          isOpen={validationModal.isOpen}
+          onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+          type={validationModal.type}
+          title={validationModal.title}
+          message={validationModal.message}
+        />
       </div>
     </div>
   );

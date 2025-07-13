@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import ProfileMenu from "../ProfileMenu";
 import Admin_Navbar from "./Admin_Navbar";
 import axios from "axios";
+import ValidationModal from "../ValidationModal";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -197,35 +198,65 @@ export default function Admin_Accounts() {
     const requiredFields = ["firstname", "lastname", "email", "password", "role", "schoolID", "contactNo"];
     for (const field of requiredFields) {
       if (!formData[field]) {
-        alert(`Please fill in ${field}.`);
+        setValidationModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'Missing Field',
+          message: `Please fill in ${field}.`
+        });
         return;
       }
     }
     // Prevent admin from creating student accounts
     if (formData.role === "students") {
-      alert("Student accounts can only be registered through the public registration form.");
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Invalid Role',
+        message: "Student accounts can only be registered through the public registration form."
+      });
       return;
     }
     // SchoolID validation for all roles
     if (formData.role === "faculty") {
       if (!/^F00/.test(formData.schoolID)) {
-        alert("Faculty ID must start with F00.");
+        setValidationModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'Invalid Faculty ID',
+          message: "Faculty ID must start with F00."
+        });
         return;
       }
     } else if (formData.role === "admin") {
       if (!/^A00/.test(formData.schoolID)) {
-        alert("Admin ID must start with A00.");
+        setValidationModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'Invalid Admin ID',
+          message: "Admin ID must start with A00."
+        });
         return;
       }
     } else if (formData.role === "vice president of education" || formData.role === "principal") {
       if (!/^N00/.test(formData.schoolID)) {
-        alert("VP/Principal ID must start with N00.");
+        setValidationModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'Invalid VP/Principal ID',
+          message: "VP/Principal ID must start with N00."
+        });
         return;
       }
     }
     // Contact number validation: must be 11 digits and start with 09
     if (!/^09\d{9}$/.test(formData.contactNo)) {
-      alert("Contact number must be exactly 11 digits and start with 09 (e.g., 09000000000)");
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Invalid Contact Number',
+        message: "Contact number must be exactly 11 digits and start with 09 (e.g., 09000000000)"
+      });
       return;
     }
     if (isEditMode) {
@@ -238,7 +269,12 @@ export default function Admin_Accounts() {
         formData.role !== editingUser.role;
 
       if (!hasChanges) {
-        alert("No changes were made to the account.");
+        setValidationModal({
+          isOpen: true,
+          type: 'info',
+          title: 'No Changes',
+          message: "No changes were made to the account."
+        });
         return;
       }
 
@@ -305,10 +341,20 @@ export default function Admin_Accounts() {
           });
           fetchUsers();
         } else {
-          alert('Error: Failed to create account');
+          setValidationModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Creation Failed',
+            message: 'Error: Failed to create account'
+          });
         }
       } catch {
-        alert('Error: Failed to create account');
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Creation Failed',
+          message: 'Error: Failed to create account'
+        });
       }
     }
   };
@@ -374,11 +420,21 @@ export default function Admin_Accounts() {
           });
         }, 2000);
       } else {
-        alert("Failed to update account: " + (data.error || "Unknown error"));
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Update Failed',
+          message: "Failed to update account: " + (data.error || "Unknown error")
+        });
       }
     } catch (err) {
       console.error(err);
-      alert("Something went wrong while updating the account.");
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: "Something went wrong while updating the account."
+      });
     }
   };
 
@@ -601,6 +657,13 @@ export default function Admin_Accounts() {
   }, [formData.role]);
 
   const isFormValid = formData.role !== "" && formData.firstname && formData.lastname && formData.email && formData.schoolID && formData.contactNo && formData.personalemail && formData.password;
+
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
 
   return (
     <>
@@ -1130,6 +1193,13 @@ export default function Admin_Accounts() {
           </div>
         </div>
       )}
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
+      />
     </>
   );
 }

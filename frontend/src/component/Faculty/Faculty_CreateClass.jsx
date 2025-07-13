@@ -4,6 +4,7 @@ import Faculty_Navbar from "./Faculty_Navbar";
 import archiveIcon from "../../assets/archive.png";
 import createEventIcon from "../../assets/createEvent.png";
 import * as XLSX from "xlsx";
+import ValidationModal from "../ValidationModal";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -24,6 +25,12 @@ export default function FacultyCreateClass() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [classImage, setClassImage] = useState(null);
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
 
   // Fetch faculty assignments on mount
   useEffect(() => {
@@ -254,7 +261,12 @@ export default function FacultyCreateClass() {
 
     // Use dropdown values for className and classCode
     if (!selectedSubject || !selectedSection || members.length === 0) {
-      alert("Please fill in all fields and add at least one member.");
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Missing Information',
+        message: "Please fill in all fields and add at least one member."
+      });
       return;
     }
 
@@ -277,18 +289,48 @@ export default function FacultyCreateClass() {
         body: formData,
       });
       if (res.ok) {
-        alert("Class created successfully!");
+        setValidationModal({
+          isOpen: true,
+          type: 'success',
+          title: 'Success',
+          message: "Class created successfully!"
+        });
         setSelectedSubject("");
         setSelectedSection("");
         setSelectedStudents([]);
         setClassImage(null);
       } else {
         const data = await res.json();
-        alert("Error: " + (data.error || "Failed to create class"));
+        let errorMessage = data.error || "Failed to create class";
+        
+        // Handle specific error cases
+        if (res.status === 400) {
+          errorMessage = data.error || 'Invalid class data. Please check your input.';
+        } else if (res.status === 401) {
+          errorMessage = 'Your session has expired. Please log in again.';
+        } else if (res.status === 403) {
+          errorMessage = 'You do not have permission to create classes.';
+        } else if (res.status === 409) {
+          errorMessage = data.error || 'A class with this name already exists.';
+        } else if (res.status >= 500) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        }
+        
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Creation Failed',
+          message: "Error: " + errorMessage
+        });
       }
-    } catch {
-      console.error("Error creating class:");
-      alert("Something went wrong.");
+    } catch (err) {
+      console.error("Error creating class:", err);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: "Network error. Please check your connection and try again."
+      });
     }
   };
 
@@ -528,6 +570,14 @@ export default function FacultyCreateClass() {
         
 
       </div>
+      
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
+      />
       
 
   );

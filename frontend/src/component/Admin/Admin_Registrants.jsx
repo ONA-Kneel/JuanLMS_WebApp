@@ -51,7 +51,31 @@ export default function Admin_Registrants() {
       const res = await axios.get(`${API_BASE}/api/registrants`, { params });
       setRegistrants(res.data);
     } catch (err) {
-      setError('Failed to fetch registrants.');
+      console.error('Error fetching registrants:', err);
+      let errorMessage = 'Failed to fetch registrants. Please try again.';
+      
+      if (err.response) {
+        const status = err.response.status;
+        const data = err.response.data;
+        
+        if (status === 401) {
+          errorMessage = 'Your session has expired. Please log in again.';
+        } else if (status === 403) {
+          errorMessage = 'You do not have permission to view registrants.';
+        } else if (status === 404) {
+          errorMessage = 'Registrants not found.';
+        } else if (status >= 500) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        } else {
+          errorMessage = data.message || `Failed to fetch registrants (${status}).`;
+        }
+      } else if (err.request) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else {
+        errorMessage = err.message || 'An unexpected error occurred.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -110,7 +134,33 @@ export default function Admin_Registrants() {
       await axios.post(`${API_BASE}/api/registrants/${id}/approve`);
       setRegistrants(registrants => registrants.map(r => r._id === id ? { ...r, status: 'approved', rejectionNote: '' } : r));
     } catch (err) {
-      setError('Failed to approve registrant.');
+      console.error('Error approving registrant:', err);
+      let errorMessage = 'Failed to approve registrant. Please try again.';
+      
+      if (err.response) {
+        const status = err.response.status;
+        const data = err.response.data;
+        
+        if (status === 400) {
+          errorMessage = data.message || 'Invalid registrant data.';
+        } else if (status === 401) {
+          errorMessage = 'Your session has expired. Please log in again.';
+        } else if (status === 403) {
+          errorMessage = 'You do not have permission to approve registrants.';
+        } else if (status === 404) {
+          errorMessage = 'Registrant not found.';
+        } else if (status >= 500) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        } else {
+          errorMessage = data.message || `Failed to approve registrant (${status}).`;
+        }
+      } else if (err.request) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else {
+        errorMessage = err.message || 'An unexpected error occurred.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setActionLoading(null);
     }
@@ -131,7 +181,33 @@ export default function Admin_Registrants() {
       setShowRejectModal(false);
       setRejectingId(null);
     } catch (err) {
-      setError('Failed to reject registrant.');
+      console.error('Error rejecting registrant:', err);
+      let errorMessage = 'Failed to reject registrant. Please try again.';
+      
+      if (err.response) {
+        const status = err.response.status;
+        const data = err.response.data;
+        
+        if (status === 400) {
+          errorMessage = data.message || 'Invalid rejection data.';
+        } else if (status === 401) {
+          errorMessage = 'Your session has expired. Please log in again.';
+        } else if (status === 403) {
+          errorMessage = 'You do not have permission to reject registrants.';
+        } else if (status === 404) {
+          errorMessage = 'Registrant not found.';
+        } else if (status >= 500) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        } else {
+          errorMessage = data.message || `Failed to reject registrant (${status}).`;
+        }
+      } else if (err.request) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else {
+        errorMessage = err.message || 'An unexpected error occurred.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setActionLoading(null);
     }

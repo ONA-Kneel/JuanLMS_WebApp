@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { FiFile, FiBook, FiMessageSquare } from "react-icons/fi";
 import QuizTab from "./ActivityTab";
+import { MoreVertical } from "lucide-react";
+import ValidationModal from './ValidationModal';
 // import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
@@ -45,6 +47,30 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [allStudents, setAllStudents] = useState([]);
   const [editingMembers, setEditingMembers] = useState(false);
   const [newStudentIDs, setNewStudentIDs] = useState([]);
+  
+  // Validation modal state
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
+  
+  // Confirmation modal state
+  const [confirmationModal, setConfirmationModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null
+  });
+
+  // Helper function to check if assignment is posted
+  const isAssignmentPosted = (assignment) => {
+    if (!assignment.postAt) return true; // If no postAt, consider it posted
+    const now = new Date();
+    const postAt = new Date(assignment.postAt);
+    return postAt <= now;
+  };
 
   // Fetch lessons from backend
   useEffect(() => {
@@ -117,14 +143,19 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setAssignmentError(null);
       const token = localStorage.getItem('token');
       const userRole = localStorage.getItem('role');
-      // Removed unused userId
 
       // Always include classID in the assignments request for students
       const assignmentsUrl = `${API_BASE}/assignments?classID=${classId}`;
       fetch(assignmentsUrl, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-        .then(res => res.json())
+        .then(async res => {
+          if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+          }
+          return res.json();
+        })
         .then(data => {
           // Support both classID (string) and classIDs (array)
           const filtered = Array.isArray(data)
@@ -136,7 +167,16 @@ export default function ClassContent({ selected, isFaculty = false }) {
             Promise.all(filtered.map(assignment =>
               fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
                 headers: { 'Authorization': `Bearer ${token}` }
-              }).then(res => res.json())
+              }).then(async res => {
+                if (!res.ok) {
+                  console.warn(`Failed to fetch submissions for assignment ${assignment._id}`);
+                  return [];
+                }
+                return res.json();
+              }).catch(err => {
+                console.warn(`Error fetching submissions for assignment ${assignment._id}:`, err);
+                return [];
+              })
             )).then(submissionsArrays => {
               // Filter out assignments the student has already submitted
               const assignmentsWithSubmission = filtered.map((assignment, i) => ({
@@ -145,14 +185,31 @@ export default function ClassContent({ selected, isFaculty = false }) {
               }));
               setAssignments(assignmentsWithSubmission);
               setAssignmentsLoading(false);
+            }).catch(err => {
+              console.error('Error processing submissions:', err);
+              setAssignments(filtered);
+              setAssignmentsLoading(false);
             });
           } else {
             setAssignments(filtered);
             setAssignmentsLoading(false);
           }
         })
-        .catch(() => {
-          setAssignmentError('Failed to fetch assignments');
+        .catch(err => {
+          console.error('Error fetching assignments:', err);
+          let errorMessage = 'Failed to fetch assignments. Please try again.';
+          
+          if (err.message.includes('401')) {
+            errorMessage = 'Your session has expired. Please log in again.';
+          } else if (err.message.includes('403')) {
+            errorMessage = 'You do not have permission to view assignments for this class.';
+          } else if (err.message.includes('404')) {
+            errorMessage = 'Class not found or you may not have access to it.';
+          } else if (err.message.includes('500')) {
+            errorMessage = 'Server error occurred. Please try again later.';
+          }
+          
+          setAssignmentError(errorMessage);
           setAssignmentsLoading(false);
         });
     }
@@ -230,27 +287,62 @@ export default function ClassContent({ selected, isFaculty = false }) {
     setShowAnnouncementForm(false);
     form.reset();
       } else {
-        alert('Failed to add announcement.');
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Add Announcement Failed',
+          message: 'Failed to add announcement. Please try again.'
+        });
       }
     } catch {
-      alert('Failed to add announcement.');
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: 'Failed to add announcement due to network error. Please check your connection and try again.'
+      });
     }
   };
 
   // --- HANDLERS FOR ANNOUNCEMENTS ---
   const handleDeleteAnnouncement = async (id) => {
-    if (!window.confirm('Delete this announcement?')) return;
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/announcements/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) setAnnouncements(announcements.filter(a => a._id !== id));
-      else alert('Failed to delete announcement.');
-    } catch {
-      alert('Failed to delete announcement.');
-    }
+    setConfirmationModal({
+      isOpen: true,
+      title: 'Delete Announcement',
+      message: 'Are you sure you want to delete this announcement?',
+      onConfirm: async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const res = await fetch(`${API_BASE}/announcements/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            setAnnouncements(announcements.filter(a => a._id !== id));
+            setValidationModal({
+              isOpen: true,
+              type: 'success',
+              title: 'Success',
+              message: 'Announcement deleted successfully.'
+            });
+          } else {
+            setValidationModal({
+              isOpen: true,
+              type: 'error',
+              title: 'Delete Failed',
+              message: 'Failed to delete announcement. Please try again.'
+            });
+          }
+        } catch {
+          setValidationModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Network Error',
+            message: 'Failed to delete announcement due to network error. Please check your connection and try again.'
+          });
+        }
+      }
+    });
   };
   const handleEditAnnouncement = async (id, currentTitle, currentContent) => {
     const newTitle = window.prompt('Edit title:', currentTitle);
@@ -269,11 +361,27 @@ export default function ClassContent({ selected, isFaculty = false }) {
       });
       if (res.ok) {
         setAnnouncements(announcements.map(a => a._id === id ? { ...a, title: newTitle, content: newContent } : a));
+        setValidationModal({
+          isOpen: true,
+          type: 'success',
+          title: 'Success',
+          message: 'Announcement updated successfully.'
+        });
       } else {
-        alert('Failed to update announcement.');
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Update Failed',
+          message: 'Failed to update announcement. Please try again.'
+        });
       }
     } catch {
-      alert('Failed to update announcement.');
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: 'Failed to update announcement due to network error. Please check your connection and try again.'
+      });
     }
   };
 
@@ -295,7 +403,12 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const handleLessonUpload = async (e) => {
     e.preventDefault();
     if (!lessonTitle || lessonFiles.length === 0) {
-      alert("Please provide a title and at least one file.");
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Please provide a title and at least one file.'
+      });
       return;
     }
     setUploading(true);
@@ -317,13 +430,24 @@ export default function ClassContent({ selected, isFaculty = false }) {
         setLessonTitle("");
         setLessonFiles([]);
         // Optionally, refresh lessons list
-        window.location.reload();
+        const newLesson = await res.json();
+        setBackendLessons(lessons => [...lessons, newLesson]);
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to upload lesson.");
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Upload Failed',
+          message: data.error || "Failed to upload lesson. Please try again."
+        });
       }
     } catch {
-      alert("Failed to upload lesson.");
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: 'Failed to upload lesson due to network error. Please check your connection and try again.'
+      });
     } finally {
       setUploading(false);
     }
@@ -355,12 +479,27 @@ export default function ClassContent({ selected, isFaculty = false }) {
       });
       if (res.ok) {
         setBackendLessons(backendLessons.map(l => l._id === lessonId ? { ...l, title: editingLessonTitle } : l));
-        alert('Lesson title updated!');
+        setValidationModal({
+          isOpen: true,
+          type: 'success',
+          title: 'Success',
+          message: 'Lesson title updated successfully!'
+        });
       } else {
-        alert('Failed to update lesson title.');
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Update Failed',
+          message: 'Failed to update lesson title. Please try again.'
+        });
       }
     } catch {
-      alert('Failed to update lesson title.');
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: 'Failed to update lesson title due to network error. Please check your connection and try again.'
+      });
     }
   };
 
@@ -382,49 +521,108 @@ export default function ClassContent({ selected, isFaculty = false }) {
         const data = await res.json();
         setBackendLessons(backendLessons.map(l => l._id === lessonId ? data.lesson : l));
         setNewFiles([]);
-        alert('Files uploaded!');
+        setValidationModal({
+          isOpen: true,
+          type: 'success',
+          title: 'Success',
+          message: 'Files uploaded successfully!'
+        });
       } else {
-        alert('Failed to upload new files.');
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Upload Failed',
+          message: 'Failed to upload new files. Please try again.'
+        });
       }
     } catch {
-      alert('Failed to upload new files.');
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: 'Failed to upload new files due to network error. Please check your connection and try again.'
+      });
     }
   };
 
   const handleDeleteLessonFile = async (lessonId, fileUrl) => {
-    if (!window.confirm('Delete this file from the material?')) return;
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(`${API_BASE}/lessons/${lessonId}/file?fileUrl=${encodeURIComponent(fileUrl)}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setBackendLessons(backendLessons.map(l => l._id === lessonId ? { ...l, files: l.files.filter(f => f.fileUrl !== fileUrl) } : l));
-      } else {
-        alert('Failed to delete file.');
+    setConfirmationModal({
+      isOpen: true,
+      title: 'Delete File',
+      message: 'Are you sure you want to delete this file from the material?',
+      onConfirm: async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const res = await fetch(`${API_BASE}/lessons/${lessonId}/file?fileUrl=${encodeURIComponent(fileUrl)}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            setBackendLessons(backendLessons.map(l => l._id === lessonId ? { ...l, files: l.files.filter(f => f.fileUrl !== fileUrl) } : l));
+            setValidationModal({
+              isOpen: true,
+              type: 'success',
+              title: 'Success',
+              message: 'File deleted successfully.'
+            });
+          } else {
+            setValidationModal({
+              isOpen: true,
+              type: 'error',
+              title: 'Delete Failed',
+              message: 'Failed to delete file. Please try again.'
+            });
+          }
+        } catch {
+          setValidationModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Network Error',
+            message: 'Failed to delete file due to network error. Please check your connection and try again.'
+          });
+        }
       }
-    } catch {
-      alert('Failed to delete file.');
-    }
+    });
   };
 
   const handleDeleteLesson = async (lessonId) => {
-    if (!window.confirm('Delete this material and all its files?')) return;
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(`${API_BASE}/lessons/${lessonId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setBackendLessons(backendLessons.filter(l => l._id !== lessonId));
-      } else {
-        alert('Failed to delete material.');
+    setConfirmationModal({
+      isOpen: true,
+      title: 'Delete Material',
+      message: 'Are you sure you want to delete this material and all its files?',
+      onConfirm: async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const res = await fetch(`${API_BASE}/lessons/${lessonId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            setBackendLessons(backendLessons.filter(l => l._id !== lessonId));
+            setValidationModal({
+              isOpen: true,
+              type: 'success',
+              title: 'Success',
+              message: 'Material deleted successfully.'
+            });
+          } else {
+            setValidationModal({
+              isOpen: true,
+              type: 'error',
+              title: 'Delete Failed',
+              message: 'Failed to delete material. Please try again.'
+            });
+          }
+        } catch {
+          setValidationModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Network Error',
+            message: 'Failed to delete material due to network error. Please check your connection and try again.'
+          });
+        }
       }
-    } catch {
-      alert('Failed to delete material.');
-    }
+    });
   };
 
   // --- MAIN RENDER ---
@@ -543,21 +741,64 @@ export default function ClassContent({ selected, isFaculty = false }) {
             ) : assignmentError ? (
               <p className="text-red-600">{assignmentError}</p>
             ) : assignments.length > 0 ? (
-              assignments.map((item) => (
-                <div
-                  key={item._id}
-                  className="p-4 rounded-xl bg-white border border-blue-200 shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer hover:bg-blue-50 transition"
-                  onClick={() => navigate(`/assignment/${item._id}`)}
-                >
-                  <div>
-                    <span className={`inline-block px-2 py-1 rounded text-xs font-bold mr-2 ${item.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{item.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
-                    <span className="text-lg font-bold text-blue-900">{item.title}</span>
-                    <div className="text-gray-700 text-sm mt-1">{item.instructions}</div>
-                    {item.dueDate && <div className="text-xs text-gray-500 mt-1">Due: {new Date(item.dueDate).toLocaleString()}</div>}
-                    {item.points && <div className="text-xs text-gray-500">Points: {item.points}</div>}
+              assignments.map((item) => {
+                const isPosted = isAssignmentPosted(item);
+                return (
+                  <div
+                    key={item._id}
+                    className={`p-4 rounded-xl border shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative ${
+                      isPosted 
+                        ? 'bg-white border-blue-200 hover:bg-blue-50' 
+                        : 'bg-gray-100 border-gray-300 opacity-75'
+                    }`}
+                    onClick={() => navigate(`/assignment/${item._id}`)}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>
+                          {item.type === 'quiz' ? 'Quiz' : 'Assignment'}
+                        </span>
+                        {!isPosted && isFaculty && (
+                          <span className="inline-block px-2 py-1 rounded text-xs font-bold bg-gray-500 text-white">
+                            Not Posted Yet
+                          </span>
+                        )}
+                      </div>
+                      <span className={`text-lg font-bold ${isPosted ? 'text-blue-900' : 'text-gray-600'}`}>{item.title}</span>
+                      <div className={`text-sm mt-1 ${isPosted ? 'text-gray-700' : 'text-gray-500'}`}>{item.instructions}</div>
+                      {item.dueDate && (
+                        <div className={`text-xs mt-1 ${isPosted ? 'text-gray-500' : 'text-gray-400'}`}>
+                          Due: {new Date(item.dueDate).toLocaleString()}
+                        </div>
+                      )}
+                      {item.points && (
+                        <div className={`text-xs ${isPosted ? 'text-gray-500' : 'text-gray-400'}`}>
+                          Points: {item.points}
+                        </div>
+                      )}
+                      {!isPosted && item.postAt && isFaculty && (
+                        <div className="text-xs text-blue-600 mt-1">
+                          Will be posted: {new Date(item.postAt).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                    {/* Faculty-only menu */}
+                    {isFaculty && (
+                      <div className="absolute top-2 right-2">
+                                              <Menu 
+                        assignment={item} 
+                        onDelete={id => setAssignments(assignments => assignments.filter(a => a._id !== id))}
+                        onUpdate={(updatedAssignment) => setAssignments(assignments => 
+                          assignments.map(a => a._id === updatedAssignment._id ? updatedAssignment : a)
+                        )}
+                        setValidationModal={setValidationModal}
+                        setConfirmationModal={setConfirmationModal}
+                      />
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <p>No assignments found.</p>
             )}
@@ -883,15 +1124,30 @@ export default function ClassContent({ selected, isFaculty = false }) {
                             body: JSON.stringify({ members: newStudentIDs })
                           });
                           if (res.ok) {
-                            alert('Class members updated!');
                             const updated = await res.json();
                             setMembers(updated);
                             setEditingMembers(false);
+                            setValidationModal({
+                              isOpen: true,
+                              type: 'success',
+                              title: 'Success',
+                              message: 'Class members updated successfully!'
+                            });
                           } else {
-                            alert('Failed to update members');
+                            setValidationModal({
+                              isOpen: true,
+                              type: 'error',
+                              title: 'Update Failed',
+                              message: 'Failed to update members. Please try again.'
+                            });
                           }
                         } catch {
-                          alert('Error updating members');
+                          setValidationModal({
+                            isOpen: true,
+                            type: 'error',
+                            title: 'Network Error',
+                            message: 'Error updating members due to network error. Please check your connection and try again.'
+                          });
                         }
                       }}
                       className="bg-green-600 text-white px-3 py-1 rounded"
@@ -921,6 +1177,213 @@ export default function ClassContent({ selected, isFaculty = false }) {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* Validation Modal */}
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
+      />
+
+      {/* Confirmation Modal */}
+      <ValidationModal
+        isOpen={confirmationModal.isOpen}
+        onClose={() => setConfirmationModal({ ...confirmationModal, isOpen: false })}
+        type="warning"
+        title={confirmationModal.title}
+        message={confirmationModal.message}
+        onConfirm={confirmationModal.onConfirm}
+        confirmText="Confirm"
+        showCancel={true}
+        cancelText="Cancel"
+      />
+    </div>
+  );
+}
+
+// Add Menu component at the bottom of the file
+function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmationModal }) {
+  const isPosted = () => {
+    if (!assignment.postAt) return true;
+    const now = new Date();
+    const postAt = new Date(assignment.postAt);
+    return postAt <= now;
+  };
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
+  const handleDelete = async () => {
+    setConfirmationModal({
+      isOpen: true,
+      title: 'Delete Assignment',
+      message: 'Are you sure you want to delete this assignment? This action cannot be undone.',
+      onConfirm: async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const res = await fetch(`${API_BASE}/assignments/${assignment._id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (res.ok) {
+            if (onDelete) onDelete(assignment._id);
+            setValidationModal({
+              isOpen: true,
+              type: 'success',
+              title: 'Success',
+              message: 'Assignment deleted successfully.'
+            });
+          } else {
+            const err = await res.json();
+            let errorMessage = err.error || `HTTP ${res.status}: ${res.statusText}`;
+            let errorTitle = 'Delete Failed';
+            
+            // Handle specific error cases
+            if (res.status === 400) {
+              errorTitle = 'Invalid Request';
+              errorMessage = 'Invalid assignment ID or request format.';
+            } else if (res.status === 401) {
+              errorTitle = 'Authentication Error';
+              errorMessage = 'Your session has expired. Please log in again.';
+            } else if (res.status === 403) {
+              errorTitle = 'Permission Denied';
+              errorMessage = 'You do not have permission to delete this assignment.';
+            } else if (res.status === 404) {
+              errorTitle = 'Not Found';
+              errorMessage = 'Assignment not found. It may have already been deleted.';
+            } else if (res.status >= 500) {
+              errorTitle = 'Server Error';
+              errorMessage = 'A server error occurred. Please try again later.';
+            }
+            
+            setValidationModal({
+              isOpen: true,
+              type: 'error',
+              title: errorTitle,
+              message: errorMessage
+            });
+          }
+        } catch (err) {
+          console.error('Network error:', err);
+          setValidationModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Network Error',
+            message: 'Failed to delete assignment due to network error. Please check your connection and try again.'
+          });
+        }
+      }
+    });
+  };
+
+  const handlePostNow = async () => {
+    setIsPosting(true);
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/assignments/${assignment._id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ postAt: new Date().toISOString() })
+      });
+      
+      if (res.ok) {
+        const updatedAssignment = await res.json();
+        // Update the assignment in the local state seamlessly
+        if (onUpdate) {
+          onUpdate(updatedAssignment);
+        }
+        setValidationModal({
+          isOpen: true,
+          type: 'success',
+          title: 'Success',
+          message: 'Assignment posted successfully! Students can now see this assignment.'
+        });
+      } else {
+        const err = await res.json();
+        let errorMessage = err.error || `HTTP ${res.status}: ${res.statusText}`;
+        let errorTitle = 'Post Failed';
+        
+        // Handle specific error cases
+        if (res.status === 400) {
+          errorTitle = 'Invalid Request';
+          errorMessage = 'Invalid assignment data or request format.';
+        } else if (res.status === 401) {
+          errorTitle = 'Authentication Error';
+          errorMessage = 'Your session has expired. Please log in again.';
+        } else if (res.status === 403) {
+          errorTitle = 'Permission Denied';
+          errorMessage = 'You do not have permission to post this assignment.';
+        } else if (res.status === 404) {
+          errorTitle = 'Not Found';
+          errorMessage = 'Assignment not found. It may have been deleted.';
+        } else if (res.status >= 500) {
+          errorTitle = 'Server Error';
+          errorMessage = 'A server error occurred. Please try again later.';
+        }
+        
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: errorTitle,
+          message: errorMessage
+        });
+      }
+    } catch (err) {
+      console.error('Network error:', err);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: 'Failed to post assignment due to network error. Please check your connection and try again.'
+      });
+    } finally {
+      setIsPosting(false);
+    }
+  };
+  return (
+    <div className="relative">
+      <button
+        className="p-1 rounded-full hover:bg-gray-200"
+        onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
+      >
+        <MoreVertical size={24} />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 w-32 bg-white border rounded shadow-lg z-20">
+          <button
+            className="w-full text-left px-4 py-2 hover:bg-gray-100"
+            onClick={e => { e.stopPropagation(); setOpen(false); navigate(`/create-assignment?edit=${assignment._id}`); }}
+          >
+            Edit
+          </button>
+          {!isPosted() && (
+            <button
+              className={`w-full text-left px-4 py-2 hover:bg-gray-100 ${
+                isPosting ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600'
+              }`}
+              onClick={e => { 
+                e.stopPropagation(); 
+                setOpen(false); 
+                if (!isPosting) handlePostNow(); 
+              }}
+              disabled={isPosting}
+            >
+              {isPosting ? 'Posting...' : 'Post Now'}
+            </button>
+          )}
+          <button
+            className="w-full text-left px-4 py-2 hover:bg-gray-100 text-red-600"
+            onClick={e => { e.stopPropagation(); setOpen(false); handleDelete(); }}
+          >
+            Delete
+          </button>
         </div>
       )}
     </div>

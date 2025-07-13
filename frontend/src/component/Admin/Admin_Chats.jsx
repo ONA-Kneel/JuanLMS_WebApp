@@ -8,6 +8,7 @@ import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
+import ValidationModal from "../ValidationModal";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -443,7 +444,12 @@ export default function Admin_Chats() {
 
   const handleCreateGroup = async () => {
     if (!groupName.trim() || selectedParticipants.length === 0) {
-      alert("Please provide a group name and select at least one participant");
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Missing Information',
+        message: "Please provide a group name and select at least one participant"
+      });
       return;
     }
 
@@ -466,14 +472,23 @@ export default function Admin_Chats() {
       // Join the group in socket
       socket.current?.emit("joinGroup", { userId: currentUserId, groupId: newGroup._id });
     } catch (err) {
-      console.error("Error creating group:", err);
-      alert(err.response?.data?.error || "Error creating group");
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Creation Failed',
+        message: err.response?.data?.error || "Error creating group"
+      });
     }
   };
 
   const handleJoinGroup = async () => {
     if (!joinGroupId.trim()) {
-      alert("Please enter a group ID");
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Missing Group Code',
+        message: "Please enter a group ID"
+      });
       return;
     }
 
@@ -488,8 +503,12 @@ export default function Admin_Chats() {
       setShowJoinGroup(false);
       setJoinGroupId("");
     } catch (err) {
-      console.error("Error joining group:", err);
-      alert(err.response?.data?.error || "Error joining group");
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Join Failed',
+        message: err.response?.data?.error || "Error joining group"
+      });
     }
   };
 
@@ -512,8 +531,12 @@ export default function Admin_Chats() {
       // Leave the group in socket
       socket.current?.emit("leaveGroup", { userId: currentUserId, groupId: selectedChat._id });
     } catch (err) {
-      console.error("Error leaving group:", err);
-      alert(err.response?.data?.error || "Error leaving group");
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Leave Failed',
+        message: err.response?.data?.error || "Error leaving group"
+      });
     }
   };
 
@@ -551,7 +574,12 @@ export default function Admin_Chats() {
       setNewMessage("");
       setSelectedFile(null);
     } catch (err) {
-      console.error("Error sending group message:", err);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Send Failed',
+        message: err.response?.data?.error || "Error sending group message"
+      });
     }
   };
 
@@ -1133,6 +1161,13 @@ export default function Admin_Chats() {
           </div>
         )}
       </div>
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
+      />
     </div>
   );
 }

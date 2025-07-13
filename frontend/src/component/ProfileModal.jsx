@@ -9,6 +9,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 import SupportModal from './Support/SupportModal';
 import profileicon from "../assets/profileicon (1).svg";
+import ValidationModal from './ValidationModal';
 
 Modal.setAppElement('#root');
 
@@ -264,6 +265,12 @@ export default function ProfileModal({
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [userInfo, setUserInfo] = useState({});
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
 
   // --- Role Descriptions ---
   const roleDescriptions = {
@@ -372,7 +379,12 @@ export default function ProfileModal({
       });
       const uploadData = await uploadResponse.json();
       if (!uploadResponse.ok) {
-        alert(uploadData.error || "Image upload failed");
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Upload Failed',
+          message: uploadData.error || "Image upload failed"
+        });
         return;
       }
       // Fetch updated user info from backend
@@ -382,7 +394,12 @@ export default function ProfileModal({
       resetCropState();
     } catch (e) {
       console.error(e);
-      alert("An error occurred while uploading the image.");
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: "An error occurred while uploading the image."
+      });
     }
   }, [croppedAreaPixels, imageSrc, onCrop, closeCropModal]);
 
@@ -566,6 +583,14 @@ export default function ProfileModal({
         {showChangePassword && (
           <ChangePasswordModal userId={userInfo._id} onClose={() => setShowChangePassword(false)} />
         )}
+
+        <ValidationModal
+          isOpen={validationModal.isOpen}
+          onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+          type={validationModal.type}
+          title={validationModal.title}
+          message={validationModal.message}
+        />
       </div>
     </div>,
     document.getElementById('portal')

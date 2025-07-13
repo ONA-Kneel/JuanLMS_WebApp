@@ -11,6 +11,7 @@ import createEvent from "../../assets/createEvent.png";
 // import editEvent from "../../assets/editEvent.png";
 import ProfileModal from "../ProfileModal";
 import interactionPlugin from "@fullcalendar/interaction";
+import ValidationModal from "../ValidationModal";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -45,6 +46,12 @@ export default function Admin_Calendar() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [classDates, setClassDates] = useState([]);
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
 
   const formattedDate = today.toLocaleDateString("en-US", {
     weekday: "long",
@@ -150,8 +157,14 @@ export default function Admin_Calendar() {
       });
       await fetchEvents();
       setShowEventModal(false);
-    } catch {
-      alert("Failed to add event");
+    } catch (error) {
+      console.error("Error adding event:", error);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Add Failed',
+        message: "Failed to add event"
+      });
     }
   };
 
@@ -192,8 +205,14 @@ export default function Admin_Calendar() {
       });
       await fetchEvents();
       setShowEditModal(false);
-    } catch {
-      alert("Failed to update event");
+    } catch (error) {
+      console.error("Error updating event:", error);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Update Failed',
+        message: "Failed to update event"
+      });
     }
   };
 
@@ -205,8 +224,14 @@ export default function Admin_Calendar() {
       await axios.delete(`${API_BASE}/events/${_id}`);
       await fetchEvents();
       setShowEditModal(false);
-    } catch {
-      alert("Failed to delete event");
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Delete Failed',
+        message: "Failed to delete event"
+      });
     }
   };
 
@@ -559,6 +584,14 @@ export default function Admin_Calendar() {
             </div>
           </div>
         )}
+
+        <ValidationModal
+          isOpen={validationModal.isOpen}
+          onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+          type={validationModal.type}
+          title={validationModal.title}
+          message={validationModal.message}
+        />
 
       </div>
     </div>

@@ -74,24 +74,95 @@ router.get('/', authenticateToken, async (req, res) => {
   res.json(assignments);
 });
 
+// Get a single assignment by ID
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const assignment = await Assignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ error: 'Assignment not found.' });
+    }
+    res.json(assignment);
+  } catch (err) {
+    console.error('Error fetching assignment:', err);
+    if (err.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid assignment ID format.' });
+    }
+    res.status(500).json({ error: 'Failed to fetch assignment. Please try again.' });
+  }
+});
+
+// Update assignment (for posting status, etc.)
+router.patch('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { postAt } = req.body;
+    const assignment = await Assignment.findById(req.params.id);
+    
+    if (!assignment) {
+      return res.status(404).json({ error: 'Assignment not found.' });
+    }
+    
+    // Only allow faculty who created the assignment to update it
+    if (assignment.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Not authorized to update this assignment.' });
+    }
+    
+    if (postAt !== undefined) {
+      assignment.postAt = postAt;
+    }
+    
+    await assignment.save();
+    res.json(assignment);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Create assignment or quiz
 router.post('/', authenticateToken, upload.single('attachmentFile'), async (req, res) => {
-  let { classIDs, classID, title, instructions, type, description, dueDate, points, fileUploadRequired, allowedFileTypes, fileInstructions, questions, assignedTo, attachmentLink, postAt } = req.body;
-  const createdBy = req.user._id;
-  // Parse arrays/objects if sent as FormData
-  if (typeof classIDs === 'string') classIDs = JSON.parse(classIDs);
-  if (typeof assignedTo === 'string') assignedTo = JSON.parse(assignedTo);
-  let attachmentFile = '';
-  if (req.file) {
-    attachmentFile = `/uploads/submissions/${req.file.filename}`;
-  }
   try {
+    let { classIDs, classID, title, instructions, type, description, dueDate, points, fileUploadRequired, allowedFileTypes, fileInstructions, questions, assignedTo, attachmentLink, postAt } = req.body;
+    const createdBy = req.user._id;
+    
+    // Validate required fields
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Assignment title is required.' });
+    }
+    
+    if (!classIDs && !classID) {
+      return res.status(400).json({ error: 'At least one class must be selected.' });
+    }
+    
+    if (points !== undefined && (points < 1 || points > 100)) {
+      return res.status(400).json({ error: 'Points must be between 1 and 100.' });
+    }
+    
+    // Parse arrays/objects if sent as FormData
+    if (typeof classIDs === 'string') {
+      try {
+        classIDs = JSON.parse(classIDs);
+      } catch (parseErr) {
+        return res.status(400).json({ error: 'Invalid class IDs format.' });
+      }
+    }
+    if (typeof assignedTo === 'string') {
+      try {
+        assignedTo = JSON.parse(assignedTo);
+      } catch (parseErr) {
+        return res.status(400).json({ error: 'Invalid assignedTo format.' });
+      }
+    }
+    
+    let attachmentFile = '';
+    if (req.file) {
+      attachmentFile = `/uploads/submissions/${req.file.filename}`;
+    }
+    
     let assignments = [];
     if (Array.isArray(classIDs) && classIDs.length > 0) {
       for (const cid of classIDs) {
         const assignment = new Assignment({
           classID: cid,
-          title,
+          title: title.trim(),
           instructions,
           type: type || 'assignment',
           description,
@@ -114,7 +185,7 @@ router.post('/', authenticateToken, upload.single('attachmentFile'), async (req,
     } else if (classID) {
       const assignment = new Assignment({
         classID,
-        title,
+        title: title.trim(),
         instructions,
         type: type || 'assignment',
         description,
@@ -136,24 +207,88 @@ router.post('/', authenticateToken, upload.single('attachmentFile'), async (req,
       return res.status(400).json({ error: 'No classID(s) provided.' });
     }
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create assignment.' });
+    console.error('Error creating assignment:', err);
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ error: errors.join(', ') });
+    }
+    res.status(500).json({ error: 'Failed to create assignment. Please try again.' });
   }
 });
 
 // Edit assignment
 router.put('/:id', authenticateToken, async (req, res) => {
-  const { title, instructions } = req.body;
-  const assignment = await Assignment.findByIdAndUpdate(
-    req.params.id, { title, instructions }, { new: true }
-  );
-  res.json(assignment);
+  try {
+    const { title, instructions, description, dueDate, points, attachmentLink, postAt, classIDs } = req.body;
+    
+    // Validate required fields
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Assignment title is required.' });
+    }
+    
+    if (points !== undefined && (points < 1 || points > 100)) {
+      return res.status(400).json({ error: 'Points must be between 1 and 100.' });
+    }
+    
+    const assignment = await Assignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ error: 'Assignment not found.' });
+    }
+    
+    // Only allow faculty who created the assignment to update it
+    if (assignment.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'You are not authorized to edit this assignment.' });
+    }
+    
+    // Update fields
+    if (title !== undefined) assignment.title = title.trim();
+    if (instructions !== undefined) assignment.instructions = instructions;
+    if (description !== undefined) assignment.description = description;
+    if (dueDate !== undefined) assignment.dueDate = dueDate;
+    if (points !== undefined) assignment.points = points;
+    if (attachmentLink !== undefined) assignment.attachmentLink = attachmentLink;
+    if (postAt !== undefined) assignment.postAt = postAt;
+    if (classIDs !== undefined && Array.isArray(classIDs)) {
+      assignment.classID = classIDs[0]; // For now, just use the first class ID
+    }
+    
+    await assignment.save();
+    res.json(assignment);
+  } catch (err) {
+    console.error('Error updating assignment:', err);
+    if (err.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid assignment ID format.' });
+    }
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ error: errors.join(', ') });
+    }
+    res.status(500).json({ error: 'Failed to update assignment. Please try again.' });
+  }
 });
 
 // Delete assignment
 router.delete('/:id', authenticateToken, async (req, res) => {
-  await Assignment.findByIdAndDelete(req.params.id);
-  res.json({ success: true });
+  try {
+    const assignment = await Assignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ error: 'Assignment not found.' });
+    }
+    
+    // Only allow faculty who created the assignment to delete it
+    if (assignment.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'You are not authorized to delete this assignment.' });
+    }
+    
+    await Assignment.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Assignment deleted successfully.' });
+  } catch (err) {
+    console.error('Error deleting assignment:', err);
+    if (err.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid assignment ID format.' });
+    }
+    res.status(500).json({ error: 'Failed to delete assignment. Please try again.' });
+  }
 });
 
 // Mark assignment as viewed by a student

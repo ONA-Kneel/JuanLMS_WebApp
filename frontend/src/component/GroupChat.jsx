@@ -1,12 +1,13 @@
 // GroupChat.jsx
 // A comprehensive group chat component for all user roles
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
 import uploadfile from "../assets/uploadfile.png";
 import closeIcon from "../assets/close.png";
 import { useNavigate } from "react-router-dom";
+import ValidationModal from "./ValidationModal";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
@@ -26,6 +27,12 @@ export default function GroupChat({ NavbarComponent }) {
   const [selectedParticipants, setSelectedParticipants] = useState([]);
   const [joinGroupId, setJoinGroupId] = useState("");
   const [lastMessages, setLastMessages] = useState({});
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -237,7 +244,12 @@ export default function GroupChat({ NavbarComponent }) {
 
   const handleCreateGroup = async () => {
     if (!groupName.trim() || selectedParticipants.length === 0) {
-      alert("Please provide a group name and select at least one participant");
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Missing Information',
+        message: "Please provide a group name and select at least one participant"
+      });
       return;
     }
 
@@ -260,14 +272,23 @@ export default function GroupChat({ NavbarComponent }) {
       // Join the group in socket
       socket.current.emit("joinGroup", { userId: currentUserId, groupId: newGroup._id });
     } catch (err) {
-      console.error("Error creating group:", err);
-      alert(err.response?.data?.error || "Error creating group");
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Creation Failed',
+        message: err.response?.data?.error || "Error creating group"
+      });
     }
   };
 
   const handleJoinGroup = async () => {
     if (!joinGroupId.trim()) {
-      alert("Please enter a group ID");
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Missing Group Code',
+        message: "Please enter a group ID"
+      });
       return;
     }
 
@@ -282,8 +303,12 @@ export default function GroupChat({ NavbarComponent }) {
       setShowJoinGroup(false);
       setJoinGroupId("");
     } catch (err) {
-      console.error("Error joining group:", err);
-      alert(err.response?.data?.error || "Error joining group");
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Join Failed',
+        message: err.response?.data?.error || "Error joining group"
+      });
     }
   };
 
@@ -306,8 +331,12 @@ export default function GroupChat({ NavbarComponent }) {
       // Leave the group in socket
       socket.current.emit("leaveGroup", { userId: currentUserId, groupId: selectedGroup._id });
     } catch (err) {
-      console.error("Error leaving group:", err);
-      alert(err.response?.data?.error || "Error leaving group");
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Leave Failed',
+        message: err.response?.data?.error || "Error leaving group"
+      });
     }
   };
 
@@ -622,6 +651,14 @@ export default function GroupChat({ NavbarComponent }) {
           </div>
         </div>
       )}
+
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
+      />
     </div>
   );
 } 

@@ -2,13 +2,14 @@
 // Login page for JuanLMS. Handles user authentication, auto-login, and role-based navigation.
 // Features: Remember Me, password visibility toggle, JWT decode, and auto-login if credentials are stored.
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import logo from '../assets/logo/Logo4.svg';
 import logo6 from '../assets/logo/SJDD Logo.svg';
 import axios from 'axios';
 import { Eye, EyeOff } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
+import ValidationModal from './ValidationModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -36,6 +37,12 @@ export default function Login() {
     return 30;
   });
   const [showArchivedModal, setShowArchivedModal] = useState(false);
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
 
   // --- EFFECT: Auto-login if credentials are stored in localStorage ---
   useEffect(() => {
@@ -74,9 +81,16 @@ export default function Login() {
       else if (role === 'vice president of education') navigate('/parent_dashboard');
       else if (role === 'admin') navigate('/admin_dashboard');
       else if (role === 'principal') navigate('/principal_dashboard');
-      else alert('Unknown role');
+      else {
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Unknown Role',
+          message: 'Unknown role'
+        });
+      }
     } catch (error) {
-      console.log(error);
+      console.error('Auto-login failed:', error);
       // Clear stored credentials if auto-login fails
       localStorage.removeItem('rememberedEmail');
       localStorage.removeItem('rememberedPassword');
@@ -150,19 +164,19 @@ export default function Login() {
       else if (role === 'vice president of education') navigate('/parent_dashboard');
       else if (role === 'admin') navigate('/admin_dashboard');
       else if (role === 'principal') navigate('/principal_dashboard');
-      else alert('Unknown role');
+      else {
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Unknown Role',
+          message: 'Unknown role'
+        });
+      }
   
     } catch (error) {
-      console.log(error);
-      // Increment failed attempts
-      const newFailedAttempts = failedAttempts + 1;
-      setFailedAttempts(newFailedAttempts);
+      console.error('Login failed:', error);
       
-      if (newFailedAttempts >= 3) {
-        setIsLocked(true);
-        const lockoutEndTime = Date.now() + (30 * 1000); // 30 seconds from now
-        localStorage.setItem('lockoutEndTime', lockoutEndTime.toString());
-      }
+      // Handle archived account case first
       if (
         error.response &&
         error.response.data &&
@@ -171,6 +185,52 @@ export default function Login() {
         setShowArchivedModal(true);
         return;
       }
+      
+      // Increment failed attempts
+      const newFailedAttempts = failedAttempts + 1;
+      setFailedAttempts(newFailedAttempts);
+      
+      // Check if account should be locked
+      if (newFailedAttempts >= 5) {
+        setIsLocked(true);
+        const lockoutEndTime = Date.now() + (30 * 60 * 1000); // 30 minutes
+        localStorage.setItem('lockoutEndTime', lockoutEndTime.toString());
+        setLockoutTime(30 * 60); // 30 minutes in seconds
+        return;
+      }
+      
+      // Handle specific error cases
+      let errorMessage = 'Invalid email or password.';
+      
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        if (status === 401) {
+          errorMessage = data.message || 'Invalid email or password.';
+        } else if (status === 403) {
+          errorMessage = data.message || 'Account is disabled or locked.';
+        } else if (status === 404) {
+          errorMessage = 'User account not found.';
+        } else if (status === 422) {
+          errorMessage = data.message || 'Invalid input data.';
+        } else if (status >= 500) {
+          errorMessage = 'Server error. Please try again later.';
+        } else {
+          errorMessage = data.message || `Login failed (${status}).`;
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else {
+        errorMessage = error.message || 'An unexpected error occurred.';
+      }
+      
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Login Failed',
+        message: errorMessage
+      });
     }
   };
   
@@ -292,6 +352,13 @@ export default function Login() {
           </div>
         </div>
       )}
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
+      />
     </div>
   );
 }
