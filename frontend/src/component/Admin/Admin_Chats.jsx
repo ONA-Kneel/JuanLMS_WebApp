@@ -42,9 +42,17 @@ export default function Admin_Chats() {
   const [memberSearchTerm, setMemberSearchTerm] = useState("");
   const [users, setUsers] = useState([]);
 
-  // Add state for new individual chat
-  const [showNewChatModal, setShowNewChatModal] = useState(false);
-  const [userSearchTerm, setUserSearchTerm] = useState("");
+  // Add missing validationModal state
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: "",
+    title: "",
+    message: ""
+  });
+
+  // Add state for leave confirmation and group members dropdown
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showMembersDropdown, setShowMembersDropdown] = useState(false);
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -621,15 +629,6 @@ export default function Admin_Chats() {
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
 
-  // Filter users for new chat modal
-  const filteredUsersForNewChat = users
-    .filter(user => user._id !== currentUserId)
-    .filter(user => !recentChats.some(chat => chat._id === user._id))
-    .filter(user =>
-      user.firstname?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-      user.lastname?.toLowerCase().includes(userSearchTerm.toLowerCase())
-    );
-
   // Unified chat interface with tabs, left/right panels, and modals
   return (
     <div className="flex min-h-screen h-screen max-h-screen">
@@ -694,14 +693,7 @@ export default function Admin_Chats() {
             </div>
 
             {/* New Chat Button */}
-            <div className="mb-4">
-              <button
-                onClick={() => setShowNewChatModal(true)}
-                className="w-full bg-blue-900 text-white py-2 px-4 rounded-lg hover:bg-blue-800 transition-colors text-sm"
-              >
-                Start New Chat
-              </button>
-            </div>
+            {/* Removed the Start New Chat button as requested */}
 
             {/* Unified Chat List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
@@ -866,17 +858,21 @@ export default function Admin_Chats() {
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    {selectedChat.isGroup ? (
-                      <button
-                        onClick={handleLeaveGroup}
-                        className="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition-colors text-sm"
-                      >
-                        Leave Group
-                      </button>
-                    ) : (
-                      <div className="flex space-x-3">
-                        <img src={uploadfile} alt="Upload" className="w-6 h-6 cursor-pointer hover:opacity-75" />
-                      </div>
+                    {selectedChat.isGroup && (
+                      <>
+                        <button
+                          onClick={() => setShowMembersDropdown((prev) => !prev)}
+                          className="bg-gray-200 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-300 transition-colors text-sm mr-2"
+                        >
+                          View Members
+                        </button>
+                        <button
+                          onClick={() => setShowLeaveConfirm(true)}
+                          className="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition-colors text-sm"
+                        >
+                          Leave Group
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -884,7 +880,7 @@ export default function Admin_Chats() {
                 <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
                   {(selectedChat.isGroup ? groupMessages[selectedChat._id] || [] : messages[selectedChat._id] || []).map((msg, index, arr) => {
                     const isRecipient = msg.senderId !== currentUserId;
-                    const sender = isRecipient ? userGroups.find(u => u._id === msg.senderId) : null;
+                    const sender = users.find(u => u._id === msg.senderId);
                     const prevMsg = arr[index - 1];
                     const showHeader =
                       index === 0 ||
@@ -978,57 +974,7 @@ export default function Admin_Chats() {
         </div>
 
         {/* New Chat Modal */}
-        {showNewChatModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-semibold mb-4">Start New Chat</h3>
-              <input
-                type="text"
-                placeholder="Search users by name..."
-                className="w-full p-2 border rounded-lg mb-4"
-                value={userSearchTerm}
-                onChange={(e) => setUserSearchTerm(e.target.value)}
-              />
-              <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg">
-                {filteredUsersForNewChat.length === 0 ? (
-                  <div className="text-gray-400 text-center p-4 text-sm">
-                    {userSearchTerm.trim() === "" ? "Start typing to search users" : "No users found"}
-                  </div>
-                ) : (
-                  filteredUsersForNewChat.map(user => (
-                    <div
-                      key={user._id}
-                      className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded cursor-pointer border-b border-gray-100"
-                      onClick={() => handleStartNewChat(user)}
-                    >
-                      <img
-                        src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar}
-                        alt="Profile"
-                        className="w-10 h-10 rounded-full object-cover border"
-                        onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
-                      />
-                      <div>
-                        <div className="font-semibold text-sm">{user.lastname}, {user.firstname}</div>
-                        <div className="text-xs text-gray-500 capitalize">{user.role}</div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="flex gap-2 mt-4">
-                <button
-                  onClick={() => {
-                    setShowNewChatModal(false);
-                    setUserSearchTerm("");
-                  }}
-                  className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Removed the New Chat Modal related to showNewChatModal as requested */}
 
         {/* Create Group Modal */}
         {showCreateGroup && (
@@ -1156,6 +1102,58 @@ export default function Admin_Chats() {
                     Cancel
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Replace the dropdown with a centered modal for group members */}
+        {showMembersDropdown && selectedChat.isGroup && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4">
+              <h3 className="text-lg font-semibold mb-4">Group Members</h3>
+              <ul className="mb-4 divide-y divide-gray-200">
+                {selectedChat.participants.map((userId, idx) => {
+                  const user = users.find((u) => u._id === userId);
+                  if (!user) return null;
+                  return (
+                    <li key={userId} className="flex items-center gap-2 py-2">
+                      <img src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar} alt="Profile" className="w-8 h-8 rounded-full object-cover border" />
+                      <span>{user.lastname}, {user.firstname}</span>
+                      {selectedChat.createdBy === user._id && (
+                        <span className="text-xs text-blue-600 ml-2">(Creator)</span>
+                      )}
+                      <span className="text-xs text-gray-500 ml-2">{user.role}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button onClick={() => setShowMembersDropdown(false)} className="w-full py-2 rounded bg-blue-900 text-white font-semibold">Close</button>
+            </div>
+          </div>
+        )}
+
+        {showLeaveConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4">
+              <h3 className="text-lg font-semibold mb-4">Confirm Leave Group</h3>
+              <p className="mb-4">Are you sure you want to leave the group "{selectedChat.name}"?</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setShowLeaveConfirm(false);
+                    handleLeaveGroup();
+                  }}
+                  className="flex-1 py-2 rounded-lg text-sm bg-red-500 text-white hover:bg-red-600"
+                >
+                  Yes, Leave
+                </button>
+                <button
+                  onClick={() => setShowLeaveConfirm(false)}
+                  className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
