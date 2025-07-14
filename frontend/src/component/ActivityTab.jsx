@@ -392,80 +392,80 @@ export default function ActivityTab({ onAssignmentCreated }) {
                 <h1 className="text-2xl font-bold mb-8 font-poppins">{isEditMode ? 'Edit Assignment' : 'Create an Assignment'}</h1>
                 <div className="bg-white rounded-xl shadow p-8 mb-8">
                     <label className="block font-bold text-lg mb-1 font-poppins">Title of Assignment</label>
-                    <input
+                            <input
                         className="w-full border-b text-lg font-semibold focus:outline-none focus:border-blue-600 bg-transparent mb-4 font-poppins"
-                        placeholder="Title"
-                        value={title}
-                        onChange={e => setTitle(e.target.value)}
-                    />
-                    <label className="block font-bold text-lg mb-1 mt-4 font-poppins">Instructions <span className="font-normal text-base text-gray-500">(optional)</span></label>
-                    <textarea
+                                placeholder="Title"
+                                value={title}
+                                onChange={e => setTitle(e.target.value)}
+                            />
+                    <label className="block font-bold text-lg mb-1 mt-4 font-poppins">Instructions</label>
+                            <textarea
                         className="w-full border-b focus:outline-none focus:border-blue-400 bg-transparent min-h-[80px] resize-y mb-4 font-poppins"
-                        placeholder="Instructions here"
-                        value={description}
+                                placeholder="Instructions here"
+                                value={description}
                         onChange={e => setDescription(e.target.value)}
                     />
-                    <div className="relative mb-4 mt-2">
-                        <button
-                            type="button"
-                            className={`flex items-center gap-2 px-4 py-2 rounded border ${showAddDropdown ? 'bg-blue-100 border-blue-400' : 'bg-white border-gray-300'} text-blue-900 font-semibold hover:bg-blue-50`}
-                            onClick={() => setShowAddDropdown(v => !v)}
-                        >
-                            Add Attachment
-                        </button>
-                        {showAddDropdown && (
-                            <div className="absolute left-0 mt-2 w-48 bg-white border rounded shadow-lg z-10">
+                            <div className="relative mb-4 mt-2">
                                 <button
-                                    className="w-full flex items-center gap-2 px-4 py-2 hover:bg-gray-100 text-left"
-                                    onClick={() => { setShowAddDropdown(false); setShowLinkModal(true); }}
+                                    type="button"
+                                    className={`flex items-center gap-2 px-4 py-2 rounded border ${showAddDropdown ? 'bg-blue-100 border-blue-400' : 'bg-white border-gray-300'} text-blue-900 font-semibold hover:bg-blue-50`}
+                                    onClick={() => setShowAddDropdown(v => !v)}
                                 >
-                                    <span className="material-icons">link</span> Link
+                                    Add Attachment
                                 </button>
-                                <button
-                                    className="w-full flex items-center gap-2 px-4 py-2 hover:bg-gray-100 text-left"
-                                    onClick={() => { setShowAddDropdown(false); setTimeout(() => { fileInputRef.current && fileInputRef.current.click(); }, 100); }}
-                                >
-                                    <span className="material-icons">attach_file</span> File
-                                </button>
-                            </div>
-                        )}
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            style={{ display: 'none' }}
-                            onChange={e => setAttachmentFile(e.target.files[0])}
-                        />
-                    </div>
-                    {/* Link Modal */}
-                    {showLinkModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                                <h3 className="text-lg font-semibold mb-4 text-blue-900">Add Link Attachment</h3>
+                                {showAddDropdown && (
+                                    <div className="absolute left-0 mt-2 w-48 bg-white border rounded shadow-lg z-10">
+                                        <button
+                                            className="w-full flex items-center gap-2 px-4 py-2 hover:bg-gray-100 text-left"
+                                            onClick={() => { setShowAddDropdown(false); setShowLinkModal(true); }}
+                                        >
+                                            <span className="material-icons">link</span> Link
+                                        </button>
+                                        <button
+                                            className="w-full flex items-center gap-2 px-4 py-2 hover:bg-gray-100 text-left"
+                                            onClick={() => { setShowAddDropdown(false); setTimeout(() => { fileInputRef.current && fileInputRef.current.click(); }, 100); }}
+                                        >
+                                            <span className="material-icons">attach_file</span> File
+                                        </button>
+                                    </div>
+                                )}
                                 <input
-                                    type="url"
-                                    className="border rounded px-2 py-1 w-full mb-4"
-                                    placeholder="Paste your link here (e.g. Google Drive, GitHub, etc.)"
-                                    value={pendingLink}
-                                    onChange={e => setPendingLink(e.target.value)}
+                                    type="file"
+                                    ref={fileInputRef}
+                                    style={{ display: 'none' }}
+                                    onChange={e => setAttachmentFile(e.target.files[0])}
                                 />
-                                <div className="flex gap-2 justify-end">
-                                    <button className="bg-gray-300 text-gray-800 px-4 py-2 rounded" onClick={() => { setShowLinkModal(false); setPendingLink(''); }}>Cancel</button>
-                                    <button className="bg-blue-900 text-white px-4 py-2 rounded" onClick={() => { setAttachmentLink(pendingLink); setShowLinkModal(false); setPendingLink(''); }}>Add Link</button>
-                                </div>
                             </div>
-                        </div>
-                    )}
-                    {/* Show selected attachments */}
-                    {(attachmentLink || attachmentFile) && (
-                        <div className="mb-4 flex flex-col gap-2">
-                            {attachmentLink && (
-                                <div className="flex items-center gap-2 text-sm"><span className="material-icons">link</span> <a href={attachmentLink} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">{attachmentLink}</a> <button className="ml-2 text-red-500" onClick={() => setAttachmentLink('')}>Remove</button></div>
+                            {/* Link Modal */}
+                            {showLinkModal && (
+                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                                        <h3 className="text-lg font-semibold mb-4 text-blue-900">Add Link Attachment</h3>
+                                        <input
+                                            type="url"
+                                            className="border rounded px-2 py-1 w-full mb-4"
+                                            placeholder="Paste your link here (e.g. Google Drive, GitHub, etc.)"
+                                            value={pendingLink}
+                                            onChange={e => setPendingLink(e.target.value)}
+                                        />
+                                        <div className="flex gap-2 justify-end">
+                                            <button className="bg-gray-300 text-gray-800 px-4 py-2 rounded" onClick={() => { setShowLinkModal(false); setPendingLink(''); }}>Cancel</button>
+                                            <button className="bg-blue-900 text-white px-4 py-2 rounded" onClick={() => { setAttachmentLink(pendingLink); setShowLinkModal(false); setPendingLink(''); }}>Add Link</button>
+                                        </div>
+                                    </div>
+                                </div>
                             )}
-                            {attachmentFile && (
-                                <div className="flex items-center gap-2 text-sm"><span className="material-icons">attach_file</span> {attachmentFile.name} <button className="ml-2 text-red-500" onClick={() => setAttachmentFile(null)}>Remove</button></div>
+                            {/* Show selected attachments */}
+                            {(attachmentLink || attachmentFile) && (
+                                <div className="mb-4 flex flex-col gap-2">
+                                    {attachmentLink && (
+                                        <div className="flex items-center gap-2 text-sm"><span className="material-icons">link</span> <a href={attachmentLink} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">{attachmentLink}</a> <button className="ml-2 text-red-500" onClick={() => setAttachmentLink('')}>Remove</button></div>
+                                    )}
+                                    {attachmentFile && (
+                                        <div className="flex items-center gap-2 text-sm"><span className="material-icons">attach_file</span> {attachmentFile.name} <button className="ml-2 text-red-500" onClick={() => setAttachmentFile(null)}>Remove</button></div>
+                                    )}
+                                </div>
                             )}
-                        </div>
-                    )}
                 </div>
                 <div className="flex gap-4 mt-8 justify-end">
                     <button className="bg-blue-900 hover:bg-blue-950 text-white px-6 py-2 rounded font-poppins" onClick={handleSave}>Save Assignment</button>
@@ -546,7 +546,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                     </div>
                     {/* For each selected class, show student selection at the bottom of the class section */}
                     <div className="flex flex-col gap-4 mt-4">
-                        <label className="block text-sm font-medium mb-1 font-poppins">For</label>
+                    <label className="block text-sm font-medium mb-1 font-poppins">For</label>
                         {selectedClassIDs.map(classID => {
                             const entry = classStudentMap[classID];
                             const cls = availableClasses.find(c => c.classID === classID);

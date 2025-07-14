@@ -58,6 +58,8 @@ import Parent_Grades from './component/Parent/Parent_Grades';
 import Parent_Progress from './component/Parent/Parent_Progress';
 import ActivityTab from './component/ActivityTab';
 import QuizTab from './component/QuizTab';
+import QuizView from './component/QuizView';
+import QuizResponses from './component/QuizResponses';
 
 function App() {
   return (
@@ -124,6 +126,11 @@ function App() {
 
         {/* Assignment/Quiz Detail Page */}
         <Route path="/assignment/:assignmentId" element={<ProtectedRoute allowedRoles={['faculty','students']}><AssignmentDetailPage /></ProtectedRoute>} />
+
+        {/* Quiz Taking Page (Student) */}
+        <Route path="/quiz/:quizId" element={<ProtectedRoute allowedRoles={['students']}><QuizView /></ProtectedRoute>} />
+        {/* Quiz Responses Page (Faculty) */}
+        <Route path="/quiz/:quizId/responses" element={<ProtectedRoute allowedRoles={['faculty']}><QuizResponses /></ProtectedRoute>} />
 
         {/* Registration Page */}
         <Route path="/register" element={<Registration />} />

@@ -136,7 +136,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     }
   }, [selected, classId]);
 
-  // Fetch assignments from backend
+  // Fetch assignments and quizzes from backend
   useEffect(() => {
     if (selected === "classwork" && classId) {
       setAssignmentsLoading(true);
@@ -144,74 +144,64 @@ export default function ClassContent({ selected, isFaculty = false }) {
       const token = localStorage.getItem('token');
       const userRole = localStorage.getItem('role');
 
-      // Always include classID in the assignments request for students
-      const assignmentsUrl = `${API_BASE}/assignments?classID=${classId}`;
-      fetch(assignmentsUrl, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-        .then(async res => {
-          if (!res.ok) {
-            const errorData = await res.json();
-            throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
-          }
-          return res.json();
-        })
-        .then(data => {
-          // Support both classID (string) and classIDs (array)
-          const filtered = Array.isArray(data)
-            ? data.filter(a => a.classID === classId || (Array.isArray(a.classIDs) && a.classIDs.includes(classId)))
-            : [];
+      // Fetch both assignments and quizzes in parallel
+      Promise.all([
+        fetch(`${API_BASE}/assignments?classID=${classId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).then(res => res.ok ? res.json() : []),
+        fetch(`${API_BASE}/api/quizzes?classID=${classId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).then(res => res.ok ? res.json() : [])
+      ])
+      .then(([assignmentsData, quizzesData]) => {
+        const merged = [
+          ...(Array.isArray(assignmentsData) ? assignmentsData : []),
+          ...(Array.isArray(quizzesData) ? quizzesData : [])
+        ];
+        // Filter for this class (should be redundant, but safe)
+        const filtered = merged.filter(a =>
+          a.classID === classId ||
+          (Array.isArray(a.assignedTo) && a.assignedTo.some(at => String(at.classID) === String(classId)))
+        );
+        console.log("Filtered assignments/quizzes for class", classId, filtered);
 
-          // If user is a student, fetch their submissions to filter out completed assignments
-          if (userRole === 'students') {
-            Promise.all(filtered.map(assignment =>
-              fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-              }).then(async res => {
-                if (!res.ok) {
-                  console.warn(`Failed to fetch submissions for assignment ${assignment._id}`);
-                  return [];
-                }
-                return res.json();
-              }).catch(err => {
-                console.warn(`Error fetching submissions for assignment ${assignment._id}:`, err);
+        // If user is a student, fetch their submissions to filter out completed assignments
+        if (userRole === 'students') {
+          Promise.all(filtered.map(assignment =>
+            fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }).then(async res => {
+              if (!res.ok) {
+                console.warn(`Failed to fetch submissions for assignment ${assignment._id}`);
                 return [];
-              })
-            )).then(submissionsArrays => {
-              // Filter out assignments the student has already submitted
-              const assignmentsWithSubmission = filtered.map((assignment, i) => ({
-                ...assignment,
-                hasSubmitted: submissionsArrays[i] && submissionsArrays[i].length > 0
-              }));
-              setAssignments(assignmentsWithSubmission);
-              setAssignmentsLoading(false);
+              }
+              return res.json();
             }).catch(err => {
-              console.error('Error processing submissions:', err);
-              setAssignments(filtered);
-              setAssignmentsLoading(false);
-            });
-          } else {
+              console.warn(`Error fetching submissions for assignment ${assignment._id}:`, err);
+              return [];
+            })
+          )).then(submissionsArrays => {
+            const assignmentsWithSubmission = filtered.map((assignment, i) => ({
+              ...assignment,
+              hasSubmitted: submissionsArrays[i] && submissionsArrays[i].length > 0
+            }));
+            setAssignments(assignmentsWithSubmission);
+            setAssignmentsLoading(false);
+          }).catch(err => {
+            console.error('Error processing submissions:', err);
             setAssignments(filtered);
             setAssignmentsLoading(false);
-          }
-        })
-        .catch(err => {
-          console.error('Error fetching assignments:', err);
-          let errorMessage = 'Failed to fetch assignments. Please try again.';
-          
-          if (err.message.includes('401')) {
-            errorMessage = 'Your session has expired. Please log in again.';
-          } else if (err.message.includes('403')) {
-            errorMessage = 'You do not have permission to view assignments for this class.';
-          } else if (err.message.includes('404')) {
-            errorMessage = 'Class not found or you may not have access to it.';
-          } else if (err.message.includes('500')) {
-            errorMessage = 'Server error occurred. Please try again later.';
-          }
-          
-          setAssignmentError(errorMessage);
+          });
+        } else {
+          setAssignments(filtered);
           setAssignmentsLoading(false);
-        });
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching assignments/quizzes:', err);
+        setAssignmentError('Failed to fetch assignments/quizzes. Please try again.');
+        setAssignmentsLoading(false);
+      });
     }
   }, [selected, classId]);
 
@@ -751,7 +741,13 @@ export default function ClassContent({ selected, isFaculty = false }) {
                         ? 'bg-white border-blue-200 hover:bg-blue-50' 
                         : 'bg-gray-100 border-gray-300 opacity-75'
                     }`}
-                    onClick={() => navigate(`/assignment/${item._id}`)}
+                    onClick={() => {
+                      if (item.type === 'quiz') {
+                        navigate(`/quiz/${item._id}`);
+                      } else {
+                        navigate(`/assignment/${item._id}`);
+                      }
+                    }}
                   >
                     <div>
                       <div className="flex items-center gap-2 mb-1">
@@ -800,7 +796,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 );
               })
             ) : (
-              <p>No assignments found.</p>
+              <p>No assignments or quizzes found.</p>
             )}
           </div>
         </>
@@ -1223,12 +1219,14 @@ function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmat
       message: 'Are you sure you want to delete this assignment? This action cannot be undone.',
       onConfirm: async () => {
         const token = localStorage.getItem('token');
+        const url = assignment.type === 'quiz'
+          ? `${API_BASE}/api/quizzes/${assignment._id}`
+          : `${API_BASE}/assignments/${assignment._id}`;
         try {
-          const res = await fetch(`${API_BASE}/assignments/${assignment._id}`, {
+          const res = await fetch(url, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
           });
-          
           if (res.ok) {
             if (onDelete) onDelete(assignment._id);
             setValidationModal({
@@ -1241,7 +1239,6 @@ function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmat
             const err = await res.json();
             let errorMessage = err.error || `HTTP ${res.status}: ${res.statusText}`;
             let errorTitle = 'Delete Failed';
-            
             // Handle specific error cases
             if (res.status === 400) {
               errorTitle = 'Invalid Request';
@@ -1259,7 +1256,6 @@ function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmat
               errorTitle = 'Server Error';
               errorMessage = 'A server error occurred. Please try again later.';
             }
-            
             setValidationModal({
               isOpen: true,
               type: 'error',
@@ -1283,8 +1279,11 @@ function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmat
   const handlePostNow = async () => {
     setIsPosting(true);
     const token = localStorage.getItem('token');
+    const url = assignment.type === 'quiz'
+      ? `${API_BASE}/api/quizzes/${assignment._id}`
+      : `${API_BASE}/assignments/${assignment._id}`;
     try {
-      const res = await fetch(`${API_BASE}/assignments/${assignment._id}`, {
+      const res = await fetch(url, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1292,7 +1291,6 @@ function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmat
         },
         body: JSON.stringify({ postAt: new Date().toISOString() })
       });
-      
       if (res.ok) {
         const updatedAssignment = await res.json();
         // Update the assignment in the local state seamlessly
@@ -1309,7 +1307,6 @@ function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmat
         const err = await res.json();
         let errorMessage = err.error || `HTTP ${res.status}: ${res.statusText}`;
         let errorTitle = 'Post Failed';
-        
         // Handle specific error cases
         if (res.status === 400) {
           errorTitle = 'Invalid Request';
@@ -1327,7 +1324,6 @@ function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmat
           errorTitle = 'Server Error';
           errorMessage = 'A server error occurred. Please try again later.';
         }
-        
         setValidationModal({
           isOpen: true,
           type: 'error',
@@ -1359,7 +1355,15 @@ function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmat
         <div className="absolute right-0 mt-2 w-32 bg-white border rounded shadow-lg z-20">
           <button
             className="w-full text-left px-4 py-2 hover:bg-gray-100"
-            onClick={e => { e.stopPropagation(); setOpen(false); navigate(`/create-assignment?edit=${assignment._id}`); }}
+            onClick={e => {
+              e.stopPropagation();
+              setOpen(false);
+              if (assignment.type === 'quiz') {
+                navigate(`/create-quiz?edit=${assignment._id}`);
+              } else {
+                navigate(`/create-assignment?edit=${assignment._id}`);
+              }
+            }}
           >
             Edit
           </button>

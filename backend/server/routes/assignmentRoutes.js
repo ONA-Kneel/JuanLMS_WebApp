@@ -5,6 +5,7 @@ import Submission from '../models/Submission.js';
 import multer from 'multer';
 import path from 'path';
 import User from '../models/User.js';
+import Quiz from '../models/Quiz.js';
 
 const router = express.Router();
 
@@ -38,12 +39,24 @@ router.get('/', authenticateToken, async (req, res) => {
     assignments = [];
   }
 
+  // Fetch quizzes for this class
+  let quizzes = [];
+  if (classID) {
+    quizzes = await Quiz.find({ $or: [ { classID }, { classIDs: classID } ] }).sort({ createdAt: -1 });
+  }
+
+  // Add type field for frontend
+  const assignmentsWithType = assignments.map(a => ({ ...a.toObject(), type: 'assignment' }));
+  const quizzesWithType = quizzes.map(q => ({ ...q.toObject(), type: 'quiz' }));
+
   // Debug log before filtering
   console.log('[DEBUG] Role:', role, 'Assignments before filter:', assignments ? assignments.length : 'undefined', 'classID:', classID, 'userId:', userId);
 
+  let combined = [...assignmentsWithType, ...quizzesWithType];
+
   if (role === 'students') {
     const now = new Date();
-    assignments = assignments.filter(a => {
+    combined = combined.filter(a => {
       // Debug log for scheduling
       console.log('DEBUG_ASSIGNMENT_SCHEDULE', {
         title: a.title,
@@ -52,8 +65,8 @@ router.get('/', authenticateToken, async (req, res) => {
         assignedTo: a.assignedTo,
         classID: classID,
         userId: userId,
-        assignedToEntry: a.assignedTo.find(e => e.classID === classID),
-        studentIDs: a.assignedTo.find(e => e.classID === classID)?.studentIDs
+        assignedToEntry: a.assignedTo?.find?.(e => e.classID === classID),
+        studentIDs: a.assignedTo?.find?.(e => e.classID === classID)?.studentIDs
       });
       if (a.postAt && new Date(a.postAt) > now) return false;
       if (!a.assignedTo || a.assignedTo.length === 0) return false; // hide if not set
@@ -65,13 +78,14 @@ router.get('/', authenticateToken, async (req, res) => {
     // Debug log if not students or assignments empty
     console.log('[DEBUG] Not a student or no assignments to filter. Role:', role, 'Assignments:', assignments ? assignments.length : 'undefined');
   }
-  console.log('FINAL assignments for user', userId, 'role', role, ':', assignments.map(a => ({
+  console.log('FINAL assignments for user', userId, 'role', role, ':', combined.map(a => ({
     title: a.title,
     classID: a.classID,
     assignedTo: a.assignedTo,
-    postAt: a.postAt
+    postAt: a.postAt,
+    type: a.type
   })));
-  res.json(assignments);
+  res.json(combined);
 });
 
 // Get a single assignment by ID

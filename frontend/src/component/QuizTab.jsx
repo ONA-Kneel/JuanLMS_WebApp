@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import ValidationModal from './ValidationModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
-    const { classId } = useParams();
+export default function QuizTab({ onQuizCreated, onPointsChange }) {
     const [searchParams] = useSearchParams();
     const editAssignmentId = searchParams.get('edit');
     
@@ -24,16 +23,12 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
         required: true,
         identificationAnswer: "",
         trueFalseAnswer: true,
+        image: null, // for quiz question image
     });
     const [dueDate, setDueDate] = useState("");
-    const [showClassModal, setShowClassModal] = useState(false);
     const [availableClasses, setAvailableClasses] = useState([]);
     const [selectedClassIDs, setSelectedClassIDs] = useState([]);
-    const [pendingSavePayload, setPendingSavePayload] = useState(null);
     const [showSuccess, setShowSuccess] = useState(false);
-    const [quizPoints, setQuizPoints] = useState(100);
-    const [environment, setEnvironment] = useState('Environment 1');
-    const [studentGroup, setStudentGroup] = useState('All students');
     const [schedulePost, setSchedulePost] = useState(false);
     // Validation modal state
     const [validationModal, setValidationModal] = useState({
@@ -53,13 +48,16 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
     const [timingClose, setTimingClose] = useState("");
     const [timingLimitEnabled, setTimingLimitEnabled] = useState(false);
     const [timingLimit, setTimingLimit] = useState(0);
-    const [timingExpire, setTimingExpire] = useState("Open attempts are submitted automatically");
 
     const [showQuestionBehaviour, setShowQuestionBehaviour] = useState(false);
     const [shuffleQuestions, setShuffleQuestions] = useState("Yes");
 
     const [showSafeExam, setShowSafeExam] = useState(false);
     const [safeExamRequired, setSafeExamRequired] = useState("No");
+
+    const [classStudentMap, setClassStudentMap] = useState({}); // { classID: { students: [], selected: 'all' | [ids] } }
+    const [lightboxImage, setLightboxImage] = useState(null);
+    const [imageUploading, setImageUploading] = useState(false);
 
     const resetForm = () => setForm({
         type: "multiple",
@@ -85,21 +83,36 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             setIsEditMode(true);
             setLoading(true);
             const token = localStorage.getItem('token');
-            
-            fetch(`${API_BASE}/assignments/${editAssignmentId}`, {
+            // First, try to fetch as a quiz
+            fetch(`${API_BASE}/api/quizzes/${editAssignmentId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
                 .then(async res => {
-                    if (!res.ok) {
-                        const errorData = await res.json();
-                        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
-                    }
+                    if (res.ok) {
                     return res.json();
+                    } else {
+                        // If not found as quiz, try as assignment
+                        return fetch(`${API_BASE}/assignments/${editAssignmentId}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        }).then(async res2 => {
+                            if (!res2.ok) {
+                                const errorData = await res2.json();
+                                throw new Error(errorData.error || `HTTP ${res2.status}: ${res2.statusText}`);
+                            }
+                            const data2 = await res2.json();
+                            // If it's not a quiz, redirect to ActivityTab
+                            if (data2.type !== 'quiz') {
+                                window.location.href = `/create-assignment?edit=${editAssignmentId}`;
+                                return null;
+                            }
+                            return data2;
+                        });
+                    }
                 })
                 .then(data => {
+                    if (!data) return;
                     setTitle(data.title || "");
                     setDescription(data.instructions || data.description || "");
-                    setQuizPoints(data.points || 100);
                     if (data.questions && Array.isArray(data.questions)) {
                         setQuestions(data.questions);
                     }
@@ -111,6 +124,14 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                         const hours = String(dueDateLocal.getHours()).padStart(2, '0');
                         const minutes = String(dueDateLocal.getMinutes()).padStart(2, '0');
                         setDueDate(`${year}-${month}-${day}T${hours}:${minutes}`);
+                    }
+                    if (data.timing) {
+                        setTimingOpenEnabled(data.timing.open !== null);
+                        setTimingOpen(data.timing.open || "");
+                        setTimingCloseEnabled(data.timing.close !== null);
+                        setTimingClose(data.timing.close || "");
+                        setTimingLimitEnabled(data.timing.limit !== null);
+                        setTimingLimit(data.timing.limit || 0);
                     }
                     if (data.classID) {
                         setSelectedClassIDs([data.classID]);
@@ -140,6 +161,102 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                 .finally(() => setLoading(false));
         }
     }, [editAssignmentId]);
+
+    // Fetch available classes on mount
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        fetch(`${API_BASE}/classes/my-classes`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+            .then(res => res.json())
+            .then(data => setAvailableClasses(Array.isArray(data) ? data : []));
+    }, []);
+
+    // Fetch students for each selected class
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        selectedClassIDs.forEach(classID => {
+            if (!classStudentMap[classID]) {
+                fetch(`${API_BASE}/classes/${classID}/members`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        const students = Array.isArray(data.students) ? data.students : [];
+                        setClassStudentMap(prev => ({
+                            ...prev,
+                            [classID]: { students, selected: 'all' }
+                        }));
+                    });
+            }
+        });
+        // Remove classes that are no longer selected
+        setClassStudentMap(prev => {
+            const updated = { ...prev };
+            Object.keys(updated).forEach(cid => {
+                if (!selectedClassIDs.includes(cid)) delete updated[cid];
+            });
+            return updated;
+        });
+    }, [selectedClassIDs]);
+
+    const handleStudentSelection = (classID, typeOrId) => {
+        setClassStudentMap(prev => {
+            const entry = prev[classID] || { students: [], selected: 'all' };
+            if (typeOrId === 'all') {
+                return { ...prev, [classID]: { ...entry, selected: 'all' } };
+            } else {
+                // Toggle student ID
+                let selected = Array.isArray(entry.selected) ? [...entry.selected] : [];
+                if (selected.includes(typeOrId)) {
+                    selected = selected.filter(id => id !== typeOrId);
+                } else {
+                    selected.push(typeOrId);
+                }
+                return { ...prev, [classID]: { ...entry, selected } };
+            }
+        });
+    };
+
+    const handleStudentTypeChange = (classID, value) => {
+        setClassStudentMap(prev => ({
+            ...prev,
+            [classID]: { ...prev[classID], selected: value === 'all' ? 'all' : [] }
+        }));
+    };
+
+    const handleImageChange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setImageUploading(true);
+            const formData = new FormData();
+            formData.append('image', file);
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API_BASE}/quizzes/upload-image`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                if (!res.ok) {
+                    throw new Error('Image upload failed');
+                }
+                const data = await res.json();
+                setForm(f => ({ ...f, image: data.url }));
+            } catch (err) {
+                setValidationModal({
+                    isOpen: true,
+                    type: 'error',
+                    title: 'Image Upload Failed',
+                    message: err.message || 'Could not upload image. Please try again.'
+                });
+            } finally {
+                setImageUploading(false);
+            }
+        }
+    };
 
     const handleAddOrUpdate = () => {
         if (!form.question.trim()) {
@@ -195,6 +312,7 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             question: form.question,
             points: form.points,
             required: form.required,
+            image: form.image || null,
         };
         if (form.type === "multiple") {
             q.choices = form.choices;
@@ -225,11 +343,14 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             required: q.required,
             identificationAnswer: q.correctAnswer || "",
             trueFalseAnswer: q.correctAnswer === false ? false : true,
+            image: q.image || null,
         });
     };
 
     const handleDelete = idx => setQuestions(questions.filter((_, i) => i !== idx));
     const handleDuplicate = idx => setQuestions([...questions, { ...questions[idx] }]);
+
+    const FAR_FUTURE_DATE = "2099-12-31T23:59";
 
     const handleSave = async () => {
         if (!title.trim()) {
@@ -250,7 +371,17 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             });
             return;
         }
-        if (quizPoints < 1 || quizPoints > 100) {
+        if (!selectedClassIDs.length) {
+            setValidationModal({
+                isOpen: true,
+                type: 'warning',
+                title: 'No Classes Selected',
+                message: 'Please select at least one class to post this quiz.'
+            });
+            return;
+        }
+        const totalPoints = questions.reduce((sum, q) => sum + (q.points || 0), 0);
+        if (totalPoints < 1 || totalPoints > 100) {
             setValidationModal({
                 isOpen: true,
                 type: 'warning',
@@ -259,49 +390,130 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             });
             return;
         }
+        // Timing validation
+        if (timingOpenEnabled && !timingOpen) {
+            setValidationModal({
+                isOpen: true,
+                type: 'warning',
+                title: 'Missing Open Time',
+                message: 'Please set the open time for the quiz.'
+            });
+            return;
+        }
+        if (timingCloseEnabled && !timingClose) {
+            setValidationModal({
+                isOpen: true,
+                type: 'warning',
+                title: 'Missing Close Time',
+                message: 'Please set the close time for the quiz.'
+            });
+            return;
+        }
+        if (timingLimitEnabled && (!timingLimit || isNaN(Number(timingLimit)) || Number(timingLimit) < 1)) {
+            setValidationModal({
+                isOpen: true,
+                type: 'warning',
+                title: 'Invalid Time Limit',
+                message: 'Please set a valid time limit (in minutes, at least 1).' 
+            });
+            return;
+        }
         const token = localStorage.getItem('token');
-        const userRole = localStorage.getItem('role');
+        // Get user from localStorage
+        let userId = null;
+        try {
+            const userObj = JSON.parse(localStorage.getItem('user'));
+            userId = userObj?._id || null;
+        } catch {
+            userId = null;
+        }
+        // Build assignedTo array like ActivityTab.jsx
+        const assignedTo = selectedClassIDs.map(classID => {
+            const entry = classStudentMap[classID];
+            if (!entry) return { classID, studentIDs: [] };
+            if (entry.selected === 'all') {
+                const allStudentIDs = entry.students.map(stu => stu.userID || stu._id);
+                return { classID, studentIDs: allStudentIDs };
+            } else {
+                const ids = Array.isArray(entry.selected)
+                  ? entry.selected.map(stuId => {
+                        const stuObj = entry.students.find(s => (s.userID || s._id) === stuId);
+                        return stuObj ? (stuObj.userID || stuObj._id) : stuId;
+                    })
+                  : [];
+                return { classID, studentIDs: ids };
+            }
+        });
         const payload = {
-            classID: classId,
+            assignedTo, // for per-student assignment
             title,
             instructions: description,
             type: 'quiz',
             description,
-            points: quizPoints,
+            points: totalPoints,
             questions,
+            timing: {
+                open: timingOpenEnabled ? timingOpen : null,
+                close: timingCloseEnabled ? timingClose : null,
+                limit: timingLimitEnabled ? Number(timingLimit) : null
+            },
+            createdBy: userId,
         };
+        // Schedule post logic (PH time)
+        if (schedulePost && dueDate) {
+            const [datePart, timePart] = dueDate.split('T');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hour, minute] = timePart.split(':').map(Number);
+            // Convert PH time to UTC
+            const utcDate = new Date(Date.UTC(year, month - 1, day, hour - 8, minute));
+            const isoPostAt = utcDate.toISOString();
+            if (!isNaN(Date.parse(isoPostAt))) {
+                payload.postAt = isoPostAt;
+            }
+        } else {
+            // If not scheduled, set postAt to far future so students never see it
+            const local = new Date(FAR_FUTURE_DATE);
+            const utc = new Date(local.getTime() - local.getTimezoneOffset() * 60000);
+            payload.postAt = utc.toISOString();
+        }
         if (dueDate) {
             const isoDueDate = new Date(dueDate).toISOString();
             if (!isNaN(Date.parse(isoDueDate))) {
                 payload.dueDate = isoDueDate;
             }
         }
-        if (schedulePost) {
-            payload.schedulePost = true;
-        }
-        if (userRole === 'faculty') {
-            setPendingSavePayload(payload);
-            if (availableClasses.length === 0) {
-                fetch(`${API_BASE}/classes/my-classes`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                })
-                    .then(res => res.json())
-                    .then(data => setAvailableClasses(Array.isArray(data) ? data : []));
-            }
-            setShowClassModal(true);
-            return;
-        }
-        await actuallySave(payload);
+        await actuallySave(payload, token);
     };
 
-    const actuallySave = async (payload) => {
-        const token = localStorage.getItem('token');
-        if (selectedClassIDs.length > 0) {
-            payload.classIDs = selectedClassIDs;
+    const actuallySave = async (payload, token) => {
+        // Ensure createdBy is always present
+        if (!payload.createdBy) {
+            try {
+                const userObj = JSON.parse(localStorage.getItem('user'));
+                payload.createdBy = userObj?._id || null;
+            } catch {
+                payload.createdBy = null;
+            }
         }
         try {
-            const url = isEditMode ? `${API_BASE}/assignments/${editAssignmentId}` : `${API_BASE}/assignments`;
-            const method = isEditMode ? 'PUT' : 'POST';
+            let url, method;
+            if (isEditMode) {
+                if (payload.type === 'quiz') {
+                    url = `${API_BASE}/api/quizzes/${editAssignmentId}`;
+                    method = 'PUT';
+                } else {
+                    url = `${API_BASE}/assignments/${editAssignmentId}`;
+                    method = 'PUT';
+                }
+            } else {
+                if (payload.type === 'quiz') {
+                    url = `${API_BASE}/api/quizzes`;
+                    method = 'POST';
+                } else {
+                    url = `${API_BASE}/assignments`;
+                    method = 'POST';
+                }
+            }
             const res = await fetch(url, {
                 method,
                 headers: {
@@ -313,7 +525,13 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             if (res.ok) {
                 setShowSuccess(true);
                 if (typeof onQuizCreated === 'function') onQuizCreated();
-                onClose && onClose();
+                setTimeout(() => {
+                    if (window.history.length > 1) {
+                        window.history.back();
+                    } else {
+                        window.location.assign('/faculty_activities');
+                    }
+                }, 800);
             } else {
                 const err = await res.json();
                 let errorMessage = err.error || `HTTP ${res.status}: ${res.statusText}`;
@@ -357,6 +575,16 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
         return now.toISOString().slice(0, 16);
     };
 
+    // Lightbox close on Escape
+    useEffect(() => {
+        if (!lightboxImage) return;
+        const handleKey = (e) => {
+            if (e.key === 'Escape') setLightboxImage(null);
+        };
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+    }, [lightboxImage]);
+
     if (loading) {
         return (
             <div className="flex items-center justify-center py-8">
@@ -381,7 +609,7 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                         value={title}
                         onChange={e => setTitle(e.target.value)}
                     />
-                    <label className="block font-bold text-lg mb-1 mt-4">Instructions <span className="font-normal text-base text-gray-500">(optional)</span></label>
+                    <label className="block font-bold text-lg mb-1 mt-4">Instructions </label>
                     <textarea
                         className="w-full border-b focus:outline-none focus:border-blue-400 bg-transparent min-h-[80px] resize-y mb-4"
                         placeholder="Instructions here"
@@ -402,6 +630,27 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                                 <span className="ml-2 text-xs text-gray-500">({q.type}, {q.points} pt{q.points > 1 ? 's' : ''})</span>
                                 {q.required && <span className="ml-2 text-xs text-red-600">*</span>}
                             </div>
+                            {q.image && (
+                                <div className="mb-2 relative group w-fit">
+                                    <button
+                                        type="button"
+                                        onClick={() => setLightboxImage(q.image)}
+                                        className="focus:outline-none"
+                                    >
+                                        <img
+                                            src={q.image}
+                                            alt="Question"
+                                            className="max-h-40 rounded border transition-transform duration-200 group-hover:scale-105 group-hover:brightness-90 cursor-zoom-in"
+                                        />
+                                        {/* Zoom icon overlay */}
+                                        <span className="absolute bottom-2 right-2 bg-white/80 rounded-full p-1 shadow group-hover:bg-blue-100">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l5 5m-5-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
+                                        </span>
+                                    </button>
+                                </div>
+                            )}
                             {q.type === "multiple" && (
                                 <ul className="mb-2">
                                     {q.choices.map((c, i) => (
@@ -454,15 +703,33 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                                 />
                             </div>
                         </div>
-                        <select
+                        {/* Image upload */}
+                        <div className="mb-2">
+                            <label className="block text-sm font-medium mb-1">Image (optional)</label>
+                            <input type="file" accept="image/*" onChange={handleImageChange} disabled={imageUploading} />
+                            {imageUploading && <span className="text-blue-600 ml-2">Uploading...</span>}
+                            {form.image && (
+                                <div className="mt-2 flex items-center gap-2">
+                                    <img src={form.image} alt="Question" className="max-h-40 rounded border" />
+                                    <button
+                                        type="button"
+                                        className="text-red-600 text-sm font-semibold ml-2"
+                                        onClick={() => setForm(f => ({ ...f, image: null }))}
+                                    >
+                                        Remove Image
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                            <select
                             className="border rounded px-3 py-2 w-60 mt-2 mb-2"
-                            value={form.type}
-                            onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                        >
-                            <option value="multiple">Multiple choice</option>
-                            <option value="truefalse">True or False</option>
-                            <option value="identification">Identification</option>
-                        </select>
+                                value={form.type}
+                                onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                            >
+                                <option value="multiple">Multiple choice</option>
+                                <option value="truefalse">True or False</option>
+                                <option value="identification">Identification</option>
+                            </select>
                         {form.type === "multiple" && (
                             <div className="mb-3">
                                 <label className="block text-sm font-medium mb-1">Choices</label>
@@ -524,65 +791,30 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                         </div>
                     </div>
                     <div className="flex items-center gap-4 mt-4 max-w-4xl w-full mx-auto">
-                        <button
-                            type="button"
-                            className="bg-blue-700 text-white px-4 py-2 rounded shadow"
-                            onClick={handleAddOrUpdate}
-                        >
-                            {editingIndex !== null ? "Update Question" : "Add Question"}
-                        </button>
-                        {editingIndex !== null && (
                             <button
                                 type="button"
-                                className="bg-gray-400 text-white px-4 py-2 rounded"
-                                onClick={() => { setEditingIndex(null); resetForm(); }}
+                                className="bg-blue-700 text-white px-4 py-2 rounded shadow"
+                                onClick={handleAddOrUpdate}
                             >
-                                Cancel
+                                {editingIndex !== null ? "Update Question" : "Add Question"}
                             </button>
-                        )}
+                            {editingIndex !== null && (
+                                <button
+                                    type="button"
+                                    className="bg-gray-400 text-white px-4 py-2 rounded"
+                                    onClick={() => { setEditingIndex(null); resetForm(); }}
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                        </div>
                     </div>
-                </div>
                 <div className="flex gap-4 mt-8 justify-end">
                     <button className="bg-blue-700 text-white px-6 py-2 rounded" onClick={handleSave}>
                         {isEditMode ? 'Update Quiz' : 'Save Quiz'}
                     </button>
-                    <button className="bg-gray-500 text-white px-6 py-2 rounded" onClick={onClose}>Cancel</button>
+                    <button className="bg-gray-500 text-white px-6 py-2 rounded" onClick={() => window.history.length > 1 ? window.history.back() : window.location.assign('/faculty_activities')}>Cancel</button>
                 </div>
-                {/* Class selection modal */}
-                {showClassModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                        <div className="bg-white p-8 rounded-xl shadow-xl max-w-md w-full relative">
-                            <button
-                                className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl font-bold"
-                                onClick={() => setShowClassModal(false)}
-                                aria-label="Close"
-                            >
-                                ×
-                            </button>
-                            <h3 className="text-xl font-bold mb-4">Assign to Classes</h3>
-                            <select
-                                multiple
-                                className="w-full border rounded px-3 py-2 h-32 mb-4"
-                                value={selectedClassIDs}
-                                onChange={e => setSelectedClassIDs(Array.from(e.target.selectedOptions).map(opt => opt.value))}
-                            >
-                                {availableClasses.map(cls => (
-                                    <option key={cls._id} value={cls.classID}>{cls.className || cls.name}</option>
-                                ))}
-                            </select>
-                            <button
-                                className="bg-blue-900 text-white px-4 py-2 rounded w-full"
-                                onClick={async () => {
-                                    setShowClassModal(false);
-                                    await actuallySave({ ...pendingSavePayload, classIDs: selectedClassIDs });
-                                }}
-                                disabled={selectedClassIDs.length === 0}
-                            >
-                                Assign & Save
-                            </button>
-                        </div>
-                    </div>
-                )}
                 {/* Success confirmation modal */}
                 {showSuccess && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -602,13 +834,9 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
             <div className="w-96 min-w-[320px] bg-white border-l px-8 py-10 flex flex-col gap-8">
                 <div>
                     <label className="block text-sm font-medium mb-1">Points</label>
-                    <input
-                        type="number"
-                        min={1}
-                        className="border rounded px-2 py-1 w-full"
-                        value={quizPoints}
-                        onChange={e => setQuizPoints(Number(e.target.value))}
-                    />
+                    <div className="border rounded px-2 py-1 w-full bg-gray-100 text-gray-700">
+                        {questions.reduce((sum, q) => sum + (q.points || 0), 0)}
+                    </div>
                 </div>
                 <div>
                     <label className="block text-sm font-medium mb-1">Due Date</label>
@@ -622,57 +850,87 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                 </div>
                 <div>
                     <label className="block text-sm font-medium mb-1">Class(es)</label>
-                    {/* Example: Replace with dynamic class list if needed */}
                     <div className="flex flex-col gap-2">
-                        {availableClasses.length > 0 ? (
-                            availableClasses.map(cls => (
-                                <label key={cls._id} className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedClassIDs.includes(cls.classID)}
-                                        onChange={e => {
-                                            if (e.target.checked) setSelectedClassIDs(ids => [...ids, cls.classID]);
-                                            else setSelectedClassIDs(ids => ids.filter(id => id !== cls.classID));
-                                        }}
-                                    />
+                        {availableClasses.map(cls => (
+                            <label key={cls._id} className="flex items-start gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="mt-1"
+                                    value={cls.classID}
+                                    checked={selectedClassIDs.includes(cls.classID)}
+                                    onChange={e => {
+                                        if (e.target.checked) {
+                                            setSelectedClassIDs(ids => [...ids, cls.classID]);
+                                        } else {
+                                            setSelectedClassIDs(ids => ids.filter(id => id !== cls.classID));
+                                        }
+                                    }}
+                                />
+                                <span>
                                     <span className="font-semibold">{cls.className || cls.name}</span>
-                                    <span className="text-xs text-gray-500">{cls.section || cls.classCode}</span>
-                                </label>
-                            ))
-                        ) : (
-                            <span className="text-gray-400 text-sm">No classes available</span>
-                        )}
+                                    <br />
+                                    <span className="text-xs text-gray-700">{cls.classCode || 'N/A'}</span>
+                                </span>
+                            </label>
+                        ))}
+                    </div>
+                    {/* For each selected class, show student selection at the bottom of the class section */}
+                    <div className="flex flex-col gap-4 mt-4">
+                    <label className="block text-sm font-medium mb-1">For</label>
+                        {selectedClassIDs.map(classID => {
+                            const entry = classStudentMap[classID];
+                            const cls = availableClasses.find(c => c.classID === classID);
+                            if (!entry || !cls) return null;
+                            return (
+                                <div key={classID} className="p-2 border rounded bg-gray-50">
+                                    <div className="font-semibold mb-1">
+                                        {cls.className || cls.name} <span className="text-xs text-gray-700">({cls.classCode || 'N/A'})</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="font-semibold">Assign to:</span>
+                    <select
+                                            className="border rounded px-2 py-1"
+                                            value={entry.selected === 'all' ? 'all' : 'specific'}
+                                            onChange={e => handleStudentTypeChange(classID, e.target.value)}
+                                        >
+                                            <option value="all">All students</option>
+                                            <option value="specific">Specific students</option>
+                    </select>
+                                    </div>
+                                    {entry.selected !== 'all' && (
+                                        <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                                            {entry.students.map(stu => (
+                                                <label key={stu.userID || stu._id} className="flex items-center gap-2 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Array.isArray(entry.selected) && entry.selected.includes(stu.userID || stu._id)}
+                                                        onChange={() => handleStudentSelection(classID, stu.userID || stu._id)}
+                                                    />
+                                                    <span>{stu.firstname} {stu.lastname}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
-                <div>
-                    <label className="block text-sm font-medium mb-1">For</label>
-                    <select
-                        className="border rounded px-2 py-1 w-full mb-2"
-                        value={environment}
-                        onChange={e => setEnvironment(e.target.value)}
-                    >
-                        <option value="Environment 1">Environment 1</option>
-                        <option value="Environment 2">Environment 2</option>
-                    </select>
-                    <select
-                        className="border rounded px-2 py-1 w-full"
-                        value={studentGroup}
-                        onChange={e => setStudentGroup(e.target.value)}
-                    >
-                        <option value="All students">All students</option>
-                        <option value="Group A">Group A</option>
-                        <option value="Group B">Group B</option>
-                    </select>
-                </div>
-                <div>
+                {/* Schedule Post Toggle and DateTime Picker */}
+                <div className="mb-4 flex flex-col gap-2">
                     <label className="flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            checked={schedulePost}
-                            onChange={e => setSchedulePost(e.target.checked)}
-                        />
+                        <input type="checkbox" checked={schedulePost} onChange={e => setSchedulePost(e.target.checked)} />
                         Schedule Post
                     </label>
+                    {schedulePost && (
+                        <input
+                            type="datetime-local"
+                            className="border rounded px-2 py-1"
+                            value={dueDate}
+                            onChange={e => setDueDate(e.target.value)}
+                            min={getMinDueDate()}
+                        />
+                    )}
                 </div>
                 {/* Timing Collapsible Section */}
                 <div className="border rounded mb-2">
@@ -698,6 +956,7 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                                 <label className="flex items-center gap-1 mt-1">
                                     <input type="checkbox" checked={timingOpenEnabled} onChange={e => setTimingOpenEnabled(e.target.checked)} /> Enable
                                 </label>
+                                <span className="text-xs text-gray-500">If enabled, students can only start the quiz at or after this time.</span>
                             </div>
                             <div className="mb-2">
                                 <label className="block text-sm font-medium mb-1">Close the quiz</label>
@@ -711,13 +970,14 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                                 <label className="flex items-center gap-1 mt-1">
                                     <input type="checkbox" checked={timingCloseEnabled} onChange={e => setTimingCloseEnabled(e.target.checked)} /> Enable
                                 </label>
+                                <span className="text-xs text-gray-500">If enabled, the quiz will be inaccessible after this time.</span>
                             </div>
                             <div className="mb-2">
                                 <label className="block text-sm font-medium mb-1">Time limit</label>
                                 <div className="flex items-center gap-2">
                                     <input
                                         type="number"
-                                        min={0}
+                                        min={1}
                                         className="border rounded px-2 py-1 w-20"
                                         value={timingLimit}
                                         onChange={e => setTimingLimit(e.target.value)}
@@ -728,18 +988,7 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                                 <label className="flex items-center gap-1 mt-1">
                                     <input type="checkbox" checked={timingLimitEnabled} onChange={e => setTimingLimitEnabled(e.target.checked)} /> Enable
                                 </label>
-                            </div>
-                            <div className="mb-2">
-                                <label className="block text-sm font-medium mb-1">When time expires</label>
-                                <select
-                                    className="border rounded px-2 py-1 w-full max-w-full"
-                                    value={timingExpire}
-                                    onChange={e => setTimingExpire(e.target.value)}
-                                >
-                                    <option>Open attempts are submitted automatically</option>
-                                    <option>Attempts must be submitted before time expires</option>
-                                    <option>There is a grace period</option>
-                                </select>
+                                <span className="text-xs text-gray-500">If enabled, students have only this much time to finish the quiz after starting. When the timer hits 0, answers are auto-submitted.</span>
                             </div>
                         </div>
                     )}
@@ -758,15 +1007,15 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                         <div className="px-4 pb-4 pt-2 flex flex-col gap-4">
                             <div>
                                 <label className="block text-sm font-medium mb-1">Shuffle within questions</label>
-                                <select
-                                    className="border rounded px-2 py-1 w-full"
+                    <select
+                        className="border rounded px-2 py-1 w-full"
                                     value={shuffleQuestions}
                                     onChange={e => setShuffleQuestions(e.target.value)}
-                                >
+                    >
                                     <option>Yes</option>
                                     <option>No</option>
-                                </select>
-                            </div>
+                    </select>
+                </div>
                         </div>
                     )}
                 </div>
@@ -782,7 +1031,7 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                     </button>
                     {showSafeExam && (
                         <div className="px-4 pb-4 pt-2 flex flex-col gap-4">
-                            <div>
+                <div>
                                 <label className="block text-sm font-medium mb-1">Require the use of Safe Exam Browser</label>
                                 <select
                                     className="border rounded px-2 py-1 w-full"
@@ -792,8 +1041,8 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                                     <option>No</option>
                                     <option>Yes</option>
                                 </select>
-                            </div>
-                        </div>
+                </div>
+            </div>
                     )}
                 </div>
                 {/* Grading Collapsible Section */}
@@ -845,6 +1094,33 @@ export default function QuizTab({ onClose, onQuizCreated, onPointsChange }) {
                 title={validationModal.title}
                 message={validationModal.message}
             />
+            {/* Lightbox Modal */}
+            {lightboxImage && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in"
+                    onClick={() => setLightboxImage(null)}
+                    style={{ cursor: 'zoom-out' }}
+                >
+                    <div
+                        className="relative max-w-3xl w-full flex flex-col items-center"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <button
+                            className="absolute top-2 right-2 text-white bg-black/60 rounded-full p-2 hover:bg-black/80 text-2xl font-bold z-10"
+                            onClick={() => setLightboxImage(null)}
+                            aria-label="Close"
+                        >
+                            ×
+                        </button>
+                        <img
+                            src={lightboxImage}
+                            alt="Zoomed Question"
+                            className="max-h-[80vh] max-w-full rounded shadow-lg border-4 border-white"
+                            style={{ objectFit: 'contain' }}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 } 
