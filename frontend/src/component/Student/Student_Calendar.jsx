@@ -137,10 +137,13 @@ export default function Student_Calendar() {
           if (Array.isArray(assignments)) {
             assignments.forEach(a => {
               if (a.dueDate) {
+                const due = new Date(a.dueDate);
+                const start = new Date(due);
+                start.setHours(0, 0, 0, 0); // start of the due date
                 events.push({
                   title: `${a.title} (${cls.className || cls.name || 'Class'})`,
-                  start: a.dueDate,
-                  end: a.dueDate,
+                  start: start.toISOString(),
+                  end: due.toISOString(),
                   color: '#faad14', // yellow for assignments
                   assignmentId: a._id,
                   classId: classCode,
@@ -157,10 +160,13 @@ export default function Student_Calendar() {
           if (Array.isArray(quizzes)) {
             quizzes.forEach(q => {
               if (q.dueDate) {
+                const due = new Date(q.dueDate);
+                const start = new Date(due);
+                start.setHours(0, 0, 0, 0); // start of the due date
                 events.push({
                   title: `${q.title} (${cls.className || cls.name || 'Class'})`,
-                  start: q.dueDate,
-                  end: q.dueDate,
+                  start: start.toISOString(),
+                  end: due.toISOString(),
                   color: '#a259e6', // purple for quizzes
                   assignmentId: q._id,
                   classId: classCode,
@@ -241,6 +247,7 @@ export default function Student_Calendar() {
               height="auto"
               events={allEvents}
               dateClick={handleDateClick}
+              eventContent={renderEventContent}
             />
           )}
         </div>
@@ -263,17 +270,12 @@ export default function Student_Calendar() {
                         <span className={`ml-2 px-2 py-1 rounded text-xs font-bold ${ev.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{ev.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
                       )}
                       <br />
-                      <span className="text-sm text-gray-600">
-                        {ev.start
-                          ? new Date(ev.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : ''}
-                        {ev.end && (
-                          <>
-                            {' - '}
-                            {new Date(ev.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </>
-                        )}
-                      </span>
+                      {/* Show only the due time (end time) if available */}
+                      {ev.end && (
+                        <span className="text-sm text-gray-600">
+                          Due: {new Date(ev.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -288,3 +290,24 @@ export default function Student_Calendar() {
     </div>
   );
 };
+
+function renderEventContent(arg) {
+  const { event } = arg;
+  // Only show time for assignment/quiz events
+  if (event.extendedProps.type === 'assignment' || event.extendedProps.type === 'quiz') {
+    // Show due time (end time)
+    const end = event.end;
+    let timeStr = '';
+    if (end) {
+      const d = new Date(end);
+      timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    return (
+      <>
+        <b>{timeStr}</b> <span>{event.title}</span>
+      </>
+    );
+  }
+  // Default rendering for other events
+  return <span>{event.title}</span>;
+}
