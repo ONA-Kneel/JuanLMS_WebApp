@@ -130,7 +130,7 @@ router.post('/quizzes/:quizId/submit', authenticateToken, async (req, res) => {
 });
 
 // Faculty fetches all responses for a quiz
-router.get('/quizzes/:quizId/responses', authenticateToken, async (req, res) => {
+router.get('/:quizId/responses', authenticateToken, async (req, res) => {
     try {
         const { quizId } = req.params;
         // Optionally: check if req.user is faculty

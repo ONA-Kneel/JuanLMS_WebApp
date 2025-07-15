@@ -743,7 +743,11 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     }`}
                     onClick={() => {
                       if (item.type === 'quiz') {
-                        navigate(`/quiz/${item._id}`);
+                        if (isFaculty) {
+                          navigate(`/quiz/${item._id}/responses`);
+                        } else {
+                          navigate(`/quiz/${item._id}`);
+                        }
                       } else {
                         navigate(`/assignment/${item._id}`);
                       }
