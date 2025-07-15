@@ -142,7 +142,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setAssignmentsLoading(true);
       setAssignmentError(null);
       const token = localStorage.getItem('token');
-      const userRole = localStorage.getItem('role');
 
       // Fetch both assignments and quizzes in parallel
       Promise.all([
@@ -163,11 +162,13 @@ export default function ClassContent({ selected, isFaculty = false }) {
           a.classID === classId ||
           (Array.isArray(a.assignedTo) && a.assignedTo.some(at => String(at.classID) === String(classId)))
         );
-        console.log("Filtered assignments/quizzes for class", classId, filtered);
+        // Only show posted assignments/quizzes to students
+        const filteredForRole = localStorage.getItem('role') === 'faculty' ? filtered : filtered.filter(isAssignmentPosted);
+        console.log("Filtered assignments/quizzes for class", classId, filteredForRole);
 
         // If user is a student, fetch their submissions to filter out completed assignments
-        if (userRole === 'students') {
-          Promise.all(filtered.map(assignment =>
+        if (localStorage.getItem('role') === 'students') {
+          Promise.all(filteredForRole.map(assignment =>
             fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
               headers: { 'Authorization': `Bearer ${token}` }
             }).then(async res => {
@@ -181,7 +182,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
               return [];
             })
           )).then(submissionsArrays => {
-            const assignmentsWithSubmission = filtered.map((assignment, i) => ({
+            const assignmentsWithSubmission = filteredForRole.map((assignment, i) => ({
               ...assignment,
               hasSubmitted: submissionsArrays[i] && submissionsArrays[i].length > 0
             }));
@@ -189,11 +190,11 @@ export default function ClassContent({ selected, isFaculty = false }) {
             setAssignmentsLoading(false);
           }).catch(err => {
             console.error('Error processing submissions:', err);
-            setAssignments(filtered);
+            setAssignments(filteredForRole);
             setAssignmentsLoading(false);
           });
         } else {
-          setAssignments(filtered);
+          setAssignments(filteredForRole);
           setAssignmentsLoading(false);
         }
       })

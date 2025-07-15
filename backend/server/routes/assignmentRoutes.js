@@ -72,6 +72,12 @@ router.get('/', authenticateToken, async (req, res) => {
       if (!a.assignedTo || a.assignedTo.length === 0) return false; // hide if not set
       const entry = a.assignedTo.find(e => e.classID === classID);
       if (!entry) return false;
+      // Debug log for userId and studentIDs
+      console.log('DEBUG_ASSIGNMENT_STUDENT_CHECK', {
+        userId,
+        studentIDs: entry.studentIDs,
+        includes: Array.isArray(entry.studentIDs) && entry.studentIDs.includes(userId)
+      });
       return Array.isArray(entry.studentIDs) && entry.studentIDs.includes(userId);
     });
   } else {

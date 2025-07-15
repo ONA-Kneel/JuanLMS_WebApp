@@ -74,21 +74,42 @@ export default function Faculty_Calendar() {
         const myClasses = classes.filter(cls => cls.facultyID === userId || cls.facultyID === userId?.toString());
         let events = [];
         for (const cls of myClasses) {
-          const res = await fetch(`${API_BASE}/assignments?classID=${cls._id}`, {
+          // Assignments
+          const resA = await fetch(`${API_BASE}/assignments?classID=${cls._id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
-          const data = await res.json();
-          if (Array.isArray(data)) {
-            data.forEach(a => {
+          const assignments = await resA.json();
+          if (Array.isArray(assignments)) {
+            assignments.forEach(a => {
               if (a.dueDate) {
                 events.push({
                   title: `${a.title} (${cls.className || cls.name || 'Class'})`,
                   start: a.dueDate,
                   end: a.dueDate,
-                  color: a.type === 'quiz' ? '#a259e6' : '#00b894',
+                  color: '#faad14', // yellow for assignments
                   assignmentId: a._id,
                   classId: cls._id,
-                  type: a.type,
+                  type: 'assignment',
+                });
+              }
+            });
+          }
+          // Quizzes
+          const resQ = await fetch(`${API_BASE}/api/quizzes?classID=${cls._id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const quizzes = await resQ.json();
+          if (Array.isArray(quizzes)) {
+            quizzes.forEach(q => {
+              if (q.dueDate) {
+                events.push({
+                  title: `${q.title} (${cls.className || cls.name || 'Class'})`,
+                  start: q.dueDate,
+                  end: q.dueDate,
+                  color: '#a259e6', // purple for quizzes
+                  assignmentId: q._id,
+                  classId: cls._id,
+                  type: 'quiz',
                 });
               }
             });

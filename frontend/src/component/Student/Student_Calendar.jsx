@@ -21,7 +21,7 @@ export default function Student_Calendar() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [classDates, setClassDates] = useState([]);
-  // const [assignmentEvents, setAssignmentEvents] = useState([]); // commented out with assignments useEffect
+  const [assignmentEvents, setAssignmentEvents] = useState([]);
 
   useEffect(() => {
     (async () => {
@@ -117,50 +117,72 @@ export default function Student_Calendar() {
   }, []);
 
   // Fetch assignments/quizzes for student's classes and add as calendar events
-  /*
   useEffect(() => {
     const fetchAssignments = async () => {
       try {
         const token = localStorage.getItem('token');
-        const resClasses = await fetch('http://localhost:5000/classes/my-classes', {
+        const resClasses = await fetch(`${API_BASE}/classes/my-classes`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const classes = await resClasses.json();
         let events = [];
         for (const cls of classes) {
-          const res = await fetch(`http://localhost:5000/assignments?classID=${cls._id}`, {
+          // Use class code, not _id, for assignment and quiz fetches
+          const classCode = cls.classID || cls.classCode || cls._id;
+          // Fetch assignments
+          const resA = await fetch(`${API_BASE}/assignments?classID=${classCode}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
-          const data = await res.json();
-          if (Array.isArray(data)) {
-            data.forEach(a => {
+          const assignments = await resA.json();
+          if (Array.isArray(assignments)) {
+            assignments.forEach(a => {
               if (a.dueDate) {
                 events.push({
                   title: `${a.title} (${cls.className || cls.name || 'Class'})`,
                   start: a.dueDate,
                   end: a.dueDate,
-                  color: a.type === 'quiz' ? '#a259e6' : '#00b894',
+                  color: '#faad14', // yellow for assignments
                   assignmentId: a._id,
-                  classId: cls._id,
-                  type: a.type,
+                  classId: classCode,
+                  type: 'assignment',
+                });
+              }
+            });
+          }
+          // Fetch quizzes
+          const resQ = await fetch(`${API_BASE}/api/quizzes?classID=${classCode}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const quizzes = await resQ.json();
+          if (Array.isArray(quizzes)) {
+            quizzes.forEach(q => {
+              if (q.dueDate) {
+                events.push({
+                  title: `${q.title} (${cls.className || cls.name || 'Class'})`,
+                  start: q.dueDate,
+                  end: q.dueDate,
+                  color: '#a259e6', // purple for quizzes
+                  assignmentId: q._id,
+                  classId: classCode,
+                  type: 'quiz',
                 });
               }
             });
           }
         }
-        console.log('Assignment events for calendar:', events);
         setAssignmentEvents(events);
+        console.log('Assignment/Quiz events for calendar:', events);
       } catch {
         // ignore assignment fetch errors
       }
     };
     fetchAssignments();
   }, []);
-  */
 
   const allEvents = [
     ...adminEvents,
     ...holidays,
+    ...assignmentEvents,
     ...classDates.map(date => ({
       start: date.start,
       display: 'background',
@@ -177,11 +199,11 @@ export default function Student_Calendar() {
         const end = ev.end ? ev.end.slice(0, 10) : start;
         return clickedDate >= start && clickedDate <= end;
       }),
-      // ...assignmentEvents.filter(ev => {
-      //   const start = ev.start ? ev.start.slice(0, 10) : ev.date;
-      //   const end = ev.end ? ev.end.slice(0, 10) : start;
-      //   return clickedDate >= start && clickedDate <= end;
-      // })
+      ...assignmentEvents.filter(ev => {
+        const start = ev.start ? ev.start.slice(0, 10) : ev.date;
+        const end = ev.end ? ev.end.slice(0, 10) : start;
+        return clickedDate >= start && clickedDate <= end;
+      })
     ];
     setSelectedDayEvents(eventsForDay);
     setShowDayModal(true);
