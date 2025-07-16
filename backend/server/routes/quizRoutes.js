@@ -108,7 +108,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 // Student submits quiz answers
-router.post('/quizzes/:quizId/submit', authenticateToken, async (req, res) => {
+router.post('/:quizId/submit', authenticateToken, async (req, res) => {
     try {
         const { quizId } = req.params;
         const studentId = req.user ? req.user._id : req.body.studentId; // fallback for testing
@@ -121,9 +121,27 @@ router.post('/quizzes/:quizId/submit', authenticateToken, async (req, res) => {
         if (existing) {
             return res.status(400).json({ error: 'You have already submitted this quiz.' });
         }
-        const response = new QuizResponse({ quizId, studentId, answers });
+        // --- Auto-grading logic ---
+        const quiz = await Quiz.findById(quizId);
+        let score = 0;
+        let checkedAnswers = [];
+        quiz.questions.forEach((q, i) => {
+          const studentAnswer = answers[i]?.answer;
+          let correct = false;
+          if (q.type === 'multiple') {
+            correct = Array.isArray(studentAnswer) && Array.isArray(q.correct) &&
+                      studentAnswer.length === q.correct.length &&
+                      studentAnswer.every(a => q.correct.includes(a));
+          } else {
+            correct = studentAnswer === q.correct;
+          }
+          if (correct) score += q.points || 1;
+          checkedAnswers.push({ correct, studentAnswer, correctAnswer: q.correct });
+        });
+        // Save response with score
+        const response = new QuizResponse({ quizId, studentId, answers, score, checkedAnswers });
         await response.save();
-        res.status(201).json({ message: 'Quiz submitted successfully.' });
+        res.status(201).json({ message: 'Quiz submitted successfully.', score });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

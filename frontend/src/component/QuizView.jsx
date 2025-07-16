@@ -77,7 +77,7 @@ export default function QuizView() {
     setSubmitting(true);
     const token = localStorage.getItem('token');
     try {
-      await fetch(`${API_BASE}/quizzes/${quizId}/submit`, {
+      await fetch(`${API_BASE}/api/quizzes/${quizId}/submit`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -113,7 +113,7 @@ export default function QuizView() {
         <h2 className="text-4xl font-extrabold mb-4 text-blue-900 text-center">{quiz.title}</h2>
         <p className="mb-8 text-gray-700 text-xl text-center">Your response has been recorded.</p>
         <button className="bg-blue-800 text-white px-8 py-3 rounded-lg text-lg font-semibold mb-4 shadow">View score</button>
-        <button className="text-blue-700 underline text-base font-medium" onClick={() => window.location.reload()}>Submit another response</button>
+        <button className="text-blue-700 underline text-base font-medium" onClick={() => window.location.href =  '/student_dashboard'}>Back to Dashboard</button>
       </div>
     </div>
   );

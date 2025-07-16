@@ -13,6 +13,11 @@ const QuizResponseSchema = new mongoose.Schema({
   graded: { type: Boolean, default: false },
   score: { type: Number },
   feedback: { type: String },
+  checkedAnswers: [{
+    correct: Boolean,
+    studentAnswer: mongoose.Schema.Types.Mixed,
+    correctAnswer: mongoose.Schema.Types.Mixed
+  }],
 }, { timestamps: true });
 
 export default mongoose.model('QuizResponse', QuizResponseSchema); 
