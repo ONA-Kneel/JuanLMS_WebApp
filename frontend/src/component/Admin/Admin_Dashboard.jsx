@@ -14,6 +14,11 @@ export default function Admin_Dashboard() {
   const [currentTerm, setCurrentTerm] = useState(null);
   const [holidays, setHolidays] = useState([]);
   const [classDates, setClassDates] = useState([]);
+  const [lastLogins, setLastLogins] = useState([]);
+  const [lastLoginsLoading, setLastLoginsLoading] = useState(true);
+  const [lastLoginsError, setLastLoginsError] = useState(null);
+  const [lastLoginsPage, setLastLoginsPage] = useState(1);
+  const LAST_LOGINS_PER_PAGE = 7;
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -103,6 +108,28 @@ export default function Admin_Dashboard() {
       .catch(err => console.error("Failed to fetch holidays", err));
   }, []);
 
+  useEffect(() => {
+    // Fetch last logins for all users
+    const token = localStorage.getItem("token");
+    setLastLoginsLoading(true);
+    fetch(`${API_BASE}/audit-logs/last-logins`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.lastLogins)) {
+          setLastLogins(data.lastLogins);
+        } else {
+          setLastLogins([]);
+        }
+        setLastLoginsLoading(false);
+      })
+      .catch(err => {
+        setLastLoginsError("Failed to fetch last logins");
+        setLastLoginsLoading(false);
+      });
+  }, []);
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString('en-US', {
       year: 'numeric', month: 'long', day: 'numeric',
@@ -160,6 +187,44 @@ export default function Admin_Dashboard() {
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   };
+
+  // Helper for row color based on days since last login
+  const getRowColor = (lastLogin) => {
+    if (!lastLogin) return '';
+    const now = new Date();
+    const loginDate = new Date(lastLogin);
+    const diffDays = Math.floor((now - loginDate) / (1000 * 60 * 60 * 24));
+    if (diffDays >= 3) return 'bg-red-100';
+    if (diffDays === 2) return 'bg-yellow-100';
+    if (diffDays <= 1) return 'bg-green-100';
+    return '';
+  };
+
+  // Sort logins: reds first, then yellow, then green, then by most recent lastLogin
+  const sortedLogins = [...lastLogins].sort((a, b) => {
+    const getPriority = (log) => {
+      if (!log.lastLogin) return 3;
+      const now = new Date();
+      const loginDate = new Date(log.lastLogin);
+      const diffDays = Math.floor((now - loginDate) / (1000 * 60 * 60 * 24));
+      if (diffDays >= 3) return 0; // red
+      if (diffDays === 2) return 1; // yellow
+      if (diffDays <= 1) return 2; // green
+      return 3;
+    };
+    const pa = getPriority(a);
+    const pb = getPriority(b);
+    if (pa !== pb) return pa - pb;
+    // If same priority, sort by most recent lastLogin (descending)
+    return new Date(b.lastLogin) - new Date(a.lastLogin);
+  });
+
+  // Pagination logic
+  const totalLastLoginsPages = Math.ceil(sortedLogins.length / LAST_LOGINS_PER_PAGE);
+  const paginatedLogins = sortedLogins.slice(
+    (lastLoginsPage - 1) * LAST_LOGINS_PER_PAGE,
+    lastLoginsPage * LAST_LOGINS_PER_PAGE
+  );
 
   return (
     <div className="flex flex-col min-h-screen overflow-hidden font-poppinsr">
@@ -227,6 +292,59 @@ export default function Admin_Dashboard() {
               <span className="text-3xl font-bold text-indigo-600">--</span>
               <span className="text-gray-500 text-sm">(Coming soon)</span>
             </div>
+
+            {/* Last Logins Preview moved here */}
+            <div className="bg-white rounded-xl shadow p-4 mb-4">
+              <h4 className="text-md font-bold mb-2">Last Logins Preview</h4>
+              {lastLoginsLoading ? (
+                <div className="text-gray-500 text-sm">Loading...</div>
+              ) : lastLoginsError ? (
+                <div className="text-red-500 text-sm">{lastLoginsError}</div>
+              ) : lastLogins.length === 0 ? (
+                <div className="text-gray-500 text-sm">No login data found.</div>
+              ) : (
+                <>
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-xs table-fixed">
+                    <thead>
+                      <tr className="bg-gray-50 text-left">
+                        <th className="p-2 border-b w-2/6 font-semibold text-gray-700">User</th>
+                        <th className="p-2 border-b w-1/6 font-semibold text-gray-700">Role</th>
+                        <th className="p-2 border-b w-3/6 font-semibold text-gray-700">Last Login</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedLogins.map((log, idx) => (
+                        <tr key={log._id} className={getRowColor(log.lastLogin)}>
+                          <td className="p-2 border-b text-gray-900 whitespace-nowrap">{log.userName}</td>
+                          <td className="p-2 border-b text-gray-700 whitespace-nowrap">{log.userRole}</td>
+                          <td className="p-2 border-b text-gray-500 whitespace-nowrap">{formatDate(log.lastLogin)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {/* Pagination controls */}
+                  {totalLastLoginsPages > 1 && (
+                    <div className="flex justify-center items-center gap-2 mt-2">
+                      <button
+                        className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs"
+                        onClick={() => setLastLoginsPage((p) => Math.max(1, p - 1))}
+                        disabled={lastLoginsPage === 1}
+                      >
+                        {'<'}
+                      </button>
+                      <span className="text-xs">Page {lastLoginsPage} of {totalLastLoginsPages}</span>
+                      <button
+                        className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs"
+                        onClick={() => setLastLoginsPage((p) => Math.min(totalLastLoginsPages, p + 1))}
+                        disabled={lastLoginsPage === totalLastLoginsPages}
+                      >
+                        {'>'}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
           <div className="w-full md:w-96 flex flex-col gap-6">
@@ -283,13 +401,6 @@ export default function Admin_Dashboard() {
                   }
                 }}
               />
-            </div>
-
-            <div className="bg-white rounded-xl shadow p-4 mb-4">
-              <h4 className="text-md font-bold mb-2">Last Logins Preview</h4>
-              <ul className="text-gray-700 text-sm list-disc ml-4">
-                <li>-- (Coming soon)</li>
-              </ul>
             </div>
           </div>
         </div>

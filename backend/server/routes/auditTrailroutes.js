@@ -148,4 +148,51 @@ router.post('/audit-log', authenticateToken, async (req, res) => {
   }
 });
 
+// --- GET /audit-logs/last-logins - Get latest login for every user (admin/principal only) ---
+router.get('/audit-logs/last-logins', authenticateToken, async (req, res) => {
+  try {
+    // Only admin and principal can access
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    if (!req.user.role) {
+      return res.status(403).json({ message: 'User role not found' });
+    }
+    if (req.user.role !== 'admin' && req.user.role !== 'principal') {
+      return res.status(403).json({ message: 'Access denied. Admin/Principal only.' });
+    }
+
+    let db;
+    try {
+      db = database.getDb();
+    } catch (dbError) {
+      await database.connectToServer();
+      db = database.getDb();
+    }
+
+    // Aggregate latest login per user
+    const lastLogins = await db.collection('AuditLogs').aggregate([
+      { $match: { action: 'Login' } },
+      { $sort: { timestamp: -1 } },
+      {
+        $group: {
+          _id: "$userId",
+          userName: { $first: "$userName" },
+          userRole: { $first: "$userRole" },
+          lastLogin: { $first: "$timestamp" }
+        }
+      },
+      { $sort: { lastLogin: -1 } }
+    ]).toArray();
+
+    return res.json({ lastLogins });
+  } catch (error) {
+    console.error('[Audit] Error in /audit-logs/last-logins:', error);
+    return res.status(500).json({
+      message: 'Failed to fetch last logins',
+      error: error.message
+    });
+  }
+});
+
 export default router; 
