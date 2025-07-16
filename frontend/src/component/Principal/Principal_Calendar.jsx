@@ -135,6 +135,33 @@ export default function Principal_Calendar() {
     setShowDayModal(true);
   };
 
+  // Add renderEventContent function for consistent event display
+  function renderEventContent(arg) {
+    const { event } = arg;
+    const color = event.backgroundColor || event.color || '#1890ff';
+    let timeStr = '';
+    if (event.extendedProps.type === 'assignment' || event.extendedProps.type === 'quiz') {
+      const end = event.end;
+      if (end) {
+        const d = new Date(end);
+        timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+    }
+    const subtitle = event.extendedProps.subtitle;
+    return (
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block', marginRight: 4 }}></span>
+          {timeStr && <b>{timeStr}</b>}
+          <span style={{ marginLeft: timeStr ? 4 : 0 }}>{event.title}</span>
+        </span>
+        {subtitle && (
+          <span style={{ fontSize: '0.8em', color: '#666', marginLeft: 16 }}>{subtitle}</span>
+        )}
+      </span>
+    );
+  }
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Principal_Navbar />
@@ -167,6 +194,7 @@ export default function Principal_Calendar() {
               height="auto"
               events={allEvents}
               dateClick={handleDateClick}
+              eventContent={renderEventContent}
             />
           )}
         </div>

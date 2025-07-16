@@ -39,6 +39,11 @@ router.get('/', authenticateToken, async (req, res) => {
     assignments = [];
   }
 
+  // Debug log for faculty
+  if (role === 'faculty') {
+    console.log('[DEBUG][FACULTY] /assignments', { classID, userId, assignmentsCount: assignments.length, assignmentTitles: assignments.map(a => a.title) });
+  }
+
   // Fetch quizzes for this class
   let quizzes = [];
   if (classID) {

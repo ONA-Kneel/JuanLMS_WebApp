@@ -121,6 +121,7 @@ export default function Student_Calendar() {
     const fetchAssignments = async () => {
       try {
         const token = localStorage.getItem('token');
+        const userId = JSON.parse(atob(token.split('.')[1])).userID;
         const resClasses = await fetch(`${API_BASE}/classes/my-classes`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -136,15 +137,18 @@ export default function Student_Calendar() {
           const assignments = await resA.json();
           if (Array.isArray(assignments)) {
             assignments.forEach(a => {
-              if (a.dueDate) {
+              // Only show if assigned to this student
+              const entry = a.assignedTo?.find?.(e => e.classID === classCode);
+              if (a.dueDate && entry && Array.isArray(entry.studentIDs) && entry.studentIDs.includes(userId)) {
                 const due = new Date(a.dueDate);
                 const start = new Date(due);
-                start.setHours(0, 0, 0, 0); // start of the due date
+                start.setHours(0, 0, 0, 0);
                 events.push({
-                  title: `${a.title} (${cls.className || cls.name || 'Class'})`,
+                  title: a.title,
+                  subtitle: cls.className || cls.name || 'Class',
                   start: start.toISOString(),
                   end: due.toISOString(),
-                  color: '#faad14', // yellow for assignments
+                  color: '#52c41a',
                   assignmentId: a._id,
                   classId: classCode,
                   type: 'assignment',
@@ -159,15 +163,18 @@ export default function Student_Calendar() {
           const quizzes = await resQ.json();
           if (Array.isArray(quizzes)) {
             quizzes.forEach(q => {
-              if (q.dueDate) {
+              // Only show if assigned to this student
+              const entry = q.assignedTo?.find?.(e => e.classID === classCode);
+              if (q.dueDate && entry && Array.isArray(entry.studentIDs) && entry.studentIDs.includes(userId)) {
                 const due = new Date(q.dueDate);
                 const start = new Date(due);
-                start.setHours(0, 0, 0, 0); // start of the due date
+                start.setHours(0, 0, 0, 0);
                 events.push({
-                  title: `${q.title} (${cls.className || cls.name || 'Class'})`,
+                  title: q.title,
+                  subtitle: cls.className || cls.name || 'Class',
                   start: start.toISOString(),
                   end: due.toISOString(),
-                  color: '#a259e6', // purple for quizzes
+                  color: '#a259e6',
                   assignmentId: q._id,
                   classId: classCode,
                   type: 'quiz',
@@ -272,9 +279,9 @@ export default function Student_Calendar() {
                       <br />
                       {/* Show only the due time (end time) if available */}
                       {ev.end && (
-                        <span className="text-sm text-gray-600">
+                      <span className="text-sm text-gray-600">
                           Due: {new Date(ev.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                      </span>
                       )}
                     </li>
                   ))}
@@ -293,21 +300,26 @@ export default function Student_Calendar() {
 
 function renderEventContent(arg) {
   const { event } = arg;
-  // Only show time for assignment/quiz events
+  const color = event.backgroundColor || event.color || '#1890ff';
+  let timeStr = '';
   if (event.extendedProps.type === 'assignment' || event.extendedProps.type === 'quiz') {
-    // Show due time (end time)
     const end = event.end;
-    let timeStr = '';
     if (end) {
       const d = new Date(end);
       timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
-    return (
-      <>
-        <b>{timeStr}</b> <span>{event.title}</span>
-      </>
-    );
   }
-  // Default rendering for other events
-  return <span>{event.title}</span>;
+  const subtitle = event.extendedProps.subtitle;
+  return (
+    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block', marginRight: 4 }}></span>
+        {timeStr && <b>{timeStr}</b>}
+        <span style={{ marginLeft: timeStr ? 4 : 0 }}>{event.title}</span>
+      </span>
+      {subtitle && (
+        <span style={{ fontSize: '0.8em', color: '#666', marginLeft: 16 }}>{subtitle}</span>
+      )}
+    </span>
+  );
 }

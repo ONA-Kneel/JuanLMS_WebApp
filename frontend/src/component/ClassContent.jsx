@@ -146,7 +146,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       // Fetch both assignments and quizzes in parallel
       Promise.all([
         fetch(`${API_BASE}/assignments?classID=${classId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` }
         }).then(res => res.ok ? res.json() : []),
         fetch(`${API_BASE}/api/quizzes?classID=${classId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -166,43 +166,43 @@ export default function ClassContent({ selected, isFaculty = false }) {
         const filteredForRole = localStorage.getItem('role') === 'faculty' ? filtered : filtered.filter(isAssignmentPosted);
         console.log("Filtered assignments/quizzes for class", classId, filteredForRole);
 
-        // If user is a student, fetch their submissions to filter out completed assignments
+          // If user is a student, fetch their submissions to filter out completed assignments
         if (localStorage.getItem('role') === 'students') {
           Promise.all(filteredForRole.map(assignment =>
-            fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            }).then(async res => {
-              if (!res.ok) {
-                console.warn(`Failed to fetch submissions for assignment ${assignment._id}`);
+              fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              }).then(async res => {
+                if (!res.ok) {
+                  console.warn(`Failed to fetch submissions for assignment ${assignment._id}`);
+                  return [];
+                }
+                return res.json();
+              }).catch(err => {
+                console.warn(`Error fetching submissions for assignment ${assignment._id}:`, err);
                 return [];
-              }
-              return res.json();
-            }).catch(err => {
-              console.warn(`Error fetching submissions for assignment ${assignment._id}:`, err);
-              return [];
-            })
-          )).then(submissionsArrays => {
+              })
+            )).then(submissionsArrays => {
             const assignmentsWithSubmission = filteredForRole.map((assignment, i) => ({
-              ...assignment,
-              hasSubmitted: submissionsArrays[i] && submissionsArrays[i].length > 0
-            }));
-            setAssignments(assignmentsWithSubmission);
-            setAssignmentsLoading(false);
-          }).catch(err => {
-            console.error('Error processing submissions:', err);
+                ...assignment,
+                hasSubmitted: submissionsArrays[i] && submissionsArrays[i].length > 0
+              }));
+              setAssignments(assignmentsWithSubmission);
+              setAssignmentsLoading(false);
+            }).catch(err => {
+              console.error('Error processing submissions:', err);
             setAssignments(filteredForRole);
-            setAssignmentsLoading(false);
-          });
-        } else {
+              setAssignmentsLoading(false);
+            });
+          } else {
           setAssignments(filteredForRole);
-          setAssignmentsLoading(false);
-        }
-      })
-      .catch(err => {
+            setAssignmentsLoading(false);
+          }
+        })
+        .catch(err => {
         console.error('Error fetching assignments/quizzes:', err);
         setAssignmentError('Failed to fetch assignments/quizzes. Please try again.');
-        setAssignmentsLoading(false);
-      });
+          setAssignmentsLoading(false);
+        });
     }
   }, [selected, classId]);
 

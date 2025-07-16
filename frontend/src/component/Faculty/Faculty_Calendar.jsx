@@ -69,46 +69,55 @@ export default function Faculty_Calendar() {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const classes = await resClasses.json();
-        // Filter classes where the logged-in user is the faculty
-        const userId = JSON.parse(atob(token.split('.')[1])).id || JSON.parse(atob(token.split('.')[1]))._id;
-        const myClasses = classes.filter(cls => cls.facultyID === userId || cls.facultyID === userId?.toString());
+        // Filter classes where the logged-in user is the faculty (use school ID)
+        const userSchoolId = JSON.parse(atob(token.split('.')[1])).userID;
+        const myClasses = classes.filter(cls => cls.facultyID === userSchoolId);
         let events = [];
         for (const cls of myClasses) {
+          const classCode = cls.classID || cls.classCode || cls._id;
           // Assignments
-          const resA = await fetch(`${API_BASE}/assignments?classID=${cls._id}`, {
+          const resA = await fetch(`${API_BASE}/assignments?classID=${classCode}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const assignments = await resA.json();
           if (Array.isArray(assignments)) {
             assignments.forEach(a => {
               if (a.dueDate) {
+                const due = new Date(a.dueDate);
+                const start = new Date(due);
+                start.setHours(0, 0, 0, 0);
                 events.push({
-                  title: `${a.title} (${cls.className || cls.name || 'Class'})`,
-                  start: a.dueDate,
-                  end: a.dueDate,
-                  color: '#faad14', // yellow for assignments
+                  title: a.title, // Only the activity title
+                  subtitle: cls.className || cls.name || 'Class', // Subject as subtitle
+                  start: start.toISOString(),
+                  end: due.toISOString(),
+                  color: '#52c41a', // green for assignments (matches screenshot)
                   assignmentId: a._id,
-                  classId: cls._id,
+                  classId: classCode,
                   type: 'assignment',
                 });
               }
             });
           }
           // Quizzes
-          const resQ = await fetch(`${API_BASE}/api/quizzes?classID=${cls._id}`, {
+          const resQ = await fetch(`${API_BASE}/api/quizzes?classID=${classCode}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const quizzes = await resQ.json();
           if (Array.isArray(quizzes)) {
             quizzes.forEach(q => {
               if (q.dueDate) {
+                const due = new Date(q.dueDate);
+                const start = new Date(due);
+                start.setHours(0, 0, 0, 0);
                 events.push({
-                  title: `${q.title} (${cls.className || cls.name || 'Class'})`,
-                  start: q.dueDate,
-                  end: q.dueDate,
+                  title: q.title, // Only the quiz title
+                  subtitle: cls.className || cls.name || 'Class', // Subject as subtitle
+                  start: start.toISOString(),
+                  end: due.toISOString(),
                   color: '#a259e6', // purple for quizzes
                   assignmentId: q._id,
-                  classId: cls._id,
+                  classId: classCode,
                   type: 'quiz',
                 });
               }
@@ -194,14 +203,49 @@ export default function Faculty_Calendar() {
   const handleDateClick = (arg) => {
     const clickedDate = arg.dateStr;
     setSelectedDate(clickedDate);
-    const eventsForDay = adminEvents.filter(ev => {
+    const eventsForDay = [
+      ...adminEvents.filter(ev => {
+        const start = ev.start ? ev.start.slice(0, 10) : ev.date;
+        const end = ev.end ? ev.end.slice(0, 10) : start;
+        return clickedDate >= start && clickedDate <= end;
+      }),
+      ...assignmentEvents.filter(ev => {
       const start = ev.start ? ev.start.slice(0, 10) : ev.date;
       const end = ev.end ? ev.end.slice(0, 10) : start;
       return clickedDate >= start && clickedDate <= end;
-    });
+      })
+    ];
     setSelectedDayEvents(eventsForDay);
     setShowDayModal(true);
   };
+
+  // Custom event content for calendar cells
+  function renderEventContent(arg) {
+    const { event } = arg;
+    // Show a colored dot before the event title, due time, and subject (subtitle)
+    const color = event.backgroundColor || event.color || '#1890ff';
+    let timeStr = '';
+    if (event.extendedProps.type === 'assignment' || event.extendedProps.type === 'quiz') {
+      const end = event.end;
+      if (end) {
+        const d = new Date(end);
+        timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+    }
+    const subtitle = event.extendedProps.subtitle;
+    return (
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block', marginRight: 4 }}></span>
+          {timeStr && <b>{timeStr}</b>}
+          <span style={{ marginLeft: timeStr ? 4 : 0 }}>{event.title}</span>
+        </span>
+        {subtitle && (
+          <span style={{ fontSize: '0.8em', color: '#666', marginLeft: 16 }}>{subtitle}</span>
+        )}
+      </span>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden relative">
@@ -234,6 +278,7 @@ export default function Faculty_Calendar() {
                 height="auto"
                 events={allEvents}
                 dateClick={handleDateClick}
+                eventContent={renderEventContent}
               />
             )}
         </div>
@@ -272,8 +317,8 @@ export default function Faculty_Calendar() {
         )}
         {showDayModal && (
           <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="absolute inset-0 bg-black/50" onClick={() => setShowDayModal(false)}></div>
-            <div className="relative bg-white rounded-lg shadow-lg p-8 z-10 w-96">
+            <div className="absolute inset-0 bg-black/50"></div>
+            <div className="relative bg-white rounded-lg shadow-lg p-8 z-10 w-96" onClick={e => e.stopPropagation()}>
               <h3 className="text-xl font-bold mb-4">
                 Events for {new Date(selectedDate).toLocaleDateString()}
               </h3>
@@ -282,20 +327,17 @@ export default function Faculty_Calendar() {
               ) : (
                 <ul>
                   {selectedDayEvents.map(ev => (
-                    <li key={ev._id} className="mb-2">
+                    <li key={ev._id || ev.assignmentId || ev.title} className="mb-2">
                       <span className="font-semibold">{ev.title}</span>
+                      {ev.type && (
+                        <span className={`ml-2 px-2 py-1 rounded text-xs font-bold ${ev.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{ev.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
+                      )}
                       <br />
+                      {ev.end && (
                       <span className="text-sm text-gray-600">
-                        {ev.start
-                          ? new Date(ev.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : ''}
-                        {ev.end && (
-                          <>
-                            {' - '}
-                            {new Date(ev.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </>
-                        )}
+                          Due: {new Date(ev.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
+                      )}
                     </li>
                   ))}
                 </ul>
