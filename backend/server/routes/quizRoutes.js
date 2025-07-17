@@ -119,7 +119,7 @@ router.post('/:quizId/submit', authenticateToken, async (req, res) => {
         // Prevent duplicate submissions (optional)
         const existing = await QuizResponse.findOne({ quizId, studentId });
         if (existing) {
-            return res.status(400).json({ error: 'You have already submitted this quiz.' });
+            return res.status(400).json({ error: 'You have already submitted this quiz. You cannot submit again.' });
         }
         // --- Auto-grading logic ---
         const quiz = await Quiz.findById(quizId);

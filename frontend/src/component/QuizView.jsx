@@ -15,6 +15,7 @@ export default function QuizView() {
   const [timeLeft, setTimeLeft] = useState(null);
   const [studentInfo, setStudentInfo] = useState({ name: '', section: '' });
   const [showIntro, setShowIntro] = useState(true);
+  const [alreadySubmitted, setAlreadySubmitted] = useState(false);
 
   // Fetch quiz details
   useEffect(() => {
@@ -43,6 +44,22 @@ export default function QuizView() {
         name: tokenData.name || '',
         section: tokenData.section || ''
       });
+      // Check if already submitted
+      const userId = tokenData._id || tokenData.id;
+      fetch(`${API_BASE}/api/quizzes/quizzes/${quizId}/response/${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => {
+          if (res.status === 404) return null;
+          return res.json();
+        })
+        .then(data => {
+          if (data && data._id) {
+            setAlreadySubmitted(true);
+            setSubmitted(true);
+          }
+        })
+        .catch(() => {});
     } catch {
       // ignore error
     }
@@ -77,7 +94,7 @@ export default function QuizView() {
     setSubmitting(true);
     const token = localStorage.getItem('token');
     try {
-      await fetch(`${API_BASE}/api/quizzes/${quizId}/submit`, {
+      const res = await fetch(`${API_BASE}/api/quizzes/${quizId}/submit`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -85,9 +102,18 @@ export default function QuizView() {
         },
         body: JSON.stringify({ answers: quiz.questions.map((q, i) => ({ questionId: q._id || i, answer: answers[i] })) })
       });
+      if (!res.ok) {
+        const err = await res.json();
+        if (err.error && err.error.includes('already submitted')) {
+          setAlreadySubmitted(true);
+          setSubmitted(true);
+          return;
+        }
+        throw new Error(err.error || 'Failed to submit quiz.');
+      }
       setSubmitted(true);
-    } catch {
-      setError('Failed to submit quiz.');
+    } catch (e) {
+      setError(e.message || 'Failed to submit quiz.');
     } finally {
       setSubmitting(false);
     }
@@ -113,6 +139,16 @@ export default function QuizView() {
         <h2 className="text-4xl font-extrabold mb-4 text-blue-900 text-center">{quiz.title}</h2>
         <p className="mb-8 text-gray-700 text-xl text-center">Your response has been recorded.</p>
         <button className="bg-blue-800 text-white px-8 py-3 rounded-lg text-lg font-semibold mb-4 shadow">View score</button>
+        <button className="text-blue-700 underline text-base font-medium" onClick={() => window.location.href =  '/student_dashboard'}>Back to Dashboard</button>
+      </div>
+    </div>
+  );
+
+  if (alreadySubmitted) return (
+    <div className="fixed inset-0 flex items-center justify-center bg-gray-100 z-50">
+      <div className="w-full max-w-2xl mx-auto p-12 bg-white rounded-3xl shadow-2xl border-4 border-blue-800 flex flex-col items-center">
+        <h2 className="text-4xl font-extrabold mb-4 text-blue-900 text-center">{quiz.title}</h2>
+        <p className="mb-8 text-gray-700 text-xl text-center">You have already submitted this quiz. You cannot submit again.</p>
         <button className="text-blue-700 underline text-base font-medium" onClick={() => window.location.href =  '/student_dashboard'}>Back to Dashboard</button>
       </div>
     </div>
