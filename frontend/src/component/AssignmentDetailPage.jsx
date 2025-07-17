@@ -25,7 +25,21 @@ export default function AssignmentDetailPage() {
   const [submissionType, setSubmissionType] = useState('file'); // 'file' or 'link'
   const [link, setLink] = useState('');
   const [gradingSubmission, setGradingSubmission] = useState(null);
+  const [gradingStudent, setGradingStudent] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null); // { url, name, type }
   const navigate = useNavigate();
+  const [imageZoom, setImageZoom] = useState(1);
+
+  // --- Track when a student views an assignment ---
+  useEffect(() => {
+    if (localStorage.getItem('role') === 'students' && assignmentId) {
+      const token = localStorage.getItem('token');
+      fetch(`${API_BASE}/assignments/${assignmentId}/view`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    }
+  }, [assignmentId]);
 
   useEffect(() => {
     setRole(localStorage.getItem('role'));
@@ -282,40 +296,46 @@ export default function AssignmentDetailPage() {
                         <tr>
                           <th className="p-3 border">Name</th>
                           <th className="p-3 border">Status</th>
-                          <th className="p-3 border">File</th>
                           <th className="p-3 border">Grade</th>
                           <th className="p-3 border">Feedback</th>
                           <th className="p-3 border">Action</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {submissions.map((member) => (
-                          <tr key={member._id}>
-                            <td className="p-3 border">{member.lastname}, {member.firstname}</td>
-                            <td className="p-3 border">{member.submission ? member.submission.status : "Not Turned In"}</td>
-                            <td className="p-3 border">{member.submission && member.submission.fileUrl ? (
-                              <a href={member.submission.fileUrl} className="text-blue-700 underline" target="_blank" rel="noopener noreferrer">{member.submission.fileName}</a>
-                            ) : "-"}</td>
-                            <td className="p-3 border">{member.submission && member.submission.grade !== undefined ? member.submission.grade : "-"}</td>
-                            <td className="p-3 border">{member.submission && member.submission.feedback ? member.submission.feedback : "-"}</td>
-                            <td className="p-3 border">
-                              {member.submission && member.submission.status === 'turned-in' ? (
+                        {submissions.map((member) => {
+                          let status = "Not Viewed Yet";
+                          const userId = String(member._id); // Always use MongoDB ObjectId as string
+                          const hasViewed = assignment.views && assignment.views.map(String).includes(userId);
+                          // Debug log
+                          // console.log('Checking viewed:', {views: assignment.views, userId, member});
+
+                          if (member.submission) {
+                            status = "Submitted";
+                          } else if (hasViewed) {
+                            status = "Viewed";
+                          }
+                          return (
+                            <tr key={member._id}>
+                              <td className="p-3 border">{member.lastname}, {member.firstname}</td>
+                              <td className="p-3 border">{status}</td>
+                              <td className="p-3 border">{member.submission && member.submission.grade !== undefined ? member.submission.grade : "-"}</td>
+                              <td className="p-3 border">{member.submission && member.submission.feedback ? member.submission.feedback : "-"}</td>
+                              <td className="p-3 border">
                                 <button
                                   className="bg-green-700 text-white px-2 py-1 rounded"
                                   onClick={() => {
-                                    setGradingSubmission(member.submission._id);
-                                    setGradeValue(member.submission.grade !== undefined ? member.submission.grade : '');
-                                    setFeedbackValue(member.submission.feedback || '');
+                                    setGradingSubmission(member.submission ? member.submission._id : member._id);
+                                    setGradeValue(member.submission && member.submission.grade !== undefined ? member.submission.grade : '');
+                                    setFeedbackValue(member.submission && member.submission.feedback ? member.submission.feedback : '');
+                                    setGradingStudent(member);
                                   }}
                                 >
                                   Grade
                                 </button>
-                              ) : member.submission && member.submission.status === 'graded' ? (
-                                <span className="text-green-700 font-semibold">Graded</span>
-                              ) : "-"}
-                            </td>
-                          </tr>
-                        ))}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                     {gradeError && <div className="text-red-600 text-sm mt-2">{gradeError}</div>}
@@ -405,27 +425,141 @@ export default function AssignmentDetailPage() {
       {/* Grading Modal */}
       {gradingSubmission && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-            <h3 className="text-xl font-semibold mb-4 text-blue-900">Grade Submission</h3>
-            <form onSubmit={e => {
-              e.preventDefault();
-              handleGrade(gradingSubmission);
-              setGradingSubmission(null);
-            }} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Grade</label>
-                <input type="number" className="border rounded px-2 py-1 w-full" placeholder="Grade" value={gradeValue} onChange={e => setGradeValue(e.target.value)} required />
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full p-12 flex flex-col md:flex-row gap-12">
+            {/* Left: Files */}
+            <div className="flex-1 flex flex-col">
+              <h3 className="text-2xl font-extrabold mb-4 text-blue-900">Grade Submission</h3>
+              <div className="font-bold text-lg mb-2">Submitted File:</div>
+              <div className="flex flex-col gap-3">
+                {gradingStudent && gradingStudent.submission && gradingStudent.submission.files && gradingStudent.submission.files.length > 0 ? (
+                  gradingStudent.submission.files.map((file, idx) => {
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    return (
+                      <div key={idx} className="flex items-center gap-2">
+                        <button
+                          className="bg-blue-900 text-white rounded-full px-5 py-2 font-semibold text-left w-full hover:bg-blue-800 transition"
+                          style={{ minWidth: '120px' }}
+                          onClick={() => setPreviewFile({ url: file.url, name: file.name, type: ext })}
+                        >
+                          {file.name}
+                        </button>
+                        <button
+                          className="ml-1 text-blue-900 hover:text-blue-700"
+                          title="Download"
+                          onClick={() => window.open(file.url, '_blank')}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"><path fill="currentColor" d="M12 16.5a1 1 0 0 1-1-1V5a1 1 0 1 1 2 0v10.5a1 1 0 0 1-1 1Z"/><path fill="currentColor" d="M7.21 13.79a1 1 0 0 1 1.42-1.42l2.29 2.3 2.3-2.3a1 1 0 1 1 1.41 1.42l-3 3a1 1 0 0 1-1.42 0l-3-3Z"/><path fill="currentColor" d="M5 20a1 1 0 0 1 0-2h14a1 1 0 1 1 0 2H5Z"/></svg>
+                        </button>
+                      </div>
+                    );
+                  })
+                ) : gradingStudent && gradingStudent.submission && gradingStudent.submission.fileUrl ? (
+                  (() => {
+                    const file = gradingStudent.submission;
+                    const ext = file.fileName.split('.').pop().toLowerCase();
+                    return (
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="bg-blue-900 text-white rounded-full px-5 py-2 font-semibold text-left w-full hover:bg-blue-800 transition"
+                          style={{ minWidth: '120px' }}
+                          onClick={() => setPreviewFile({ url: file.fileUrl, name: file.fileName, type: ext })}
+                        >
+                          {file.fileName}
+                        </button>
+                        <button
+                          className="ml-1 text-blue-900 hover:text-blue-700"
+                          title="Download"
+                          onClick={() => window.open(file.fileUrl, '_blank')}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"><path fill="currentColor" d="M12 16.5a1 1 0 0 1-1-1V5a1 1 0 1 1 2 0v10.5a1 1 0 0 1-1 1Z"/><path fill="currentColor" d="M7.21 13.79a1 1 0 0 1 1.42-1.42l2.29 2.3 2.3-2.3a1 1 0 1 1 1.41 1.42l-3 3a1 1 0 0 1-1.42 0l-3-3Z"/><path fill="currentColor" d="M5 20a1 1 0 0 1 0-2h14a1 1 0 1 1 0 2H5Z"/></svg>
+                        </button>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="text-gray-500">No file submitted.</div>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Feedback</label>
-                <input type="text" className="border rounded px-2 py-1 w-full" placeholder="Feedback" value={feedbackValue} onChange={e => setFeedbackValue(e.target.value)} />
+            </div>
+            {/* Divider */}
+            <div className="w-px bg-gray-300 mx-8 hidden md:block" style={{ minHeight: '300px' }} />
+            {/* Right: Feedback/Grade */}
+            <div className="flex-1 flex flex-col gap-4">
+              <label className="font-bold text-lg mb-1">Feedback</label>
+              <textarea
+                className="border-2 border-blue-800 rounded-xl px-4 py-3 w-full mb-2 text-lg min-h-[120px]"
+                placeholder="Enter feedback here..."
+                value={feedbackValue}
+                onChange={e => setFeedbackValue(e.target.value)}
+              />
+              <label className="font-bold text-lg mb-1">Grade</label>
+              <div className="flex items-center gap-2 mb-4">
+                <input
+                  type="number"
+                  className="border-2 border-blue-800 rounded-xl px-4 py-2 w-24 text-lg"
+                  placeholder="Grade"
+                  value={gradeValue}
+                  onChange={e => setGradeValue(e.target.value)}
+                  required
+                />
+                <span className="text-lg font-bold">/ {assignment && assignment.points ? assignment.points : 100}</span>
               </div>
-              {gradeError && <div className="text-red-600 text-sm">{gradeError}</div>}
-              <div className="flex gap-2 justify-end">
-                <button type="button" className="bg-gray-300 text-gray-800 px-4 py-2 rounded" onClick={() => setGradingSubmission(null)}>Cancel</button>
-                <button type="submit" className="bg-green-700 text-white px-4 py-2 rounded" disabled={gradeLoading}>{gradeLoading ? 'Grading...' : 'Submit'}</button>
+              {gradeError && <div className="text-red-600 text-sm mb-2">{gradeError}</div>}
+              <div className="flex gap-4 justify-end mt-4">
+                <button type="button" className="bg-gray-400 text-black px-6 py-2 rounded-lg font-semibold" onClick={() => setGradingSubmission(null)}>Cancel</button>
+                <button type="button" className="bg-blue-900 text-white px-6 py-2 rounded-lg font-semibold" onClick={e => { e.preventDefault(); handleGrade(gradingSubmission); setGradingSubmission(null); }}>Grade</button>
               </div>
-            </form>
+            </div>
+            {/* File Preview Modal */}
+            {previewFile && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
+                {/* X button */}
+                <button
+                  className="absolute top-8 right-12 text-white text-4xl font-bold bg-black/60 rounded-full p-2 hover:bg-black/90 z-50"
+                  onClick={() => { setPreviewFile(null); setImageZoom(1); }}
+                  aria-label="Close"
+                >
+                  &times;
+                </button>
+                {/* Centered image */}
+                <div className="flex flex-col items-center w-full h-full justify-center z-40">
+                  {['jpg','jpeg','png','gif','bmp','webp'].includes(previewFile.type) ? (
+                    <img
+                      src={previewFile.url}
+                      alt={previewFile.name}
+                      style={{ transform: `scale(${imageZoom})`, maxWidth: '90vw', maxHeight: '80vh', transition: 'transform 0.2s' }}
+                      className="rounded border shadow-2xl bg-white"
+                    />
+                  ) : previewFile.type === 'pdf' ? (
+                    <iframe src={previewFile.url} width="100%" height="700px" title="PDF Preview" className="border rounded mb-2" />
+                  ) : (
+                    <div className="text-gray-700">Cannot preview this file type.</div>
+                  )}
+                  <div className="text-white font-semibold mt-4">{previewFile.name}</div>
+                </div>
+                {/* Zoom controls - floating at bottom center */}
+                {['jpg','jpeg','png','gif','bmp','webp'].includes(previewFile.type) && (
+                  <div
+                    className="absolute left-1/2 bottom-12 -translate-x-1/2 flex gap-4 items-center z-50"
+                    style={{ background: 'rgba(0,0,0,0.5)', borderRadius: '2rem', padding: '0.5rem 1.5rem' }}
+                  >
+                    <button
+                      className="bg-gray-300 text-2xl px-4 py-2 rounded-full font-bold"
+                      onClick={() => setImageZoom(z => Math.max(0.5, z - 0.2))}
+                    >
+                      -
+                    </button>
+                    <span className="text-white text-lg">Zoom: {(imageZoom * 100).toFixed(0)}%</span>
+                    <button
+                      className="bg-gray-300 text-2xl px-4 py-2 rounded-full font-bold"
+                      onClick={() => setImageZoom(z => Math.min(3, z + 0.2))}
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

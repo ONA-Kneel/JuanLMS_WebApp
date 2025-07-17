@@ -220,8 +220,8 @@ export default function QuizView() {
               {choice}
             </label>
           ))}
-        </div>
-      );
+          </div>
+        );
     }
     if (q.type === 'truefalse') {
       return (
