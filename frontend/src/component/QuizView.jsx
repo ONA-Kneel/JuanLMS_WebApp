@@ -130,7 +130,36 @@ export default function QuizView() {
 
   if (loading) return <div className="p-8 text-center">Loading quiz...</div>;
   if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
-  if (!isAvailable()) return <div className="p-8 text-center text-gray-600">This quiz is not available at this time.</div>;
+  if (!isAvailable()) {
+    // Show open/close times if set
+    const openTime = quiz.timing?.open ? new Date(quiz.timing.open) : null;
+    const closeTime = quiz.timing?.close ? new Date(quiz.timing.close) : null;
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-gray-100 z-50">
+        <div className="w-full max-w-xl mx-auto p-10 bg-white rounded-3xl shadow-2xl border-4 border-blue-800 flex flex-col items-center">
+          <h2 className="text-3xl font-extrabold mb-4 text-blue-900 text-center">Quiz Not Available</h2>
+          <p className="mb-6 text-gray-700 text-lg text-center">This quiz is not available at this time.</p>
+          {openTime && (
+            <div className="mb-2 text-lg">
+              <span className="font-semibold text-blue-800">Opens:</span> <span className="text-gray-800">{openTime.toLocaleString()}</span>
+            </div>
+          )}
+          {closeTime && (
+            <div className="mb-2 text-lg">
+              <span className="font-semibold text-blue-800">Closes:</span> <span className="text-gray-800">{closeTime.toLocaleString()}</span>
+            </div>
+          )}
+          <button
+            className="mt-6 bg-blue-800 text-white px-8 py-3 rounded-lg text-lg font-semibold shadow hover:bg-blue-900 transition"
+            onClick={() => {
+              if (window.history.length > 1) window.history.back();
+              else window.location.href = '/student_dashboard';
+            }}
+          >Back to Class</button>
+        </div>
+      </div>
+    );
+  }
 
   // Confirmation card after submission
   if (submitted) return (
@@ -178,7 +207,7 @@ export default function QuizView() {
   function renderChoices() {
     if (q.type === 'multiple' && Array.isArray(q.choices)) {
       return (
-        <div className="flex flex-col gap-4 mb-6 w-full">
+        <div className="flex flex-col gap-4 mb-6 w-full font-poppinsr">
           {q.choices.map((choice, idx) => (
             <label key={idx} className="flex items-center gap-3 text-lg">
               <input

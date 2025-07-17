@@ -11,6 +11,7 @@ import {
   Legend
 } from 'chart.js';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
+import ValidationModal from './ValidationModal';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -37,6 +38,53 @@ export default function QuizResponses() {
   const [error, setError] = useState('');
   const [tab, setTab] = useState('toGrade');
   const [selectedIdx, setSelectedIdx] = useState(0);
+  const [editScoreIdx, setEditScoreIdx] = useState(null);
+  const [editScoreValue, setEditScoreValue] = useState(0);
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
+
+  const handleScoreEdit = idx => {
+    setEditScoreIdx(idx);
+    setEditScoreValue(typeof responses[idx].score === 'number' ? responses[idx].score : 0);
+  };
+  const handleScoreSave = async idx => {
+    const resp = responses[idx];
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/api/quizzes/${quizId}/responses/${resp._id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ score: editScoreValue })
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setResponses(r => r.map((item, i) => i === idx ? { ...item, score: updated.score } : item));
+        setEditScoreIdx(null);
+      } else {
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Update Failed',
+          message: 'Failed to update score.'
+        });
+      }
+    } catch {
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: 'Failed to update score due to network error. Please try again.'
+      });
+    }
+  };
+  const handleScoreCancel = () => setEditScoreIdx(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -65,7 +113,7 @@ export default function QuizResponses() {
       {/* Sidebar Navigation */}
       <Faculty_Navbar />
       {/* Main Content */}
-      <div className="flex-1 flex flex-col items-start py-8 px-8 ml-0 md:ml-64">
+      <div className="flex-1 flex flex-col items-start py-8 px-8 ml-0 md:ml-64 font-poppinsr">
         <button className="mb-4 text-blue-800 font-semibold text-base hover:underline" onClick={() => window.history.back()}>&lt; Back</button>
         <div className="flex items-center justify-between w-full mb-2">
           <h1 className="text-3xl font-extrabold text-blue-900">{quiz?.title || 'Quiz Responses'}</h1>
@@ -95,9 +143,32 @@ export default function QuizResponses() {
               <span> {selectedIdx+1} of {responses.length} </span>
               <button disabled={selectedIdx===responses.length-1} onClick={()=>setSelectedIdx(i=>i+1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&gt;</button>
             </div>
-            <div className="mb-2 text-sm text-gray-600">{responses[selectedIdx].studentId?.firstname} {responses[selectedIdx].studentId?.lastname}</div>
-            <div className="mb-2 text-sm text-gray-600">Submitted: {new Date(responses[selectedIdx].submittedAt).toLocaleString()}</div>
-            <div className="mb-2 text-sm text-gray-600">Score: <span className="font-bold">{typeof responses[selectedIdx].score === 'number' ? responses[selectedIdx].score : 0} / {stats.total}</span></div>
+            <div className="mb-2 text-2xl font-bold text-blue-900">{responses[selectedIdx].studentId?.firstname} {responses[selectedIdx].studentId?.lastname}</div>
+            <div className="mb-2 text-lg text-gray-700">Submitted: {new Date(responses[selectedIdx].submittedAt).toLocaleString()}</div>
+            <div className="mb-4 flex items-center gap-4">
+              <span className="text-2xl text-gray-800 font-bold">Score: </span>
+              {editScoreIdx === selectedIdx ? (
+                <>
+                  <input
+                    type="number"
+                    min={0}
+                    max={stats.total}
+                    className="border-2 border-blue-400 rounded px-3 py-1 text-2xl w-24 text-center font-bold mr-2"
+                    value={editScoreValue}
+                    onChange={e => setEditScoreValue(Number(e.target.value))}
+                  />
+                  <span className="text-2xl font-bold">/ {stats.total}</span>
+                  <button className="ml-2 px-3 py-1 bg-green-600 text-white rounded font-semibold" onClick={() => handleScoreSave(selectedIdx)}>Save</button>
+                  <button className="ml-2 px-3 py-1 bg-gray-400 text-white rounded font-semibold" onClick={handleScoreCancel}>Cancel</button>
+                </>
+              ) : (
+                <>
+                  <span className="text-3xl font-extrabold text-blue-800">{typeof responses[selectedIdx].score === 'number' ? responses[selectedIdx].score : 0}</span>
+                  <span className="text-2xl font-bold">/ {stats.total}</span>
+                  <button className="ml-4 px-4 py-1 bg-blue-700 text-white rounded font-semibold hover:bg-blue-900 transition" onClick={() => handleScoreEdit(selectedIdx)}>Edit</button>
+                </>
+              )}
+            </div>
             {responses[selectedIdx].feedback && <div className="mb-2 text-green-700">Feedback: {responses[selectedIdx].feedback}</div>}
             <div className="border rounded p-4 bg-gray-50 mb-4">
               <ol className="list-decimal ml-6">
@@ -176,6 +247,13 @@ export default function QuizResponses() {
         </div>
       )}
         </div>
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
+      />
     </div>
   );
 } 

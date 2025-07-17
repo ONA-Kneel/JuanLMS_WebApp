@@ -165,6 +165,21 @@ router.get('/:quizId/responses', authenticateToken, async (req, res) => {
     }
 });
 
+// PATCH a quiz response's score by responseId
+router.patch('/:quizId/responses/:responseId', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { responseId } = req.params;
+    const { score } = req.body;
+    if (typeof score !== 'number') return res.status(400).json({ error: 'Score must be a number.' });
+    const updated = await QuizResponse.findByIdAndUpdate(responseId, { score }, { new: true });
+    if (!updated) return res.status(404).json({ error: 'Quiz response not found.' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Faculty fetches a single student's response
 router.get('/quizzes/:quizId/response/:studentId', async (req, res) => {
     try {
