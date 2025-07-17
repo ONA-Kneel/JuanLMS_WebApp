@@ -129,14 +129,20 @@ router.post('/:quizId/submit', authenticateToken, async (req, res) => {
           const studentAnswer = answers[i]?.answer;
           let correct = false;
           if (q.type === 'multiple') {
-            correct = Array.isArray(studentAnswer) && Array.isArray(q.correct) &&
-                      studentAnswer.length === q.correct.length &&
-                      studentAnswer.every(a => q.correct.includes(a));
+            // For single-answer MCQ, correctAnswers is an array with one index
+            if (Array.isArray(q.correctAnswers) && q.correctAnswers.length === 1) {
+              correct = studentAnswer === q.correctAnswers[0];
+            } else {
+              // fallback for legacy/multi-answer
+              correct = Array.isArray(studentAnswer) && Array.isArray(q.correctAnswers) &&
+                        studentAnswer.length === q.correctAnswers.length &&
+                        studentAnswer.every(a => q.correctAnswers.includes(a));
+            }
           } else {
-            correct = studentAnswer === q.correct;
+            correct = studentAnswer === q.correctAnswer;
           }
           if (correct) score += q.points || 1;
-          checkedAnswers.push({ correct, studentAnswer, correctAnswer: q.correct });
+          checkedAnswers.push({ correct, studentAnswer, correctAnswer: q.correctAnswers || q.correctAnswer });
         });
         // Save response with score
         const response = new QuizResponse({ quizId, studentId, answers, score, checkedAnswers });

@@ -177,44 +177,22 @@ export default function QuizView() {
   // 2x2 grid for choices
   function renderChoices() {
     if (q.type === 'multiple' && Array.isArray(q.choices)) {
-      const grid = [];
-      for (let i = 0; i < q.choices.length; i += 2) {
-        grid.push(
-          <div key={i} className="flex gap-16 mb-6 w-full">
-            <label className="flex items-center gap-3 w-1/2 text-lg">
+      return (
+        <div className="flex flex-col gap-4 mb-6 w-full">
+          {q.choices.map((choice, idx) => (
+            <label key={idx} className="flex items-center gap-3 text-lg">
               <input
-                type="checkbox"
+                type="radio"
                 className="w-5 h-5 accent-blue-800"
-                checked={Array.isArray(answers[current]) ? answers[current].includes(i) : false}
-                onChange={e => {
-                  let arr = Array.isArray(answers[current]) ? [...answers[current]] : [];
-                  if (e.target.checked) arr.push(i);
-                  else arr = arr.filter(x => x !== i);
-                  handleChange(current, arr);
-                }}
+                name={`mcq${current}`}
+                checked={answers[current] === idx}
+                onChange={() => handleChange(current, idx)}
               />
-              {q.choices[i]}
+              {choice}
             </label>
-            {q.choices[i + 1] !== undefined && (
-              <label className="flex items-center gap-3 w-1/2 text-lg">
-                <input
-                  type="checkbox"
-                  className="w-5 h-5 accent-blue-800"
-                  checked={Array.isArray(answers[current]) ? answers[current].includes(i + 1) : false}
-                  onChange={e => {
-                    let arr = Array.isArray(answers[current]) ? [...answers[current]] : [];
-                    if (e.target.checked) arr.push(i + 1);
-                    else arr = arr.filter(x => x !== i + 1);
-                    handleChange(current, arr);
-                  }}
-                />
-                {q.choices[i + 1]}
-              </label>
-            )}
-          </div>
-        );
-      }
-      return grid;
+          ))}
+        </div>
+      );
     }
     if (q.type === 'truefalse') {
       return (
@@ -272,13 +250,13 @@ export default function QuizView() {
             <button
               className="bg-blue-800 text-white px-8 py-2 rounded-lg text-lg font-semibold"
               onClick={() => setCurrent(c => c + 1)}
-              disabled={answers[current] == null || (q.type === 'multiple' && (!Array.isArray(answers[current]) || answers[current].length === 0))}
+              disabled={answers[current] == null}
             >Next</button>
           ) : (
             <button
               className="bg-blue-800 text-white px-8 py-2 rounded-lg text-lg font-semibold"
               onClick={handleSubmit}
-              disabled={submitting || answers[current] == null || (q.type === 'multiple' && (!Array.isArray(answers[current]) || answers[current].length === 0))}
+              disabled={submitting || answers[current] == null}
             >{submitting ? 'Submitting...' : 'Submit'}</button>
           )}
         </div>

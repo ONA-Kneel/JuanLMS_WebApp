@@ -81,7 +81,7 @@ export default function QuizResponses() {
           <div className="w-full">
             <div className="mb-6">
               <div className="font-bold text-lg mb-1">Instructions</div>
-              <div className="mb-4 text-gray-700">{quiz?.instructions || quiz?.description}</div>
+      <div className="mb-4 text-gray-700">{quiz?.instructions || quiz?.description}</div>
               <div className="font-bold text-lg mb-1">Description</div>
               <div className="mb-4 text-gray-700">{quiz?.description}</div>
             </div>
@@ -126,7 +126,7 @@ export default function QuizResponses() {
                 })}
               </ol>
             </div>
-          </div>
+      </div>
         )}
         {tab === 'toGrade' && responses.length === 0 && (
           <div className="text-gray-600">No responses yet.</div>
@@ -134,48 +134,48 @@ export default function QuizResponses() {
         {/* Insights Tab */}
         {tab === 'insights' && (
           <div className="w-full">
-            <div className="mb-4 flex gap-8">
-              <div className="bg-gray-50 p-4 rounded shadow text-center flex-1">
-                <div className="text-xs text-gray-500">Average</div>
-                <div className="text-lg font-bold">{stats.avg.toFixed(2)} / {stats.total} points</div>
-              </div>
-              <div className="bg-gray-50 p-4 rounded shadow text-center flex-1">
-                <div className="text-xs text-gray-500">Median</div>
-                <div className="text-lg font-bold">{stats.median} / {stats.total} points</div>
-              </div>
-              <div className="bg-gray-50 p-4 rounded shadow text-center flex-1">
-                <div className="text-xs text-gray-500">Range</div>
-                <div className="text-lg font-bold">{stats.range[0]} - {stats.range[1]} points</div>
-              </div>
+          <div className="mb-4 flex gap-8">
+            <div className="bg-gray-50 p-4 rounded shadow text-center flex-1">
+              <div className="text-xs text-gray-500">Average</div>
+              <div className="text-lg font-bold">{stats.avg.toFixed(2)} / {stats.total} points</div>
             </div>
-            <div className="my-8">
-              <div className="font-semibold mb-2">Total points distribution</div>
-              <Bar
-                data={{
-                  labels: distLabels,
-                  datasets: [{
-                    label: '# of respondents',
-                    data: distData,
-                    backgroundColor: 'rgba(99, 102, 241, 0.7)'
-                  }]
-                }}
-                options={{
-                  responsive: true,
-                  plugins: {
-                    legend: { display: false },
-                    title: { display: false }
-                  },
-                  scales: {
-                    x: { title: { display: true, text: 'Points scored' } },
-                    y: { title: { display: true, text: '# of respondents' }, beginAtZero: true, precision: 0 }
-                  }
-                }}
-                height={120}
-              />
+            <div className="bg-gray-50 p-4 rounded shadow text-center flex-1">
+              <div className="text-xs text-gray-500">Median</div>
+              <div className="text-lg font-bold">{stats.median} / {stats.total} points</div>
+            </div>
+            <div className="bg-gray-50 p-4 rounded shadow text-center flex-1">
+              <div className="text-xs text-gray-500">Range</div>
+              <div className="text-lg font-bold">{stats.range[0]} - {stats.range[1]} points</div>
             </div>
           </div>
-        )}
-      </div>
+          <div className="my-8">
+            <div className="font-semibold mb-2">Total points distribution</div>
+            <Bar
+              data={{
+                labels: distLabels,
+                datasets: [{
+                  label: '# of respondents',
+                  data: distData,
+                  backgroundColor: 'rgba(99, 102, 241, 0.7)'
+                }]
+              }}
+              options={{
+                responsive: true,
+                plugins: {
+                  legend: { display: false },
+                  title: { display: false }
+                },
+                scales: {
+                  x: { title: { display: true, text: 'Points scored' } },
+                  y: { title: { display: true, text: '# of respondents' }, beginAtZero: true, precision: 0 }
+                }
+              }}
+              height={120}
+            />
+          </div>
+        </div>
+      )}
+        </div>
     </div>
   );
 } 
