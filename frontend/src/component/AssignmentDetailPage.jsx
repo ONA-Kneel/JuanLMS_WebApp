@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import Student_Navbar from './Student/Student_Navbar';
+import ValidationModal from './ValidationModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -14,21 +15,22 @@ export default function AssignmentDetailPage() {
   const [activeTab, setActiveTab] = useState('assignment');
   const [submissions, setSubmissions] = useState([]);
   const [studentSubmission, setStudentSubmission] = useState(null);
-  const [file, setFile] = useState(null);
+  const [file, setFile] = useState(null); // now a FileList or null
+  const [links, setLinks] = useState(['']); // array of up to 5 links
   const [submitLoading, setSubmitLoading] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
   const [gradeLoading, setGradeLoading] = useState(false);
   const [gradeError, setGradeError] = useState('');
   const [gradeValue, setGradeValue] = useState('');
   const [feedbackValue, setFeedbackValue] = useState('');
   // Removed unused classMembers state
   const [submissionType, setSubmissionType] = useState('file'); // 'file' or 'link'
-  const [link, setLink] = useState('');
   const [gradingSubmission, setGradingSubmission] = useState(null);
   const [gradingStudent, setGradingStudent] = useState(null);
   const [previewFile, setPreviewFile] = useState(null); // { url, name, type }
   const navigate = useNavigate();
   const [imageZoom, setImageZoom] = useState(1);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState(null);
 
   // --- Track when a student views an assignment ---
   useEffect(() => {
@@ -129,25 +131,53 @@ export default function AssignmentDetailPage() {
         .then(res => res.json())
         .then(data => {
           const userId = localStorage.getItem('userID');
-          const sub = Array.isArray(data) ? data.find(s => s.student && (s.student._id === userId || s.student === userId)) : null;
+          console.log('Fetched submissions:', data, 'Current user:', userId);
+          console.log('userId:', `"${userId}"`, typeof userId);
+          if (Array.isArray(data)) {
+            data.forEach((s, i) => {
+              if (s.student) {
+                console.log(`Submission[${i}].studentID:`, `"${s.student.studentID}"`, typeof s.student.studentID);
+              }
+            });
+          }
+          const sub = Array.isArray(data)
+            ? data.find(s => {
+                if (!s.student) return false;
+                console.log(
+                  'Comparing:',
+                  String(s.student._id), 'vs', String(userId),
+                  String(s.student), 'vs', String(userId),
+                  String(s.student.userID), 'vs', String(userId)
+                );
+                return (
+                  String(s.student._id) === String(userId) ||
+                  String(s.student) === String(userId) ||
+                  String(s.student.userID) === String(userId)
+                );
+              })
+            : null;
+          console.log('Matched submission:', sub);
           setStudentSubmission(sub);
         });
     }
-  }, [role, assignment, assignmentId, submitSuccess, gradeLoading]);
+  }, [role, assignment, assignmentId, gradeLoading]);
 
   // Student submit handler
   const handleStudentSubmit = async (e) => {
     e.preventDefault();
     setSubmitLoading(true);
-    setSubmitSuccess(false);
     setError('');
     const token = localStorage.getItem('token');
     try {
       const formData = new FormData();
-      if (submissionType === 'file') {
-        formData.append('file', file);
+      if (submissionType === 'file' && file) {
+        for (let i = 0; i < file.length && i < 5; i++) {
+          formData.append('files', file[i]);
+        }
       } else if (submissionType === 'link') {
-        formData.append('link', link);
+        for (let i = 0; i < links.length && i < 5; i++) {
+          if (links[i]) formData.append('links', links[i]);
+        }
       }
       const res = await fetch(`${API_BASE}/assignments/${assignmentId}/submit`, {
         method: 'POST',
@@ -155,9 +185,19 @@ export default function AssignmentDetailPage() {
         body: formData
       });
       if (res.ok) {
-        setSubmitSuccess(true);
+        // Refetch the student's submission from the backend
+        fetch(`${API_BASE}/assignments/${assignmentId}/submissions`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            const userId = localStorage.getItem('userID');
+            const sub = Array.isArray(data) ? data.find(s => s.student && (s.student._id === userId || s.student === userId)) : null;
+            setStudentSubmission(sub);
+            // Seamless reload after submission
+            setTimeout(() => navigate(0), 200);
+          });
         setFile(null);
-        setLink('');
       } else {
         setError('Failed to submit.');
       }
@@ -165,6 +205,64 @@ export default function AssignmentDetailPage() {
       setError('Failed to submit.');
     } finally {
       setSubmitLoading(false);
+    }
+  };
+
+  // Student undo submission handler
+  const handleUndoSubmission = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_BASE}/assignments/${assignmentId}/submission`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      // Refetch the student's submission from the backend
+      fetch(`${API_BASE}/assignments/${assignmentId}/submissions`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          const userId = localStorage.getItem('userID');
+          const sub = Array.isArray(data) ? data.find(s => s.student && (s.student._id === userId || s.student === userId)) : null;
+          setStudentSubmission(sub);
+        });
+    } else {
+      // Optionally handle error
+    }
+  };
+
+  // Handler to delete a file from submission
+  const handleDeleteFile = async () => {
+    if (!fileToDelete) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/assignments/${assignmentId}/submission/file`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ fileUrl: fileToDelete.url }),
+      });
+      if (res.ok) {
+        // Refetch the student's submission from the backend
+        fetch(`${API_BASE}/assignments/${assignmentId}/submissions`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            const userId = localStorage.getItem('userID');
+            const sub = Array.isArray(data) ? data.find(s => s.student && (s.student._id === userId || s.student === userId || s.student.userID === userId)) : null;
+            setStudentSubmission(sub);
+          });
+      } else {
+        setError('Failed to delete file.');
+      }
+    } catch {
+      setError('Failed to delete file.');
+    } finally {
+      setShowDeleteModal(false);
+      setFileToDelete(null);
     }
   };
 
@@ -191,7 +289,6 @@ export default function AssignmentDetailPage() {
       if (res.ok) {
         setGradeValue('');
         setFeedbackValue('');
-        setSubmitSuccess(true); // trigger refresh
         setGradeError('');
       } else {
         const err = await res.json();
@@ -227,6 +324,7 @@ export default function AssignmentDetailPage() {
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       {role === 'faculty' ? <Faculty_Navbar /> : <Student_Navbar />}
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+        
         <div className="w-full p-0 mt-0">
           <button className="mb-6 text-blue-900 hover:underline" onClick={() => navigate(-1)}>&larr; Back</button>
           {/* Assignment Creation/Edit UI - modern style */}
@@ -356,16 +454,14 @@ export default function AssignmentDetailPage() {
               {assignment.type !== 'quiz' && (
                 <div className="mb-4">
                   <h2 className="text-lg font-semibold mb-1">Submit Assignment</h2>
-                  {submitSuccess ? (
-                    <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
-                      <strong className="font-bold">Success!</strong>
-                      <p className="block sm:inline"> Your assignment has been submitted successfully. You can now close this page.</p>
-                    </div>
-                  ) : studentSubmission ? (
+                  {studentSubmission && (
                     <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative mb-4">
                       <strong className="font-bold">Already Submitted!</strong>
                       <p className="block sm:inline"> You have already submitted this assignment.</p>
-                      {studentSubmission.fileUrl && (
+                      {/* Show all submitted files */}
+                      
+                      {/* Legacy single file/link support */}
+                      {/* {studentSubmission.fileUrl && (
                         <div className="mt-2">
                           <span className="font-semibold">Submitted File: </span>
                           <a href={studentSubmission.fileUrl} className="text-blue-700 underline" target="_blank" rel="noopener noreferrer">
@@ -381,41 +477,143 @@ export default function AssignmentDetailPage() {
                           </a>
                         </div>
                       )}
-                      {studentSubmission.grade !== undefined && (
-                        <div className="mt-2">
-                          <span className="font-semibold">Grade: </span>
-                          {studentSubmission.grade}
-                        </div>
-                      )}
-                      {studentSubmission.feedback && (
-                        <div className="mt-2">
-                          <span className="font-semibold">Feedback: </span>
-                          {studentSubmission.feedback}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <form onSubmit={handleStudentSubmit} className="space-y-2" encType="multipart/form-data">
-                      <label className="block text-sm font-medium mb-1">Submission Type</label>
-                      <select
-                        className="border rounded px-2 py-1 w-full mb-2"
-                        value={submissionType}
-                        onChange={e => setSubmissionType(e.target.value)}
+                      <button
+                        className="mt-3 bg-red-600 text-white px-4 py-2 rounded"
+                        onClick={handleUndoSubmission}
                       >
-                        <option value="file">File</option>
-                        <option value="link">Link</option>
-                      </select>
-                      {submissionType === 'file' ? (
-                        <input type="file" className="border rounded px-2 py-1 w-full" accept="*" onChange={e => setFile(e.target.files[0])} required />
-                      ) : (
-                        <input type="url" className="border rounded px-2 py-1 w-full" placeholder="Paste your link here (e.g. Google Drive, GitHub, etc.)" value={link} onChange={e => setLink(e.target.value)} required />
-                      )}
-                      <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded" disabled={submitLoading}>
-                        {submitLoading ? 'Submitting...' : 'Submit'}
-                      </button>
-                      {error && <div className="text-red-600 text-sm">{error}</div>}
-                    </form>
+                        Undo Submission
+                      </button> */}
+                    </div>
                   )}
+                  {/* Always show the submission form for resubmission or first submission */}
+                  <form onSubmit={handleStudentSubmit} className="space-y-2" encType="multipart/form-data">
+                    <label className="block text-sm font-medium mb-1">Submission Type</label>
+                    <select
+                      className="border rounded px-2 py-1 w-full mb-2"
+                      value={submissionType}
+                      onChange={e => setSubmissionType(e.target.value)}
+                      disabled={!!studentSubmission}
+                    >
+                      <option value="file">File</option>
+                      <option value="link">Link</option>
+                    </select>
+                    {submissionType === 'file' ? (
+                      <>
+                        <input
+                          type="file"
+                          className="border rounded px-2 py-1 w-full"
+                          accept="*"
+                          multiple
+                          onChange={e => setFile(e.target.files)}
+                          required={!studentSubmission}
+                          disabled={!!studentSubmission}
+                        />
+                        <div className="text-xs text-gray-600 mt-1">You can submit up to 5 files.</div>
+                      </>
+                    ) : (
+                      <>
+                        {links.map((l, idx) => (
+                          <input
+                            key={idx}
+                            type="url"
+                            className="border rounded px-2 py-1 w-full mb-1"
+                            placeholder={`Paste your link here (e.g. Google Drive, GitHub, etc.)`}
+                            value={l}
+                            onChange={e => {
+                              const newLinks = [...links];
+                              newLinks[idx] = e.target.value;
+                              setLinks(newLinks);
+                            }}
+                            required={!studentSubmission}
+                            disabled={!!studentSubmission}
+                          />
+                        ))}
+                        {links.length < 5 && !studentSubmission && (
+                          <button type="button" className="text-blue-700 underline text-xs mb-2" onClick={() => setLinks([...links, ''])}>+ Add another link</button>
+                        )}
+                        {links.length > 1 && !studentSubmission && (
+                          <button type="button" className="text-red-600 underline text-xs mb-2 ml-2" onClick={() => setLinks(links.slice(0, -1))}>Remove last link</button>
+                        )}
+                        <div className="text-xs text-gray-600 mt-1">You can submit up to 5 links.</div>
+                      </>
+                    )}
+                    {/* Show submitted files/links here */}
+                    {studentSubmission && (
+                      <>
+                        {studentSubmission.files && studentSubmission.files.length > 0 && (
+                          <div className="mt-2 flex flex-col gap-2">
+                            <span className="font-semibold">Submitted Files: </span>
+                            <div className="flex flex-wrap gap-2">
+                              {studentSubmission.files.map((f, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  {/* Blue pill button for file name */}
+                                  <button
+                                    className="bg-blue-900 text-white rounded-full px-5 py-2 font-semibold text-left hover:bg-blue-800 transition"
+                                    style={{ minWidth: '120px' }}
+                                    onClick={() => {
+                                      const ext = f.name.split('.').pop().toLowerCase();
+                                      if (["jpg","jpeg","png","gif","bmp","webp","pdf"].includes(ext)) {
+                                        setPreviewFile({ url: f.url, name: f.name, type: ext });
+                                      } else {
+                                        window.open(f.url, '_blank');
+                                      }
+                                    }}
+                                  >
+                                    {f.name}
+                                  </button>
+                                  {/* Delete icon */}
+                                  <button
+                                    className="ml-1 text-red-600 hover:text-red-800"
+                                    title="Delete File"
+                                    onClick={() => { setFileToDelete(f); setShowDeleteModal(true); }}
+                                    style={{ display: 'flex', alignItems: 'center' }}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24">
+                                      <path fill="currentColor" d="M6 7V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1h3v2h-1v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9H2V7h3Zm2-1v1h8V6H8Zm10 3H6v12h12V9Z"/>
+                                    </svg>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {/* Show submitted links (up to 5) */}
+                        {studentSubmission.links && studentSubmission.links.length > 0 && (
+                          <div className="mt-2">
+                            <span className="font-semibold">Submitted Links: </span>
+                            <ul>
+                              {studentSubmission.links.map((l, idx) => (
+                                <li key={idx}>
+                                  <a href={l} className="text-blue-700 underline" target="_blank" rel="noopener noreferrer">
+                                    {l}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {/* Show Undo or Submit button depending on submission state */}
+                    {studentSubmission ? (
+                      <button
+                        className="mt-3 bg-red-600 text-white px-4 py-2 rounded"
+                        onClick={handleUndoSubmission}
+                        type="button"
+                      >
+                        Undo Submission
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        className="bg-blue-900 text-white px-4 py-2 rounded"
+                        disabled={submitLoading}
+                      >
+                        Submit
+                      </button>
+                    )}
+                    {error && <div className="text-red-600 text-sm">{error}</div>}
+                  </form>
                 </div>
               )}
             </>
@@ -563,6 +761,18 @@ export default function AssignmentDetailPage() {
           </div>
         </div>
       )}
+      {/* Validation Modal for file delete */}
+      <ValidationModal
+        isOpen={showDeleteModal}
+        onClose={() => { setShowDeleteModal(false); setFileToDelete(null); }}
+        type="warning"
+        title="Delete File?"
+        message={fileToDelete ? `Are you sure you want to delete '${fileToDelete.name}' from your submission? This cannot be undone.` : ''}
+        onConfirm={handleDeleteFile}
+        confirmText="Delete"
+        showCancel={true}
+        cancelText="Cancel"
+      />
     </div>
   );
 } 

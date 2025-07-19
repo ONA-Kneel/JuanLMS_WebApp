@@ -345,26 +345,26 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Student submits an assignment (with file upload)
-router.post('/:id/submit', authenticateToken, upload.single('file'), async (req, res) => {
+router.post('/:id/submit', authenticateToken, upload.array('files', 5), async (req, res) => {
   try {
     const student = req.user._id;
     const assignment = req.params.id;
-    let fileUrl = req.body.fileUrl;
-    let fileName = req.body.fileName;
-    if (req.file) {
-      fileUrl = `/uploads/submissions/${req.file.filename}`;
-      fileName = req.file.originalname;
+    let files = [];
+    if (req.files && req.files.length > 0) {
+      files = req.files.map(f => ({
+        url: `/uploads/submissions/${f.filename}`,
+        name: f.originalname
+      }));
     }
     // Check if already submitted
     let submission = await Submission.findOne({ assignment, student });
     if (submission) {
-      submission.fileUrl = fileUrl;
-      submission.fileName = fileName;
+      submission.files = files;
       submission.submittedAt = new Date();
       submission.status = 'turned-in';
       await submission.save();
     } else {
-      submission = new Submission({ assignment, student, fileUrl, fileName });
+      submission = new Submission({ assignment, student, files });
       await submission.save();
     }
     res.json(submission);
@@ -377,7 +377,7 @@ router.post('/:id/submit', authenticateToken, upload.single('file'), async (req,
 router.get('/:id/submissions', authenticateToken, async (req, res) => {
   try {
     const assignment = req.params.id;
-    const submissions = await Submission.find({ assignment }).populate('student', 'firstname lastname email');
+    const submissions = await Submission.find({ assignment }).populate('student', 'userID firstname lastname email');
     res.json(submissions);
   } catch (err) {
     console.error('Error fetching submissions:', err);
@@ -403,6 +403,37 @@ router.post('/:id/grade', authenticateToken, async (req, res) => {
     res.json(submission);
   } catch (err) {
     res.status(500).json({ error: 'Failed to grade submission.' });
+  }
+});
+
+// Student undoes their submission (delete submission)
+router.delete('/:id/submission', authenticateToken, async (req, res) => {
+  try {
+    const student = req.user._id;
+    const assignment = req.params.id;
+    const submission = await Submission.findOneAndDelete({ assignment, student });
+    if (!submission) return res.status(404).json({ error: 'Submission not found.' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to undo submission.' });
+  }
+});
+
+// Student deletes a file from their submission (but not the whole submission)
+router.patch('/:id/submission/file', authenticateToken, async (req, res) => {
+  try {
+    const student = req.user._id;
+    const assignment = req.params.id;
+    const { fileUrl } = req.body;
+    if (!fileUrl) return res.status(400).json({ error: 'fileUrl is required.' });
+    const submission = await Submission.findOne({ assignment, student });
+    if (!submission) return res.status(404).json({ error: 'Submission not found.' });
+    // Remove the file from the files array
+    submission.files = (submission.files || []).filter(f => f.url !== fileUrl);
+    await submission.save();
+    res.json(submission);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete file from submission.' });
   }
 });
 
