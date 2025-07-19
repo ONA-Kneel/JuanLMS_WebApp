@@ -31,6 +31,9 @@ export default function AssignmentDetailPage() {
   const [imageZoom, setImageZoom] = useState(1);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [fileToDelete, setFileToDelete] = useState(null);
+  // Add state for selected files before submission
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [deletingFile, setDeletingFile] = useState(null);
 
   // --- Track when a student views an assignment ---
   useEffect(() => {
@@ -198,6 +201,7 @@ export default function AssignmentDetailPage() {
             setTimeout(() => navigate(0), 200);
           });
         setFile(null);
+        setSelectedFiles([]); // After submission, clear selectedFiles
       } else {
         setError('Failed to submit.');
       }
@@ -225,6 +229,8 @@ export default function AssignmentDetailPage() {
           const userId = localStorage.getItem('userID');
           const sub = Array.isArray(data) ? data.find(s => s.student && (s.student._id === userId || s.student === userId)) : null;
           setStudentSubmission(sub);
+          setSelectedFiles([]);
+          setFile(null);
         });
     } else {
       // Optionally handle error
@@ -234,6 +240,7 @@ export default function AssignmentDetailPage() {
   // Handler to delete a file from submission
   const handleDeleteFile = async () => {
     if (!fileToDelete) return;
+    setDeletingFile(fileToDelete.url);
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(`${API_BASE}/assignments/${assignmentId}/submission/file`, {
@@ -263,6 +270,7 @@ export default function AssignmentDetailPage() {
     } finally {
       setShowDeleteModal(false);
       setFileToDelete(null);
+      setDeletingFile(null);
     }
   };
 
@@ -400,40 +408,53 @@ export default function AssignmentDetailPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {submissions.map((member) => {
-                          let status = "Not Viewed Yet";
-                          const userId = String(member._id); // Always use MongoDB ObjectId as string
-                          const hasViewed = assignment.views && assignment.views.map(String).includes(userId);
-                          // Debug log
-                          // console.log('Checking viewed:', {views: assignment.views, userId, member});
-
-                          if (member.submission) {
-                            status = "Submitted";
-                          } else if (hasViewed) {
-                            status = "Viewed";
-                          }
-                          return (
-                            <tr key={member._id}>
-                              <td className="p-3 border">{member.lastname}, {member.firstname}</td>
-                              <td className="p-3 border">{status}</td>
-                              <td className="p-3 border">{member.submission && member.submission.grade !== undefined ? member.submission.grade : "-"}</td>
-                              <td className="p-3 border">{member.submission && member.submission.feedback ? member.submission.feedback : "-"}</td>
-                              <td className="p-3 border">
-                                <button
-                                  className="bg-green-700 text-white px-2 py-1 rounded"
-                                  onClick={() => {
-                                    setGradingSubmission(member.submission ? member.submission._id : member._id);
-                                    setGradeValue(member.submission && member.submission.grade !== undefined ? member.submission.grade : '');
-                                    setFeedbackValue(member.submission && member.submission.feedback ? member.submission.feedback : '');
-                                    setGradingStudent(member);
-                                  }}
-                                >
-                                  Grade
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                        {submissions
+                          .filter(member => {
+                            if (activeTab === 'toGrade') {
+                              // Show all assigned students who have not been graded (regardless of submission)
+                              // Not graded: no submission, or submission with no grade/feedback
+                              return !member.submission || ((member.submission.grade === undefined || member.submission.grade === null) && (!member.submission.feedback || member.submission.feedback === ''));
+                            } else if (activeTab === 'graded') {
+                              // Only show submissions that have a grade or feedback
+                              return member.submission && (member.submission.grade !== undefined && member.submission.grade !== null || (member.submission.feedback && member.submission.feedback !== ''));
+                            }
+                            return false;
+                          })
+                          .map((member) => {
+                            let status = "Not Viewed Yet";
+                            const userId = String(member._id); // Always use MongoDB ObjectId as string
+                            const hasViewed = assignment.views && assignment.views.map(String).includes(userId);
+                            if (member.submission) {
+                              if ((member.submission.grade !== undefined && member.submission.grade !== null) || (member.submission.feedback && member.submission.feedback !== '')) {
+                                status = "Graded";
+                              } else {
+                                status = "Submitted";
+                              }
+                            } else if (hasViewed) {
+                              status = "Viewed";
+                            }
+                            return (
+                              <tr key={member._id}>
+                                <td className="p-3 border">{member.lastname}, {member.firstname}</td>
+                                <td className="p-3 border">{status}</td>
+                                <td className="p-3 border">{member.submission && member.submission.grade !== undefined ? member.submission.grade : "-"}</td>
+                                <td className="p-3 border">{member.submission && member.submission.feedback ? member.submission.feedback : "-"}</td>
+                                <td className="p-3 border">
+                                  <button
+                                    className="bg-green-700 text-white px-2 py-1 rounded"
+                                    onClick={() => {
+                                      setGradingSubmission(member.submission ? member.submission._id : member._id);
+                                      setGradeValue(member.submission && member.submission.grade !== undefined ? member.submission.grade : '');
+                                      setFeedbackValue(member.submission && member.submission.feedback ? member.submission.feedback : '');
+                                      setGradingStudent(member);
+                                    }}
+                                  >
+                                    Grade
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                       </tbody>
                     </table>
                     {gradeError && <div className="text-red-600 text-sm mt-2">{gradeError}</div>}
@@ -504,7 +525,10 @@ export default function AssignmentDetailPage() {
                           className="border rounded px-2 py-1 w-full"
                           accept="*"
                           multiple
-                          onChange={e => setFile(e.target.files)}
+                          onChange={e => {
+                            setFile(e.target.files);
+                            setSelectedFiles(Array.from(e.target.files));
+                          }}
                           required={!studentSubmission}
                           disabled={!!studentSubmission}
                         />
@@ -537,6 +561,41 @@ export default function AssignmentDetailPage() {
                         <div className="text-xs text-gray-600 mt-1">You can submit up to 5 links.</div>
                       </>
                     )}
+                    {/* Show selected files before submission */}
+                    {!studentSubmission && selectedFiles.length > 0 && (
+                      <div className="mt-2 flex flex-col gap-2">
+                        <span className="font-semibold">Selected Files: </span>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedFiles.map((f, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <span
+                                className="bg-blue-900 text-white rounded-full px-5 py-2 font-semibold text-left"
+                                style={{ minWidth: '120px' }}
+                              >
+                                {f.name}
+                              </span>
+                              <button
+                                className="ml-1 text-red-600 hover:text-red-800"
+                                title="Remove File"
+                                onClick={() => {
+                                  const newFiles = selectedFiles.filter((_, i) => i !== idx);
+                                  setSelectedFiles(newFiles);
+                                  // Update the FileList for submission
+                                  const dt = new DataTransfer();
+                                  newFiles.forEach(file => dt.items.add(file));
+                                  setFile(dt.files.length > 0 ? dt.files : null);
+                                }}
+                                style={{ display: 'flex', alignItems: 'center' }}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24">
+                                  <path fill="currentColor" d="M6 7V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1h3v2h-1v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9H2V7h3Zm2-1v1h8V6H8Zm10 3H6v12h12V9Z"/>
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {/* Show submitted files/links here */}
                     {studentSubmission && (
                       <>
@@ -552,7 +611,7 @@ export default function AssignmentDetailPage() {
                                     style={{ minWidth: '120px' }}
                                     onClick={() => {
                                       const ext = f.name.split('.').pop().toLowerCase();
-                                      if (["jpg","jpeg","png","gif","bmp","webp","pdf"].includes(ext)) {
+                                      if (["jpg","jpeg","png","gif","bmp","webp"].includes(ext)) {
                                         setPreviewFile({ url: f.url, name: f.name, type: ext });
                                       } else {
                                         window.open(f.url, '_blank');
@@ -561,17 +620,27 @@ export default function AssignmentDetailPage() {
                                   >
                                     {f.name}
                                   </button>
-                                  {/* Delete icon */}
-                                  <button
-                                    className="ml-1 text-red-600 hover:text-red-800"
-                                    title="Delete File"
-                                    onClick={() => { setFileToDelete(f); setShowDeleteModal(true); }}
-                                    style={{ display: 'flex', alignItems: 'center' }}
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24">
-                                      <path fill="currentColor" d="M6 7V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1h3v2h-1v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9H2V7h3Zm2-1v1h8V6H8Zm10 3H6v12h12V9Z"/>
+                                  {/* Only show delete icon if not submitted yet */}
+                                  {!studentSubmission && (
+                                    <button
+                                      className="ml-1 text-red-600 hover:text-red-800"
+                                      title="Delete File"
+                                      onClick={() => { setFileToDelete(f); setShowDeleteModal(true); }}
+                                      style={{ display: 'flex', alignItems: 'center' }}
+                                      disabled={!!deletingFile}
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24">
+                                        <path fill="currentColor" d="M6 7V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1h3v2h-1v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9H2V7h3Zm2-1v1h8V6H8Zm10 3H6v12h12V9Z"/>
+                                      </svg>
+                                    </button>
+                                  )}
+                                  {/* Spinner if deleting this file */}
+                                  {deletingFile === f.url && (
+                                    <svg className="animate-spin ml-2" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
                                     </svg>
-                                  </button>
+                                  )}
                                 </div>
                               ))}
                             </div>
