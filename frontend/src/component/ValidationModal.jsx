@@ -67,13 +67,14 @@ const ValidationModal = ({
 
     return (
         <Modal
-            isOpen={isOpen}
-            onRequestClose={onClose}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            overlayClassName="fixed inset-0 bg-black/50 backdrop-blur-sm"
-            contentLabel="Validation Modal"
+        isOpen={isOpen}
+        onRequestClose={onClose}
+        className="flex items-center justify-center p-4"
+        overlayClassName="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999]" // ensure overlay is on top
+        contentLabel="Validation Modal"
+        portalClassName="z-[9999]" 
         >
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-modal-pop">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-modal-pop z-[9999] mt-80">
                 <div className="flex items-center gap-3 mb-4">
                     {getIcon()}
                     <h3 className={`text-xl font-bold ${getTitleColor()}`}>

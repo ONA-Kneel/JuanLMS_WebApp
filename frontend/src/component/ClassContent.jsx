@@ -48,7 +48,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [editingMembers, setEditingMembers] = useState(false);
   const [newStudentIDs, setNewStudentIDs] = useState([]);
   const [filterType, setFilterType] = useState("all");
-  
+  const [showLessonModal, setShowLessonModal] = useState(false);
+  const [lessonLink, setLessonLink] = useState("");
+
   // Validation modal state
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
@@ -392,58 +394,123 @@ export default function ClassContent({ selected, isFaculty = false }) {
   }
 
   // --- HANDLERS FOR LESSON UPLOAD ---
+  // const handleLessonUpload = async (e) => {
+  //   e.preventDefault();
+  //   if (!lessonTitle || lessonFiles.length === 0) {
+  //     setValidationModal({
+  //       isOpen: true,
+  //       type: 'warning',
+  //       title: 'Missing Information',
+  //       message: 'Please provide a title and at least one file.'
+  //     });
+  //     return;
+  //   }
+  //   setUploading(true);
+  //   const formData = new FormData();
+  //   formData.append("classID", classId);
+  //   formData.append("title", lessonTitle);
+  //   for (let file of lessonFiles) {
+  //     formData.append("files", file);
+  //   }
+  //   const token = localStorage.getItem("token");
+  //   try {
+  //     const res = await fetch(`${API_BASE}/lessons`, {
+  //       method: "POST",
+  //       headers: { Authorization: `Bearer ${token}` },
+  //       body: formData,
+  //     });
+  //     if (res.ok) {
+  //       setShowLessonForm(false);
+  //       setLessonTitle("");
+  //       setLessonFiles([]);
+  //       // Optionally, refresh lessons list
+  //       const newLesson = await res.json();
+  //       setBackendLessons(lessons => [...lessons, newLesson]);
+  //     } else {
+  //       const data = await res.json();
+  //       setValidationModal({
+  //         isOpen: true,
+  //         type: 'error',
+  //         title: 'Upload Failed',
+  //         message: data.error || "Failed to upload lesson. Please try again."
+  //       });
+  //     }
+  //   } catch {
+  //     setValidationModal({
+  //       isOpen: true,
+  //       type: 'error',
+  //       title: 'Network Error',
+  //       message: 'Failed to upload lesson due to network error. Please check your connection and try again.'
+  //     });
+  //   } finally {
+  //     setUploading(false);
+  //   }
+  // };
+
   const handleLessonUpload = async (e) => {
-    e.preventDefault();
-    if (!lessonTitle || lessonFiles.length === 0) {
-      setValidationModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Missing Information',
-        message: 'Please provide a title and at least one file.'
-      });
-      return;
-    }
-    setUploading(true);
-    const formData = new FormData();
-    formData.append("classID", classId);
-    formData.append("title", lessonTitle);
-    for (let file of lessonFiles) {
-      formData.append("files", file);
-    }
-    const token = localStorage.getItem("token");
-    try {
-      const res = await fetch(`${API_BASE}/lessons`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      if (res.ok) {
-        setShowLessonForm(false);
-        setLessonTitle("");
-        setLessonFiles([]);
-        // Optionally, refresh lessons list
-        const newLesson = await res.json();
-        setBackendLessons(lessons => [...lessons, newLesson]);
-      } else {
-        const data = await res.json();
-        setValidationModal({
-          isOpen: true,
-          type: 'error',
-          title: 'Upload Failed',
-          message: data.error || "Failed to upload lesson. Please try again."
-        });
-      }
-    } catch {
+  e.preventDefault();
+  if (!lessonTitle || (lessonFiles.length === 0 && !lessonLink)) {
+    setValidationModal({
+      isOpen: true,
+      type: 'warning',
+      title: 'Missing Information',
+      message: 'Please provide a title and either a file or a link.'
+    });
+    return;
+  }
+
+  setUploading(true);
+  const formData = new FormData();
+  formData.append("classID", classId);
+  formData.append("title", lessonTitle);
+
+  if (lessonLink) {
+    formData.append("link", lessonLink);
+  }
+
+  for (let file of lessonFiles) {
+    formData.append("files", file);
+  }
+
+  const token = localStorage.getItem("token");
+
+  try {
+    const res = await fetch(`${API_BASE}/lessons`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+
+    if (res.ok) {
+      setShowLessonForm(false);
+      setLessonTitle("");
+      setLessonFiles([]);
+      setLessonLink(""); // Clear the link field
+
+      const newLesson = await res.json();
+      setBackendLessons(lessons => [...lessons, newLesson]);
+    } else {
+      const data = await res.json();
       setValidationModal({
         isOpen: true,
         type: 'error',
-        title: 'Network Error',
-        message: 'Failed to upload lesson due to network error. Please check your connection and try again.'
+        title: 'Upload Failed',
+        message: data.error || "Failed to upload lesson. Please try again."
       });
-    } finally {
-      setUploading(false);
+      setShowLessonForm(false); // ✅ Close modal on error
     }
-  };
+  } catch {
+    setValidationModal({
+      isOpen: true,
+      type: 'error',
+      title: 'Network Error',
+      message: 'Failed to upload lesson due to network error. Please check your connection and try again.'
+    });
+    setShowLessonForm(false); // ✅ Close modal on network error
+  } finally {
+    setUploading(false);
+  }
+};
 
   // --- HANDLERS FOR LESSON DELETE/EDIT (Faculty only) ---
   const [editingLessonId, setEditingLessonId] = useState(null);
@@ -842,7 +909,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
             {isFaculty && !showLessonForm && (
               <button
                 className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm"
-                onClick={() => setShowLessonForm(true)}
+                onClick={() => setShowLessonModal(true)}
               >
                 + Add Material
               </button>
@@ -1208,27 +1275,125 @@ export default function ClassContent({ selected, isFaculty = false }) {
         </div>
       )}
 
-      {/* Validation Modal */}
-      <ValidationModal
-        isOpen={validationModal.isOpen}
-        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
-        type={validationModal.type}
-        title={validationModal.title}
-        message={validationModal.message}
-      />
+{/* Validation Modal Backdrop */}
+{validationModal.isOpen && (
+  <ValidationModal
+    isOpen={validationModal.isOpen}
+    onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+    type={validationModal.type}
+    title={validationModal.title}
+    message={validationModal.message}
+  />
+)}
 
-      {/* Confirmation Modal */}
-      <ValidationModal
-        isOpen={confirmationModal.isOpen}
-        onClose={() => setConfirmationModal({ ...confirmationModal, isOpen: false })}
-        type="warning"
-        title={confirmationModal.title}
-        message={confirmationModal.message}
-        onConfirm={confirmationModal.onConfirm}
-        confirmText="Confirm"
-        showCancel={true}
-        cancelText="Cancel"
-      />
+{confirmationModal.isOpen && (
+  <ValidationModal
+    isOpen={confirmationModal.isOpen}
+    onClose={() => setConfirmationModal({ ...confirmationModal, isOpen: false })}
+    type="warning"
+    title={confirmationModal.title}
+    message={confirmationModal.message}
+    onConfirm={confirmationModal.onConfirm}
+    confirmText="Confirm"
+    showCancel={true}
+    cancelText="Cancel"
+  />
+)}
+
+      {showLessonModal && (
+        <div className="fixed inset-0 z-[1030] flex items-center justify-center bg-[rgba(0,0,0,0.4)] backdrop-blur-sm p-4">
+          <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4">Add New Module</h2>
+            <form onSubmit={handleLessonUpload} className="flex flex-col gap-4">
+              <div>
+                <label className="font-semibold">Lesson Title</label>
+                <input
+                  type="text"
+                  value={lessonTitle}
+                  onChange={e => setLessonTitle(e.target.value)}
+                  className="border rounded px-3 py-2 w-full"
+                  required
+                />
+              </div>
+
+              {/* Accept File Upload */}
+              <div>
+                <label className="font-semibold">Upload Files</label>
+                <input
+                  type="file"
+                  multiple
+                  onChange={e =>
+                    setLessonFiles([...lessonFiles, ...Array.from(e.target.files)])
+                  }
+                  className="border rounded px-3 py-2 w-full"
+                />
+              </div>
+
+              {/* Accept Links */}
+              <div>
+                <label className="font-semibold">or Paste Link</label>
+                <input
+                  type="url"
+                  placeholder="https://example.com/lesson.pdf"
+                  value={lessonLink}
+                  onChange={e => setLessonLink(e.target.value)}
+                  className="border rounded px-3 py-2 w-full"
+                />
+              </div>
+
+              {/* Display selected files */}
+              {(lessonFiles.length > 0 || lessonLink) && (
+                <ul className="mt-2 flex flex-col gap-2">
+                  {lessonFiles.map((file, idx) => (
+                    <li key={idx} className="bg-gray-100 px-3 py-1 rounded flex items-center justify-between">
+                      <span>{file.name}</span>
+                      <button
+                        type="button"
+                        className="text-red-600 hover:text-red-800 text-xs font-bold"
+                        onClick={() => setLessonFiles(lessonFiles.filter((_, i) => i !== idx))}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                  {lessonLink && (
+                    <li className="bg-gray-100 px-3 py-1 rounded flex items-center justify-between">
+                      <a href={lessonLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-sm">
+                        {lessonLink}
+                      </a>
+                      <button
+                        type="button"
+                        className="text-red-600 hover:text-red-800 text-xs font-bold"
+                        onClick={() => setLessonLink("")}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              )}
+
+              {/* Buttons */}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLessonModal(false)}
+                  className="bg-gray-400 text-white px-4 py-2 rounded"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={uploading || (lessonFiles.length === 0 && !lessonLink)}
+                  className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950"
+                >
+                  {uploading ? "Uploading..." : "Save Module"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
