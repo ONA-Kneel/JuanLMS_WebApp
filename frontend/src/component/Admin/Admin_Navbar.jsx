@@ -45,7 +45,7 @@ const Admin_Navbar = () => {
                 {/* Logo */}
                 <div className="flex justify-center md:justify-start items-center mb-6 p-3 flex-col">
                     <div className='flex justify-center items-center'>
-                        <img src={logo6} className='w-20 h-15 ml-0 md:ml-0 p-0' alt="Logo" />
+                        <img src={logo6} className='w-25 h-25 ml-0 md:ml-0 p-0' alt="Logo" />
                     </div>
                     <div className='flex justify-center items-center'>
                         <img src={logo5} className='w-40 ml-0 md:ml-0' alt="Logo" />
