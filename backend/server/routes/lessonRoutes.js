@@ -39,9 +39,9 @@ const upload = multer({
 // Accepts up to 5 files per lesson
 router.post('/', authenticateToken, upload.array('files', 5), async (req, res) => {
   try {
-    const { classID, title } = req.body;
+    const { classID, title, link } = req.body;
     // Validate required fields and at least one file
-    if (!classID || !title || !req.files || req.files.length === 0) {
+    if (!classID || !title || (!req.files || req.files.length === 0) && !link) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     // Map uploaded files to file info objects for storage in MongoDB
@@ -50,7 +50,7 @@ router.post('/', authenticateToken, upload.array('files', 5), async (req, res) =
       fileName: file.originalname
     }));
     // Create and save the lesson document
-    const lesson = new Lesson({ classID, title, files });
+    const lesson = new Lesson({ classID, title, files, link });
     await lesson.save();
 
     // Create audit log for material upload

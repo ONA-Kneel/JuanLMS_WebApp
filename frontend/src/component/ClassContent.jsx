@@ -562,6 +562,80 @@ export default function ClassContent({ selected, isFaculty = false }) {
     }
   };
 
+  const handleCreateLesson = async () => {
+    const token = localStorage.getItem('token');
+
+    // Basic validation
+    if (!lessonTitle || !classId || (lessonFiles.length === 0 && !lessonLink)) {
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Missing Data',
+        message: 'Please provide a title, select a class, and either upload at least one file or add a link.'
+      });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('classID', classId);
+    formData.append('title', lessonTitle);
+
+    if (lessonLink) {
+      formData.append('link', lessonLink);
+    }
+
+    for (const file of lessonFiles) {
+      formData.append('files', file);
+    }
+
+    // Optional: Log all formData content for debugging
+    for (let [key, val] of formData.entries()) {
+      console.log(`${key}:`, val);
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/lessons`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          // ❗ No Content-Type header when using FormData
+        },
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setBackendLessons(prev => [data.lesson, ...prev]);
+        setLessonTitle('');
+        setLessonFiles([]);
+        setLessonLink(''); // ✅ Clear link input too
+        setValidationModal({
+          isOpen: true,
+          type: 'success',
+          title: 'Success',
+          message: 'Lesson uploaded successfully!'
+        });
+      } else {
+        const error = await res.json();
+        console.error("Server Response:", error);
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Upload Failed',
+          message: error?.error || 'Failed to upload lesson.'
+        });
+      }
+    } catch (err) {
+      console.error("Network Error:", err);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: 'Check your internet connection and try again.'
+      });
+    }
+  };
+
   // Upload new files to lesson (requires backend PATCH/POST endpoint, not currently implemented)
   const handleAddFilesToLesson = async (lessonId) => {
     if (newFiles.length === 0) return;
@@ -765,16 +839,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
         <>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold">Classwork</h2>
-            {isFaculty && (
-              <div className="relative inline-block" ref={dropdownRef}>
-                <div className="flex items-center gap-3">
-                  <button
-                    className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm flex items-center gap-2"
-                    onClick={() => setShowDropdown((prev) => !prev)}
-                  >
-                    + Create
-                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                  </button>
 
                   <div>
                     <label className="mr-2 text-sm text-gray-700">Filter:</label>
@@ -788,6 +852,17 @@ export default function ClassContent({ selected, isFaculty = false }) {
                       <option value="assignment">Assignment</option>
                     </select>
                   </div>
+
+            {isFaculty && (
+              <div className="relative inline-block" ref={dropdownRef}>
+                <div className="flex items-center gap-3">
+                  <button
+                    className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm flex items-center gap-2"
+                    onClick={() => setShowDropdown((prev) => !prev)}
+                  >
+                    + Create
+                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                  </button>
                 </div>
 
                 {showDropdown && (
@@ -958,12 +1033,14 @@ export default function ClassContent({ selected, isFaculty = false }) {
             </div>
             <div className="flex gap-2 mt-2">
               <button
-                type="submit"
+                type="button"
+                onClick={handleCreateLesson}
                 className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm"
                 disabled={uploading || lessonFiles.length === 0}
               >
                 {uploading ? "Uploading..." : "Save Module"}
               </button>
+
               <button
                 type="button"
                 className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-sm"
@@ -1275,36 +1352,37 @@ export default function ClassContent({ selected, isFaculty = false }) {
         </div>
       )}
 
-{/* Validation Modal Backdrop */}
-{validationModal.isOpen && (
-  <ValidationModal
-    isOpen={validationModal.isOpen}
-    onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
-    type={validationModal.type}
-    title={validationModal.title}
-    message={validationModal.message}
-  />
-)}
+      {/* Validation Modal Backdrop */}
+      {validationModal.isOpen && (
+        <ValidationModal
+          isOpen={validationModal.isOpen}
+          onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+          type={validationModal.type}
+          title={validationModal.title}
+          message={validationModal.message}
+        />
+      )}
 
-{confirmationModal.isOpen && (
-  <ValidationModal
-    isOpen={confirmationModal.isOpen}
-    onClose={() => setConfirmationModal({ ...confirmationModal, isOpen: false })}
-    type="warning"
-    title={confirmationModal.title}
-    message={confirmationModal.message}
-    onConfirm={confirmationModal.onConfirm}
-    confirmText="Confirm"
-    showCancel={true}
-    cancelText="Cancel"
-  />
-)}
+      {confirmationModal.isOpen && (
+        <ValidationModal
+          isOpen={confirmationModal.isOpen}
+          onClose={() => setConfirmationModal({ ...confirmationModal, isOpen: false })}
+          type="warning"
+          title={confirmationModal.title}
+          message={confirmationModal.message}
+          onConfirm={confirmationModal.onConfirm}
+          confirmText="Confirm"
+          showCancel={true}
+          cancelText="Cancel"
+        />
+      )}
 
       {showLessonModal && (
         <div className="fixed inset-0 z-[1030] flex items-center justify-center bg-[rgba(0,0,0,0.4)] backdrop-blur-sm p-4">
           <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">Add New Module</h2>
             <form onSubmit={handleLessonUpload} className="flex flex-col gap-4">
+              {/* Title */}
               <div>
                 <label className="font-semibold">Lesson Title</label>
                 <input
@@ -1316,20 +1394,20 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 />
               </div>
 
-              {/* Accept File Upload */}
+              {/* File Upload */}
               <div>
                 <label className="font-semibold">Upload Files</label>
                 <input
                   type="file"
                   multiple
                   onChange={e =>
-                    setLessonFiles([...lessonFiles, ...Array.from(e.target.files)])
+                    setLessonFiles(prev => [...prev, ...Array.from(e.target.files)])
                   }
                   className="border rounded px-3 py-2 w-full"
                 />
               </div>
 
-              {/* Accept Links */}
+              {/* Optional Link */}
               <div>
                 <label className="font-semibold">or Paste Link</label>
                 <input
@@ -1341,16 +1419,21 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 />
               </div>
 
-              {/* Display selected files */}
+              {/* Display uploaded files and link */}
               {(lessonFiles.length > 0 || lessonLink) && (
                 <ul className="mt-2 flex flex-col gap-2">
                   {lessonFiles.map((file, idx) => (
-                    <li key={idx} className="bg-gray-100 px-3 py-1 rounded flex items-center justify-between">
+                    <li
+                      key={idx}
+                      className="bg-gray-100 px-3 py-1 rounded flex items-center justify-between"
+                    >
                       <span>{file.name}</span>
                       <button
                         type="button"
                         className="text-red-600 hover:text-red-800 text-xs font-bold"
-                        onClick={() => setLessonFiles(lessonFiles.filter((_, i) => i !== idx))}
+                        onClick={() =>
+                          setLessonFiles(files => files.filter((_, i) => i !== idx))
+                        }
                       >
                         Remove
                       </button>
@@ -1358,7 +1441,12 @@ export default function ClassContent({ selected, isFaculty = false }) {
                   ))}
                   {lessonLink && (
                     <li className="bg-gray-100 px-3 py-1 rounded flex items-center justify-between">
-                      <a href={lessonLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-sm">
+                      <a
+                        href={lessonLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline text-sm"
+                      >
                         {lessonLink}
                       </a>
                       <button
@@ -1373,12 +1461,13 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 </ul>
               )}
 
-              {/* Buttons */}
-              <div className="flex justify-end gap-2">
+              {/* Submit and Cancel */}
+              <div className="flex justify-end gap-2 mt-4">
                 <button
                   type="button"
                   onClick={() => setShowLessonModal(false)}
                   className="bg-gray-400 text-white px-4 py-2 rounded"
+                  disabled={uploading}
                 >
                   Cancel
                 </button>
