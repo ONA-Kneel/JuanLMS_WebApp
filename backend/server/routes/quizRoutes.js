@@ -1,10 +1,12 @@
 import express from 'express';
+import User from '../models/User.js'; // Make sure this is at the top
 import Quiz from '../models/Quiz.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import QuizResponse from '../models/QuizResponse.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+
 
 const router = express.Router();
 
@@ -193,4 +195,19 @@ router.get('/quizzes/:quizId/response/:studentId', async (req, res) => {
     }
 });
 
-export default router; 
+// Fetch students by array of IDs
+router.post('/students/by-ids', authenticateToken, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No student IDs provided.' });
+    }
+    // If your student IDs are strings (not ObjectId), use this:
+    const students = await User.find({ userID: { $in: ids } }, 'firstname lastname email _id userID');
+    res.json({ students });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;

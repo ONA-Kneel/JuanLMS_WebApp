@@ -23,7 +23,7 @@ function calculateStats(responses, quiz) {
   if (!scores.length) return { avg: 0, median: 0, range: [0, 0], dist: {}, total };
   const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
   const sorted = [...scores].sort((a, b) => a - b);
-  const median = sorted.length % 2 === 0 ? (sorted[sorted.length/2-1] + sorted[sorted.length/2])/2 : sorted[Math.floor(sorted.length/2)];
+  const median = sorted.length % 2 === 0 ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2 : sorted[Math.floor(sorted.length / 2)];
   const range = [Math.min(...scores), Math.max(...scores)];
   const dist = {};
   for (let s of scores) dist[s] = (dist[s] || 0) + 1;
@@ -46,6 +46,8 @@ export default function QuizResponses() {
     title: '',
     message: ''
   });
+  // Add members state
+  const [members, setMembers] = useState([]);
 
   const handleScoreEdit = idx => {
     setEditScoreIdx(idx);
@@ -88,12 +90,34 @@ export default function QuizResponses() {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
+    // Fetch quiz, responses, and members
     Promise.all([
       fetch(`${API_BASE}/api/quizzes/${quizId}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(res => res.json()),
       fetch(`${API_BASE}/api/quizzes/${quizId}/responses`, { headers: { 'Authorization': `Bearer ${token}` } }).then(res => res.json())
-    ]).then(([quizData, respData]) => {
+    ]).then(async ([quizData, respData]) => {
       setQuiz(quizData);
       setResponses(Array.isArray(respData) ? respData : []);
+      let membersData = [];
+      // Fetch only assigned students
+      const assignedIDs = quizData?.assignedTo?.[0]?.studentIDs || [];
+      if (assignedIDs.length > 0) {
+        try {
+          const res = await fetch(`${API_BASE}/api/quizzes/students/by-ids`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ids: assignedIDs })
+          });
+          const data = await res.json();
+          membersData = Array.isArray(data.students) ? data.students : [];
+          console.log("Loaded assigned members:", membersData);
+        } catch {
+          membersData = [];
+        }
+      }
+      setMembers(membersData);
       setLoading(false);
     }).catch(() => {
       setError('Failed to load quiz or responses.');
@@ -109,27 +133,28 @@ export default function QuizResponses() {
   const distData = distLabels.map(k => stats.dist[k]);
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="min-h-screen min-w-screen bg-gray-100 flex">
       {/* Sidebar Navigation */}
       <Faculty_Navbar />
       {/* Main Content */}
       <div className="flex-1 flex flex-col items-start py-8 px-8 ml-0 md:ml-64 font-poppinsr">
-        <button className="mb-4 text-blue-800 font-semibold text-base hover:underline" onClick={() => window.history.back()}>&lt; Back</button>
+        <button className="mb-4 text-blue-800 text-base hover:underline" onClick={() => window.history.back()}>&larr; Back</button>
         <div className="flex items-center justify-between w-full mb-2">
           <h1 className="text-3xl font-extrabold text-blue-900">{quiz?.title || 'Quiz Responses'}</h1>
           <span className="text-base font-semibold text-gray-700">Points: {stats.total}</span>
         </div>
         <div className="flex gap-8 border-b border-gray-300 mb-6 mt-4 w-full">
-          <button className={`pb-2 px-2 text-lg font-semibold ${tab==='assignment' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={()=>setTab('assignment')}>Assignment</button>
-          <button className={`pb-2 px-2 text-lg font-semibold ${tab==='toGrade' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={()=>setTab('toGrade')}>To Grade</button>
-          <button className={`pb-2 px-2 text-lg font-semibold ${tab==='insights' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={()=>setTab('insights')}>Insights</button>
+          <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'assignment' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('assignment')}>Assignment</button>
+          <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'toGrade' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('toGrade')}>Submissions</button>
+          <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'status' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('status')}>Status</button>
+          <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'insights' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('insights')}>Insights</button>
         </div>
         {/* Assignment Tab */}
         {tab === 'assignment' && (
           <div className="w-full">
             <div className="mb-6">
               <div className="font-bold text-lg mb-1">Instructions</div>
-      <div className="mb-4 text-gray-700">{quiz?.instructions || quiz?.description}</div>
+              <div className="mb-4 text-gray-700">{quiz?.instructions || quiz?.description}</div>
               <div className="font-bold text-lg mb-1">Description</div>
               <div className="mb-4 text-gray-700">{quiz?.description}</div>
             </div>
@@ -139,9 +164,9 @@ export default function QuizResponses() {
         {tab === 'toGrade' && responses.length > 0 && (
           <div className="w-full">
             <div className="flex items-center gap-4 mb-4">
-              <button disabled={selectedIdx===0} onClick={()=>setSelectedIdx(i=>i-1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&lt;</button>
-              <span> {selectedIdx+1} of {responses.length} </span>
-              <button disabled={selectedIdx===responses.length-1} onClick={()=>setSelectedIdx(i=>i+1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&gt;</button>
+              <button disabled={selectedIdx === 0} onClick={() => setSelectedIdx(i => i - 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&lt;</button>
+              <span> {selectedIdx + 1} of {responses.length} </span>
+              <button disabled={selectedIdx === responses.length - 1} onClick={() => setSelectedIdx(i => i + 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&gt;</button>
             </div>
             <div className="mb-2 text-2xl font-bold text-blue-900">{responses[selectedIdx].studentId?.firstname} {responses[selectedIdx].studentId?.lastname}</div>
             <div className="mb-2 text-lg text-gray-700">Submitted: {new Date(responses[selectedIdx].submittedAt).toLocaleString()}</div>
@@ -197,56 +222,111 @@ export default function QuizResponses() {
                 })}
               </ol>
             </div>
-      </div>
+          </div>
         )}
         {tab === 'toGrade' && responses.length === 0 && (
           <div className="text-gray-600">No responses yet.</div>
         )}
+        {/* Status Tab */}
+        {tab === 'status' && (
+          <div className="w-full">
+            <h2 className="text-lg font-semibold mb-4">Student Quiz Status</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="p-3 border">Name</th>
+                    <th className="p-3 border">Status</th>
+                    <th className="p-3 border">Score</th>
+                    {/* Removed Feedback column */}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.isArray(members) && members.length > 0 ? (
+                    members
+                      .filter(student => {
+                        const assignedIDs = quiz?.assignedTo?.[0]?.studentIDs || [];
+                        return assignedIDs.includes(student._id) || assignedIDs.includes(student.userID);
+                      })
+                      .map(student => {
+                        const response = responses.find(r =>
+                          r.studentId?._id === student._id ||
+                          r.studentId === student._id ||
+                          r.studentId?.userID === student.userID
+                        );
+                        let status = "Not Yet Viewed";
+                        if (response) {
+                          status = "Submitted";
+                        } else if (quiz?.views && quiz.views.map(String).includes(String(student._id))) {
+                          status = "Viewed";
+                        }
+                        return (
+                          <tr key={student._id}>
+                            <td className="p-3 border">{student.lastname}, {student.firstname}</td>
+                            <td className="p-3 border">{status}</td>
+                            <td className="p-3 border">{response && typeof response.score === 'number' ? response.score : "-"}</td>
+                            {/* Removed Feedback cell */}
+                          </tr>
+                        );
+                      })
+                  ) : (
+                    <tr>
+                      <td className="p-3 border text-center" colSpan={3}>No students found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         {/* Insights Tab */}
         {tab === 'insights' && (
-          <div className="w-full">
-          <div className="mb-4 flex gap-8">
-            <div className="bg-gray-50 p-4 rounded shadow text-center flex-1">
-              <div className="text-xs text-gray-500">Average</div>
-              <div className="text-lg font-bold">{stats.avg.toFixed(2)} / {stats.total} points</div>
+          <div className="w-full px-2">
+            <div className="mb-4 flex flex-col md:flex-row gap-4 md:gap-8">
+              <div className="bg-gray-50 p-4 rounded shadow text-center flex-1">
+                <div className="text-xs text-gray-500">Average</div>
+                <div className="text-lg font-bold">{stats.avg.toFixed(2)} / {stats.total} points</div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded shadow text-center flex-1">
+                <div className="text-xs text-gray-500">Median</div>
+                <div className="text-lg font-bold">{stats.median} / {stats.total} points</div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded shadow text-center flex-1">
+                <div className="text-xs text-gray-500">Range</div>
+                <div className="text-lg font-bold">{stats.range[0]} - {stats.range[1]} points</div>
+              </div>
             </div>
-            <div className="bg-gray-50 p-4 rounded shadow text-center flex-1">
-              <div className="text-xs text-gray-500">Median</div>
-              <div className="text-lg font-bold">{stats.median} / {stats.total} points</div>
-            </div>
-            <div className="bg-gray-50 p-4 rounded shadow text-center flex-1">
-              <div className="text-xs text-gray-500">Range</div>
-              <div className="text-lg font-bold">{stats.range[0]} - {stats.range[1]} points</div>
+            <div className="my-8">
+              <div className="font-semibold mb-2">Total points distribution</div>
+              <div className="w-full max-7xl ">
+                <Bar
+                  data={{
+                    labels: distLabels,
+                    datasets: [{
+                      label: '# of respondents',
+                      data: distData,
+                      backgroundColor: 'rgba(99, 102, 241, 0.7)'
+                    }]
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: false },
+                      title: { display: false }
+                    },
+                    scales: {
+                      x: { title: { display: true, text: 'Points scored' } },
+                      y: { title: { display: true, text: '# of respondents' }, beginAtZero: true, precision: 0 }
+                    }
+                  }}
+                  height={250}
+                />
+              </div>
             </div>
           </div>
-          <div className="my-8">
-            <div className="font-semibold mb-2">Total points distribution</div>
-            <Bar
-              data={{
-                labels: distLabels,
-                datasets: [{
-                  label: '# of respondents',
-                  data: distData,
-                  backgroundColor: 'rgba(99, 102, 241, 0.7)'
-                }]
-              }}
-              options={{
-                responsive: true,
-                plugins: {
-                  legend: { display: false },
-                  title: { display: false }
-                },
-                scales: {
-                  x: { title: { display: true, text: 'Points scored' } },
-                  y: { title: { display: true, text: '# of respondents' }, beginAtZero: true, precision: 0 }
-                }
-              }}
-              height={120}
-            />
-          </div>
-        </div>
-      )}
-        </div>
+        )}
+      </div>
       <ValidationModal
         isOpen={validationModal.isOpen}
         onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
@@ -256,4 +336,4 @@ export default function QuizResponses() {
       />
     </div>
   );
-} 
+}
