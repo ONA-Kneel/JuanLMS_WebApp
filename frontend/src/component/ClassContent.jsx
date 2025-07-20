@@ -47,6 +47,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [allStudents, setAllStudents] = useState([]);
   const [editingMembers, setEditingMembers] = useState(false);
   const [newStudentIDs, setNewStudentIDs] = useState([]);
+  const [filterType, setFilterType] = useState("all");
   
   // Validation modal state
   const [validationModal, setValidationModal] = useState({
@@ -699,13 +700,29 @@ export default function ClassContent({ selected, isFaculty = false }) {
             <h2 className="text-2xl font-bold">Classwork</h2>
             {isFaculty && (
               <div className="relative inline-block" ref={dropdownRef}>
-                <button
-                  className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm flex items-center gap-2"
-                  onClick={() => setShowDropdown((prev) => !prev)}
-                >
-                  + Create
-                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    className="bg-blue-900 text-white px-3 py-2 rounded hover:bg-blue-950 text-sm flex items-center gap-2"
+                    onClick={() => setShowDropdown((prev) => !prev)}
+                  >
+                    + Create
+                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+
+                  <div>
+                    <label className="mr-2 text-sm text-gray-700">Filter:</label>
+                    <select
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value)}
+                      className="px-3 py-1 border border-gray-300 rounded text-sm"
+                    >
+                      <option value="all">All</option>
+                      <option value="quiz">Quiz</option>
+                      <option value="assignment">Assignment</option>
+                    </select>
+                  </div>
+                </div>
+
                 {showDropdown && (
                   <div className="absolute right-0 mt-2 w-48 bg-white border rounded shadow-lg z-10">
                     <button
@@ -732,7 +749,17 @@ export default function ClassContent({ selected, isFaculty = false }) {
             ) : assignmentError ? (
               <p className="text-red-600">{assignmentError}</p>
             ) : assignments.length > 0 ? (
-              assignments.map((item) => {
+                assignments
+                  .filter((item) => {
+                    if (filterType === "all") return true;
+                    return item.type === filterType;
+                  })
+                  .sort((a, b) => {
+                    const dateA = new Date(a.dueDate || a.postAt || 0);
+                    const dateB = new Date(b.dueDate || b.postAt || 0);
+                    return dateA - dateB; // ascending: past to future
+                  })
+                  .map((item) => {
                 const isPosted = isAssignmentPosted(item);
                 return (
                   <div
