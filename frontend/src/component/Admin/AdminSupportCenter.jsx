@@ -121,9 +121,9 @@ export default function AdminSupportCenter() {
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Support Center</h2>
             <p className="text-base md:text-lg">
-              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
-              {currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
-              {new Date().toLocaleDateString("en-US", {
+              <span> </span>{academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+              <span> </span>{currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
+              <span> </span>{new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
                 month: "long",

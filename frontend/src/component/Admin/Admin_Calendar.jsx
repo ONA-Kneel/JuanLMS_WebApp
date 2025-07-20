@@ -337,9 +337,9 @@ export default function Admin_Calendar() {
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Calendar</h2>
             <p className="text-base md:text-lg">
-              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} |
-              {currentTerm ? `${currentTerm.termName}` : "Loading..."} |
-              {formattedDate}
+              <span> </span>{academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} |
+              <span> </span>{currentTerm ? `${currentTerm.termName}` : "Loading..."} |
+              <span> </span>{formattedDate}
             </p>
           </div>
           <ProfileMenu onOpen={() => setShowProfileModal(true)} />
