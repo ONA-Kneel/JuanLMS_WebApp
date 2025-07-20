@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import Student_Navbar from './Student/Student_Navbar';
 import ValidationModal from './ValidationModal';
@@ -274,56 +275,110 @@ export default function AssignmentDetailPage() {
     }
   };
 
+  const refreshStudentSubmission = async () => {
+    const userID = localStorage.getItem('userID');
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_BASE}/submissions/assignment/${assignmentId}/student/${userID}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      setSubmissions(data); // <- this updates the grade shown
+    }
+  } catch (err) {
+    console.error('Failed to refresh student submission:', err);
+  }
+};
+
+const fetchSubmission = async () => {
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch(`${API_BASE}/submissions/assignment/${assignmentId}/student/${user?._id}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setSubmissions(data);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+useEffect(() => {
+    fetchSubmission();
+  }, []);
+
+
   // Faculty grade handler
   const handleGrade = async (submissionId) => {
-    setGradeLoading(true);
-    setGradeError('');
-    const token = localStorage.getItem('token');
-    
-    // Validate grade input
-    if (!gradeValue || gradeValue < 0 || gradeValue > 100) {
-      setGradeError('Please enter a valid grade between 0 and 100.');
-      setGradeLoading(false);
-      return;
-    }
-    
-    try {
-      const res = await fetch(`${API_BASE}/assignments/${assignmentId}/grade`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId, grade: gradeValue, feedback: feedbackValue })
-      });
-      
-      if (res.ok) {
-        setGradeValue('');
-        setFeedbackValue('');
-        setGradeError('');
-      } else {
-        const err = await res.json();
-        let errorMessage = err.error || `HTTP ${res.status}: ${res.statusText}`;
-        
-        // Handle specific error cases
-        if (res.status === 400) {
-          errorMessage = 'Invalid grade value or submission data.';
-        } else if (res.status === 401) {
-          errorMessage = 'Your session has expired. Please log in again.';
-        } else if (res.status === 403) {
-          errorMessage = 'You do not have permission to grade this submission.';
-        } else if (res.status === 404) {
-          errorMessage = 'Submission not found.';
-        } else if (res.status >= 500) {
-          errorMessage = 'Server error occurred. Please try again later.';
-        }
-        
-        setGradeError(errorMessage);
+  setGradeLoading(true);
+  setGradeError('');
+  const token = localStorage.getItem('token');
+
+  if (!gradeValue || gradeValue < 0 || gradeValue > 100) {
+    setGradeError('Please enter a valid grade between 0 and 100.');
+    setGradeLoading(false);
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/assignments/${assignmentId}/grade`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        submissionId,
+        grade: gradeValue,
+        feedback: feedbackValue,
+      }),
+    });
+
+    if (res.ok) {
+      setGradeValue('');
+      setFeedbackValue('');
+      setGradeError('');
+
+      // ✅ Only refresh student's submission if it matches
+      if (typeof refreshStudentSubmission === 'function' && submissions?._id === submissionId) {
+        refreshStudentSubmission(); // <-- This is the only required refresh
       }
-    } catch (err) {
-      console.error('Grading error:', err);
-      setGradeError('Network error. Please check your connection and try again.');
-    } finally {
-      setGradeLoading(false);
+
+    } else {
+      const err = await res.json();
+      let errorMessage = err.error || `HTTP ${res.status}: ${res.statusText}`;
+
+      if (res.status === 400) {
+        errorMessage = 'Invalid grade value or submission data.';
+      } else if (res.status === 401) {
+        errorMessage = 'Your session has expired. Please log in again.';
+      } else if (res.status === 403) {
+        errorMessage = 'You do not have permission to grade this submission.';
+      } else if (res.status === 404) {
+        errorMessage = 'Submission not found.';
+      } else if (res.status >= 500) {
+        errorMessage = 'Server error occurred. Please try again later.';
+      }
+
+      setGradeError(errorMessage);
     }
-  };
+  } catch (err) {
+    console.error('Grading error:', err);
+    setGradeError('Network error. Please check your connection and try again.');
+  } finally {
+    setGradeLoading(false);
+  }
+};
+
+  
 
   if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-100">Loading...</div>;
   if (error || !assignment) return <div className="flex items-center justify-center min-h-screen bg-gray-100">{error || 'Assignment not found.'}</div>;
@@ -467,10 +522,28 @@ export default function AssignmentDetailPage() {
           {/* Student view */}
           {role !== 'faculty' && (
             <>
-              <div className="mt-4 mb-4">
-                <h2 className="text-lg font-semibold mb-1">Instructions</h2>
-                <div className="text-gray-800 whitespace-pre-line">{assignment.instructions}</div>
+              <div className="flex flex-row mb-6 justify-between">
+                <div className="mt-4 mb-4">
+                  <h2 className="text-lg font-semibold mb-1">Instructions</h2>
+                  <div className="text-gray-800 whitespace-pre-line">{assignment.instructions}</div>
+                </div>
+
+                <div className="flex flex-col mb-6 justify-between">
+                  {studentSubmission?.grade == null ? (
+                      <p className="text-gray-600 italic">Not yet graded.</p>
+                    ) : (
+                      <>
+                        <p className="text-blue-900 font-bold mt-2">Grade: {studentSubmission.grade}%</p>
+                        {studentSubmission.feedback && (
+                          <p className="text-blue-500 font-semibold mt-1">Feedback: {studentSubmission.feedback}</p>
+                        )}
+                      </>
+                    )}
+
+                </div>
+
               </div>
+              
               {/* Always show submit UI for assignments (not quizzes) */}
               {assignment.type !== 'quiz' && (
                 <div className="mb-4">
