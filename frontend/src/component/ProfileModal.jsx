@@ -406,26 +406,29 @@ export default function ProfileModal({
   // ===================== Render =====================
   if (!open) return null;
 
-  return ReactDom.createPortal(
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-30 p-4">
-      <div className="z-40 bg-gray-50/95 p-6 md:p-12 rounded-3xl shadow-2xl max-w-5xl w-full h-[90vh] overflow-y-auto font-poppinsr relative">
-        {/* Sign-out Button */}
-        <button 
-          onClick={() => {
-            // Clear all user data from localStorage
-            localStorage.removeItem('user');
-            localStorage.removeItem('token');
-            localStorage.removeItem('userID');
-            localStorage.removeItem('rememberedEmail');
-            localStorage.removeItem('rememberedPassword');
-            // Close modal and redirect to login
-            onClose();
-            window.location.href = '/';
-          }} 
-          className="absolute right-10 top-6 text-black font-poppinsb hover:underline"
+    return ReactDom.createPortal(
+      <div
+        className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-30 p-4"
+        onClick={onClose} // 🔹 click outside closes modal
+      >
+        <div
+          className="z-40 bg-gray-50/95 p-6 md:p-12 rounded-3xl shadow-2xl max-w-5xl w-full h-[90vh] overflow-y-auto font-poppinsr relative"
+          onClick={(e) => e.stopPropagation()} // 🔹 click inside does nothing
         >
-          Sign-out
-        </button>
+          {/* Sign-out Button */}
+          <button 
+            onClick={() => {
+              localStorage.removeItem('user');
+              localStorage.removeItem('token');
+              localStorage.removeItem('userID');
+              localStorage.removeItem('rememberedEmail');
+              localStorage.removeItem('rememberedPassword');
+              window.location.href = '/'; 
+            }}
+            className="absolute right-10 top-6 text-black font-poppinsb hover:underline"
+          >
+            Sign-out
+          </button>
 
         {/* Profile Header */}
         <div className="flex items-center gap-6 mb-6">

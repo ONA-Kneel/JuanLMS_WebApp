@@ -86,8 +86,8 @@ export default function Faculty_Dashboard() {
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Faculty Dashboard</h2>
             <p className="text-base md:text-lg">
-              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."}  |  
-              <span> </span>{currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
+              {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."}  |  
+              <span> </span>{currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
               <span> </span>{new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",

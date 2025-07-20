@@ -129,8 +129,8 @@ export default function Student_Dashboard() {
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Student Dashboard</h2>
             <p className="text-base md:text-lg">
-              {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
-              {currentTerm ? `Current Term: ${currentTerm.termName}` : "Loading..."} | 
+              {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+              {currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",

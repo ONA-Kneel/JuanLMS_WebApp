@@ -58,7 +58,7 @@ export default function ProfileMenu() {
           open={isOpen}
           onClose={() => {
             setIsOpen(false);
-            navigate("/");
+            // navigate("/");
           }}
           cropModalOpen={modalIsOpen}
           openCropModal={() => setModalIsOpen(true)}

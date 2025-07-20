@@ -82,7 +82,7 @@ export default function Principal_Dashboard() {
             <div>
               <h2 className="text-2xl md:text-3xl font-bold">Principal Dashboard</h2>
               <p className="text-base md:text-lg">
-                {academicYear ? `AY: ${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+                {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
                 {currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
                 {new Date().toLocaleDateString("en-US", {
                   weekday: "long",
