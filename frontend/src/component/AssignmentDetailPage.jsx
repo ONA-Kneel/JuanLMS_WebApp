@@ -52,7 +52,7 @@ export default function AssignmentDetailPage() {
     const token = localStorage.getItem('token');
     setLoading(true);
     setError('');
-    
+
     fetch(`${API_BASE}/assignments/${assignmentId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -69,7 +69,7 @@ export default function AssignmentDetailPage() {
       .catch(err => {
         console.error('Failed to fetch assignment:', err);
         let errorMessage = 'Failed to fetch assignment. Please try again.';
-        
+
         if (err.message.includes('404')) {
           errorMessage = 'Assignment not found. It may have been deleted or you may not have permission to view it.';
         } else if (err.message.includes('403')) {
@@ -81,7 +81,7 @@ export default function AssignmentDetailPage() {
         } else if (err.message.includes('500')) {
           errorMessage = 'Server error occurred. Please try again later.';
         }
-        
+
         setError(errorMessage);
       })
       .finally(() => setLoading(false));
@@ -146,19 +146,19 @@ export default function AssignmentDetailPage() {
           }
           const sub = Array.isArray(data)
             ? data.find(s => {
-                if (!s.student) return false;
-                console.log(
-                  'Comparing:',
-                  String(s.student._id), 'vs', String(userId),
-                  String(s.student), 'vs', String(userId),
-                  String(s.student.userID), 'vs', String(userId)
-                );
-                return (
-                  String(s.student._id) === String(userId) ||
-                  String(s.student) === String(userId) ||
-                  String(s.student.userID) === String(userId)
-                );
-              })
+              if (!s.student) return false;
+              console.log(
+                'Comparing:',
+                String(s.student._id), 'vs', String(userId),
+                String(s.student), 'vs', String(userId),
+                String(s.student.userID), 'vs', String(userId)
+              );
+              return (
+                String(s.student._id) === String(userId) ||
+                String(s.student) === String(userId) ||
+                String(s.student.userID) === String(userId)
+              );
+            })
             : null;
           console.log('Matched submission:', sub);
           setStudentSubmission(sub);
@@ -277,108 +277,108 @@ export default function AssignmentDetailPage() {
 
   const refreshStudentSubmission = async () => {
     const userID = localStorage.getItem('userID');
-  try {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/submissions/assignment/${assignmentId}/student/${userID}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setSubmissions(data); // <- this updates the grade shown
+      }
+    } catch (err) {
+      console.error('Failed to refresh student submission:', err);
+    }
+  };
+
+  const fetchSubmission = async () => {
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API_BASE}/submissions/assignment/${assignmentId}/student/${userID}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      setSubmissions(data); // <- this updates the grade shown
+    try {
+      const res = await fetch(`${API_BASE}/submissions/assignment/${assignmentId}/student/${user?._id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSubmissions(data);
+      }
+    } catch (err) {
+      console.error(err);
     }
-  } catch (err) {
-    console.error('Failed to refresh student submission:', err);
-  }
-};
+  };
 
-const fetchSubmission = async () => {
-  const token = localStorage.getItem('token');
-  try {
-    const res = await fetch(`${API_BASE}/submissions/assignment/${assignmentId}/student/${user?._id}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setSubmissions(data);
-    }
-  } catch (err) {
-    console.error(err);
-  }
-};
-
-useEffect(() => {
+  useEffect(() => {
     fetchSubmission();
   }, []);
 
 
   // Faculty grade handler
   const handleGrade = async (submissionId) => {
-  setGradeLoading(true);
-  setGradeError('');
-  const token = localStorage.getItem('token');
+    setGradeLoading(true);
+    setGradeError('');
+    const token = localStorage.getItem('token');
 
-  if (!gradeValue || gradeValue < 0 || gradeValue > 100) {
-    setGradeError('Please enter a valid grade between 0 and 100.');
-    setGradeLoading(false);
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/assignments/${assignmentId}/grade`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        submissionId,
-        grade: gradeValue,
-        feedback: feedbackValue,
-      }),
-    });
-
-    if (res.ok) {
-      setGradeValue('');
-      setFeedbackValue('');
-      setGradeError('');
-
-      // ✅ Only refresh student's submission if it matches
-      if (typeof refreshStudentSubmission === 'function' && submissions?._id === submissionId) {
-        refreshStudentSubmission(); // <-- This is the only required refresh
-      }
-
-    } else {
-      const err = await res.json();
-      let errorMessage = err.error || `HTTP ${res.status}: ${res.statusText}`;
-
-      if (res.status === 400) {
-        errorMessage = 'Invalid grade value or submission data.';
-      } else if (res.status === 401) {
-        errorMessage = 'Your session has expired. Please log in again.';
-      } else if (res.status === 403) {
-        errorMessage = 'You do not have permission to grade this submission.';
-      } else if (res.status === 404) {
-        errorMessage = 'Submission not found.';
-      } else if (res.status >= 500) {
-        errorMessage = 'Server error occurred. Please try again later.';
-      }
-
-      setGradeError(errorMessage);
+    if (!gradeValue || gradeValue < 0 || gradeValue > 100) {
+      setGradeError('Please enter a valid grade between 0 and 100.');
+      setGradeLoading(false);
+      return;
     }
-  } catch (err) {
-    console.error('Grading error:', err);
-    setGradeError('Network error. Please check your connection and try again.');
-  } finally {
-    setGradeLoading(false);
-  }
-};
 
-  
+    try {
+      const res = await fetch(`${API_BASE}/assignments/${assignmentId}/grade`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          submissionId,
+          grade: gradeValue,
+          feedback: feedbackValue,
+        }),
+      });
+
+      if (res.ok) {
+        setGradeValue('');
+        setFeedbackValue('');
+        setGradeError('');
+
+        // ✅ Only refresh student's submission if it matches
+        if (typeof refreshStudentSubmission === 'function' && submissions?._id === submissionId) {
+          refreshStudentSubmission(); // <-- This is the only required refresh
+        }
+
+      } else {
+        const err = await res.json();
+        let errorMessage = err.error || `HTTP ${res.status}: ${res.statusText}`;
+
+        if (res.status === 400) {
+          errorMessage = 'Invalid grade value or submission data.';
+        } else if (res.status === 401) {
+          errorMessage = 'Your session has expired. Please log in again.';
+        } else if (res.status === 403) {
+          errorMessage = 'You do not have permission to grade this submission.';
+        } else if (res.status === 404) {
+          errorMessage = 'Submission not found.';
+        } else if (res.status >= 500) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        }
+
+        setGradeError(errorMessage);
+      }
+    } catch (err) {
+      console.error('Grading error:', err);
+      setGradeError('Network error. Please check your connection and try again.');
+    } finally {
+      setGradeLoading(false);
+    }
+  };
+
+
 
   if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-100">Loading...</div>;
   if (error || !assignment) return <div className="flex items-center justify-center min-h-screen bg-gray-100">{error || 'Assignment not found.'}</div>;
@@ -387,7 +387,7 @@ useEffect(() => {
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       {role === 'faculty' ? <Faculty_Navbar /> : <Student_Navbar />}
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
-        
+
         <div className="w-full p-0 mt-0">
           <button className="mb-6 text-blue-900 hover:underline" onClick={() => navigate(-1)}>&larr; Back</button>
           {/* Assignment Creation/Edit UI - modern style */}
@@ -397,12 +397,12 @@ useEffect(() => {
                 type="text"
                 placeholder="Title"
                 className="w-full border-b-2 border-blue-300 focus:border-blue-900 text-2xl font-bold px-2 py-2 outline-none bg-transparent"
-                // value, onChange handlers as needed
+              // value, onChange handlers as needed
               />
               <textarea
                 placeholder="Instructions (optional)"
                 className="w-full bg-gray-100 rounded-lg border border-gray-200 px-4 py-3 text-base min-h-[100px] resize-y focus:outline-none focus:ring-2 focus:ring-blue-200"
-                // value, onChange handlers as needed
+              // value, onChange handlers as needed
               />
               <div className="flex gap-4 mt-4">
                 <button type="button" className="flex items-center gap-2 border border-blue-900 text-blue-900 px-4 py-2 rounded hover:bg-blue-50">
@@ -425,7 +425,7 @@ useEffect(() => {
           {role === 'faculty' && (
             <div className="mt-6 mb-4">
               <div className="flex gap-4 border-b mb-4">
-                <button className={`pb-2 px-4 ${activeTab === 'assignment' ? 'border-b-2 border-blue-900 font-bold' : ''}`} onClick={() => setActiveTab('assignment')}>Assignment</button>
+                <button className={`pb-2 px-4 ${activeTab === 'assignment' ? 'border-b-2 border-blue-900 font-bold' : ''}`} onClick={() => setActiveTab('assignment')}>Details</button>
                 <button className={`pb-2 px-4 ${activeTab === 'toGrade' ? 'border-b-2 border-blue-900 font-bold' : ''}`} onClick={() => setActiveTab('toGrade')}>To Grade</button>
                 <button className={`pb-2 px-4 ${activeTab === 'graded' ? 'border-b-2 border-blue-900 font-bold' : ''}`} onClick={() => setActiveTab('graded')}>Graded</button>
               </div>
@@ -530,20 +530,20 @@ useEffect(() => {
 
                 <div className="flex flex-col mb-6 justify-between">
                   {studentSubmission?.grade == null ? (
-                      <p className="text-gray-600 italic">Not yet graded.</p>
-                    ) : (
-                      <>
-                        <p className="text-blue-900 font-bold mt-2">Grade: {studentSubmission.grade}%</p>
-                        {studentSubmission.feedback && (
-                          <p className="text-blue-500 font-semibold mt-1">Feedback: {studentSubmission.feedback}</p>
-                        )}
-                      </>
-                    )}
+                    <p className="text-gray-600 italic">Not yet graded.</p>
+                  ) : (
+                    <>
+                      <p className="text-blue-900 font-bold mt-2">Grade: {studentSubmission.grade}%</p>
+                      {studentSubmission.feedback && (
+                        <p className="text-blue-500 font-semibold mt-1">Feedback: {studentSubmission.feedback}</p>
+                      )}
+                    </>
+                  )}
 
                 </div>
 
               </div>
-              
+
               {/* Always show submit UI for assignments (not quizzes) */}
               {assignment.type !== 'quiz' && (
                 <div className="mb-4">
@@ -553,7 +553,7 @@ useEffect(() => {
                       <strong className="font-bold">Already Submitted!</strong>
                       <p className="block sm:inline"> You have already submitted this assignment.</p>
                       {/* Show all submitted files */}
-                      
+
                       {/* Legacy single file/link support */}
                       {/* {studentSubmission.fileUrl && (
                         <div className="mt-2">
@@ -661,7 +661,7 @@ useEffect(() => {
                                 style={{ display: 'flex', alignItems: 'center' }}
                               >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24">
-                                  <path fill="currentColor" d="M6 7V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1h3v2h-1v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9H2V7h3Zm2-1v1h8V6H8Zm10 3H6v12h12V9Z"/>
+                                  <path fill="currentColor" d="M6 7V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1h3v2h-1v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9H2V7h3Zm2-1v1h8V6H8Zm10 3H6v12h12V9Z" />
                                 </svg>
                               </button>
                             </div>
@@ -684,7 +684,7 @@ useEffect(() => {
                                     style={{ minWidth: '120px' }}
                                     onClick={() => {
                                       const ext = f.name.split('.').pop().toLowerCase();
-                                      if (["jpg","jpeg","png","gif","bmp","webp"].includes(ext)) {
+                                      if (["jpg", "jpeg", "png", "gif", "bmp", "webp"].includes(ext)) {
                                         setPreviewFile({ url: f.url, name: f.name, type: ext });
                                       } else {
                                         window.open(f.url, '_blank');
@@ -703,7 +703,7 @@ useEffect(() => {
                                       disabled={!!deletingFile}
                                     >
                                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24">
-                                        <path fill="currentColor" d="M6 7V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1h3v2h-1v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9H2V7h3Zm2-1v1h8V6H8Zm10 3H6v12h12V9Z"/>
+                                        <path fill="currentColor" d="M6 7V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1h3v2h-1v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9H2V7h3Zm2-1v1h8V6H8Zm10 3H6v12h12V9Z" />
                                       </svg>
                                     </button>
                                   )}
@@ -788,7 +788,7 @@ useEffect(() => {
                           title="Download"
                           onClick={() => window.open(file.url, '_blank')}
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"><path fill="currentColor" d="M12 16.5a1 1 0 0 1-1-1V5a1 1 0 1 1 2 0v10.5a1 1 0 0 1-1 1Z"/><path fill="currentColor" d="M7.21 13.79a1 1 0 0 1 1.42-1.42l2.29 2.3 2.3-2.3a1 1 0 1 1 1.41 1.42l-3 3a1 1 0 0 1-1.42 0l-3-3Z"/><path fill="currentColor" d="M5 20a1 1 0 0 1 0-2h14a1 1 0 1 1 0 2H5Z"/></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"><path fill="currentColor" d="M12 16.5a1 1 0 0 1-1-1V5a1 1 0 1 1 2 0v10.5a1 1 0 0 1-1 1Z" /><path fill="currentColor" d="M7.21 13.79a1 1 0 0 1 1.42-1.42l2.29 2.3 2.3-2.3a1 1 0 1 1 1.41 1.42l-3 3a1 1 0 0 1-1.42 0l-3-3Z" /><path fill="currentColor" d="M5 20a1 1 0 0 1 0-2h14a1 1 0 1 1 0 2H5Z" /></svg>
                         </button>
                       </div>
                     );
@@ -811,7 +811,7 @@ useEffect(() => {
                           title="Download"
                           onClick={() => window.open(file.fileUrl, '_blank')}
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"><path fill="currentColor" d="M12 16.5a1 1 0 0 1-1-1V5a1 1 0 1 1 2 0v10.5a1 1 0 0 1-1 1Z"/><path fill="currentColor" d="M7.21 13.79a1 1 0 0 1 1.42-1.42l2.29 2.3 2.3-2.3a1 1 0 1 1 1.41 1.42l-3 3a1 1 0 0 1-1.42 0l-3-3Z"/><path fill="currentColor" d="M5 20a1 1 0 0 1 0-2h14a1 1 0 1 1 0 2H5Z"/></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"><path fill="currentColor" d="M12 16.5a1 1 0 0 1-1-1V5a1 1 0 1 1 2 0v10.5a1 1 0 0 1-1 1Z" /><path fill="currentColor" d="M7.21 13.79a1 1 0 0 1 1.42-1.42l2.29 2.3 2.3-2.3a1 1 0 1 1 1.41 1.42l-3 3a1 1 0 0 1-1.42 0l-3-3Z" /><path fill="currentColor" d="M5 20a1 1 0 0 1 0-2h14a1 1 0 1 1 0 2H5Z" /></svg>
                         </button>
                       </div>
                     );
@@ -839,7 +839,15 @@ useEffect(() => {
                   className="border-2 border-blue-800 rounded-xl px-4 py-2 w-24 text-lg"
                   placeholder="Grade"
                   value={gradeValue}
-                  onChange={e => setGradeValue(e.target.value)}
+                  min={0}
+                  max={assignment && assignment.points ? assignment.points : 100}
+                  onChange={e => {
+                    let val = Number(e.target.value);
+                    const maxPoints = assignment && assignment.points ? assignment.points : 100;
+                    if (val > maxPoints) val = maxPoints;
+                    if (val < 0) val = 0;
+                    setGradeValue(val);
+                  }}
                   required
                 />
                 <span className="text-lg font-bold">/ {assignment && assignment.points ? assignment.points : 100}</span>
@@ -863,7 +871,7 @@ useEffect(() => {
                 </button>
                 {/* Centered image */}
                 <div className="flex flex-col items-center w-full h-full justify-center z-40">
-                  {['jpg','jpeg','png','gif','bmp','webp'].includes(previewFile.type) ? (
+                  {['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(previewFile.type) ? (
                     <img
                       src={previewFile.url}
                       alt={previewFile.name}
@@ -878,7 +886,7 @@ useEffect(() => {
                   <div className="text-white font-semibold mt-4">{previewFile.name}</div>
                 </div>
                 {/* Zoom controls - floating at bottom center */}
-                {['jpg','jpeg','png','gif','bmp','webp'].includes(previewFile.type) && (
+                {['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(previewFile.type) && (
                   <div
                     className="absolute left-1/2 bottom-12 -translate-x-1/2 flex gap-4 items-center z-50"
                     style={{ background: 'rgba(0,0,0,0.5)', borderRadius: '2rem', padding: '0.5rem 1.5rem' }}

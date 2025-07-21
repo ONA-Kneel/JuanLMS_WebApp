@@ -144,7 +144,7 @@ export default function QuizResponses() {
           <span className="text-base font-semibold text-gray-700">Points: {stats.total}</span>
         </div>
         <div className="flex gap-8 border-b border-gray-300 mb-6 mt-4 w-full">
-          <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'assignment' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('assignment')}>Assignment</button>
+          <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'assignment' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('assignment')}>Details</button>
           <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'toGrade' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('toGrade')}>Submissions</button>
           <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'status' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('status')}>Status</button>
           <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'insights' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('insights')}>Insights</button>
@@ -180,7 +180,12 @@ export default function QuizResponses() {
                     max={stats.total}
                     className="border-2 border-blue-400 rounded px-3 py-1 text-2xl w-24 text-center font-bold mr-2"
                     value={editScoreValue}
-                    onChange={e => setEditScoreValue(Number(e.target.value))}
+                    onChange={e => {
+                      let val = Number(e.target.value);
+                      if (val > stats.total) val = stats.total;
+                      if (val < 0) val = 0;
+                      setEditScoreValue(val);
+                    }}
                   />
                   <span className="text-2xl font-bold">/ {stats.total}</span>
                   <button className="ml-2 px-3 py-1 bg-green-600 text-white rounded font-semibold" onClick={() => handleScoreSave(selectedIdx)}>Save</button>
