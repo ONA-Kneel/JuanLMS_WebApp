@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import seedrandom from 'seedrandom';
+
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -21,51 +23,67 @@ export default function QuizView() {
 
   // Fetch quiz details
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    fetch(`${API_BASE}/api/quizzes/${quizId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        setQuiz(data);
-        setAnswers(Array(data.questions?.length || 0).fill(null));
-        setLoading(false);
-        // Handle timing
-        if (data.timing && data.timing.limit) {
-          setTimeLeft(data.timing.limit * 60); // minutes to seconds
-        }
-      })
-      .catch(() => {
-        setError('Failed to load quiz.');
-        setLoading(false);
-      });
-    // Fetch student info (if available)
+  const token = localStorage.getItem('token');
+
+  const fetchQuiz = async () => {
     try {
+      const res = await fetch(`${API_BASE}/api/quizzes/${quizId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+
+      // 🔐 Decode token to get student ID
       const tokenData = JSON.parse(atob(token.split('.')[1]));
+      const studentId = tokenData._id || tokenData.id;
+
+      // 🔀 Shuffle the questions using seedrandom (based on student + quiz)
+      const rng = seedrandom(`${quizId}-${studentId}`);
+      const shuffledQuestions = [...data.questions];
+      for (let i = shuffledQuestions.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [shuffledQuestions[i], shuffledQuestions[j]] = [shuffledQuestions[j], shuffledQuestions[i]];
+      }
+      data.questions = shuffledQuestions;
+
+      setQuiz(data);
+      setAnswers(Array(data.questions.length).fill(null));
+      setLoading(false);
+
+      // 🕒 Handle quiz time limit
+      if (data.timing && data.timing.limit) {
+        setTimeLeft(data.timing.limit * 60);
+      }
+
+      // 👤 Set student info
       setStudentInfo({
         name: tokenData.name || '',
         section: tokenData.section || ''
       });
-      // Check if already submitted
-      const userId = tokenData._id || tokenData.id;
-      fetch(`${API_BASE}/api/quizzes/quizzes/${quizId}/response/${userId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-        .then(res => {
-          if (res.status === 404) return null;
-          return res.json();
-        })
-        .then(data => {
-          if (data && data._id) {
-            setAlreadySubmitted(true);
-            setSubmitted(true);
-          }
-        })
-        .catch(() => {});
-    } catch {
-      // ignore error
+
+      // ✅ Check for previous submission
+      const userId = studentId;
+      const subRes = await fetch(`${API_BASE}/api/quizzes/${quizId}/response/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (subRes.ok) {
+        const subData = await subRes.json();
+        if (subData && subData._id) {
+          setAlreadySubmitted(true);
+          setSubmitted(true);
+        }
+      }
+
+    } catch (err) {
+      console.error('Error loading quiz:', err);
+      setError('Failed to load quiz.');
+      setLoading(false);
     }
-  }, [quizId]);
+  };
+
+  fetchQuiz();
+}, [quizId]);
+
 
   // Timer logic
   useEffect(() => {

@@ -138,6 +138,11 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                     } else if (data.classIDs && Array.isArray(data.classIDs)) {
                         setSelectedClassIDs(data.classIDs);
                     }
+                    if (data.questionBehaviour && typeof data.questionBehaviour.shuffle === "boolean") {
+                        setShuffleQuestions(data.questionBehaviour.shuffle ? "Yes" : "No");
+                    } else if (typeof data.shuffleQuestions === "boolean") {
+                        setShuffleQuestions(data.shuffleQuestions ? "Yes" : "No");
+                    }
                 })
                 .catch(err => {
                     console.error('Failed to load quiz:', err);
@@ -353,6 +358,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
     const FAR_FUTURE_DATE = "2099-12-31T23:59";
 
     const handleSave = async () => {
+        console.log("shuffleQuestions value at save:", shuffleQuestions);
         if (!title.trim()) {
             setValidationModal({
                 isOpen: true,
@@ -444,8 +450,10 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                 return { classID, studentIDs: ids };
             }
         });
+
+        // FIX: Convert shuffleQuestions to boolean
         const payload = {
-            assignedTo, // for per-student assignment
+            assignedTo,
             title,
             instructions: description,
             type: 'quiz',
@@ -458,7 +466,12 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                 limit: timingLimitEnabled ? Number(timingLimit) : null
             },
             createdBy: userId,
+            questionBehaviour: {
+                shuffle: shuffleQuestions === "Yes"
+            },
+            // Remove shuffleQuestions: shuffleQuestions === "Yes"
         };
+
         // Schedule post logic (PH time)
         if (schedulePost && dueDate) {
             const [datePart, timePart] = dueDate.split('T');
@@ -808,7 +821,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                                 </button>
                             )}
                         </div>
-                    </div>
+                </div>
                 <div className="flex gap-4 mt-8 justify-end">
                     <button className="bg-blue-700 text-white px-6 py-2 rounded" onClick={handleSave}>
                         {isEditMode ? 'Update Quiz' : 'Save Quiz'}
@@ -1012,8 +1025,8 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                                     value={shuffleQuestions}
                                     onChange={e => setShuffleQuestions(e.target.value)}
                     >
-                                    <option>Yes</option>
-                                    <option>No</option>
+                                    <option value="Yes">Yes</option>
+                                    <option value="No">No</option>
                     </select>
                 </div>
                         </div>
@@ -1123,4 +1136,4 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             )}
         </div>
     );
-} 
+}
