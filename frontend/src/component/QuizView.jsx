@@ -16,6 +16,8 @@ export default function QuizView() {
   const [studentInfo, setStudentInfo] = useState({ name: '', section: '' });
   const [showIntro, setShowIntro] = useState(true);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+  const [showScoreModal, setShowScoreModal] = useState(false);
+  const [scoreData, setScoreData] = useState(null);
 
   // Fetch quiz details
   useEffect(() => {
@@ -119,6 +121,31 @@ export default function QuizView() {
     }
   };
 
+  // Add this function to fetch the score
+  const handleViewScore = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/api/quizzes/${quizId}/myscore`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch score');
+      const data = await res.json();
+      setScoreData(data);
+      setShowScoreModal(true);
+    } catch {
+      setScoreData({ score: null, total: null, message: "Failed to fetch score." });
+      setShowScoreModal(true);
+    }
+  };
+
+  // Motivational message
+  const getMessage = (score, total) => {
+    if (score === total) return "Perfect! 🎉 Congratulations, you aced it!";
+    if (score >= total * 0.8) return "Great job! Keep up the good work!";
+    if (score >= total * 0.5) return "Not bad! Review and try again for a higher score!";
+    return "Don't give up! Every attempt is a step closer to success!";
+  };
+
   // Progress bar
   function ProgressBar({ value, max }) {
     return (
@@ -167,9 +194,32 @@ export default function QuizView() {
       <div className="w-full max-w-2xl mx-auto p-12 bg-white rounded-3xl shadow-2xl border-4 border-blue-800 flex flex-col items-center">
         <h2 className="text-4xl font-extrabold mb-4 text-blue-900 text-center">{quiz.title}</h2>
         <p className="mb-8 text-gray-700 text-xl text-center">Your response has been recorded.</p>
-        <button className="bg-blue-800 text-white px-8 py-3 rounded-lg text-lg font-semibold mb-4 shadow">View score</button>
+        <button
+          className="bg-blue-800 text-white px-8 py-3 rounded-lg text-lg font-semibold mb-4 shadow"
+          onClick={handleViewScore}
+        >View score</button>
         <button className="text-blue-700 underline text-base font-medium" onClick={() => window.location.href =  '/student_dashboard'}>Back to Dashboard</button>
       </div>
+      {/* Score Modal */}
+      {showScoreModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+          <div className="bg-white rounded-xl shadow-xl p-8 max-w-md w-full text-center border-2 border-blue-800">
+            <h3 className="text-2xl font-bold mb-4 text-blue-900">Your Score</h3>
+            {scoreData && scoreData.score != null ? (
+              <>
+                <div className="text-3xl font-extrabold mb-2">{scoreData.score} / {scoreData.total}</div>
+                <div className="text-lg mb-4">{getMessage(scoreData.score, scoreData.total)}</div>
+              </>
+            ) : (
+              <div className="text-red-600 mb-4">Unable to fetch score.</div>
+            )}
+            <button
+              className="mt-2 bg-blue-800 hover:bg-blue-900 text-white px-6 py-2 rounded"
+              onClick={() => setShowScoreModal(false)}
+            >Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -292,4 +342,4 @@ export default function QuizView() {
       </div>
     </div>
   );
-} 
+}

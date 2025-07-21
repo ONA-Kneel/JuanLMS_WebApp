@@ -210,4 +210,27 @@ router.post('/students/by-ids', authenticateToken, async (req, res) => {
   }
 });
 
+// Get the current student's score for a quiz
+router.get('/:quizId/myscore', authenticateToken, async (req, res) => {
+  try {
+    const { quizId } = req.params;
+    const studentId = req.user._id;
+    const response = await QuizResponse.findOne({ quizId, studentId });
+    if (!response) return res.status(404).json({ error: 'No submission found' });
+
+    // Get total possible points from the quiz
+    const quiz = await Quiz.findById(quizId);
+    const total = quiz && Array.isArray(quiz.questions)
+      ? quiz.questions.reduce((sum, q) => sum + (q.points || 1), 0)
+      : null;
+
+    res.json({
+      score: response.score ?? 0,
+      total: total ?? 0
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
