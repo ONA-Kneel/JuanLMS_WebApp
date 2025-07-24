@@ -209,22 +209,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
     }
   }, [selected, classId]);
 
-  // Fetch members when "members" tab is selected
-  // useEffect(() => {
-  //   if (selected === "members" && classId) {
-  //     setMembersLoading(true);
-  //     setMembersError(null);
-  //     const token = localStorage.getItem('token');
-  //     fetch(`${API_BASE}/classes/${classId}/members`, {
-  //       headers: { 'Authorization': `Bearer ${token}` }
-  //     })
-  //       .then(res => res.json())
-  //       .then(data => setMembers(data && typeof data === 'object' ? data : { faculty: [], students: [] }))
-  //       .catch(() => setMembersError("Failed to fetch members."))
-  //       .finally(() => setMembersLoading(false));
-  //   }
-  // }, [selected, classId]);
-
   useEffect(() => {
   if (selected === "members" && classId) {
     setMembersLoading(true);

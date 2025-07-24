@@ -1,3 +1,5 @@
+//quiz routes
+
 import express from 'express';
 import User from '../models/User.js';
 import Quiz from '../models/Quiz.js';
