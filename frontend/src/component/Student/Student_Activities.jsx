@@ -27,6 +27,58 @@ export default function Student_Activities() {
     { id: "completed", label: "Completed" },
   ];
 
+  // Fetch academic year
+  useEffect(() => {
+    async function fetchAcademicYear() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year", err);
+      }
+    }
+    fetchAcademicYear();
+  }, []);
+
+  // Fetch current term
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) {
+        console.log('No academic year available for term fetching');
+        return;
+      }
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        console.log('Fetching terms for school year:', schoolYearName);
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        console.log('Term fetch response status:', res.status);
+        if (res.ok) {
+          const terms = await res.json();
+          console.log('Fetched terms:', terms);
+          const active = terms.find(term => term.status === 'active');
+          console.log('Active term found:', active);
+          setCurrentTerm(active || null);
+        } else {
+          console.error('Failed to fetch terms, status:', res.status);
+          setCurrentTerm(null);
+        }
+      } catch (error) {
+        console.error('Error fetching terms:', error);
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
+
   useEffect(() => {
     const fetchActivities = async () => {
       setLoading(true);
@@ -292,8 +344,17 @@ export default function Student_Activities() {
       
       if (status === 'upcoming') {
         // Show activities that are not yet due and not completed
+        // Also include activities with no due date unless they're completed
         const isCompleted = isActivityCompleted(activity);
-        return dueDate >= now && !isCompleted;
+        const hasNoDueDate = !activity.dueDate || activity.dueDate === null || activity.dueDate === undefined;
+        
+        if (hasNoDueDate) {
+          // Activities with no due date appear in upcoming unless completed
+          return !isCompleted;
+        } else {
+          // Activities with due dates appear in upcoming if not yet due and not completed
+          return dueDate >= now && !isCompleted;
+        }
       } else if (status === 'past-due') {
         // Show activities that are past due and not completed
         const isCompleted = isActivityCompleted(activity);
@@ -351,14 +412,20 @@ export default function Student_Activities() {
 
   // Group activities by due date (for Upcoming tab)
   const groupActivitiesByDueDate = (activities) => {
-    // Sort by due date (ascending - nearest due date first)
-    const sortedActivities = [...activities]
-      .sort((a, b) => new Date(a.dueDate || 0) - new Date(b.dueDate || 0));
+    // Separate activities with and without due dates
+    const activitiesWithDueDate = activities.filter(activity => activity.dueDate);
+    const activitiesWithoutDueDate = activities.filter(activity => !activity.dueDate);
+    
+    // Sort activities with due dates (ascending - nearest due date first)
+    const sortedActivitiesWithDueDate = [...activitiesWithDueDate]
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
     
     // Group by due date
     const groupedByDate = {};
-    sortedActivities.forEach(activity => {
-      const dueDate = new Date(activity.dueDate || new Date());
+    
+    // Add activities with due dates
+    sortedActivitiesWithDueDate.forEach(activity => {
+      const dueDate = new Date(activity.dueDate);
       const dateKey = dueDate.toDateString();
       if (!groupedByDate[dateKey]) {
         groupedByDate[dateKey] = [];
@@ -366,8 +433,19 @@ export default function Student_Activities() {
       groupedByDate[dateKey].push(activity);
     });
     
-    // Sort date keys (nearest due date first)
-    const sortedDateKeys = Object.keys(groupedByDate).sort((a, b) => new Date(a) - new Date(b));
+    // Add activities without due dates to a special group
+    if (activitiesWithoutDueDate.length > 0) {
+      groupedByDate['No due date'] = activitiesWithoutDueDate;
+    }
+    
+    // Sort date keys (nearest due date first, "No due date" at the end)
+    const dateKeys = Object.keys(groupedByDate).filter(key => key !== 'No due date');
+    const sortedDateKeys = dateKeys.sort((a, b) => new Date(a) - new Date(b));
+    
+    // Add "No due date" at the end
+    if (groupedByDate['No due date']) {
+      sortedDateKeys.push('No due date');
+    }
     
     return { groupedByDate, sortedDateKeys };
   };
@@ -428,6 +506,40 @@ export default function Student_Activities() {
             <div>
               <h2 className="text-2xl md:text-3xl font-bold">Activities</h2>
               <p className="text-base md:text-lg">
+                {academicYear && currentTerm && (
+                  <>
+                    {(() => {
+                      console.log('Academic Year Object:', academicYear);
+                      console.log('Current Term Object:', currentTerm);
+                      
+                      if (typeof academicYear === 'object') {
+                        // Handle different possible formats for the year data
+                        let startYear, endYear;
+                        
+                        if (academicYear.schoolYearStart && academicYear.schoolYearEnd) {
+                          // If they're already year numbers
+                          if (typeof academicYear.schoolYearStart === 'number') {
+                            startYear = academicYear.schoolYearStart;
+                            endYear = academicYear.schoolYearEnd;
+                          } else {
+                            // If they're date strings or timestamps
+                            startYear = new Date(academicYear.schoolYearStart).getFullYear();
+                            endYear = new Date(academicYear.schoolYearEnd).getFullYear();
+                          }
+                        } else {
+                          // Fallback: try to extract from other fields or use current year
+                          const currentYear = new Date().getFullYear();
+                          startYear = currentYear;
+                          endYear = currentYear + 1;
+                        }
+                        
+                        console.log('Extracted years:', startYear, endYear);
+                        return `${startYear}-${endYear}`;
+                      }
+                      return academicYear;
+                    })()} | {typeof currentTerm === 'object' ? currentTerm.termName : currentTerm} | {" "}
+                  </>
+                )}
                 {new Date().toLocaleDateString("en-US", {
                   weekday: "long",
                   year: "numeric",
@@ -523,13 +635,19 @@ export default function Student_Activities() {
                     {/* Date separator */}
                     <div className="mb-4 mt-6 first:mt-0">
                       <h4 className="text-lg font-semibold text-gray-700 mb-3">
-                        {activeTab === 'completed' ? 'Submitted on ' : 'Due on '}
-                        {new Date(dateKey).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        })}
+                        {dateKey === 'No due date' ? (
+                          'No due date'
+                        ) : (
+                          <>
+                            {activeTab === 'completed' ? 'Submitted on ' : 'Due on '}
+                            {new Date(dateKey).toLocaleDateString('en-US', {
+                              weekday: 'long',
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            })}
+                          </>
+                        )}
                       </h4>
                     </div>
                     
