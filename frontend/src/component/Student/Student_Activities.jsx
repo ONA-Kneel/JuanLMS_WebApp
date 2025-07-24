@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
@@ -6,17 +7,19 @@ import ProfileMenu from "../ProfileMenu";
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Student_Activities() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("upcoming");
   const [assignments, setAssignments] = useState([]);
+  const [quizzes, setQuizzes] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
+  const [quizResponses, setQuizResponses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedAssignment, setSelectedAssignment] = useState(null);
-  const [submitLoading, setSubmitLoading] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [submitError, setSubmitError] = useState('');
-  const [submissionFile, setSubmissionFile] = useState(null);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [filter, setFilter] = useState("All");
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const filterRef = useRef();
 
   const tabs = [
     { id: "upcoming", label: "Upcoming" },
@@ -25,57 +28,201 @@ export default function Student_Activities() {
   ];
 
   useEffect(() => {
-    const fetchAssignments = async () => {
+    const fetchActivities = async () => {
       setLoading(true);
       setError(null);
       try {
         const token = localStorage.getItem('token');
-        // Use the general assignments endpoint which applies proper filtering
-        const res = await fetch(`${API_BASE}/assignments`, {
+        const decodedToken = JSON.parse(atob(token.split('.')[1]));
+        const userId = decodedToken.userID; // Student ID like S441
+        const userObjectId = decodedToken.id; // MongoDB ObjectId
+        console.log('Fetching activities for student:', userId);
+        console.log('User ObjectId:', userObjectId);
+        
+        // First, fetch student's enrolled classes
+        console.log('Fetching student classes from:', `${API_BASE}/classes/my-classes`);
+        const classesRes = await fetch(`${API_BASE}/classes/my-classes`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        const data = await res.json();
         
-        if (Array.isArray(data)) {
-          // Add class names to assignments
-          const assignmentsWithClassNames = await Promise.all(
-            data.map(async (assignment) => {
-              // Get class info for this assignment
-              const classIDs = assignment.classIDs || [assignment.classID];
-              const classNames = [];
-              
-              for (const classID of classIDs) {
-                try {
-                  const classRes = await fetch(`${API_BASE}/classes/${classID}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                  });
-                  if (classRes.ok) {
-                    const classData = await classRes.json();
-                    classNames.push(classData.className || classData.name || 'Class');
-                  }
-                } catch {
-                  classNames.push('Class');
-                }
-              }
-              
-              return {
-                ...assignment,
-                className: classNames.join(', ')
-              };
-            })
-          );
-          
-          setAssignments(assignmentsWithClassNames);
-        } else {
-          setAssignments([]);
+        if (!classesRes.ok) {
+          console.error('Classes fetch failed:', classesRes.status, classesRes.statusText);
+          throw new Error('Failed to fetch classes');
         }
-      } catch {
-        setError('Failed to fetch assignments.');
+        
+        const classes = await classesRes.json();
+        console.log('Student classes received:', classes);
+        
+        let allAssignments = [];
+        let allQuizzes = [];
+        
+        // Fetch assignments and quizzes for each class
+        for (const cls of classes) {
+          const classCode = cls.classID || cls.classCode || cls._id;
+          console.log('Fetching activities for class:', classCode, cls.className);
+          
+          try {
+            // Fetch assignments for this class
+            const assignmentRes = await fetch(`${API_BASE}/assignments?classID=${classCode}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (assignmentRes.ok) {
+              const assignments = await assignmentRes.json();
+              console.log(`Assignments for class ${classCode}:`, assignments);
+              
+              if (Array.isArray(assignments)) {
+                // Filter assignments assigned to this student
+                const studentAssignments = assignments.filter(assignment => {
+                  const entry = assignment.assignedTo?.find?.(e => e.classID === classCode);
+                  return entry && Array.isArray(entry.studentIDs) && entry.studentIDs.includes(userId);
+                });
+                
+                // Add class info to assignments
+                const assignmentsWithInfo = studentAssignments.map(assignment => ({
+                  ...assignment,
+                  type: 'assignment',
+                  classInfo: {
+                    classCode: cls.classCode || cls.classID || 'N/A',
+                    className: cls.className || cls.name || 'Unknown Class'
+                  }
+                }));
+                
+                allAssignments.push(...assignmentsWithInfo);
+              }
+            }
+            
+            // Fetch quizzes for this class
+            const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${classCode}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (quizRes.ok) {
+              const quizzes = await quizRes.json();
+              console.log(`Quizzes for class ${classCode}:`, quizzes);
+              
+              if (Array.isArray(quizzes)) {
+                // Filter quizzes assigned to this student
+                const studentQuizzes = quizzes.filter(quiz => {
+                  const entry = quiz.assignedTo?.find?.(e => e.classID === classCode);
+                  return entry && Array.isArray(entry.studentIDs) && entry.studentIDs.includes(userId);
+                });
+                
+                // Add class info to quizzes
+                const quizzesWithInfo = studentQuizzes.map(quiz => ({
+                  ...quiz,
+                  type: 'quiz',
+                  classInfo: {
+                    classCode: cls.classCode || cls.classID || 'N/A',
+                    className: cls.className || cls.name || 'Unknown Class'
+                  }
+                }));
+                
+                allQuizzes.push(...quizzesWithInfo);
+              }
+            }
+          } catch (classError) {
+            console.error(`Error fetching activities for class ${classCode}:`, classError);
+          }
+        }
+        
+        console.log('Final processed assignments:', allAssignments);
+        console.log('Final processed quizzes:', allQuizzes);
+        
+        // Fetch submissions for assignments
+        let allSubmissions = [];
+        for (const assignment of allAssignments) {
+          try {
+            const submissionRes = await fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (submissionRes.ok) {
+              const submissionData = await submissionRes.json();
+              if (Array.isArray(submissionData)) {
+                // Find submissions by this student
+                const studentSubmissions = submissionData.filter(sub => 
+                  sub.student && (sub.student._id === userId || sub.student === userId || sub.student.userID === userId)
+                );
+                allSubmissions.push(...studentSubmissions);
+              }
+            }
+          } catch (submissionError) {
+            console.error(`Error fetching submissions for assignment ${assignment._id}:`, submissionError);
+          }
+        }
+        
+        // Fetch quiz responses
+        let allQuizResponses = [];
+        console.log('Fetching quiz responses for', allQuizzes.length, 'quizzes');
+        
+        for (const quiz of allQuizzes) {
+          try {
+            console.log(`Fetching responses for quiz: ${quiz.title} (ID: ${quiz._id})`);
+            const responseRes = await fetch(`${API_BASE}/api/quizzes/${quiz._id}/responses`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            console.log(`Quiz response fetch status for ${quiz._id}:`, responseRes.status);
+            
+            if (responseRes.ok) {
+              const responseData = await responseRes.json();
+              console.log(`Raw response data for quiz ${quiz._id}:`, responseData);
+              
+              if (Array.isArray(responseData)) {
+                console.log(`Found ${responseData.length} total responses for quiz ${quiz._id}`);
+                
+                // Find responses by this student
+                const studentResponses = responseData.filter(resp => {
+                  console.log('Checking response:', resp);
+                  console.log('Response studentId field:', resp.studentId);
+                  console.log('Current userId:', userId);
+                  console.log('Current userObjectId:', userObjectId);
+                  
+                  // Check both student and studentId fields for compatibility
+                  const studentField = resp.student || resp.studentId;
+                  const matches = studentField && (
+                    studentField._id === userId ||           // Match with student ID (S441)
+                    studentField._id === userObjectId ||     // Match with MongoDB ObjectId
+                    studentField === userId ||               // Direct match with student ID
+                    studentField === userObjectId ||         // Direct match with ObjectId
+                    studentField.userID === userId ||        // Match userID field
+                    studentField.studentID === userId        // Match studentID field
+                  );
+                  
+                  console.log('Response matches current student:', matches);
+                  return matches;
+                });
+                
+                console.log(`Found ${studentResponses.length} responses for current student in quiz ${quiz._id}`);
+                allQuizResponses.push(...studentResponses);
+              } else {
+                console.log(`Response data for quiz ${quiz._id} is not an array:`, responseData);
+              }
+            } else {
+              console.error(`Failed to fetch responses for quiz ${quiz._id}:`, responseRes.status, responseRes.statusText);
+            }
+          } catch (responseError) {
+            console.error(`Error fetching responses for quiz ${quiz._id}:`, responseError);
+          }
+        }
+        
+        console.log('Final submissions:', allSubmissions);
+        console.log('Final quiz responses:', allQuizResponses);
+        
+        setAssignments(allAssignments);
+        setQuizzes(allQuizzes);
+        setSubmissions(allSubmissions);
+        setQuizResponses(allQuizResponses);
+        
+      } catch (error) {
+        console.error('Error fetching activities:', error);
+        setError('Failed to fetch activities.');
       } finally {
         setLoading(false);
       }
     };
-    fetchAssignments();
+    fetchActivities();
   }, []);
 
   useEffect(() => {
@@ -119,6 +266,157 @@ export default function Student_Activities() {
     fetchActiveTermForYear();
   }, [academicYear]);
 
+  // Handle outside click for filter dropdown
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setShowFilterDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Get combined activities
+  const getAllActivities = () => {
+    return [...assignments, ...quizzes];
+  };
+
+  // Filter activities by due date status
+  const getActivitiesByStatus = (status) => {
+    const now = new Date();
+    const allActivities = getAllActivities();
+    
+    return allActivities.filter(activity => {
+      const dueDate = new Date(activity.dueDate);
+      
+      if (status === 'upcoming') {
+        // Show activities that are not yet due and not completed
+        const isCompleted = isActivityCompleted(activity);
+        return dueDate >= now && !isCompleted;
+      } else if (status === 'past-due') {
+        // Show activities that are past due and not completed
+        const isCompleted = isActivityCompleted(activity);
+        return dueDate < now && !isCompleted;
+      } else if (status === 'completed') {
+        // Show activities that have been submitted/completed
+        return isActivityCompleted(activity);
+      }
+      return true;
+    });
+  };
+
+  // Check if an activity has been completed (submitted) by the student
+  const isActivityCompleted = (activity) => {
+    console.log(`Checking completion for ${activity.type}: ${activity.title} (ID: ${activity._id})`);
+    
+    if (activity.type === 'assignment') {
+      // Check if student has submitted this assignment
+      const hasSubmission = submissions.some(submission => {
+        const matches = submission.assignment === activity._id || 
+                       submission.assignment?._id === activity._id ||
+                       submission.assignmentId === activity._id;
+        if (matches) {
+          console.log('Found matching assignment submission:', submission);
+        }
+        return matches;
+      });
+      console.log(`Assignment ${activity.title} completed:`, hasSubmission);
+      return hasSubmission;
+    } else if (activity.type === 'quiz') {
+      // Check if student has responded to this quiz
+      const hasResponse = quizResponses.some(response => {
+        const matches = response.quiz === activity._id || 
+                       response.quiz?._id === activity._id ||
+                       response.quizId === activity._id;
+        if (matches) {
+          console.log('Found matching quiz response:', response);
+        }
+        return matches;
+      });
+      console.log(`Quiz ${activity.title} completed:`, hasResponse);
+      console.log('Available quiz responses:', quizResponses);
+      return hasResponse;
+    }
+    return false;
+  };
+
+  // Apply filter to activities
+  const getFilteredActivities = (activities) => {
+    if (filter === "All") return activities;
+    if (filter === "Quiz") return activities.filter(a => a.type === "quiz");
+    if (filter === "Assignment") return activities.filter(a => a.type === "assignment");
+    return activities;
+  };
+
+  // Group activities by due date (for Upcoming tab)
+  const groupActivitiesByDueDate = (activities) => {
+    // Sort by due date (ascending - nearest due date first)
+    const sortedActivities = [...activities]
+      .sort((a, b) => new Date(a.dueDate || 0) - new Date(b.dueDate || 0));
+    
+    // Group by due date
+    const groupedByDate = {};
+    sortedActivities.forEach(activity => {
+      const dueDate = new Date(activity.dueDate || new Date());
+      const dateKey = dueDate.toDateString();
+      if (!groupedByDate[dateKey]) {
+        groupedByDate[dateKey] = [];
+      }
+      groupedByDate[dateKey].push(activity);
+    });
+    
+    // Sort date keys (nearest due date first)
+    const sortedDateKeys = Object.keys(groupedByDate).sort((a, b) => new Date(a) - new Date(b));
+    
+    return { groupedByDate, sortedDateKeys };
+  };
+
+  // Group activities by submission date (for Completed tab)
+  const groupActivitiesBySubmissionDate = (activities) => {
+    // Add submission date to each activity
+    const activitiesWithSubmissionDate = activities.map(activity => {
+      let submissionDate = null;
+      
+      if (activity.type === 'assignment') {
+        // Find the submission for this assignment
+        const submission = submissions.find(sub => 
+          sub.assignment === activity._id || sub.assignment?._id === activity._id
+        );
+        submissionDate = submission ? new Date(submission.submittedAt || submission.createdAt) : null;
+      } else if (activity.type === 'quiz') {
+        // Find the quiz response for this quiz
+        const response = quizResponses.find(resp => 
+          resp.quiz === activity._id || resp.quiz?._id === activity._id || resp.quizId === activity._id
+        );
+        submissionDate = response ? new Date(response.submittedAt || response.createdAt) : null;
+      }
+      
+      return { ...activity, submissionDate };
+    });
+    
+    // Sort by submission date (ascending - oldest submissions first, latest at bottom)
+    const sortedActivities = activitiesWithSubmissionDate
+      .filter(activity => activity.submissionDate) // Only include activities with submission dates
+      .sort((a, b) => new Date(a.submissionDate) - new Date(b.submissionDate));
+    
+    // Group by submission date
+    const groupedByDate = {};
+    sortedActivities.forEach(activity => {
+      const submissionDate = activity.submissionDate;
+      const dateKey = submissionDate.toDateString();
+      if (!groupedByDate[dateKey]) {
+        groupedByDate[dateKey] = [];
+      }
+      groupedByDate[dateKey].push(activity);
+    });
+    
+    // Sort date keys (oldest submission date first, latest at bottom)
+    const sortedDateKeys = Object.keys(groupedByDate).sort((a, b) => new Date(a) - new Date(b));
+    
+    return { groupedByDate, sortedDateKeys };
+  };
+
   return (
     <>
       <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -159,112 +457,134 @@ export default function Student_Activities() {
 
           {/* Content */}
           <div className="mt-6">
-            {activeTab === "upcoming" && (
+            {/* Filter and Header */}
+            <div className="flex justify-between items-start mb-4">
               <div>
-                {loading ? (
-                  <p>Loading assignments...</p>
-                ) : error ? (
-                  <p className="text-red-600">{error}</p>
-                ) : assignments.length === 0 ? (
-                  <p>No upcoming activities.</p>
-                ) : (
-                  assignments.map((a) => (
-                    <div key={a._id} className="p-4 rounded-xl bg-white border border-blue-200 shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 cursor-pointer hover:bg-blue-50 transition" onClick={() => setSelectedAssignment(a)}>
-                      <div>
-                        <span className={`inline-block px-2 py-1 rounded text-xs font-bold mr-2 ${a.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{a.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
-                        <span className="text-lg font-bold text-blue-900">{a.title}</span>
-                        <div className="text-gray-700 text-sm mt-1">{a.instructions}</div>
-                        {a.dueDate && <div className="text-xs text-gray-500 mt-1">Due: {new Date(a.dueDate).toLocaleString()}</div>}
-                        {a.points && <div className="text-xs text-gray-500">Points: {a.points}</div>}
-                        <div className="text-xs text-gray-500">{a.className}</div>
+                <h3 className="text-black text-2xl font-bold mb-2">
+                  {activeTab === "upcoming" && "Upcoming"}
+                  {activeTab === "past-due" && "Past Due"}
+                  {activeTab === "completed" && "Completed"}
+                </h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Filter:</span>
+                  <div className="relative" ref={filterRef}>
+                    <button
+                      className="bg-white border border-gray-300 text-gray-700 text-sm px-3 py-1 rounded hover:bg-gray-50 flex items-center gap-2 min-w-[100px] justify-between"
+                      onClick={() => setShowFilterDropdown((prev) => !prev)}
+                    >
+                      {filter}
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {showFilterDropdown && (
+                      <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-300 rounded shadow-lg z-10">
+                        {["All", "Quiz", "Assignment"].map((option) => (
+                          <button
+                            key={option}
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${
+                              filter === option ? "bg-blue-500 text-white" : "text-gray-700"
+                            }`}
+                            onClick={() => {
+                              setFilter(option);
+                              setShowFilterDropdown(false);
+                            }}
+                          >
+                            {option}
+                          </button>
+                        ))}
                       </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <p>Loading activities...</p>
+            ) : error ? (
+              <p className="text-red-600">{error}</p>
+            ) : (
+              (() => {
+                const statusActivities = getActivitiesByStatus(activeTab);
+                const filteredActivities = getFilteredActivities(statusActivities);
+                
+                if (filteredActivities.length === 0) {
+                  return <p className="mt-4">No activities found.</p>;
+                }
+                
+                // Use different grouping based on the active tab
+                const { groupedByDate, sortedDateKeys } = activeTab === 'completed' 
+                  ? groupActivitiesBySubmissionDate(filteredActivities)
+                  : groupActivitiesByDueDate(filteredActivities);
+                
+                return sortedDateKeys.map(dateKey => (
+                  <div key={dateKey}>
+                    {/* Date separator */}
+                    <div className="mb-4 mt-6 first:mt-0">
+                      <h4 className="text-lg font-semibold text-gray-700 mb-3">
+                        {activeTab === 'completed' ? 'Submitted on ' : 'Due on '}
+                        {new Date(dateKey).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </h4>
                     </div>
-                  ))
-                )}
-              </div>
-            )}
-            {activeTab === "past-due" && (
-              <div>
-                <h3 className="text-2xl font-semibold">Past Due</h3>
-                <p className="mt-4">No activities here.</p>
-              </div>
-            )}
-            {activeTab === "completed" && (
-              <div>
-                <h3 className="text-2xl font-semibold">Completed</h3>
-                <p className="mt-4">No completed activities yet.</p>
-              </div>
+                    
+                    {/* Activities for this date */}
+                    {groupedByDate[dateKey].map((activity) => (
+                      <div
+                        key={`${activity.type}-${activity._id}-${activity.classInfo?.classCode || 'unknown'}`}
+                        className="bg-[#00418B] p-4 rounded-xl shadow-lg mb-4 hover:bg-[#002d5a] cursor-pointer transition-colors"
+                        onClick={() => {
+                          if (activity.type === 'assignment') {
+                            navigate(`/assignment/${activity._id}`);
+                          } else if (activity.type === 'quiz') {
+                            navigate(`/quiz/${activity._id}`);
+                          }
+                        }}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="text-white text-xl md:text-2xl font-semibold mb-2">{activity.title}</h3>
+                            <p className="text-white/90 text-sm mb-1">
+                              Due at {activity.dueDate ? new Date(activity.dueDate).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true
+                              }) : 'No due date'}
+                            </p>
+                            <p className="text-white/80 text-sm font-medium">
+                              {activity.classInfo?.classCode || 'N/A'} | {activity.classInfo?.className || 'Unknown Class'}
+                            </p>
+                            {activity.instructions && (
+                              <p className="text-white/70 text-xs mt-1 line-clamp-2">
+                                {activity.instructions}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="bg-white/20 text-white px-3 py-1 rounded text-xs uppercase font-bold mb-1">
+                              {activity.type === 'assignment' ? 'ASSIGNMENT' : 'QUIZ'}
+                            </div>
+                            <div className="text-white font-bold text-lg">
+                              {activity.points || 0} Points
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ));
+              })()
             )}
           </div>
         </div>
       </div>
-      {/* Assignment/Quiz Detail Modal */}
-      {selectedAssignment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg mx-auto bg-white rounded-xl shadow-xl max-h-[90vh] overflow-y-auto p-8">
-            <button
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl font-bold"
-              onClick={() => setSelectedAssignment(null)}
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <div className="mb-4">
-              <span className={`inline-block px-2 py-1 rounded text-xs font-bold mr-2 ${selectedAssignment.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{selectedAssignment.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
-              <span className="text-2xl font-bold text-blue-900">{selectedAssignment.title}</span>
-            </div>
-            <div className="mb-2 text-gray-700">{selectedAssignment.instructions}</div>
-            {selectedAssignment.description && <div className="mb-2 text-gray-600">{selectedAssignment.description}</div>}
-            {selectedAssignment.dueDate && <div className="mb-2 text-xs text-gray-500">Due: {new Date(selectedAssignment.dueDate).toLocaleString()}</div>}
-            {selectedAssignment.points && <div className="mb-2 text-xs text-gray-500">Points: {selectedAssignment.points}</div>}
-            {/* File upload for assignment */}
-            {selectedAssignment.type !== 'quiz' && (
-              <form className="mb-4" onSubmit={async e => {
-                e.preventDefault();
-                setSubmitLoading(true);
-                setSubmitError('');
-                try {
-                  const token = localStorage.getItem('token');
-                  const formData = new FormData();
-                  formData.append('assignmentId', selectedAssignment._id);
-                  formData.append('file', submissionFile);
-                  const res = await fetch(`${API_BASE}/submissions`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    body: formData
-                  });
-                  if (res.ok) {
-                    setSubmitSuccess(true);
-                    setSelectedAssignment(null);
-                  } else {
-                    setSubmitError('Failed to submit.');
-                  }
-                } catch {
-                  setSubmitError('Failed to submit.');
-                } finally {
-                  setSubmitLoading(false);
-                }
-              }}>
-                <input type="file" required onChange={e => setSubmissionFile(e.target.files[0])} className="border rounded px-2 py-1 mb-2" />
-                {submitError && <div className="text-red-600 text-sm mb-2">{submitError}</div>}
-                <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950" disabled={submitLoading}>{submitLoading ? 'Submitting...' : 'Submit'}</button>
-              </form>
-            )}
-            {/* Quiz questions (if any) can be rendered here */}
-            <div className="flex justify-end mt-6">
-              <button className="bg-blue-900 text-white px-6 py-2 rounded" onClick={() => setSelectedAssignment(null)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {submitSuccess && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-            <h3 className="text-xl font-semibold mb-2 text-green-600">Submitted!</h3>
-            <button onClick={() => setSubmitSuccess(false)} className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded w-full">OK</button>
-          </div>
-        </div>
-      )}
     </>
   );
 }
