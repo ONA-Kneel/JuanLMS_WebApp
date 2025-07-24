@@ -7,6 +7,7 @@ import multer from 'multer';
 import path from 'path';
 import User from '../models/User.js';
 import Quiz from '../models/Quiz.js';
+import Class from '../models/Class.js';
 
 const router = express.Router();
 
@@ -49,11 +50,47 @@ router.get('/', authenticateToken, async (req, res) => {
   let quizzes = [];
   if (classID) {
     quizzes = await Quiz.find({ $or: [ { classID }, { classIDs: classID } ] }).sort({ createdAt: -1 });
+  } else if (role === 'faculty') {
+    // For faculty, get quizzes from all their classes
+    const facultyClasses = await Class.find({ facultyID: userId });
+    const classIDs = facultyClasses.map(c => c.classID);
+    quizzes = await Quiz.find({ 
+      $or: [ 
+        { classID: { $in: classIDs } }, 
+        { classIDs: { $in: classIDs } } 
+      ] 
+    }).sort({ createdAt: -1 });
   }
 
-  // Add type field for frontend
-  const assignmentsWithType = assignments.map(a => ({ ...a.toObject(), type: 'assignment' }));
-  const quizzesWithType = quizzes.map(q => ({ ...q.toObject(), type: 'quiz' }));
+  // Get class information for all unique classIDs
+  const allClassIDs = [...new Set([
+    ...assignments.map(a => a.classID),
+    ...quizzes.map(q => q.classID || q.classIDs?.[0]).filter(Boolean)
+  ])];
+  
+  const classesMap = {};
+  if (allClassIDs.length > 0) {
+    const classes = await Class.find({ classID: { $in: allClassIDs } });
+    classes.forEach(cls => {
+      classesMap[cls.classID] = {
+        className: cls.className,
+        classCode: cls.classCode,
+        classDesc: cls.classDesc
+      };
+    });
+  }
+
+  // Add type field and class info for frontend
+  const assignmentsWithType = assignments.map(a => ({ 
+    ...a.toObject(), 
+    type: 'assignment',
+    classInfo: classesMap[a.classID] || { className: 'Unknown', classCode: 'N/A', classDesc: '' }
+  }));
+  const quizzesWithType = quizzes.map(q => ({ 
+    ...q.toObject(), 
+    type: 'quiz',
+    classInfo: classesMap[q.classID || q.classIDs?.[0]] || { className: 'Unknown', classCode: 'N/A', classDesc: '' }
+  }));
 
   // Debug log before filtering
   console.log('[DEBUG] Role:', role, 'Assignments before filter:', assignments ? assignments.length : 'undefined', 'classID:', classID, 'userId:', userId);

@@ -3,6 +3,7 @@
 import express from 'express';
 import User from '../models/User.js';
 import Quiz from '../models/Quiz.js';
+import Class from '../models/Class.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -52,12 +53,55 @@ router.post('/', authenticateToken, async (req, res) => {
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { classID } = req.query;
-    let filter = {};
+    const userId = req.user.userID;
+    const role = req.user.role;
+    
+    let quizzes;
     if (classID) {
-      filter['assignedTo.classID'] = classID;
+      quizzes = await Quiz.find({ 'assignedTo.classID': classID });
+    } else if (role === 'faculty') {
+      // For faculty, get quizzes from all their classes
+      const facultyClasses = await Class.find({ facultyID: userId });
+      const classIDs = facultyClasses.map(c => c.classID);
+      quizzes = await Quiz.find({ 
+        $or: [ 
+          { classID: { $in: classIDs } }, 
+          { 'assignedTo.classID': { $in: classIDs } } 
+        ] 
+      });
+    } else {
+      quizzes = [];
     }
-    const quizzes = await Quiz.find(filter);
-    res.json(quizzes);
+    
+    // Get class information for all unique classIDs
+    const allClassIDs = [...new Set([
+      ...quizzes.map(q => q.classID).filter(Boolean),
+      ...quizzes.flatMap(q => q.assignedTo?.map(a => a.classID) || []).filter(Boolean)
+    ])];
+    
+    const classesMap = {};
+    if (allClassIDs.length > 0) {
+      const classes = await Class.find({ classID: { $in: allClassIDs } });
+      classes.forEach(cls => {
+        classesMap[cls.classID] = {
+          className: cls.className,
+          classCode: cls.classCode,
+          classDesc: cls.classDesc
+        };
+      });
+    }
+    
+    // Add class info to quizzes
+    const quizzesWithClassInfo = quizzes.map(q => {
+      const quizObj = q.toObject();
+      const primaryClassID = q.classID || q.assignedTo?.[0]?.classID;
+      return {
+        ...quizObj,
+        classInfo: classesMap[primaryClassID] || { className: 'Unknown', classCode: 'N/A', classDesc: '' }
+      };
+    });
+    
+    res.json(quizzesWithClassInfo);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -294,26 +294,7 @@ export default function AssignmentDetailPage() {
     }
   };
 
-  const fetchSubmission = async () => {
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(`${API_BASE}/submissions/assignment/${assignmentId}/student/${user?._id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSubmissions(data);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
-  useEffect(() => {
-    fetchSubmission();
-  }, []);
 
 
   // Faculty grade handler
