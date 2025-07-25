@@ -31,6 +31,7 @@ import subjectRoutes from './routes/subjectRoutes.js';
 import registrantRoutes from './routes/registrantRoutes.js';
 import classDateRoutes  from './routes/classDateRoutes.js';
 import quizRoutes from './routes/quizRoutes.js';
+import meetingRoutes from './routes/meetingRoutes.js';
 
 
 dotenv.config({ path: './config.env' });
@@ -139,6 +140,8 @@ app.use('/api/terms', termRoutes);
 app.use('/api/tracks', trackRoutes);
 app.use('/api/strands', strandRoutes);
 app.use('/api/sections', sectionRoutes);
+app.use('/api/meetings', meetingRoutes);
+app.use('/api/classes', classRoutes);
 app.use("/api/faculty-assignments", facultyAssignmentRoutes);
 app.use("/api/student-assignments", studentAssignmentRoutes);
 app.use("/api/subjects", subjectRoutes);

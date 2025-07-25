@@ -252,4 +252,23 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
   }
 });
 
+// Get only faculty's assigned classes (for Faculty_Meeting component)
+router.get('/faculty-classes', authenticateToken, async (req, res) => {
+  try {
+    const userID = req.user.userID;
+    
+    // Only allow faculty to access this endpoint
+    if (req.user.role !== 'faculty') {
+      return res.status(403).json({ error: 'Access denied. Faculty only.' });
+    }
+    
+    // Get classes where the logged-in faculty is assigned
+    const classes = await Class.find({ facultyID: userID });
+    res.json(classes);
+  } catch (err) {
+    console.error('Error fetching faculty classes:', err);
+    res.status(500).json({ error: 'Failed to fetch faculty classes.' });
+  }
+});
+
 export default router; 
