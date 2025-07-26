@@ -81,26 +81,73 @@ const Faculty_Meeting = () => {
     async function fetchClasses() {
       try {
         const token = localStorage.getItem("token");
-        // Use faculty-specific endpoint to get only assigned classes
-        const res = await fetch(`${API_BASE}/classes/faculty-classes`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setClasses(data);
-          if (data.length > 0) {
-            setSelectedClass(data[0]); // Auto-select first class
-          }
-        } else {
-          console.error("Failed to fetch faculty classes - using fallback");
-          // Fallback: try the general classes endpoint and filter client-side
-          const fallbackRes = await fetch(`${API_BASE}/classes`, {
-            headers: { "Authorization": `Bearer ${token}` }
+        if (!token) {
+          console.error("No authentication token found");
+          // Redirect to login or show login modal
+          return;
+        }
+
+        // Decode token to check expiration
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const isTokenExpired = Date.now() >= payload.exp * 1000;
+        
+        if (isTokenExpired) {
+          console.error("Token has expired");
+          // Clear invalid token and redirect to login
+          localStorage.removeItem("token");
+          // Optionally redirect to login page
+          // window.location.href = "/login";
+          return;
+        }
+
+        // Try faculty-specific endpoint first
+        try {
+          const res = await fetch(`${API_BASE}/classes/faculty-classes`, {
+            method: 'GET',
+            headers: { 
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            // Remove credentials for now to avoid CORS issues with wildcard origin
+            // credentials: 'include' // Only include if backend is properly configured for CORS with credentials
           });
+
+          if (res.status === 401) {
+            // Token is invalid or expired
+            localStorage.removeItem("token");
+            // Optionally redirect to login page
+            // window.location.href = "/login";
+            console.error("Authentication failed: Invalid or expired token");
+            return;
+          }
+
+          if (res.ok) {
+            const data = await res.json();
+            setClasses(data);
+            if (data.length > 0) {
+              setSelectedClass(data[0]);
+            }
+            setLoading(false);
+            return; // Exit if successful
+          }
+        } catch (err) {
+          console.error("Error fetching faculty classes:", err);
+        }
+
+        // Fallback: try the general classes endpoint and filter client-side
+        try {
+          const fallbackRes = await fetch(`${API_BASE}/classes`, {
+            method: 'GET',
+            headers: { 
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            // Remove credentials for now to avoid CORS issues with wildcard origin
+            // credentials: 'include' // Only include if backend is properly configured for CORS with credentials
+          });
+
           if (fallbackRes.ok) {
             const allClasses = await fallbackRes.json();
-            // Filter classes where the current user is the faculty
-            const payload = JSON.parse(atob(token.split('.')[1]));
             const facultyId = payload.userID;
             const facultyClasses = allClasses.filter(cls => cls.facultyID === facultyId);
             setClasses(facultyClasses);
@@ -108,9 +155,11 @@ const Faculty_Meeting = () => {
               setSelectedClass(facultyClasses[0]);
             }
           }
+        } catch (err) {
+          console.error("Error in fallback class fetch:", err);
         }
       } catch (err) {
-        console.error("Failed to fetch classes", err);
+        console.error("Authentication error:", err);
       } finally {
         setLoading(false);
       }
@@ -304,9 +353,9 @@ const Faculty_Meeting = () => {
         {activeMeeting && (
           <VideoMeetingRoom
             meetingData={activeMeeting}
-            onLeaveMeeting={handleLeaveMeeting}
-            userName={userInfo.name}
-            userEmail={userInfo.email}
+            onLeave={handleLeaveMeeting}
+            isOpen={!!activeMeeting}
+            isModerator={true}
           />
         )}
       </div>

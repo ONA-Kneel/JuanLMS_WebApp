@@ -20,8 +20,8 @@ const MeetingSchema = new mongoose.Schema({
   },
   duration: {
     type: Number,
-    required: true,
-    default: 60,
+    required: false,
+    default: null,
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,

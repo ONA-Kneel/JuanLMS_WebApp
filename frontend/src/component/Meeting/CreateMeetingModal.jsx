@@ -9,7 +9,7 @@ const CreateMeetingModal = ({ isOpen, onClose, classID, onMeetingCreated }) => {
     description: '',
     meetingType: 'scheduled',
     scheduledTime: '',
-    duration: 60
+    duration: '' // Make duration optional by default
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -43,17 +43,19 @@ const CreateMeetingModal = ({ isOpen, onClose, classID, onMeetingCreated }) => {
         return;
       }
 
+      // Prepare meeting data with explicit field names
       const meetingData = {
         title: formData.title.trim(),
         description: formData.description.trim(),
-        classID: classID,
+        classID: classID, // Ensure this is the correct field name
         meetingType: formData.meetingType,
-        duration: parseInt(formData.duration),
+        duration: formData.duration ? parseInt(formData.duration) : null,
         scheduledTime: formData.meetingType === 'scheduled' && formData.scheduledTime
           ? new Date(formData.scheduledTime).toISOString()
           : new Date().toISOString()
       };
 
+      console.log('Sending meeting data:', meetingData);
 
       const response = await fetch(`${API_BASE}/api/meetings`, {
         method: 'POST',
@@ -65,29 +67,31 @@ const CreateMeetingModal = ({ isOpen, onClose, classID, onMeetingCreated }) => {
       });
 
       const result = await response.json();
+      console.log('Meeting creation response:', { status: response.status, result });
 
-      if (response.ok) {
-        // Reset form
-        setFormData({
-          title: '',
-          description: '',
-          meetingType: 'scheduled',
-          scheduledTime: '',
-          duration: 60
-        });
-        
-        // Notify parent component
-        if (onMeetingCreated) {
-          onMeetingCreated(result);
-        }
-        
-        onClose();
-      } else {
-        setError(result.message || 'Failed to create meeting');
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create meeting');
       }
+
+      // If we get here, the meeting was created successfully
+      // Reset form
+      setFormData({
+        title: '',
+        description: '',
+        meetingType: 'scheduled',
+        scheduledTime: '',
+        duration: '' // Reset to no duration
+      });
+      
+      // Notify parent component
+      if (onMeetingCreated) {
+        onMeetingCreated(result);
+      }
+      
+      onClose();
     } catch (error) {
       console.error('Error creating meeting:', error);
-      setError('Network error. Please try again.');
+      setError(error.message || 'Failed to create meeting. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -222,11 +226,20 @@ const CreateMeetingModal = ({ isOpen, onClose, classID, onMeetingCreated }) => {
             </div>
           )}
 
-          {/* Duration */}
+          {/* Duration - Optional */}
           <div>
-            <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">
-              Duration (minutes)
-            </label>
+            <div className="flex justify-between items-center mb-1">
+              <label htmlFor="duration" className="block text-sm font-medium text-gray-700">
+                Duration (optional)
+              </label>
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, duration: '' }))}
+                className="text-xs text-blue-600 hover:text-blue-800"
+              >
+                No time limit
+              </button>
+            </div>
             <select
               id="duration"
               name="duration"
@@ -234,11 +247,14 @@ const CreateMeetingModal = ({ isOpen, onClose, classID, onMeetingCreated }) => {
               onChange={handleInputChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
+              <option value="">No time limit</option>
               <option value={30}>30 minutes</option>
               <option value={60}>1 hour</option>
               <option value={90}>1.5 hours</option>
               <option value={120}>2 hours</option>
               <option value={180}>3 hours</option>
+              <option value={240}>4 hours</option>
+              <option value={300}>5 hours</option>
             </select>
           </div>
 

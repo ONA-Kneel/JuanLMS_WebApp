@@ -10,11 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@daily-co/daily-js": "^0.81.0",
     "@fullcalendar/common": "^5.11.5",
     "@fullcalendar/core": "^6.1.17",
     "@fullcalendar/daygrid": "^6.1.17",
     "@fullcalendar/interaction": "^6.1.17",
     "@fullcalendar/react": "^6.1.17",
+    "@jitsi/react-sdk": "^1.4.4",
     "@tailwindcss/vite": "^4.0.14",
     "axios": "^1.9.0",
     "chart.js": "^4.5.0",
@@ -42,6 +44,7 @@
     "seedrandom": "^3.0.5",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
+    "styled-jss": "^2.2.3",
     "tailwindcss": "^4.0.14",
     "xlsx": "^0.18.5"
   },
