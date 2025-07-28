@@ -79,6 +79,11 @@ const NotificationCenter = ({
                       <span>👤 {notification.faculty}</span>
                       <span>{getTimeAgo(notification.timestamp)}</span>
                     </div>
+                    {notification.className && (
+                      <div className="flex items-center text-xs text-blue-600 mt-1">
+                        <span>📚 {notification.className} ({notification.classCode})</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -27,6 +27,14 @@ const notificationSchema = new mongoose.Schema({
     type: String, 
     required: true 
   },
+  className: { 
+    type: String, 
+    required: false 
+  },
+  classCode: { 
+    type: String, 
+    required: false 
+  },
   relatedItemId: { 
     type: mongoose.Schema.Types.ObjectId, 
     required: false 

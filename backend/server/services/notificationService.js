@@ -50,6 +50,8 @@ export const createClassNotifications = async (classID, notificationData) => {
           recipientId: member._id, // Use the actual ObjectId
           faculty: facultyName,
           classID: classID,
+          className: classData.className, // Add class name
+          classCode: classData.classCode, // Add class code
           ...notificationData
         });
         notifications.push(notification);

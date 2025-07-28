@@ -35,6 +35,8 @@ export const useNotifications = () => {
         title: 'New Course Material Available',
         message: 'Dr. Smith has posted new lecture notes for Computer Science 101',
         faculty: 'Dr. Sarah Smith',
+        className: 'Computer Science 101',
+        classCode: 'CS101',
         timestamp: new Date(Date.now() - 300000),
         read: false,
         priority: 'high'
@@ -45,6 +47,8 @@ export const useNotifications = () => {
         title: 'Assignment Due Reminder',
         message: 'Programming Assignment #3 is due tomorrow at 11:59 PM',
         faculty: 'Prof. Johnson',
+        className: 'Advanced Programming',
+        classCode: 'CS201',
         timestamp: new Date(Date.now() - 900000),
         read: false,
         priority: 'urgent'
@@ -56,7 +60,12 @@ export const useNotifications = () => {
   // Show simple text toast notification
   const showToast = (notification) => {
     const icon = notification.type === 'announcement' ? '📢' : '📝';
-    const message = `${icon} ${notification.title}\n${notification.message}\n👤 ${notification.faculty}`;
+    let message = `${icon} ${notification.title}\n${notification.message}\n👤 ${notification.faculty}`;
+    
+    // Add class information if available
+    if (notification.className) {
+      message += `\n📚 ${notification.className} (${notification.classCode})`;
+    }
     
     const toastConfig = {
       position: "top-right",
