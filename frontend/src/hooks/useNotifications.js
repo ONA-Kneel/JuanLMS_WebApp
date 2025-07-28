@@ -15,7 +15,10 @@ export const useNotifications = () => {
       const user = JSON.parse(localStorage.getItem('user'));
       if (!user || !user._id) return;
 
-      const response = await axios.get(`${API_BASE}/notifications/${user._id}`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/notifications/${user._id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       setNotifications(response.data);
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -74,23 +77,15 @@ export const useNotifications = () => {
     }
   };
 
-  // Add notification and show toast
-  const addNotification = (notification) => {
-    const newNotification = {
-      ...notification,
-      id: Date.now(),
-      timestamp: new Date(),
-      read: false
-    };
-    
-    setNotifications(prev => [newNotification, ...prev]);
-    showToast(newNotification);
-  };
+
 
   // Mark notification as read
   const markAsRead = async (notificationId) => {
     try {
-      // await axios.patch(`${API_BASE}/notifications/${notificationId}/read`);
+      const token = localStorage.getItem('token');
+      await axios.patch(`${API_BASE}/notifications/${notificationId}/read`, {}, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       setNotifications(prev => 
         prev.map(n => 
           (n._id || n.id) === notificationId ? { ...n, read: true } : n
@@ -107,7 +102,10 @@ export const useNotifications = () => {
       const user = JSON.parse(localStorage.getItem('user'));
       if (!user || !user._id) return;
       
-      // await axios.patch(`${API_BASE}/notifications/${user._id}/read-all`);
+      const token = localStorage.getItem('token');
+      await axios.patch(`${API_BASE}/notifications/${user._id}/read-all`, {}, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
@@ -127,7 +125,6 @@ export const useNotifications = () => {
     unreadCount,
     showNotificationCenter,
     setShowNotificationCenter,
-    addNotification,
     markAsRead,
     markAllAsRead,
     fetchNotifications

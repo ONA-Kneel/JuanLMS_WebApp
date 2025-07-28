@@ -27,8 +27,7 @@ export default function ProfileMenu() {
     showNotificationCenter,
     setShowNotificationCenter,
     markAsRead,
-    markAllAsRead,
-    addNotification // For testing
+    markAllAsRead
   } = useNotifications();
 
   // Fetch user info from backend
@@ -56,26 +55,7 @@ export default function ProfileMenu() {
     return profileicon;
   };
 
-  // Test functions (remove these in production)
-  const testAnnouncement = () => {
-    addNotification({
-      type: 'announcement',
-      title: 'New Announcement Posted',
-      message: 'Check out the latest updates from your instructor',
-      faculty: 'Dr. Wilson',
-      priority: 'normal'
-    });
-  };
 
-  const testActivity = () => {
-    addNotification({
-      type: 'activity',
-      title: 'New Activity Available',
-      message: 'A new assignment has been posted and is ready for submission',
-      faculty: 'Prof. Davis',
-      priority: 'high'
-    });
-  };
 
   return (
     <>
@@ -83,15 +63,6 @@ export default function ProfileMenu() {
     <div className="relative flex flex-row items-center justify-end ">
         {/* Right side - Buttons and profile */}
         <div className="flex items-center space-x-5 ml-auto">
-          {/* Test buttons (remove in production) */}
-          <div className="flex space-x-2">
-            <button onClick={testAnnouncement} className="text-xs bg-blue-500 text-white px-2 py-1 rounded">
-              Test Announcement
-            </button>
-            <button onClick={testActivity} className="text-xs bg-green-500 text-white px-2 py-1 rounded">
-              Test Activity
-            </button>
-          </div>
 
           {/* Notification Bell Button */}
           <button
@@ -159,7 +130,7 @@ export default function ProfileMenu() {
       />
 
       {/* Custom CSS for toast styling */}
-      <style jsx>{`
+      <style>{`
         .toast-urgent {
           border-left: 4px solid #ef4444;
         }

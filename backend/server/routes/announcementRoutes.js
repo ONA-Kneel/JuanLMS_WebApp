@@ -1,6 +1,7 @@
 import express from 'express';
 import Announcement from '../models/Announcement.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import { createAnnouncementNotification } from '../services/notificationService.js';
 
 const router = express.Router();
 
@@ -13,12 +14,27 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // Create announcement
 router.post('/', authenticateToken, async (req, res) => {
-  const { classID, title, content } = req.body;
-  const announcement = new Announcement({
-    classID, title, content, createdBy: req.user._id
-  });
-  await announcement.save();
-  res.status(201).json(announcement);
+  try {
+    const { classID, title, content } = req.body;
+    console.log(`Creating announcement for class: ${classID}`);
+    console.log(`Announcement data:`, { title, content, createdBy: req.user._id });
+    
+    const announcement = new Announcement({
+      classID, title, content, createdBy: req.user._id
+    });
+    await announcement.save();
+    
+    console.log(`Announcement saved with ID: ${announcement._id}`);
+    
+    // Create notifications for students in the class
+    console.log(`Creating notifications for class: ${classID}`);
+    await createAnnouncementNotification(classID, announcement);
+    
+    res.status(201).json(announcement);
+  } catch (error) {
+    console.error('Error creating announcement:', error);
+    res.status(500).json({ error: 'Failed to create announcement' });
+  }
 });
 
 // Edit announcement
