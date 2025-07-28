@@ -121,4 +121,59 @@ export const createActivityNotification = async (classID, activity) => {
   };
 
   await createClassNotifications(classID, notificationData);
+};
+
+// Create notification for new message
+export const createMessageNotification = async (senderId, receiverId, message) => {
+  try {
+    // Get sender information
+    let sender = await User.findOne({ userID: senderId });
+    if (!sender) {
+      sender = await User.findOne({ schoolID: senderId });
+    }
+    if (!sender) {
+      sender = await User.findById(senderId);
+    }
+
+    if (!sender) {
+      console.error(`Sender ${senderId} not found`);
+      return;
+    }
+
+    // Get receiver information
+    let receiver = await User.findOne({ userID: receiverId });
+    if (!receiver) {
+      receiver = await User.findOne({ schoolID: receiverId });
+    }
+    if (!receiver) {
+      receiver = await User.findById(receiverId);
+    }
+
+    if (!receiver) {
+      console.error(`Receiver ${receiverId} not found`);
+      return;
+    }
+
+    const senderName = `${sender.firstname} ${sender.lastname}`;
+    const messageContent = message.getDecryptedMessage ? message.getDecryptedMessage() : message.message;
+    const truncatedMessage = messageContent.length > 50 ? messageContent.substring(0, 50) + '...' : messageContent;
+
+    const notification = new Notification({
+      recipientId: receiver._id,
+      type: 'message',
+      title: 'New Message Received',
+      message: `"${truncatedMessage}"`,
+      faculty: senderName,
+      classID: 'direct_message', // Special identifier for direct messages
+      className: 'Direct Message',
+      classCode: 'DM',
+      relatedItemId: message._id,
+      priority: 'normal'
+    });
+
+    await notification.save();
+    console.log(`Created message notification for ${receiver.firstname} ${receiver.lastname} from ${senderName}`);
+  } catch (error) {
+    console.error('Error creating message notification:', error);
+  }
 }; 

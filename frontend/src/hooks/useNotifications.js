@@ -52,6 +52,18 @@ export const useNotifications = () => {
         timestamp: new Date(Date.now() - 900000),
         read: false,
         priority: 'urgent'
+      },
+      {
+        id: 3,
+        type: 'message',
+        title: 'New Message Received',
+        message: '"Hey, can you help me with the assignment?"',
+        faculty: 'John Doe',
+        className: 'Direct Message',
+        classCode: 'DM',
+        timestamp: new Date(Date.now() - 600000),
+        read: false,
+        priority: 'normal'
       }
     ];
     setNotifications(sampleData);
@@ -59,11 +71,12 @@ export const useNotifications = () => {
 
   // Show simple text toast notification
   const showToast = (notification) => {
-    const icon = notification.type === 'announcement' ? '📢' : '📝';
+    const icon = notification.type === 'announcement' ? '📢' : 
+                 notification.type === 'message' ? '💬' : '📝';
     let message = `${icon} ${notification.title}\n${notification.message}\n👤 ${notification.faculty}`;
     
-    // Add class information if available
-    if (notification.className) {
+    // Add class information if available (skip for direct messages)
+    if (notification.className && notification.classID !== 'direct_message') {
       message += `\n📚 ${notification.className} (${notification.classCode})`;
     }
     

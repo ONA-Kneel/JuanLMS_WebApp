@@ -7,6 +7,8 @@ import Message from '../models/Message.js';
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { createMessageNotification } from '../services/notificationService.js';
+import User from '../models/User.js';
 
 const router = express.Router();
 
@@ -32,22 +34,30 @@ const upload = multer({ storage });
 
 // --- POST / - send a message (optionally with a file) ---
 router.post('/', upload.single('file'), async (req, res) => {
-  const { senderId, receiverId, message } = req.body;
-  // If a file is uploaded, store its URL (relative to server root)
-  const fileUrl = req.file ? `uploads/messages/${req.file.filename}` : null;
+  try {
+    const { senderId, receiverId, message } = req.body;
+    // If a file is uploaded, store its URL (relative to server root)
+    const fileUrl = req.file ? `uploads/messages/${req.file.filename}` : null;
 
-  // Message object structure: senderId, receiverId, message (text), fileUrl (optional)
-  const newMessage = new Message({ senderId, receiverId, message, fileUrl });
-  await newMessage.save();
+    // Message object structure: senderId, receiverId, message (text), fileUrl (optional)
+    const newMessage = new Message({ senderId, receiverId, message, fileUrl });
+    await newMessage.save();
 
-  // Return decrypted message to frontend
-  res.status(201).json({
-    ...newMessage.toObject(),
-    senderId: newMessage.getDecryptedSenderId(),
-    receiverId: newMessage.getDecryptedReceiverId(),
-    message: newMessage.getDecryptedMessage(),
-    fileUrl: newMessage.getDecryptedFileUrl(),
-  });
+    // Create notification for the receiver
+    await createMessageNotification(senderId, receiverId, newMessage);
+
+    // Return decrypted message to frontend
+    res.status(201).json({
+      ...newMessage.toObject(),
+      senderId: newMessage.getDecryptedSenderId(),
+      receiverId: newMessage.getDecryptedReceiverId(),
+      message: newMessage.getDecryptedMessage(),
+      fileUrl: newMessage.getDecryptedFileUrl(),
+    });
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
 });
 
 // --- GET /:userId/:chatWithId - fetch messages between two users ---

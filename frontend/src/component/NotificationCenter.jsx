@@ -61,7 +61,8 @@ const NotificationCenter = ({
               >
                 <div className="flex items-start space-x-3">
                   <div className="text-2xl">
-                    {notification.type === 'announcement' ? '📢' : '📝'}
+                    {notification.type === 'announcement' ? '📢' : 
+                     notification.type === 'message' ? '💬' : '📝'}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
@@ -79,9 +80,14 @@ const NotificationCenter = ({
                       <span>👤 {notification.faculty}</span>
                       <span>{getTimeAgo(notification.timestamp)}</span>
                     </div>
-                    {notification.className && (
+                    {notification.className && notification.classID !== 'direct_message' && (
                       <div className="flex items-center text-xs text-blue-600 mt-1">
                         <span>📚 {notification.className} ({notification.classCode})</span>
+                      </div>
+                    )}
+                    {notification.classID === 'direct_message' && (
+                      <div className="flex items-center text-xs text-green-600 mt-1">
+                        <span>💬 Direct Message</span>
                       </div>
                     )}
                   </div>
