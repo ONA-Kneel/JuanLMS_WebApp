@@ -30,6 +30,87 @@ export default function ProfileMenu() {
     markAllAsRead
   } = useNotifications();
 
+  // Handle notification clicks
+  const handleNotificationClick = (notification) => {
+    console.log('Notification clicked:', notification);
+    
+    // Close notification center
+    setShowNotificationCenter(false);
+    
+    // Get user role for proper navigation
+    const userRole = userInfo.role || localStorage.getItem('role');
+    const isFaculty = userRole === 'faculty';
+    const isStudent = userRole === 'students';
+    const isAdmin = userRole === 'admin';
+    const isPrincipal = userRole === 'principal';
+    
+    // Navigate based on notification type
+    switch (notification.type) {
+      case 'announcement':
+        // Navigate to the class where the announcement was posted
+        if (notification.classID && notification.classID !== 'direct_message') {
+          if (isFaculty) {
+            navigate(`/faculty_class/${notification.classID}`);
+          } else if (isStudent) {
+            navigate(`/student_class/${notification.classID}`);
+          }
+        }
+        break;
+        
+      case 'assignment':
+        // Navigate to the class where the assignment was posted
+        if (notification.classID && notification.classID !== 'direct_message') {
+          if (isFaculty) {
+            navigate(`/faculty_class/${notification.classID}`);
+          } else if (isStudent) {
+            navigate(`/student_class/${notification.classID}`);
+          }
+        }
+        break;
+        
+      case 'quiz':
+        // Navigate to the class where the quiz was posted
+        if (notification.classID && notification.classID !== 'direct_message') {
+          if (isFaculty) {
+            navigate(`/faculty_class/${notification.classID}`);
+          } else if (isStudent) {
+            navigate(`/student_class/${notification.classID}`);
+          }
+        }
+        break;
+        
+      case 'message':
+        // Navigate to role-specific chat routes
+        if (isFaculty) {
+          navigate('/faculty_chats');
+        } else if (isStudent) {
+          navigate('/student_chats');
+        } else if (isAdmin) {
+          navigate('/admin_chats');
+        } else if (isPrincipal) {
+          navigate('/principal_chats');
+        } else {
+          // Fallback for other roles
+          navigate('/faculty_chats');
+        }
+        break;
+        
+      case 'activity':
+        // Navigate to the class where the activity was posted
+        if (notification.classID && notification.classID !== 'direct_message') {
+          if (isFaculty) {
+            navigate(`/faculty_class/${notification.classID}`);
+          } else if (isStudent) {
+            navigate(`/student_class/${notification.classID}`);
+          }
+        }
+        break;
+        
+      default:
+        console.log('Unknown notification type:', notification.type);
+    }
+  };
+
   // Fetch user info from backend
   const fetchUserInfo = async () => {
     const user = JSON.parse(localStorage.getItem('user'));
@@ -111,6 +192,7 @@ export default function ProfileMenu() {
           onMarkAsRead={markAsRead}
           onMarkAllAsRead={markAllAsRead}
           onClose={() => setShowNotificationCenter(false)}
+          onNotificationClick={handleNotificationClick}
         />
       )}
 

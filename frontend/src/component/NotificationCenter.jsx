@@ -6,7 +6,8 @@ const NotificationCenter = ({
   notifications, 
   onMarkAsRead, 
   onMarkAllAsRead, 
-  onClose 
+  onClose,
+  onNotificationClick 
 }) => {
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -54,10 +55,16 @@ const NotificationCenter = ({
             notifications.map((notification) => (
               <div
                 key={notification._id || notification.id}
-                className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
+                className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors duration-200 ${
                   !notification.read ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
                 }`}
-                onClick={() => onMarkAsRead(notification._id || notification.id)}
+                onClick={() => {
+                  onMarkAsRead(notification._id || notification.id);
+                  if (onNotificationClick) {
+                    onNotificationClick(notification);
+                  }
+                }}
+                title="Click to view"
               >
                 <div className="flex items-start space-x-3">
                   <div className="text-2xl">
@@ -78,7 +85,10 @@ const NotificationCenter = ({
                     </p>
                     <div className="flex items-center justify-between text-xs text-gray-500">
                       <span>👤 {notification.faculty}</span>
-                      <span>{getTimeAgo(notification.timestamp)}</span>
+                      <div className="flex items-center space-x-2">
+                        <span>{getTimeAgo(notification.timestamp)}</span>
+                        <span className="text-blue-500 text-xs">→</span>
+                      </div>
                     </div>
                     {notification.className && notification.classID !== 'direct_message' && (
                       <div className="flex items-center text-xs text-blue-600 mt-1">
