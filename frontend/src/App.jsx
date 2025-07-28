@@ -1,5 +1,7 @@
-// App.js
+// App.js - Updated with ToastContainer
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 // For Logging in into different user and accounts
 import Login from './component/Login';
 import ForgotPassword from './component/ForgotPassword';
@@ -136,6 +138,23 @@ function App() {
         <Route path="/register" element={<Registration />} />
 
       </Routes>
+
+      {/* Toast Container - Add this at the end, before closing Router */}
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+        style={{ zIndex: 9999 }}
+        toastClassName="custom-toast"
+        bodyClassName="custom-toast-body"
+      />
     </Router>
   );
 }

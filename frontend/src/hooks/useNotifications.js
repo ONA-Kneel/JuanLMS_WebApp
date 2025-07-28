@@ -1,0 +1,135 @@
+// hooks/useNotifications.js - NO JSX VERSION
+import { useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
+import axios from 'axios';
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+export const useNotifications = () => {
+  const [notifications, setNotifications] = useState([]);
+  const [showNotificationCenter, setShowNotificationCenter] = useState(false);
+
+  // Fetch notifications from backend
+  const fetchNotifications = async () => {
+    try {
+      const user = JSON.parse(localStorage.getItem('user'));
+      if (!user || !user._id) return;
+
+      const response = await axios.get(`${API_BASE}/notifications/${user._id}`);
+      setNotifications(response.data);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      // Sample data for testing
+      setSampleNotifications();
+    }
+  };
+
+  const setSampleNotifications = () => {
+    const sampleData = [
+      {
+        id: 1,
+        type: 'announcement',
+        title: 'New Course Material Available',
+        message: 'Dr. Smith has posted new lecture notes for Computer Science 101',
+        faculty: 'Dr. Sarah Smith',
+        timestamp: new Date(Date.now() - 300000),
+        read: false,
+        priority: 'high'
+      },
+      {
+        id: 2,
+        type: 'activity',
+        title: 'Assignment Due Reminder',
+        message: 'Programming Assignment #3 is due tomorrow at 11:59 PM',
+        faculty: 'Prof. Johnson',
+        timestamp: new Date(Date.now() - 900000),
+        read: false,
+        priority: 'urgent'
+      }
+    ];
+    setNotifications(sampleData);
+  };
+
+  // Show simple text toast notification
+  const showToast = (notification) => {
+    const icon = notification.type === 'announcement' ? '📢' : '📝';
+    const message = `${icon} ${notification.title}\n${notification.message}\n👤 ${notification.faculty}`;
+    
+    const toastConfig = {
+      position: "top-right",
+      autoClose: 5000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      className: notification.priority === 'urgent' ? 'toast-urgent' : 'toast-normal'
+    };
+
+    if (notification.priority === 'urgent') {
+      toast.error(message, toastConfig);
+    } else if (notification.priority === 'high') {
+      toast.warn(message, toastConfig);
+    } else {
+      toast.info(message, toastConfig);
+    }
+  };
+
+  // Add notification and show toast
+  const addNotification = (notification) => {
+    const newNotification = {
+      ...notification,
+      id: Date.now(),
+      timestamp: new Date(),
+      read: false
+    };
+    
+    setNotifications(prev => [newNotification, ...prev]);
+    showToast(newNotification);
+  };
+
+  // Mark notification as read
+  const markAsRead = async (notificationId) => {
+    try {
+      // await axios.patch(`${API_BASE}/notifications/${notificationId}/read`);
+      setNotifications(prev => 
+        prev.map(n => 
+          (n._id || n.id) === notificationId ? { ...n, read: true } : n
+        )
+      );
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  // Mark all as read
+  const markAllAsRead = async () => {
+    try {
+      const user = JSON.parse(localStorage.getItem('user'));
+      if (!user || !user._id) return;
+      
+      // await axios.patch(`${API_BASE}/notifications/${user._id}/read-all`);
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return {
+    notifications,
+    unreadCount,
+    showNotificationCenter,
+    setShowNotificationCenter,
+    addNotification,
+    markAsRead,
+    markAllAsRead,
+    fetchNotifications
+  };
+};
