@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Calendar, Clock, Video, Users } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.comp-server.onrender.comp-server.onrender.com";
 
 const CreateMeetingModal = ({ isOpen, onClose, classID, onMeetingCreated }) => {
   const [formData, setFormData] = useState({

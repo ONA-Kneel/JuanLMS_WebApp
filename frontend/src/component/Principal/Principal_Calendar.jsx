@@ -7,7 +7,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import ProfileMenu from "../ProfileMenu";
 import Principal_Navbar from "./Principal_Navbar";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.comp-server.onrender.com";
 
 export default function Principal_Calendar() {
   const [holidays, setHolidays] = useState([]);
