@@ -214,11 +214,12 @@ export default function TermDetails() {
         }
         
         const data = await response.json();
+        console.log('Term details loaded:', data);
         setTermDetails(data);
         setError(null);
       } catch (err) {
+        console.error('Error loading term details:', err);
         setError("Failed to load term details.");
-        console.error(err);
       } finally {
         setLoading(false);
       }
@@ -238,15 +239,19 @@ export default function TermDetails() {
 
   const fetchTracks = async () => {
     try {
+      console.log('Fetching tracks for term:', termDetails.termName);
       const res = await fetch(`${API_BASE}/api/tracks/term/${termDetails.termName}`);
       if (res.ok) {
         const data = await res.json();
+        console.log('Tracks loaded:', data);
         setTracks(data);
       } else {
         const data = await res.json();
+        console.error('Failed to fetch tracks:', data);
         setTrackError(data.message || 'Failed to fetch tracks');
       }
     } catch (err) {
+      console.error('Error fetching tracks:', err);
       setTrackError('Error fetching tracks');
     }
   };
