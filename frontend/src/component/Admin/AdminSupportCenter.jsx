@@ -3,7 +3,7 @@ import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import { getAllTickets, replyToTicket } from '../../services/ticketService';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.comp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function AdminSupportCenter() {
   const [tickets, setTickets] = useState([]);

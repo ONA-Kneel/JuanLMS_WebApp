@@ -3,11 +3,12 @@ import Term from '../models/Term.js';
 import SchoolYear from '../models/SchoolYear.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import FacultyAssignment from '../models/FacultyAssignment.js';
+import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 // Get all terms for a school year by its name
-router.get('/schoolyear/:schoolYearName', async (req, res) => {
+router.get('/schoolyear/:schoolYearName', authenticateToken, async (req, res) => {
   try {
     const terms = await Term.find({ schoolYear: req.params.schoolYearName })
       .sort({ termName: 1 });
@@ -18,7 +19,7 @@ router.get('/schoolyear/:schoolYearName', async (req, res) => {
 });
 
 // Create a new term
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { schoolYearId, startDate, endDate } = req.body;
 
@@ -68,7 +69,7 @@ router.post('/', async (req, res) => {
 });
 
 // Archive a term
-router.patch('/:termId/archive', async (req, res) => {
+router.patch('/:termId/archive', authenticateToken, async (req, res) => {
   try {
     const term = await Term.findById(req.params.termId);
     if (!term) {
@@ -89,7 +90,7 @@ router.patch('/:termId/archive', async (req, res) => {
 });
 
 // Add this endpoint after the archive endpoint
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', authenticateToken, async (req, res) => {
   try {
     const term = await Term.findById(req.params.id);
     if (!term) {
@@ -114,7 +115,7 @@ router.patch('/:id', async (req, res) => {
 });
 
 // Get a term by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const term = await Term.findById(req.params.id);
     if (!term) {
@@ -127,7 +128,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Get the current active term
-router.get('/active', async (req, res) => {
+router.get('/active', authenticateToken, async (req, res) => {
   try {
     const activeTerm = await Term.findOne({ status: 'active' });
     if (!activeTerm) {

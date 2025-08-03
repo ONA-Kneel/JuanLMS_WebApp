@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.comp-server.onrender.comp-server.onrender.comp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -201,12 +201,20 @@ export default function TermDetails() {
     const fetchTerm = async () => {
       try {
         setLoading(true);
+        const token = localStorage.getItem('token');
 
-        const response = await fetch(`${API_BASE}/api/terms/${termId}`);
+        const response = await fetch(`${API_BASE}/api/terms/${termId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         setTermDetails(data);
-
-
         setError(null);
       } catch (err) {
         setError("Failed to load term details.");

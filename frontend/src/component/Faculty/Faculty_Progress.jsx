@@ -2,7 +2,7 @@ import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
 import { useState, useEffect } from "react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.comp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Faculty_Progress() {
   const [academicYear, setAcademicYear] = useState(null);
