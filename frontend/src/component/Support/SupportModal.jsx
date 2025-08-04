@@ -14,11 +14,20 @@ export default function SupportModal({ onClose }) {
   const [ticketInput, setTicketInput] = useState('');
   const [showTicket, setShowTicket] = useState(false);
   const [newTicket, setNewTicket] = useState({
-    number: '',
+    number: generateTicketNumber(),
     subject: '',
     content: '',
     file: null
   });
+
+  // Generate ticket number function
+  function generateTicketNumber() {
+    let num = '';
+    for (let i = 0; i < 12; i++) {
+      num += Math.floor(Math.random() * 10);
+    }
+    return `SJDD${num}`;
+  }
   const [submitted, setSubmitted] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -41,7 +50,7 @@ export default function SupportModal({ onClose }) {
     setView('main');
     setTicketInput('');
     setShowTicket(false);
-    setNewTicket({ number: '', subject: '', content: '', file: null });
+    setNewTicket({ number: generateTicketNumber(), subject: '', content: '', file: null });
     setSubmitted(false);
     onClose();
   };
@@ -87,19 +96,30 @@ export default function SupportModal({ onClose }) {
     setLoading(true);
     setError('');
     try {
-      const userId = localStorage.getItem('userID');
       const token = localStorage.getItem('token');
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const userID = localStorage.getItem('userID');
       
-      if (!userId || !token) {
+      if (!token || (!user._id && !userID)) {
         setError('User not authenticated. Please log in again.');
         setLoading(false);
         return;
       }
 
+      // Try to use _id first, then fallback to userID
+      const userId = user._id || userID;
+      
+      console.log('[TICKET SUBMISSION] User data:', {
+        userId,
+        userFromStorage: user,
+        token: token ? 'Present' : 'Missing'
+      });
+
       const formData = new FormData();
       formData.append('userId', userId);
       formData.append('subject', newTicket.subject);
       formData.append('description', newTicket.content);
+      formData.append('number', newTicket.number);
       if (newTicket.file) {
         formData.append('file', newTicket.file);
       }
@@ -243,7 +263,16 @@ export default function SupportModal({ onClose }) {
                 className="flex flex-col gap-4"
                 onSubmit={handleSubmitNewTicket}
               >
-                <div className="text-sm text-gray-700 mb-1">Ticket Number: <span className="font-mono">{newTicket.number}</span></div>
+                <div className="text-sm text-gray-700 mb-1 flex items-center gap-2">
+                  <span>Ticket Number: <span className="font-mono">{newTicket.number}</span></span>
+                  <button
+                    type="button"
+                    onClick={() => setNewTicket(prev => ({ ...prev, number: generateTicketNumber() }))}
+                    className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                  >
+                    Regenerate
+                  </button>
+                </div>
                 <input
                   className="w-full rounded-full px-4 py-2 bg-white bg-opacity-30 text-gray-900 placeholder-gray-500 text-center border border-white focus:outline-none"
                   placeholder="Enter subject"

@@ -105,7 +105,9 @@ export default function AdminSupportCenter() {
     setReplyLoading(true);
     setReplyError('');
     try {
-      const adminId = localStorage.getItem('userID');
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const userID = localStorage.getItem('userID');
+      const adminId = user._id || userID;
       if (!adminId) {
         setReplyError('Admin ID not found. Please log in again.');
         setReplyLoading(false);

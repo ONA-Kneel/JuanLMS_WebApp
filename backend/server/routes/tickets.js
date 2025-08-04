@@ -38,7 +38,21 @@ ticketsRouter.post('/', authenticateToken, upload.single('file'), async (req, re
   let fileUrl = req.file ? req.file.filename : null;
 
   // Validate that the authenticated user matches the userId in the request
-  if (req.user._id !== userId) {
+  // Check both _id and userID fields from the JWT token
+  const authenticatedUserId = req.user._id || req.user.userID;
+  console.log('[TICKET CREATION] User validation:', {
+    authenticatedUserId,
+    requestUserId: userId,
+    jwtUser: req.user,
+    match: authenticatedUserId === userId
+  });
+  
+  if (authenticatedUserId !== userId) {
+    console.log('[USER ID MISMATCH]', {
+      authenticatedUserId,
+      requestUserId: userId,
+      jwtUser: req.user
+    });
     return res.status(403).json({ error: 'Unauthorized: User ID mismatch' });
   }
 
@@ -64,7 +78,7 @@ ticketsRouter.post('/', authenticateToken, upload.single('file'), async (req, re
     userId,
     subject,
     description,
-    number: generateTicketNumber(),
+    number: req.body.number || generateTicketNumber(), // Use provided number or generate one
     status: 'new',
     createdAt: now,
     updatedAt: now,
