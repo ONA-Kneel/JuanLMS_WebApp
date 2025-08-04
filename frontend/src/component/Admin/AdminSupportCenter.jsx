@@ -21,8 +21,10 @@ export default function AdminSupportCenter() {
       setLoading(true);
       setError('');
       try {
+        console.log('Fetching tickets...');
         const data = await getAllTickets();
-        setTickets(data);
+        console.log('Tickets fetched:', data);
+        setTickets(data || []);
       } catch (err) {
         console.error('Error fetching tickets:', err);
         let errorMessage = 'Failed to fetch tickets. Please try again.';
@@ -30,6 +32,7 @@ export default function AdminSupportCenter() {
         if (err.response) {
           const status = err.response.status;
           const data = err.response.data;
+          console.error('Response error:', { status, data });
           
           if (status === 401) {
             errorMessage = 'Your session has expired. Please log in again.';
@@ -40,11 +43,13 @@ export default function AdminSupportCenter() {
           } else if (status >= 500) {
             errorMessage = 'Server error occurred. Please try again later.';
           } else {
-            errorMessage = data.message || `Failed to fetch tickets (${status}).`;
+            errorMessage = data.message || data.error || `Failed to fetch tickets (${status}).`;
           }
         } else if (err.request) {
+          console.error('Network error:', err.request);
           errorMessage = 'Network error. Please check your connection and try again.';
         } else {
+          console.error('Other error:', err);
           errorMessage = err.message || 'An unexpected error occurred.';
         }
         
@@ -100,17 +105,62 @@ export default function AdminSupportCenter() {
     setReplyLoading(true);
     setReplyError('');
     try {
+      const adminId = localStorage.getItem('userID');
+      if (!adminId) {
+        setReplyError('Admin ID not found. Please log in again.');
+        setReplyLoading(false);
+        return;
+      }
+
       await replyToTicket(ticketId, {
         sender: 'admin',
-        senderId: 'ADMIN_ID', // Replace with actual admin id
+        senderId: adminId,
         message: reply
       });
       setReply('');
-      // Optionally, refetch tickets or update state
+      
+      // Refetch tickets to get updated data
+      const updatedTickets = await getAllTickets();
+      setTickets(updatedTickets);
     } catch (err) {
-      setReplyError('Failed to send reply');
+      console.error('Reply error:', err);
+      if (err.response) {
+        const errorMessage = err.response.data?.error || err.response.data?.message || 'Failed to send reply';
+        setReplyError(errorMessage);
+      } else if (err.request) {
+        setReplyError('Network error. Please check your connection and try again.');
+      } else {
+        setReplyError('Failed to send reply. Please try again.');
+      }
     }
     setReplyLoading(false);
+  }
+
+  async function handleStatusChange(ticketId, newStatus) {
+    try {
+      const token = localStorage.getItem('token');
+      const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+      
+      const endpoint = newStatus === 'opened' ? 'open' : 'close';
+      const response = await fetch(`${API_BASE}/api/tickets/${ticketId}/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update ticket status: ${response.status}`);
+      }
+
+      // Refetch tickets to get updated data
+      const updatedTickets = await getAllTickets();
+      setTickets(updatedTickets);
+    } catch (err) {
+      console.error('Status change error:', err);
+      setReplyError('Failed to update ticket status. Please try again.');
+    }
   }
 
   return (
@@ -133,6 +183,8 @@ export default function AdminSupportCenter() {
           </div>
           <ProfileMenu isAdmin={true} />
         </div>
+        
+
         <div className="flex h-[70vh] bg-white rounded-2xl shadow-md">
           <div className="w-80 border-r border-gray-200 overflow-y-auto bg-white p-2" style={{ maxHeight: '100%' }}>
             {loading ? (
@@ -187,13 +239,31 @@ export default function AdminSupportCenter() {
                       onChange={e => setReply(e.target.value)}
                     />
                     {replyError && <div className="text-red-500 mb-2">{replyError}</div>}
-                    <button
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                      onClick={() => handleReply(ticket._id)}
-                      disabled={replyLoading}
-                    >
-                      {replyLoading ? 'Sending...' : 'Send Response'}
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                        onClick={() => handleReply(ticket._id)}
+                        disabled={replyLoading}
+                      >
+                        {replyLoading ? 'Sending...' : 'Send Response'}
+                      </button>
+                      {ticket.status === 'new' && (
+                        <button
+                          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                          onClick={() => handleStatusChange(ticket._id, 'opened')}
+                        >
+                          Mark as Opened
+                        </button>
+                      )}
+                      {ticket.status === 'opened' && (
+                        <button
+                          className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                          onClick={() => handleStatusChange(ticket._id, 'closed')}
+                        >
+                          Mark as Closed
+                        </button>
+                      )}
+                    </div>
                   </>
                 );
               })()

@@ -54,11 +54,29 @@ export default function SupportModal({ onClose }) {
     setShowTicket(false);
     setTicketData(null);
     try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('User not authenticated. Please log in again.');
+        setLoading(false);
+        return;
+      }
+      
       const ticket = await getTicketByNumber(ticketInput);
       setTicketData(ticket);
       setShowTicket(true);
     } catch (err) {
-      setError('Ticket not found');
+      console.error('Ticket fetch error:', err);
+      if (err.response) {
+        // Server responded with error status
+        const errorMessage = err.response.data?.error || err.response.data?.message || 'Ticket not found';
+        setError(errorMessage);
+      } else if (err.request) {
+        // Network error
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        // Other error
+        setError('Ticket not found');
+      }
     }
     setLoading(false);
   }
@@ -69,21 +87,45 @@ export default function SupportModal({ onClose }) {
     setLoading(true);
     setError('');
     try {
+      const userId = localStorage.getItem('userID');
+      const token = localStorage.getItem('token');
+      
+      if (!userId || !token) {
+        setError('User not authenticated. Please log in again.');
+        setLoading(false);
+        return;
+      }
+
       const formData = new FormData();
-      formData.append('userId', 'USER_ID'); // Replace with actual user id from context/session
+      formData.append('userId', userId);
       formData.append('subject', newTicket.subject);
       formData.append('description', newTicket.content);
       if (newTicket.file) {
         formData.append('file', newTicket.file);
       }
-      const response = await axios.post('/api/tickets', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+      const response = await axios.post(`${API_BASE}/api/tickets`, formData, {
+        headers: { 
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        }
       });
       setNewTicket(prev => ({ ...prev, number: response.data.number }));
       setSubmitted(true);
       setShowToast(true);
     } catch (err) {
-      setError('Failed to submit ticket');
+      console.error('Ticket submission error:', err);
+      if (err.response) {
+        // Server responded with error status
+        const errorMessage = err.response.data?.error || err.response.data?.message || 'Failed to submit ticket';
+        setError(errorMessage);
+      } else if (err.request) {
+        // Network error
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        // Other error
+        setError('Failed to submit ticket. Please try again.');
+      }
     }
     setLoading(false);
   }

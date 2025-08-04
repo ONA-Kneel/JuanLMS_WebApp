@@ -1,7 +1,18 @@
 import axios from 'axios';
 
-export const createTicket = (data) => axios.post('/api/tickets', data).then(res => res.data);
-export const getUserTickets = (userId) => axios.get(`/api/tickets/user/${userId}`).then(res => res.data);
-export const getTicketByNumber = (number) => axios.get(`/api/tickets/number/${number}`).then(res => res.data);
-export const getAllTickets = (status) => axios.get('/api/tickets', { params: status ? { status } : {} }).then(res => res.data);
-export const replyToTicket = (ticketId, data) => axios.post(`/api/tickets/${ticketId}/reply`, data).then(res => res.data); 
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+
+// Helper function to get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
+export const createTicket = (data) => axios.post(`${API_BASE}/api/tickets`, data, { headers: getAuthHeaders() }).then(res => res.data);
+export const getUserTickets = (userId) => axios.get(`${API_BASE}/api/tickets/user/${userId}`, { headers: getAuthHeaders() }).then(res => res.data);
+export const getTicketByNumber = (number) => axios.get(`${API_BASE}/api/tickets/number/${number}`, { headers: getAuthHeaders() }).then(res => res.data);
+export const getAllTickets = (status) => axios.get(`${API_BASE}/api/tickets`, { 
+  params: status ? { status } : {},
+  headers: getAuthHeaders()
+}).then(res => res.data);
+export const replyToTicket = (ticketId, data) => axios.post(`${API_BASE}/api/tickets/${ticketId}/reply`, data, { headers: getAuthHeaders() }).then(res => res.data); 
