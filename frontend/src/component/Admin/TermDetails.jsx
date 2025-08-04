@@ -1855,31 +1855,25 @@ export default function TermDetails() {
     const activeTracks = tracks.filter(track => track.status === 'active');
     const activeTracksMap = new Set(activeTracks.map(track => track.trackName));
 
-    // Get all active strands in the system
+    // Get all active strands in the system for this school year and term
     const activeStrandsInSystem = [];
     for (const track of activeTracks) {
-      const res = await fetch(`${API_BASE}/api/strands/track/${track.trackName}`);
+      const res = await fetch(`${API_BASE}/api/strands/track/${track.trackName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
       if (res.ok) {
         const strands = await res.json();
         const activeStrands = strands.filter(strand => strand.status === 'active');
         activeStrandsInSystem.push(...activeStrands);
+        console.log(`Strands for track "${track.trackName}":`, activeStrands);
       }
     }
+    console.log('All active strands in system:', activeStrandsInSystem);
 
-    // Get all existing sections in the system
-    for (const track of activeTracks) {
-      const strandsInTrack = activeStrandsInSystem.filter(s => s.trackName === track.trackName);
-      for (const strand of strandsInTrack) {
-        const res = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
-        if (res.ok) {
-          const sections = await res.json();
-          const activeSections = sections.filter(section => section.status === 'active');
-          activeSections.forEach(section => {
-            existingSectionsInSystem.add(`${section.trackName}-${section.strandName}-${section.sectionName}-${section.gradeLevel}`);
-          });
-        }
-      }
-    }
+    // Get all existing sections from the component state (more reliable)
+    const existingSections = sections.filter(section => section.status === 'active');
+    existingSections.forEach(section => {
+      existingSectionsInSystem.add(`${section.trackName}-${section.strandName}-${section.sectionName}-${section.gradeLevel}`);
+    });
+    console.log('Existing sections in system:', Array.from(existingSectionsInSystem));
 
     // Track section names in the uploaded file for duplicates
     const uploadedSectionNames = new Set();
@@ -1920,7 +1914,18 @@ export default function TermDetails() {
         }
       }
 
-      // 4. Check if track exists and is active
+      // 4. Check if section already exists in the system
+      if (isValid) {
+        const sectionKey = `${trackName}-${strandName}-${sectionName}-${gradeLevel}`;
+        console.log(`Checking if section exists: "${sectionKey}"`);
+        console.log('Available existing sections:', Array.from(existingSectionsInSystem));
+        if (existingSectionsInSystem.has(sectionKey)) {
+          isValid = false;
+          message = `Section "${sectionName}" already exists in ${trackName} - ${strandName} - ${gradeLevel}`;
+        }
+      }
+
+      // 5. Check if track exists and is active
       if (isValid) {
         const trackFound = activeTracksMap.has(trackName);
         if (!trackFound) {
@@ -1929,16 +1934,23 @@ export default function TermDetails() {
         }
       }
 
-      // 5. Check if strand exists within the active track and is active
+      // 6. Check if strand exists within the active track and is active
       if (isValid) {
-        const strandFound = activeStrandsInSystem.some(s => s.trackName === trackName && s.strandName === strandName);
+        const strandFound = activeStrandsInSystem.some(s => 
+        s.trackName.trim() === trackName.trim() && 
+        s.strandName.trim() === strandName.trim()
+      );
+        console.log(`Checking strand "${strandName}" in track "${trackName}":`, {
+          strandFound,
+          availableStrands: activeStrandsInSystem.filter(s => s.trackName === trackName).map(s => s.strandName)
+        });
         if (!strandFound) {
           isValid = false;
           message = `Strand "${strandName}" does not exist in track "${trackName}" or is not active`;
         }
       }
 
-      // 6. Check if grade level is valid
+      // 7. Check if grade level is valid
       if (isValid) {
         if (gradeLevel !== 'Grade 11' && gradeLevel !== 'Grade 12') {
           isValid = false;
@@ -2211,15 +2223,17 @@ export default function TermDetails() {
     for (const track of tracks) {
       if (track.status === 'active') {
         try {
-          const strandsRes = await fetch(`${API_BASE}/api/strands/track/${track.trackName}`);
+          const strandsRes = await fetch(`${API_BASE}/api/strands/track/${track.trackName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
           if (strandsRes.ok) {
             const fetchedStrands = await strandsRes.json();
+            console.log(`Strands for track "${track.trackName}":`, fetchedStrands);
             for (const strand of fetchedStrands.filter(s => s.status === 'active')) {
               activeStrandsMap.set(`${track.trackName}-${strand.strandName}`, strand);
               try {
-                const sectionsRes = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
+                const sectionsRes = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
                 if (sectionsRes.ok) {
                   const fetchedSections = await sectionsRes.json();
+                  console.log(`Sections for strand "${strand.strandName}":`, fetchedSections);
                   for (const section of fetchedSections.filter(sec => sec.status === 'active')) {
                     activeSectionsMap.set(`${track.trackName}-${strand.strandName}-${section.sectionName}`, section);
                   }
@@ -2235,24 +2249,13 @@ export default function TermDetails() {
       }
     }
 
-    // Fetch existing faculty assignments (assuming only one assignment per faculty-track-strand-section for a given term)
-    const existingAssignmentsInSystem = new Set();
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/api/faculty-assignments?termId=${termDetails._id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        data.forEach(assign => {
-          existingAssignmentsInSystem.add(`${assign.facultyId}-${assign.trackName}-${assign.strandName}-${assign.sectionName}`);
-        });
-      } else {
-        console.error('Failed to fetch existing faculty assignments for validation.');
-      }
-    } catch (err) {
-      console.error('Error fetching existing faculty assignments for validation:', err);
-    }
+    // Get existing faculty assignments from the component state (more reliable)
+    const existingAssignments = facultyAssignments.filter(assignment => assignment.status === 'active');
+    const existingAssignmentsInSystem = new Set(existingAssignments.map(assign => 
+      `${assign.facultyId}-${assign.trackName}-${assign.strandName}-${assign.sectionName}`
+    ));
+    
+    console.log('Existing faculty assignments in system:', Array.from(existingAssignmentsInSystem));
 
     for (let i = 0; i < assignmentsToValidate.length; i++) {
       const assignment = assignmentsToValidate[i];
@@ -2260,15 +2263,21 @@ export default function TermDetails() {
       const trackName = assignment.trackName?.trim() || '';
       const strandName = assignment.strandName?.trim() || '';
       const sectionName = assignment.sectionName?.trim() || '';
+      const gradeLevel = assignment.gradeLevel?.trim() || '';
+      const subjectName = assignment.subjectName?.trim() || '';
 
       let isValid = true;
       let message = 'Valid';
       let facultyId = ''; // To store the faculty ID for valid assignments
 
       // 1. Check for missing required fields
-      if (!facultyNameInput || !trackName || !strandName || !sectionName) {
+      if (!facultyNameInput || !trackName || !strandName || !sectionName || !gradeLevel || !subjectName) {
         isValid = false;
-        message = 'Missing Faculty Name, Track Name, Strand Name, or Section Name';
+        message = 'Missing Faculty Name, Track Name, Strand Name, Section Name, Grade Level, or Subject';
+        console.log(`Row ${i + 1}: Missing required fields - facultyNameInput: "${facultyNameInput}", trackName: "${trackName}", strandName: "${strandName}", sectionName: "${sectionName}", gradeLevel: "${gradeLevel}", subjectName: "${subjectName}"`);
+        status[i] = { valid: isValid, message: message, facultyId: facultyId };
+        console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
+        continue; // Skip all other validations for this row
       }
 
       // 2. Check if faculty exists and is active
@@ -2323,13 +2332,17 @@ export default function TermDetails() {
       // 7. Check for existing assignments in the system
       if (isValid) {
         const existingCombo = `${facultyId}-${trackName}-${strandName}-${sectionName}`;
+        console.log(`Row ${i + 1}: Checking if faculty assignment exists: "${existingCombo}"`);
+        console.log(`Row ${i + 1}: Available existing assignments:`, Array.from(existingAssignmentsInSystem));
         if (existingAssignmentsInSystem.has(existingCombo)) {
           isValid = false;
           message = 'Faculty assignment already exists in the system';
+          console.log(`Row ${i + 1}: Found existing assignment match`);
         }
       }
 
       status[i] = { valid: isValid, message: message, facultyId: facultyId };
+      console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
     }
     return status;
   };
@@ -2616,15 +2629,17 @@ export default function TermDetails() {
     for (const track of tracks) {
       if (track.status === 'active') {
         try {
-          const strandsRes = await fetch(`${API_BASE}/api/strands/track/${track.trackName}`);
+          const strandsRes = await fetch(`${API_BASE}/api/strands/track/${track.trackName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
           if (strandsRes.ok) {
             const fetchedStrands = await strandsRes.json();
+            console.log(`Strands for track "${track.trackName}":`, fetchedStrands);
             for (const strand of fetchedStrands.filter(s => s.status === 'active')) {
               activeStrandsMap.set(`${track.trackName}-${strand.strandName}`, strand);
               try {
-                const sectionsRes = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}`);
+                const sectionsRes = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
                 if (sectionsRes.ok) {
                   const fetchedSections = await sectionsRes.json();
+                  console.log(`Sections for strand "${strand.strandName}":`, fetchedSections);
                   for (const section of fetchedSections.filter(sec => sec.status === 'active')) {
                     activeSectionsMap.set(`${track.trackName}-${strand.strandName}-${section.sectionName}`, section);
                   }
@@ -2683,10 +2698,18 @@ export default function TermDetails() {
       if (!studentNameInput || !gradeLevel || !trackName || !strandName || !sectionName) {
         isValid = false;
         message = 'Missing Student Name, Grade Level, Track Name, Strand Name, or Section Name';
+        console.log(`Row ${i + 1}: Missing required fields - studentNameInput: "${studentNameInput}", gradeLevel: "${gradeLevel}", trackName: "${trackName}", strandName: "${strandName}", sectionName: "${sectionName}"`);
+        status[i] = { valid: isValid, message: message, studentId: studentId };
+        console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
+        continue; // Skip all other validations for this row
       }
       if (isValid && !['Grade 11', 'Grade 12'].includes(gradeLevel)) {
         isValid = false;
         message = 'Grade Level must be "Grade 11" or "Grade 12"';
+        console.log(`Row ${i + 1}: Invalid grade level - "${gradeLevel}"`);
+        status[i] = { valid: isValid, message: message, studentId: studentId };
+        console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
+        continue; // Skip all other validations for this row
       }
 
       // 2. Check if student exists and is active
@@ -2746,15 +2769,17 @@ export default function TermDetails() {
       // 7. Check for existing assignments in the system
       if (isValid) {
         const existingCombo = `${studentId}-${trackName}-${strandName}-${sectionName}`;
-        console.log(`Checking for existing assignment in system: "${existingCombo}"`);
+        console.log(`Row ${i + 1}: Checking for existing assignment in system: "${existingCombo}"`);
+        console.log(`Row ${i + 1}: Available existing assignments:`, Array.from(existingAssignmentsInSystem));
         if (existingAssignmentsInSystem.has(existingCombo)) {
           isValid = false;
           message = 'Student assignment already exists in the system';
+          console.log(`Row ${i + 1}: Found existing assignment match`);
         }
       }
 
       status[i] = { valid: isValid, message: message, studentId: studentId };
-      console.log(`Validation result for assignment ${i + 1}:`, status[i]);
+      console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
     }
     return status;
   };
@@ -2868,6 +2893,7 @@ export default function TermDetails() {
 
       for (let i = 0; i < validAssignments.length; i++) {
         const assignment = validAssignments[i];
+        // Get the studentId from the validation status of the original preview data
         const originalIndex = studentPreviewData.indexOf(assignment);
         const studentId = studentValidationStatus[originalIndex]?.studentId;
 
@@ -2876,7 +2902,7 @@ export default function TermDetails() {
           continue;
         }
 
-        const res = await fetch('${API_BASE}/api/student-assignments', {
+        const res = await fetch(`${API_BASE}/api/student-assignments`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -2906,7 +2932,7 @@ export default function TermDetails() {
       window.alert(`${createdAssignments.length} student assignment(s) uploaded successfully!`);
       setStudentExcelFile(null);
       setStudentPreviewModalOpen(false);
-      document.querySelector('input[type="file"][accept=".xlsx,.xls"]').value = ''; // Reset file input
+      document.querySelector('input[type="file"][accept=".xlsx,.xls"]').value = '';
 
     } catch (err) {
       setStudentExcelError(err.message || 'Error uploading student assignments');
@@ -3152,15 +3178,16 @@ export default function TermDetails() {
   // Validate Subjects for batch upload (reuse/extend existing validateSubjects)
   const validateSubjectsBatch = async (subjectsToValidate) => {
     const status = {};
-    const uploadedSubjectNames = new Set();
-    let allSubjects = [];
-    try {
-      const res = await fetch(`${API_BASE}/api/subjects`);
-      if (res.ok) {
-        allSubjects = await res.json();
-      }
-    } catch (err) { }
-    const allSubjectNamesInSystem = new Set(allSubjects.map(s => s.subjectName.trim().toLowerCase()));
+    const uploadedSubjectKeys = new Set();
+    
+    // Get existing subjects from the component state (more reliable)
+    const existingSubjects = subjects.filter(subject => subject.status === 'active');
+    const existingSubjectKeys = new Set(existingSubjects.map(s => 
+      `${s.trackName}-${s.strandName}-${s.subjectName}-${s.gradeLevel}`
+    ));
+    
+    console.log('Existing subjects in system:', Array.from(existingSubjectKeys));
+    
     for (let i = 0; i < subjectsToValidate.length; i++) {
       const subject = subjectsToValidate[i];
       const subjectName = subject.subjectName?.trim() || '';
@@ -3169,35 +3196,53 @@ export default function TermDetails() {
       const gradeLevel = subject.gradeLevel?.trim() || '';
       let isValid = true;
       let message = 'Valid';
+      
+      // 1. Check if all required fields are provided
       if (!subjectName || !trackName || !strandName || !gradeLevel) {
         isValid = false;
         message = 'All fields are required.';
       }
-      if (isValid && allSubjectNamesInSystem.has(subjectName.toLowerCase())) {
-        isValid = false;
-        message = 'Subject name already exists in the system (must be unique)';
+      
+      // 2. Check for duplicates within the uploaded file
+      if (isValid) {
+        const subjectKey = `${trackName}-${strandName}-${subjectName}-${gradeLevel}`;
+        if (uploadedSubjectKeys.has(subjectKey)) {
+          isValid = false;
+          message = `Duplicate subject "${subjectName}" in ${trackName} - ${strandName} - ${gradeLevel}`;
+        } else {
+          uploadedSubjectKeys.add(subjectKey);
+        }
       }
-      if (isValid && uploadedSubjectNames.has(subjectName.toLowerCase())) {
-        isValid = false;
-        message = 'Duplicate subject name in uploaded file (subject names must be unique)';
-      } else if (isValid) {
-        uploadedSubjectNames.add(subjectName.toLowerCase());
+      
+      // 3. Check if subject already exists in the system
+      if (isValid) {
+        const subjectKey = `${trackName}-${strandName}-${subjectName}-${gradeLevel}`;
+        console.log(`Checking if subject exists: "${subjectKey}"`);
+        console.log('Available existing subjects:', Array.from(existingSubjectKeys));
+        if (existingSubjectKeys.has(subjectKey)) {
+          isValid = false;
+          message = `Subject "${subjectName}" already exists in ${trackName} - ${strandName} - ${gradeLevel}`;
+        }
       }
-      // Check if track exists
+      
+      // 4. Check if track exists and is active
       if (isValid && !tracks.find(t => t.trackName === trackName && t.status === 'active')) {
         isValid = false;
         message = `Track "${trackName}" does not exist or is not active`;
       }
-      // Check if strand exists for the track
+      
+      // 5. Check if strand exists within the active track and is active
       if (isValid && !strands.find(s => s.strandName === strandName && s.trackName === trackName && s.status === 'active')) {
         isValid = false;
         message = `Strand "${strandName}" does not exist in track "${trackName}" or is not active`;
       }
-      // Check grade level
+      
+      // 6. Check if grade level is valid
       if (isValid && gradeLevel !== 'Grade 11' && gradeLevel !== 'Grade 12') {
         isValid = false;
         message = 'Grade Level must be either "Grade 11" or "Grade 12"';
       }
+      
       status[i] = { valid: isValid, message: message };
     }
     return status;
@@ -4891,6 +4936,94 @@ Actual import to database is coming soon!`;
                   </tbody>
                   </table>
                 </div>
+                
+                {/* Subject Preview Modal */}
+                {subjectPreviewModalOpen && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-auto">
+                      <h3 className="text-xl font-semibold mb-4">Preview Subjects to Upload</h3>
+
+                      <div className="mb-4">
+                        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+                          <div className="flex">
+                            <div className="flex-shrink-0">
+                              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-sm text-blue-700">
+                                {Object.values(subjectValidationStatus).filter(v => v.valid).length} subject(s) are valid and will be uploaded.
+                                {Object.values(subjectValidationStatus).filter(v => !v.valid).length > 0 && (
+                                  <span className="block mt-1">
+                                    {Object.values(subjectValidationStatus).filter(v => !v.valid).length} subject(s) have validation errors and will be skipped.
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                          <thead>
+                            <tr className="bg-gray-100 text-left">
+                              <th className="p-3 border">Track Name</th>
+                              <th className="p-3 border">Strand Name</th>
+                              <th className="p-3 border">Grade Level</th>
+                              <th className="p-3 border">Subject Name</th>
+                              <th className="p-3 border">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {subjectPreviewData.map((subject, index) => {
+                              const isValid = subjectValidationStatus[index]?.valid;
+                              const message = subjectValidationStatus[index]?.message;
+                              return (
+                                <tr key={index} className={!isValid ? 'bg-red-50' : ''}>
+                                  <td className="p-3 border">{subject.trackName}</td>
+                                  <td className="p-3 border">{subject.strandName}</td>
+                                  <td className="p-3 border">{subject.gradeLevel}</td>
+                                  <td className="p-3 border">{subject.subjectName}</td>
+                                  <td className="p-3 border">
+                                    <span className={`px-2 py-1 rounded text-xs ${isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                      {message}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="mt-6 flex justify-end gap-3">
+                        <button
+                          onClick={() => {
+                            setSubjectPreviewModalOpen(false);
+                            setSubjectPreviewData([]);
+                            setSubjectValidationStatus({});
+                            setSubjectExcelError('');
+                          }}
+                          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleConfirmSubjectUpload}
+                          disabled={isSubjectUploading || !subjectPreviewData.some((_, index) => subjectValidationStatus[index]?.valid)}
+                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!subjectPreviewData.some((_, index) => subjectValidationStatus[index]?.valid) || isSubjectUploading)
+                            ? 'opacity-50 cursor-not-allowed'
+                            : ''
+                            }`}
+                        >
+                          {isSubjectUploading ? 'Uploading...' : `Upload ${Object.values(subjectValidationStatus).filter(v => v.valid).length} Valid Subject(s)`}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -5216,6 +5349,98 @@ Actual import to database is coming soon!`;
                     </tbody>
                   </table>
                 </div>
+                
+                {/* Faculty Assignment Preview Modal */}
+                {facultyAssignmentPreviewModalOpen && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 max-w-6xl w-full max-h-[90vh] overflow-auto">
+                      <h3 className="text-xl font-semibold mb-4">Preview Faculty Assignments to Upload</h3>
+
+                      <div className="mb-4">
+                        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+                          <div className="flex">
+                            <div className="flex-shrink-0">
+                              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-sm text-blue-700">
+                                {Object.values(facultyAssignmentValidationStatus).filter(v => v.valid).length} faculty assignment(s) are valid and will be uploaded.
+                                {Object.values(facultyAssignmentValidationStatus).filter(v => !v.valid).length > 0 && (
+                                  <span className="block mt-1">
+                                    {Object.values(facultyAssignmentValidationStatus).filter(v => !v.valid).length} faculty assignment(s) have validation errors and will be skipped.
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                          <thead>
+                            <tr className="bg-gray-100 text-left">
+                              <th className="p-3 border">Faculty Name</th>
+                              <th className="p-3 border">Track Name</th>
+                              <th className="p-3 border">Strand Name</th>
+                              <th className="p-3 border">Section Name</th>
+                              <th className="p-3 border">Grade Level</th>
+                              <th className="p-3 border">Subject</th>
+                              <th className="p-3 border">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {facultyAssignmentPreviewData.map((assignment, index) => {
+                              const isValid = facultyAssignmentValidationStatus[index]?.valid;
+                              const message = facultyAssignmentValidationStatus[index]?.message;
+                              return (
+                                <tr key={index} className={!isValid ? 'bg-red-50' : ''}>
+                                  <td className="p-3 border">{assignment.facultyNameInput}</td>
+                                  <td className="p-3 border">{assignment.trackName}</td>
+                                  <td className="p-3 border">{assignment.strandName}</td>
+                                  <td className="p-3 border">{assignment.sectionName}</td>
+                                  <td className="p-3 border">{assignment.gradeLevel}</td>
+                                  <td className="p-3 border">{assignment.subjectName}</td>
+                                  <td className="p-3 border">
+                                    <span className={`px-2 py-1 rounded text-xs ${isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                      {message}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="mt-6 flex justify-end gap-3">
+                        <button
+                          onClick={() => {
+                            setFacultyAssignmentPreviewModalOpen(false);
+                            setFacultyAssignmentPreviewData([]);
+                            setFacultyAssignmentValidationStatus({});
+                            setFacultyError('');
+                          }}
+                          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleConfirmFacultyAssignmentUpload}
+                          disabled={isFacultyAssignmentUploading || !facultyAssignmentPreviewData.some((_, index) => facultyAssignmentValidationStatus[index]?.valid)}
+                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!facultyAssignmentPreviewData.some((_, index) => facultyAssignmentValidationStatus[index]?.valid) || isFacultyAssignmentUploading)
+                            ? 'opacity-50 cursor-not-allowed'
+                            : ''
+                            }`}
+                        >
+                          {isFacultyAssignmentUploading ? 'Uploading...' : `Upload ${Object.values(facultyAssignmentValidationStatus).filter(v => v.valid).length} Valid Faculty Assignment(s)`}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           
@@ -5456,6 +5681,97 @@ Actual import to database is coming soon!`;
                     </div>
                   </div>
                 )}
+                
+                {/* Student Assignment Preview Modal */}
+                {studentPreviewModalOpen && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 max-w-6xl w-full max-h-[90vh] overflow-auto">
+                      <h3 className="text-xl font-semibold mb-4">Preview Student Assignments to Upload</h3>
+
+                      <div className="mb-4">
+                        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+                          <div className="flex">
+                            <div className="flex-shrink-0">
+                              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-sm text-blue-700">
+                                {Object.values(studentValidationStatus).filter(v => v.valid).length} student assignment(s) are valid and will be uploaded.
+                                {Object.values(studentValidationStatus).filter(v => !v.valid).length > 0 && (
+                                  <span className="block mt-1">
+                                    {Object.values(studentValidationStatus).filter(v => !v.valid).length} student assignment(s) have validation errors and will be skipped.
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                          <thead>
+                            <tr className="bg-gray-100 text-left">
+                              <th className="p-3 border">Student Name</th>
+                              <th className="p-3 border">Grade Level</th>
+                              <th className="p-3 border">Track Name</th>
+                              <th className="p-3 border">Strand Name</th>
+                              <th className="p-3 border">Section Name</th>
+                              <th className="p-3 border">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {studentPreviewData.map((assignment, index) => {
+                              const isValid = studentValidationStatus[index]?.valid;
+                              const message = studentValidationStatus[index]?.message;
+                              return (
+                                <tr key={index} className={!isValid ? 'bg-red-50' : ''}>
+                                  <td className="p-3 border">{assignment['Student Name']}</td>
+                                  <td className="p-3 border">{assignment['Grade Level']}</td>
+                                  <td className="p-3 border">{assignment['Track Name']}</td>
+                                  <td className="p-3 border">{assignment['Strand Name']}</td>
+                                  <td className="p-3 border">{assignment['Section Name']}</td>
+                                  <td className="p-3 border">
+                                    <span className={`px-2 py-1 rounded text-xs ${isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                      {message}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="mt-6 flex justify-end gap-3">
+                        <button
+                          onClick={() => {
+                            setStudentPreviewModalOpen(false);
+                            setStudentPreviewData([]);
+                            setStudentValidationStatus({});
+                            setStudentExcelError('');
+                          }}
+                          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleConfirmStudentAssignmentUpload}
+                          disabled={isStudentUploading || !studentPreviewData.some((_, index) => studentValidationStatus[index]?.valid)}
+                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!studentPreviewData.some((_, index) => studentValidationStatus[index]?.valid) || isStudentUploading)
+                            ? 'opacity-50 cursor-not-allowed'
+                            : ''
+                            }`}
+                        >
+                          {isStudentUploading ? 'Uploading...' : `Upload ${Object.values(studentValidationStatus).filter(v => v.valid).length} Valid Student Assignment(s)`}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 {/* Student Assignments List */}
                 <div className="mt-8">
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">

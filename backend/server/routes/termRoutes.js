@@ -43,6 +43,36 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // Check for overlapping terms before creating new one
+    const overlappingTerms = await Term.find({
+      schoolYear: fullSchoolYearName,
+      status: { $ne: 'archived' }, // Only check active/inactive terms
+      $or: [
+        // New term starts during an existing term
+        {
+          startDate: { $lte: startDate },
+          endDate: { $gt: startDate }
+        },
+        // New term ends during an existing term
+        {
+          startDate: { $lt: endDate },
+          endDate: { $gte: endDate }
+        },
+        // New term completely contains an existing term
+        {
+          startDate: { $gte: startDate },
+          endDate: { $lte: endDate }
+        }
+      ]
+    });
+
+    if (overlappingTerms.length > 0) {
+      const overlappingTermNames = overlappingTerms.map(t => t.termName).join(', ');
+      return res.status(400).json({ 
+        message: `Term dates overlap with existing terms: ${overlappingTermNames}. Please choose different dates.` 
+      });
+    }
+
     // Create new term with simple numbering and school year name
     const term = new Term({
       termName: `Term ${existingTerms.length + 1}`,
@@ -95,6 +125,8 @@ router.patch('/:id', async (req, res) => {
     if (!term) {
       return res.status(404).json({ message: 'Term not found' });
     }
+
+    // Handle status updates
     if (req.body.status === 'active') {
       // Archive other terms in the same school year only
       await Term.updateMany(
@@ -105,7 +137,56 @@ router.patch('/:id', async (req, res) => {
     } else if (req.body.status) {
       term.status = req.body.status;
     }
-    // Add other updatable fields if needed
+
+    // Handle date updates
+    if (req.body.startDate) {
+      term.startDate = new Date(req.body.startDate);
+    }
+    if (req.body.endDate) {
+      term.endDate = new Date(req.body.endDate);
+    }
+
+    // Validate dates if both are provided
+    if (req.body.startDate && req.body.endDate) {
+      const startDate = new Date(req.body.startDate);
+      const endDate = new Date(req.body.endDate);
+      
+      if (endDate <= startDate) {
+        return res.status(400).json({ message: 'End date must be after start date' });
+      }
+
+      // Check for overlapping terms in the same school year
+      const overlappingTerms = await Term.find({
+        _id: { $ne: term._id }, // Exclude current term being edited
+        schoolYear: term.schoolYear,
+        status: { $ne: 'archived' }, // Only check active/inactive terms
+        $or: [
+          // New term starts during an existing term
+          {
+            startDate: { $lte: startDate },
+            endDate: { $gt: startDate }
+          },
+          // New term ends during an existing term
+          {
+            startDate: { $lt: endDate },
+            endDate: { $gte: endDate }
+          },
+          // New term completely contains an existing term
+          {
+            startDate: { $gte: startDate },
+            endDate: { $lte: endDate }
+          }
+        ]
+      });
+
+      if (overlappingTerms.length > 0) {
+        const overlappingTermNames = overlappingTerms.map(t => t.termName).join(', ');
+        return res.status(400).json({ 
+          message: `Term dates overlap with existing terms: ${overlappingTermNames}. Please choose different dates.` 
+        });
+      }
+    }
+
     const updatedTerm = await term.save();
     res.json(updatedTerm);
   } catch (error) {

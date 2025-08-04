@@ -299,6 +299,43 @@ export default function ProfileModal({
     }
   };
 
+  // Handle logout
+  const handleLogout = async () => {
+    console.log('Logout button clicked');
+    try {
+      // Call logout endpoint to create audit log
+      const token = localStorage.getItem('token');
+      console.log('Token found:', !!token);
+      if (token) {
+        console.log('Making logout API call to:', `${API_BASE}/logout`);
+        const response = await axios.post(`${API_BASE}/logout`, {}, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        console.log('Logout API response:', response.data);
+      }
+    } catch (error) {
+      console.error('Error during logout:', error);
+      console.error('Error details:', error.response?.data);
+      // Continue with logout even if audit log fails
+    }
+
+    console.log('Clearing local storage...');
+    // Clear local storage
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('userID');
+    localStorage.removeItem('role');
+    localStorage.removeItem('rememberedEmail');
+    localStorage.removeItem('rememberedPassword');
+
+    console.log('Closing modal and redirecting...');
+    // Close modal and redirect to login
+    onClose();
+    window.location.href = '/';
+  };
+
   useEffect(() => {
     fetchUserInfo();
     // eslint-disable-next-line
@@ -417,14 +454,7 @@ export default function ProfileModal({
         >
           {/* Sign-out Button */}
           <button 
-            onClick={() => {
-              localStorage.removeItem('user');
-              localStorage.removeItem('token');
-              localStorage.removeItem('userID');
-              localStorage.removeItem('rememberedEmail');
-              localStorage.removeItem('rememberedPassword');
-              window.location.href = '/'; 
-            }}
+            onClick={handleLogout}
             className="absolute right-10 top-6 text-black font-poppinsb hover:underline"
           >
             Sign-out
@@ -579,6 +609,14 @@ export default function ProfileModal({
                 {showHelp && <SupportModal onClose={() => setShowHelp(false)} />}
               </>
             )}
+            
+            {/* Logout Button */}
+            <button
+              className="mt-3 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
           </div>
         )}
 

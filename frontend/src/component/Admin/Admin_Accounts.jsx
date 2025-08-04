@@ -42,29 +42,11 @@ export default function Admin_Accounts() {
   const [totalPages, setTotalPages] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
-  // Placeholder archived users data
-  const [archivedUsers, setArchivedUsers] = useState([
-    {
-      _id: "1",
-      userID: "S101",
-      lastname: "Doe",
-      firstname: "Jane",
-      middlename: "A.",
-      role: "students",
-      archivedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-      deletedAt: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000), // 25 days left
-    },
-    {
-      _id: "2",
-      userID: "F202",
-      lastname: "Smith",
-      firstname: "John",
-      middlename: "B.",
-      role: "faculty",
-      archivedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), // 10 days ago
-      deletedAt: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000), // 20 days left
-    },
-  ]);
+  // Archived users data with pagination
+  const [archivedUsers, setArchivedUsers] = useState([]);
+  const [archivedCurrentPage, setArchivedCurrentPage] = useState(1);
+  const [archivedTotalPages, setArchivedTotalPages] = useState(1);
+  const ARCHIVED_ITEMS_PER_PAGE = 10;
 
   // Add state for active tab
   const [activeTab, setActiveTab] = useState('all');
@@ -144,11 +126,25 @@ export default function Admin_Accounts() {
 
   useEffect(() => {
     if (showArchivedTable) {
-      fetch(`${API_BASE}/users/archived-users`)
-        .then(res => res.json())
-        .then(data => setArchivedUsers(data));
+      fetchArchivedUsers(archivedCurrentPage, ARCHIVED_ITEMS_PER_PAGE);
     }
-  }, [showArchivedTable]);
+  }, [showArchivedTable, archivedCurrentPage]);
+
+  const fetchArchivedUsers = async (page = 1, limit = ARCHIVED_ITEMS_PER_PAGE) => {
+    try {
+      const res = await fetch(`${API_BASE}/users/archived-users?page=${page}&limit=${limit}`);
+      const data = await res.json();
+      if (res.ok) {
+        setArchivedUsers(data.users || data);
+        setArchivedTotalPages(data.pagination?.totalPages || 1);
+        setArchivedCurrentPage(data.pagination?.currentPage || 1);
+      } else {
+        console.error("Failed to fetch archived users:", data);
+      }
+    } catch (err) {
+      console.error("Error fetching archived users:", err);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -549,9 +545,7 @@ export default function Admin_Accounts() {
       setTimeout(() => setShowArchivePasswordModal(false), 2000);
       fetchUsers(); // Refresh the users list from the backend
       if (showArchivedTable) {
-        fetch(`${API_BASE}/users/archived-users`)
-          .then(res => res.json())
-          .then(data => setArchivedUsers(data));
+        fetchArchivedUsers(archivedCurrentPage, ARCHIVED_ITEMS_PER_PAGE);
       }
     } else {
       const data = await res.json();
@@ -574,6 +568,10 @@ export default function Admin_Accounts() {
       setArchivedUsers(prev => prev.filter(u => u._id !== user._id));
       fetchUsers(); // Refresh active users
       setShowRecoverSuccess(true);
+      // Refresh archived users list after recovery
+      setTimeout(() => {
+        fetchArchivedUsers(archivedCurrentPage, ARCHIVED_ITEMS_PER_PAGE);
+      }, 1000);
     }
   };
 
@@ -1121,65 +1119,98 @@ export default function Admin_Accounts() {
       {/* Archived Accounts Modal */}
       {showArchivedTable && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-3xl w-full relative">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-6xl w-full relative max-h-[90vh] overflow-hidden">
             <button
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl font-bold"
-              onClick={() => setShowArchivedTable(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl font-bold z-10"
+              onClick={() => {
+                setShowArchivedTable(false);
+                setArchivedCurrentPage(1); // Reset to first page when closing
+              }}
               aria-label="Close"
             >
               &times;
             </button>
-            <h3 className="text-xl font-semibold mb-4">Archived Accounts</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
-                <thead>
-                  <tr className="bg-gray-50 text-left">
-                    <th className="p-3 border">School ID</th>
-                    <th className="p-3 border">Last Name</th>
-                    <th className="p-3 border">First Name</th>
-                    <th className="p-3 border">Middle Name</th>
-                    <th className="p-3 border">Role</th>
-                    <th className="p-3 border">Archived At</th>
-                    <th className="p-3 border">Days Left</th>
-                    <th className="p-3 border">Actions</th>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-800">Archived Accounts</h3>
+              <div className="text-sm text-gray-600">
+                Showing {archivedUsers.length} of archived accounts
+              </div>
+            </div>
+            
+            <div className="overflow-x-auto max-h-[60vh]">
+              <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr className="text-left">
+                    <th className="p-4 border-b font-semibold text-gray-700">School ID</th>
+                    <th className="p-4 border-b font-semibold text-gray-700">Last Name</th>
+                    <th className="p-4 border-b font-semibold text-gray-700">First Name</th>
+                    <th className="p-4 border-b font-semibold text-gray-700">Middle Name</th>
+                    <th className="p-4 border-b font-semibold text-gray-700">Role</th>
+                    <th className="p-4 border-b font-semibold text-gray-700">Archived At</th>
+                    <th className="p-4 border-b font-semibold text-gray-700">Days Left</th>
+                    <th className="p-4 border-b font-semibold text-gray-700">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {archivedUsers.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="text-center p-4 text-gray-500">
-                        No archived users found.
+                      <td colSpan="8" className="text-center p-8 text-gray-500">
+                        <div className="flex flex-col items-center">
+                          <svg className="w-12 h-12 text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                          </svg>
+                          <p className="text-lg font-medium">No archived accounts found</p>
+                          <p className="text-sm text-gray-400">All accounts are currently active</p>
+                        </div>
                       </td>
                     </tr>
                   ) : (
                     archivedUsers.map((user, idx) => (
-                      <tr key={user._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
-                        <td className="p-3 border-b">{formatSchoolId(user.userID)}</td>
-                        <td className="p-3 border-b">{user.lastname}</td>
-                        <td className="p-3 border-b">{user.firstname}</td>
-                        <td className="p-3 border-b">{user.middlename}</td>
-                        <td className="p-3 border-b">
-                          <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
+                      <tr key={user._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition-colors" : "bg-gray-50 hover:bg-gray-100 transition-colors"}>
+                        <td className="p-4 border-b font-medium">{formatSchoolId(user.userID)}</td>
+                        <td className="p-4 border-b">{user.lastname}</td>
+                        <td className="p-4 border-b">{user.firstname}</td>
+                        <td className="p-4 border-b">{user.middlename || '-'}</td>
+                        <td className="p-4 border-b">
+                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold
                             ${user.role === 'students' ? 'bg-green-100 text-green-700 border border-green-300' :
                               user.role === 'faculty' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
                               user.role === 'admin' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
                               user.role === 'principal' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
                               user.role === 'vice president of education' ? 'bg-pink-100 text-pink-700 border border-pink-300' :
-                              'bg-gray-100 text-gray-700 border border-gray-300'}`}>{user.role === 'vice president of education' ? 'Vice President of Education' : user.role}</span>
+                              'bg-gray-100 text-gray-700 border border-gray-300'}`}>
+                            {user.role === 'vice president of education' ? 'Vice President of Education' : user.role}
+                          </span>
                         </td>
-                        <td className="p-3 border-b">{user.archivedAt ? new Date(user.archivedAt).toLocaleDateString() : '-'}</td>
-                        <td className="p-3 border-b">{user.deletedAt ? getDaysLeft(user.deletedAt) : '-'}</td>
-                        <td className="p-3 border-b">
-                          <div className="inline-flex space-x-2">
-                            <button
-                              onClick={() => handleRecover(user)}
-                              className="p-1 rounded hover:bg-green-100 group relative"
-                              title="Recover"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-green-600 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582M20 20v-5h-.581M5.5 19A7.5 7.5 0 0112 4.5c2.485 0 4.5 2.015 4.5 4.5S14.485 13.5 12 13.5c-2.485 0-4.5-2.015-4.5-4.5" /></svg>
-                              <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Recover</span>
-                            </button>
-                          </div>
+                        <td className="p-4 border-b text-gray-600">
+                          {user.archivedAt ? new Date(user.archivedAt).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          }) : '-'}
+                        </td>
+                        <td className="p-4 border-b">
+                          {user.deletedAt ? (
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              getDaysLeft(user.deletedAt) <= 3 ? 'bg-red-100 text-red-700' :
+                              getDaysLeft(user.deletedAt) <= 7 ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>
+                              {getDaysLeft(user.deletedAt)} days left
+                            </span>
+                          ) : '-'}
+                        </td>
+                        <td className="p-4 border-b">
+                          <button
+                            onClick={() => handleRecover(user)}
+                            className="inline-flex items-center px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors duration-200 group"
+                            title="Recover Account"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582M20 20v-5h-.581M5.5 19A7.5 7.5 0 0112 4.5c2.485 0 4.5 2.015 4.5 4.5S14.485 13.5 12 13.5c-2.485 0-4.5-2.015-4.5-4.5" />
+                            </svg>
+                            Recover
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -1187,8 +1218,38 @@ export default function Admin_Accounts() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls for Archived Accounts */}
+            {archivedTotalPages > 1 && (
+              <div className="flex justify-center items-center gap-4 mt-6 pt-4 border-t">
+                <button
+                  className="px-4 py-2 rounded-lg bg-gray-300 hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => setArchivedCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={archivedCurrentPage === 1}
+                >
+                  Previous
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Page</span>
+                  <span className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm font-medium">
+                    {archivedCurrentPage}
+                  </span>
+                  <span className="text-sm text-gray-600">of {archivedTotalPages}</span>
+                </div>
+                <button
+                  className="px-4 py-2 rounded-lg bg-gray-300 hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => setArchivedCurrentPage((prev) => Math.min(archivedTotalPages, prev + 1))}
+                  disabled={archivedCurrentPage === archivedTotalPages}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+
             {showRecoverSuccess && (
-              <div className="mt-4 text-green-600 font-semibold">Account recovered successfully!</div>
+              <div className="mt-4 p-3 bg-green-100 border border-green-300 rounded-lg text-green-700 font-medium">
+                ✓ Account recovered successfully!
+              </div>
             )}
           </div>
         </div>

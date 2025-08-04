@@ -66,6 +66,10 @@ export default function Login() {
       const decoded = jwtDecode(token);
       const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
   
+      // Debug: Log the role to see what's being received
+      console.log('Received role:', role);
+      console.log('Role type:', typeof role);
+  
       // If user has a profile picture, build the image URL
       const imageUrl = profilePic ? `${API_BASE}/uploads/${profilePic}` : null;
   
@@ -75,18 +79,22 @@ export default function Login() {
       localStorage.setItem('userID', userID);
       localStorage.setItem('role', role);
   
-      // Navigate to dashboard based on user role
-      if (role === 'students') navigate('/student_dashboard');
-      else if (role === 'faculty') navigate('/faculty_dashboard');
-      else if (role === 'vice president of education') navigate('/parent_dashboard');
-      else if (role === 'admin') navigate('/admin_dashboard');
-      else if (role === 'principal') navigate('/principal_dashboard');
+      // Navigate to dashboard based on user role (case-insensitive comparison)
+      const normalizedRole = role ? role.toLowerCase().trim() : '';
+      console.log('Normalized role:', normalizedRole);
+      
+      if (normalizedRole === 'students' || normalizedRole === 'student') navigate('/student_dashboard');
+      else if (normalizedRole === 'faculty') navigate('/faculty_dashboard');
+      else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president' || normalizedRole === 'parent') navigate('/parent_dashboard');
+      else if (normalizedRole === 'admin') navigate('/admin_dashboard');
+      else if (normalizedRole === 'principal') navigate('/principal_dashboard');
       else {
+        console.error('Unknown role received:', role);
         setValidationModal({
           isOpen: true,
           type: 'error',
           title: 'Unknown Role',
-          message: 'Unknown role'
+          message: `Unknown role: ${role}. Please contact administrator.`
         });
       }
     } catch (error) {
@@ -140,6 +148,10 @@ export default function Login() {
       const decoded = jwtDecode(token);
       const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
   
+      // Debug: Log the role to see what's being received
+      console.log('Received role:', role);
+      console.log('Role type:', typeof role);
+  
       const imageUrl = profilePic ? `${API_BASE}/uploads/${profilePic}` : null;
   
       // Store user info and token in localStorage
@@ -158,18 +170,22 @@ export default function Login() {
         localStorage.removeItem('rememberedPassword');
       }
   
-      // Navigate to dashboard based on user role
-      if (role === 'students') navigate('/student_dashboard');
-      else if (role === 'faculty') navigate('/faculty_dashboard');
-      else if (role === 'vice president of education') navigate('/parent_dashboard');
-      else if (role === 'admin') navigate('/admin_dashboard');
-      else if (role === 'principal') navigate('/principal_dashboard');
+      // Navigate to dashboard based on user role (case-insensitive comparison)
+      const normalizedRole = role ? role.toLowerCase().trim() : '';
+      console.log('Normalized role:', normalizedRole);
+      
+      if (normalizedRole === 'students' || normalizedRole === 'student') navigate('/student_dashboard');
+      else if (normalizedRole === 'faculty') navigate('/faculty_dashboard');
+      else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president' || normalizedRole === 'parent') navigate('/parent_dashboard');
+      else if (normalizedRole === 'admin') navigate('/admin_dashboard');
+      else if (normalizedRole === 'principal') navigate('/principal_dashboard');
       else {
+        console.error('Unknown role received:', role);
         setValidationModal({
           isOpen: true,
           type: 'error',
           title: 'Unknown Role',
-          message: 'Unknown role'
+          message: `Unknown role: ${role}. Please contact administrator.`
         });
       }
   

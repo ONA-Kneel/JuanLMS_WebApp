@@ -835,6 +835,38 @@ userRoutes.post('/login', async (req, res) => {
     res.json({ token });
 });
 
+// ------------------ LOGOUT ROUTE ------------------
+
+// Logout route: creates audit log for logout
+userRoutes.post('/logout', authenticateToken, async (req, res) => {
+    console.log('Logout endpoint called');
+    console.log('User:', req.user);
+    console.log('IP:', req.ip || req.connection.remoteAddress);
+    
+    try {
+        // Add audit log for logout
+        const db = database.getDb();
+        const auditLog = {
+            userId: req.user._id,
+            userName: req.user.name || `${req.user.firstname || ''} ${req.user.lastname || ''}`.trim(),
+            userRole: req.user.role,
+            action: 'Logout',
+            details: `User logged out from ${req.ip || req.connection.remoteAddress}`,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            timestamp: new Date()
+        };
+        console.log('Creating audit log:', auditLog);
+        
+        await db.collection('AuditLogs').insertOne(auditLog);
+        console.log('Audit log created successfully');
+
+        res.json({ message: 'Logged out successfully' });
+    } catch (error) {
+        console.error('Error during logout:', error);
+        res.status(500).json({ message: 'Error during logout' });
+    }
+});
+
 // ------------------ UTILS ------------------
 
 // Get user role from email domain

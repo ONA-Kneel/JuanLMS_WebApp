@@ -252,10 +252,11 @@ export default function Admin_AuditTrail() {
           <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
             <thead>
               <tr className="bg-gray-100 text-left">
-                <th className="p-3 border w-1/5">Timestamp</th>
-                <th className="p-3 border w-1/5">User</th>
-                <th className="p-3 border w-1/5">Action</th>
-                <th className="p-3 border w-2/5">Details</th>
+                <th className="p-3 border w-1/6">Timestamp</th>
+                <th className="p-3 border w-1/6">User</th>
+                <th className="p-3 border w-1/6">Role</th>
+                <th className="p-3 border w-1/6">Action</th>
+                <th className="p-3 border w-2/6">Details</th>
               </tr>
             </thead>
             <tbody>
@@ -282,7 +283,7 @@ export default function Admin_AuditTrail() {
                 </tr>
               ) : filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="text-center p-4 text-gray-500">
+                  <td colSpan="5" className="text-center p-4 text-gray-500">
                     No audit logs found. System actions will be recorded here.
                   </td>
                 </tr>
@@ -291,6 +292,7 @@ export default function Admin_AuditTrail() {
                   <tr key={log._id} className="hover:bg-gray-50">
                     <td className="p-3 border text-gray-500 whitespace-nowrap">{formatDate(log.timestamp)}</td>
                     <td className="p-3 border text-gray-900 whitespace-nowrap">{log.userName}</td>
+                    <td className="p-3 border text-gray-900 whitespace-nowrap">{log.userRole || 'Unknown'}</td>
                     <td className="p-3 border text-gray-900 whitespace-nowrap">{actionLabelMap[log.action] || log.action}</td>
                     <td className="p-3 border text-gray-500">{log.details}</td>
                   </tr>

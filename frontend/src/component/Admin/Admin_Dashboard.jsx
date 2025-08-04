@@ -9,6 +9,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Admin_Dashboard() {
   const [recentAuditLogs, setRecentAuditLogs] = useState([]);
+  const [filteredAuditLogs, setFilteredAuditLogs] = useState([]);
   const [accountCounts, setAccountCounts] = useState({ admin: 0, faculty: 0, student: 0 });
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
@@ -23,7 +24,7 @@ export default function Admin_Dashboard() {
   useEffect(() => {
     const token = localStorage.getItem('token');
 
-    fetch(`${API_BASE}/audit-logs?page=1&limit=5`, {
+          fetch(`${API_BASE}/audit-logs?page=1&limit=50`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -56,6 +57,12 @@ export default function Admin_Dashboard() {
 
     fetchAcademicYear();
   }, []);
+
+  // Filter to show only students and faculties
+  useEffect(() => {
+    // Take only the first 5 for preview
+    setFilteredAuditLogs(recentAuditLogs.slice(0, 5));
+  }, [recentAuditLogs]);
 
   useEffect(() => {
     async function fetchActiveTermForYear() {
@@ -349,25 +356,27 @@ export default function Admin_Dashboard() {
 
           <div className="w-full md:w-96 flex flex-col gap-6">
             <div className="bg-white rounded-xl shadow p-4 mb-4 max-h-80 overflow-y-auto">
-              <h3 className="text-lg md:text-xl font-bold mb-3">Audit Preview</h3>
+              <h3 className="text-lg md:text-xl font-bold mb-3">Student/Faculty Audit Preview</h3>
               <table className="min-w-full bg-white border rounded-lg overflow-hidden text-xs table-fixed">
                 <thead>
                   <tr className="bg-gray-50 text-left">
                     <th className="p-2 border-b w-2/6 font-semibold text-gray-700">Timestamp</th>
                     <th className="p-2 border-b w-2/6 font-semibold text-gray-700">User</th>
+                    <th className="p-2 border-b w-1/6 font-semibold text-gray-700">Role</th>
                     <th className="p-2 border-b w-1/6 font-semibold text-gray-700">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {recentAuditLogs.length === 0 ? (
+                  {filteredAuditLogs.length === 0 ? (
                     <tr>
-                      <td colSpan="3" className="text-center p-2 text-gray-500">No recent audit logs found.</td>
+                      <td colSpan="4" className="text-center p-2 text-gray-500">No student/faculty activities found.</td>
                     </tr>
                   ) : (
-                    recentAuditLogs.map((log, idx) => (
+                    filteredAuditLogs.map((log, idx) => (
                       <tr key={log._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50" : "bg-gray-50 hover:bg-gray-100"}>
                         <td className="p-2 border-b text-gray-500 whitespace-nowrap">{formatDate(log.timestamp)}</td>
                         <td className="p-2 border-b text-gray-900 whitespace-nowrap">{log.userName}</td>
+                        <td className="p-2 border-b text-gray-900 whitespace-nowrap">{log.userRole}</td>
                         <td className="p-2 border-b text-gray-900 whitespace-nowrap">{log.action}</td>
                       </tr>
                     ))

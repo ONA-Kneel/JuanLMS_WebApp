@@ -81,7 +81,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Update school year status
+// Update school year status or details
 router.patch('/:id', async (req, res) => {
   try {
     const schoolYear = await SchoolYear.findById(req.params.id);
@@ -89,33 +89,61 @@ router.patch('/:id', async (req, res) => {
       return res.status(404).json({ message: 'School year not found' });
     }
 
-    // If setting to active, deactivate all others
-    if (req.body.status === 'active') {
-      await SchoolYear.updateMany(
-        { _id: { $ne: req.params.id }, status: 'active' },
-        { status: 'inactive' }
-      );
-      // Do not activate any terms automatically
-      // Instead, return the list of terms for this school year in the response
+    // Handle school year start year update
+    if (req.body.schoolYearStart) {
+      const newStartYear = parseInt(req.body.schoolYearStart);
+      
+      // Validate the new start year
+      if (newStartYear < 1900 || newStartYear > 2100) {
+        return res.status(400).json({ message: 'Invalid school year start' });
+      }
+
+      // Check for duplicates (excluding the current school year being edited and archived ones)
+      const existingSchoolYear = await SchoolYear.findOne({ 
+        schoolYearStart: newStartYear,
+        status: { $ne: 'archived' },
+        _id: { $ne: req.params.id }
+      });
+      
+      if (existingSchoolYear) {
+        return res.status(400).json({ message: 'A school year with this start year already exists' });
+      }
+
+      // Update the school year start and end
+      schoolYear.schoolYearStart = newStartYear;
+      schoolYear.schoolYearEnd = newStartYear + 1;
+    }
+
+    // Handle status update
+    if (req.body.status) {
+      // If setting to active, deactivate all others
+      if (req.body.status === 'active') {
+        await SchoolYear.updateMany(
+          { _id: { $ne: req.params.id }, status: 'active' },
+          { status: 'inactive' }
+        );
+        // Do not activate any terms automatically
+        // Instead, return the list of terms for this school year in the response
+        schoolYear.status = req.body.status;
+        const updatedSchoolYear = await schoolYear.save();
+        const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
+        const terms = await Term.find({ schoolYear: schoolYearName });
+        return res.json({ schoolYear: updatedSchoolYear, terms });
+      }
+      
       schoolYear.status = req.body.status;
-      const updatedSchoolYear = await schoolYear.save();
-      const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
-      const terms = await Term.find({ schoolYear: schoolYearName });
-      return res.json({ schoolYear: updatedSchoolYear, terms });
+
+      // Archive all terms and assignments for this school year if archiving or inactivating
+      if (req.body.status === 'archived' || req.body.status === 'inactive') {
+        const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
+        // Archive all terms for this school year
+        await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
+        await StudentAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
+        await FacultyAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
+      }
     }
-    
-    schoolYear.status = req.body.status;
+
     const updatedSchoolYear = await schoolYear.save();
-
-    // Archive all terms and assignments for this school year if archiving or inactivating
-    if (req.body.status === 'archived' || req.body.status === 'inactive') {
-      const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
-      // Archive all terms for this school year
-      await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
-      await StudentAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
-      await FacultyAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
-    }
-
     res.json(updatedSchoolYear);
   } catch (error) {
     res.status(400).json({ message: error.message });

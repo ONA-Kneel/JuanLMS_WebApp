@@ -53,13 +53,23 @@ router.get('/audit-logs', authenticateToken, async (req, res) => {
 
     // Build filter object
     const filter = {};
+    
+    // For principals, only show student and faculty actions (all actions, not just login/logout)
+    if (req.user.role === 'principal') {
+      filter['userRole'] = { $in: ['student', 'students', 'faculty'] };
+    }
+    
     if (action && action !== 'all') {
       filter.action = action;
     }
     if (role && role !== 'all') {
-      // Add role-based filtering logic here
-      // This assumes the user's role is stored in the audit log
-      filter['userRole'] = role;
+      // Handle role filtering with case variations
+      if (role === 'student') {
+        // For student role, match both 'student' and 'students'
+        filter['userRole'] = { $in: ['student', 'students'] };
+      } else {
+        filter['userRole'] = role;
+      }
     }
 
     // Get total count for pagination

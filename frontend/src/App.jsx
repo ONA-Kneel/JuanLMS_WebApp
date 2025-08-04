@@ -39,6 +39,7 @@ import Principal_Chats from './component/Principal/Principal_Chats';
 import Principal_Grades from './component/Principal/Principal_Grades';
 import Principal_Calendar from './component/Principal/Principal_Calendar';
 import Principal_AuditTrail from './component/Principal/Principal_AuditTrail';
+import Principal_FacultyReport from './component/Principal/Principal_FacultyReport';
 
 // Admin Access
 import Admin_Dashboard from './component/Admin/Admin_Dashboard';
@@ -101,6 +102,7 @@ function App() {
         <Route path="/principal_grades" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Grades /></ProtectedRoute>}/>
         <Route path="/principal_calendar" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Calendar /></ProtectedRoute>}/>
         <Route path="/principal_audit_trail" element={<ProtectedRoute allowedRoles={['principal']}><Principal_AuditTrail/></ProtectedRoute>}/>
+        <Route path="/principal_faculty_report" element={<ProtectedRoute allowedRoles={['principal']}><Principal_FacultyReport/></ProtectedRoute>}/>
 
         {/* Admin */}
         <Route path="/admin_dashboard" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Dashboard/></ProtectedRoute>}/>

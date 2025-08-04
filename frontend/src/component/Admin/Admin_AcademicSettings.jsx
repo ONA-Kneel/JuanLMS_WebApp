@@ -32,6 +32,15 @@ export default function Admin_AcademicSettings() {
   const [promptTerms, setPromptTerms] = useState([]);
   const [promptSchoolYear, setPromptSchoolYear] = useState(null);
   const [selectedPromptTerm, setSelectedPromptTerm] = useState("");
+  
+  // Term editing states
+  const [showEditTermModal, setShowEditTermModal] = useState(false);
+  const [editingTerm, setEditingTerm] = useState(null);
+  const [editTermFormData, setEditTermFormData] = useState({
+    startDate: '',
+    endDate: ''
+  });
+  const [editTermError, setEditTermError] = useState('');
 
   const [formData, setFormData] = useState({
     schoolYearStart: "",
@@ -145,6 +154,9 @@ export default function Admin_AcademicSettings() {
         setFormData({ schoolYearStart: "", status: "inactive" });
         fetchSchoolYears();
         setShowActivateModal(false);
+        setShowCreateModal(false);
+        setIsEditMode(false);
+        setEditingYear(null);
       } else {
         const data = await res.json();
         setError(data.message || "Failed to create school year");
@@ -172,6 +184,7 @@ export default function Admin_AcademicSettings() {
 
     const yearExists = schoolYears.some(year =>
       year.schoolYearStart === startYear &&
+      year.status !== 'archived' &&
       (!isEditMode || year._id !== editingYear?._id)
     );
 
@@ -196,6 +209,10 @@ export default function Admin_AcademicSettings() {
       if (!confirmEdit) return;
 
       try {
+        console.log('Sending edit request:', {
+          schoolYearStart: startYear,
+          status: formData.status
+        });
         const res = await fetch(`${API_BASE}/api/schoolyears/${editingYear._id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -206,26 +223,16 @@ export default function Admin_AcademicSettings() {
         });
 
         if (res.ok) {
+          console.log('Edit successful');
           alert("School year updated successfully");
-          setSchoolYears(prevYears =>
-            prevYears
-              .map(year =>
-                year._id === editingYear._id
-                  ? {
-                      ...year,
-                      schoolYearStart: startYear,
-                      schoolYearEnd: startYear + 1,
-                      status: formData.status
-                    }
-                  : year
-              )
-              .filter(year => year.status !== 'archived')
-          );
+          fetchSchoolYears(); // Refresh from database
           setIsEditMode(false);
           setEditingYear(null);
           setFormData({ schoolYearStart: "", status: "inactive" });
+          setShowCreateModal(false); // Close the modal
         } else {
           const data = await res.json();
+          console.log('Edit failed:', data);
           setError(data.message || "Failed to update school year");
         }
       } catch {
@@ -252,9 +259,14 @@ export default function Admin_AcademicSettings() {
   };
 
   const handleEdit = (year) => {
+    console.log('Edit clicked for year:', year);
     setIsEditMode(true);
     setEditingYear(year);
     setFormData({
+      schoolYearStart: year.schoolYearStart.toString(),
+      status: year.status
+    });
+    console.log('Form data set to:', {
       schoolYearStart: year.schoolYearStart.toString(),
       status: year.status
     });
@@ -346,6 +358,28 @@ export default function Admin_AcademicSettings() {
       setTermError('End date must be after start date');
         return;
       }
+
+    // Check for overlapping terms in the same school year
+    const overlappingTerms = terms.filter(t => 
+      t.status !== 'archived' && // Only check active/inactive terms
+      (
+        // New term starts during an existing term
+        (new Date(t.startDate) <= new Date(termFormData.startDate) && 
+         new Date(t.endDate) > new Date(termFormData.startDate)) ||
+        // New term ends during an existing term
+        (new Date(t.startDate) < new Date(termFormData.endDate) && 
+         new Date(t.endDate) >= new Date(termFormData.endDate)) ||
+        // New term completely contains an existing term
+        (new Date(t.startDate) >= new Date(termFormData.startDate) && 
+         new Date(t.endDate) <= new Date(termFormData.endDate))
+      )
+    );
+
+    if (overlappingTerms.length > 0) {
+      const overlappingTermNames = overlappingTerms.map(t => t.termName).join(', ');
+      setTermError(`Term dates overlap with existing terms: ${overlappingTermNames}. Please choose different dates.`);
+      return;
+    }
 
     try {
       const res = await fetch(`${API_BASE}/api/terms`, {
@@ -448,6 +482,133 @@ export default function Admin_AcademicSettings() {
       alert('School year added as inactive.');
     } catch {
       setError('Failed to add school year as inactive.');
+    }
+  };
+
+  // Term editing functions
+  const handleEditTerm = (term) => {
+    setEditingTerm(term);
+    setEditTermFormData({
+      startDate: term.startDate.split('T')[0], // Convert to YYYY-MM-DD format
+      endDate: term.endDate.split('T')[0]
+    });
+    setEditTermError('');
+    setShowEditTermModal(true);
+  };
+
+  const handleEditTermSubmit = async (e) => {
+    e.preventDefault();
+    setEditTermError('');
+
+    if (!editTermFormData.startDate || !editTermFormData.endDate) {
+      setEditTermError('Please fill in all fields');
+      return;
+    }
+
+    // Validate term dates are within school year bounds
+    if (selectedYear) {
+      const schoolYearStart = selectedYear.schoolYearStart;
+      const schoolYearEnd = selectedYear.schoolYearEnd;
+      const startDate = new Date(editTermFormData.startDate);
+      const endDate = new Date(editTermFormData.endDate);
+      const minDate = new Date(`${schoolYearStart}-01-01`);
+      const maxDate = new Date(`${schoolYearEnd}-12-31`);
+      if (startDate < minDate || startDate > maxDate || endDate < minDate || endDate > maxDate) {
+        setEditTermError(`Term dates must be within the school year bounds (${schoolYearStart} to ${schoolYearEnd}).`);
+        return;
+      }
+    }
+
+    if (new Date(editTermFormData.endDate) <= new Date(editTermFormData.startDate)) {
+      setEditTermError('End date must be after start date');
+      return;
+    }
+
+    // Check for overlapping terms in the same school year
+    const overlappingTerms = terms.filter(t => 
+      t._id !== editingTerm._id && // Exclude current term being edited
+      t.status !== 'archived' && // Only check active/inactive terms
+      (
+        // New term starts during an existing term
+        (new Date(t.startDate) <= new Date(editTermFormData.startDate) && 
+         new Date(t.endDate) > new Date(editTermFormData.startDate)) ||
+        // New term ends during an existing term
+        (new Date(t.startDate) < new Date(editTermFormData.endDate) && 
+         new Date(t.endDate) >= new Date(editTermFormData.endDate)) ||
+        // New term completely contains an existing term
+        (new Date(t.startDate) >= new Date(editTermFormData.startDate) && 
+         new Date(t.endDate) <= new Date(editTermFormData.endDate))
+      )
+    );
+
+    if (overlappingTerms.length > 0) {
+      const overlappingTermNames = overlappingTerms.map(t => t.termName).join(', ');
+      setEditTermError(`Term dates overlap with existing terms: ${overlappingTermNames}. Please choose different dates.`);
+      return;
+    }
+
+    try {
+      console.log('Sending term update:', {
+        startDate: editTermFormData.startDate,
+        endDate: editTermFormData.endDate
+      });
+      const res = await fetch(`${API_BASE}/api/terms/${editingTerm._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startDate: editTermFormData.startDate,
+          endDate: editTermFormData.endDate
+        })
+      });
+
+      if (res.ok) {
+        const updatedTerm = await res.json();
+        console.log('Term updated successfully:', updatedTerm);
+        setTerms(terms.map(t => t._id === editingTerm._id ? updatedTerm : t));
+        setShowEditTermModal(false);
+        setEditingTerm(null);
+        setEditTermFormData({ startDate: '', endDate: '' });
+        alert('Term updated successfully');
+        fetchTerms(selectedYear);
+      } else {
+        const data = await res.json();
+        console.log('Term update failed:', data);
+        setEditTermError(data.message || 'Failed to update term');
+      }
+    } catch (error) {
+      console.log('Term update error:', error);
+      setEditTermError('Error updating term');
+    }
+  };
+
+  const handleToggleTermStatus = async (term) => {
+    const newStatus = term.status === 'active' ? 'inactive' : 'active';
+    const action = newStatus === 'active' ? 'activate' : 'deactivate';
+    
+    if (!window.confirm(`Are you sure you want to ${action} ${term.termName}?`)) return;
+    
+    try {
+      console.log('Sending status update:', { status: newStatus });
+      const res = await fetch(`${API_BASE}/api/terms/${term._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      
+      if (res.ok) {
+        const updatedTerm = await res.json();
+        console.log('Status updated successfully:', updatedTerm);
+        setTerms(terms.map(t => t._id === term._id ? updatedTerm : t));
+        alert(`${term.termName} has been ${action}d`);
+        fetchTerms(selectedYear);
+      } else {
+        const data = await res.json();
+        console.log('Status update failed:', data);
+        setTermError(data.message || `Failed to ${action} term`);
+      }
+    } catch (error) {
+      console.log('Status update error:', error);
+      setTermError(`Error ${action}ing term`);
     }
   };
 
@@ -727,11 +888,15 @@ export default function Admin_AcademicSettings() {
                                   inactive
                                 </span>
                               ) : (
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                  term.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                }`}>
+                                <button
+                                  onClick={() => handleToggleTermStatus(term)}
+                                  className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer hover:shadow ${
+                                    term.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-red-100 hover:text-red-800' : 'bg-gray-100 text-gray-800 hover:bg-green-100 hover:text-green-800'
+                                  }`}
+                                  title={`Click to ${term.status === 'active' ? 'deactivate' : 'activate'} ${term.termName}`}
+                                >
                                   {term.status}
-                                </span>
+                                </button>
                               )}
                             </td>
                             <td className="p-3 border">
@@ -748,14 +913,15 @@ export default function Admin_AcademicSettings() {
                                   </svg>
                         </button>
                       <button
-                                    className="p-1 rounded hover:bg-yellow-100 group relative"
-                                  title="Edit"
-                                  >
-                                    {/* Heroicons Pencil Square (black) */}
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
-                                    </svg>
-                                  </button>
+                        onClick={() => handleEditTerm(term)}
+                        className="p-1 rounded hover:bg-yellow-100 group relative"
+                        title="Edit"
+                      >
+                        {/* Heroicons Pencil Square (black) */}
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                        </svg>
+                      </button>
                                   {term.status === 'archived' && selectedYear.status === 'active' ? (
                                     <button
                                       onClick={() => handleActivateTerm(term)}
@@ -766,18 +932,29 @@ export default function Admin_AcademicSettings() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                       </svg>
                                     </button>
-                                  ) : selectedYear.status !== 'active' || term.status === 'archived' ? (
+                                  ) : selectedYear.status !== 'active' ? (
                                     <button
                                       disabled
-                                      className="p-1 rounded bg-gray-200 text-green-600 cursor-not-allowed"
-                                      title="Archived"
+                                      className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
+                                      title="School year is not active"
                                     >
-                                      {/* Heroicons Check (green) */}
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-green-600">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                      {/* Heroicons Minus (gray) */}
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M18 12H6" />
                                       </svg>
                                     </button>
                                   ) : term.status === 'active' ? (
+                                    <button
+                                      onClick={() => handleArchiveTerm(term)}
+                                      className="p-1 rounded hover:bg-red-100 group relative"
+                                      title="Archive"
+                                    >
+                                      {/* Heroicons Trash (red) */}
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                      </svg>
+                                    </button>
+                                  ) : term.status === 'inactive' ? (
                                     <button
                                       onClick={() => handleArchiveTerm(term)}
                                       className="p-1 rounded hover:bg-red-100 group relative"
@@ -912,7 +1089,7 @@ export default function Admin_AcademicSettings() {
                       required
                     >
                       <option value="" disabled>Select year</option>
-                      {Array.from({ length: 2100 - 1900 + 1 }, (_, i) => 1900 + i).map(year => (
+                      {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map(year => (
                         <option key={year} value={year}>{year}</option>
                       ))}
                     </select>
@@ -1018,6 +1195,83 @@ export default function Admin_AcademicSettings() {
                     Activate Selected
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Edit Term Modal */}
+          {showEditTermModal && editingTerm && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg shadow-xl w-96 p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Edit Term: {editingTerm.termName}</h3>
+                  <button
+                    onClick={() => {
+                      setShowEditTermModal(false);
+                      setEditingTerm(null);
+                      setEditTermFormData({ startDate: '', endDate: '' });
+                    }}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <form onSubmit={handleEditTermSubmit}>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={editTermFormData.startDate}
+                      onChange={(e) => setEditTermFormData({ ...editTermFormData, startDate: e.target.value })}
+                      className="w-full p-2 border rounded-md"
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={editTermFormData.endDate}
+                      onChange={(e) => setEditTermFormData({ ...editTermFormData, endDate: e.target.value })}
+                      className="w-full p-2 border rounded-md"
+                      required
+                    />
+                  </div>
+
+                  {editTermError && (
+                    <div className="mb-4 text-red-500 text-sm">
+                      {editTermError}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEditTermModal(false);
+                        setEditingTerm(null);
+                        setEditTermFormData({ startDate: '', endDate: '' });
+                      }}
+                      className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
+                    >
+                      Update Term
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
