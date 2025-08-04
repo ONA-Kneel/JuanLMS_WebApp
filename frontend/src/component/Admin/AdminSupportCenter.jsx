@@ -15,16 +15,26 @@ export default function AdminSupportCenter() {
   const [replyError, setReplyError] = useState('');
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('all'); // all, new, opened, closed
+  const [allTickets, setAllTickets] = useState([]); // Store all tickets for counting
 
   useEffect(() => {
     async function fetchTickets() {
       setLoading(true);
       setError('');
       try {
-        console.log('Fetching tickets...');
-        const data = await getAllTickets();
+        console.log('Fetching tickets with filter:', activeFilter);
+        const data = await getAllTickets(activeFilter === 'all' ? null : activeFilter);
         console.log('Tickets fetched:', data);
         setTickets(data || []);
+        
+        // Also fetch all tickets for counting if we're not already showing all
+        if (activeFilter !== 'all') {
+          const allData = await getAllTickets();
+          setAllTickets(allData || []);
+        } else {
+          setAllTickets(data || []);
+        }
       } catch (err) {
         console.error('Error fetching tickets:', err);
         let errorMessage = 'Failed to fetch tickets. Please try again.';
@@ -58,7 +68,7 @@ export default function AdminSupportCenter() {
       setLoading(false);
     }
     fetchTickets();
-  }, []);
+  }, [activeFilter]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -122,7 +132,7 @@ export default function AdminSupportCenter() {
       setReply('');
       
       // Refetch tickets to get updated data
-      const updatedTickets = await getAllTickets();
+      const updatedTickets = await getAllTickets(activeFilter === 'all' ? null : activeFilter);
       setTickets(updatedTickets);
     } catch (err) {
       console.error('Reply error:', err);
@@ -157,13 +167,19 @@ export default function AdminSupportCenter() {
       }
 
       // Refetch tickets to get updated data
-      const updatedTickets = await getAllTickets();
+      const updatedTickets = await getAllTickets(activeFilter === 'all' ? null : activeFilter);
       setTickets(updatedTickets);
     } catch (err) {
       console.error('Status change error:', err);
       setReplyError('Failed to update ticket status. Please try again.');
     }
   }
+
+  // Handle filter change
+  const handleFilterChange = (filter) => {
+    setActiveFilter(filter);
+    setSelected(null); // Clear selection when changing filters
+  };
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr ">
@@ -186,6 +202,50 @@ export default function AdminSupportCenter() {
           <ProfileMenu isAdmin={true} />
         </div>
         
+
+        {/* Filter Tabs */}
+        <div className="mb-4 flex space-x-1 bg-white rounded-lg p-1 shadow-sm">
+          <button
+            onClick={() => handleFilterChange('all')}
+            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeFilter === 'all'
+                ? 'bg-[#9575cd] text-white shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            All ({allTickets.length})
+          </button>
+          <button
+            onClick={() => handleFilterChange('new')}
+            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeFilter === 'new'
+                ? 'bg-[#9575cd] text-white shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            New ({allTickets.filter(t => t.status === 'new').length})
+          </button>
+          <button
+            onClick={() => handleFilterChange('opened')}
+            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeFilter === 'opened'
+                ? 'bg-[#9575cd] text-white shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            Opened ({allTickets.filter(t => t.status === 'opened').length})
+          </button>
+          <button
+            onClick={() => handleFilterChange('closed')}
+            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeFilter === 'closed'
+                ? 'bg-[#9575cd] text-white shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            Closed ({allTickets.filter(t => t.status === 'closed').length})
+          </button>
+        </div>
 
         <div className="flex h-[70vh] bg-white rounded-2xl shadow-md">
           <div className="w-80 border-r border-gray-200 overflow-y-auto bg-white p-2" style={{ maxHeight: '100%' }}>
