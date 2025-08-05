@@ -11,7 +11,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -46,6 +46,26 @@ export default function Login() {
 
   // --- EFFECT: Auto-login if credentials are stored in localStorage ---
   useEffect(() => {
+    // Check if we should logout when returning to login page
+    const shouldLogout = localStorage.getItem('shouldLogoutOnReturn');
+    const token = localStorage.getItem('token');
+    
+    if (shouldLogout === 'true' && token) {
+      // Clear all user data
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      localStorage.removeItem('userID');
+      localStorage.removeItem('role');
+      localStorage.removeItem('shouldLogoutOnReturn');
+      
+      // Clear any stored credentials that might exist
+      localStorage.removeItem('rememberedEmail');
+      localStorage.removeItem('rememberedPassword');
+      
+      console.log('Auto-logout: User returned to login page without "Remember Me"');
+      return; // Don't proceed with auto-login
+    }
+    
     // Check for stored credentials on component mount
     const storedEmail = localStorage.getItem('rememberedEmail');
     const storedPassword = localStorage.getItem('rememberedPassword');
@@ -55,6 +75,79 @@ export default function Login() {
       handleAutoLogin(storedEmail, storedPassword);
     }
   }, []);
+
+  // --- EFFECT: Handle browser navigation and auto-logout ---
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Check if user is logged in but didn't use "Remember Me"
+      const token = localStorage.getItem('token');
+      const rememberedEmail = localStorage.getItem('rememberedEmail');
+      const rememberedPassword = localStorage.getItem('rememberedPassword');
+      
+      // If user is logged in but doesn't have remembered credentials, mark for logout
+      if (token && (!rememberedEmail || !rememberedPassword)) {
+        localStorage.setItem('shouldLogoutOnReturn', 'true');
+      }
+    };
+
+    const handlePageShow = () => {
+      // Check if we should logout when returning to login page
+      const shouldLogout = localStorage.getItem('shouldLogoutOnReturn');
+      const token = localStorage.getItem('token');
+      
+      if (shouldLogout === 'true' && token) {
+        // Clear all user data
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        localStorage.removeItem('userID');
+        localStorage.removeItem('role');
+        localStorage.removeItem('shouldLogoutOnReturn');
+        
+        // Clear any stored credentials that might exist
+        localStorage.removeItem('rememberedEmail');
+        localStorage.removeItem('rememberedPassword');
+        
+        console.log('Auto-logout: User returned to login page without "Remember Me"');
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      // Handle when page becomes visible again (e.g., switching tabs back)
+      if (!document.hidden) {
+        const shouldLogout = localStorage.getItem('shouldLogoutOnReturn');
+        const token = localStorage.getItem('token');
+        
+        if (shouldLogout === 'true' && token) {
+          // Clear all user data
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+          localStorage.removeItem('userID');
+          localStorage.removeItem('role');
+          localStorage.removeItem('shouldLogoutOnReturn');
+          
+          // Clear any stored credentials that might exist
+          localStorage.removeItem('rememberedEmail');
+          localStorage.removeItem('rememberedPassword');
+          
+          console.log('Auto-logout: User returned to page without "Remember Me"');
+        }
+      }
+    };
+
+    // Add event listeners
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pageshow', handlePageShow);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cleanup event listeners
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pageshow', handlePageShow);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+
 
   // --- HANDLER: Auto-login using stored credentials ---
   const handleAutoLogin = async (email, password) => {
@@ -73,12 +166,15 @@ export default function Login() {
       // If user has a profile picture, build the image URL
       const imageUrl = profilePic ? `${API_BASE}/uploads/${profilePic}` : null;
   
-      // Store user info and token in localStorage
+            // Store user info and token in localStorage
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
       localStorage.setItem('token', token);
       localStorage.setItem('userID', userID);
       localStorage.setItem('role', role);
-  
+      
+      // Clear the logout flag since auto-login means user had "Remember Me" enabled
+      localStorage.removeItem('shouldLogoutOnReturn');
+
       // Navigate to dashboard based on user role (case-insensitive comparison)
       const normalizedRole = role ? role.toLowerCase().trim() : '';
       console.log('Normalized role:', normalizedRole);
@@ -164,10 +260,14 @@ export default function Login() {
       if (rememberMe) {
         localStorage.setItem('rememberedEmail', email);
         localStorage.setItem('rememberedPassword', password);
+        // Clear the logout flag since user chose to be remembered
+        localStorage.removeItem('shouldLogoutOnReturn');
       } else {
         // Clear any previously stored credentials
         localStorage.removeItem('rememberedEmail');
         localStorage.removeItem('rememberedPassword');
+        // Set flag to logout when returning to login page
+        localStorage.setItem('shouldLogoutOnReturn', 'true');
       }
   
       // Navigate to dashboard based on user role (case-insensitive comparison)

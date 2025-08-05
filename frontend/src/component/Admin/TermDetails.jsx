@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -201,16 +201,25 @@ export default function TermDetails() {
     const fetchTerm = async () => {
       try {
         setLoading(true);
+        const token = localStorage.getItem('token');
 
-        const response = await fetch(`${API_BASE}/api/terms/${termId}`);
+        const response = await fetch(`${API_BASE}/api/terms/${termId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log('Term details loaded:', data);
         setTermDetails(data);
-
-
         setError(null);
       } catch (err) {
+        console.error('Error loading term details:', err);
         setError("Failed to load term details.");
-        console.error(err);
       } finally {
         setLoading(false);
       }
@@ -230,15 +239,19 @@ export default function TermDetails() {
 
   const fetchTracks = async () => {
     try {
+      console.log('Fetching tracks for term:', termDetails.termName);
       const res = await fetch(`${API_BASE}/api/tracks/term/${termDetails.termName}`);
       if (res.ok) {
         const data = await res.json();
+        console.log('Tracks loaded:', data);
         setTracks(data);
       } else {
         const data = await res.json();
+        console.error('Failed to fetch tracks:', data);
         setTrackError(data.message || 'Failed to fetch tracks');
       }
     } catch (err) {
+      console.error('Error fetching tracks:', err);
       setTrackError('Error fetching tracks');
     }
   };

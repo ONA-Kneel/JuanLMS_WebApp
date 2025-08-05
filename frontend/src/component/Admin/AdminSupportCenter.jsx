@@ -3,7 +3,7 @@ import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import { getAllTickets, replyToTicket } from '../../services/ticketService';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function AdminSupportCenter() {
   const [tickets, setTickets] = useState([]);
@@ -15,14 +15,26 @@ export default function AdminSupportCenter() {
   const [replyError, setReplyError] = useState('');
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('all'); // all, new, opened, closed
+  const [allTickets, setAllTickets] = useState([]); // Store all tickets for counting
 
   useEffect(() => {
     async function fetchTickets() {
       setLoading(true);
       setError('');
       try {
-        const data = await getAllTickets();
-        setTickets(data);
+        console.log('Fetching tickets with filter:', activeFilter);
+        const data = await getAllTickets(activeFilter === 'all' ? null : activeFilter);
+        console.log('Tickets fetched:', data);
+        setTickets(data || []);
+        
+        // Also fetch all tickets for counting if we're not already showing all
+        if (activeFilter !== 'all') {
+          const allData = await getAllTickets();
+          setAllTickets(allData || []);
+        } else {
+          setAllTickets(data || []);
+        }
       } catch (err) {
         console.error('Error fetching tickets:', err);
         let errorMessage = 'Failed to fetch tickets. Please try again.';
@@ -30,6 +42,7 @@ export default function AdminSupportCenter() {
         if (err.response) {
           const status = err.response.status;
           const data = err.response.data;
+          console.error('Response error:', { status, data });
           
           if (status === 401) {
             errorMessage = 'Your session has expired. Please log in again.';
@@ -40,11 +53,13 @@ export default function AdminSupportCenter() {
           } else if (status >= 500) {
             errorMessage = 'Server error occurred. Please try again later.';
           } else {
-            errorMessage = data.message || `Failed to fetch tickets (${status}).`;
+            errorMessage = data.message || data.error || `Failed to fetch tickets (${status}).`;
           }
         } else if (err.request) {
+          console.error('Network error:', err.request);
           errorMessage = 'Network error. Please check your connection and try again.';
         } else {
+          console.error('Other error:', err);
           errorMessage = err.message || 'An unexpected error occurred.';
         }
         
@@ -53,7 +68,7 @@ export default function AdminSupportCenter() {
       setLoading(false);
     }
     fetchTickets();
-  }, []);
+  }, [activeFilter]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -100,18 +115,71 @@ export default function AdminSupportCenter() {
     setReplyLoading(true);
     setReplyError('');
     try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const userID = localStorage.getItem('userID');
+      const adminId = user._id || userID;
+      if (!adminId) {
+        setReplyError('Admin ID not found. Please log in again.');
+        setReplyLoading(false);
+        return;
+      }
+
       await replyToTicket(ticketId, {
         sender: 'admin',
-        senderId: 'ADMIN_ID', // Replace with actual admin id
+        senderId: adminId,
         message: reply
       });
       setReply('');
-      // Optionally, refetch tickets or update state
+      
+      // Refetch tickets to get updated data
+      const updatedTickets = await getAllTickets(activeFilter === 'all' ? null : activeFilter);
+      setTickets(updatedTickets);
     } catch (err) {
-      setReplyError('Failed to send reply');
+      console.error('Reply error:', err);
+      if (err.response) {
+        const errorMessage = err.response.data?.error || err.response.data?.message || 'Failed to send reply';
+        setReplyError(errorMessage);
+      } else if (err.request) {
+        setReplyError('Network error. Please check your connection and try again.');
+      } else {
+        setReplyError('Failed to send reply. Please try again.');
+      }
     }
     setReplyLoading(false);
   }
+
+  async function handleStatusChange(ticketId, newStatus) {
+    try {
+      const token = localStorage.getItem('token');
+      const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+      
+      const endpoint = newStatus === 'opened' ? 'open' : 'close';
+      const response = await fetch(`${API_BASE}/api/tickets/${ticketId}/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update ticket status: ${response.status}`);
+      }
+
+      // Refetch tickets to get updated data
+      const updatedTickets = await getAllTickets(activeFilter === 'all' ? null : activeFilter);
+      setTickets(updatedTickets);
+    } catch (err) {
+      console.error('Status change error:', err);
+      setReplyError('Failed to update ticket status. Please try again.');
+    }
+  }
+
+  // Handle filter change
+  const handleFilterChange = (filter) => {
+    setActiveFilter(filter);
+    setSelected(null); // Clear selection when changing filters
+  };
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr ">
@@ -133,6 +201,52 @@ export default function AdminSupportCenter() {
           </div>
           <ProfileMenu isAdmin={true} />
         </div>
+        
+
+        {/* Filter Tabs */}
+        <div className="mb-4 flex space-x-1 bg-white rounded-lg p-1 shadow-sm">
+          <button
+            onClick={() => handleFilterChange('all')}
+            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeFilter === 'all'
+                ? 'bg-[#9575cd] text-white shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            All ({allTickets.length})
+          </button>
+          <button
+            onClick={() => handleFilterChange('new')}
+            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeFilter === 'new'
+                ? 'bg-[#9575cd] text-white shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            New ({allTickets.filter(t => t.status === 'new').length})
+          </button>
+          <button
+            onClick={() => handleFilterChange('opened')}
+            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeFilter === 'opened'
+                ? 'bg-[#9575cd] text-white shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            Opened ({allTickets.filter(t => t.status === 'opened').length})
+          </button>
+          <button
+            onClick={() => handleFilterChange('closed')}
+            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeFilter === 'closed'
+                ? 'bg-[#9575cd] text-white shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            Closed ({allTickets.filter(t => t.status === 'closed').length})
+          </button>
+        </div>
+
         <div className="flex h-[70vh] bg-white rounded-2xl shadow-md">
           <div className="w-80 border-r border-gray-200 overflow-y-auto bg-white p-2" style={{ maxHeight: '100%' }}>
             {loading ? (
@@ -187,13 +301,31 @@ export default function AdminSupportCenter() {
                       onChange={e => setReply(e.target.value)}
                     />
                     {replyError && <div className="text-red-500 mb-2">{replyError}</div>}
-                    <button
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                      onClick={() => handleReply(ticket._id)}
-                      disabled={replyLoading}
-                    >
-                      {replyLoading ? 'Sending...' : 'Send Response'}
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                        onClick={() => handleReply(ticket._id)}
+                        disabled={replyLoading}
+                      >
+                        {replyLoading ? 'Sending...' : 'Send Response'}
+                      </button>
+                      {ticket.status === 'new' && (
+                        <button
+                          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                          onClick={() => handleStatusChange(ticket._id, 'opened')}
+                        >
+                          Mark as Opened
+                        </button>
+                      )}
+                      {ticket.status === 'opened' && (
+                        <button
+                          className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                          onClick={() => handleStatusChange(ticket._id, 'closed')}
+                        >
+                          Mark as Closed
+                        </button>
+                      )}
+                    </div>
                   </>
                 );
               })()

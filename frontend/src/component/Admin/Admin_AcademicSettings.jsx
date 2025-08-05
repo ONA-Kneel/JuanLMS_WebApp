@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Admin_AcademicSettings() {
   const [isEditMode, setIsEditMode] = useState(false);
@@ -85,7 +85,12 @@ export default function Admin_AcademicSettings() {
       if (!academicYear) return;
       try {
         const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`);
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         if (res.ok) {
           const terms = await res.json();
           const active = terms.find(term => term.status === 'active');
@@ -117,7 +122,12 @@ export default function Admin_AcademicSettings() {
   const fetchTerms = async (year) => {
     try {
       const schoolYearName = `${year.schoolYearStart}-${year.schoolYearEnd}`;
-      const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         setTerms(data);
@@ -289,9 +299,13 @@ export default function Admin_AcademicSettings() {
   const handleArchiveTerm = async (term) => {
     if (window.confirm(`Are you sure you want to archive ${term.termName}?`)) {
       try {
+        const token = localStorage.getItem('token');
         const res = await fetch(`${API_BASE}/api/terms/${term._id}/archive`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
         });
 
         if (res.ok) {
@@ -312,9 +326,13 @@ export default function Admin_AcademicSettings() {
   const handleActivateTerm = async (term) => {
     if (!window.confirm(`Are you sure you want to activate ${term.termName}?`)) return;
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE}/api/terms/${term._id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ status: 'active' })
       });
       if (res.ok) {
@@ -382,9 +400,13 @@ export default function Admin_AcademicSettings() {
     }
 
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE}/api/terms`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           schoolYearId: selectedYear._id,
           startDate: termFormData.startDate,
@@ -446,9 +468,13 @@ export default function Admin_AcademicSettings() {
   const handleActivatePromptTerm = async () => {
     if (!selectedPromptTerm) return;
     try {
+      const token = localStorage.getItem('token');
       await fetch(`${API_BASE}/api/terms/${selectedPromptTerm}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ status: 'active' })
       });
       setShowTermActivationPrompt(false);

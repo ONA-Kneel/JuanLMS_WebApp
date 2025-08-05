@@ -46,17 +46,23 @@ ticketSchema.pre('save', function(next) {
 
 // Method to decrypt sensitive data
 ticketSchema.methods.decryptSensitiveData = function() {
-  const ticket = this.toObject();
-  ticket.userId = decrypt(ticket.userId);
-  ticket.number = decrypt(ticket.number);
-  ticket.description = decrypt(ticket.description);
-  if (ticket.file) ticket.file = decrypt(ticket.file);
-  ticket.messages = ticket.messages.map(msg => ({
-    ...msg,
-    senderId: decrypt(msg.senderId),
-    message: decrypt(msg.message)
-  }));
-  return ticket;
+  try {
+    const ticket = this.toObject();
+    ticket.userId = decrypt(ticket.userId);
+    ticket.number = decrypt(ticket.number);
+    ticket.description = decrypt(ticket.description);
+    if (ticket.file) ticket.file = decrypt(ticket.file);
+    ticket.messages = ticket.messages.map(msg => ({
+      ...msg,
+      senderId: decrypt(msg.senderId),
+      message: decrypt(msg.message)
+    }));
+    return ticket;
+  } catch (err) {
+    console.error('[TICKET DECRYPTION ERROR]', err);
+    console.error('[TICKET DATA]', this.toObject());
+    throw new Error('Failed to decrypt ticket data');
+  }
 };
 
 const Ticket = mongoose.model('Ticket', ticketSchema);
