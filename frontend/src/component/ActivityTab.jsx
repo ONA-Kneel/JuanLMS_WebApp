@@ -493,16 +493,16 @@ export default function ActivityTab({ onAssignmentCreated }) {
             </div>
             {/* Sidebar */}
             <div className="w-96 min-w-[380px] bg-white border-l px-8 py-10 flex flex-col gap-8">
-                <div>
-                    <label className="block text-sm font-medium mb-1 font-poppins">Points</label>
-                    <div className="border rounded px-2 py-1 w-full font-poppins bg-white cursor-pointer" onClick={() => setShowPointsDropdown(!showPointsDropdown)}>
-                        <div className="flex justify-between items-center">
-                            <span>{activityPoints}</span>
-                            <span className="text-gray-500">▼</span>
-                        </div>
-                    </div>
-                                         {showPointsDropdown && (
-                         <div className="absolute z-50 mt-1 w-full bg-white border rounded shadow-lg max-h-60 overflow-y-auto">
+                                 <div className="relative">
+                     <label className="block text-sm font-medium mb-1 font-poppins">Points</label>
+                     <div className="border rounded px-2 py-1 w-full font-poppins bg-white cursor-pointer" onClick={() => setShowPointsDropdown(!showPointsDropdown)}>
+                         <div className="flex justify-between items-center">
+                             <span>{activityPoints}</span>
+                             <span className="text-gray-500">▼</span>
+                         </div>
+                     </div>
+                     {showPointsDropdown && (
+                         <div className="absolute z-50 mt-1 w-full bg-white border rounded shadow-lg max-h-96 overflow-y-auto">
                              <div className="p-2">
                                  <div className="text-sm font-semibold text-gray-700 mb-2">1 to 10</div>
                                  <div className="grid grid-cols-5 gap-1 mb-3">
