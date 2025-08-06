@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import SibApiV3Sdk from 'sib-api-v3-sdk';
 import exceljs from 'exceljs';
 import { sendEmail } from '../utils/emailUtil.js';
+import { authenticateToken } from '../middleware/authMiddleware.js';
 // import nodemailer from 'nodemailer'; // For real email sending
 // import exceljs from 'exceljs'; // For real Excel export
 
@@ -47,7 +48,7 @@ router.post('/register', async (req, res) => {
 });
 
 // GET /api/registrants?date=YYYY-MM-DD&status=pending
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const { date, status } = req.query;
     let filter = {};
@@ -62,11 +63,11 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/registrants/:id/approve
-router.post('/:id/approve', async (req, res) => {
+router.post('/:id/approve', authenticateToken, async (req, res) => {
   try {
-    if (!process.env.BREVO_API_KEY) {
-      console.error('BREVO_API_KEY is not set. Please set it in your environment.');
-      return res.status(500).json({ message: 'Email system not configured. Contact admin.' });
+    const hasEmailConfig = !!process.env.BREVO_API_KEY;
+    if (!hasEmailConfig) {
+      console.warn('BREVO_API_KEY is not set. Approval will proceed without email notification.');
     }
     const registrant = await Registrant.findById(req.params.id);
     if (!registrant) return res.status(404).json({ message: 'Registrant not found' });
@@ -91,25 +92,25 @@ router.post('/:id/approve', async (req, res) => {
     registrant.processedAt = new Date();
     registrant.processedBy = req.body && req.body.adminId ? req.body.adminId : null;
     await registrant.save();
-    // Send acceptance email via Brevo using utility
-    try {
-      await sendEmail({
-        toEmail: registrant.personalEmail,
-        toName: `${registrant.firstName} ${registrant.lastName}`,
-        subject: 'Admission Offer - Welcome to San Juan De Dios Educational Foundation Inc',
-        textContent:
+    
+    // Send acceptance email via Brevo using utility (only if email is configured)
+    if (hasEmailConfig) {
+      try {
+        await sendEmail({
+          toEmail: registrant.personalEmail,
+          toName: `${registrant.firstName} ${registrant.lastName}`,
+          subject: 'Admission Offer - Welcome to San Juan De Dios Educational Foundation Inc',
+          textContent:
 `Dear ${registrant.firstName} ${registrant.lastName},\n\nCongratulations! We are pleased to inform you that you have been accepted into our academic institution for the upcoming academic year. Your application demonstrated outstanding qualifications and potential, and we are excited to welcome you into our community.\n\nAs part of your enrollment, your official school credentials have been generated:\n\n- School Email: ${schoolEmail}\n- Temporary Password: ${tempPassword}\n\nPlease use these credentials to log in to the student portal and complete your onboarding tasks.\n\nWe look forward to seeing the great things you will accomplish here.\n\nWarm regards,\nAdmissions Office`
-      });
-      console.log('Acceptance email sent to', registrant.personalEmail);
-    } catch (emailErr) {
-      console.error('Error sending acceptance email via Brevo:', emailErr);
-      // Rollback: set registrant back to pending and delete user
-      registrant.status = 'pending';
-      registrant.processedAt = null;
-      registrant.processedBy = null;
-      await registrant.save();
-      await User.deleteOne({ _id: user._id });
-      return res.status(500).json({ message: 'Failed to send acceptance email. Approval not completed.' });
+        });
+        console.log('Acceptance email sent to', registrant.personalEmail);
+      } catch (emailErr) {
+        console.error('Error sending acceptance email via Brevo:', emailErr);
+        // Don't rollback - just log the error and continue
+        console.warn('Approval completed but email notification failed. User account created successfully.');
+      }
+    } else {
+      console.log('Approval completed without email notification (email system not configured)');
     }
     res.json({ message: 'Registrant approved and user created.' });
   } catch (err) {
@@ -119,11 +120,11 @@ router.post('/:id/approve', async (req, res) => {
 });
 
 // POST /api/registrants/:id/reject
-router.post('/:id/reject', async (req, res) => {
+router.post('/:id/reject', authenticateToken, async (req, res) => {
   try {
-    if (!process.env.BREVO_API_KEY) {
-      console.error('BREVO_API_KEY is not set. Please set it in your environment.');
-      return res.status(500).json({ message: 'Email system not configured. Contact admin.' });
+    const hasEmailConfig = !!process.env.BREVO_API_KEY;
+    if (!hasEmailConfig) {
+      console.warn('BREVO_API_KEY is not set. Rejection will proceed without email notification.');
     }
     const { note } = req.body;
     const registrant = await Registrant.findById(req.params.id);
@@ -134,23 +135,30 @@ router.post('/:id/reject', async (req, res) => {
     registrant.processedAt = new Date();
     registrant.processedBy = req.body.adminId || null;
     await registrant.save();
-    // Send rejection email via Brevo
-    try {
-      let defaultClient = SibApiV3Sdk.ApiClient.instance;
-      let apiKey = defaultClient.authentications['api-key'];
-      apiKey.apiKey = process.env.BREVO_API_KEY;
-      let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-      let applicantName = `${registrant.firstName} ${registrant.lastName}`;
-      let sendSmtpEmail = {
-        to: [{ email: registrant.personalEmail, name: applicantName }],
-        sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
-        subject: 'Admission Decision',
-        textContent:
+    
+    // Send rejection email via Brevo (only if email is configured)
+    if (hasEmailConfig) {
+      try {
+        let defaultClient = SibApiV3Sdk.ApiClient.instance;
+        let apiKey = defaultClient.authentications['api-key'];
+        apiKey.apiKey = process.env.BREVO_API_KEY;
+        let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+        let applicantName = `${registrant.firstName} ${registrant.lastName}`;
+        let sendSmtpEmail = {
+          to: [{ email: registrant.personalEmail, name: applicantName }],
+          sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
+          subject: 'Admission Decision',
+          textContent:
 `Dear ${applicantName},\n\nThank you for your interest in joining our academic institution. After careful consideration of your application, we regret to inform you that we are unable to offer you admission at this time.\n\n${registrant.note}\n\nIf you would like clarification regarding this decision or would like to discuss alternative pathways, we encourage you to contact the Registrar's Office at your convenience.\n\nWe appreciate the effort you put into your application and wish you success in your academic journey.\n\nSincerely,\nAdmissions Office`
-      };
-      await apiInstance.sendTransacEmail(sendSmtpEmail);
-    } catch (emailErr) {
-      console.error('Error sending rejection email via Brevo:', emailErr);
+        };
+        await apiInstance.sendTransacEmail(sendSmtpEmail);
+        console.log('Rejection email sent to', registrant.personalEmail);
+      } catch (emailErr) {
+        console.error('Error sending rejection email via Brevo:', emailErr);
+        console.warn('Rejection completed but email notification failed.');
+      }
+    } else {
+      console.log('Rejection completed without email notification (email system not configured)');
     }
     res.json({ message: 'Registrant rejected.' });
   } catch (err) {
@@ -160,7 +168,7 @@ router.post('/:id/reject', async (req, res) => {
 });
 
 // GET /api/registrants/export?date=YYYY-MM-DD
-router.get('/export', async (req, res) => {
+router.get('/export', authenticateToken, async (req, res) => {
   try {
     const { date, status } = req.query;
     let filter = {};
