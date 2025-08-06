@@ -799,12 +799,21 @@ export default function ClassContent({ selected, isFaculty = false }) {
             ) : announcements.length > 0 ? (
               announcements.map((item) => (
                 <div key={item._id} className="p-4 rounded bg-blue-50 border border-blue-200 shadow-sm flex justify-between items-start">
-                  <div>
-                  <h3 className="font-semibold text-blue-900">{item.title}</h3>
-                  <p className="text-sm text-gray-700">{item.content}</p>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-blue-900">{item.title}</h3>
+                    <p className="text-sm text-gray-700 mb-2">{item.content}</p>
+                    <p className="text-xs text-gray-500">
+                      Posted on: {new Date(item.createdAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
                   </div>
                   {isFaculty && (
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 ml-4">
                       <button onClick={() => handleEditAnnouncement(item._id, item.title, item.content)} className="bg-yellow-400 hover:bg-yellow-500 text-xs px-2 py-1 rounded font-bold">Edit</button>
                       <button onClick={() => handleDeleteAnnouncement(item._id)} className="bg-red-600 hover:bg-red-700 text-xs px-2 py-1 rounded text-white font-bold">Delete</button>
                     </div>
