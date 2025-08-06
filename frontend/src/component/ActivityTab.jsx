@@ -505,7 +505,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                          <div className="absolute z-50 mt-1 w-full bg-white border rounded shadow-lg max-h-60 overflow-y-auto">
                              <div className="p-2">
                                  <div className="text-sm font-semibold text-gray-700 mb-2">1 to 10</div>
-                                 <div className="flex gap-1 mb-3">
+                                 <div className="grid grid-cols-5 gap-1 mb-3">
                                      {Array.from({ length: 10 }, (_, i) => i + 1).map(num => (
                                          <button
                                              key={num}
@@ -520,7 +520,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                      ))}
                                  </div>
                                  <div className="text-sm font-semibold text-gray-700 mb-2">11 to 20</div>
-                                 <div className="flex gap-1 mb-3">
+                                 <div className="grid grid-cols-5 gap-1 mb-3">
                                      {Array.from({ length: 10 }, (_, i) => i + 11).map(num => (
                                          <button
                                              key={num}
@@ -535,7 +535,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                      ))}
                                  </div>
                                  <div className="text-sm font-semibold text-gray-700 mb-2">21 to 30</div>
-                                 <div className="flex gap-1 mb-3">
+                                 <div className="grid grid-cols-5 gap-1 mb-3">
                                      {Array.from({ length: 10 }, (_, i) => i + 21).map(num => (
                                          <button
                                              key={num}
@@ -550,7 +550,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                      ))}
                                  </div>
                                  <div className="text-sm font-semibold text-gray-700 mb-2">31 to 40</div>
-                                 <div className="flex gap-1 mb-3">
+                                 <div className="grid grid-cols-5 gap-1 mb-3">
                                      {Array.from({ length: 10 }, (_, i) => i + 31).map(num => (
                                          <button
                                              key={num}
@@ -565,7 +565,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                      ))}
                                  </div>
                                  <div className="text-sm font-semibold text-gray-700 mb-2">41 to 50</div>
-                                 <div className="flex gap-1 mb-3">
+                                 <div className="grid grid-cols-5 gap-1 mb-3">
                                      {Array.from({ length: 10 }, (_, i) => i + 41).map(num => (
                                          <button
                                              key={num}
@@ -580,7 +580,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                      ))}
                                  </div>
                                  <div className="text-sm font-semibold text-gray-700 mb-2">51 to 60</div>
-                                 <div className="flex gap-1 mb-3">
+                                 <div className="grid grid-cols-5 gap-1 mb-3">
                                      {Array.from({ length: 10 }, (_, i) => i + 51).map(num => (
                                          <button
                                              key={num}
@@ -595,7 +595,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                      ))}
                                  </div>
                                  <div className="text-sm font-semibold text-gray-700 mb-2">61 to 70</div>
-                                 <div className="flex gap-1 mb-3">
+                                 <div className="grid grid-cols-5 gap-1 mb-3">
                                      {Array.from({ length: 10 }, (_, i) => i + 61).map(num => (
                                          <button
                                              key={num}
@@ -610,7 +610,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                      ))}
                                  </div>
                                  <div className="text-sm font-semibold text-gray-700 mb-2">71 to 80</div>
-                                 <div className="flex gap-1 mb-3">
+                                 <div className="grid grid-cols-5 gap-1 mb-3">
                                      {Array.from({ length: 10 }, (_, i) => i + 71).map(num => (
                                          <button
                                              key={num}
@@ -625,7 +625,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                      ))}
                                  </div>
                                  <div className="text-sm font-semibold text-gray-700 mb-2">81 to 90</div>
-                                 <div className="flex gap-1 mb-3">
+                                 <div className="grid grid-cols-5 gap-1 mb-3">
                                      {Array.from({ length: 10 }, (_, i) => i + 81).map(num => (
                                          <button
                                              key={num}
@@ -640,7 +640,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                      ))}
                                  </div>
                                  <div className="text-sm font-semibold text-gray-700 mb-2">91 to 100</div>
-                                 <div className="flex gap-1">
+                                 <div className="grid grid-cols-5 gap-1">
                                      {Array.from({ length: 10 }, (_, i) => i + 91).map(num => (
                                          <button
                                              key={num}
