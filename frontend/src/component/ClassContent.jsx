@@ -801,8 +801,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 <div key={item._id} className="p-4 rounded bg-blue-50 border border-blue-200 shadow-sm flex justify-between items-start">
                   <div className="flex-1">
                     <h3 className="font-semibold text-blue-900">{item.title}</h3>
-                    <p className="text-sm text-gray-700 mb-2">{item.content}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 mb-2">
                       Posted on: {new Date(item.createdAt).toLocaleDateString('en-US', {
                         year: 'numeric',
                         month: 'long',
@@ -811,6 +810,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                         minute: '2-digit'
                       })}
                     </p>
+                    <p className="text-sm text-gray-700">{item.content}</p>
                   </div>
                   {isFaculty && (
                     <div className="flex gap-2 ml-4">
