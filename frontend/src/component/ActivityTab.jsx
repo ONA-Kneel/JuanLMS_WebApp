@@ -18,7 +18,6 @@ export default function ActivityTab({ onAssignmentCreated }) {
     const [classStudentMap, setClassStudentMap] = useState({}); // { classID: { students: [], selected: 'all' | [ids] } }
     const [showSuccess, setShowSuccess] = useState(false);
     const [activityPoints, setActivityPoints] = useState(100); // Default points for the whole activity
-    const [selectedRange, setSelectedRange] = useState(100); // Default range for the first dropdown
     const [showAddDropdown, setShowAddDropdown] = useState(false);
     const [attachmentFile, setAttachmentFile] = useState(null);
     const [attachmentLink, setAttachmentLink] = useState('');
@@ -72,9 +71,6 @@ export default function ActivityTab({ onAssignmentCreated }) {
                     setDescription(data.instructions || data.description || "");
                     const points = data.points || 100;
                     setActivityPoints(points);
-                    // Set the range based on the points
-                    const range = Math.ceil(points / 10) * 10;
-                    setSelectedRange(range);
                     setAttachmentLink(data.attachmentLink || "");
                     
                     // Set due date if it exists
@@ -297,7 +293,6 @@ export default function ActivityTab({ onAssignmentCreated }) {
         setSelectedClassIDs([]);
         setClassStudentMap({});
         setActivityPoints(100);
-        setSelectedRange(100);
         setAttachmentFile(null);
         setAttachmentLink("");
         setShowAddDropdown(false);
@@ -497,37 +492,62 @@ export default function ActivityTab({ onAssignmentCreated }) {
             {/* Sidebar */}
             <div className="w-96 min-w-[380px] bg-white border-l px-8 py-10 flex flex-col gap-8">
                 <div>
-                    <label className="block text-sm font-medium mb-1 font-poppins">Points Range</label>
-                    <select
-                        className="border rounded px-2 py-1 w-full font-poppins mb-2"
-                        value={selectedRange}
-                        onChange={e => {
-                            const range = Number(e.target.value);
-                            setSelectedRange(range);
-                            // Reset points to 1 when changing range
-                            setActivityPoints(1);
-                        }}
-                    >
-                        <option value={10}>1 to 10</option>
-                        <option value={20}>11 to 20</option>
-                        <option value={30}>21 to 30</option>
-                        <option value={40}>31 to 40</option>
-                        <option value={50}>41 to 50</option>
-                        <option value={60}>51 to 60</option>
-                        <option value={70}>61 to 70</option>
-                        <option value={80}>71 to 80</option>
-                        <option value={90}>81 to 90</option>
-                        <option value={100}>91 to 100</option>
-                    </select>
                     <label className="block text-sm font-medium mb-1 font-poppins">Points</label>
                     <select
                         className="border rounded px-2 py-1 w-full font-poppins"
                         value={activityPoints}
                         onChange={e => setActivityPoints(Number(e.target.value))}
                     >
-                        {Array.from({ length: selectedRange }, (_, i) => i + 1).map(num => (
-                            <option key={num} value={num}>{num}</option>
-                        ))}
+                        <optgroup label="1 to 10">
+                            {Array.from({ length: 10 }, (_, i) => i + 1).map(num => (
+                                <option key={num} value={num}>✓ {num}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="11 to 20">
+                            {Array.from({ length: 10 }, (_, i) => i + 11).map(num => (
+                                <option key={num} value={num}>✓ {num}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="21 to 30">
+                            {Array.from({ length: 10 }, (_, i) => i + 21).map(num => (
+                                <option key={num} value={num}>✓ {num}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="31 to 40">
+                            {Array.from({ length: 10 }, (_, i) => i + 31).map(num => (
+                                <option key={num} value={num}>✓ {num}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="41 to 50">
+                            {Array.from({ length: 10 }, (_, i) => i + 41).map(num => (
+                                <option key={num} value={num}>✓ {num}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="51 to 60">
+                            {Array.from({ length: 10 }, (_, i) => i + 51).map(num => (
+                                <option key={num} value={num}>✓ {num}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="61 to 70">
+                            {Array.from({ length: 10 }, (_, i) => i + 61).map(num => (
+                                <option key={num} value={num}>✓ {num}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="71 to 80">
+                            {Array.from({ length: 10 }, (_, i) => i + 71).map(num => (
+                                <option key={num} value={num}>✓ {num}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="81 to 90">
+                            {Array.from({ length: 10 }, (_, i) => i + 81).map(num => (
+                                <option key={num} value={num}>✓ {num}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="91 to 100">
+                            {Array.from({ length: 10 }, (_, i) => i + 91).map(num => (
+                                <option key={num} value={num}>✓ {num}</option>
+                            ))}
+                        </optgroup>
                     </select>
                 </div>
                 <div>
