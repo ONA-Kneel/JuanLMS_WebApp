@@ -500,6 +500,7 @@ export default function Admin_Accounts() {
       userID: user.userID,
       contactNo: user.contactNo || '',
     });
+    setShowCreateModal(true); // Open the modal when editing
   };
 
   const handleArchive = (user) => {
