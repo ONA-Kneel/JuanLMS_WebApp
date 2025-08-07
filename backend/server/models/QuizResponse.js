@@ -18,6 +18,12 @@ const QuizResponseSchema = new mongoose.Schema({
     studentAnswer: mongoose.Schema.Types.Mixed,
     correctAnswer: mongoose.Schema.Types.Mixed
   }],
+  violationCount: { type: Number, default: 0 },
+  violationEvents: [{
+    question: Number,
+    time: String // ISO string
+  }],
+  questionTimes: [Number], // seconds per question
 }, { timestamps: true });
 
 export default mongoose.model('QuizResponse', QuizResponseSchema); 

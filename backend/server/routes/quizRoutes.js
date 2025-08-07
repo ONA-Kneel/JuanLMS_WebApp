@@ -205,7 +205,7 @@ router.post('/:quizId/submit', authenticateToken, async (req, res) => {
   try {
     const { quizId } = req.params;
     const studentId = req.user ? req.user._id : req.body.studentId;
-    const { answers } = req.body;
+    const { answers, violationCount, violationEvents, questionTimes } = req.body;
     if (!Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ error: 'Answers are required.' });
     }
@@ -233,7 +233,7 @@ router.post('/:quizId/submit', authenticateToken, async (req, res) => {
       if (correct) score += q.points || 1;
       checkedAnswers.push({ correct, studentAnswer, correctAnswer: q.correctAnswers || q.correctAnswer });
     });
-    const response = new QuizResponse({ quizId, studentId, answers, score, checkedAnswers });
+    const response = new QuizResponse({ quizId, studentId, answers, score, checkedAnswers, violationCount, violationEvents, questionTimes });
     await response.save();
     res.status(201).json({ message: 'Quiz submitted successfully.', score });
   } catch (err) {

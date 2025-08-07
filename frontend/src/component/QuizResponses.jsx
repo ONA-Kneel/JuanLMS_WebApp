@@ -48,6 +48,7 @@ export default function QuizResponses() {
   });
   // Add members state
   const [members, setMembers] = useState([]);
+  const [showViolationsModal, setShowViolationsModal] = useState(false);
 
   const handleScoreEdit = idx => {
     setEditScoreIdx(idx);
@@ -198,30 +199,49 @@ export default function QuizResponses() {
                   <button className="ml-4 px-4 py-1 bg-blue-700 text-white rounded font-semibold hover:bg-blue-900 transition" onClick={() => handleScoreEdit(selectedIdx)}>Edit</button>
                 </>
               )}
+              {/* Show violation count and button */}
+              <span className="ml-8 text-base text-red-600 font-semibold">Tab/Focus Violations: {responses[selectedIdx].violationCount || 0}</span>
+              <button
+                className="ml-4 px-4 py-1 bg-red-600 text-white rounded font-semibold hover:bg-red-800 transition"
+                onClick={() => setShowViolationsModal(true)}
+              >
+                View Violations ({responses[selectedIdx].violationEvents?.length || 0})
+              </button>
             </div>
             {responses[selectedIdx].feedback && <div className="mb-2 text-green-700">Feedback: {responses[selectedIdx].feedback}</div>}
+            {/* Answers list with time spent per question on the right */}
             <div className="border rounded p-4 bg-gray-50 mb-4">
               <ol className="list-decimal ml-6">
                 {quiz.questions.map((q, idx) => {
                   const ans = responses[selectedIdx].answers.find(a => (a.questionId === (q._id || idx) || (a.questionId?._id === (q._id || idx))));
+                  const timeSpent = Array.isArray(responses[selectedIdx].questionTimes) ? responses[selectedIdx].questionTimes[idx] : null;
                   return (
-                    <li key={q._id || idx} className="mb-3">
-                      <div className="font-bold">{q.question}</div>
-                      {q.image && <img src={q.image} alt="Question" className="max-h-32 mb-2" />}
-                      <div className="ml-2">
-                        <span className="italic">Student Answer: </span>
-                        {q.type === 'multiple' && Array.isArray(ans?.answer) && (
-                          <ul className="list-disc ml-4">
-                            {ans.answer.map(i => <li key={i}>{q.choices[i]}</li>)}
-                          </ul>
-                        )}
-                        {q.type === 'truefalse' && (
-                          <span>{ans?.answer === true ? 'True' : ans?.answer === false ? 'False' : 'No answer'}</span>
-                        )}
-                        {q.type === 'identification' && (
-                          <span>{ans?.answer || 'No answer'}</span>
-                        )}
+                    <li key={q._id || idx} className="mb-3 flex justify-between items-start">
+                      <div>
+                        <div className="font-bold">{q.question}</div>
+                        {q.image && <img src={q.image} alt="Question" className="max-h-32 mb-2" />}
+                        <div className="ml-2">
+                          <span className="italic">Student Answer: </span>
+                          {q.type === 'multiple' && Array.isArray(ans?.answer) && (
+                            <ul className="list-disc ml-4">
+                              {ans.answer.map(i => <li key={i}>{q.choices[i]}</li>)}
+                            </ul>
+                          )}
+                          {q.type === 'truefalse' && (
+                            <span>{ans?.answer === true ? 'True' : ans?.answer === false ? 'False' : 'No answer'}</span>
+                          )}
+                          {q.type === 'identification' && (
+                            <span>{ans?.answer || 'No answer'}</span>
+                          )}
+                        </div>
                       </div>
+                      {/* Time spent per question on the far right with label */}
+                      {timeSpent !== null && (
+                        <div className="ml-8 text-xs text-blue-700 whitespace-nowrap self-center text-center">
+                          <div className="font-semibold">Time Spent</div>
+                          {timeSpent} seconds
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -339,6 +359,32 @@ export default function QuizResponses() {
         title={validationModal.title}
         message={validationModal.message}
       />
+      {/* Modal for violation events */}
+      {showViolationsModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+          <div className="bg-white rounded-xl shadow-xl p-8 max-w-md w-full text-center border-2 border-red-500">
+            <h3 className="text-2xl font-bold mb-4 text-red-700">Tab/Focus Violation Timeline</h3>
+            <ul className="text-left mb-4">
+              {responses[selectedIdx].violationEvents.map((v, i) => (
+                <li key={i} className="mb-2 flex items-center">
+                  <span className="mr-2 text-red-600">⛔</span>
+                  <span>
+                    <span className="font-semibold">Stopped viewing the quiz-taking page</span>
+                    {v.question && <> (Question {v.question})</>}
+                    <span className="ml-2 text-gray-500 text-xs">{new Date(v.time).toLocaleString()}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <button
+              className="mt-2 bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded"
+              onClick={() => setShowViolationsModal(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

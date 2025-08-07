@@ -126,12 +126,12 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                         setDueDate(`${year}-${month}-${day}T${hours}:${minutes}`);
                     }
                     if (data.timing) {
-                        setTimingOpenEnabled(data.timing.openEnabled);
+                        setTimingOpenEnabled(data.timing.open !== null);
                         setTimingOpen(data.timing.open || "");
-                        setTimingCloseEnabled(data.timing.closeEnabled);
+                        setTimingCloseEnabled(data.timing.close !== null);
                         setTimingClose(data.timing.close || "");
-                        setTimingLimitEnabled(data.timing.timeLimitEnabled);
-                        setTimingLimit(data.timing.timeLimit || 0);
+                        setTimingLimitEnabled(data.timing.limit !== null);
+                        setTimingLimit(data.timing.limit || 0);
                     }
                     if (data.classID) {
                         setSelectedClassIDs([data.classID]);
@@ -462,11 +462,8 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             questions,
             timing: {
                 open: timingOpenEnabled ? timingOpen : null,
-                openEnabled: timingOpenEnabled,
                 close: timingCloseEnabled ? timingClose : null,
-                closeEnabled: timingCloseEnabled,
-                timeLimit: timingLimitEnabled ? Number(timingLimit) : null,
-                timeLimitEnabled: timingLimitEnabled,
+                limit: timingLimitEnabled ? Number(timingLimit) : null
             },
             createdBy: userId,
             questionBehaviour: {
@@ -1042,20 +1039,20 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                         className="w-full flex items-center justify-between px-4 py-3 font-semibold text-left text-lg focus:outline-none"
                         onClick={() => setShowSafeExam(v => !v)}
                     >
-                        <span>Safe Exam Browser</span>
+                        <span>Exam Proctoring</span>
                         <span>{showSafeExam ? '▲' : '▼'}</span>
                     </button>
                     {showSafeExam && (
                         <div className="px-4 pb-4 pt-2 flex flex-col gap-4">
                 <div>
-                                <label className="block text-sm font-medium mb-1">Require the use of Safe Exam Browser</label>
+                                <label className="block text-sm font-medium mb-1">Enables the Exam Proctoring</label>
                                 <select
                                     className="border rounded px-2 py-1 w-full"
                                     value={safeExamRequired}
                                     onChange={e => setSafeExamRequired(e.target.value)}
                                 >
-                                    <option>No</option>
                                     <option>Yes</option>
+                                    <option>No</option>
                                 </select>
                 </div>
             </div>

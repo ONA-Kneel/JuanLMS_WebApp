@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import seedrandom from 'seedrandom';
 
@@ -24,6 +24,11 @@ export default function QuizView() {
   const [timeWarned, setTimeWarned] = useState(false);
   const [showUnansweredModal, setShowUnansweredModal] = useState(false);
   const [unansweredNumbers, setUnansweredNumbers] = useState([]);
+  const [violationCount, setViolationCount] = useState(0);
+  const violationCountRef = useRef(0);
+  const [violationEvents, setViolationEvents] = useState([]); // {question: number, time: ISO string}
+  const [questionTimes, setQuestionTimes] = useState([]); // seconds spent per question
+  const questionStartTimeRef = useRef(Date.now());
 
   // Fetch quiz details
   useEffect(() => {
@@ -108,6 +113,47 @@ export default function QuizView() {
     return () => clearInterval(interval);
   }, [quiz, timeLeft, submitted, timeWarned]);
 
+  // Track time spent per question
+  useEffect(() => {
+    if (!quiz || !quiz.questions) return;
+    // Initialize questionTimes if not set
+    if (questionTimes.length !== quiz.questions.length) {
+      setQuestionTimes(Array(quiz.questions.length).fill(0));
+    }
+    // Reset start time when quiz loads
+    questionStartTimeRef.current = Date.now();
+    // eslint-disable-next-line
+  }, [quiz]);
+  // When current question changes, record time spent on previous question
+  useEffect(() => {
+    if (!quiz || !quiz.questions) return;
+    if (current === 0) {
+      questionStartTimeRef.current = Date.now();
+      return;
+    }
+    setQuestionTimes(prev => {
+      const now = Date.now();
+      const prevTimes = [...prev];
+      const prevIdx = current - 1;
+      if (prevIdx >= 0) {
+        prevTimes[prevIdx] += Math.floor((now - questionStartTimeRef.current) / 1000);
+      }
+      questionStartTimeRef.current = now;
+      return prevTimes;
+    });
+    // eslint-disable-next-line
+  }, [current]);
+  // On quiz submit, record time for last question
+  const recordLastQuestionTime = () => {
+    if (!quiz || !quiz.questions) return;
+    setQuestionTimes(prev => {
+      const now = Date.now();
+      const prevTimes = [...prev];
+      prevTimes[current] += Math.floor((now - questionStartTimeRef.current) / 1000);
+      return prevTimes;
+    });
+  };
+
   // Check quiz availability
   const isAvailable = () => {
     if (!quiz) return false;
@@ -121,7 +167,46 @@ export default function QuizView() {
     setAnswers(ans => ans.map((a, i) => (i === idx ? value : a)));
   };
 
+  // Canvas-style monitoring: focus loss/tab switch
+  useEffect(() => {
+    const handleBlur = () => {
+      // Record violation event with question number and timestamp
+      setViolationEvents(events => [...events, { question: current + 1, time: new Date().toISOString() }]);
+      violationCountRef.current += 1;
+      setViolationCount(violationCountRef.current);
+      alert("You have left the quiz window. Your teacher will be notified.");
+      // Optionally, send to backend immediately (for real-time logging)
+      /*
+      fetch('/api/quiz-violation', {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'Tab switched', count: violationCountRef.current, quizId }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      */
+    };
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [current]);
+  // Disable right-click, copy, paste
+  useEffect(() => {
+    const handleContextMenu = (e) => e.preventDefault();
+    const handleCopy = (e) => e.preventDefault();
+    const handlePaste = (e) => e.preventDefault();
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('copy', handleCopy);
+    document.addEventListener('paste', handlePaste);
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('copy', handleCopy);
+      document.removeEventListener('paste', handlePaste);
+    };
+  }, []);
+
   const handleSubmit = async () => {
+    // Record time for last question
+    recordLastQuestionTime();
     // Check for unanswered required questions
     const unanswered = quiz.questions
       .map((q, i) => (q.required && (answers[i] === null || answers[i] === undefined || answers[i] === "")) ? i + 1 : null)
@@ -140,7 +225,12 @@ export default function QuizView() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ answers: quiz.questions.map((q, i) => ({ questionId: q._id || i, answer: answers[i] !== null && answers[i] !== undefined ? answers[i] : "" })) })
+        body: JSON.stringify({ 
+          answers: quiz.questions.map((q, i) => ({ questionId: q._id || i, answer: answers[i] !== null && answers[i] !== undefined ? answers[i] : "" })),
+          violationCount: violationCountRef.current,
+          violationEvents,
+          questionTimes
+        })
       });
       if (!res.ok) {
         const err = await res.json();
