@@ -69,7 +69,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
 
   // Helper function to check if assignment is posted
   const isAssignmentPosted = (assignment) => {
-    if (!assignment.postAt) return true; // If no postAt, consider it posted
+    if (!assignment.postAt) return false; // If no postAt, consider it not posted
     const now = new Date();
     const postAt = new Date(assignment.postAt);
     return postAt <= now;
@@ -844,20 +844,18 @@ export default function ClassContent({ selected, isFaculty = false }) {
         <>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold">Classwork</h2>
-
-                  <div>
-                    <label className="mr-2 text-sm text-gray-700">Filter:</label>
-                    <select
-                      value={filterType}
-                      onChange={(e) => setFilterType(e.target.value)}
-                      className="px-3 py-1 border border-gray-300 rounded text-sm"
-                    >
-                      <option value="all">All</option>
-                      <option value="quiz">Quiz</option>
-                      <option value="assignment">Assignment</option>
-                    </select>
-                  </div>
-
+            <div>
+              <label className="mr-2 text-sm text-gray-700">Filter:</label>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="px-3 py-1 border border-gray-300 rounded text-sm"
+              >
+                <option value="all">All</option>
+                <option value="quiz">Quiz</option>
+                <option value="assignment">Assignment</option>
+              </select>
+            </div>
             {isFaculty && (
               <div className="relative inline-block" ref={dropdownRef}>
                 <div className="flex items-center gap-3">
@@ -869,7 +867,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                   </button>
                 </div>
-
                 {showDropdown && (
                   <div className="absolute right-0 mt-2 w-48 bg-white border rounded shadow-lg z-10">
                     <button
@@ -889,91 +886,142 @@ export default function ClassContent({ selected, isFaculty = false }) {
               </div>
             )}
           </div>
-          {/* Assignment/Quiz list (Teams-style cards, clickable) */}
+          {/* Assignment/Quiz list grouped by date and unposted at top */}
           <div className="space-y-4">
             {assignmentsLoading ? (
               <p className="text-blue-700">Loading assignments...</p>
             ) : assignmentError ? (
               <p className="text-red-600">{assignmentError}</p>
             ) : assignments.length > 0 ? (
-                assignments
+              (() => {
+                // Filter and combine assignments/quizzes
+                let allItems = assignments
                   .filter((item) => {
                     if (filterType === "all") return true;
                     return item.type === filterType;
                   })
-                  .sort((a, b) => {
-                    const dateA = new Date(a.dueDate || a.postAt || 0);
-                    const dateB = new Date(b.dueDate || b.postAt || 0);
-                    return dateA - dateB; // ascending: past to future
-                  })
-                  .map((item) => {
-                const isPosted = isAssignmentPosted(item);
+                  .map(item => ({ ...item, isPosted: isAssignmentPosted(item) }));
+                // Separate unposted and posted
+                const unposted = allItems.filter(item => !item.isPosted);
+                const posted = allItems.filter(item => item.isPosted);
+                // Group posted by date (descending)
+                const groupedByDate = {};
+                posted.forEach(item => {
+                  const date = new Date(item.createdAt || item.postAt || new Date());
+                  const dateKey = date.toDateString();
+                  if (!groupedByDate[dateKey]) groupedByDate[dateKey] = [];
+                  groupedByDate[dateKey].push(item);
+                });
+                const sortedDateKeys = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
                 return (
-                  <div
-                    key={item._id}
-                    className={`p-4 rounded-xl border shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative ${
-                      isPosted 
-                        ? 'bg-white border-blue-200 hover:bg-blue-50' 
-                        : 'bg-gray-100 border-gray-300 opacity-75'
-                    }`}
-                    onClick={() => {
-                      if (item.type === 'quiz') {
-                        if (isFaculty) {
-                          navigate(`/quiz/${item._id}/responses`);
-                        } else {
-                          navigate(`/quiz/${item._id}`);
-                        }
-                      } else {
-                        navigate(`/assignment/${item._id}`);
-                      }
-                    }}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>
-                          {item.type === 'quiz' ? 'Quiz' : 'Assignment'}
-                        </span>
-                        {!isPosted && isFaculty && (
-                          <span className="inline-block px-2 py-1 rounded text-xs font-bold bg-gray-500 text-white">
-                            Not Posted Yet
-                          </span>
-                        )}
-                      </div>
-                      <span className={`text-lg font-bold ${isPosted ? 'text-blue-900' : 'text-gray-600'}`}>{item.title}</span>
-                      <div className={`text-sm mt-1 ${isPosted ? 'text-gray-700' : 'text-gray-500'}`}>{item.instructions}</div>
-                      {item.dueDate && (
-                        <div className={`text-xs mt-1 ${isPosted ? 'text-gray-500' : 'text-gray-400'}`}>
-                          Due: {new Date(item.dueDate).toLocaleString()}
-                        </div>
-                      )}
-                      {item.points && (
-                        <div className={`text-xs ${isPosted ? 'text-gray-500' : 'text-gray-400'}`}>
-                          Points: {item.points}
-                        </div>
-                      )}
-                      {!isPosted && item.postAt && isFaculty && (
-                        <div className="text-xs text-blue-600 mt-1">
-                          Will be posted: {new Date(item.postAt).toLocaleString()}
-                        </div>
-                      )}
-                    </div>
-                    {/* Faculty-only menu */}
-                    {isFaculty && (
-                      <div className="absolute top-2 right-2">
-                                              <Menu 
-                        assignment={item} 
-                        onDelete={id => setAssignments(assignments => assignments.filter(a => a._id !== id))}
-                        onUpdate={(updatedAssignment) => setAssignments(assignments => 
-                          assignments.map(a => a._id === updatedAssignment._id ? updatedAssignment : a)
-                        )}
-                        setValidationModal={setValidationModal}
-                        setConfirmationModal={setConfirmationModal}
-                      />
+                  <>
+                    {/* Unposted at the top */}
+                    {unposted.length > 0 && (
+                      <div className="mb-6">
+                        <h4 className="text-lg font-semibold text-gray-700 mb-3">Not Yet Posted</h4>
+                        {unposted.map(item => (
+                          <div
+                            key={item._id}
+                            className={`p-4 rounded-xl border shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative bg-gray-100 border-gray-300 opacity-75`}
+                            onClick={() => {
+                              if (item.type === 'quiz') {
+                                if (isFaculty) {
+                                  navigate(`/quiz/${item._id}/responses`);
+                                } else {
+                                  navigate(`/quiz/${item._id}`);
+                                }
+                              } else {
+                                navigate(`/assignment/${item._id}`);
+                              }
+                            }}
+                          >
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{item.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
+                                <span className="inline-block px-2 py-1 rounded text-xs font-bold bg-gray-500 text-white">Not Posted Yet</span>
+                              </div>
+                              <span className="text-lg font-bold text-gray-600">{item.title}</span>
+                              <div className="text-sm mt-1 text-gray-500">{item.instructions}</div>
+                              {item.dueDate && (
+                                <div className="text-xs mt-1 text-gray-400">Due: {new Date(item.dueDate).toLocaleString()}</div>
+                              )}
+                              {item.points && (
+                                <div className="text-xs text-gray-400">Points: {item.points}</div>
+                              )}
+                              {item.postAt && (
+                                <div className="text-xs text-blue-600 mt-1">Will be posted: {new Date(item.postAt).toLocaleString()}</div>
+                              )}
+                            </div>
+                            {isFaculty && (
+                              <div className="absolute top-2 right-2">
+                                <Menu 
+                                  assignment={item} 
+                                  onDelete={id => setAssignments(assignments => assignments.filter(a => a._id !== id))}
+                                  onUpdate={(updatedAssignment) => setAssignments(assignments => assignments.map(a => a._id === updatedAssignment._id ? updatedAssignment : a))}
+                                  setValidationModal={setValidationModal}
+                                  setConfirmationModal={setConfirmationModal}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
-                  </div>
+                    {/* Posted grouped by date */}
+                    {sortedDateKeys.map(dateKey => (
+                      <div key={dateKey}>
+                        <div className="mb-4 mt-6 first:mt-0">
+                          <h4 className="text-lg font-semibold text-gray-700 mb-3">{new Date(dateKey).toLocaleDateString('en-US', {
+                            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                          })}</h4>
+                        </div>
+                        {groupedByDate[dateKey].map(item => (
+                          <div
+                            key={item._id}
+                            className={`p-4 rounded-xl border shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative bg-white border-blue-200 hover:bg-blue-50`}
+                            onClick={() => {
+                              if (item.type === 'quiz') {
+                                if (isFaculty) {
+                                  navigate(`/quiz/${item._id}/responses`);
+                                } else {
+                                  navigate(`/quiz/${item._id}`);
+                                }
+                              } else {
+                                navigate(`/assignment/${item._id}`);
+                              }
+                            }}
+                          >
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{item.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
+                              </div>
+                              <span className="text-lg font-bold text-blue-900">{item.title}</span>
+                              <div className="text-sm mt-1 text-gray-700">{item.instructions}</div>
+                              {item.dueDate && (
+                                <div className="text-xs mt-1 text-gray-500">Due: {new Date(item.dueDate).toLocaleString()}</div>
+                              )}
+                              {item.points && (
+                                <div className="text-xs text-gray-500">Points: {item.points}</div>
+                              )}
+                            </div>
+                            {isFaculty && (
+                              <div className="absolute top-2 right-2">
+                                <Menu 
+                                  assignment={item} 
+                                  onDelete={id => setAssignments(assignments => assignments.filter(a => a._id !== id))}
+                                  onUpdate={(updatedAssignment) => setAssignments(assignments => assignments.map(a => a._id === updatedAssignment._id ? updatedAssignment : a))}
+                                  setValidationModal={setValidationModal}
+                                  setConfirmationModal={setConfirmationModal}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </>
                 );
-              })
+              })()
             ) : (
               <p>No assignments or quizzes found.</p>
             )}
@@ -1495,7 +1543,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
 // Add Menu component at the bottom of the file
 function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmationModal }) {
   const isPosted = () => {
-    if (!assignment.postAt) return true;
+    if (!assignment.postAt) return false; // Changed to false for unposted items
     const now = new Date();
     const postAt = new Date(assignment.postAt);
     return postAt <= now;
