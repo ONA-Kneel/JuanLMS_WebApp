@@ -20,6 +20,10 @@ export default function QuizView() {
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [scoreData, setScoreData] = useState(null);
+  const [showTimeWarning, setShowTimeWarning] = useState(false);
+  const [timeWarned, setTimeWarned] = useState(false);
+  const [showUnansweredModal, setShowUnansweredModal] = useState(false);
+  const [unansweredNumbers, setUnansweredNumbers] = useState([]);
 
   // Fetch quiz details
   useEffect(() => {
@@ -50,8 +54,9 @@ export default function QuizView() {
       setLoading(false);
 
       // 🕒 Handle quiz time limit
-      if (data.timing && data.timing.limit) {
-        setTimeLeft(data.timing.limit * 60);
+      if (data.timing && data.timing.timeLimitEnabled && data.timing.timeLimit) {
+        setTimeLeft(data.timing.timeLimit * 60);
+        setTimeWarned(false); // Reset warning flag on new quiz load
       }
 
       // 👤 Set student info
@@ -87,15 +92,21 @@ export default function QuizView() {
 
   // Timer logic
   useEffect(() => {
-    if (!quiz || !quiz.timing || !quiz.timing.limit || submitted) return;
+    if (!quiz || !quiz.timing || !quiz.timing.timeLimitEnabled || !quiz.timing.timeLimit || submitted) return;
     if (timeLeft === null) return;
+    const totalSeconds = quiz.timing.timeLimit * 60;
+    // Show warning modal at 60% elapsed (40% left)
+    if (!timeWarned && timeLeft <= totalSeconds * 0.4 && timeLeft > 0) {
+      setShowTimeWarning(true);
+      setTimeWarned(true);
+    }
     if (timeLeft <= 0) {
       handleSubmit();
       return;
     }
     const interval = setInterval(() => setTimeLeft(t => t - 1), 1000);
     return () => clearInterval(interval);
-  }, [quiz, timeLeft, submitted]);
+  }, [quiz, timeLeft, submitted, timeWarned]);
 
   // Check quiz availability
   const isAvailable = () => {
@@ -111,6 +122,15 @@ export default function QuizView() {
   };
 
   const handleSubmit = async () => {
+    // Check for unanswered required questions
+    const unanswered = quiz.questions
+      .map((q, i) => (q.required && (answers[i] === null || answers[i] === undefined || answers[i] === "")) ? i + 1 : null)
+      .filter(n => n !== null);
+    if (unanswered.length > 0) {
+      setUnansweredNumbers(unanswered);
+      setShowUnansweredModal(true);
+      return;
+    }
     setSubmitting(true);
     const token = localStorage.getItem('token');
     try {
@@ -120,7 +140,7 @@ export default function QuizView() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ answers: quiz.questions.map((q, i) => ({ questionId: q._id || i, answer: answers[i] })) })
+        body: JSON.stringify({ answers: quiz.questions.map((q, i) => ({ questionId: q._id || i, answer: answers[i] !== null && answers[i] !== undefined ? answers[i] : "" })) })
       });
       if (!res.ok) {
         const err = await res.json();
@@ -318,8 +338,34 @@ export default function QuizView() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
       {/* Timer centered above card */}
-      {quiz.timing?.limit && (
+      {quiz.timing?.timeLimitEnabled && quiz.timing?.timeLimit && (
         <div className="mb-4 text-2xl font-bold text-blue-900 text-center">Timer: {Math.floor(timeLeft/60)}:{String(timeLeft%60).padStart(2,'0')}</div>
+      )}
+      {/* Time warning modal */}
+      {showTimeWarning && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+          <div className="bg-white rounded-xl shadow-xl p-8 max-w-md w-full text-center border-2 border-yellow-500">
+            <h3 className="text-2xl font-bold mb-4 text-yellow-700">Time is more than halfway done!</h3>
+            <div className="text-lg mb-4">You have used 60% of your time. Please review and submit your answers soon.</div>
+            <button
+              className="mt-2 bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded"
+              onClick={() => setShowTimeWarning(false)}
+            >OK</button>
+          </div>
+        </div>
+      )}
+      {/* Unanswered required questions modal */}
+      {showUnansweredModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+          <div className="bg-white rounded-xl shadow-xl p-8 max-w-md w-full text-center border-2 border-red-500">
+            <h3 className="text-2xl font-bold mb-4 text-red-700">Required Questions Not Answered</h3>
+            <div className="text-lg mb-4">Please answer the following required question(s):<br/> {unansweredNumbers.join(", ")}</div>
+            <button
+              className="mt-2 bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded"
+              onClick={() => setShowUnansweredModal(false)}
+            >OK</button>
+          </div>
+        </div>
       )}
       {/* Card */}
       <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border-4 border-blue-800 flex flex-col items-stretch p-12 mb-8">
@@ -353,7 +399,7 @@ export default function QuizView() {
             <button
               className="bg-blue-800 text-white px-8 py-2 rounded-lg text-lg font-semibold"
               onClick={handleSubmit}
-              disabled={submitting || answers[current] == null}
+              disabled={submitting}
             >{submitting ? 'Submitting...' : 'Submit'}</button>
           )}
         </div>

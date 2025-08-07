@@ -126,12 +126,12 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                         setDueDate(`${year}-${month}-${day}T${hours}:${minutes}`);
                     }
                     if (data.timing) {
-                        setTimingOpenEnabled(data.timing.open !== null);
+                        setTimingOpenEnabled(data.timing.openEnabled);
                         setTimingOpen(data.timing.open || "");
-                        setTimingCloseEnabled(data.timing.close !== null);
+                        setTimingCloseEnabled(data.timing.closeEnabled);
                         setTimingClose(data.timing.close || "");
-                        setTimingLimitEnabled(data.timing.limit !== null);
-                        setTimingLimit(data.timing.limit || 0);
+                        setTimingLimitEnabled(data.timing.timeLimitEnabled);
+                        setTimingLimit(data.timing.timeLimit || 0);
                     }
                     if (data.classID) {
                         setSelectedClassIDs([data.classID]);
@@ -462,8 +462,11 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             questions,
             timing: {
                 open: timingOpenEnabled ? timingOpen : null,
+                openEnabled: timingOpenEnabled,
                 close: timingCloseEnabled ? timingClose : null,
-                limit: timingLimitEnabled ? Number(timingLimit) : null
+                closeEnabled: timingCloseEnabled,
+                timeLimit: timingLimitEnabled ? Number(timingLimit) : null,
+                timeLimitEnabled: timingLimitEnabled,
             },
             createdBy: userId,
             questionBehaviour: {
