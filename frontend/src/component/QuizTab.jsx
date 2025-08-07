@@ -1058,46 +1058,6 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             </div>
                     )}
                 </div>
-                {/* Grading Collapsible Section */}
-                <div className="border rounded mb-2">
-                    <button
-                        type="button"
-                        className="w-full flex items-center justify-between px-4 py-3 font-semibold text-left text-lg focus:outline-none"
-                        onClick={() => setShowGrading(v => !v)}
-                    >
-                        <span>Grading</span>
-                        <span>{showGrading ? '▲' : '▼'}</span>
-                    </button>
-                    {showGrading && (
-                        <div className="px-4 pb-4 pt-2 flex flex-col gap-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Grade to pass</label>
-                                <input
-                                    type="number"
-                                    min={0}
-                                    className="border rounded px-2 py-1 w-full"
-                                    value={gradeToPass}
-                                    onChange={e => setGradeToPass(e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Attempts allowed</label>
-                                <select
-                                    className="border rounded px-2 py-1 w-full"
-                                    value={attemptsAllowed}
-                                    onChange={e => setAttemptsAllowed(e.target.value)}
-                                >
-                                    <option value="Unlimited">Unlimited</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                    <option value="4">4</option>
-                                    <option value="5">5</option>
-                                </select>
-                            </div>
-                        </div>
-                    )}
-                </div>
             </div>
             {/* Validation Modal */}
             <ValidationModal
