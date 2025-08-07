@@ -773,21 +773,33 @@ export default function ClassContent({ selected, isFaculty = false }) {
             )}
           </div>
 
-          {/* Announcement form for faculty */}
+          {/* Replace inline announcement form with modal */}
           {isFaculty && showAnnouncementForm && (
-            <form onSubmit={handleAddAnnouncement} className="mb-6 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
-              <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
-                <input name="title" required className="w-full border rounded px-3 py-2 text-sm" />
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+              <div className="bg-white p-8 rounded-xl shadow-xl max-w-lg w-full border-2 border-blue-200 relative">
+                <button
+                  className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl font-bold"
+                  onClick={() => setShowAnnouncementForm(false)}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+                <h3 className="text-xl font-bold mb-4 text-blue-900">Create Announcement</h3>
+                <form onSubmit={handleAddAnnouncement} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
+                    <input name="title" required className="w-full border rounded px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-blue-900 mb-1">Content</label>
+                    <textarea name="content" required className="w-full border rounded px-3 py-2 text-sm" rows={3} />
+                  </div>
+                  <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm">
+                    Save Announcement
+                  </button>
+                </form>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Content</label>
-                <textarea name="content" required className="w-full border rounded px-3 py-2 text-sm" rows={3} />
-              </div>
-              <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm">
-                Save Announcement
-              </button>
-            </form>
+            </div>
           )}
 
           {/* Announcements list (faculty: backend, students: backend) */}
