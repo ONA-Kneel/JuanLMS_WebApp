@@ -2,12 +2,14 @@ import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileModal from "../ProfileModal";
 import ProfileMenu from "../ProfileMenu";
 import React, { useEffect, useState } from 'react';
+import GradingSystem from '../GradingSystem';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Faculty_Grades() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [activeTab, setActiveTab] = useState('traditional'); // 'traditional' or 'excel'
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -73,8 +75,27 @@ export default function Faculty_Grades() {
           <ProfileMenu/>
         </div>
 
-        {/* Grades Table */}
-        <div className="overflow-x-auto">
+        {/* Tab Navigation */}
+        <div className="mb-6">
+          <div className="flex gap-4 border-b">
+            <button
+              className={`pb-2 px-4 ${activeTab === 'traditional' ? 'border-b-2 border-blue-900 font-bold' : ''}`}
+              onClick={() => setActiveTab('traditional')}
+            >
+              Traditional Grades
+            </button>
+            <button
+              className={`pb-2 px-4 ${activeTab === 'excel' ? 'border-b-2 border-blue-900 font-bold' : ''}`}
+              onClick={() => setActiveTab('excel')}
+            >
+              Excel Grading System
+            </button>
+          </div>
+        </div>
+
+        {/* Content based on active tab */}
+        {activeTab === 'traditional' ? (
+          <div className="overflow-x-auto">
           <table className="min-w-full bg-white border border-gray-300 text-sm">
             <thead>
               <tr>
@@ -108,6 +129,9 @@ export default function Faculty_Grades() {
             </tbody>
           </table>
         </div>
+        ) : (
+          <GradingSystem />
+        )}
       </div>
     </div>
   );

@@ -221,4 +221,26 @@ router.get('/active', authenticateToken, async (req, res) => {
   }
 });
 
+// Get current term (alias for active)
+router.get('/current', authenticateToken, async (req, res) => {
+  try {
+    const activeTerm = await Term.findOne({ status: 'active' });
+    if (!activeTerm) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'No active term found' 
+      });
+    }
+    res.json({
+      success: true,
+      term: activeTerm
+    });
+  } catch (err) {
+    res.status(500).json({ 
+      success: false, 
+      message: err.message 
+    });
+  }
+});
+
 export default router; 

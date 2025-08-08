@@ -33,6 +33,7 @@ import classDateRoutes  from './routes/classDateRoutes.js';
 import quizRoutes from './routes/quizRoutes.js';
 import meetingRoutes from './routes/meetingRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import gradingRoutes from './routes/gradingRoutes.js';
 
 
 dotenv.config({ path: './config.env' });
@@ -150,6 +151,7 @@ app.use('/api/registrants', registrantRoutes);
 app.use('/api/class-dates', classDateRoutes);
 app.use('/api/quizzes', quizRoutes);
 app.use('/notifications', notificationRoutes);
+app.use('/api/grading', gradingRoutes);
 
 // Start server
 app.listen(PORT, () => {

@@ -160,4 +160,26 @@ router.get('/active', async (req, res) => {
   }
 });
 
+// Get current school year (alias for active)
+router.get('/current', async (req, res) => {
+  try {
+    const activeSchoolYear = await SchoolYear.findOne({ status: 'active' });
+    if (!activeSchoolYear) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'No active school year found' 
+      });
+    }
+    res.json({
+      success: true,
+      schoolYear: activeSchoolYear
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+});
+
 export default router; 
