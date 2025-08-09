@@ -3,16 +3,7 @@ import StudentAssignment from '../models/StudentAssignment.js';
 import User from '../models/User.js';
 
 /**
- * Process Excel file for grading data
- * @param {Buffer} fileBuffer - Excel file buffer
- * @param {Object} options - Processing options
- * @param {string} options.sectionName - Section name
- * @param {string} options.trackName - Track name
- * @param {string} options.strandName - Strand name
- * @param {string} options.gradeLevel - Grade level
- * @param {string} options.schoolYear - School year
- * @param {string} options.termName - Term name
- * @returns {Object} Processed data with grades and validation results
+ * Process Excel file for grading data - Enhanced to handle blank sheets and various formats
  */
 export async function processGradingExcel(fileBuffer, options) {
   try {
@@ -24,18 +15,39 @@ export async function processGradingExcel(fileBuffer, options) {
     // Convert to JSON
     const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-    if (data.length < 2) {
-      throw new Error('Excel file must have at least a header row and one data row');
+    if (data.length === 0) {
+      return {
+        success: false,
+        errors: ['Excel file is empty or contains no data'],
+        warnings: [],
+        grades: []
+      };
     }
 
-    // Validate header
-    const header = data[0];
-    const expectedHeaders = ['Student Name', 'Grade', 'Feedback'];
+    // Handle different header formats
+    const header = data[0] || [];
+    let headerMapping = {};
 
-    for (let i = 0; i < expectedHeaders.length; i++) {
-      if (!header[i] || header[i].toString().trim() !== expectedHeaders[i]) {
-        throw new Error(`Invalid header format. Expected: ${expectedHeaders.join(', ')}`);
+    // Try to find headers in the first row
+    for (let i = 0; i < header.length; i++) {
+      const headerValue = header[i] ? header[i].toString().trim().toLowerCase() : '';
+      
+      if (headerValue.includes('student') || headerValue.includes('name')) {
+        headerMapping.studentName = i;
+      } else if (headerValue.includes('grade') || headerValue.includes('score') || headerValue.includes('mark')) {
+        headerMapping.grade = i;
+      } else if (headerValue.includes('feedback') || headerValue.includes('comment') || headerValue.includes('remark')) {
+        headerMapping.feedback = i;
       }
+    }
+
+    // If no headers found, assume first 3 columns are Student Name, Grade, Feedback
+    if (Object.keys(headerMapping).length === 0) {
+      headerMapping = {
+        studentName: 0,
+        grade: 1,
+        feedback: 2
+      };
     }
 
     // Process data rows
@@ -45,11 +57,16 @@ export async function processGradingExcel(fileBuffer, options) {
 
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
-      if (!row[0] || !row[0].toString().trim()) continue; // Skip empty rows
+      if (!row || row.length === 0) continue; // Skip empty rows
 
-      const studentName = row[0].toString().trim();
-      const gradeValue = row[1];
-      const feedback = row[2] ? row[2].toString().trim() : '';
+      const studentName = row[headerMapping.studentName] ? row[headerMapping.studentName].toString().trim() : '';
+      const gradeValue = row[headerMapping.grade];
+      const feedback = row[headerMapping.feedback] ? row[headerMapping.feedback].toString().trim() : '';
+
+      // Skip rows without student names
+      if (!studentName) {
+        continue;
+      }
 
       // Validate grade
       let grade = null;
@@ -64,10 +81,23 @@ export async function processGradingExcel(fileBuffer, options) {
         continue;
       }
 
-      // Find student in database
-      const student = await User.findOne({
-        firstname: { $regex: new RegExp(studentName.split(' ')[0], 'i') },
-        lastname: { $regex: new RegExp(studentName.split(' ').slice(1).join(' '), 'i') },
+      // Find student in database - more flexible matching
+      let student = null;
+      
+      // Try exact name match first
+      student = await User.findOne({
+        $or: [
+          { 
+            firstname: { $regex: new RegExp(`^${studentName.split(' ')[0]}$`, 'i') },
+            lastname: { $regex: new RegExp(studentName.split(' ').slice(1).join(' '), 'i') }
+          },
+          {
+            firstname: { $regex: new RegExp(studentName, 'i') }
+          },
+          {
+            lastname: { $regex: new RegExp(studentName, 'i') }
+          }
+        ],
         role: 'student'
       });
 
@@ -115,7 +145,7 @@ export async function processGradingExcel(fileBuffer, options) {
 }
 
 /**
- * Generate Excel template for grading
+ * Generate Excel template for grading - Enhanced to handle blank sheets
  * @param {Array} students - Array of student objects
  * @param {Object} options - Template options
  * @returns {Buffer} Excel file buffer
@@ -155,5 +185,46 @@ export function generateGradingTemplate(students, options = {}) {
 
   } catch (error) {
     throw new Error(`Error generating Excel template: ${error.message}`);
+  }
+}
+
+/**
+ * Validate Excel file structure without processing grades
+ * @param {Buffer} fileBuffer - Excel file buffer
+ * @returns {Object} Validation result
+ */
+export function validateExcelStructure(fileBuffer) {
+  try {
+    const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+
+    if (!worksheet) {
+      return {
+        isValid: false,
+        error: 'No worksheet found in Excel file'
+      };
+    }
+
+    const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+    if (data.length === 0) {
+      return {
+        isValid: false,
+        error: 'Excel file is empty'
+      };
+    }
+
+    return {
+      isValid: true,
+      rowCount: data.length,
+      columnCount: data[0] ? data[0].length : 0
+    };
+
+  } catch (error) {
+    return {
+      isValid: false,
+      error: `Invalid Excel file: ${error.message}`
+    };
   }
 } 

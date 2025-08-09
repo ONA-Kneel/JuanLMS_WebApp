@@ -192,6 +192,19 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
       });
     }
 
+    // Check if any grades were processed
+    if (result.grades.length === 0) {
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      return res.status(400).json({
+        success: false,
+        message: 'No valid grades found in the Excel file. Please ensure the file contains student names and grades.',
+        errors: ['No grades were processed from the uploaded file'],
+        warnings: result.warnings
+      });
+    }
+
     // Save grading data to database
     const gradingData = new GradingData({
       facultyId,
@@ -251,7 +264,7 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
 
     res.status(500).json({
       success: false,
-      message: 'Error uploading grades'
+      message: error.message || 'Error uploading grades'
     });
   }
 });

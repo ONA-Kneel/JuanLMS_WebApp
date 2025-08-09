@@ -15,7 +15,7 @@ import ValidationModal from './ValidationModal';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://juanlms-webapp-server.onrender.com';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 function calculateStats(responses, quiz) {
   const scores = responses.map(r => typeof r.score === 'number' ? r.score : 0);

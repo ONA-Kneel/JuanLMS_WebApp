@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function GradingSystem() {
   const [facultyAssignments, setFacultyAssignments] = useState([]);
@@ -64,6 +64,8 @@ export default function GradingSystem() {
     const assignment = facultyAssignments.find(a => a._id === assignmentId);
     if (assignment) {
       setSelectedSection(assignment);
+      // Fetch grading data for this assignment
+      fetchGradingData(assignmentId);
     }
   };
 
@@ -76,15 +78,20 @@ export default function GradingSystem() {
         'text/csv'
       ];
       
-      if (allowedTypes.includes(file.type) || 
-          file.name.endsWith('.xlsx') || 
-          file.name.endsWith('.xls') || 
-          file.name.endsWith('.csv')) {
+      // Check file extension
+      const fileExtension = file.name.toLowerCase().split('.').pop();
+      const allowedExtensions = ['xlsx', 'xls', 'csv'];
+      
+      if (allowedTypes.includes(file.type) || allowedExtensions.includes(fileExtension)) {
         setExcelFile(file);
+        setSuccessMessage(`File selected: ${file.name}`);
+        setTimeout(() => setSuccessMessage(''), 3000);
       } else {
         setValidationMessage('Please select a valid Excel file (.xlsx, .xls) or CSV file.');
         setValidationType('error');
         setShowValidationModal(true);
+        // Clear the file input
+        e.target.value = '';
       }
     }
   };
@@ -97,9 +104,48 @@ export default function GradingSystem() {
       return;
     }
 
-    // Mock download - just show success message
-    setSuccessMessage('Template downloaded successfully!');
-    setTimeout(() => setSuccessMessage(''), 3000);
+    try {
+      const selectedAssignmentObj = facultyAssignments.find(a => a._id === selectedAssignment);
+      const queryParams = new URLSearchParams({
+        sectionName: selectedAssignmentObj.sectionName,
+        trackName: selectedAssignmentObj.trackName,
+        strandName: selectedAssignmentObj.strandName,
+        gradeLevel: selectedAssignmentObj.gradeLevel,
+        schoolYear: selectedAssignmentObj.schoolYear,
+        termName: selectedAssignmentObj.termName
+      });
+
+      const response = await fetch(`${API_BASE}/api/grading/template/${selectedAssignment}?${queryParams}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `grading_template_${selectedAssignmentObj.sectionName}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        setSuccessMessage('Template downloaded successfully!');
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        const errorData = await response.json();
+        setValidationMessage(errorData.message || 'Failed to download template');
+        setValidationType('error');
+        setShowValidationModal(true);
+      }
+    } catch (error) {
+      console.error('Error downloading template:', error);
+      setValidationMessage('Error downloading template. Please try again.');
+      setValidationType('error');
+      setShowValidationModal(true);
+    }
   };
 
   const handleUpload = async () => {
@@ -117,14 +163,72 @@ export default function GradingSystem() {
       return;
     }
 
-    // Mock upload - just show success message
-    setUploadLoading(true);
-    setTimeout(() => {
-      setSuccessMessage(`Grades uploaded successfully! File: ${excelFile.name}`);
-      setExcelFile(null);
+    try {
+      setUploadLoading(true);
+      const formData = new FormData();
+      formData.append('excelFile', excelFile);
+
+      // Add required fields to form data
+      const selectedAssignmentObj = facultyAssignments.find(a => a._id === selectedAssignment);
+      formData.append('sectionName', selectedAssignmentObj.sectionName);
+      formData.append('trackName', selectedAssignmentObj.trackName);
+      formData.append('strandName', selectedAssignmentObj.strandName);
+      formData.append('gradeLevel', selectedAssignmentObj.gradeLevel);
+      formData.append('schoolYear', selectedAssignmentObj.schoolYear);
+      formData.append('termName', selectedAssignmentObj.termName);
+
+      const response = await fetch(`${API_BASE}/api/grading/upload/${selectedAssignment}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSuccessMessage(`Grades uploaded successfully! ${data.data.totalProcessed} students processed.`);
+        setExcelFile(null);
+        
+        // Refresh grading data
+        fetchGradingData(selectedAssignment);
+      } else {
+        const errorData = await response.json();
+        setValidationMessage(errorData.message || 'Failed to upload grades');
+        setValidationType('error');
+        setShowValidationModal(true);
+      }
+    } catch (error) {
+      console.error('Error uploading grades:', error);
+      setValidationMessage('Error uploading grades. Please try again.');
+      setValidationType('error');
+      setShowValidationModal(true);
+    } finally {
       setUploadLoading(false);
-      setTimeout(() => setSuccessMessage(''), 5000);
-    }, 2000);
+    }
+  };
+
+  const fetchGradingData = async (assignmentId) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/api/grading/data/${assignmentId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setGradingData(data.data || []);
+      } else {
+        console.error('Failed to fetch grading data');
+      }
+    } catch (error) {
+      console.error('Error fetching grading data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const deleteGradingData = async (gradingDataId) => {
@@ -132,9 +236,33 @@ export default function GradingSystem() {
       return;
     }
 
-    // Mock delete - just show success message
-    setSuccessMessage('Grading data deleted successfully!');
-    setTimeout(() => setSuccessMessage(''), 3000);
+    try {
+      const response = await fetch(`${API_BASE}/api/grading/data/${gradingDataId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        setSuccessMessage('Grading data deleted successfully!');
+        setTimeout(() => setSuccessMessage(''), 3000);
+        
+        // Refresh grading data
+        fetchGradingData(selectedAssignment);
+      } else {
+        const errorData = await response.json();
+        setValidationMessage(errorData.message || 'Failed to delete grading data');
+        setValidationType('error');
+        setShowValidationModal(true);
+      }
+    } catch (error) {
+      console.error('Error deleting grading data:', error);
+      setValidationMessage('Error deleting grading data. Please try again.');
+      setValidationType('error');
+      setShowValidationModal(true);
+    }
   };
 
   return (
@@ -237,6 +365,13 @@ export default function GradingSystem() {
                   <p className="text-sm text-gray-600 mt-1">
                     Upload an Excel file with columns: Student Name, Grade, Feedback (optional)
                   </p>
+                  {excelFile && (
+                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                      <p className="text-sm text-blue-800">
+                        <strong>Selected file:</strong> {excelFile.name} ({(excelFile.size / 1024).toFixed(1)} KB)
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-4">
                   <button

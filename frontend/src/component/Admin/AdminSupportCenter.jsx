@@ -3,7 +3,7 @@ import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import { getAllTickets, replyToTicket } from '../../services/ticketService';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function AdminSupportCenter() {
   const [tickets, setTickets] = useState([]);
@@ -151,7 +151,7 @@ export default function AdminSupportCenter() {
   async function handleStatusChange(ticketId, newStatus) {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
       
       const endpoint = newStatus === 'opened' ? 'open' : 'close';
       const response = await fetch(`${API_BASE}/api/tickets/${ticketId}/${endpoint}`, {
