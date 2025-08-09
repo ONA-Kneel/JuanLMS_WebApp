@@ -8,7 +8,7 @@ const gradingDataSchema = new mongoose.Schema({
   },
   assignmentId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Assignment',
+    ref: 'FacultyAssignment', // Changed from 'Assignment' to 'FacultyAssignment'
     required: true
   },
   sectionName: {

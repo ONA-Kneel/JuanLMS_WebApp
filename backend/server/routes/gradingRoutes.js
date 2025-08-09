@@ -9,6 +9,7 @@ import FacultyAssignment from '../models/FacultyAssignment.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import Submission from '../models/Submission.js';
 import { processGradingExcel, generateGradingTemplate } from '../utils/excelProcessor.js';
+import User from '../models/User.js'; // Added import for User
 
 const router = express.Router();
 
@@ -72,6 +73,45 @@ router.get('/assignments/:facultyId', authenticateToken, async (req, res) => {
   }
 });
 
+// Get current faculty assignments (for the authenticated user)
+router.get('/my-assignments', authenticateToken, async (req, res) => {
+  try {
+    const facultyId = req.user.id;
+    console.log('Fetching assignments for faculty:', facultyId);
+
+    // First, let's check if the faculty exists
+    const faculty = await User.findById(facultyId);
+    if (!faculty) {
+      console.log('Faculty not found:', facultyId);
+      return res.status(404).json({
+        success: false,
+        message: 'Faculty not found'
+      });
+    }
+
+    console.log('Faculty found:', faculty.firstname, faculty.lastname);
+
+    const assignments = await FacultyAssignment.find({ 
+      facultyId: facultyId,
+      status: 'active'
+    }).sort({ createdAt: -1 });
+
+    console.log('Found assignments:', assignments.length, assignments);
+
+    res.json({
+      success: true,
+      assignments: assignments
+    });
+  } catch (error) {
+    console.error('Error fetching faculty assignments:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching assignments',
+      error: error.message
+    });
+  }
+});
+
 // Get students for a specific section
 router.get('/section/:sectionId/students', authenticateToken, async (req, res) => {
   try {
@@ -96,6 +136,58 @@ router.get('/section/:sectionId/students', authenticateToken, async (req, res) =
     res.status(500).json({
       success: false,
       message: 'Error fetching students'
+    });
+  }
+});
+
+// Debug endpoint to see all students in a section
+router.get('/debug/students/:sectionName', authenticateToken, async (req, res) => {
+  try {
+    const { sectionName } = req.params;
+    const { trackName, strandName, gradeLevel, schoolYear, termName } = req.query;
+
+    console.log('Debug request for section:', { sectionName, trackName, strandName, gradeLevel, schoolYear, termName });
+
+    // Get all students in the section
+    const studentAssignments = await StudentAssignment.find({
+      sectionName,
+      trackName,
+      strandName,
+      gradeLevel,
+      schoolYear,
+      termName
+    }).populate('studentId', 'firstname lastname email');
+
+    // Get all students in the database
+    const allStudents = await User.find({ role: 'student' }).select('firstname lastname email');
+
+    res.json({
+      success: true,
+      sectionStudents: studentAssignments.map(sa => ({
+        id: sa.studentId._id,
+        name: `${sa.studentId.firstname} ${sa.studentId.lastname}`,
+        email: sa.studentId.email
+      })),
+      allStudents: allStudents.map(s => ({
+        id: s._id,
+        name: `${s.firstname} ${s.lastname}`,
+        email: s.email
+      })),
+      sectionInfo: {
+        sectionName,
+        trackName,
+        strandName,
+        gradeLevel,
+        schoolYear,
+        termName
+      }
+    });
+  } catch (error) {
+    console.error('Error in debug endpoint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching debug information',
+      error: error.message
     });
   }
 });
@@ -141,6 +233,8 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
     const { facultyAssignmentId } = req.params;
     const facultyId = req.user.id;
 
+    console.log('Upload request received:', { facultyAssignmentId, facultyId, body: req.body });
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -157,16 +251,20 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
       termName
     } = req.body;
 
+    console.log('Processing options:', { sectionName, trackName, strandName, gradeLevel, schoolYear, termName });
+
     // Validate required fields
     if (!sectionName || !trackName || !strandName || !gradeLevel || !schoolYear || !termName) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields'
+        message: 'Missing required fields',
+        received: { sectionName, trackName, strandName, gradeLevel, schoolYear, termName }
       });
     }
 
     // Read file buffer
     const fileBuffer = fs.readFileSync(req.file.path);
+    console.log('File read successfully, size:', fileBuffer.length);
 
     // Process Excel file
     const processingOptions = {
@@ -178,7 +276,9 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
       termName
     };
 
+    console.log('Processing Excel file with options:', processingOptions);
     const result = await processGradingExcel(fileBuffer, processingOptions);
+    console.log('Processing result:', result);
 
     if (!result.success) {
       // Clean up uploaded file
@@ -208,7 +308,7 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
     // Save grading data to database
     const gradingData = new GradingData({
       facultyId,
-      assignmentId: facultyAssignmentId, // Use FacultyAssignment ID as assignmentId
+      assignmentId: facultyAssignmentId,
       sectionName,
       trackName,
       strandName,
@@ -220,21 +320,23 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
       status: 'processed'
     });
 
+    console.log('Saving grading data:', gradingData);
     await gradingData.save();
+    console.log('Grading data saved successfully');
 
     // Update submissions with grades
     for (const grade of result.grades) {
       await Submission.findOneAndUpdate(
         {
-          assignmentId: facultyAssignmentId, // Use FacultyAssignment ID
-          studentId: grade.studentId
+          assignment: facultyAssignmentId, // Changed from assignmentId to assignment
+          student: grade.studentId // Changed from studentId to student
         },
         {
           $set: {
             grade: grade.grade,
             feedback: grade.feedback,
-            gradedAt: new Date(),
-            gradedBy: facultyId
+            status: 'graded', // Set status to graded
+            submittedAt: new Date()
           }
         },
         { upsert: false }
@@ -264,7 +366,8 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
 
     res.status(500).json({
       success: false,
-      message: error.message || 'Error uploading grades'
+      message: error.message || 'Error uploading grades',
+      error: error.toString()
     });
   }
 });
@@ -315,15 +418,16 @@ router.delete('/data/:gradingDataId', authenticateToken, async (req, res) => {
     for (const grade of gradingData.grades) {
       await Submission.findOneAndUpdate(
         {
-          assignmentId: gradingData.assignmentId,
-          studentId: grade.studentId
+          assignment: gradingData.assignmentId, // Changed from assignmentId to assignment
+          student: grade.studentId // Changed from studentId to student
         },
         {
           $unset: {
             grade: 1,
-            feedback: 1,
-            gradedAt: 1,
-            gradedBy: 1
+            feedback: 1
+          },
+          $set: {
+            status: 'turned-in' // Revert status to turned-in
           }
         }
       );

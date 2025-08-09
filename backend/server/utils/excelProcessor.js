@@ -7,15 +7,21 @@ import User from '../models/User.js';
  */
 export async function processGradingExcel(fileBuffer, options) {
   try {
+    console.log('Starting Excel processing with options:', options);
+    
     // Read the Excel file
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
 
+    console.log('Excel file read, sheet name:', sheetName);
+
     // Convert to JSON
     const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    console.log('Data converted to JSON, rows:', data.length);
 
     if (data.length === 0) {
+      console.log('Excel file is empty');
       return {
         success: false,
         errors: ['Excel file is empty or contains no data'],
@@ -27,6 +33,8 @@ export async function processGradingExcel(fileBuffer, options) {
     // Handle different header formats
     const header = data[0] || [];
     let headerMapping = {};
+
+    console.log('Headers found:', header);
 
     // Try to find headers in the first row
     for (let i = 0; i < header.length; i++) {
@@ -50,6 +58,8 @@ export async function processGradingExcel(fileBuffer, options) {
       };
     }
 
+    console.log('Header mapping:', headerMapping);
+
     // Process data rows
     const grades = [];
     const errors = [];
@@ -63,8 +73,11 @@ export async function processGradingExcel(fileBuffer, options) {
       const gradeValue = row[headerMapping.grade];
       const feedback = row[headerMapping.feedback] ? row[headerMapping.feedback].toString().trim() : '';
 
+      console.log(`Processing row ${i + 1}:`, { studentName, gradeValue, feedback });
+
       // Skip rows without student names
       if (!studentName) {
+        console.log(`Skipping row ${i + 1}: No student name`);
         continue;
       }
 
@@ -74,61 +87,141 @@ export async function processGradingExcel(fileBuffer, options) {
         grade = parseFloat(gradeValue);
         if (isNaN(grade) || grade < 0 || grade > 100) {
           errors.push(`Row ${i + 1}: Invalid grade value "${gradeValue}". Must be between 0-100.`);
+          console.log(`Invalid grade in row ${i + 1}:`, gradeValue);
           continue;
         }
       } else {
         warnings.push(`Row ${i + 1}: No grade provided for ${studentName}`);
+        console.log(`No grade provided for ${studentName} in row ${i + 1}`);
         continue;
       }
 
       // Find student in database - more flexible matching
       let student = null;
       
-      // Try exact name match first
-      student = await User.findOne({
-        $or: [
-          { 
-            firstname: { $regex: new RegExp(`^${studentName.split(' ')[0]}$`, 'i') },
-            lastname: { $regex: new RegExp(studentName.split(' ').slice(1).join(' '), 'i') }
-          },
-          {
-            firstname: { $regex: new RegExp(studentName, 'i') }
-          },
-          {
-            lastname: { $regex: new RegExp(studentName, 'i') }
-          }
-        ],
-        role: 'student'
-      });
+      try {
+        // First, let's get all students to see what we're working with
+        const allStudents = await User.find({ role: 'student' }).select('firstname lastname');
+        console.log('Available students:', allStudents.map(s => `${s.firstname} ${s.lastname}`));
+        
+        // Try multiple matching strategies
+        const nameParts = studentName.trim().split(/\s+/);
+        const firstName = nameParts[0];
+        const lastName = nameParts.slice(1).join(' ');
+        
+        // Strategy 1: Exact full name match
+        student = await User.findOne({
+          $or: [
+            { 
+              firstname: { $regex: new RegExp(`^${firstName}$`, 'i') },
+              lastname: { $regex: new RegExp(`^${lastName}$`, 'i') }
+            },
+            {
+              firstname: { $regex: new RegExp(`^${studentName}$`, 'i') }
+            },
+            {
+              lastname: { $regex: new RegExp(`^${studentName}$`, 'i') }
+            }
+          ],
+          role: 'student'
+        });
 
-      if (!student) {
-        errors.push(`Row ${i + 1}: Student "${studentName}" not found in database`);
-        continue;
+        // Strategy 2: Partial name matching if exact match fails
+        if (!student) {
+          student = await User.findOne({
+            $or: [
+              { 
+                firstname: { $regex: new RegExp(firstName, 'i') },
+                lastname: { $regex: new RegExp(lastName, 'i') }
+              },
+              {
+                firstname: { $regex: new RegExp(studentName, 'i') }
+              },
+              {
+                lastname: { $regex: new RegExp(studentName, 'i') }
+              },
+              {
+                $expr: {
+                  $regexMatch: {
+                    input: { $concat: ["$firstname", " ", "$lastname"] },
+                    regex: studentName,
+                    options: "i"
+                  }
+                }
+              }
+            ],
+            role: 'student'
+          });
+        }
+
+        // Strategy 3: Reverse name matching (lastname firstname)
+        if (!student && nameParts.length >= 2) {
+          student = await User.findOne({
+            $or: [
+              { 
+                firstname: { $regex: new RegExp(lastName, 'i') },
+                lastname: { $regex: new RegExp(firstName, 'i') }
+              }
+            ],
+            role: 'student'
+          });
+        }
+
+        if (!student) {
+          const availableStudents = allStudents.map(s => `${s.firstname} ${s.lastname}`).join(', ');
+          errors.push(`Row ${i + 1}: Student "${studentName}" not found in database. Available students in this section: ${availableStudents}`);
+          console.log(`Student not found: ${studentName}`);
+          console.log('Available students:', availableStudents);
+          continue;
+        }
+
+        console.log(`Found student:`, student.firstname, student.lastname);
+
+        // Check if student is enrolled in the section
+        const studentAssignment = await StudentAssignment.findOne({
+          studentId: student._id,
+          sectionName: options.sectionName,
+          trackName: options.trackName,
+          strandName: options.strandName,
+          gradeLevel: options.gradeLevel,
+          schoolYear: options.schoolYear,
+          termName: options.termName
+        });
+
+        if (!studentAssignment) {
+          // Get all student assignments for this section to show what's available
+          const sectionAssignments = await StudentAssignment.find({
+            sectionName: options.sectionName,
+            trackName: options.trackName,
+            strandName: options.strandName,
+            gradeLevel: options.gradeLevel,
+            schoolYear: options.schoolYear,
+            termName: options.termName
+          }).populate('studentId', 'firstname lastname');
+          
+          const enrolledStudents = sectionAssignments.map(sa => `${sa.studentId.firstname} ${sa.studentId.lastname}`).join(', ');
+          
+          errors.push(`Row ${i + 1}: Student "${studentName}" is not enrolled in section "${options.sectionName}". Enrolled students: ${enrolledStudents}`);
+          console.log(`Student not enrolled in section: ${studentName} - ${options.sectionName}`);
+          console.log('Enrolled students:', enrolledStudents);
+          continue;
+        }
+
+        grades.push({
+          studentId: student._id,
+          studentName: studentName,
+          grade: grade,
+          feedback: feedback
+        });
+
+        console.log(`Successfully processed grade for ${studentName}: ${grade}`);
+      } catch (error) {
+        console.error(`Error processing student ${studentName}:`, error);
+        errors.push(`Row ${i + 1}: Error processing student "${studentName}": ${error.message}`);
       }
-
-      // Check if student is enrolled in the section
-      const studentAssignment = await StudentAssignment.findOne({
-        studentId: student._id,
-        sectionName: options.sectionName,
-        trackName: options.trackName,
-        strandName: options.strandName,
-        gradeLevel: options.gradeLevel,
-        schoolYear: options.schoolYear,
-        termName: options.termName
-      });
-
-      if (!studentAssignment) {
-        errors.push(`Row ${i + 1}: Student "${studentName}" is not enrolled in section "${options.sectionName}"`);
-        continue;
-      }
-
-      grades.push({
-        studentId: student._id,
-        studentName: studentName,
-        grade: grade,
-        feedback: feedback
-      });
     }
+
+    console.log('Processing complete:', { grades: grades.length, errors: errors.length, warnings: warnings.length });
 
     return {
       success: errors.length === 0,
@@ -140,6 +233,7 @@ export async function processGradingExcel(fileBuffer, options) {
     };
 
   } catch (error) {
+    console.error('Error in processGradingExcel:', error);
     throw new Error(`Error processing Excel file: ${error.message}`);
   }
 }
