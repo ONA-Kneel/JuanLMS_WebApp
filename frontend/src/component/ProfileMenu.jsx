@@ -32,53 +32,16 @@ export default function ProfileMenu() {
 
   // Handle notification clicks
   const handleNotificationClick = (notification) => {
-    console.log('Notification clicked:', notification);
+    const user = JSON.parse(localStorage.getItem('user'));
+    const role = user?.role?.toLowerCase();
     
-    // Close notification center
-    setShowNotificationCenter(false);
-    
-    // Get user role for proper navigation
-    const userRole = userInfo.role || localStorage.getItem('role');
-    const isFaculty = userRole === 'faculty';
-    const isStudent = userRole === 'students';
-    const isAdmin = userRole === 'admin';
-    const isPrincipal = userRole === 'principal';
-    
-    // Navigate based on notification type
+    const isFaculty = role === 'faculty';
+    const isStudent = role === 'students' || role === 'student';
+    const isAdmin = role === 'admin';
+    const isPrincipal = role === 'principal';
+    const isVPE = role === 'vice president of education';
+
     switch (notification.type) {
-      case 'announcement':
-        // Navigate to the class where the announcement was posted
-        if (notification.classID && notification.classID !== 'direct_message') {
-          if (isFaculty) {
-            navigate(`/faculty_class/${notification.classID}`);
-          } else if (isStudent) {
-            navigate(`/student_class/${notification.classID}`);
-          }
-        }
-        break;
-        
-      case 'assignment':
-        // Navigate to the class where the assignment was posted
-        if (notification.classID && notification.classID !== 'direct_message') {
-          if (isFaculty) {
-            navigate(`/faculty_class/${notification.classID}`);
-          } else if (isStudent) {
-            navigate(`/student_class/${notification.classID}`);
-          }
-        }
-        break;
-        
-      case 'quiz':
-        // Navigate to the class where the quiz was posted
-        if (notification.classID && notification.classID !== 'direct_message') {
-          if (isFaculty) {
-            navigate(`/faculty_class/${notification.classID}`);
-          } else if (isStudent) {
-            navigate(`/student_class/${notification.classID}`);
-          }
-        }
-        break;
-        
       case 'message':
         // Navigate to role-specific chat routes
         if (isFaculty) {
@@ -89,6 +52,8 @@ export default function ProfileMenu() {
           navigate('/admin_chats');
         } else if (isPrincipal) {
           navigate('/principal_chats');
+        } else if (isVPE) {
+          navigate('/vpe_chats');
         } else {
           // Fallback for other roles
           navigate('/faculty_chats');

@@ -7,8 +7,10 @@ import uploadfile from "../../assets/uploadfile.png";
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
-import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
+import ContactNicknameManager from "../ContactNicknameManager";
+import GroupNicknameManager from "../GroupNicknameManager";
+import { getUserDisplayName } from "../../utils/userDisplayUtils";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -27,6 +29,7 @@ export default function Faculty_Chats() {
   });
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [contactNicknames, setContactNicknames] = useState({});
 
   // Group chat states
   const [groups, setGroups] = useState([]);
@@ -71,13 +74,11 @@ export default function Faculty_Chats() {
   const storedUser = localStorage.getItem("user");
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
 
-  const navigate = useNavigate();
-
   useEffect(() => {
     if (!currentUserId) {
-      navigate("/", { replace: true });
+      window.location.href = '/';
     }
-  }, [currentUserId, navigate]);
+  }, [currentUserId]);
 
   // ================= SOCKET.IO SETUP =================
   useEffect(() => {
@@ -109,9 +110,11 @@ export default function Faculty_Chats() {
         // Update last message for this chat
         const chat = recentChats.find(c => c._id === incomingMessage.senderId);
         if (chat) {
+          const contactNickname = contactNicknames[chat._id];
+          const displayName = getUserDisplayName(chat, contactNickname);
           const prefix = incomingMessage.senderId === currentUserId 
             ? "You: " 
-            : `${chat.lastname}, ${chat.firstname}: `;
+            : `${displayName}: `;
           const text = incomingMessage.message 
             ? incomingMessage.message 
             : (incomingMessage.fileUrl ? "File sent" : "");
@@ -164,7 +167,7 @@ export default function Faculty_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/users`);
+        const res = await axios.get(`${API_BASE}/users/with-nicknames`);
         // Support both array and paginated object
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
@@ -179,6 +182,28 @@ export default function Faculty_Chats() {
       }
     };
     fetchUsers();
+  }, [currentUserId]);
+
+  // ================= FETCH CONTACT NICKNAMES =================
+  useEffect(() => {
+    const fetchContactNicknames = async () => {
+      if (!currentUserId) return;
+      try {
+        const res = await axios.get(`${API_BASE}/users/${currentUserId}/contacts/nicknames`);
+        const nicknamesMap = {};
+        res.data.forEach(item => {
+          // Ensure contactId is properly handled as a string
+          const contactId = item.contactId?.toString() || item.contactId;
+          if (contactId && item.nickname) {
+            nicknamesMap[contactId] = item.nickname;
+          }
+        });
+        setContactNicknames(nicknamesMap);
+      } catch (err) {
+        console.error("Error fetching contact nicknames:", err);
+      }
+    };
+    fetchContactNicknames();
   }, [currentUserId]);
 
   // ================= FETCH GROUPS =================
@@ -209,9 +234,11 @@ export default function Faculty_Chats() {
             const chatMessages = newMessages[chat._id] || [];
             const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
             if (lastMsg) {
+              const contactNickname = contactNicknames[chat._id];
+              const displayName = getUserDisplayName(chat, contactNickname);
               const prefix = lastMsg.senderId === currentUserId 
                 ? "You: " 
-                : `${chat.lastname}, ${chat.firstname}: `;
+                : `${displayName}: `;
               const text = lastMsg.message 
                 ? lastMsg.message 
                 : (lastMsg.fileUrl ? "File sent" : "");
@@ -284,7 +311,7 @@ export default function Faculty_Chats() {
           groupId: selectedChat._id,
           text: sentMessage.message,
           fileUrl: sentMessage.fileUrl || null,
-          senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
+          senderName: storedUser ? getUserDisplayName(JSON.parse(storedUser)) : "Unknown",
         });
 
         setGroupMessages((prev) => ({
@@ -468,7 +495,9 @@ export default function Faculty_Chats() {
         : (messages[selectedChat._id] || []);
       const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
       if (lastMsg) {
-        let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
+        const contactNickname = contactNicknames[selectedChat._id];
+        const displayName = getUserDisplayName(selectedChat, contactNickname);
+        let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${displayName}: `;
         let text = (lastMsg.message) ? lastMsg.message : (lastMsg.fileUrl ? "File sent" : "");
         setLastMessages(prev => ({
           ...prev,
@@ -507,9 +536,11 @@ export default function Faculty_Chats() {
         const chatMessages = newMessages[chat._id] || [];
         const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
         if (lastMsg) {
+          const contactNickname = contactNicknames[chat._id];
+          const displayName = getUserDisplayName(chat, contactNickname);
           const prefix = lastMsg.senderId === currentUserId 
             ? "You: " 
-            : `${chat.lastname}, ${chat.firstname}: `;
+            : `${displayName}: `;
           const text = lastMsg.message 
             ? lastMsg.message 
             : (lastMsg.fileUrl ? "File sent" : "");
@@ -521,7 +552,7 @@ export default function Faculty_Chats() {
     };
     fetchAllRecentMessages();
     // eslint-disable-next-line
-  }, [recentChats, currentUserId]);
+  }, [recentChats, currentUserId, contactNicknames]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -697,7 +728,7 @@ export default function Faculty_Chats() {
                       )}
                       <div className="flex flex-col min-w-0 ml-2">
                         <strong className="truncate text-sm">
-                          {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
+                          {chat.type === 'group' ? chat.name : getUserDisplayName(chat, contactNicknames[chat._id])}
                         </strong>
                         {chat.type === 'group' ? (
                           <span className="text-xs text-gray-500 truncate">
@@ -764,7 +795,7 @@ export default function Faculty_Chats() {
                       )}
                       <div className="flex flex-col min-w-0 ml-2">
                         <strong className="truncate text-sm">
-                          {item.type === 'group' ? item.name : `${item.lastname}, ${item.firstname}`}
+                          {item.type === 'group' ? item.name : getUserDisplayName(item, contactNicknames[item._id])}
                         </strong>
                         {item.isNewUser ? (
                           <span className="text-xs text-blue-600">Click to start new chat</span>
@@ -818,9 +849,42 @@ export default function Faculty_Chats() {
                     )}
                     {/* In chat header, below the group name/title, show member count and dropdown for group chats only: */}
                     <div className="flex flex-col">
-                      <h3 className="text-lg font-semibold">
-                        {isGroupChat ? selectedChat.name : `${selectedChat.lastname}, ${selectedChat.firstname}`}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-semibold">
+                          {isGroupChat ? selectedChat.name : getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()])}
+                        </h3>
+                        {!isGroupChat && (
+                          <ContactNicknameManager
+                            currentUserId={currentUserId}
+                            contactId={selectedChat._id}
+                            contactName={getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()])}
+                            originalName={`${selectedChat.firstname || ''} ${selectedChat.lastname || ''}`.trim()}
+                            onNicknameUpdate={(contactId, nickname) => {
+                              setContactNicknames(prev => ({
+                                ...prev,
+                                [contactId?.toString() || contactId]: nickname
+                              }));
+                            }}
+                            className="relative z-10"
+                          />
+                        )}
+                        {isGroupChat && (
+                          <GroupNicknameManager
+                            currentUserId={currentUserId}
+                            groupName={selectedChat.name}
+                            participants={selectedChat.participants}
+                            users={users}
+                            contactNicknames={contactNicknames}
+                            onNicknameUpdate={(contactId, nickname) => {
+                              setContactNicknames(prev => ({
+                                ...prev,
+                                [contactId?.toString() || contactId]: nickname
+                              }));
+                            }}
+                            className="relative z-10"
+                          />
+                        )}
+                      </div>
                       {isGroupChat && (
                         <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
                           {(selectedChat?.participants?.length || 0)} members
@@ -923,7 +987,7 @@ export default function Faculty_Chats() {
                                 <div>
                                   <div className="flex items-center gap-2 mb-1">
                                     <span className="font-semibold text-sm">
-                                      {isGroupChat ? (msg.senderName || "Unknown") : (sender ? `${sender.lastname}, ${sender.firstname}` : "")}
+                                      {sender ? getUserDisplayName(sender, contactNicknames[sender._id?.toString()]) : (msg.senderId === currentUserId ? "You" : "Unknown User")}
                                     </span>
                                     {(msg.createdAt || msg.updatedAt) && (
                                       <span className="text-xs text-gray-400 ml-2">
@@ -1059,7 +1123,7 @@ export default function Faculty_Chats() {
                     if (!user) return null;
                     return (
                       <span key={userId} className="flex items-center bg-blue-100 text-blue-900 px-2 py-1 rounded-full text-xs">
-                        {user.lastname}, {user.firstname}
+                        {getUserDisplayName(user, contactNicknames[user._id])}
                         <button
                           className="ml-1 text-red-500 hover:text-red-700"
                           onClick={() => setSelectedGroupMembers(prev => prev.filter(id => id !== userId))}
@@ -1101,7 +1165,7 @@ export default function Faculty_Chats() {
                             setMemberSearchTerm("");
                           }}
                         >
-                          <span className="text-sm">{user.lastname}, {user.firstname}</span>
+                          <span className="text-sm">{getUserDisplayName(user, contactNicknames[user._id])}</span>
                         </div>
                       ))
                   )
@@ -1238,7 +1302,7 @@ export default function Faculty_Chats() {
                   const isCreator = selectedChat?.createdBy === userId;
                   return (
                     <li key={userId} className="flex items-center justify-between py-2">
-                      <span>{user.lastname}, {user.firstname} {isCreator && <span className="text-xs text-blue-700">(Creator)</span>}</span>
+                      <span>{getUserDisplayName(user, contactNicknames[user._id])} {isCreator && <span className="text-xs text-blue-700">(Creator)</span>}</span>
                       {selectedChat?.createdBy === currentUserId && !isCreator && (
                         <button
                           className="text-red-500 hover:text-red-700 text-xs px-2 py-1 border border-red-300 rounded"
@@ -1269,7 +1333,7 @@ export default function Faculty_Chats() {
             <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
               <h3 className="text-lg font-semibold mb-4 text-red-600">Remove Member</h3>
               <p className="text-gray-600 mb-6">
-                Are you sure you want to remove <strong>{memberToRemove.lastname}, {memberToRemove.firstname}</strong> from the group?
+                Are you sure you want to remove <strong>{getUserDisplayName(memberToRemove, contactNicknames[memberToRemove._id])}</strong> from the group?
               </p>
               <div className="flex gap-2">
                 <button

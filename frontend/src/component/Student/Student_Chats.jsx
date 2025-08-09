@@ -1,4 +1,4 @@
-// Admin_Chats.jsx
+// Student_Chats.jsx
 
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
@@ -7,8 +7,13 @@ import uploadfile from "../../assets/uploadfile.png";
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
-import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
+import ContactNicknameManager from "../ContactNicknameManager";
+import GroupNicknameManager from "../GroupNicknameManager";
+import { getUserDisplayName } from "../../utils/userDisplayUtils";
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
 
 export default function Student_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
@@ -17,16 +22,15 @@ export default function Student_Chats() {
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
-  const [onlineUsers, setOnlineUsers] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
     const stored = localStorage.getItem("recentChats_student");
     return stored ? JSON.parse(stored) : [];
   });
-  const [lastMessage, setLastMessage] = useState(null);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [contactNicknames, setContactNicknames] = useState({});
 
   // Group chat states
   const [groups, setGroups] = useState([]);
@@ -38,21 +42,13 @@ export default function Student_Chats() {
   const [joinGroupCode, setJoinGroupCode] = useState("");
   const [isGroupChat, setIsGroupChat] = useState(false);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
-
-  // Add state for member search
-  const [memberSearchTerm, setMemberSearchTerm] = useState("");
-  
-  // Add state for leave group confirmation
+  const [showMembersModal, setShowMembersModal] = useState(false);
   const [showLeaveGroupModal, setShowLeaveGroupModal] = useState(false);
   const [groupToLeave, setGroupToLeave] = useState(null);
-
-  // Add state for creator leave error
   const [showCreatorLeaveError, setShowCreatorLeaveError] = useState(false);
-
-  // Add state for members modal
-  const [showMembersModal, setShowMembersModal] = useState(false);
-  const [memberToRemove, setMemberToRemove] = useState(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState(null);
+  const [memberSearchTerm, setMemberSearchTerm] = useState("");
 
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
@@ -64,19 +60,14 @@ export default function Student_Chats() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
-  const navigate = useNavigate();
 
-  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
-  const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
-
-  const storedUser = localStorage.getItem("user");
-  const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
+  const currentUserId = JSON.parse(localStorage.getItem("user"))?._id;
 
   useEffect(() => {
     if (!currentUserId) {
-      navigate("/", { replace: true });
+      window.location.href = '/';
     }
-  }, [currentUserId, navigate]);
+  }, [currentUserId]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -129,8 +120,8 @@ export default function Student_Chats() {
 
     socket.current.emit("addUser", currentUserId);
 
-    socket.current.on("getUsers", (users) => {
-      setOnlineUsers(users);
+    socket.current.on("getUsers", () => {
+      // Users are handled separately
     });
 
     socket.current.on("getMessage", (data) => {
@@ -140,7 +131,6 @@ export default function Student_Chats() {
         message: data.text,
         fileUrl: data.fileUrl || null,
       };
-
       setMessages((prev) => {
         const newMessages = {
           ...prev,
@@ -153,9 +143,10 @@ export default function Student_Chats() {
         // Update last message for this chat
         const chat = recentChats.find(c => c._id === incomingMessage.senderId);
         if (chat) {
+          const contactNickname = contactNicknames[chat._id] || null;
           const prefix = incomingMessage.senderId === currentUserId 
             ? "You: " 
-            : `${chat.lastname}, ${chat.firstname}: `;
+            : `${getUserDisplayName(chat, contactNickname)}: `;
           const text = incomingMessage.message 
             ? incomingMessage.message 
             : (incomingMessage.fileUrl ? "File sent" : "");
@@ -208,7 +199,7 @@ export default function Student_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/users`);
+        const res = await axios.get(`${API_BASE}/users/with-nicknames`);
         // Support both array and paginated object
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
@@ -223,6 +214,35 @@ export default function Student_Chats() {
       }
     };
     fetchUsers();
+  }, [currentUserId]);
+
+  // ================= FETCH CONTACT NICKNAMES =================
+  useEffect(() => {
+    const fetchContactNicknames = async () => {
+      if (!currentUserId) return;
+      
+      try {
+        const response = await axios.get(`${API_BASE}/users/${currentUserId}/contacts/nicknames`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        const nicknamesMap = {};
+        response.data.forEach(item => {
+          // Ensure contactId is properly handled as a string
+          const contactId = item.contactId?.toString() || item.contactId;
+          if (contactId && item.nickname) {
+            nicknamesMap[contactId] = item.nickname;
+          }
+        });
+        setContactNicknames(nicknamesMap);
+      } catch (error) {
+        console.error('Error fetching contact nicknames:', error);
+      }
+    };
+    
+    fetchContactNicknames();
   }, [currentUserId]);
 
   // ================= FETCH GROUPS =================
@@ -253,9 +273,10 @@ export default function Student_Chats() {
             const chatMessages = newMessages[chat._id] || [];
             const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
             if (lastMsg) {
+              const contactNickname = contactNicknames[chat._id] || null;
               const prefix = lastMsg.senderId === currentUserId 
                 ? "You: " 
-                : `${chat.lastname}, ${chat.firstname}: `;
+                : `${getUserDisplayName(chat, contactNickname)}: `;
               const text = lastMsg.message 
                 ? lastMsg.message 
                 : (lastMsg.fileUrl ? "File sent" : "");
@@ -328,7 +349,7 @@ export default function Student_Chats() {
           groupId: selectedChat._id,
           text: sentMessage.message,
           fileUrl: sentMessage.fileUrl || null,
-          senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
+          senderName: JSON.parse(localStorage.getItem("user")).firstname + " " + JSON.parse(localStorage.getItem("user")).lastname,
         });
 
         setGroupMessages((prev) => ({
@@ -511,14 +532,12 @@ export default function Student_Chats() {
         : (messages[selectedChat._id] || []);
       const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
       if (lastMsg) {
-        let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
-        let text = (lastMsg.message) ? lastMsg.message : (lastMsg.fileUrl ? "File sent" : "");
-        setLastMessage({ prefix, text });
+        // Update last message logic if needed in the future
       } else {
-        setLastMessage(null);
+        // Update last message logic if needed in the future
       }
     } else {
-      setLastMessage(null);
+      // Update last message logic if needed in the future
     }
   }, [selectedChat, messages, currentUserId, groupMessages, isGroupChat]);
 
@@ -534,16 +553,17 @@ export default function Student_Chats() {
           try {
             const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
             newMessages[chat._id] = res.data;
-          } catch (err) {
+          } catch {
             newMessages[chat._id] = [];
           }
         }
         const chatMessages = newMessages[chat._id] || [];
         const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
         if (lastMsg) {
+          const contactNickname = contactNicknames[chat._id] || null;
           const prefix = lastMsg.senderId === currentUserId 
             ? "You: " 
-            : `${chat.lastname}, ${chat.firstname}: `;
+            : `${getUserDisplayName(chat, contactNickname)}: `;
           const text = lastMsg.message 
             ? lastMsg.message 
             : (lastMsg.fileUrl ? "File sent" : "");
@@ -555,7 +575,7 @@ export default function Student_Chats() {
     };
     fetchAllRecentMessages();
     // eslint-disable-next-line
-  }, [recentChats, currentUserId]);
+  }, [recentChats, currentUserId, contactNicknames]);
 
   // 1. Remove activeTab and all tab logic
   // 2. Add state for dropdown menu (showGroupMenu)
@@ -575,9 +595,10 @@ export default function Student_Chats() {
     // First show existing chats/groups that match
     ...unifiedChats.filter(chat => {
       if (chat.type === 'individual') {
+        const contactNickname = contactNicknames[chat._id] || null;
         return (
-          chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
+          getUserDisplayName(chat, contactNickname)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (chat.nickname && chat.nickname.toLowerCase().includes(searchTerm.toLowerCase()))
         );
       } else {
         return chat.name?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -587,10 +608,13 @@ export default function Student_Chats() {
     ...users
       .filter(user => user._id !== currentUserId)
       .filter(user => !recentChats.some(chat => chat._id === user._id))
-      .filter(user =>
-        user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+      .filter(user => {
+        const contactNickname = contactNicknames[user._id] || null;
+        return (
+          getUserDisplayName(user, contactNickname)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (user.nickname && user.nickname.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+      })
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
 
@@ -690,7 +714,7 @@ export default function Student_Chats() {
                       )}
                       <div className="flex flex-col min-w-0 ml-2">
                         <strong className="truncate text-sm">
-                          {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
+                          {chat.type === 'group' ? chat.name : getUserDisplayName(chat, contactNicknames[chat._id] || null)}
                         </strong>
                         {chat.type === 'group' ? (
                           <span className="text-xs text-gray-500 truncate">
@@ -753,7 +777,7 @@ export default function Student_Chats() {
                       )}
                       <div className="flex flex-col min-w-0 ml-2">
                         <strong className="truncate text-sm">
-                          {item.type === 'group' ? item.name : `${item.lastname}, ${item.firstname}`}
+                          {item.type === 'group' ? item.name : getUserDisplayName(item, contactNicknames[item._id] || null)}
                         </strong>
                         {item.isNewUser ? (
                           <span className="text-xs text-blue-600">Click to start new chat</span>
@@ -808,8 +832,40 @@ export default function Student_Chats() {
                     {/* In chat header, below the group name/title, show member count and dropdown for group chats only: */}
                     <div className="flex flex-col">
                       <h3 className="text-lg font-semibold">
-                        {isGroupChat ? selectedChat.name : `${selectedChat.lastname}, ${selectedChat.firstname}`}
+                        {isGroupChat ? selectedChat.name : getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()] || null)}
                       </h3>
+                      {!isGroupChat && (
+                        <ContactNicknameManager 
+                          currentUserId={currentUserId}
+                          contactId={selectedChat._id} 
+                          contactName={getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()] || null)}
+                          originalName={`${selectedChat.firstname || ''} ${selectedChat.lastname || ''}`.trim()}
+                          onNicknameUpdate={(contactId, nickname) => {
+                            // Update the contact nicknames state
+                            setContactNicknames(prev => ({
+                              ...prev,
+                              [contactId?.toString() || contactId]: nickname
+                            }));
+                          }}
+                          className="mt-1"
+                        />
+                      )}
+                      {isGroupChat && (
+                        <GroupNicknameManager 
+                          currentUserId={currentUserId}
+                          groupName={selectedChat.name}
+                          participants={selectedChat.participants}
+                          users={users}
+                          contactNicknames={contactNicknames}
+                          onNicknameUpdate={(contactId, nickname) => {
+                            setContactNicknames(prev => ({
+                              ...prev,
+                              [contactId?.toString() || contactId]: nickname
+                            }));
+                          }}
+                          className="mt-1"
+                        />
+                      )}
                       {isGroupChat && (
                         <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
                           {(selectedChat?.participants?.length || 0)} members
@@ -836,7 +892,6 @@ export default function Student_Chats() {
 
                 <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
                   {selectedChatMessages.map((msg, index) => {
-                    const isRecipient = msg.senderId !== currentUserId;
                     const sender = users.find(u => u._id === msg.senderId);
                     const prevMsg = selectedChatMessages[index - 1];
                     const showHeader =
@@ -911,7 +966,7 @@ export default function Student_Chats() {
                                 />
                                 <div>
                                   <div className="flex items-center gap-2 mb-1">
-                                    <span className="font-semibold text-sm">{sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown"}</span>
+                                    <span className="font-semibold text-sm">{sender ? getUserDisplayName(sender, contactNicknames[sender._id?.toString()] || null) : (msg.senderId === currentUserId ? "You" : "Unknown User")}</span>
                                     {(msg.createdAt || msg.updatedAt) && (
                                       <span className="text-xs text-gray-400 ml-2">
                                         {dateLabel ? `${dateLabel}, ` : ""}{timeLabel}

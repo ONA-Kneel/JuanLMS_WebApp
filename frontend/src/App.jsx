@@ -41,6 +41,14 @@ import Principal_Calendar from './component/Principal/Principal_Calendar';
 import Principal_AuditTrail from './component/Principal/Principal_AuditTrail';
 import Principal_FacultyReport from './component/Principal/Principal_FacultyReport';
 
+// VPE Access
+import VPE_Dashboard from './component/VPE/VPE_Dashboard';
+import VPE_Chats from './component/VPE/VPE_Chats';
+import VPE_Grades from './component/VPE/VPE_Grades';
+import VPE_Calendar from './component/VPE/VPE_Calendar';
+import VPE_AuditTrail from './component/VPE/VPE_AuditTrail';
+import VPE_FacultyReport from './component/VPE/VPE_FacultyReport';
+
 // Admin Access
 import Admin_Dashboard from './component/Admin/Admin_Dashboard';
 import Admin_Activities from './component/Admin/Admin_Activities';
@@ -104,6 +112,14 @@ function App() {
         <Route path="/principal_audit_trail" element={<ProtectedRoute allowedRoles={['principal']}><Principal_AuditTrail/></ProtectedRoute>}/>
         <Route path="/principal_faculty_report" element={<ProtectedRoute allowedRoles={['principal']}><Principal_FacultyReport/></ProtectedRoute>}/>
 
+        {/* VPE */}
+        <Route path="/vpe_dashboard" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Dashboard/></ProtectedRoute>}/>
+        <Route path="/vpe_chats" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Chats /></ProtectedRoute>}/>
+        <Route path="/vpe_grades" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Grades /></ProtectedRoute>}/>
+        <Route path="/vpe_calendar" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Calendar /></ProtectedRoute>}/>
+        <Route path="/vpe_audit_trail" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_AuditTrail/></ProtectedRoute>}/>
+        <Route path="/vpe_faculty_report" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_FacultyReport/></ProtectedRoute>}/>
+
         {/* Admin */}
         <Route path="/admin_dashboard" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Dashboard/></ProtectedRoute>}/>
         <Route path="/admin_accounts" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Accounts /></ProtectedRoute>}/>
@@ -119,9 +135,9 @@ function App() {
         <Route path="/admin_registrants" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Registrants /></ProtectedRoute>} />
 
         {/* Parent */}
-        <Route path="/parent_dashboard" element={<ProtectedRoute allowedRoles={['vice president of education']}><Parent_Dashboard/></ProtectedRoute>}/>
-        <Route path="/parent_grades" element={<ProtectedRoute allowedRoles={['vice president of education']}><Parent_Grades/></ProtectedRoute>}/>
-        <Route path="/parent_progress" element={<ProtectedRoute allowedRoles={['vice president of education']}><Parent_Progress/></ProtectedRoute>}/>
+        <Route path="/parent_dashboard" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Dashboard/></ProtectedRoute>}/>
+        <Route path="/parent_grades" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Grades/></ProtectedRoute>}/>
+        <Route path="/parent_progress" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Progress/></ProtectedRoute>}/>
 
         {/* Assignment Creation Page */}
         <Route path="/create-assignment" element={<ProtectedRoute allowedRoles={['faculty']}><ActivityTab /></ProtectedRoute>} />

@@ -181,7 +181,7 @@ export default function Login() {
       
       if (normalizedRole === 'students' || normalizedRole === 'student') navigate('/student_dashboard');
       else if (normalizedRole === 'faculty') navigate('/faculty_dashboard');
-      else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president' || normalizedRole === 'parent') navigate('/parent_dashboard');
+      else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president' || normalizedRole === 'parent') navigate('/vpe_dashboard');
       else if (normalizedRole === 'admin') navigate('/admin_dashboard');
       else if (normalizedRole === 'principal') navigate('/principal_dashboard');
       else {
@@ -276,7 +276,7 @@ export default function Login() {
       
       if (normalizedRole === 'students' || normalizedRole === 'student') navigate('/student_dashboard');
       else if (normalizedRole === 'faculty') navigate('/faculty_dashboard');
-      else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president' || normalizedRole === 'parent') navigate('/parent_dashboard');
+      else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president' || normalizedRole === 'parent') navigate('/vpe_dashboard');
       else if (normalizedRole === 'admin') navigate('/admin_dashboard');
       else if (normalizedRole === 'principal') navigate('/principal_dashboard');
       else {

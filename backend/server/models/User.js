@@ -18,6 +18,7 @@ const userSchema = new mongoose.Schema({
   role: String,
   userID: String,
   profilePic: { type: String, default: null },
+  nickname: { type: String, default: null },
   contactNo: {
     type: String,
     required: true,
@@ -76,6 +77,9 @@ userSchema.pre("save", async function (next) {
   if (this.isModified("profilePic") && this.profilePic) {
     this.profilePic = encrypt(this.profilePic);
   }
+  if (this.isModified("nickname") && this.nickname) {
+    this.nickname = encrypt(this.nickname);
+  }
   next();
 });
 
@@ -95,6 +99,13 @@ userSchema.methods.getDecryptedProfilePic = function () {
     return decrypt(this.profilePic);
   }
   return this.profilePic;
+};
+userSchema.methods.getDecryptedNickname = function () {
+  if (!this.nickname) return null;
+  if (typeof this.nickname === 'string' && this.nickname.includes(':')) {
+    return decrypt(this.nickname);
+  }
+  return this.nickname;
 };
 
 export default mongoose.model("User", userSchema);

@@ -38,6 +38,7 @@ userRoutes.get('/users/students', authenticateToken, async (req, res) => {
       firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
       lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
       profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+      nickname: user.getDecryptedNickname ? user.getDecryptedNickname() : user.nickname,
       password: undefined,
     }));
 
@@ -96,6 +97,7 @@ userRoutes.get("/users/search", authenticateToken, async (req, res) => {
         firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
         lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
         profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+        nickname: user.getDecryptedNickname ? user.getDecryptedNickname() : user.nickname,
         password: undefined,
     }));
     res.json(decryptedUsers);
@@ -118,6 +120,7 @@ userRoutes.get("/users", async (req, res) => {
             schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
             personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
             profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+            nickname: user.getDecryptedNickname ? user.getDecryptedNickname() : user.nickname,
             password: undefined,
         }));
         res.json({
@@ -145,6 +148,7 @@ userRoutes.get("/users/active", async (req, res) => {
             schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
             personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
             profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+            nickname: user.getDecryptedNickname ? user.getDecryptedNickname() : user.nickname,
             password: undefined,
         }));
         res.json(decryptedUsers);
@@ -210,6 +214,7 @@ userRoutes.route("/users/:id").get(async (req, res) => {
             schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
             personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
             profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+            nickname: user.getDecryptedNickname ? user.getDecryptedNickname() : user.nickname,
             password: undefined, // Never send password!
         };
 
@@ -833,6 +838,210 @@ userRoutes.post('/login', async (req, res) => {
     }
 
     res.json({ token });
+});
+
+// ------------------ NICKNAME ROUTES ------------------
+
+// Get user's nickname
+userRoutes.get('/users/:id/nickname', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const nickname = user.getDecryptedNickname ? user.getDecryptedNickname() : user.nickname;
+    res.json({ nickname });
+  } catch (error) {
+    console.error('Error fetching nickname:', error);
+    res.status(500).json({ error: 'Failed to fetch nickname' });
+  }
+});
+
+// Update user's nickname
+userRoutes.patch('/users/:id/nickname', authenticateToken, async (req, res) => {
+  try {
+    const { nickname } = req.body;
+    
+    // Validate that the user is updating their own nickname or is an admin
+    if (req.user._id !== req.params.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'You can only update your own nickname' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Validate nickname length
+    if (nickname && nickname.length > 50) {
+      return res.status(400).json({ error: 'Nickname must be 50 characters or less' });
+    }
+
+    user.nickname = nickname;
+    await user.save();
+
+    // Return the updated nickname
+    const updatedNickname = user.getDecryptedNickname ? user.getDecryptedNickname() : user.nickname;
+    res.json({ nickname: updatedNickname, message: 'Nickname updated successfully' });
+  } catch (error) {
+    console.error('Error updating nickname:', error);
+    res.status(500).json({ error: 'Failed to update nickname' });
+  }
+});
+
+// Get all users with nicknames (for chat display)
+userRoutes.get('/users/with-nicknames', authenticateToken, async (req, res) => {
+  try {
+    const users = await User.find({ isArchived: { $ne: true } });
+    
+    const usersWithNicknames = users.map(user => ({
+      _id: user._id,
+      firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
+      lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
+      nickname: user.getDecryptedNickname ? user.getDecryptedNickname() : user.nickname,
+      role: user.role,
+      profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+    }));
+
+    res.json(usersWithNicknames);
+  } catch (error) {
+    console.error('Error fetching users with nicknames:', error);
+    res.status(500).json({ error: 'Failed to fetch users with nicknames' });
+  }
+});
+
+// ------------------ PER-CONTACT NICKNAME ROUTES ------------------
+
+// Get nickname for a specific contact
+userRoutes.get('/users/:userId/contacts/:contactId/nickname', authenticateToken, async (req, res) => {
+  try {
+    const { userId, contactId } = req.params;
+    
+    // Validate that the user is requesting their own contact nicknames
+    if (req.user._id !== userId) {
+      return res.status(403).json({ error: 'You can only view your own contact nicknames' });
+    }
+
+    const UserContactNickname = (await import('../models/UserContactNickname.js')).default;
+    const nicknameRecord = await UserContactNickname.findOne({ userId, contactId });
+    
+    if (!nicknameRecord) {
+      return res.json({ nickname: null });
+    }
+
+    const nickname = nicknameRecord.getDecryptedNickname ? nicknameRecord.getDecryptedNickname() : nicknameRecord.nickname;
+    res.json({ nickname });
+  } catch (error) {
+    console.error('Error fetching contact nickname:', error);
+    res.status(500).json({ error: 'Failed to fetch contact nickname' });
+  }
+});
+
+// Set or update nickname for a specific contact
+userRoutes.patch('/users/:userId/contacts/:contactId/nickname', authenticateToken, async (req, res) => {
+  try {
+    const { userId, contactId } = req.params;
+    const { nickname } = req.body;
+    
+    // Validate that the user is updating their own contact nicknames
+    if (req.user._id !== userId) {
+      return res.status(403).json({ error: 'You can only update your own contact nicknames' });
+    }
+
+    // Validate nickname length
+    if (nickname && nickname.length > 50) {
+      return res.status(400).json({ error: 'Nickname must be 50 characters or less' });
+    }
+
+    const UserContactNickname = (await import('../models/UserContactNickname.js')).default;
+    
+    // Check if contact exists
+    const contact = await User.findById(contactId);
+    if (!contact) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+
+    // Check if user is trying to set nickname for themselves
+    if (userId === contactId) {
+      return res.status(400).json({ error: 'You cannot set a nickname for yourself' });
+    }
+
+    let nicknameRecord = await UserContactNickname.findOne({ userId, contactId });
+    
+    if (nicknameRecord) {
+      // Update existing nickname
+      nicknameRecord.nickname = nickname;
+      await nicknameRecord.save();
+    } else {
+      // Create new nickname record
+      nicknameRecord = new UserContactNickname({
+        userId,
+        contactId,
+        nickname
+      });
+      await nicknameRecord.save();
+    }
+
+    // Return the updated nickname
+    const updatedNickname = nicknameRecord.getDecryptedNickname ? nicknameRecord.getDecryptedNickname() : nicknameRecord.nickname;
+    res.json({ nickname: updatedNickname, message: 'Contact nickname updated successfully' });
+  } catch (error) {
+    console.error('Error updating contact nickname:', error);
+    res.status(500).json({ error: 'Failed to update contact nickname' });
+  }
+});
+
+// Delete nickname for a specific contact
+userRoutes.delete('/users/:userId/contacts/:contactId/nickname', authenticateToken, async (req, res) => {
+  try {
+    const { userId, contactId } = req.params;
+    
+    // Validate that the user is deleting their own contact nicknames
+    if (req.user._id !== userId) {
+      return res.status(403).json({ error: 'You can only delete your own contact nicknames' });
+    }
+
+    const UserContactNickname = (await import('../models/UserContactNickname.js')).default;
+    const nicknameRecord = await UserContactNickname.findOneAndDelete({ userId, contactId });
+    
+    if (!nicknameRecord) {
+      return res.status(404).json({ error: 'Contact nickname not found' });
+    }
+
+    res.json({ message: 'Contact nickname deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting contact nickname:', error);
+    res.status(500).json({ error: 'Failed to delete contact nickname' });
+  }
+});
+
+// Get all contact nicknames for a user
+userRoutes.get('/users/:userId/contacts/nicknames', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Validate that the user is requesting their own contact nicknames
+    if (req.user._id !== userId) {
+      return res.status(403).json({ error: 'You can only view your own contact nicknames' });
+    }
+
+    const UserContactNickname = (await import('../models/UserContactNickname.js')).default;
+    const nicknameRecords = await UserContactNickname.find({ userId }).populate('contactId', 'firstname lastname role profilePic');
+    
+    const nicknames = nicknameRecords.map(record => ({
+      contactId: record.contactId._id,
+      contactName: `${record.contactId.firstname || ''} ${record.contactId.lastname || ''}`.trim(),
+      contactRole: record.contactId.role,
+      contactProfilePic: record.contactId.profilePic,
+      nickname: record.getDecryptedNickname ? record.getDecryptedNickname() : record.nickname
+    }));
+
+    res.json(nicknames);
+  } catch (error) {
+    console.error('Error fetching contact nicknames:', error);
+    res.status(500).json({ error: 'Failed to fetch contact nicknames' });
+  }
 });
 
 // ------------------ LOGOUT ROUTE ------------------
