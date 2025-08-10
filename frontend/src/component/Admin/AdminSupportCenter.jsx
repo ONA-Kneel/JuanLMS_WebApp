@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
-import { getAllTickets, replyToTicket } from '../../services/ticketService';
+import { getAllTickets, replyToTicket, openTicket } from '../../services/ticketService';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -149,29 +149,10 @@ export default function AdminSupportCenter() {
         setSelected(null);
       }
       
-      // Show success message for automatic status update
-      // Check the response from the API to see if status was automatically updated
-      console.log('[FRONTEND REPLY] Checking ticket status:', replyResponse.status);
-      if (replyResponse.status === 'opened') {
-        // The ticket was automatically moved to opened status
-        setReplySuccess('Reply sent and ticket automatically moved to opened status. Check the "Opened" tab to see it.');
-        
-        // If we're currently on the 'new' tab and the ticket moved to 'opened', 
-        // automatically switch to the 'opened' tab to show the user where the ticket went
-        if (activeFilter === 'new') {
-          setTimeout(() => {
-            handleFilterChange('opened');
-            setReplySuccess('Ticket moved to "Opened" tab. You can now view it there.');
-          }, 2000);
-        }
-        
-        // Clear success message after 5 seconds
-        setTimeout(() => setReplySuccess(''), 5000);
-      } else {
-        setReplySuccess('Reply sent successfully');
-        // Clear success message after 3 seconds
-        setTimeout(() => setReplySuccess(''), 3000);
-      }
+      // Show success message
+      setReplySuccess('Reply sent successfully');
+      // Clear success message after 3 seconds
+      setTimeout(() => setReplySuccess(''), 3000);
     } catch (err) {
       console.error('Reply error:', err);
       if (err.response) {
@@ -212,6 +193,35 @@ export default function AdminSupportCenter() {
       setReplyError('Failed to update ticket status. Please try again.');
     }
   }
+
+  // Handle opening a ticket (changes status from 'new' to 'opened')
+  const handleOpenTicket = async (ticketId) => {
+    try {
+      console.log('[FRONTEND OPEN TICKET] Opening ticket:', ticketId);
+      const openedTicket = await openTicket(ticketId);
+      console.log('[FRONTEND OPEN TICKET] Ticket opened successfully:', openedTicket);
+      
+      // Refetch tickets to get updated data
+      const updatedTickets = await getAllTickets(activeFilter === 'all' ? null : activeFilter);
+      setTickets(updatedTickets);
+      
+      // Also refetch all tickets for accurate tab counts
+      const allData = await getAllTickets();
+      setAllTickets(allData || []);
+      
+      // If we're currently on the 'new' tab and the ticket moved to 'opened', 
+      // automatically switch to the 'opened' tab to show the user where the ticket went
+      if (activeFilter === 'new') {
+        setTimeout(() => {
+          handleFilterChange('opened');
+        }, 1000);
+      }
+      
+    } catch (err) {
+      console.error('[FRONTEND OPEN TICKET ERROR]', err);
+      // Don't show error to user for this automatic action
+    }
+  };
 
   // Handle filter change
   const handleFilterChange = (filter) => {
@@ -298,7 +308,13 @@ export default function AdminSupportCenter() {
                 <div
                   key={ticket._id}
                   className={`p-4 mb-2 rounded-lg cursor-pointer border border-transparent hover:border-[#9575cd] hover:bg-[#ede7f6] transition-all ${selected === ticket._id ? 'bg-[#d1c4e9] border-[#9575cd] shadow' : ''}`}
-                  onClick={() => setSelected(ticket._id)}
+                  onClick={() => {
+                    setSelected(ticket._id);
+                    // If this is a new ticket, automatically open it
+                    if (ticket.status === 'new') {
+                      handleOpenTicket(ticket._id);
+                    }
+                  }}
                 >
                   <b className="block text-base">{ticket.subject}</b>
                   <span className="block text-xs text-gray-500">{ticket.number}</span>
@@ -334,7 +350,7 @@ export default function AdminSupportCenter() {
                     </div>
                     {ticket.status === 'new' && (
                       <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
-                        💡 <strong>Note:</strong> When you reply to this ticket, it will automatically be moved to the "Opened" tab.
+                        💡 <strong>Note:</strong> This ticket will automatically be moved to the "Opened" tab when you view it.
                       </div>
                     )}
                     <textarea
