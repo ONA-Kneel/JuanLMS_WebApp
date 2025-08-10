@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
 import { getUserDisplayName } from "../../utils/userDisplayUtils";
-import { API_BASE } from "../../utils/authUtils";
+
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 const VPE_Chats = () => {
   const [currentUserId, setCurrentUserId] = useState(null);
