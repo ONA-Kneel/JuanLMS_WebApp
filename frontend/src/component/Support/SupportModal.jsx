@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Headphones } from 'lucide-react';
+import { Headphones, Search, FileText, Clock, CheckCircle, XCircle } from 'lucide-react';
 import axios from 'axios';
-import { createTicket, getTicketByNumber } from '../../services/ticketService';
+import { createTicket, getTicketByNumber, getUserTickets } from '../../services/ticketService';
 
 const sampleTicket = {
   number: 'SJDD1234567890',
@@ -10,7 +10,7 @@ const sampleTicket = {
 };
 
 export default function SupportModal({ onClose }) {
-  const [view, setView] = useState('main'); // main | active | new | submitted
+  const [view, setView] = useState('main'); // main | active | new | submitted | myTickets
   const [ticketInput, setTicketInput] = useState('');
   const [showTicket, setShowTicket] = useState(false);
   const [newTicket, setNewTicket] = useState({
@@ -19,6 +19,13 @@ export default function SupportModal({ onClose }) {
     content: '',
     file: null
   });
+
+  // New state for user tickets
+  const [userTickets, setUserTickets] = useState([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketsError, setTicketsError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedUserTicket, setSelectedUserTicket] = useState(null);
 
   // Generate ticket number function
   function generateTicketNumber() {
@@ -52,7 +59,61 @@ export default function SupportModal({ onClose }) {
     setShowTicket(false);
     setNewTicket({ number: generateTicketNumber(), subject: '', content: '', file: null });
     setSubmitted(false);
+    setUserTickets([]);
+    setSearchTerm('');
+    setSelectedUserTicket(null);
+    setTicketsError('');
     onClose();
+  };
+
+  // Fetch user tickets
+  const fetchUserTickets = async () => {
+    setTicketsLoading(true);
+    setTicketsError('');
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const userID = localStorage.getItem('userID');
+      const userId = user._id || userID;
+      
+      if (!userId) {
+        setTicketsError('User not authenticated. Please log in again.');
+        return;
+      }
+
+      const tickets = await getUserTickets(userId);
+      setUserTickets(tickets || []);
+    } catch (err) {
+      console.error('Error fetching user tickets:', err);
+      if (err.response) {
+        setTicketsError(err.response.data?.error || 'Failed to fetch tickets');
+      } else if (err.request) {
+        setTicketsError('Network error. Please check your connection and try again.');
+      } else {
+        setTicketsError('Failed to fetch tickets. Please try again.');
+      }
+    } finally {
+      setTicketsLoading(false);
+    }
+  };
+
+  // Filter tickets based on search term
+  const filteredTickets = userTickets.filter(ticket => 
+    ticket.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    ticket.number?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Get status icon and color
+  const getStatusInfo = (status) => {
+    switch (status) {
+      case 'new':
+        return { icon: <Clock size={16} />, color: 'text-blue-600', bgColor: 'bg-blue-100' };
+      case 'opened':
+        return { icon: <FileText size={16} />, color: 'text-orange-600', bgColor: 'bg-orange-100' };
+      case 'closed':
+        return { icon: <CheckCircle size={16} />, color: 'text-green-600', bgColor: 'bg-green-100' };
+      default:
+        return { icon: <FileText size={16} />, color: 'text-gray-600', bgColor: 'bg-gray-100' };
+    }
   };
 
   // Active Ticket view: handle fetch by number
@@ -150,6 +211,12 @@ export default function SupportModal({ onClose }) {
     setLoading(false);
   }
 
+  // Handle view change to myTickets
+  const handleViewMyTickets = () => {
+    setView('myTickets');
+    fetchUserTickets();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
       <div
@@ -181,7 +248,7 @@ export default function SupportModal({ onClose }) {
             <div className="flex flex-col gap-4">
               <button
                 className="w-full rounded-full px-4 py-3 bg-white bg-opacity-30 text-gray-900 font-semibold text-center hover:bg-opacity-50 transition border border-white"
-                onClick={() => setView('active')}
+                onClick={handleViewMyTickets}
               >
                 Have an active ticket? enter here
               </button>
@@ -193,6 +260,94 @@ export default function SupportModal({ onClose }) {
               </button>
             </div>
           </>
+        )}
+        {/* My Tickets view */}
+        {view === 'myTickets' && (
+          <div className="transition-all">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Support Center<br /><span className="text-lg font-semibold">My Tickets</span></h2>
+                <div className="text-lg mt-2">View all your tickets</div>
+              </div>
+              <div className="ml-4">
+                <div className="bg-white bg-opacity-30 rounded-full p-3">
+                  <Headphones size={48} className="text-[#9575cd]" />
+                </div>
+              </div>
+            </div>
+            
+            {/* Search Bar */}
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="Search tickets by title or number..."
+                className="w-full pl-10 pr-4 py-3 rounded-full bg-white bg-opacity-30 text-gray-900 placeholder-gray-500 border border-white focus:outline-none focus:border-[#9575cd]"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            {/* Tickets List */}
+            <div className="max-h-96 overflow-y-auto">
+              {ticketsLoading ? (
+                <div className="text-center text-gray-500 py-4">Loading your tickets...</div>
+              ) : ticketsError ? (
+                <div className="text-center text-red-500 py-4">{ticketsError}</div>
+              ) : filteredTickets.length === 0 ? (
+                <div className="text-center text-gray-500 py-4">
+                  {searchTerm ? 'No tickets match your search' : 'You haven\'t submitted any tickets yet'}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredTickets.map((ticket) => {
+                    const statusInfo = getStatusInfo(ticket.status);
+                    return (
+                      <div
+                        key={ticket._id}
+                        className={`p-4 rounded-lg cursor-pointer border border-transparent hover:border-[#9575cd] hover:bg-white hover:bg-opacity-20 transition-all ${
+                          selectedUserTicket === ticket._id ? 'bg-white bg-opacity-30 border-[#9575cd]' : 'bg-white bg-opacity-10'
+                        }`}
+                        onClick={() => setSelectedUserTicket(selectedUserTicket === ticket._id ? null : ticket._id)}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-semibold text-gray-900 text-sm line-clamp-1">{ticket.subject}</h3>
+                          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bgColor} ${statusInfo.color}`}>
+                            {statusInfo.icon}
+                            <span className="capitalize">{ticket.status}</span>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-600 mb-2">#{ticket.number}</div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(ticket.createdAt).toLocaleDateString()}
+                        </div>
+                        
+                        {/* Expanded ticket details */}
+                        {selectedUserTicket === ticket._id && (
+                          <div className="mt-3 pt-3 border-t border-white border-opacity-20">
+                            <p className="text-sm text-gray-700 mb-3">{ticket.description}</p>
+                            {ticket.messages && ticket.messages.length > 1 && (
+                              <div className="text-xs text-gray-500">
+                                {ticket.messages.length - 1} response{ticket.messages.length > 2 ? 's' : ''} from support
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Back button */}
+            <button
+              className="w-full mt-4 rounded-full px-4 py-3 bg-white bg-opacity-30 text-gray-900 font-semibold text-center hover:bg-opacity-50 transition border border-white"
+              onClick={() => setView('main')}
+            >
+              Back to Main Menu
+            </button>
+          </div>
         )}
         {/* Active Ticket view */}
         {view === 'active' && (
@@ -311,6 +466,12 @@ export default function SupportModal({ onClose }) {
         }
         .animate-fade-in {
           animation: fadeIn 0.3s;
+        }
+        .line-clamp-1 {
+          display: -webkit-box;
+          -webkit-line-clamp: 1;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
         }
         @keyframes fadeIn {
           0% { opacity: 0; transform: translateY(-10px); }
