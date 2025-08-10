@@ -82,6 +82,7 @@ ticketsRouter.post('/', authenticateToken, upload.single('file'), async (req, re
   
   try {
     await ticket.save();
+    
     const decryptedTicket = ticket.decryptSensitiveData();
     res.status(201).json(decryptedTicket);
   } catch (err) {
@@ -112,8 +113,11 @@ ticketsRouter.get('/file/:ticketId', authenticateToken, async (req, res) => {
 // GET /api/tickets/user/:userId
 ticketsRouter.get('/user/:userId', authenticateToken, async (req, res) => {
   try {
-    const encryptedUserId = encrypt(req.params.userId);
-    const tickets = await Ticket.find({ userId: encryptedUserId });
+    // userId is no longer encrypted in the database
+    const userId = req.params.userId;
+    
+    const tickets = await Ticket.find({ userId: userId });
+    
     const decryptedTickets = tickets.map(ticket => ticket.decryptSensitiveData());
     res.json(decryptedTickets);
   } catch (err) {

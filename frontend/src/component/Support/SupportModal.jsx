@@ -69,37 +69,29 @@ export default function SupportModal({ onClose }) {
     setTicketsLoading(true);
     setTicketsError('');
     try {
-            const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
       const userID = localStorage.getItem('userID');
       
-      // Try both user._id and userID, with userID taking precedence
-      const userId = userID || user._id;
+      // Use the same user ID logic as ticket creation
+      const userId = user._id || userID;
       
       if (!userId) {
         setTicketsError('User not authenticated. Please log in again.');
         return;
       }
 
-      // Use the same user ID that was used for ticket creation
-      const ticketUserId = user._id || userID;
-      
-      try {
-        const tickets = await getUserTickets(ticketUserId);
-        setUserTickets(tickets || []);
-      } catch (err) {
-        console.error('Error fetching user tickets:', err);
-        setUserTickets([]);
-        if (err.response) {
-          setTicketsError(err.response.data?.error || 'Failed to fetch tickets');
-        } else if (err.request) {
-          setTicketsError('Network error. Please check your connection and try again.');
-        } else {
-          setTicketsError('Failed to fetch tickets. Please try again.');
-        }
-      }
+      const tickets = await getUserTickets(userId);
+      setUserTickets(tickets || []);
     } catch (err) {
-      console.error('Error in fetchUserTickets:', err);
-      setTicketsError('Failed to fetch tickets. Please try again.');
+      console.error('Error fetching user tickets:', err);
+      setUserTickets([]);
+      if (err.response) {
+        setTicketsError(err.response.data?.error || 'Failed to fetch tickets');
+      } else if (err.request) {
+        setTicketsError('Network error. Please check your connection and try again.');
+      } else {
+        setTicketsError('Failed to fetch tickets. Please try again.');
+      }
     } finally {
       setTicketsLoading(false);
     }
