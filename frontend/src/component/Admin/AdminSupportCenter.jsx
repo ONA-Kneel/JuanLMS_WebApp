@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
-import { getAllTickets, replyToTicket } from '../../services/ticketService';
+import { getAllTickets, replyToTicket, openTicket } from '../../services/ticketService';
+import { getUserById, getUserByUserID } from '../../services/userService';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function AdminSupportCenter() {
   const [tickets, setTickets] = useState([]);
@@ -13,10 +14,54 @@ export default function AdminSupportCenter() {
   const [reply, setReply] = useState('');
   const [replyLoading, setReplyLoading] = useState(false);
   const [replyError, setReplyError] = useState('');
+  const [replySuccess, setReplySuccess] = useState('');
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all'); // all, new, opened, closed
   const [allTickets, setAllTickets] = useState([]); // Store all tickets for counting
+  const [userDetails, setUserDetails] = useState({}); // Store user details for each ticket
+
+  // Function to fetch user details for tickets
+  const fetchUserDetails = async (tickets) => {
+    const userDetailsMap = {};
+    for (const ticket of tickets) {
+      // Check if userId is a valid MongoDB ObjectId (24 character hex string)
+      const isValidObjectId = ticket.userId && /^[0-9a-fA-F]{24}$/.test(ticket.userId);
+      
+      if (ticket.userId && isValidObjectId && !userDetailsMap[ticket.userId]) {
+        try {
+          const userData = await getUserById(ticket.userId);
+          userDetailsMap[ticket.userId] = {
+            name: `${userData.firstname || ''} ${userData.lastname || ''}`.trim(),
+            role: userData.role || 'Unknown'
+          };
+        } catch (err) {
+          console.error(`Failed to fetch user details for ${ticket.userId}:`, err);
+          userDetailsMap[ticket.userId] = {
+            name: 'Unknown User',
+            role: 'Unknown'
+          };
+        }
+      } else if (ticket.userId && !isValidObjectId) {
+        console.warn(`Invalid userId format for ticket ${ticket._id}: ${ticket.userId}`);
+        // Try to find user by userID as a fallback
+        try {
+          const userData = await getUserByUserID(ticket.userId);
+          userDetailsMap[ticket.userId] = {
+            name: `${userData.firstname || ''} ${userData.lastname || ''}`.trim(),
+            role: userData.role || 'Unknown'
+          };
+        } catch (err) {
+          console.error(`Failed to fetch user details by userID for ${ticket.userId}:`, err);
+          userDetailsMap[ticket.userId] = {
+            name: 'Invalid User ID',
+            role: 'Unknown'
+          };
+        }
+      }
+    }
+    setUserDetails(userDetailsMap);
+  };
 
   useEffect(() => {
     async function fetchTickets() {
@@ -34,6 +79,11 @@ export default function AdminSupportCenter() {
           setAllTickets(allData || []);
         } else {
           setAllTickets(data || []);
+        }
+
+        // Fetch user details for the tickets
+        if (data && data.length > 0) {
+          await fetchUserDetails(data);
         }
       } catch (err) {
         console.error('Error fetching tickets:', err);
@@ -114,6 +164,7 @@ export default function AdminSupportCenter() {
   async function handleReply(ticketId) {
     setReplyLoading(true);
     setReplyError('');
+    setReplySuccess('');
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       const userID = localStorage.getItem('userID');
@@ -124,16 +175,38 @@ export default function AdminSupportCenter() {
         return;
       }
 
-      await replyToTicket(ticketId, {
+      const replyResponse = await replyToTicket(ticketId, {
         sender: 'admin',
         senderId: adminId,
         message: reply
       });
+      console.log('[FRONTEND REPLY] Response from API:', replyResponse);
       setReply('');
       
       // Refetch tickets to get updated data
       const updatedTickets = await getAllTickets(activeFilter === 'all' ? null : activeFilter);
       setTickets(updatedTickets);
+      
+      // Also refetch all tickets for accurate tab counts
+      const allData = await getAllTickets();
+      setAllTickets(allData || []);
+      
+      // Refetch user details for updated tickets
+      if (updatedTickets && updatedTickets.length > 0) {
+        await fetchUserDetails(updatedTickets);
+      }
+      
+      // If the current ticket is no longer in the updated tickets list (e.g., status changed),
+      // clear the selection to avoid showing a "not found" state
+      if (selected && !updatedTickets.find(t => t._id === selected)) {
+        console.log('[FRONTEND REPLY] Selected ticket no longer in current view, clearing selection');
+        setSelected(null);
+      }
+      
+      // Show success message
+      setReplySuccess('Reply sent successfully');
+      // Clear success message after 3 seconds
+      setTimeout(() => setReplySuccess(''), 3000);
     } catch (err) {
       console.error('Reply error:', err);
       if (err.response) {
@@ -151,7 +224,7 @@ export default function AdminSupportCenter() {
   async function handleStatusChange(ticketId, newStatus) {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
       
       const endpoint = newStatus === 'opened' ? 'open' : 'close';
       const response = await fetch(`${API_BASE}/api/tickets/${ticketId}/${endpoint}`, {
@@ -169,11 +242,50 @@ export default function AdminSupportCenter() {
       // Refetch tickets to get updated data
       const updatedTickets = await getAllTickets(activeFilter === 'all' ? null : activeFilter);
       setTickets(updatedTickets);
+      
+      // Refetch user details for updated tickets
+      if (updatedTickets && updatedTickets.length > 0) {
+        await fetchUserDetails(updatedTickets);
+      }
     } catch (err) {
       console.error('Status change error:', err);
       setReplyError('Failed to update ticket status. Please try again.');
     }
   }
+
+  // Handle opening a ticket (changes status from 'new' to 'opened')
+  const handleOpenTicket = async (ticketId) => {
+    try {
+      console.log('[FRONTEND OPEN TICKET] Opening ticket:', ticketId);
+      const openedTicket = await openTicket(ticketId);
+      console.log('[FRONTEND OPEN TICKET] Ticket opened successfully:', openedTicket);
+      
+      // Refetch tickets to get updated data
+      const updatedTickets = await getAllTickets(activeFilter === 'all' ? null : activeFilter);
+      setTickets(updatedTickets);
+      
+      // Also refetch all tickets for accurate tab counts
+      const allData = await getAllTickets();
+      setAllTickets(allData || []);
+      
+      // Refetch user details for updated tickets
+      if (updatedTickets && updatedTickets.length > 0) {
+        await fetchUserDetails(updatedTickets);
+      }
+      
+      // If we're currently on the 'new' tab and the ticket moved to 'opened', 
+      // automatically switch to the 'opened' tab to show the user where the ticket went
+      if (activeFilter === 'new') {
+        setTimeout(() => {
+          handleFilterChange('opened');
+        }, 1000);
+      }
+      
+    } catch (err) {
+      console.error('[FRONTEND OPEN TICKET ERROR]', err);
+      // Don't show error to user for this automatic action
+    }
+  };
 
   // Handle filter change
   const handleFilterChange = (filter) => {
@@ -260,8 +372,17 @@ export default function AdminSupportCenter() {
                 <div
                   key={ticket._id}
                   className={`p-4 mb-2 rounded-lg cursor-pointer border border-transparent hover:border-[#9575cd] hover:bg-[#ede7f6] transition-all ${selected === ticket._id ? 'bg-[#d1c4e9] border-[#9575cd] shadow' : ''}`}
-                  onClick={() => setSelected(ticket._id)}
+                  onClick={() => {
+                    setSelected(ticket._id);
+                    // If this is a new ticket, automatically open it
+                    if (ticket.status === 'new') {
+                      handleOpenTicket(ticket._id);
+                    }
+                  }}
                 >
+                  <div className="text-xs text-gray-600 mb-1">
+                    {userDetails[ticket.userId]?.name || 'Loading...'} ({userDetails[ticket.userId]?.role || 'Unknown'})
+                  </div>
                   <b className="block text-base">{ticket.subject}</b>
                   <span className="block text-xs text-gray-500">{ticket.number}</span>
                   <span className="block text-xs mt-1 font-semibold text-[#7e57c2]">{ticket.status}</span>
@@ -278,6 +399,14 @@ export default function AdminSupportCenter() {
                   <>
                     <h3 className="text-xl font-semibold mb-2">{ticket.subject}</h3>
                     <div className="mb-2 text-sm text-[#7e57c2] font-semibold">Ticket No: {ticket.number} | Status: {ticket.status}</div>
+                    <div className="mb-3 p-3 bg-gray-50 rounded-lg border-l-4 border-blue-500">
+                      <div className="text-sm font-medium text-gray-700">
+                        Submitted by: <span className="font-semibold text-blue-600">{userDetails[ticket.userId]?.name || 'Loading...'}</span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Role: {userDetails[ticket.userId]?.role || 'Unknown'}
+                      </div>
+                    </div>
                     <p className="mb-4 text-gray-700">{ticket.description}</p>
                     <div className="mb-4">
                       <b>Messages:</b>
@@ -294,13 +423,24 @@ export default function AdminSupportCenter() {
                         )}
                       </ul>
                     </div>
+                    {ticket.status === 'new' && (
+                      <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+                        💡 <strong>Note:</strong> This ticket will automatically be moved to the "Opened" tab when you view it.
+                      </div>
+                    )}
                     <textarea
                       placeholder="Respond to this ticket..."
                       className="w-full min-h-[100px] border rounded p-2 mb-4"
                       value={reply}
-                      onChange={e => setReply(e.target.value)}
+                      onChange={e => {
+                        setReply(e.target.value);
+                        // Clear success/error messages when user starts typing
+                        if (replySuccess) setReplySuccess('');
+                        if (replyError) setReplyError('');
+                      }}
                     />
                     {replyError && <div className="text-red-500 mb-2">{replyError}</div>}
+                    {replySuccess && <div className="text-green-500 mb-2">{replySuccess}</div>}
                     <div className="flex gap-2">
                       <button
                         className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
@@ -309,14 +449,7 @@ export default function AdminSupportCenter() {
                       >
                         {replyLoading ? 'Sending...' : 'Send Response'}
                       </button>
-                      {ticket.status === 'new' && (
-                        <button
-                          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-                          onClick={() => handleStatusChange(ticket._id, 'opened')}
-                        >
-                          Mark as Opened
-                        </button>
-                      )}
+                      {/* "Mark as Opened" button removed - status automatically changes when admin replies */}
                       {ticket.status === 'opened' && (
                         <button
                           className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"

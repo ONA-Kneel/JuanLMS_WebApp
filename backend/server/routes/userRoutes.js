@@ -202,7 +202,7 @@ userRoutes.get('/users/archived-users', async (req, res) => {
 });
 
 // Retrieve ONE user by ID
-userRoutes.route("/users/:id").get(async (req, res) => {
+userRoutes.route("/users/:id").get(authenticateToken, async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ error: "User not found" });
@@ -215,6 +215,29 @@ userRoutes.route("/users/:id").get(async (req, res) => {
             personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
             profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
             nickname: user.getDecryptedNickname ? user.getDecryptedNickname() : user.nickname,
+            password: undefined, // Never send password!
+        };
+
+        res.json(decryptedUser);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch user" });
+    }
+});
+
+// Retrieve ONE user by userID (string identifier like F001, A001)
+userRoutes.route("/users/by-userid/:userID").get(authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findOne({ userID: req.params.userID });
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        // Decrypt sensitive fields
+        const decryptedUser = {
+            ...user.toObject(),
+            email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+            schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
+            personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+            profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
             password: undefined, // Never send password!
         };
 

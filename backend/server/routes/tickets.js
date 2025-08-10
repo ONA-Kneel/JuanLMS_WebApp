@@ -39,20 +39,9 @@ ticketsRouter.post('/', authenticateToken, upload.single('file'), async (req, re
 
   // Validate that the authenticated user matches the userId in the request
   // Check both _id and userID fields from the JWT token
-  const authenticatedUserId = req.user._id || req.user.userID;
-  console.log('[TICKET CREATION] User validation:', {
-    authenticatedUserId,
-    requestUserId: userId,
-    jwtUser: req.user,
-    match: authenticatedUserId === userId
-  });
+  const authenticatedUserIds = [req.user._id, req.user.userID].filter(Boolean);
   
-  if (authenticatedUserId !== userId) {
-    console.log('[USER ID MISMATCH]', {
-      authenticatedUserId,
-      requestUserId: userId,
-      jwtUser: req.user
-    });
+  if (!authenticatedUserIds.includes(userId)) {
     return res.status(403).json({ error: 'Unauthorized: User ID mismatch' });
   }
 
@@ -93,9 +82,8 @@ ticketsRouter.post('/', authenticateToken, upload.single('file'), async (req, re
   
   try {
     await ticket.save();
+    
     const decryptedTicket = ticket.decryptSensitiveData();
-    console.log('[TICKET CREATED]', decryptedTicket);
-    console.log('[MONGOOSE CONNECTION]', Ticket.db.name);
     res.status(201).json(decryptedTicket);
   } catch (err) {
     console.error('[TICKET ERROR]', err);
@@ -124,10 +112,18 @@ ticketsRouter.get('/file/:ticketId', authenticateToken, async (req, res) => {
 // Get all tickets for a user
 // GET /api/tickets/user/:userId
 ticketsRouter.get('/user/:userId', authenticateToken, async (req, res) => {
-  const encryptedUserId = encrypt(req.params.userId);
-  const tickets = await Ticket.find({ userId: encryptedUserId });
-  const decryptedTickets = tickets.map(ticket => ticket.decryptSensitiveData());
-  res.json(decryptedTickets);
+  try {
+    // userId is no longer encrypted in the database
+    const userId = req.params.userId;
+    
+    const tickets = await Ticket.find({ userId: userId });
+    
+    const decryptedTickets = tickets.map(ticket => ticket.decryptSensitiveData());
+    res.json(decryptedTickets);
+  } catch (err) {
+    console.error('[GET USER TICKETS ERROR]', err);
+    res.status(500).json({ error: 'Failed to fetch user tickets' });
+  }
 });
 
 // Reply to a ticket (user or admin)
@@ -146,18 +142,18 @@ ticketsRouter.post('/:ticketId/reply', authenticateToken, async (req, res) => {
     }
     
     const now = new Date();
+    
+    // Prepare update object
+    const updateObj = {
+      $push: { messages: { sender, senderId, message, timestamp: now } },
+      $set: { updatedAt: now }
+    };
+    
     const ticket = await Ticket.findByIdAndUpdate(
       req.params.ticketId,
-      {
-        $push: { messages: { sender, senderId, message, timestamp: now } },
-        $set: { updatedAt: now }
-      },
+      updateObj,
       { new: true }
     );
-    
-    if (!ticket) {
-      return res.status(404).json({ error: 'Ticket not found' });
-    }
     
     const decryptedTicket = ticket.decryptSensitiveData();
     console.log('[REPLY TO TICKET] Success - Updated ticket:', decryptedTicket._id);
@@ -211,6 +207,23 @@ ticketsRouter.post('/:ticketId/open', authenticateToken, async (req, res) => {
     console.log('[OPEN TICKET] Request from user:', req.user._id);
     console.log('[OPEN TICKET] Ticket ID:', req.params.ticketId);
     
+    // First, get the current ticket to check its status
+    const currentTicket = await Ticket.findById(req.params.ticketId);
+    if (!currentTicket) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    
+    // Decrypt the current ticket to check its actual status
+    const decryptedCurrentTicket = currentTicket.decryptSensitiveData();
+    console.log('[OPEN TICKET] Current ticket status:', decryptedCurrentTicket.status);
+    
+    // Only update status if it's currently 'new'
+    if (decryptedCurrentTicket.status !== 'new') {
+      console.log('[OPEN TICKET] Ticket is already opened/closed, no status update needed');
+      const decryptedTicket = currentTicket.decryptSensitiveData();
+      return res.json(decryptedTicket);
+    }
+    
     const now = new Date();
     const ticket = await Ticket.findByIdAndUpdate(
       req.params.ticketId,
@@ -218,12 +231,8 @@ ticketsRouter.post('/:ticketId/open', authenticateToken, async (req, res) => {
       { new: true }
     );
     
-    if (!ticket) {
-      return res.status(404).json({ error: 'Ticket not found' });
-    }
-    
     const decryptedTicket = ticket.decryptSensitiveData();
-    console.log('[OPEN TICKET] Success - Updated ticket:', decryptedTicket._id);
+    console.log('[OPEN TICKET] Success - Updated ticket status from new to opened:', decryptedTicket._id);
     res.json(decryptedTicket);
   } catch (err) {
     console.error('[OPEN TICKET ERROR]', err);

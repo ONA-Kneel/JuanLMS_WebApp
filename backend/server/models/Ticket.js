@@ -22,9 +22,10 @@ const ticketSchema = new mongoose.Schema({
 
 // Pre-save middleware to encrypt sensitive data
 ticketSchema.pre('save', function(next) {
-  if (this.isModified('userId')) {
-    this.userId = encrypt(this.userId);
-  }
+  // Don't encrypt userId - it needs to be queryable
+  // if (this.isModified('userId')) {
+  //   this.userId = encrypt(this.userId);
+  // }
   if (this.isModified('number')) {
     this.number = encrypt(this.number);
   }
@@ -48,7 +49,8 @@ ticketSchema.pre('save', function(next) {
 ticketSchema.methods.decryptSensitiveData = function() {
   try {
     const ticket = this.toObject();
-    ticket.userId = decrypt(ticket.userId);
+    // userId is not encrypted, so don't decrypt it
+    // ticket.userId = decrypt(ticket.userId);
     ticket.number = decrypt(ticket.number);
     ticket.description = decrypt(ticket.description);
     if (ticket.file) ticket.file = decrypt(ticket.file);

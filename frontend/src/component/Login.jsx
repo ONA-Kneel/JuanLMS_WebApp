@@ -11,7 +11,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -177,11 +177,10 @@ export default function Login() {
 
       // Navigate to dashboard based on user role (case-insensitive comparison)
       const normalizedRole = role ? role.toLowerCase().trim() : '';
-      console.log('Normalized role:', normalizedRole);
       
       if (normalizedRole === 'students' || normalizedRole === 'student') navigate('/student_dashboard');
       else if (normalizedRole === 'faculty') navigate('/faculty_dashboard');
-      else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president' || normalizedRole === 'parent') navigate('/vpe_dashboard');
+      else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president') navigate('/VPE_dashboard');
       else if (normalizedRole === 'admin') navigate('/admin_dashboard');
       else if (normalizedRole === 'principal') navigate('/principal_dashboard');
       else {
@@ -242,16 +241,12 @@ export default function Login() {
   
       // Decode JWT to extract user info and role
       const decoded = jwtDecode(token);
-      const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
-  
-      // Debug: Log the role to see what's being received
-      console.log('Received role:', role);
-      console.log('Role type:', typeof role);
-  
+      const { _id, role, name, email: userEmail, profilePic, userID } = decoded;
+
       const imageUrl = profilePic ? `${API_BASE}/uploads/${profilePic}` : null;
-  
+
       // Store user info and token in localStorage
-      localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
+      localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, role, profilePic: imageUrl }));
       localStorage.setItem('token', token);
       localStorage.setItem('userID', userID);
       localStorage.setItem('role', role);
@@ -269,14 +264,13 @@ export default function Login() {
         // Set flag to logout when returning to login page
         localStorage.setItem('shouldLogoutOnReturn', 'true');
       }
-  
+
       // Navigate to dashboard based on user role (case-insensitive comparison)
       const normalizedRole = role ? role.toLowerCase().trim() : '';
-      console.log('Normalized role:', normalizedRole);
       
       if (normalizedRole === 'students' || normalizedRole === 'student') navigate('/student_dashboard');
       else if (normalizedRole === 'faculty') navigate('/faculty_dashboard');
-      else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president' || normalizedRole === 'parent') navigate('/vpe_dashboard');
+      else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president') navigate('/VPE_dashboard');
       else if (normalizedRole === 'admin') navigate('/admin_dashboard');
       else if (normalizedRole === 'principal') navigate('/principal_dashboard');
       else {

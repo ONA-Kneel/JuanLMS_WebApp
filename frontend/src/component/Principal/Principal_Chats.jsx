@@ -7,12 +7,10 @@ import uploadfile from "../../assets/uploadfile.png";
 import Principal_Navbar from "./Principal_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
+import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
-import ContactNicknameManager from "../ContactNicknameManager";
-import GroupNicknameManager from "../GroupNicknameManager";
-import { getUserDisplayName } from "../../utils/userDisplayUtils";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Principal_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
@@ -21,15 +19,16 @@ export default function Principal_Chats() {
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
+
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
     const stored = localStorage.getItem("recentChats_principal");
     return stored ? JSON.parse(stored) : [];
   });
+
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [contactNicknames, setContactNicknames] = useState({});
 
   // Group chat states
   const [groups, setGroups] = useState([]);
@@ -41,36 +40,59 @@ export default function Principal_Chats() {
   const [joinGroupCode, setJoinGroupCode] = useState("");
   const [isGroupChat, setIsGroupChat] = useState(false);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
-  const [showMembersModal, setShowMembersModal] = useState(false);
+
+  // Add state for member search
+  const [memberSearchTerm, setMemberSearchTerm] = useState("");
+  
+  // Add state for leave group confirmation
   const [showLeaveGroupModal, setShowLeaveGroupModal] = useState(false);
   const [groupToLeave, setGroupToLeave] = useState(null);
+
+  // Add state for creator leave error
   const [showCreatorLeaveError, setShowCreatorLeaveError] = useState(false);
-  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+
+  // Add state for members modal
+  const [showMembersModal, setShowMembersModal] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState(null);
-  const [memberSearchTerm, setMemberSearchTerm] = useState("");
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
-    type: "",
-    title: "",
-    message: "",
+    type: 'error',
+    title: '',
+    message: ''
   });
 
-  const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
-  const socket = useRef();
+  const messagesEndRef = useRef(null);
+  const socket = useRef(null);
 
-  const currentUserId = JSON.parse(localStorage.getItem("user"))?._id;
+  const API_URL = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+  const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
 
-  // ================= SOCKET CONNECTION =================
+  const storedUser = localStorage.getItem("user");
+  const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
+
+  const navigate = useNavigate();
+
   useEffect(() => {
-    if (!currentUserId) return;
+    if (!currentUserId) {
+      navigate("/", { replace: true });
+    }
+  }, [currentUserId, navigate]);
 
-    socket.current = io(API_BASE);
+  // ================= SOCKET.IO SETUP =================
+  useEffect(() => {
+    socket.current = io(SOCKET_URL, {
+      transports: ["websocket"],
+      reconnectionAttempts: 5,
+      timeout: 10000,
+    });
+
     socket.current.emit("addUser", currentUserId);
 
     socket.current.on("getUsers", () => {
-      // Users are handled separately
+      // Online users tracking removed
     });
 
     socket.current.on("getMessage", (data) => {
@@ -80,6 +102,7 @@ export default function Principal_Chats() {
         message: data.text,
         fileUrl: data.fileUrl || null,
       };
+
       setMessages((prev) => {
         const newMessages = {
           ...prev,
@@ -92,10 +115,9 @@ export default function Principal_Chats() {
         // Update last message for this chat
         const chat = recentChats.find(c => c._id === incomingMessage.senderId);
         if (chat) {
-          const contactNickname = contactNicknames[chat._id] || null;
           const prefix = incomingMessage.senderId === currentUserId 
             ? "You: " 
-            : `${getUserDisplayName(chat, contactNickname)}: `;
+            : `${chat.lastname}, ${chat.firstname}: `;
           const text = incomingMessage.message 
             ? incomingMessage.message 
             : (incomingMessage.fileUrl ? "File sent" : "");
@@ -109,23 +131,21 @@ export default function Principal_Chats() {
       });
     });
 
+    // Group chat socket events
     socket.current.on("getGroupMessage", (data) => {
       const incomingGroupMessage = {
         senderId: data.senderId,
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
+        senderName: data.senderName,
+        timestamp: new Date(),
       };
-      setGroupMessages((prev) => {
-        const newGroupMessages = {
-          ...prev,
-          [incomingGroupMessage.groupId]: [
-            ...(prev[incomingGroupMessage.groupId] || []),
-            incomingGroupMessage,
-          ],
-        };
-        return newGroupMessages;
-      });
+
+      setGroupMessages((prev) => ({
+        ...prev,
+        [data.groupId]: [...(prev[data.groupId] || []), incomingGroupMessage],
+      }));
     });
 
     socket.current.on("groupCreated", (group) => {
@@ -144,13 +164,13 @@ export default function Principal_Chats() {
     return () => {
       socket.current.disconnect();
     };
-  }, [currentUserId, recentChats, contactNicknames]);
+  }, [currentUserId, recentChats]);
 
   // ================= FETCH USERS =================
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/users/with-nicknames`);
+        const res = await axios.get(`${API_BASE}/users`);
         // Support both array and paginated object
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
@@ -165,35 +185,6 @@ export default function Principal_Chats() {
       }
     };
     fetchUsers();
-  }, [currentUserId]);
-
-  // ================= FETCH CONTACT NICKNAMES =================
-  useEffect(() => {
-    const fetchContactNicknames = async () => {
-      if (!currentUserId) return;
-      
-      try {
-        const response = await axios.get(`${API_BASE}/users/${currentUserId}/contacts/nicknames`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        
-        const nicknamesMap = {};
-        response.data.forEach(item => {
-          // Ensure contactId is properly handled as a string
-          const contactId = item.contactId?.toString() || item.contactId;
-          if (contactId && item.nickname) {
-            nicknamesMap[contactId] = item.nickname;
-          }
-        });
-        setContactNicknames(nicknamesMap);
-      } catch (error) {
-        console.error('Error fetching contact nicknames:', error);
-      }
-    };
-    
-    fetchContactNicknames();
   }, [currentUserId]);
 
   // ================= FETCH GROUPS =================
@@ -224,10 +215,9 @@ export default function Principal_Chats() {
             const chatMessages = newMessages[chat._id] || [];
             const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
             if (lastMsg) {
-              const contactNickname = contactNicknames[chat._id] || null;
               const prefix = lastMsg.senderId === currentUserId 
                 ? "You: " 
-                : `${getUserDisplayName(chat, contactNickname)}: `;
+                : `${chat.lastname}, ${chat.firstname}: `;
               const text = lastMsg.message 
                 ? lastMsg.message 
                 : (lastMsg.fileUrl ? "File sent" : "");
@@ -244,7 +234,7 @@ export default function Principal_Chats() {
     };
 
     fetchMessages();
-  }, [selectedChat, currentUserId, recentChats, contactNicknames]);
+  }, [selectedChat, currentUserId, recentChats]);
 
   // ================= FETCH GROUP MESSAGES =================
   useEffect(() => {
@@ -300,7 +290,7 @@ export default function Principal_Chats() {
           groupId: selectedChat._id,
           text: sentMessage.message,
           fileUrl: sentMessage.fileUrl || null,
-          senderName: JSON.parse(localStorage.getItem("user")).firstname + " " + JSON.parse(localStorage.getItem("user")).lastname,
+          senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
         });
 
         setGroupMessages((prev) => ({
@@ -484,10 +474,23 @@ export default function Principal_Chats() {
         : (messages[selectedChat._id] || []);
       const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
       if (lastMsg) {
-        // Update last message logic if needed in the future
+        let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
+        let text = (lastMsg.message) ? lastMsg.message : (lastMsg.fileUrl ? "File sent" : "");
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix, text }
+        }));
+      } else {
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: null
+        }));
       }
     } else {
-      // setLastMessage(null); // This line was removed as per the edit hint
+      setLastMessages(prev => ({
+        ...prev,
+        [selectedChat?._id]: null
+      }));
     }
   }, [selectedChat, messages, currentUserId, groupMessages, isGroupChat]);
 
@@ -510,10 +513,9 @@ export default function Principal_Chats() {
         const chatMessages = newMessages[chat._id] || [];
         const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
         if (lastMsg) {
-          const contactNickname = contactNicknames[chat._id] || null;
           const prefix = lastMsg.senderId === currentUserId 
             ? "You: " 
-            : `${getUserDisplayName(chat, contactNickname)}: `;
+            : `${chat.lastname}, ${chat.firstname}: `;
           const text = lastMsg.message 
             ? lastMsg.message 
             : (lastMsg.fileUrl ? "File sent" : "");
@@ -566,7 +568,7 @@ export default function Principal_Chats() {
       }
     }
     fetchActiveTermForYear();
-  }, [academicYear]);
+    }, [academicYear]);
 
   // 1. Remove activeTab and all tab logic
   // 2. Add state for dropdown menu (showGroupMenu)
@@ -586,10 +588,9 @@ export default function Principal_Chats() {
     // First show existing chats/groups that match
     ...unifiedChats.filter(chat => {
       if (chat.type === 'individual') {
-        const contactNickname = contactNicknames[chat._id] || null;
         return (
-          getUserDisplayName(chat, contactNickname)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (chat.nickname && chat.nickname.toLowerCase().includes(searchTerm.toLowerCase()))
+          chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
         );
       } else {
         return chat.name?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -600,8 +601,8 @@ export default function Principal_Chats() {
       .filter(user => user._id !== currentUserId)
       .filter(user => !recentChats.some(chat => chat._id === user._id))
       .filter(user =>
-        getUserDisplayName(user, contactNicknames[user._id] || null)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (user.nickname && user.nickname.toLowerCase().includes(searchTerm.toLowerCase()))
+        user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
       )
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
@@ -702,7 +703,7 @@ export default function Principal_Chats() {
                       )}
                       <div className="flex flex-col min-w-0 ml-2">
                         <strong className="truncate text-sm">
-                          {chat.type === 'group' ? chat.name : getUserDisplayName(chat, contactNicknames[chat._id] || null)}
+                          {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
                         </strong>
                         {chat.type === 'group' ? (
                           <span className="text-xs text-gray-500 truncate">
@@ -769,7 +770,7 @@ export default function Principal_Chats() {
                       )}
                       <div className="flex flex-col min-w-0 ml-2">
                         <strong className="truncate text-sm">
-                          {item.type === 'group' ? item.name : getUserDisplayName(item, contactNicknames[item._id] || null)}
+                          {item.type === 'group' ? item.name : `${item.lastname}, ${item.firstname}`}
                         </strong>
                         {item.isNewUser ? (
                           <span className="text-xs text-blue-600">Click to start new chat</span>
@@ -824,40 +825,8 @@ export default function Principal_Chats() {
                     {/* In chat header, below the group name/title, show member count and dropdown for group chats only: */}
                     <div className="flex flex-col">
                       <h3 className="text-lg font-semibold">
-                        {isGroupChat ? selectedChat.name : getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()] || null)}
+                        {isGroupChat ? selectedChat.name : `${selectedChat.lastname}, ${selectedChat.firstname}`}
                       </h3>
-                      {!isGroupChat && (
-                        <ContactNicknameManager 
-                          currentUserId={currentUserId}
-                          contactId={selectedChat._id} 
-                          contactName={getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()] || null)}
-                          originalName={`${selectedChat.firstname || ''} ${selectedChat.lastname || ''}`.trim()}
-                          onNicknameUpdate={(contactId, nickname) => {
-                            // Update the contact nicknames state
-                            setContactNicknames(prev => ({
-                              ...prev,
-                              [contactId?.toString() || contactId]: nickname
-                            }));
-                          }}
-                          className="mt-1"
-                        />
-                      )}
-                      {isGroupChat && (
-                        <GroupNicknameManager 
-                          currentUserId={currentUserId}
-                          groupName={selectedChat.name}
-                          participants={selectedChat.participants}
-                          users={users}
-                          contactNicknames={contactNicknames}
-                          onNicknameUpdate={(contactId, nickname) => {
-                            setContactNicknames(prev => ({
-                              ...prev,
-                              [contactId?.toString() || contactId]: nickname
-                            }));
-                          }}
-                          className="mt-1"
-                        />
-                      )}
                       {isGroupChat && (
                         <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
                           {(selectedChat?.participants?.length || 0)} members
@@ -958,7 +927,7 @@ export default function Principal_Chats() {
                                 />
                                 <div>
                                   <div className="flex items-center gap-2 mb-1">
-                                    <span className="font-semibold text-sm">{sender ? getUserDisplayName(sender, contactNicknames[sender?._id?.toString()] || null) : (msg.senderId === currentUserId ? "You" : "Unknown User")}</span>
+                                    <span className="font-semibold text-sm">{sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown"}</span>
                                     {(msg.createdAt || msg.updatedAt) && (
                                       <span className="text-xs text-gray-400 ml-2">
                                         {dateLabel ? `${dateLabel}, ` : ""}{timeLabel}
@@ -1093,7 +1062,7 @@ export default function Principal_Chats() {
                     if (!user) return null;
                     return (
                       <span key={userId} className="flex items-center bg-blue-100 text-blue-900 px-2 py-1 rounded-full text-xs">
-                        {getUserDisplayName(user, contactNicknames[user._id] || null)}
+                        {user.lastname}, {user.firstname}
                         <button
                           className="ml-1 text-red-500 hover:text-red-700"
                           onClick={() => setSelectedGroupMembers(prev => prev.filter(id => id !== userId))}
@@ -1112,8 +1081,8 @@ export default function Principal_Chats() {
                   {users
                     .filter(user => user._id !== currentUserId)
                     .filter(user =>
-                      getUserDisplayName(user, contactNicknames[user._id] || null)?.toLowerCase().includes(memberSearchTerm.toLowerCase()) ||
-                      (user.nickname && user.nickname.toLowerCase().includes(memberSearchTerm.toLowerCase()))
+                      user.firstname?.toLowerCase().includes(memberSearchTerm.toLowerCase()) ||
+                      user.lastname?.toLowerCase().includes(memberSearchTerm.toLowerCase())
                     )
                     .filter(user => !selectedGroupMembers.includes(user._id))
                     .length === 0 ? (
@@ -1122,8 +1091,8 @@ export default function Principal_Chats() {
                     users
                       .filter(user => user._id !== currentUserId)
                       .filter(user =>
-                        getUserDisplayName(user, contactNicknames[user._id] || null)?.toLowerCase().includes(memberSearchTerm.toLowerCase()) ||
-                        (user.nickname && user.nickname.toLowerCase().includes(memberSearchTerm.toLowerCase()))
+                        user.firstname?.toLowerCase().includes(memberSearchTerm.toLowerCase()) ||
+                        user.lastname?.toLowerCase().includes(memberSearchTerm.toLowerCase())
                       )
                       .filter(user => !selectedGroupMembers.includes(user._id))
                       .map(user => (
@@ -1135,7 +1104,7 @@ export default function Principal_Chats() {
                             setMemberSearchTerm("");
                           }}
                         >
-                          <span className="text-sm">{getUserDisplayName(user, contactNicknames[user._id] || null)}</span>
+                          <span className="text-sm">{user.lastname}, {user.firstname}</span>
                         </div>
                       ))
                   )
@@ -1272,7 +1241,7 @@ export default function Principal_Chats() {
                   const isCreator = selectedChat?.createdBy === userId;
                   return (
                     <li key={userId} className="flex items-center justify-between py-2">
-                      <span>{getUserDisplayName(user, contactNicknames[user._id] || null)} {isCreator && <span className="text-xs text-blue-700">(Creator)</span>}</span>
+                      <span>{user.lastname}, {user.firstname} {isCreator && <span className="text-xs text-blue-700">(Creator)</span>}</span>
                       {selectedChat?.createdBy === currentUserId && !isCreator && (
                         <button
                           className="text-red-500 hover:text-red-700 text-xs px-2 py-1 border border-red-300 rounded"

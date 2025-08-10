@@ -13,7 +13,7 @@ import ValidationModal from './ValidationModal';
 
 Modal.setAppElement('#root');
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 // ===================== ChangePasswordModal =====================
 function ChangePasswordModal({ userId, onClose }) {
@@ -452,12 +452,12 @@ export default function ProfileModal({
           className="z-40 bg-gray-50/95 p-6 md:p-12 rounded-3xl shadow-2xl max-w-5xl w-full h-[90vh] overflow-y-auto font-poppinsr relative"
           onClick={(e) => e.stopPropagation()} // 🔹 click inside does nothing
         >
-          {/* Sign-out Button */}
+          {/* Logout Button */}
           <button 
             onClick={handleLogout}
-            className="absolute right-10 top-6 text-black font-poppinsb hover:underline"
+            className="absolute right-10 top-6 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-poppinsb transition-colors"
           >
-            Sign-out
+            Logout
           </button>
 
         {/* Profile Header */}
@@ -609,14 +609,6 @@ export default function ProfileModal({
                 {showHelp && <SupportModal onClose={() => setShowHelp(false)} />}
               </>
             )}
-            
-            {/* Logout Button */}
-            <button
-              className="mt-3 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-              onClick={handleLogout}
-            >
-              Logout
-            </button>
           </div>
         )}
 

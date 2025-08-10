@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 // Helper function to get auth headers
 const getAuthHeaders = () => {
@@ -15,4 +15,5 @@ export const getAllTickets = (status) => axios.get(`${API_BASE}/api/tickets`, {
   params: status ? { status } : {},
   headers: getAuthHeaders()
 }).then(res => res.data);
-export const replyToTicket = (ticketId, data) => axios.post(`${API_BASE}/api/tickets/${ticketId}/reply`, data, { headers: getAuthHeaders() }).then(res => res.data); 
+export const replyToTicket = (ticketId, data) => axios.post(`${API_BASE}/api/tickets/${ticketId}/reply`, data, { headers: getAuthHeaders() }).then(res => res.data);
+export const openTicket = (ticketId) => axios.post(`${API_BASE}/api/tickets/${ticketId}/open`, {}, { headers: getAuthHeaders() }).then(res => res.data); 

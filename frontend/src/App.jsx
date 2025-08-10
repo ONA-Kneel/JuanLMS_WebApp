@@ -41,14 +41,6 @@ import Principal_Calendar from './component/Principal/Principal_Calendar';
 import Principal_AuditTrail from './component/Principal/Principal_AuditTrail';
 import Principal_FacultyReport from './component/Principal/Principal_FacultyReport';
 
-// VPE Access
-import VPE_Dashboard from './component/VPE/VPE_Dashboard';
-import VPE_Chats from './component/VPE/VPE_Chats';
-import VPE_Grades from './component/VPE/VPE_Grades';
-import VPE_Calendar from './component/VPE/VPE_Calendar';
-import VPE_AuditTrail from './component/VPE/VPE_AuditTrail';
-import VPE_FacultyReport from './component/VPE/VPE_FacultyReport';
-
 // Admin Access
 import Admin_Dashboard from './component/Admin/Admin_Dashboard';
 import Admin_Activities from './component/Admin/Admin_Activities';
@@ -63,10 +55,15 @@ import Admin_AcademicSettings from './component/Admin/Admin_AcademicSettings';
 import TermDetails from './component/Admin/TermDetails';
 import Admin_Registrants from './component/Admin/Admin_Registrants';
 
-// Parent Access
-import Parent_Dashboard from './component/Parent/Parent_Dashboard';
-import Parent_Grades from './component/Parent/Parent_Grades';
-import Parent_Progress from './component/Parent/Parent_Progress';
+// VPE Access
+import VPE_Dashboard from './component/VPE/VPE_Dashboard';
+import VPE_Grades from './component/VPE/VPE_Grades';
+import VPE_Chats from './component/VPE/VPE_Chats';
+import VPE_Calendar from './component/VPE/VPE_Calendar';
+import VPE_AuditTrail from './component/VPE/VPE_AuditTrail';
+import VPE_FacultyReport from './component/VPE/VPE_FacultyReport';
+
+// All Around
 import ActivityTab from './component/ActivityTab';
 import QuizTab from './component/QuizTab';
 import QuizView from './component/QuizView';
@@ -112,14 +109,6 @@ function App() {
         <Route path="/principal_audit_trail" element={<ProtectedRoute allowedRoles={['principal']}><Principal_AuditTrail/></ProtectedRoute>}/>
         <Route path="/principal_faculty_report" element={<ProtectedRoute allowedRoles={['principal']}><Principal_FacultyReport/></ProtectedRoute>}/>
 
-        {/* VPE */}
-        <Route path="/vpe_dashboard" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Dashboard/></ProtectedRoute>}/>
-        <Route path="/vpe_chats" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Chats /></ProtectedRoute>}/>
-        <Route path="/vpe_grades" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Grades /></ProtectedRoute>}/>
-        <Route path="/vpe_calendar" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Calendar /></ProtectedRoute>}/>
-        <Route path="/vpe_audit_trail" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_AuditTrail/></ProtectedRoute>}/>
-        <Route path="/vpe_faculty_report" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_FacultyReport/></ProtectedRoute>}/>
-
         {/* Admin */}
         <Route path="/admin_dashboard" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Dashboard/></ProtectedRoute>}/>
         <Route path="/admin_accounts" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Accounts /></ProtectedRoute>}/>
@@ -134,10 +123,13 @@ function App() {
         <Route path="/admin/academic-settings/terms/:termId" element={<ProtectedRoute allowedRoles={['admin']}><TermDetails /></ProtectedRoute>} />
         <Route path="/admin_registrants" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Registrants /></ProtectedRoute>} />
 
-        {/* Parent */}
-        <Route path="/parent_dashboard" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Dashboard/></ProtectedRoute>}/>
-        <Route path="/parent_grades" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Grades/></ProtectedRoute>}/>
-        <Route path="/parent_progress" element={<ProtectedRoute allowedRoles={['parent']}><Parent_Progress/></ProtectedRoute>}/>
+        {/* VPE */}
+        <Route path="/VPE_dashboard" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Dashboard/></ProtectedRoute>}/>
+        <Route path="/VPE_chats" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Chats /></ProtectedRoute>}/>
+        <Route path="/VPE_grades" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Grades /></ProtectedRoute>}/>
+        <Route path="/VPE_calendar" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Calendar /></ProtectedRoute>}/>
+        <Route path="/VPE_audit_trail" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_AuditTrail/></ProtectedRoute>}/>
+        <Route path="/VPE_faculty_report" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_FacultyReport/></ProtectedRoute>}/>
 
         {/* Assignment Creation Page */}
         <Route path="/create-assignment" element={<ProtectedRoute allowedRoles={['faculty']}><ActivityTab /></ProtectedRoute>} />
