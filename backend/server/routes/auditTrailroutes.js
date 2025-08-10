@@ -54,9 +54,10 @@ router.get('/audit-logs', authenticateToken, async (req, res) => {
     // Build filter object
     const filter = {};
     
-    // For principals, only show student and faculty actions (all actions, not just login/logout)
+    // For principals, only show student and faculty login/logout logs
     if (req.user.role === 'principal') {
       filter['userRole'] = { $in: ['student', 'students', 'faculty'] };
+      filter['action'] = { $in: ['Login', 'Logout'] };
     }
     
     if (action && action !== 'all') {

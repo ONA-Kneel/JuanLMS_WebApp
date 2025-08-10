@@ -32,6 +32,7 @@ import Faculty_Calendar from './component/Faculty/Faculty_Calendar';
 import Faculty_CreateClass from './component/Faculty/Faculty_CreateClass';
 import Faculty_ClassWorkspace from './component/Faculty/Faculty_ClassWorkspace';
 import Faculty_Meeting from './component/Faculty/Faculty_Meeting';
+import Faculty_StudentReport from './component/Faculty/Faculty_StudentReport';
 
 // Principal Access
 import Principal_Dashboard from './component/Principal/Principal_Dashboard';
@@ -99,6 +100,7 @@ function App() {
         <Route path="/faculty_createclass" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_CreateClass/></ProtectedRoute>}/> 
         <Route path="/faculty_class/:classId" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_ClassWorkspace /></ProtectedRoute>} />
         <Route path="/faculty_meeting" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Meeting /></ProtectedRoute>} />
+        <Route path="/faculty_student_report" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_StudentReport /></ProtectedRoute>} />
 
 
         {/* Principal */}

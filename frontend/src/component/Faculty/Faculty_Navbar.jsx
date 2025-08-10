@@ -10,6 +10,7 @@ import logo5 from "../../assets/logo/Logo5.svg";
 import { Menu, X } from 'lucide-react';
 import meetingIcon from "../../assets/editEvent.png";
 import logo6 from "../../assets/logo/SJDD Logo.svg";
+import facultyReportIcon from "../../assets/facultyreport.png";
 
 const Faculty_Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -24,6 +25,7 @@ const Faculty_Navbar = () => {
         { path: "/faculty_grades", icon: gradesIcon, label: "GRADES" },
         { path: "/faculty_calendar", icon: calendarIcon, label: "CALENDAR" },
         { path: "/faculty_meeting", icon: meetingIcon, label: "MEETING" },
+        { path: "/faculty_student_report", icon: facultyReportIcon, label: "STUDENT REPORTS" },
     ];
 
     return (
