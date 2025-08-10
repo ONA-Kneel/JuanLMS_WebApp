@@ -215,32 +215,32 @@ export default function Admin_Accounts() {
     }
     // SchoolID validation for all roles
     if (formData.role === "faculty") {
-      if (!/^F0/i.test(formData.schoolID)) {
+      if (!/^F\d{3}$/i.test(formData.schoolID)) {
         setValidationModal({
           isOpen: true,
           type: 'warning',
           title: 'Invalid Faculty ID',
-          message: "Faculty ID must start with F0."
+          message: "Faculty ID must be F followed by exactly 3 digits (e.g., F001, F010, F100)."
         });
         return;
       }
     } else if (formData.role === "admin") {
-      if (!/^A0/i.test(formData.schoolID)) {
+      if (!/^A\d{3}$/i.test(formData.schoolID)) {
         setValidationModal({
           isOpen: true,
           type: 'warning',
           title: 'Invalid Admin ID',
-          message: "Admin ID must start with A0."
+          message: "Admin ID must be A followed by exactly 3 digits (e.g., A001, A010, A100)."
         });
         return;
       }
     } else if (formData.role === "vice president of education" || formData.role === "principal") {
-      if (!/^N0/i.test(formData.schoolID)) {
+      if (!/^N\d{3}$/i.test(formData.schoolID)) {
         setValidationModal({
           isOpen: true,
           type: 'warning',
           title: 'Invalid VP/Principal ID',
-          message: "VP/Principal ID must start with N0."
+          message: "VP/Principal ID must be N followed by exactly 3 digits (e.g., N001, N010, N100)."
         });
         return;
       }
