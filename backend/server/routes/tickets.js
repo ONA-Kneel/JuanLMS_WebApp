@@ -153,6 +153,10 @@ ticketsRouter.post('/:ticketId/reply', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Ticket not found' });
     }
     
+    // Decrypt the current ticket to check its actual status
+    const decryptedCurrentTicket = currentTicket.decryptSensitiveData();
+    console.log('[REPLY TO TICKET] Current ticket status:', decryptedCurrentTicket.status);
+    
     // Prepare update object
     const updateObj = {
       $push: { messages: { sender, senderId, message, timestamp: now } },
@@ -160,10 +164,18 @@ ticketsRouter.post('/:ticketId/reply', authenticateToken, async (req, res) => {
     };
     
     // If admin is replying to a new ticket, automatically mark it as opened
-    if (sender === 'admin' && currentTicket.status === 'new') {
+    if (sender === 'admin' && decryptedCurrentTicket.status === 'new') {
       updateObj.$set.status = 'opened';
       console.log('[REPLY TO TICKET] Auto-updating ticket status from new to opened');
+      console.log('[REPLY TO TICKET] Update object before query:', JSON.stringify(updateObj, null, 2));
+    } else {
+      console.log('[REPLY TO TICKET] No status update needed. Sender:', sender, 'Current status:', decryptedCurrentTicket.status);
     }
+    
+    console.log('[REPLY TO TICKET] Executing MongoDB update with query:', JSON.stringify({
+      ticketId: req.params.ticketId,
+      updateObj: updateObj
+    }, null, 2));
     
     const ticket = await Ticket.findByIdAndUpdate(
       req.params.ticketId,
@@ -173,6 +185,8 @@ ticketsRouter.post('/:ticketId/reply', authenticateToken, async (req, res) => {
     
     const decryptedTicket = ticket.decryptSensitiveData();
     console.log('[REPLY TO TICKET] Success - Updated ticket:', decryptedTicket._id);
+    console.log('[REPLY TO TICKET] Final ticket status:', decryptedTicket.status);
+    console.log('[REPLY TO TICKET] Update object used:', updateObj);
     res.json(decryptedTicket);
   } catch (err) {
     console.error('[REPLY TO TICKET ERROR]', err);

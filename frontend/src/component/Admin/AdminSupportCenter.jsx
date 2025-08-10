@@ -126,11 +126,12 @@ export default function AdminSupportCenter() {
         return;
       }
 
-      await replyToTicket(ticketId, {
+      const replyResponse = await replyToTicket(ticketId, {
         sender: 'admin',
         senderId: adminId,
         message: reply
       });
+      console.log('[FRONTEND REPLY] Response from API:', replyResponse);
       setReply('');
       
       // Refetch tickets to get updated data
@@ -141,13 +142,31 @@ export default function AdminSupportCenter() {
       const allData = await getAllTickets();
       setAllTickets(allData || []);
       
+      // If the current ticket is no longer in the updated tickets list (e.g., status changed),
+      // clear the selection to avoid showing a "not found" state
+      if (selected && !updatedTickets.find(t => t._id === selected)) {
+        console.log('[FRONTEND REPLY] Selected ticket no longer in current view, clearing selection');
+        setSelected(null);
+      }
+      
       // Show success message for automatic status update
-      const currentTicket = tickets.find(t => t._id === ticketId);
-      if (currentTicket?.status === 'new') {
-        // The ticket was new and is now automatically opened
-        setReplySuccess('Reply sent and ticket automatically moved to opened status');
-        // Clear success message after 3 seconds
-        setTimeout(() => setReplySuccess(''), 3000);
+      // Check the response from the API to see if status was automatically updated
+      console.log('[FRONTEND REPLY] Checking ticket status:', replyResponse.status);
+      if (replyResponse.status === 'opened') {
+        // The ticket was automatically moved to opened status
+        setReplySuccess('Reply sent and ticket automatically moved to opened status. Check the "Opened" tab to see it.');
+        
+        // If we're currently on the 'new' tab and the ticket moved to 'opened', 
+        // automatically switch to the 'opened' tab to show the user where the ticket went
+        if (activeFilter === 'new') {
+          setTimeout(() => {
+            handleFilterChange('opened');
+            setReplySuccess('Ticket moved to "Opened" tab. You can now view it there.');
+          }, 2000);
+        }
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => setReplySuccess(''), 5000);
       } else {
         setReplySuccess('Reply sent successfully');
         // Clear success message after 3 seconds
