@@ -5,7 +5,7 @@ import { Settings } from 'lucide-react';
 import { getUserDisplayName } from '../utils/userDisplayUtils';
 import defaultAvatar from '../assets/profileicon (1).svg';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function GroupNicknameManager({ currentUserId, groupName, participants, users, contactNicknames, onNicknameUpdate, className = "" }) {
   const [showDropdown, setShowDropdown] = useState(false);

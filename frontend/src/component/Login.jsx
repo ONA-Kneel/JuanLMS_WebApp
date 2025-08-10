@@ -11,7 +11,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Login() {
   const navigate = useNavigate();

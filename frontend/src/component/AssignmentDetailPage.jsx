@@ -5,7 +5,7 @@ import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import Student_Navbar from './Student/Student_Navbar';
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function AssignmentDetailPage() {
   const { assignmentId } = useParams();
