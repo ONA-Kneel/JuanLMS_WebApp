@@ -8,6 +8,7 @@ const submissionSchema = new mongoose.Schema({
   }],
   fileUrl: { type: String }, // legacy, keep for backward compatibility
   fileName: { type: String }, // legacy, keep for backward compatibility
+  context: { type: String }, // Additional context for no-file submissions
   submittedAt: { type: Date, default: Date.now },
   status: { type: String, enum: ['turned-in', 'graded'], default: 'turned-in' },
   grade: { type: Number },

@@ -396,25 +396,35 @@ router.post('/:id/submit', authenticateToken, upload.array('files', 5), async (r
     const student = req.user._id;
     const assignment = req.params.id;
     let files = [];
+    
+    // Handle file uploads if any
     if (req.files && req.files.length > 0) {
       files = req.files.map(f => ({
         url: `/uploads/submissions/${f.filename}`,
         name: f.originalname
       }));
     }
+    
+    // Get context from form data if provided
+    const context = req.body.context || '';
+    
     // Check if already submitted
     let submission = await Submission.findOne({ assignment, student });
     if (submission) {
       submission.files = files;
+      submission.context = context;
       submission.submittedAt = new Date();
       submission.status = 'turned-in';
       await submission.save();
     } else {
-      submission = new Submission({ assignment, student, files });
+      // Create new submission - files can be empty array for no-file submissions
+      submission = new Submission({ assignment, student, files, context });
       await submission.save();
     }
+    
     res.json(submission);
   } catch (err) {
+    console.error('Error creating submission:', err);
     res.status(500).json({ error: 'Failed to submit assignment.' });
   }
 });
@@ -434,20 +444,48 @@ router.get('/:id/submissions', authenticateToken, async (req, res) => {
 // Faculty grades a submission
 router.post('/:id/grade', authenticateToken, async (req, res) => {
   try {
-    const { submissionId, grade, feedback } = req.body;
-    const submission = await Submission.findById(submissionId);
-    if (!submission) return res.status(404).json({ error: 'Submission not found' });
+    const { submissionId, studentId, grade, feedback } = req.body;
+    const assignmentId = req.params.id;
+    
+    let submission;
+    
+    // If submissionId is provided, find existing submission
+    if (submissionId) {
+      submission = await Submission.findById(submissionId);
+      if (!submission) return res.status(404).json({ error: 'Submission not found' });
+    } 
+    // If studentId is provided, find or create submission
+    else if (studentId) {
+      submission = await Submission.findOne({ assignment: assignmentId, student: studentId });
+      if (!submission) {
+        // Create a new submission for the student if none exists
+        submission = new Submission({
+          assignment: assignmentId,
+          student: studentId,
+          files: [],
+          context: '',
+          status: 'turned-in',
+          submittedAt: new Date()
+        });
+      }
+    } else {
+      return res.status(400).json({ error: 'Either submissionId or studentId is required' });
+    }
+    
     // Enforce max score of 100
     let finalGrade = grade;
     if (typeof finalGrade === 'number' && finalGrade > 100) {
       finalGrade = 100;
     }
+    
     submission.grade = finalGrade;
     submission.feedback = feedback;
     submission.status = 'graded';
     await submission.save();
+    
     res.json(submission);
   } catch (err) {
+    console.error('Error grading submission:', err);
     res.status(500).json({ error: 'Failed to grade submission.' });
   }
 });

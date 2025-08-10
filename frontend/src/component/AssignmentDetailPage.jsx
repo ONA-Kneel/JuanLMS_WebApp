@@ -35,6 +35,7 @@ export default function AssignmentDetailPage() {
   // Add state for selected files before submission
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [deletingFile, setDeletingFile] = useState(null);
+  const [submissionContext, setSubmissionContext] = useState('');
 
   // --- Track when a student views an assignment ---
   useEffect(() => {
@@ -174,6 +175,8 @@ export default function AssignmentDetailPage() {
     const token = localStorage.getItem('token');
     try {
       const formData = new FormData();
+      
+      // Handle different submission types
       if (submissionType === 'file' && file) {
         for (let i = 0; i < file.length && i < 5; i++) {
           formData.append('files', file[i]);
@@ -182,7 +185,15 @@ export default function AssignmentDetailPage() {
         for (let i = 0; i < links.length && i < 5; i++) {
           if (links[i]) formData.append('links', links[i]);
         }
+      } else if (submissionType === 'none') {
+        // For submissions without files, we still need to send the submission
+        // The backend will handle empty files array
+        formData.append('submissionType', 'none');
+        if (submissionContext) {
+          formData.append('context', submissionContext);
+        }
       }
+      
       const res = await fetch(`${API_BASE}/assignments/${assignmentId}/submit`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
@@ -203,6 +214,8 @@ export default function AssignmentDetailPage() {
           });
         setFile(null);
         setSelectedFiles([]); // After submission, clear selectedFiles
+        setLinks(['']); // Reset links
+        setSubmissionContext(''); // Reset context
       } else {
         setError('Failed to submit.');
       }
@@ -232,6 +245,7 @@ export default function AssignmentDetailPage() {
           setStudentSubmission(sub);
           setSelectedFiles([]);
           setFile(null);
+          setSubmissionContext(''); // Reset context on undo
         });
     } else {
       // Optionally handle error
@@ -310,17 +324,31 @@ export default function AssignmentDetailPage() {
     }
 
     try {
+      // Prepare the request body based on whether we have a submission ID or not
+      const requestBody = {
+        grade: gradeValue,
+        feedback: feedbackValue,
+      };
+
+      if (submissionId) {
+        // If we have a submission ID, use it
+        requestBody.submissionId = submissionId;
+      } else if (gradingStudent) {
+        // If no submission ID but we have a student, use student ID
+        requestBody.studentId = gradingStudent._id;
+      } else {
+        setGradeError('Unable to identify student for grading.');
+        setGradeLoading(false);
+        return;
+      }
+
       const res = await fetch(`${API_BASE}/assignments/${assignmentId}/grade`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          submissionId,
-          grade: gradeValue,
-          feedback: feedbackValue,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (res.ok) {
@@ -328,10 +356,24 @@ export default function AssignmentDetailPage() {
         setFeedbackValue('');
         setGradeError('');
 
-        // ✅ Only refresh student's submission if it matches
-        if (typeof refreshStudentSubmission === 'function' && submissions?._id === submissionId) {
-          refreshStudentSubmission(); // <-- This is the only required refresh
+        // Refresh the submissions list to show the new grade
+        if (role === 'faculty' && assignment) {
+          // Fetch updated submissions
+          const token = localStorage.getItem('token');
+          fetch(`${API_BASE}/assignments/${assignmentId}/submissions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+            .then(res => res.json())
+            .then(submissions => {
+              // Update the submissions state
+              setSubmissions(submissions);
+            })
+            .catch(err => console.error('Error refreshing submissions:', err));
         }
+
+        // Close the grading modal
+        setGradingSubmission(null);
+        setGradingStudent(null);
 
       } else {
         const err = await res.json();
@@ -432,11 +474,28 @@ export default function AssignmentDetailPage() {
               {(activeTab === 'toGrade' || activeTab === 'graded') && (
                 <div>
                   <h2 className="text-lg font-semibold mb-4">Submissions</h2>
+                  
+                  {/* Information about no-file submissions */}
+                  <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      <span className="font-semibold text-blue-800">Submission Information</span>
+                    </div>
+                    <p className="text-blue-700 text-sm">
+                      Students can submit assignments with files, links, or without any attachments. 
+                      Submissions without files may include additional context or be for presentations, 
+                      demonstrations, or other formats. <strong>All submissions can be graded regardless of file attachment.</strong>
+                    </p>
+                  </div>
+                  
                   <div className="overflow-x-auto">
                     <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="p-3 border">Name</th>
+                          <th className="p-3 border">Submission</th>
                           <th className="p-3 border">Status</th>
                           <th className="p-3 border">Grade</th>
                           <th className="p-3 border">Feedback</th>
@@ -469,9 +528,32 @@ export default function AssignmentDetailPage() {
                             } else if (hasViewed) {
                               status = "Viewed";
                             }
+                            
+                            // Determine submission details
+                            let submissionDetails = "No submission";
+                            if (member.submission) {
+                              if (member.submission.files && member.submission.files.length > 0) {
+                                submissionDetails = `${member.submission.files.length} file(s)`;
+                              } else if (member.submission.context) {
+                                submissionDetails = "No files + Context";
+                              } else {
+                                submissionDetails = "No files";
+                              }
+                            }
+                            
                             return (
                               <tr key={member._id}>
                                 <td className="p-3 border">{member.lastname}, {member.firstname}</td>
+                                <td className="p-3 border">
+                                  <div className="text-xs">
+                                    <div>{submissionDetails}</div>
+                                    {member.submission && member.submission.context && (
+                                      <div className="text-blue-600 mt-1 max-w-xs truncate" title={member.submission.context}>
+                                        Context: {member.submission.context.substring(0, 50)}...
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="p-3 border">{status}</td>
                                 <td className="p-3 border">{member.submission && member.submission.grade !== undefined ? member.submission.grade : "-"}</td>
                                 <td className="p-3 border">{member.submission && member.submission.feedback ? member.submission.feedback : "-"}</td>
@@ -479,7 +561,12 @@ export default function AssignmentDetailPage() {
                                   <button
                                     className="bg-green-700 text-white px-2 py-1 rounded"
                                     onClick={() => {
-                                      setGradingSubmission(member.submission ? member.submission._id : member._id);
+                                      // If there's a submission, use its ID; otherwise, use student ID
+                                      if (member.submission) {
+                                        setGradingSubmission(member.submission._id);
+                                      } else {
+                                        setGradingSubmission(null); // No submission ID
+                                      }
                                       setGradeValue(member.submission && member.submission.grade !== undefined ? member.submission.grade : '');
                                       setFeedbackValue(member.submission && member.submission.feedback ? member.submission.feedback : '');
                                       setGradingStudent(member);
@@ -533,68 +620,91 @@ export default function AssignmentDetailPage() {
                     <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative mb-4">
                       <strong className="font-bold">Already Submitted!</strong>
                       <p className="block sm:inline"> You have already submitted this assignment.</p>
-                      {/* Show all submitted files */}
-
-                      {/* Legacy single file/link support */}
-                      {/* {studentSubmission.fileUrl && (
+                      
+                      {/* Show submission details */}
+                      {studentSubmission.files && studentSubmission.files.length > 0 ? (
                         <div className="mt-2">
-                          <span className="font-semibold">Submitted File: </span>
-                          <a href={studentSubmission.fileUrl} className="text-blue-700 underline" target="_blank" rel="noopener noreferrer">
-                            {studentSubmission.fileName}
-                          </a>
+                          <span className="font-semibold">Submitted Files: </span>
+                          <div className="flex flex-wrap gap-2 mt-1">
+                            {studentSubmission.files.map((file, idx) => (
+                              <a 
+                                key={idx}
+                                href={file.url} 
+                                className="text-blue-700 underline bg-blue-50 px-2 py-1 rounded text-sm" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                              >
+                                {file.name}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-2">
+                          <span className="font-semibold">Submission Type: </span>
+                          <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm">
+                            No File (Text/Verbal Submission)
+                          </span>
+                          <p className="text-sm mt-1 text-blue-600">
+                            You submitted without files. This is fine for presentations, demonstrations, or other formats.
+                          </p>
+                          
+                          {/* Show context if provided */}
+                          {studentSubmission.context && (
+                            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                              <div className="font-semibold text-blue-800 text-sm mb-1">Your Context:</div>
+                              <p className="text-blue-700 text-sm whitespace-pre-line">
+                                {studentSubmission.context}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
-                      {studentSubmission.link && (
-                        <div className="mt-2">
-                          <span className="font-semibold">Submitted Link: </span>
-                          <a href={studentSubmission.link} className="text-blue-700 underline" target="_blank" rel="noopener noreferrer">
-                            {studentSubmission.link}
-                          </a>
-                        </div>
-                      )}
+                      
                       <button
                         className="mt-3 bg-red-600 text-white px-4 py-2 rounded"
                         onClick={handleUndoSubmission}
                       >
                         Undo Submission
-                      </button> */}
+                      </button>
                     </div>
                   )}
                   {/* Always show the submission form for resubmission or first submission */}
                   <form onSubmit={handleStudentSubmit} className="space-y-2" encType="multipart/form-data">
                     <label className="block text-sm font-medium mb-1">Submission Type</label>
                     <select
-                      className="border rounded px-2 py-1 w-full mb-2"
+                      className="border rounded px-3 py-2 w-full mb-2"
                       value={submissionType}
                       onChange={e => setSubmissionType(e.target.value)}
                       disabled={!!studentSubmission}
                     >
                       <option value="file">File</option>
                       <option value="link">Link</option>
+                      <option value="none">No File (Text/Verbal Submission)</option>
                     </select>
                     {submissionType === 'file' ? (
                       <>
                         <input
                           type="file"
-                          className="border rounded px-2 py-1 w-full"
+                          className="border rounded px-3 py-2 w-full"
                           accept="*"
                           multiple
                           onChange={e => {
                             setFile(e.target.files);
                             setSelectedFiles(Array.from(e.target.files));
                           }}
-                          required={!studentSubmission}
+                          required={false}
                           disabled={!!studentSubmission}
                         />
                         <div className="text-xs text-gray-600 mt-1">You can submit up to 5 files.</div>
                       </>
-                    ) : (
+                    ) : submissionType === 'link' ? (
                       <>
                         {links.map((l, idx) => (
                           <input
                             key={idx}
                             type="url"
-                            className="border rounded px-2 py-1 w-full mb-1"
+                            className="border rounded px-3 py-2 w-full mb-1"
                             placeholder={`Paste your link here (e.g. Google Drive, GitHub, etc.)`}
                             value={l}
                             onChange={e => {
@@ -602,7 +712,7 @@ export default function AssignmentDetailPage() {
                               newLinks[idx] = e.target.value;
                               setLinks(newLinks);
                             }}
-                            required={!studentSubmission}
+                            required={false}
                             disabled={!!studentSubmission}
                           />
                         ))}
@@ -613,6 +723,33 @@ export default function AssignmentDetailPage() {
                           <button type="button" className="text-red-600 underline text-xs mb-2 ml-2" onClick={() => setLinks(links.slice(0, -1))}>Remove last link</button>
                         )}
                         <div className="text-xs text-gray-600 mt-1">You can submit up to 5 links.</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                          <p className="text-yellow-800 text-sm">
+                            <strong>Note:</strong> You are submitting without any files or links. 
+                            This is useful for verbal presentations, in-class demonstrations, or 
+                            assignments completed in other formats. Your instructor can still grade 
+                            your submission.
+                          </p>
+                        </div>
+                        <div className="mt-3">
+                          <label className="block text-sm font-medium mb-1">
+                            Additional Context (Optional)
+                          </label>
+                          <textarea
+                            className="border rounded px-3 py-2 w-full"
+                            rows="3"
+                            placeholder="Describe your submission, presentation details, or any other relevant information..."
+                            value={submissionContext || ''}
+                            onChange={e => setSubmissionContext(e.target.value)}
+                            disabled={!!studentSubmission}
+                          />
+                          <div className="text-xs text-gray-600 mt-1">
+                            This helps your instructor understand your submission better.
+                          </div>
+                        </div>
                       </>
                     )}
                     {/* Show selected files before submission */}
@@ -744,13 +881,13 @@ export default function AssignmentDetailPage() {
         </div>
       </div>
       {/* Grading Modal */}
-      {gradingSubmission && (
+      {(gradingSubmission || gradingStudent) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full p-12 flex flex-col md:flex-row gap-12">
             {/* Left: Files */}
             <div className="flex-1 flex flex-col">
               <h3 className="text-2xl font-extrabold mb-4 text-blue-900">Grade Submission</h3>
-              <div className="font-bold text-lg mb-2">Submitted File:</div>
+              <div className="font-bold text-lg mb-2">Submission Content:</div>
               <div className="flex flex-col gap-3">
                 {gradingStudent && gradingStudent.submission && gradingStudent.submission.files && gradingStudent.submission.files.length > 0 ? (
                   gradingStudent.submission.files.map((file, idx) => {
@@ -798,7 +935,29 @@ export default function AssignmentDetailPage() {
                     );
                   })()
                 ) : (
-                  <div className="text-gray-500">No file submitted.</div>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      <span className="font-semibold text-yellow-800">No File Submitted</span>
+                    </div>
+                    <p className="text-yellow-700 text-sm">
+                      This student submitted without any files or links. This could be a verbal presentation, 
+                      in-class demonstration, or assignment completed in another format. 
+                      <strong>You can still grade this submission.</strong>
+                    </p>
+                    
+                    {/* Show context if provided */}
+                    {gradingStudent && gradingStudent.submission && gradingStudent.submission.context && (
+                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <div className="font-semibold text-blue-800 mb-1">Student Context:</div>
+                        <p className="text-blue-700 text-sm whitespace-pre-line">
+                          {gradingStudent.submission.context}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -835,8 +994,8 @@ export default function AssignmentDetailPage() {
               </div>
               {gradeError && <div className="text-red-600 text-sm mb-2">{gradeError}</div>}
               <div className="flex gap-4 justify-end mt-4">
-                <button type="button" className="bg-gray-400 text-black px-6 py-2 rounded-lg font-semibold" onClick={() => setGradingSubmission(null)}>Cancel</button>
-                <button type="button" className="bg-blue-900 text-white px-6 py-2 rounded-lg font-semibold" onClick={e => { e.preventDefault(); handleGrade(gradingSubmission); setGradingSubmission(null); }}>Grade</button>
+                <button type="button" className="bg-gray-400 text-black px-6 py-2 rounded-lg font-semibold" onClick={() => { setGradingSubmission(null); setGradingStudent(null); }}>Cancel</button>
+                <button type="button" className="bg-blue-900 text-white px-6 py-2 rounded-lg font-semibold" onClick={e => { e.preventDefault(); handleGrade(gradingSubmission); }}>Grade</button>
               </div>
             </div>
             {/* File Preview Modal */}

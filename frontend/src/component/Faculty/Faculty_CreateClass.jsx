@@ -25,6 +25,7 @@ export default function FacultyCreateClass() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [classImage, setClassImage] = useState(null);
+  const [classDesc, setClassDesc] = useState("");
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
     type: 'error',
@@ -37,12 +38,42 @@ export default function FacultyCreateClass() {
     async function fetchAssignments() {
       try {
         const token = localStorage.getItem('token');
+        let facultyID = localStorage.getItem('userID');
+        
+        // If userID is not in localStorage, try to get it from JWT token
+        if (!facultyID && token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            facultyID = payload._id;
+          } catch (e) {
+            console.error('Failed to parse JWT token');
+          }
+        }
+        
+        if (!facultyID) {
+          console.error('No faculty ID available');
+          setFacultyAssignments([]);
+          return;
+        }
+        
+        // Get all faculty assignments and filter by current user
         const res = await fetch(`${API_BASE}/api/faculty-assignments`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        const data = await res.json();
-        setFacultyAssignments(data);
-      } catch {
+        
+        if (res.ok) {
+          const data = await res.json();
+          // Filter assignments for the current faculty user
+          const userAssignments = data.filter(assignment => 
+            assignment.facultyId === facultyID || assignment.facultyId === userMongoId
+          );
+          setFacultyAssignments(userAssignments);
+        } else {
+          console.error('Failed to fetch faculty assignments');
+          setFacultyAssignments([]);
+        }
+      } catch (error) {
+        console.error('Error fetching faculty assignments:', error);
         setFacultyAssignments([]);
       }
     }
@@ -68,47 +99,85 @@ export default function FacultyCreateClass() {
   // When academicYear and currentTerm are loaded, filter assignments for those
   useEffect(() => {
     if (!academicYear || !currentTerm) return;
+    
+    console.log('Filtering assignments for:', { academicYear, currentTerm, facultyAssignments });
+    
     // Filter assignments for current year and term
     const yearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
     const filtered = facultyAssignments.filter(a =>
       String(a.schoolYear) === String(yearName) &&
       (String(a.termId) === String(currentTerm._id) || (a.termId && a.termId.$oid && String(a.termId.$oid) === String(currentTerm._id)))
     );
+    
+    console.log('Filtered assignments:', filtered);
     setFilteredAssignments(filtered);
+    
     // Get unique grade levels for this faculty in this year/term
     const uniqueGradeLevels = [...new Set(filtered.map(a => a.gradeLevel))];
-    setSelectedGradeLevel(uniqueGradeLevels[0]); // Auto-select the first one
-    // If only one grade level, auto-select it
+    console.log('Available grade levels:', uniqueGradeLevels);
+    
+    // Auto-select the first grade level if only one exists
     if (uniqueGradeLevels.length === 1) {
       setSelectedGradeLevel(uniqueGradeLevels[0]);
-    } else {
-      setSelectedGradeLevel("");
+    } else if (uniqueGradeLevels.length > 0 && !selectedGradeLevel) {
+      setSelectedGradeLevel(uniqueGradeLevels[0]);
     }
+    
     // Reset subject/section if not in filtered
-    setSelectedSubject("");
-    setSelectedSection("");
-  }, [academicYear, currentTerm, facultyAssignments]);
+    if (!filtered.some(a => a.gradeLevel === selectedGradeLevel)) {
+      setSelectedSubject("");
+      setSelectedSection("");
+    }
+  }, [academicYear, currentTerm, facultyAssignments, selectedGradeLevel]);
 
   // When grade level changes, update subjects
   useEffect(() => {
+    if (!selectedGradeLevel) {
+      setSubjects([]);
+      setSelectedSubject("");
+      return;
+    }
+    
+    console.log('Updating subjects for grade level:', selectedGradeLevel);
+    
     const filtered = filteredAssignments.filter(a =>
-      !selectedGradeLevel || String(a.gradeLevel) === String(selectedGradeLevel)
+      String(a.gradeLevel) === String(selectedGradeLevel)
     );
+    
     const uniqueSubjects = [...new Set(filtered.map(a => a.subjectName))];
+    console.log('Available subjects:', uniqueSubjects);
     setSubjects(uniqueSubjects);
-    if (!uniqueSubjects.includes(selectedSubject)) setSelectedSubject("");
-  }, [filteredAssignments, selectedGradeLevel]);
+    
+    // Reset subject if current selection is not available
+    if (!uniqueSubjects.includes(selectedSubject)) {
+      setSelectedSubject("");
+    }
+  }, [filteredAssignments, selectedGradeLevel, selectedSubject]);
 
   // When subject changes, update sections
   useEffect(() => {
+    if (!selectedSubject) {
+      setSections([]);
+      setSelectedSection("");
+      return;
+    }
+    
+    console.log('Updating sections for subject:', selectedSubject);
+    
     const filtered = filteredAssignments.filter(a =>
-      (!selectedGradeLevel || String(a.gradeLevel) === String(selectedGradeLevel)) &&
-      (!selectedSubject || a.subjectName === selectedSubject)
+      String(a.gradeLevel) === String(selectedGradeLevel) &&
+      a.subjectName === selectedSubject
     );
+    
     const uniqueSections = [...new Set(filtered.map(a => a.sectionName))];
+    console.log('Available sections:', uniqueSections);
     setSections(uniqueSections);
-    if (!uniqueSections.includes(selectedSection)) setSelectedSection("");
-  }, [filteredAssignments, selectedGradeLevel, selectedSubject]);
+    
+    // Reset section if current selection is not available
+    if (!uniqueSections.includes(selectedSection)) {
+      setSelectedSection("");
+    }
+  }, [filteredAssignments, selectedGradeLevel, selectedSubject, selectedSection]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -254,13 +323,23 @@ export default function FacultyCreateClass() {
     // Generate classID: C + 3 random digits
     const randomNum = Math.floor(100 + Math.random() * 900);
     const classID = `C${randomNum}`;
+    
+    // Auto-generate class code
+    let autoClassCode = "";
+    if (selectedSubject && selectedSection && academicYear) {
+      const subjectCode = selectedSubject.substring(0, 3).toUpperCase();
+      const sectionCode = selectedSection.substring(0, 2).toUpperCase();
+      const yearCode = academicYear.schoolYearStart.toString().slice(-2);
+      autoClassCode = `${subjectCode}-${sectionCode}-${yearCode}`;
+    }
+    
     // Use userID if present, otherwise _id, and filter out any falsy values
     const members = selectedStudents.map(s => s.userID || s._id).filter(Boolean);
     const facultyID = localStorage.getItem("userID"); // get the faculty's userID
     const token = localStorage.getItem("token"); // or whatever you use for auth
 
     // Use dropdown values for className and classCode
-    if (!selectedSubject || !selectedSection || members.length === 0) {
+    if (!selectedSubject || !selectedSection || !classDesc.trim() || members.length === 0) {
       setValidationModal({
         isOpen: true,
         type: 'warning',
@@ -273,7 +352,8 @@ export default function FacultyCreateClass() {
     const formData = new FormData();
     formData.append('classID', classID);
     formData.append('className', selectedSubject);
-    formData.append('classCode', selectedSection);
+    formData.append('classCode', autoClassCode);
+    formData.append('classDesc', classDesc.trim());
     formData.append('members', JSON.stringify(members));
     formData.append('facultyID', facultyID);
     if (classImage) {
@@ -297,6 +377,7 @@ export default function FacultyCreateClass() {
         });
         setSelectedSubject("");
         setSelectedSection("");
+        setClassDesc("");
         setSelectedStudents([]);
         setClassImage(null);
       } else {
@@ -411,7 +492,7 @@ export default function FacultyCreateClass() {
 
         {/* Responsive form layout to reduce right white space */}
         <div className="mt-6 flex flex-col md:flex-row md:space-x-8 space-y-6 md:space-y-0 ml-5">
-          {/* Left column: image upload and batch upload */}
+          {/* Left column: image upload and class description */}
           <div className="flex-1 flex flex-col space-y-6">
             <label className="text-xl font-bold">Class Image</label>
             <input
@@ -420,21 +501,35 @@ export default function FacultyCreateClass() {
               className="w-full px-3 py-2 border rounded"
               onChange={e => setClassImage(e.target.files[0])}
             />
-            <label className="text-xl font-bold">Class Code (Section)</label>
+            
+            <label className="text-xl font-bold">Class Description</label>
+            <input
+              type="text"
+              placeholder="Enter class description..."
+              className="w-full px-3 py-2 border rounded"
+              value={classDesc}
+              onChange={e => setClassDesc(e.target.value)}
+            />
+          </div>
+          
+          {/* Right column: dropdowns */}
+          <div className="flex-1 flex flex-col space-y-6">
+            <label className="text-xl font-bold">Grade Level</label>
             <select
               className="w-full px-3 py-2 border rounded"
-              value={selectedSection}
-              onChange={e => setSelectedSection(e.target.value)}
-              disabled={!selectedSubject}
+              value={selectedGradeLevel}
+              onChange={e => setSelectedGradeLevel(e.target.value)}
             >
-              <option value="">Select Section</option>
-              {sections.map(sec => (
-                <option key={sec} value={sec}>{sec}</option>
-              ))}
+              <option value="">Select Grade Level</option>
+              {filteredAssignments
+                .map(a => a.gradeLevel)
+                .filter((value, index, self) => self.indexOf(value) === index)
+                .map(grade => (
+                  <option key={grade} value={grade}>{grade}</option>
+                ))
+              }
             </select>
-          </div>
-          {/* Right column: selects */}
-          <div className="flex-1 flex flex-col space-y-6">
+
             <label className="text-xl font-bold">Class Name (Subject)</label>
             <select
               className="w-full px-3 py-2 border rounded"
@@ -447,11 +542,54 @@ export default function FacultyCreateClass() {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
+
+            <label className="text-xl font-bold">Class Code (Section)</label>
+            <select
+              className="w-full px-3 py-2 border rounded"
+              value={selectedSection}
+              onChange={e => setSelectedSection(e.target.value)}
+              disabled={!selectedSubject}
+            >
+              <option value="">Select Section</option>
+              {sections.map(sec => (
+                <option key={sec} value={sec}>{sec}</option>
+              ))}
+            </select>
             
+            {selectedSubject && selectedSection && academicYear && (
+              <div className="bg-blue-50 p-3 rounded border">
+                <p className="text-sm text-blue-800">
+                  <strong>Auto-generated Class Code:</strong> {
+                    selectedSubject.substring(0, 3).toUpperCase() + 
+                    "-" + 
+                    selectedSection.substring(0, 2).toUpperCase() + 
+                    "-" + 
+                    academicYear.schoolYearStart.toString().slice(-2)
+                  }
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
-          <h3 className="text-4xl font-bold mt-10 mb-7">Members</h3>
+        {/* Debug Information - Remove this in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-6 ml-5 p-4 bg-gray-100 rounded border">
+            <h4 className="font-bold mb-2">Debug Info:</h4>
+            <div className="text-sm space-y-1">
+              <p><strong>Faculty Assignments:</strong> {facultyAssignments.length}</p>
+              <p><strong>Filtered Assignments:</strong> {filteredAssignments.length}</p>
+              <p><strong>Available Grade Levels:</strong> {filteredAssignments.map(a => a.gradeLevel).filter((v, i, a) => a.indexOf(v) === i).join(', ')}</p>
+              <p><strong>Available Subjects:</strong> {subjects.join(', ')}</p>
+              <p><strong>Available Sections:</strong> {sections.join(', ')}</p>
+              <p><strong>Selected Grade Level:</strong> {selectedGradeLevel}</p>
+              <p><strong>Selected Subject:</strong> {selectedSubject}</p>
+              <p><strong>Selected Section:</strong> {selectedSection}</p>
+            </div>
+          </div>
+        )}
+
+        <h3 className="text-4xl font-bold mt-10 mb-7">Members</h3>
           {/* Batch Upload Input - restyled to match Bulk Assign Students UI */}
           <div className="md:space-x-8 space-y-6 md:space-y-0 ml-5">
 
