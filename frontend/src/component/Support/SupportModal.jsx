@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Headphones, Search, FileText, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Headphones, Search, FileText, Clock, CheckCircle, XCircle, Copy } from 'lucide-react';
 import axios from 'axios';
-import { createTicket, getTicketByNumber, getUserTickets } from '../../services/ticketService';
-
-const sampleTicket = {
-  number: 'SJDD1234567890',
-  status: 'Sent',
-  content: 'This is a sample ticket content.'
-};
+import { getTicketByNumber, getUserTickets } from '../../services/ticketService';
 
 export default function SupportModal({ onClose }) {
   const [view, setView] = useState('main'); // main | active | new | submitted | myTickets
@@ -26,6 +20,8 @@ export default function SupportModal({ onClose }) {
   const [ticketsError, setTicketsError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUserTicket, setSelectedUserTicket] = useState(null);
+  const [showAllTickets, setShowAllTickets] = useState(false);
+  const [sortOrder, setSortOrder] = useState('newest'); // 'newest' or 'oldest'
 
   // Generate ticket number function
   function generateTicketNumber() {
@@ -63,6 +59,8 @@ export default function SupportModal({ onClose }) {
     setSearchTerm('');
     setSelectedUserTicket(null);
     setTicketsError('');
+    setShowAllTickets(false);
+    setSortOrder('newest');
     onClose();
   };
 
@@ -101,6 +99,16 @@ export default function SupportModal({ onClose }) {
     ticket.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     ticket.number?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Sort tickets based on sort order
+  const sortedTickets = [...filteredTickets].sort((a, b) => {
+    const dateA = new Date(a.createdAt);
+    const dateB = new Date(b.createdAt);
+    return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+  });
+
+  // Get the most recent ticket for display when not showing all
+  const mostRecentTicket = sortedTickets.length > 0 ? sortedTickets[0] : null;
 
   // Get status icon and color
   const getStatusInfo = (status) => {
@@ -217,6 +225,45 @@ export default function SupportModal({ onClose }) {
     fetchUserTickets();
   };
 
+  // Copy ticket number to clipboard
+  const copyTicketNumber = async () => {
+    try {
+      await navigator.clipboard.writeText(newTicket.number);
+      // Show temporary success feedback
+      const copyButton = document.getElementById('copy-ticket-number');
+      if (copyButton) {
+        const originalText = copyButton.innerHTML;
+        copyButton.innerHTML = 'Copied!';
+        copyButton.classList.add('bg-green-500', 'hover:bg-green-600');
+        setTimeout(() => {
+          copyButton.innerHTML = originalText;
+          copyButton.classList.remove('bg-green-500', 'hover:bg-green-600');
+        }, 1500);
+      }
+    } catch (err) {
+      console.error('Failed to copy ticket number:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = newTicket.number;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      
+      // Show feedback
+      const copyButton = document.getElementById('copy-ticket-number');
+      if (copyButton) {
+        const originalText = copyButton.innerHTML;
+        copyButton.innerHTML = 'Copied!';
+        copyButton.classList.add('bg-green-500', 'hover:bg-green-600');
+        setTimeout(() => {
+          copyButton.innerHTML = originalText;
+          copyButton.classList.remove('bg-green-500', 'hover:bg-green-600');
+        }, 1500);
+      }
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
       <div
@@ -267,7 +314,13 @@ export default function SupportModal({ onClose }) {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">Support Center<br /><span className="text-lg font-semibold">My Tickets</span></h2>
-                <div className="text-lg mt-2">View all your tickets</div>
+                <div className="text-lg mt-2">
+                  {!showAllTickets ? (
+                    <span>View all your tickets</span>
+                  ) : (
+                    <span>All your tickets</span>
+                  )}
+                </div>
               </div>
               <div className="ml-4">
                 <div className="bg-white bg-opacity-30 rounded-full p-3">
@@ -288,19 +341,90 @@ export default function SupportModal({ onClose }) {
               />
             </div>
 
+            {/* Sort Controls - Only show when viewing all tickets */}
+            {showAllTickets && sortedTickets.length > 0 && (
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-sm text-gray-600">
+                  {sortedTickets.length} ticket{sortedTickets.length !== 1 ? 's' : ''} found
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Sort by:</span>
+                  <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value)}
+                    className="text-xs bg-white bg-opacity-30 text-gray-900 px-2 py-1 rounded border border-white focus:outline-none focus:border-[#9575cd]"
+                  >
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
             {/* Tickets List */}
             <div className="max-h-96 overflow-y-auto">
               {ticketsLoading ? (
                 <div className="text-center text-gray-500 py-4">Loading your tickets...</div>
               ) : ticketsError ? (
                 <div className="text-center text-red-500 py-4">{ticketsError}</div>
-              ) : filteredTickets.length === 0 ? (
+              ) : !showAllTickets && mostRecentTicket ? (
+                // Show most recent ticket with option to view all
+                <div className="space-y-3">
+                  <div className="text-center mb-3">
+                    <div className="text-sm text-gray-600 mb-2">Your most recent ticket:</div>
+                  </div>
+                  {(() => {
+                    const statusInfo = getStatusInfo(mostRecentTicket.status);
+                    return (
+                      <div
+                        className={`p-4 rounded-lg cursor-pointer border border-transparent hover:border-[#9575cd] hover:bg-white hover:bg-opacity-20 transition-all ${
+                          selectedUserTicket === mostRecentTicket._id ? 'bg-white bg-opacity-30 border-[#9575cd]' : 'bg-white bg-opacity-10'
+                        }`}
+                        onClick={() => setSelectedUserTicket(selectedUserTicket === mostRecentTicket._id ? null : mostRecentTicket._id)}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-semibold text-gray-900 text-sm line-clamp-1">{mostRecentTicket.subject}</h3>
+                          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bgColor} ${statusInfo.color}`}>
+                            {statusInfo.icon}
+                            <span className="capitalize">{mostRecentTicket.status}</span>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-600 mb-2">#{mostRecentTicket.number}</div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(mostRecentTicket.createdAt).toLocaleDateString()}
+                        </div>
+                        
+                        {/* Expanded ticket details */}
+                        {selectedUserTicket === mostRecentTicket._id && (
+                          <div className="mt-3 pt-3 border-t border-white border-opacity-20">
+                            <p className="text-sm text-gray-700 mb-3">{mostRecentTicket.description}</p>
+                            {mostRecentTicket.messages && mostRecentTicket.messages.length > 1 && (
+                              <div className="text-xs text-gray-500">
+                                {mostRecentTicket.messages.length - 1} response{mostRecentTicket.messages.length > 2 ? 's' : ''} from support
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  
+                  {/* View All Tickets Button */}
+                  <button
+                    onClick={() => setShowAllTickets(true)}
+                    className="w-full mt-4 rounded-full px-4 py-3 bg-[#9575cd] text-white font-semibold text-center hover:bg-[#7e57c2] transition border border-white"
+                  >
+                    View All Tickets ({userTickets.length})
+                  </button>
+                </div>
+              ) : sortedTickets.length === 0 ? (
                 <div className="text-center text-gray-500 py-4">
                   {searchTerm ? 'No tickets match your search' : 'You haven\'t submitted any tickets yet'}
                 </div>
               ) : (
+                // Show all tickets with sorting
                 <div className="space-y-3">
-                  {filteredTickets.map((ticket) => {
+                  {sortedTickets.map((ticket) => {
                     const statusInfo = getStatusInfo(ticket.status);
                     return (
                       <div
@@ -343,9 +467,15 @@ export default function SupportModal({ onClose }) {
             {/* Back button */}
             <button
               className="w-full mt-4 rounded-full px-4 py-3 bg-white bg-opacity-30 text-gray-900 font-semibold text-center hover:bg-opacity-50 transition border border-white"
-              onClick={() => setView('main')}
+              onClick={() => {
+                if (showAllTickets) {
+                  setShowAllTickets(false);
+                } else {
+                  setView('main');
+                }
+              }}
             >
-              Back to Main Menu
+              {showAllTickets ? 'Back to Recent Ticket' : 'Back to Main Menu'}
             </button>
           </div>
         )}
@@ -426,6 +556,16 @@ export default function SupportModal({ onClose }) {
                     className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
                   >
                     Regenerate
+                  </button>
+                  <button
+                    id="copy-ticket-number"
+                    type="button"
+                    onClick={copyTicketNumber}
+                    className="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600 flex items-center gap-1 transition-colors"
+                    title="Copy ticket number"
+                  >
+                    <Copy size={12} />
+                    Copy
                   </button>
                 </div>
                 <input
