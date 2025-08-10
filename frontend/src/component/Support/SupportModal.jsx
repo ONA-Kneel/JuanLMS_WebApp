@@ -123,7 +123,7 @@ export default function SupportModal({ onClose }) {
       if (newTicket.file) {
         formData.append('file', newTicket.file);
       }
-      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
       const response = await axios.post(`${API_BASE}/api/tickets`, formData, {
         headers: { 
           'Content-Type': 'multipart/form-data',
