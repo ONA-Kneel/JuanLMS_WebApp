@@ -39,20 +39,9 @@ ticketsRouter.post('/', authenticateToken, upload.single('file'), async (req, re
 
   // Validate that the authenticated user matches the userId in the request
   // Check both _id and userID fields from the JWT token
-  const authenticatedUserId = req.user._id || req.user.userID;
-  console.log('[TICKET CREATION] User validation:', {
-    authenticatedUserId,
-    requestUserId: userId,
-    jwtUser: req.user,
-    match: authenticatedUserId === userId
-  });
+  const authenticatedUserIds = [req.user._id, req.user.userID].filter(Boolean);
   
-  if (authenticatedUserId !== userId) {
-    console.log('[USER ID MISMATCH]', {
-      authenticatedUserId,
-      requestUserId: userId,
-      jwtUser: req.user
-    });
+  if (!authenticatedUserIds.includes(userId)) {
     return res.status(403).json({ error: 'Unauthorized: User ID mismatch' });
   }
 
@@ -94,8 +83,6 @@ ticketsRouter.post('/', authenticateToken, upload.single('file'), async (req, re
   try {
     await ticket.save();
     const decryptedTicket = ticket.decryptSensitiveData();
-    console.log('[TICKET CREATED]', decryptedTicket);
-    console.log('[MONGOOSE CONNECTION]', Ticket.db.name);
     res.status(201).json(decryptedTicket);
   } catch (err) {
     console.error('[TICKET ERROR]', err);
@@ -124,10 +111,15 @@ ticketsRouter.get('/file/:ticketId', authenticateToken, async (req, res) => {
 // Get all tickets for a user
 // GET /api/tickets/user/:userId
 ticketsRouter.get('/user/:userId', authenticateToken, async (req, res) => {
-  const encryptedUserId = encrypt(req.params.userId);
-  const tickets = await Ticket.find({ userId: encryptedUserId });
-  const decryptedTickets = tickets.map(ticket => ticket.decryptSensitiveData());
-  res.json(decryptedTickets);
+  try {
+    const encryptedUserId = encrypt(req.params.userId);
+    const tickets = await Ticket.find({ userId: encryptedUserId });
+    const decryptedTickets = tickets.map(ticket => ticket.decryptSensitiveData());
+    res.json(decryptedTickets);
+  } catch (err) {
+    console.error('[GET USER TICKETS ERROR]', err);
+    res.status(500).json({ error: 'Failed to fetch user tickets' });
+  }
 });
 
 // Reply to a ticket (user or admin)

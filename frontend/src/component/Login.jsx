@@ -242,7 +242,7 @@ export default function Login() {
   
       // Decode JWT to extract user info and role
       const decoded = jwtDecode(token);
-      const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
+      const { _id, role, name, email: userEmail, profilePic, userID } = decoded;
   
       // Debug: Log the role to see what's being received
       console.log('Received role:', role);
@@ -251,7 +251,7 @@ export default function Login() {
       const imageUrl = profilePic ? `${API_BASE}/uploads/${profilePic}` : null;
   
       // Store user info and token in localStorage
-      localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
+      localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, role, profilePic: imageUrl }));
       localStorage.setItem('token', token);
       localStorage.setItem('userID', userID);
       localStorage.setItem('role', role);

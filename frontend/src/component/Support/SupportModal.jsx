@@ -69,26 +69,37 @@ export default function SupportModal({ onClose }) {
     setTicketsLoading(true);
     setTicketsError('');
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
       const userID = localStorage.getItem('userID');
-      const userId = user._id || userID;
+      
+      // Try both user._id and userID, with userID taking precedence
+      const userId = userID || user._id;
       
       if (!userId) {
         setTicketsError('User not authenticated. Please log in again.');
         return;
       }
 
-      const tickets = await getUserTickets(userId);
-      setUserTickets(tickets || []);
-    } catch (err) {
-      console.error('Error fetching user tickets:', err);
-      if (err.response) {
-        setTicketsError(err.response.data?.error || 'Failed to fetch tickets');
-      } else if (err.request) {
-        setTicketsError('Network error. Please check your connection and try again.');
-      } else {
-        setTicketsError('Failed to fetch tickets. Please try again.');
+      // Use the same user ID that was used for ticket creation
+      const ticketUserId = user._id || userID;
+      
+      try {
+        const tickets = await getUserTickets(ticketUserId);
+        setUserTickets(tickets || []);
+      } catch (err) {
+        console.error('Error fetching user tickets:', err);
+        setUserTickets([]);
+        if (err.response) {
+          setTicketsError(err.response.data?.error || 'Failed to fetch tickets');
+        } else if (err.request) {
+          setTicketsError('Network error. Please check your connection and try again.');
+        } else {
+          setTicketsError('Failed to fetch tickets. Please try again.');
+        }
       }
+    } catch (err) {
+      console.error('Error in fetchUserTickets:', err);
+      setTicketsError('Failed to fetch tickets. Please try again.');
     } finally {
       setTicketsLoading(false);
     }
@@ -177,12 +188,6 @@ export default function SupportModal({ onClose }) {
 
       // Try to use _id first, then fallback to userID
       const userId = user._id || userID;
-      
-      console.log('[TICKET SUBMISSION] User data:', {
-        userId,
-        userFromStorage: user,
-        token: token ? 'Present' : 'Missing'
-      });
 
       const formData = new FormData();
       formData.append('userId', userId);
