@@ -8,6 +8,7 @@ import Assignment from '../models/Assignment.js';
 import FacultyAssignment from '../models/FacultyAssignment.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import Submission from '../models/Submission.js';
+import Class from '../models/Class.js';
 import { processGradingExcel, generateGradingTemplate } from '../utils/excelProcessor.js';
 import User from '../models/User.js'; // Added import for User
 
@@ -442,6 +443,168 @@ router.delete('/data/:gradingDataId', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error deleting grading data'
+    });
+  }
+});
+
+// Get faculty classes with sections and assignments (NEW HIERARCHY)
+router.get('/faculty-classes/:facultyId', authenticateToken, async (req, res) => {
+  try {
+    let { facultyId } = req.params;
+    
+    // Handle 'me' case - use the authenticated user's ID
+    if (facultyId === 'me') {
+      facultyId = req.user._id;
+    }
+    
+    // Get all classes where this faculty is a member
+    const facultyClasses = await Class.find({ 
+      members: facultyId,
+      facultyID: facultyId 
+    });
+
+    const classHierarchy = [];
+
+    for (const classItem of facultyClasses) {
+      // Get sections for this class from FacultyAssignment
+      const sections = await FacultyAssignment.find({
+        facultyId: facultyId,
+        classID: classItem.classID,
+        status: 'active'
+      }).distinct('sectionName');
+
+      const sectionData = [];
+
+      for (const sectionName of sections) {
+        // Get assignments for this class and section
+        const assignments = await Assignment.find({
+          classID: classItem.classID,
+          'assignedTo.classID': classItem.classID
+        });
+
+        sectionData.push({
+          sectionName: sectionName,
+          assignments: assignments.map(assignment => ({
+            _id: assignment._id,
+            title: assignment.title,
+            type: assignment.type,
+            dueDate: assignment.dueDate,
+            points: assignment.points
+          }))
+        });
+      }
+
+      classHierarchy.push({
+        _id: classItem._id,
+        classID: classItem.classID,
+        className: classItem.className,
+        classCode: classItem.classCode,
+        classDesc: classItem.classDesc,
+        sections: sectionData
+      });
+    }
+
+    res.json({
+      success: true,
+      classes: classHierarchy
+    });
+
+  } catch (error) {
+    console.error('Error fetching faculty classes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching classes',
+      error: error.message
+    });
+  }
+});
+
+// Get faculty classes with sections and assignments (ALTERNATIVE - using FacultyAssignment data)
+router.get('/faculty-classes-alt/:facultyId', authenticateToken, async (req, res) => {
+  try {
+    let { facultyId } = req.params;
+    
+    // Handle 'me' case - use the authenticated user's ID
+    if (facultyId === 'me') {
+      facultyId = req.user._id;
+    }
+    
+    // Get all faculty assignments grouped by class/subject
+    const facultyAssignments = await FacultyAssignment.find({
+      facultyId: facultyId,
+      status: 'active'
+    });
+
+    // Group by subject (which represents the class)
+    const classGroups = {};
+    
+    facultyAssignments.forEach(assignment => {
+      const subjectKey = assignment.subjectName;
+      
+      if (!classGroups[subjectKey]) {
+        classGroups[subjectKey] = {
+          subjectName: assignment.subjectName,
+          trackName: assignment.trackName,
+          strandName: assignment.strandName,
+          gradeLevel: assignment.gradeLevel,
+          schoolYear: assignment.schoolYear,
+          termName: assignment.termName,
+          sections: {}
+        };
+      }
+      
+      // Group sections under this subject
+      if (!classGroups[subjectKey].sections[assignment.sectionName]) {
+        classGroups[subjectKey].sections[assignment.sectionName] = {
+          sectionName: assignment.sectionName,
+          facultyAssignmentId: assignment._id,
+          assignments: []
+        };
+      }
+    });
+
+    // Now populate assignments for each section
+    for (const subject of Object.values(classGroups)) {
+      for (const sectionName of Object.keys(subject.sections)) {
+        const section = subject.sections[sectionName];
+        
+        // Find assignments for this subject and section
+        // We'll look for assignments that match the subject name and section
+        const assignments = await Assignment.find({
+          $or: [
+            { subjectName: subject.subjectName },
+            { 'assignedTo.sectionName': section.sectionName }
+          ]
+        }).limit(10); // Limit to prevent too many results
+        
+        section.assignments = assignments.map(assignment => ({
+          _id: assignment._id,
+          title: assignment.title,
+          type: assignment.type,
+          dueDate: assignment.dueDate,
+          points: assignment.points,
+          subjectName: assignment.subjectName || subject.subjectName
+        }));
+      }
+    }
+
+    // Convert to array format
+    const classHierarchy = Object.values(classGroups).map(subject => ({
+      ...subject,
+      sections: Object.values(subject.sections)
+    }));
+
+    res.json({
+      success: true,
+      classes: classHierarchy
+    });
+
+  } catch (error) {
+    console.error('Error fetching faculty classes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching classes',
+      error: error.message
     });
   }
 });

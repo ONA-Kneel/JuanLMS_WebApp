@@ -5,9 +5,10 @@ import ValidationModal from './ValidationModal';
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function GradingSystem() {
-  const [facultyAssignments, setFacultyAssignments] = useState([]);
-  const [selectedAssignment, setSelectedAssignment] = useState('');
+  const [facultyClasses, setFacultyClasses] = useState([]);
+  const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
+  const [selectedAssignment, setSelectedAssignment] = useState('');
   const [gradingData, setGradingData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
@@ -19,13 +20,13 @@ export default function GradingSystem() {
   const [validationType, setValidationType] = useState('error');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Fetch faculty assignments from database
-  const fetchFacultyAssignments = async () => {
+  // Fetch faculty classes with sections and assignments
+  const fetchFacultyClasses = async () => {
     try {
       setLoading(true);
-      console.log('Fetching faculty assignments...');
+      console.log('Fetching faculty classes...');
       
-      const response = await fetch(`${API_BASE}/api/grading/my-assignments`, {
+      const response = await fetch(`${API_BASE}/api/grading/faculty-classes-alt/${localStorage.getItem('userId') || 'me'}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
@@ -36,27 +37,23 @@ export default function GradingSystem() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Fetched faculty assignments:', data);
-        setFacultyAssignments(data.assignments || []);
-        
-        // Auto-select first assignment if available
-        if (data.assignments && data.assignments.length > 0) {
-          console.log('Auto-selecting first assignment:', data.assignments[0]);
-          setSelectedAssignment(data.assignments[0]._id);
-          setSelectedSection(data.assignments[0]);
-        } else {
-          console.log('No assignments found for this faculty');
+        console.log('Faculty classes data:', data);
+        console.log('Classes array:', data.classes);
+        console.log('Number of classes:', data.classes?.length || 0);
+        if (data.classes && data.classes.length > 0) {
+          console.log('First class:', data.classes[0]);
+          console.log('First class sections:', data.classes[0].sections);
         }
+        setFacultyClasses(data.classes || []);
       } else {
-        const errorData = await response.json();
-        console.error('Failed to fetch faculty assignments:', errorData);
-        setValidationMessage(errorData.message || 'Failed to fetch faculty assignments');
+        console.error('Failed to fetch faculty classes');
+        setValidationMessage('Failed to fetch faculty classes');
         setValidationType('error');
         setShowValidationModal(true);
       }
     } catch (error) {
-      console.error('Error fetching faculty assignments:', error);
-      setValidationMessage('Error fetching faculty assignments: ' + error.message);
+      console.error('Error fetching faculty classes:', error);
+      setValidationMessage(`Error fetching faculty classes: ${error.message}`);
       setValidationType('error');
       setShowValidationModal(true);
     } finally {
@@ -64,69 +61,60 @@ export default function GradingSystem() {
     }
   };
 
-  useEffect(() => {
-    // Fetch actual faculty assignments from database
-    fetchFacultyAssignments();
+  // Fetch grading data for selected assignment
+  const fetchGradingData = async (assignmentId) => {
+    if (!assignmentId) return;
     
-    // Set academic year and term (you might want to fetch these from API too)
-    setAcademicYear({ schoolYearStart: 2025, schoolYearEnd: 2026 });
-    setCurrentTerm({ termName: 'Term 1' });
-  }, []);
+    try {
+      const response = await fetch(`${API_BASE}/api/grading/data/${assignmentId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-  // Show a message if no assignments are found
-  if (!loading && facultyAssignments.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-100">
-        <Faculty_Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Grading System</h1>
-            <p className="text-gray-600">
-              Upload Excel files containing student grades for your assignments
-            </p>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="text-center py-8">
-              <p className="text-gray-600 text-lg mb-4">
-                No assignments found for this faculty member.
-              </p>
-              <p className="text-gray-500 mb-4">
-                Please contact your administrator to assign classes to your account.
-              </p>
-              <button
-                onClick={fetchFacultyAssignments}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
-              >
-                Refresh Assignments
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const handleAssignmentSelect = (assignmentId) => {
-    setSelectedAssignment(assignmentId);
-    setSelectedSection('');
-    setGradingData([]);
-    
-    // Find the selected assignment and set it as the section
-    const assignment = facultyAssignments.find(a => a._id === assignmentId);
-    if (assignment) {
-      setSelectedSection(assignment);
-      // Fetch grading data for this assignment
-      fetchGradingData(assignmentId);
+      if (response.ok) {
+        const data = await response.json();
+        setGradingData(data.gradingData || []);
+      } else {
+        setGradingData([]);
+      }
+    } catch (error) {
+      console.error('Error fetching grading data:', error);
+      setGradingData([]);
     }
   };
 
-  const handleSectionSelect = (assignmentId) => {
-    const assignment = facultyAssignments.find(a => a._id === assignmentId);
-    if (assignment) {
-      setSelectedSection(assignment);
-      // Fetch grading data for this assignment
-      fetchGradingData(assignmentId);
-    }
+  useEffect(() => {
+    fetchFacultyClasses();
+  }, []);
+
+  // Add effect to log state changes for debugging
+  useEffect(() => {
+    console.log('State updated:', {
+      facultyClasses: facultyClasses.length,
+      selectedClass,
+      selectedSection,
+      selectedAssignment
+    });
+  }, [facultyClasses, selectedClass, selectedSection, selectedAssignment]);
+
+  const handleClassSelect = (classIndex) => {
+    setSelectedClass(classIndex);
+    setSelectedSection('');
+    setSelectedAssignment('');
+    setGradingData([]);
+  };
+
+  const handleSectionSelect = (sectionIndex) => {
+    setSelectedSection(sectionIndex);
+    setSelectedAssignment('');
+    setGradingData([]);
+  };
+
+  const handleAssignmentSelect = (assignmentId) => {
+    setSelectedAssignment(assignmentId);
+    fetchGradingData(assignmentId);
   };
 
   const handleFileChange = (e) => {
@@ -165,7 +153,7 @@ export default function GradingSystem() {
     }
 
     try {
-      const selectedAssignmentObj = facultyAssignments.find(a => a._id === selectedAssignment);
+      const selectedAssignmentObj = facultyClasses[selectedClass]?.sections[selectedSection]?.assignments.find(a => a._id === selectedAssignment);
       if (!selectedAssignmentObj) {
         setValidationMessage('Selected assignment not found.');
         setValidationType('error');
@@ -173,18 +161,10 @@ export default function GradingSystem() {
         return;
       }
 
-      const queryParams = new URLSearchParams({
-        sectionName: selectedAssignmentObj.sectionName,
-        trackName: selectedAssignmentObj.trackName,
-        strandName: selectedAssignmentObj.strandName,
-        gradeLevel: selectedAssignmentObj.gradeLevel,
-        schoolYear: selectedAssignmentObj.schoolYear,
-        termName: selectedAssignmentObj.termName
-      });
-
-      const response = await fetch(`${API_BASE}/api/grading/template/${selectedAssignment}?${queryParams}`, {
+      const response = await fetch(`${API_BASE}/api/grading/template/${selectedAssignment}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
         }
       });
 
@@ -193,12 +173,12 @@ export default function GradingSystem() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `grading_template_${selectedAssignmentObj.sectionName}.xlsx`;
+        a.download = `grading_template_${selectedAssignmentObj.title}.xlsx`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-
+        
         setSuccessMessage('Template downloaded successfully!');
         setTimeout(() => setSuccessMessage(''), 3000);
       } else {
@@ -209,20 +189,13 @@ export default function GradingSystem() {
       }
     } catch (error) {
       console.error('Error downloading template:', error);
-      setValidationMessage('Error downloading template. Please try again.');
+      setValidationMessage(`Error downloading template: ${error.message}`);
       setValidationType('error');
       setShowValidationModal(true);
     }
   };
 
-  const handleUpload = async () => {
-    if (!excelFile) {
-      setValidationMessage('Please select a file to upload.');
-      setValidationType('error');
-      setShowValidationModal(true);
-      return;
-    }
-
+  const uploadGrades = async () => {
     if (!selectedAssignment || !selectedSection) {
       setValidationMessage('Please select both an assignment and a section first.');
       setValidationType('error');
@@ -236,7 +209,7 @@ export default function GradingSystem() {
       formData.append('excelFile', excelFile);
 
       // Add required fields to form data
-      const selectedAssignmentObj = facultyAssignments.find(a => a._id === selectedAssignment);
+      const selectedAssignmentObj = facultyClasses[selectedClass]?.sections[selectedSection]?.assignments.find(a => a._id === selectedAssignment);
       if (!selectedAssignmentObj) {
         setValidationMessage('Selected assignment not found.');
         setValidationType('error');
@@ -244,21 +217,30 @@ export default function GradingSystem() {
         return;
       }
 
-      formData.append('sectionName', selectedAssignmentObj.sectionName);
-      formData.append('trackName', selectedAssignmentObj.trackName);
-      formData.append('strandName', selectedAssignmentObj.strandName);
-      formData.append('gradeLevel', selectedAssignmentObj.gradeLevel);
-      formData.append('schoolYear', selectedAssignmentObj.schoolYear);
-      formData.append('termName', selectedAssignmentObj.termName);
+      // Get section details from the selected class
+      const selectedSectionObj = facultyClasses[selectedClass]?.sections[selectedSection];
+      if (!selectedSectionObj) {
+        setValidationMessage('Selected section not found.');
+        setValidationType('error');
+        setShowValidationModal(true);
+        return;
+      }
+
+      formData.append('sectionName', selectedSectionObj.sectionName);
+      formData.append('trackName', selectedSectionObj.trackName);
+      formData.append('strandName', selectedSectionObj.strandName);
+      formData.append('gradeLevel', selectedSectionObj.gradeLevel);
+      formData.append('schoolYear', selectedSectionObj.schoolYear);
+      formData.append('termName', selectedSectionObj.termName);
 
       console.log('Uploading file:', excelFile.name);
       console.log('Form data:', {
-        sectionName: selectedAssignmentObj.sectionName,
-        trackName: selectedAssignmentObj.trackName,
-        strandName: selectedAssignmentObj.strandName,
-        gradeLevel: selectedAssignmentObj.gradeLevel,
-        schoolYear: selectedAssignmentObj.schoolYear,
-        termName: selectedAssignmentObj.termName
+        sectionName: selectedSectionObj.sectionName,
+        trackName: selectedSectionObj.trackName,
+        strandName: selectedSectionObj.strandName,
+        gradeLevel: selectedSectionObj.gradeLevel,
+        schoolYear: selectedSectionObj.schoolYear,
+        termName: selectedSectionObj.termName
       });
 
       const response = await fetch(`${API_BASE}/api/grading/upload/${selectedAssignment}`, {
@@ -312,23 +294,15 @@ export default function GradingSystem() {
     }
 
     try {
-      const selectedAssignmentObj = facultyAssignments.find(a => a._id === selectedAssignment);
-      if (!selectedAssignmentObj) {
-        setValidationMessage('Selected assignment not found.');
+      const selectedSectionObj = facultyClasses[selectedClass]?.sections[selectedSection];
+      if (!selectedSectionObj) {
+        setValidationMessage('Selected section not found.');
         setValidationType('error');
         setShowValidationModal(true);
         return;
       }
 
-      const queryParams = new URLSearchParams({
-        trackName: selectedAssignmentObj.trackName,
-        strandName: selectedAssignmentObj.strandName,
-        gradeLevel: selectedAssignmentObj.gradeLevel,
-        schoolYear: selectedAssignmentObj.schoolYear,
-        termName: selectedAssignmentObj.termName
-      });
-
-      const response = await fetch(`${API_BASE}/api/grading/debug/students/${selectedAssignmentObj.sectionName}?${queryParams}`, {
+      const response = await fetch(`${API_BASE}/api/grading/debug/students/${selectedSectionObj.sectionName}?trackName=${selectedSectionObj.trackName}&strandName=${selectedSectionObj.strandName}&gradeLevel=${selectedSectionObj.gradeLevel}&schoolYear=${selectedSectionObj.schoolYear}&termName=${selectedSectionObj.termName}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
@@ -337,17 +311,12 @@ export default function GradingSystem() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Debug data:', data);
-        
-        const sectionStudents = data.sectionStudents.map(s => s.name).join(', ');
-        const allStudents = data.allStudents.map(s => s.name).join(', ');
-        
-        setValidationMessage(`Section Students: ${sectionStudents}\n\nAll Students: ${allStudents}`);
-        setValidationType('info');
-        setShowValidationModal(true);
+        console.log('Debug students response:', data);
+        setSuccessMessage(`Found ${data.students.length} students in section ${selectedSectionObj.sectionName}`);
+        setTimeout(() => setSuccessMessage(''), 5000);
       } else {
         const errorData = await response.json();
-        setValidationMessage(`Debug failed: ${errorData.message}`);
+        setValidationMessage(errorData.message || 'Failed to debug students');
         setValidationType('error');
         setShowValidationModal(true);
       }
@@ -359,37 +328,8 @@ export default function GradingSystem() {
     }
   };
 
-  const fetchGradingData = async (assignmentId) => {
-    try {
-      setLoading(true);
-      console.log('Fetching grading data for assignment:', assignmentId);
-      
-      const response = await fetch(`${API_BASE}/api/grading/data/${assignmentId}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      console.log('Fetch response status:', response.status);
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Grading data fetched:', data);
-        setGradingData(data.data || []);
-      } else {
-        const errorData = await response.json();
-        console.error('Failed to fetch grading data:', errorData);
-      }
-    } catch (error) {
-      console.error('Error fetching grading data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const deleteGradingData = async (gradingDataId) => {
-    if (!confirm('Are you sure you want to delete this grading data? This action cannot be undone.')) {
+    if (!confirm('Are you sure you want to delete this grading data?')) {
       return;
     }
 
@@ -416,246 +356,280 @@ export default function GradingSystem() {
       }
     } catch (error) {
       console.error('Error deleting grading data:', error);
-      setValidationMessage('Error deleting grading data. Please try again.');
+      setValidationMessage(`Error deleting grading data: ${error.message}`);
       setValidationType('error');
       setShowValidationModal(true);
     }
   };
 
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100">
+        <Faculty_Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center py-8">
+            <p className="text-gray-600 text-lg">Loading faculty classes...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show message if no classes found
+  if (!loading && facultyClasses.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-100">
+        <Faculty_Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Grades</h1>
+            <p className="text-gray-600">
+              Upload Excel files containing student grades for your assignments
+            </p>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="text-center py-8">
+              <p className="text-gray-600 text-lg mb-4">
+                No classes found for this faculty member.
+              </p>
+              <p className="text-gray-500 mb-4">
+                Please contact your administrator to assign classes to your account.
+              </p>
+              <button
+                onClick={fetchFacultyClasses}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+              >
+                Refresh Classes
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       <Faculty_Navbar />
-
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Grading System</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Grades</h1>
           <p className="text-gray-600">
             Upload Excel files containing student grades for your assignments
           </p>
         </div>
 
-        {successMessage && (
-          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-            {successMessage}
-            <button
-              onClick={() => setSuccessMessage('')}
-              className="float-right font-bold"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
-        {loading ? (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="text-center py-8">
-              <p className="text-gray-600">Loading faculty assignments...</p>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            {/* Current Academic Period */}
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-2">Current Academic Period</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
-                  <div className="text-gray-900">
-                    {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Loading...'}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Term</label>
-                  <div className="text-gray-900">
-                    {currentTerm ? currentTerm.termName : 'Loading...'}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Assignment & Section Selection */}
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-4">Select Assignment & Section</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Assignment</label>
-                  <select
-                    value={selectedAssignment}
-                    onChange={(e) => handleAssignmentSelect(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={loading}
-                  >
-                    <option value="">Select an assignment</option>
-                    {facultyAssignments.map((assignment) => (
-                      <option key={assignment._id} value={assignment._id}>
-                        {assignment.subjectName} - {assignment.sectionName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Section</label>
-                  <select
-                    value={selectedSection ? selectedSection._id : ''}
-                    onChange={(e) => handleSectionSelect(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={!selectedAssignment}
-                  >
-                    <option value="">Select a section</option>
-                    {facultyAssignments.map((assignment) => (
-                      <option key={assignment._id} value={assignment._id}>
-                        {assignment.sectionName} ({assignment.trackName} - {assignment.strandName})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Upload Grading File - Always show when both are selected */}
-            {selectedAssignment && selectedSection && (
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold mb-4">Upload Grading File</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Excel File</label>
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls,.csv"
-                      onChange={handleFileChange}
-                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                    />
-                    <p className="text-sm text-gray-600 mt-1">
-                      Upload an Excel file with columns: Student Name, Grade, Feedback (optional)
-                    </p>
-                    {excelFile && (
-                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
-                        <p className="text-sm text-blue-800">
-                          <strong>Selected file:</strong> {excelFile.name} ({(excelFile.size / 1024).toFixed(1)} KB)
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-4">
-                    <button
-                      onClick={downloadTemplate}
-                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors"
-                    >
-                      Download Template
-                    </button>
-                    <button
-                      onClick={handleUpload}
-                      disabled={!excelFile || uploadLoading}
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                    >
-                      {uploadLoading ? 'Uploading...' : 'Upload Grades'}
-                    </button>
-                    <button
-                      onClick={debugStudents}
-                      className="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 transition-colors"
-                    >
-                      Debug Students
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Grading Data Display */}
+        {/* Current Academic Period */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4">Current Academic Period</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <h3 className="text-lg font-semibold mb-4">Grading Data</h3>
-              {loading ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-600">Loading grading data...</p>
-                </div>
-              ) : gradingData.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Section
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Upload Date
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Students Graded
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {gradingData.map((data) => (
-                        <tr key={data._id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {data.sectionName}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(data.uploadedAt).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {data.grades.length} students
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              data.status === 'processed' 
-                                ? 'bg-green-100 text-green-800'
-                                : data.status === 'error'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {data.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button
-                              onClick={() => deleteGradingData(data._id)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-gray-600">
-                    {selectedAssignment && selectedSection 
-                      ? `No grading data available for ${selectedSection.sectionName}`
-                      : 'Select an assignment and section to view grading data'
-                    }
-                  </p>
-                  {selectedAssignment && selectedSection && (
-                    <p className="text-sm text-gray-500 mt-2">
-                      Upload an Excel file to see grading data here
-                    </p>
-                  )}
-                </div>
+              <label className="block text-sm font-medium text-gray-700">Academic Year</label>
+              <p className="text-lg font-semibold text-gray-900">2025-2026</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Current Term</label>
+              <p className="text-lg font-semibold text-gray-900">Term 1</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Class Selection */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4">Select Class</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Class</label>
+              <select
+                value={selectedClass}
+                onChange={(e) => handleClassSelect(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
+              >
+                <option value="">Select a class</option>
+                {facultyClasses.map((cls, index) => (
+                  <option key={index} value={index}>
+                    {cls.subjectName || cls.className}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Section</label>
+              <select
+                value={selectedSection}
+                onChange={(e) => handleSectionSelect(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={!selectedClass}
+              >
+                <option value="">Select a section</option>
+                {facultyClasses[selectedClass]?.sections?.map((section, index) => (
+                  <option key={index} value={index}>
+                    {section.sectionName} ({section.trackName} - {section.strandName})
+                  </option>
+                )) || []}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Assignment Selection */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4">Select Assignment</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Assignment</label>
+              <select
+                value={selectedAssignment}
+                onChange={(e) => handleAssignmentSelect(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-500"
+                disabled={!selectedSection}
+              >
+                <option value="">Select an assignment</option>
+                {facultyClasses[selectedClass]?.sections[selectedSection]?.assignments?.map((assignment) => (
+                  <option key={assignment._id} value={assignment._id}>
+                    {assignment.title} ({assignment.type})
+                  </option>
+                )) || []}
+              </select>
+              {selectedSection && facultyClasses[selectedClass]?.sections[selectedSection]?.assignments?.length === 0 && (
+                <p className="text-sm text-orange-600 mt-1">
+                  No assignments found for this section. Please contact your administrator.
+                </p>
               )}
             </div>
+            <div className="flex items-end">
+              <button
+                onClick={downloadTemplate}
+                disabled={!selectedSection}
+                className="w-full bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                Download Template
+              </button>
+            </div>
+          </div>
+          
+          {/* Debug Information */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-4 p-4 bg-gray-100 rounded-md text-sm">
+              <h4 className="font-semibold mb-2">Debug Info:</h4>
+              <p>Selected Class: {selectedClass !== '' ? facultyClasses[selectedClass]?.subjectName : 'None'}</p>
+              <p>Selected Section: {selectedSection !== '' ? facultyClasses[selectedClass]?.sections[selectedSection]?.sectionName : 'None'}</p>
+              <p>Assignments Count: {facultyClasses[selectedClass]?.sections[selectedSection]?.assignments?.length || 0}</p>
+              <p>Total Classes: {facultyClasses.length}</p>
+              <p>Total Sections: {facultyClasses[selectedClass]?.sections?.length || 0}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Upload Grading File */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4">Upload Grading File</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Excel File</label>
+              <input
+                type="file"
+                onChange={handleFileChange}
+                accept=".xlsx,.xls,.csv"
+                className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={!selectedAssignment || !selectedSection}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Upload an Excel file with columns: Student Name, Grade, Feedback (optional).
+              </p>
+            </div>
+            
+            <div className="flex space-x-4">
+              <button
+                onClick={uploadGrades}
+                disabled={!excelFile || !selectedAssignment || !selectedSection}
+                className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                {uploadLoading ? 'Uploading...' : 'Upload Grades'}
+              </button>
+              
+              <button
+                onClick={debugStudents}
+                disabled={!selectedSection}
+                className="bg-orange-600 text-white px-6 py-2 rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                Debug Students
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Grading Data */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4">Grading Data</h3>
+          {gradingData.length > 0 ? (
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grade</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feedback</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {gradingData.map((grade) => (
+                    <tr key={grade._id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {grade.studentName}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {grade.grade}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {grade.feedback || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button
+                          onClick={() => deleteGradingData(grade._id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 bg-gray-50 rounded-lg">
+              <p className="text-gray-600">
+                {selectedAssignment && selectedSection 
+                  ? `No grading data available for ${facultyClasses[selectedClass]?.sections[selectedSection]?.sectionName}`
+                  : 'Select a class, section, and assignment to view grading data'
+                }
+              </p>
+              <p className="text-gray-500 text-sm mt-2">
+                Upload an Excel file to see grading data here.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Success Message */}
+        {successMessage && (
+          <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-md shadow-lg z-50">
+            {successMessage}
           </div>
         )}
-      </div>
 
-      {/* Validation Modal */}
-      <ValidationModal
-        isOpen={showValidationModal}
-        onClose={() => setShowValidationModal(false)}
-        type={validationType}
-        title={validationType === 'error' ? 'Error' : 'Warning'}
-        message={validationMessage}
-        confirmText="OK"
-      />
+        {/* Validation Modal */}
+        <ValidationModal
+          isOpen={showValidationModal}
+          onClose={() => setShowValidationModal(false)}
+          message={validationMessage}
+          type={validationType}
+        />
+      </div>
     </div>
   );
 } 

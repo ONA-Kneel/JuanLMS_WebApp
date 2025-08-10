@@ -1,13 +1,17 @@
 {
-  "name": "socket",
+  "name": "juanlms-socket",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "index.cjs",
+  "type": "commonjs",
   "scripts": {
-    "start": "nodemon index.cjs"
+    "start": "nodemon index.cjs",
+    "dev": "nodemon index.cjs",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
+  "keywords": ["lms", "socket", "websocket", "real-time"],
+  "author": "Juan LMS Team",
   "license": "ISC",
-  "description": "",
+  "description": "Socket server for Juan LMS real-time features",
   "dependencies": {
     "nodemon": "^3.1.10",
     "socket.io": "^4.8.1"

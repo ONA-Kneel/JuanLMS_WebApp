@@ -1,4 +1,20 @@
 {
+  "name": "juanlms-webapp",
+  "version": "1.0.0",
+  "description": "Juan LMS - A comprehensive Learning Management System",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run frontend\"",
+    "server": "cd backend/server && npm run dev",
+    "frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "install-all": "npm install && cd backend/server && npm install && cd ../../frontend && npm install",
+    "start": "cd backend/server && npm start",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["lms", "education", "learning", "management", "system"],
+  "author": "Juan LMS Team",
+  "license": "ISC",
   "dependencies": {
     "@fullcalendar/interaction": "^6.1.17",
     "bcrypt": "^6.0.0",
@@ -8,5 +24,12 @@
     "react-pdf": "^9.2.1",
     "sib-api-v3-sdk": "^8.5.0",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }
