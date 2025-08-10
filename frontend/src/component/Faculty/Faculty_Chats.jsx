@@ -618,29 +618,85 @@ export default function Faculty_Chats() {
     const bTime = b.type === 'group' ? (groupMessages[b._id]?.slice(-1)[0]?.createdAt || 0) : (messages[b._id]?.slice(-1)[0]?.createdAt || 0);
     return new Date(bTime) - new Date(aTime);
   });
-  // Enhanced search that includes all users and existing chats
-  const searchResults = searchTerm.trim() === '' ? [] : [
-    // First show existing chats/groups that match
-    ...unifiedChats.filter(chat => {
-      if (chat.type === 'individual') {
-        return (
-          chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      } else {
-        return chat.name?.toLowerCase().includes(searchTerm.toLowerCase());
-      }
-    }),
-    // Then show users not in recent chats that match
-    ...users
-      .filter(user => user._id !== currentUserId)
-      .filter(user => !recentChats.some(chat => chat._id === user._id))
-      .filter(user =>
-        user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-      .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
-  ];
+
+  const handleSearch = async (searchValue) => {
+    setSearchTerm(searchValue);
+    
+    if (searchValue.trim() === '') {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      // Search for users using the search API
+      const searchResponse = await axios.get(`${API_BASE}/users/search?q=${encodeURIComponent(searchValue)}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      const searchUsers = searchResponse.data || [];
+      
+      // Filter out current user and users already in recent chats
+      const filteredSearchUsers = searchUsers
+        .filter(user => user._id !== currentUserId)
+        .filter(user => !recentChats.some(chat => chat._id === user._id))
+        .map(user => ({ ...user, type: 'new_user', isNewUser: true }));
+
+      // Also include existing chats/groups that match
+      const matchingChats = unifiedChats.filter(chat => {
+        if (chat.type === 'individual') {
+          return (
+            chat.firstname?.toLowerCase().includes(searchValue.toLowerCase()) ||
+            chat.lastname?.toLowerCase().includes(searchValue.toLowerCase())
+          );
+        } else {
+          return chat.name?.toLowerCase().includes(searchValue.toLowerCase());
+        }
+      });
+
+      // Combine results: existing chats first, then new users
+      setSearchResults([...matchingChats, ...filteredSearchUsers]);
+    } catch (error) {
+      console.error('Error searching users:', error);
+      // Fallback to local search if API fails
+      const localSearchResults = searchValue.trim() === '' ? [] : [
+        // First show existing chats/groups that match
+        ...unifiedChats.filter(chat => {
+          if (chat.type === 'individual') {
+            return (
+              chat.firstname?.toLowerCase().includes(searchValue.toLowerCase()) ||
+              chat.lastname?.toLowerCase().includes(searchValue.toLowerCase())
+            );
+          } else {
+            return chat.name?.toLowerCase().includes(searchValue.toLowerCase());
+          }
+        }),
+        // Then show users not in recent chats that match
+        ...users
+          .filter(user => user._id !== currentUserId)
+          .filter(user => !recentChats.some(chat => chat._id === user._id))
+          .filter(user =>
+            user.firstname?.toLowerCase().includes(searchValue.toLowerCase()) ||
+            user.lastname?.toLowerCase().includes(searchValue.toLowerCase())
+          )
+          .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
+      ];
+      setSearchResults(localSearchResults);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Debounced search to avoid too many API calls
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      handleSearch(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
 
   return (
     <div className="flex min-h-screen h-screen max-h-screen">
@@ -668,13 +724,20 @@ export default function Faculty_Chats() {
           <div className="w-full md:w-1/3 p-4 overflow-hidden flex flex-col h-full">
             {/* Header and Plus Icon */}
             <div className="flex items-center justify-between mb-4">
-              <input
-                type="text"
-                placeholder="Search users or groups..."
-                className="flex-1 p-2 border rounded-lg text-sm"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  placeholder="Search users or groups..."
+                  className="w-full p-2 border rounded-lg text-sm pr-8"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {isSearching && (
+                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-900"></div>
+                  </div>
+                )}
+              </div>
               <div className="relative ml-2">
                 <button
                   className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-900 text-white hover:bg-blue-800 focus:outline-none"
@@ -827,6 +890,10 @@ export default function Faculty_Chats() {
                       )}
                     </div>
                   ))
+                ) : isSearching ? (
+                  <div className="text-gray-400 text-center mt-10 select-none">
+                    Searching...
+                  </div>
                 ) : (
                   <div className="text-gray-400 text-center mt-10 select-none">
                     No users or groups found
