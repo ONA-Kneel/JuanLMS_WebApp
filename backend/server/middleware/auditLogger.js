@@ -18,8 +18,8 @@ export const AUDIT_ACTIONS = {
   PRINCIPAL_ADD_CLASS: 'Add Class',
   
   // Parent actions
-  PARENT_UPLOAD_MATERIAL: 'Upload Material',
-  PARENT_ADD_CLASS: 'Add Class',
+  VPE_UPLOAD_MATERIAL: 'Upload Material',
+  VPE_ADD_CLASS: 'Add Class',
   
   // Admin actions
   ADMIN_UPLOAD: 'Upload',
