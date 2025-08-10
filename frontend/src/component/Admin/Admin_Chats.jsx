@@ -129,6 +129,7 @@ export default function Admin_Chats() {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
+        senderName: data.senderName || null,
       };
 
       setGroupMessages((prev) => {
@@ -604,6 +605,7 @@ export default function Admin_Chats() {
         groupId: selectedChat._id,
         text: sentMessage.message,
         fileUrl: sentMessage.fileUrl || null,
+        senderName: JSON.parse(localStorage.getItem("user")).firstname + " " + JSON.parse(localStorage.getItem("user")).lastname,
       });
 
       setGroupMessages((prev) => ({

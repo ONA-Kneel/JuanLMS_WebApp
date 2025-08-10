@@ -108,4 +108,13 @@ userSchema.methods.getDecryptedNickname = function () {
   return this.nickname;
 };
 
+// Add missing decryption methods for firstname and lastname (these fields are not encrypted)
+userSchema.methods.getDecryptedFirstname = function () {
+  return this.firstname;
+};
+
+userSchema.methods.getDecryptedLastname = function () {
+  return this.lastname;
+};
+
 export default mongoose.model("User", userSchema);

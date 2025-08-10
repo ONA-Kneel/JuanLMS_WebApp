@@ -135,13 +135,15 @@ export default function Faculty_Chats() {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
-        senderName: data.senderName,
-        timestamp: new Date(),
+        senderName: data.senderName || null,
       };
 
       setGroupMessages((prev) => ({
         ...prev,
-        [data.groupId]: [...(prev[data.groupId] || []), incomingGroupMessage],
+        [incomingGroupMessage.groupId]: [
+          ...(prev[incomingGroupMessage.groupId] || []),
+          incomingGroupMessage,
+        ],
       }));
     });
 

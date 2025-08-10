@@ -167,7 +167,7 @@ export default function Student_Chats() {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
-        senderName: data.senderName,
+        senderName: data.senderName || null,
         timestamp: new Date(),
       };
 

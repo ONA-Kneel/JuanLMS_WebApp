@@ -69,6 +69,7 @@ export default function GroupChat({ NavbarComponent }) {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
+        senderName: data.senderName || null,
       };
 
       setGroupMessages((prev) => {
@@ -205,6 +206,7 @@ export default function GroupChat({ NavbarComponent }) {
         groupId: selectedGroup._id,
         text: sentMessage.message,
         fileUrl: sentMessage.fileUrl || null,
+        senderName: JSON.parse(localStorage.getItem("user")).firstname + " " + JSON.parse(localStorage.getItem("user")).lastname,
       });
 
       setGroupMessages((prev) => ({
