@@ -256,18 +256,19 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
         return res.status(400).json({ error: "Contact number must be exactly 11 digits and contain only numbers." });
     }
 
-    // SchoolID validation for all roles
+    // Debug: log received schoolID and role
+    console.log('Received schoolID:', schoolID, 'for role:', role);
     if (role === 'faculty') {
-        if (!/^F00/.test(schoolID)) {
-            return res.status(400).json({ error: "Faculty ID must start with F00." });
+        if (!/^F\d{3}$/.test(schoolID)) {
+            return res.status(400).json({ error: "Faculty ID must be F followed by exactly 3 digits (e.g., F001, F010, F100)." });
         }
     } else if (role === 'admin') {
-        if (!/^A00/.test(schoolID)) {
-            return res.status(400).json({ error: "Admin ID must start with A00." });
+        if (!/^A\d{3}$/.test(schoolID)) {
+            return res.status(400).json({ error: "Admin ID must be A followed by exactly 3 digits (e.g., A001, A010, A100)." });
         }
     } else if (role === 'vice president of education' || role === 'principal') {
-        if (!/^N00/.test(schoolID)) {
-            return res.status(400).json({ error: "VP/Principal ID must start with N00." });
+        if (!/^N\d{3}$/.test(schoolID)) {
+            return res.status(400).json({ error: "VP/Principal ID must be N followed by exactly 3 digits (e.g., N001, N010, N100)." });
         }
     } else if (role === 'students') {
         return res.status(400).json({ error: "Student accounts can only be registered through the public registration form." });
@@ -664,34 +665,26 @@ userRoutes.post('/forgot-password', async (req, res) => {
 // Test email endpoint (for development)
 userRoutes.get('/test-email', async (req, res) => {
     try {
-        const transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: process.env.GMAIL_USER,
-                pass: process.env.GMAIL_PASS,
-            },
-        });
-
-        transporter.verify(function(error, success) {
-            if (error) {
-                console.error('Nodemailer transporter error:', error);
-                return res.status(500).json({ message: 'Nodemailer transporter error', error });
-            } else {
-                console.log('Nodemailer transporter is ready');
-            }
-        });
-
-        await transporter.sendMail({
-            from: `"JuanLMS Test" <${process.env.GMAIL_USER}>`,
-            to: process.env.GMAIL_USER, // send to yourself for testing
-            subject: 'JuanLMS Test Email',
-            text: 'This is a test email from JuanLMS backend using Nodemailer and Gmail.',
-        });
-        console.log('Test email sent to', process.env.GMAIL_USER);
-        return res.json({ message: 'Test email sent successfully.' });
+        const apiKeyVal = process.env.BREVO_API_KEY || '';
+        const maskedKey = apiKeyVal.length > 8 ? apiKeyVal.slice(0, 4) + '...' + apiKeyVal.slice(-4) : apiKeyVal;
+        console.log('BREVO_API_KEY (masked):', maskedKey);
+        console.log('About to send Brevo test email');
+        let defaultClient = SibApiV3Sdk.ApiClient.instance;
+        let apiKey = defaultClient.authentications['api-key'];
+        apiKey.apiKey = process.env.BREVO_API_KEY;
+        let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+        let sendSmtpEmail = {
+            to: [{ email: 'nicolettecborre@gmail.com', name: 'JuanLMS Test' }],
+            sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
+            subject: 'JuanLMS Test Email (Brevo)',
+            textContent: 'This is a test email from JuanLMS backend using Brevo (Sendinblue).'
+        };
+        const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+        console.log('Brevo test email sent, result:', result);
+        return res.json({ message: 'Test email sent successfully via Brevo.' });
     } catch (err) {
-        console.error('Error sending test email:', err);
-        return res.status(500).json({ message: 'Error sending test email', error: err });
+        console.error('Error sending test email via Brevo:', err);
+        return res.status(500).json({ message: 'Error sending test email via Brevo', error: err.message });
     }
 });
 

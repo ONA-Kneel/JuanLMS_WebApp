@@ -56,16 +56,16 @@ userSchema.pre("save", async function (next) {
         return next(new Error('Student Number must be in the format YY-00000.'));
       }
     } else if (this.role === 'faculty') {
-      if (!/^F00/.test(this.schoolID)) {
-        return next(new Error('Faculty ID must start with F00.'));
+      if (!/^F\d{3}$/.test(this.schoolID)) {
+        return next(new Error('Faculty ID must be F followed by exactly 3 digits (e.g., F001, F010, F100).'));
       }
     } else if (this.role === 'admin') {
-      if (!/^A00/.test(this.schoolID)) {
-        return next(new Error('Admin ID must start with A00.'));
+      if (!/^A\d{3}$/.test(this.schoolID)) {
+        return next(new Error('Admin ID must be A followed by exactly 3 digits (e.g., A001, A010, A100).'));
       }
     } else if (this.role === 'vice president of education' || this.role === 'principal') {
-      if (!/^N00/.test(this.schoolID)) {
-        return next(new Error('VP/Principal ID must start with N00.'));
+      if (!/^N\d{3}$/.test(this.schoolID)) {
+        return next(new Error('VP/Principal ID must be N followed by exactly 3 digits (e.g., N001, N010, N100).'));
       }
     }
     this.schoolID = encrypt(this.schoolID);
