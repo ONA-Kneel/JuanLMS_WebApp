@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import { getAllTickets, replyToTicket, openTicket } from '../../services/ticketService';
-import { getUserById } from '../../services/userService';
+import { getUserById, getUserByUserID } from '../../services/userService';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -25,7 +25,10 @@ export default function AdminSupportCenter() {
   const fetchUserDetails = async (tickets) => {
     const userDetailsMap = {};
     for (const ticket of tickets) {
-      if (ticket.userId && !userDetailsMap[ticket.userId]) {
+      // Check if userId is a valid MongoDB ObjectId (24 character hex string)
+      const isValidObjectId = ticket.userId && /^[0-9a-fA-F]{24}$/.test(ticket.userId);
+      
+      if (ticket.userId && isValidObjectId && !userDetailsMap[ticket.userId]) {
         try {
           const userData = await getUserById(ticket.userId);
           userDetailsMap[ticket.userId] = {
@@ -36,6 +39,22 @@ export default function AdminSupportCenter() {
           console.error(`Failed to fetch user details for ${ticket.userId}:`, err);
           userDetailsMap[ticket.userId] = {
             name: 'Unknown User',
+            role: 'Unknown'
+          };
+        }
+      } else if (ticket.userId && !isValidObjectId) {
+        console.warn(`Invalid userId format for ticket ${ticket._id}: ${ticket.userId}`);
+        // Try to find user by userID as a fallback
+        try {
+          const userData = await getUserByUserID(ticket.userId);
+          userDetailsMap[ticket.userId] = {
+            name: `${userData.firstname || ''} ${userData.lastname || ''}`.trim(),
+            role: userData.role || 'Unknown'
+          };
+        } catch (err) {
+          console.error(`Failed to fetch user details by userID for ${ticket.userId}:`, err);
+          userDetailsMap[ticket.userId] = {
+            name: 'Invalid User ID',
             role: 'Unknown'
           };
         }

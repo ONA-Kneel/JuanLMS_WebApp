@@ -48,6 +48,15 @@ userSchema.pre("save", async function (next) {
     this.emailHash = crypto.createHash('sha256').update(this.email.toLowerCase()).digest('hex');
     this.email = encrypt(this.email);
   }
+  if (this.isModified("firstname")) {
+    this.firstname = encrypt(this.firstname);
+  }
+  if (this.isModified("lastname")) {
+    this.lastname = encrypt(this.lastname);
+  }
+  if (this.isModified("middlename")) {
+    this.middlename = encrypt(this.middlename);
+  }
   if (this.isModified("schoolID")) {
     // Validation based on role
     if (this.role === 'students') {
@@ -95,6 +104,18 @@ userSchema.methods.getDecryptedProfilePic = function () {
     return decrypt(this.profilePic);
   }
   return this.profilePic;
+};
+
+userSchema.methods.getDecryptedFirstname = function () {
+  return decrypt(this.firstname);
+};
+
+userSchema.methods.getDecryptedLastname = function () {
+  return decrypt(this.lastname);
+};
+
+userSchema.methods.getDecryptedMiddlename = function () {
+  return decrypt(this.middlename);
 };
 
 export default mongoose.model("User", userSchema);

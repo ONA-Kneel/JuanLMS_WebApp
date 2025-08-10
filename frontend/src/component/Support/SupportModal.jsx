@@ -80,11 +80,11 @@ export default function SupportModal({ onClose }) {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       const userID = localStorage.getItem('userID');
       
-      // Use the same user ID logic as ticket creation
-      const userId = user._id || userID;
+      // Always use _id for tickets (MongoDB ObjectId)
+      const userId = user._id;
       
       if (!userId) {
-        setTicketsError('User not authenticated. Please log in again.');
+        setTicketsError('User ID not found. Please log in again.');
         return;
       }
 
@@ -186,8 +186,14 @@ export default function SupportModal({ onClose }) {
         return;
       }
 
-      // Try to use _id first, then fallback to userID
-      const userId = user._id || userID;
+      // Always use _id for tickets (MongoDB ObjectId)
+      const userId = user._id;
+      
+      if (!userId) {
+        setError('User ID not found. Please log in again.');
+        setLoading(false);
+        return;
+      }
       
       const formData = new FormData();
       formData.append('subject', newTicket.subject);
