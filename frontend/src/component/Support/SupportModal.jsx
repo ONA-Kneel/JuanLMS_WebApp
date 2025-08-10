@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Headphones, Search, FileText, Clock, CheckCircle, XCircle, Copy } from 'lucide-react';
+import { Headphones, Search, FileText, Clock, CheckCircle, XCircle, Copy, ArrowLeft } from 'lucide-react';
 import axios from 'axios';
 import { getTicketByNumber, getUserTickets } from '../../services/ticketService';
 
@@ -7,6 +7,15 @@ export default function SupportModal({ onClose }) {
   const [view, setView] = useState('main'); // main | active | new | submitted | myTickets
   const [ticketInput, setTicketInput] = useState('');
   const [showTicket, setShowTicket] = useState(false);
+  // Generate ticket number function
+  function generateTicketNumber() {
+    let num = '';
+    for (let i = 0; i < 12; i++) {
+      num += Math.floor(Math.random() * 10);
+    }
+    return `SJDD${num}`;
+  }
+
   const [newTicket, setNewTicket] = useState({
     number: generateTicketNumber(),
     subject: '',
@@ -22,20 +31,19 @@ export default function SupportModal({ onClose }) {
   const [selectedUserTicket, setSelectedUserTicket] = useState(null);
   const [showAllTickets, setShowAllTickets] = useState(false);
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' or 'oldest'
-
-  // Generate ticket number function
-  function generateTicketNumber() {
-    let num = '';
-    for (let i = 0; i < 12; i++) {
-      num += Math.floor(Math.random() * 10);
-    }
-    return `SJDD${num}`;
-  }
+  const [userRole, setUserRole] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [loading, setLoading] = useState(false);
   const [ticketData, setTicketData] = useState(null);
   const [error, setError] = useState('');
+
+  // Get user role on component mount
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const role = user.role || localStorage.getItem('role') || '';
+    setUserRole(role);
+  }, []);
 
   // Auto-close toast and modal after 2.5s
   useEffect(() => {
@@ -110,20 +118,20 @@ export default function SupportModal({ onClose }) {
     return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
   });
 
-  // Get the most recent ticket for display when not showing all
-  const mostRecentTicket = sortedTickets.length > 0 ? sortedTickets[0] : null;
+  // Get most recent ticket for quick view
+  const mostRecentTicket = userTickets.length > 0 ? userTickets[0] : null;
 
-  // Get status icon and color
+  // Get status info for display
   const getStatusInfo = (status) => {
     switch (status) {
       case 'new':
-        return { icon: <Clock size={16} />, color: 'text-blue-600', bgColor: 'bg-blue-100' };
+        return { icon: <Clock size={12} />, color: 'text-blue-600', bgColor: 'bg-blue-100' };
       case 'opened':
-        return { icon: <FileText size={16} />, color: 'text-orange-600', bgColor: 'bg-orange-100' };
+        return { icon: <FileText size={12} />, color: 'text-orange-600', bgColor: 'bg-orange-100' };
       case 'closed':
-        return { icon: <CheckCircle size={16} />, color: 'text-green-600', bgColor: 'bg-green-100' };
+        return { icon: <CheckCircle size={12} />, color: 'text-green-600', bgColor: 'bg-green-100' };
       default:
-        return { icon: <FileText size={16} />, color: 'text-gray-600', bgColor: 'bg-gray-100' };
+        return { icon: <Clock size={12} />, color: 'text-gray-600', bgColor: 'bg-gray-100' };
     }
   };
 
@@ -180,43 +188,42 @@ export default function SupportModal({ onClose }) {
 
       // Try to use _id first, then fallback to userID
       const userId = user._id || userID;
-
+      
       const formData = new FormData();
-      formData.append('userId', userId);
       formData.append('subject', newTicket.subject);
       formData.append('description', newTicket.content);
+      formData.append('userId', userId);
       formData.append('number', newTicket.number);
+      
       if (newTicket.file) {
         formData.append('file', newTicket.file);
       }
-      const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
-      const response = await axios.post(`${API_BASE}/api/tickets`, formData, {
-        headers: { 
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${token}`
+
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com"}/api/tickets`, formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
         }
       });
-      setNewTicket(prev => ({ ...prev, number: response.data.number }));
-      setSubmitted(true);
-      setShowToast(true);
+
+      if (response.status === 201) {
+        setSubmitted(true);
+        setShowToast(true);
+      }
     } catch (err) {
       console.error('Ticket submission error:', err);
       if (err.response) {
-        // Server responded with error status
-        const errorMessage = err.response.data?.error || err.response.data?.message || 'Failed to submit ticket';
-        setError(errorMessage);
+        setError(err.response.data?.error || 'Failed to submit ticket');
       } else if (err.request) {
-        // Network error
         setError('Network error. Please check your connection and try again.');
       } else {
-        // Other error
         setError('Failed to submit ticket. Please try again.');
       }
     }
     setLoading(false);
   }
 
-  // Handle view change to myTickets
+  // Handle viewing my tickets
   const handleViewMyTickets = () => {
     setView('myTickets');
     fetchUserTickets();
@@ -261,6 +268,22 @@ export default function SupportModal({ onClose }) {
     }
   };
 
+  // Get role-specific welcome message
+  const getRoleWelcomeMessage = () => {
+    switch (userRole) {
+      case 'faculty':
+        return 'Faculty Support';
+      case 'students':
+        return 'Student Support';
+      case 'principal':
+        return 'Principal Support';
+      case 'admin':
+        return 'Admin Support';
+      default:
+        return 'Support Center';
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
       <div
@@ -281,7 +304,8 @@ export default function SupportModal({ onClose }) {
           <>
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">Support<br />Center</h2>
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">{getRoleWelcomeMessage()}</h2>
+                <p className="text-sm text-gray-600">How can we help you today?</p>
               </div>
               <div className="ml-4">
                 <div className="bg-white bg-opacity-30 rounded-full p-3">
@@ -294,7 +318,7 @@ export default function SupportModal({ onClose }) {
                 className="w-full rounded-full px-4 py-3 bg-white bg-opacity-30 text-gray-900 font-semibold text-center hover:bg-opacity-50 transition border border-white"
                 onClick={handleViewMyTickets}
               >
-                Have an active ticket? enter here
+                View My Tickets
               </button>
               <button
                 className="w-full rounded-full px-4 py-3 bg-white bg-opacity-30 text-gray-900 font-semibold text-center hover:bg-opacity-50 transition border border-white"
@@ -310,7 +334,7 @@ export default function SupportModal({ onClose }) {
           <div className="transition-all">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Support Center<br /><span className="text-lg font-semibold">My Tickets</span></h2>
+                <h2 className="text-2xl font-bold text-gray-900">{getRoleWelcomeMessage()}<br /><span className="text-lg font-semibold">My Tickets</span></h2>
                 <div className="text-lg mt-2">
                   {!showAllTickets ? (
                     <span>View all your tickets</span>
@@ -481,8 +505,8 @@ export default function SupportModal({ onClose }) {
           <div className="transition-all">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Support Center<br /><span className="text-lg font-semibold">Active ticket</span></h2>
-                <div className="text-lg mt-2">Short desc</div>
+                <h2 className="text-2xl font-bold text-gray-900">{getRoleWelcomeMessage()}<br /><span className="text-lg font-semibold">Active ticket</span></h2>
+                <div className="text-lg mt-2">Enter your ticket number to check status</div>
               </div>
               <div className="ml-4">
                 <div className="bg-white bg-opacity-30 rounded-full p-3">
@@ -532,7 +556,7 @@ export default function SupportModal({ onClose }) {
             )}
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Support Center<br /><span className="text-lg font-semibold">New Request</span></h2>
+                <h2 className="text-2xl font-bold text-gray-900">{getRoleWelcomeMessage()}<br /><span className="text-lg font-semibold">New Request</span></h2>
               </div>
               <div className="ml-4">
                 <div className="bg-white bg-opacity-30 rounded-full p-3">
