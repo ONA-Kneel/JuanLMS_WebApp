@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import { getAllTickets, replyToTicket, openTicket } from '../../services/ticketService';
+import { getUserById } from '../../services/userService';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -18,6 +19,30 @@ export default function AdminSupportCenter() {
   const [currentTerm, setCurrentTerm] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all'); // all, new, opened, closed
   const [allTickets, setAllTickets] = useState([]); // Store all tickets for counting
+  const [userDetails, setUserDetails] = useState({}); // Store user details for each ticket
+
+  // Function to fetch user details for tickets
+  const fetchUserDetails = async (tickets) => {
+    const userDetailsMap = {};
+    for (const ticket of tickets) {
+      if (ticket.userId && !userDetailsMap[ticket.userId]) {
+        try {
+          const userData = await getUserById(ticket.userId);
+          userDetailsMap[ticket.userId] = {
+            name: `${userData.firstname || ''} ${userData.lastname || ''}`.trim(),
+            role: userData.role || 'Unknown'
+          };
+        } catch (err) {
+          console.error(`Failed to fetch user details for ${ticket.userId}:`, err);
+          userDetailsMap[ticket.userId] = {
+            name: 'Unknown User',
+            role: 'Unknown'
+          };
+        }
+      }
+    }
+    setUserDetails(userDetailsMap);
+  };
 
   useEffect(() => {
     async function fetchTickets() {
@@ -35,6 +60,11 @@ export default function AdminSupportCenter() {
           setAllTickets(allData || []);
         } else {
           setAllTickets(data || []);
+        }
+
+        // Fetch user details for the tickets
+        if (data && data.length > 0) {
+          await fetchUserDetails(data);
         }
       } catch (err) {
         console.error('Error fetching tickets:', err);
@@ -142,6 +172,11 @@ export default function AdminSupportCenter() {
       const allData = await getAllTickets();
       setAllTickets(allData || []);
       
+      // Refetch user details for updated tickets
+      if (updatedTickets && updatedTickets.length > 0) {
+        await fetchUserDetails(updatedTickets);
+      }
+      
       // If the current ticket is no longer in the updated tickets list (e.g., status changed),
       // clear the selection to avoid showing a "not found" state
       if (selected && !updatedTickets.find(t => t._id === selected)) {
@@ -188,6 +223,11 @@ export default function AdminSupportCenter() {
       // Refetch tickets to get updated data
       const updatedTickets = await getAllTickets(activeFilter === 'all' ? null : activeFilter);
       setTickets(updatedTickets);
+      
+      // Refetch user details for updated tickets
+      if (updatedTickets && updatedTickets.length > 0) {
+        await fetchUserDetails(updatedTickets);
+      }
     } catch (err) {
       console.error('Status change error:', err);
       setReplyError('Failed to update ticket status. Please try again.');
@@ -208,6 +248,11 @@ export default function AdminSupportCenter() {
       // Also refetch all tickets for accurate tab counts
       const allData = await getAllTickets();
       setAllTickets(allData || []);
+      
+      // Refetch user details for updated tickets
+      if (updatedTickets && updatedTickets.length > 0) {
+        await fetchUserDetails(updatedTickets);
+      }
       
       // If we're currently on the 'new' tab and the ticket moved to 'opened', 
       // automatically switch to the 'opened' tab to show the user where the ticket went
@@ -316,6 +361,9 @@ export default function AdminSupportCenter() {
                     }
                   }}
                 >
+                  <div className="text-xs text-gray-600 mb-1">
+                    {userDetails[ticket.userId]?.name || 'Loading...'} ({userDetails[ticket.userId]?.role || 'Unknown'})
+                  </div>
                   <b className="block text-base">{ticket.subject}</b>
                   <span className="block text-xs text-gray-500">{ticket.number}</span>
                   <span className="block text-xs mt-1 font-semibold text-[#7e57c2]">{ticket.status}</span>
@@ -332,6 +380,14 @@ export default function AdminSupportCenter() {
                   <>
                     <h3 className="text-xl font-semibold mb-2">{ticket.subject}</h3>
                     <div className="mb-2 text-sm text-[#7e57c2] font-semibold">Ticket No: {ticket.number} | Status: {ticket.status}</div>
+                    <div className="mb-3 p-3 bg-gray-50 rounded-lg border-l-4 border-blue-500">
+                      <div className="text-sm font-medium text-gray-700">
+                        Submitted by: <span className="font-semibold text-blue-600">{userDetails[ticket.userId]?.name || 'Loading...'}</span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Role: {userDetails[ticket.userId]?.role || 'Unknown'}
+                      </div>
+                    </div>
                     <p className="mb-4 text-gray-700">{ticket.description}</p>
                     <div className="mb-4">
                       <b>Messages:</b>
