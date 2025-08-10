@@ -13,6 +13,7 @@ export default function AdminSupportCenter() {
   const [reply, setReply] = useState('');
   const [replyLoading, setReplyLoading] = useState(false);
   const [replyError, setReplyError] = useState('');
+  const [replySuccess, setReplySuccess] = useState('');
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all'); // all, new, opened, closed
@@ -114,6 +115,7 @@ export default function AdminSupportCenter() {
   async function handleReply(ticketId) {
     setReplyLoading(true);
     setReplyError('');
+    setReplySuccess('');
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       const userID = localStorage.getItem('userID');
@@ -134,6 +136,23 @@ export default function AdminSupportCenter() {
       // Refetch tickets to get updated data
       const updatedTickets = await getAllTickets(activeFilter === 'all' ? null : activeFilter);
       setTickets(updatedTickets);
+      
+      // Also refetch all tickets for accurate tab counts
+      const allData = await getAllTickets();
+      setAllTickets(allData || []);
+      
+      // Show success message for automatic status update
+      const currentTicket = tickets.find(t => t._id === ticketId);
+      if (currentTicket?.status === 'new') {
+        // The ticket was new and is now automatically opened
+        setReplySuccess('Reply sent and ticket automatically moved to opened status');
+        // Clear success message after 3 seconds
+        setTimeout(() => setReplySuccess(''), 3000);
+      } else {
+        setReplySuccess('Reply sent successfully');
+        // Clear success message after 3 seconds
+        setTimeout(() => setReplySuccess(''), 3000);
+      }
     } catch (err) {
       console.error('Reply error:', err);
       if (err.response) {
@@ -294,13 +313,24 @@ export default function AdminSupportCenter() {
                         )}
                       </ul>
                     </div>
+                    {ticket.status === 'new' && (
+                      <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+                        💡 <strong>Note:</strong> When you reply to this ticket, it will automatically be moved to the "Opened" tab.
+                      </div>
+                    )}
                     <textarea
                       placeholder="Respond to this ticket..."
                       className="w-full min-h-[100px] border rounded p-2 mb-4"
                       value={reply}
-                      onChange={e => setReply(e.target.value)}
+                      onChange={e => {
+                        setReply(e.target.value);
+                        // Clear success/error messages when user starts typing
+                        if (replySuccess) setReplySuccess('');
+                        if (replyError) setReplyError('');
+                      }}
                     />
                     {replyError && <div className="text-red-500 mb-2">{replyError}</div>}
+                    {replySuccess && <div className="text-green-500 mb-2">{replySuccess}</div>}
                     <div className="flex gap-2">
                       <button
                         className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
@@ -309,14 +339,7 @@ export default function AdminSupportCenter() {
                       >
                         {replyLoading ? 'Sending...' : 'Send Response'}
                       </button>
-                      {ticket.status === 'new' && (
-                        <button
-                          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-                          onClick={() => handleStatusChange(ticket._id, 'opened')}
-                        >
-                          Mark as Opened
-                        </button>
-                      )}
+                      {/* "Mark as Opened" button removed - status automatically changes when admin replies */}
                       {ticket.status === 'opened' && (
                         <button
                           className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"

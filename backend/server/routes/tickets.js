@@ -146,18 +146,30 @@ ticketsRouter.post('/:ticketId/reply', authenticateToken, async (req, res) => {
     }
     
     const now = new Date();
-    const ticket = await Ticket.findByIdAndUpdate(
-      req.params.ticketId,
-      {
-        $push: { messages: { sender, senderId, message, timestamp: now } },
-        $set: { updatedAt: now }
-      },
-      { new: true }
-    );
     
-    if (!ticket) {
+    // First, get the current ticket to check its status
+    const currentTicket = await Ticket.findById(req.params.ticketId);
+    if (!currentTicket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
+    
+    // Prepare update object
+    const updateObj = {
+      $push: { messages: { sender, senderId, message, timestamp: now } },
+      $set: { updatedAt: now }
+    };
+    
+    // If admin is replying to a new ticket, automatically mark it as opened
+    if (sender === 'admin' && currentTicket.status === 'new') {
+      updateObj.$set.status = 'opened';
+      console.log('[REPLY TO TICKET] Auto-updating ticket status from new to opened');
+    }
+    
+    const ticket = await Ticket.findByIdAndUpdate(
+      req.params.ticketId,
+      updateObj,
+      { new: true }
+    );
     
     const decryptedTicket = ticket.decryptSensitiveData();
     console.log('[REPLY TO TICKET] Success - Updated ticket:', decryptedTicket._id);
