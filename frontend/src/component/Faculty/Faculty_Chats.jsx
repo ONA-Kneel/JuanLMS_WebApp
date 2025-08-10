@@ -169,7 +169,11 @@ export default function Faculty_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/users/with-nicknames`);
+        const res = await axios.get(`${API_BASE}/users/with-nicknames`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
         // Support both array and paginated object
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
@@ -191,7 +195,11 @@ export default function Faculty_Chats() {
     const fetchContactNicknames = async () => {
       if (!currentUserId) return;
       try {
-        const res = await axios.get(`${API_BASE}/users/${currentUserId}/contacts/nicknames`);
+        const res = await axios.get(`${API_BASE}/users/${currentUserId}/contacts/nicknames`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
         const nicknamesMap = {};
         res.data.forEach(item => {
           // Ensure contactId is properly handled as a string
