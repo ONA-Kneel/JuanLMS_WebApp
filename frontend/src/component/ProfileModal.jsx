@@ -337,7 +337,10 @@ export default function ProfileModal({
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || !user._id) return;
     try {
-      const res = await axios.get(`${API_BASE}/users/${user._id}`);
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${API_BASE}/users/${user._id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       // Only update localStorage if the response has valid fields
       if (res.data && res.data.firstname && res.data.lastname) {
         setUserInfo(res.data);

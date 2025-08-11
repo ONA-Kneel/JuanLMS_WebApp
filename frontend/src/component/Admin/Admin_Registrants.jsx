@@ -48,7 +48,8 @@ export default function Admin_Registrants() {
       const params = {};
       if (selectedDate) params.date = selectedDate;
       if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
-      const res = await axios.get(`${API_BASE}/api/registrants`, { params });
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${API_BASE}/api/registrants`, { params, headers: { Authorization: `Bearer ${token}` } });
       setRegistrants(res.data);
     } catch (err) {
       console.error('Error fetching registrants:', err);
@@ -131,7 +132,8 @@ export default function Admin_Registrants() {
     setActionLoading(id);
     setError('');
     try {
-      await axios.post(`${API_BASE}/api/registrants/${id}/approve`);
+      const token = localStorage.getItem("token");
+      await axios.post(`${API_BASE}/api/registrants/${id}/approve`, {}, { headers: { Authorization: `Bearer ${token}` } });
       setRegistrants(registrants => registrants.map(r => r._id === id ? { ...r, status: 'approved', rejectionNote: '' } : r));
     } catch (err) {
       console.error('Error approving registrant:', err);
@@ -176,7 +178,8 @@ export default function Admin_Registrants() {
     setActionLoading(rejectingId);
     setError('');
     try {
-      await axios.post(`${API_BASE}/api/registrants/${rejectingId}/reject`, { note: rejectionNote });
+      const token = localStorage.getItem("token");
+      await axios.post(`${API_BASE}/api/registrants/${rejectingId}/reject`, { note: rejectionNote }, { headers: { Authorization: `Bearer ${token}` } });
       setRegistrants(registrants => registrants.map(r => r._id === rejectingId ? { ...r, status: 'rejected', rejectionNote } : r));
       setShowRejectModal(false);
       setRejectingId(null);

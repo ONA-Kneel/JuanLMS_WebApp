@@ -81,7 +81,10 @@ export default function ProfileMenu() {
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || !user._id) return;
     try {
-      const res = await axios.get(`${API_BASE}/users/${user._id}`);
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${API_BASE}/users/${user._id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setUserInfo(res.data);
       localStorage.setItem('user', JSON.stringify(res.data));
     } catch {
