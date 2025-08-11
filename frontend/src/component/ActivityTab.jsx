@@ -32,6 +32,10 @@ export default function ActivityTab({ onAssignmentCreated }) {
     const [isEditMode, setIsEditMode] = useState(false);
     const [loading, setLoading] = useState(false);
     
+    // Add academic year and term states
+    const [academicYear, setAcademicYear] = useState(null);
+    const [currentTerm, setCurrentTerm] = useState(null);
+    
     // Validation modal state
     const [validationModal, setValidationModal] = useState({
         isOpen: false,
@@ -40,15 +44,86 @@ export default function ActivityTab({ onAssignmentCreated }) {
         message: ''
     });
 
-    // Fetch available classes on mount
+    // Fetch academic year and term
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        fetch(`${API_BASE}/classes/my-classes`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
-            .then(res => res.json())
-            .then(data => setAvailableClasses(Array.isArray(data) ? data : []));
+        async function fetchAcademicYear() {
+            try {
+                const token = localStorage.getItem("token");
+                const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (yearRes.ok) {
+                    const year = await yearRes.json();
+                    setAcademicYear(year);
+                }
+            } catch (err) {
+                console.error("Failed to fetch academic year", err);
+            }
+        }
+        fetchAcademicYear();
     }, []);
+
+    useEffect(() => {
+        async function fetchActiveTermForYear() {
+            if (!academicYear) return;
+            try {
+                const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+                const token = localStorage.getItem("token");
+                const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const terms = await res.json();
+                    const active = terms.find(term => term.status === 'active');
+                    setCurrentTerm(active || null);
+                } else {
+                    setCurrentTerm(null);
+                }
+            } catch {
+                setCurrentTerm(null);
+            }
+        }
+        fetchActiveTermForYear();
+    }, [academicYear]);
+
+    // Fetch available classes on mount - updated to filter by term and show only active classes
+    useEffect(() => {
+        async function fetchAvailableClasses() {
+            if (!academicYear || !currentTerm) return;
+            
+            try {
+                const token = localStorage.getItem('token');
+                const userId = localStorage.getItem('userID');
+                
+                const res = await fetch(`${API_BASE}/classes`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    
+                    // Filter classes: only show active classes for current faculty in current term
+                    const filteredClasses = data.filter(cls => 
+                        cls.facultyID === userId && 
+                        cls.isArchived !== true &&
+                        cls.academicYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` &&
+                        cls.termName === currentTerm.termName
+                    );
+                    
+                    console.log('[ActivityTab] Available classes for current term:', filteredClasses);
+                    setAvailableClasses(filteredClasses);
+                } else {
+                    console.error('Failed to fetch classes for activity creation');
+                    setAvailableClasses([]);
+                }
+            } catch (err) {
+                console.error('Error fetching classes:', err);
+                setAvailableClasses([]);
+            }
+        }
+        
+        fetchAvailableClasses();
+    }, [academicYear, currentTerm]);
 
     // Load assignment data if in edit mode
     useEffect(() => {
@@ -689,7 +764,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                 <span>
                                     <span className="font-semibold font-poppinsr">{cls.className || cls.name}</span>
                                     <br />
-                                    <span className="text-xs text-gray-700 font-poppinsr">{cls.classCode || 'N/A'}</span>
+                                    <span className="text-xs text-gray-700 font-poppinsr">{cls.section || cls.classCode || 'N/A'}</span>
                                 </span>
                             </label>
                         ))}
@@ -704,7 +779,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                             return (
                                 <div key={classID} className="p-2 border rounded bg-gray-50">
                                     <div className="font-semibold font-poppinsr mb-1">
-                                        {cls.className || cls.name} <span className="text-xs text-gray-700 font-poppinsr">({cls.classCode || 'N/A'})</span>
+                                        {cls.className || cls.name} <span className="text-xs text-gray-700 font-poppinsr">({cls.section || cls.classCode || 'N/A'})</span>
                                     </div>
                                     <div className="flex items-center gap-2 mb-2">
                                         <span className="font-semibold font-poppinsr">Assign to:</span>

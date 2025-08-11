@@ -543,7 +543,7 @@ export default function FacultyCreateClass() {
               ))}
             </select>
 
-            <label className="text-xl font-bold">Class Code (Section)</label>
+            <label className="text-xl font-bold">Section</label>
             <select
               className="w-full px-3 py-2 border rounded"
               value={selectedSection}

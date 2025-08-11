@@ -323,7 +323,7 @@ export default function Login() {
           } else if (data.message && data.message.toLowerCase().includes('invalid email or password')) {
             errorMessage = 'Invalid email and password.';
           } else {
-            errorMessage = data.message || 'Invalid email or password.';
+          errorMessage = data.message || 'Invalid email or password.';
           }
         } else if (status === 403) {
           errorMessage = data.message || 'Account is disabled or locked.';

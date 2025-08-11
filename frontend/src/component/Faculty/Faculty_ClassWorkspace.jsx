@@ -126,7 +126,13 @@ export default function Faculty_ClassWorkspace() {
                             ) : classInfo ? (
                                 <>
                                     <h2 className="text-2xl md:text-3xl font-bold">{classInfo.className}</h2>
-                                    <p className="text-base md:text-lg text-gray-600">{classInfo.classCode}</p>
+                                    <p className="text-base md:text-lg text-gray-600">{classInfo.section || classInfo.classCode}</p>
+                                    {(academicYear || currentTerm) && (
+                                        <p className="text-sm text-gray-500">
+                                            {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''}
+                                            {currentTerm ? `${academicYear ? ' | ' : ''}${currentTerm.termName}` : ''}
+                                        </p>
+                                    )}
                                 </>
                             ) : (
                                 <h2 className="text-2xl md:text-3xl font-bold text-red-600">Class not found</h2>

@@ -28,10 +28,67 @@ const upload = multer({ storage });
 
 const router = express.Router();
 
+// --- GET /sections - Get available sections for class creation ---
+router.get('/sections', authenticateToken, async (req, res) => {
+  try {
+    // Get current academic year and term
+    let academicYear = null;
+    let currentTerm = null;
+    
+    try {
+      // Fetch active academic year
+      const yearRes = await fetch(`${req.protocol}://${req.get('host')}/api/schoolyears/active`, {
+        headers: { "Authorization": `Bearer ${req.headers.authorization?.split(' ')[1]}` }
+      });
+      if (yearRes.ok) {
+        academicYear = await yearRes.json();
+      }
+      
+      // Fetch active term for the year
+      if (academicYear) {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const termRes = await fetch(`${req.protocol}://${req.get('host')}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${req.headers.authorization?.split(' ')[1]}` }
+        });
+        if (termRes.ok) {
+          const terms = await termRes.json();
+          currentTerm = terms.find(term => term.status === 'active');
+        }
+      }
+    } catch (err) {
+      console.log('Could not fetch academic year/term');
+      return res.status(500).json({ error: 'Failed to fetch academic year/term' });
+    }
+
+    if (!academicYear || !currentTerm) {
+      return res.status(400).json({ error: 'No active academic year/term found' });
+    }
+
+    // Fetch sections for the current term
+    const sectionsRes = await fetch(`${req.protocol}://${req.get('host')}/api/terms/${currentTerm._id}/sections`, {
+      headers: { "Authorization": `Bearer ${req.headers.authorization?.split(' ')[1]}` }
+    });
+
+    if (sectionsRes.ok) {
+      const sections = await sectionsRes.json();
+      res.json({ 
+        sections, 
+        academicYear: `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`,
+        currentTerm: currentTerm.termName 
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to fetch sections' });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch sections' });
+  }
+});
+
 // --- POST / - Create a new class with image upload ---
 router.post('/', authenticateToken, upload.single('image'), async (req, res) => {
   try {
-    const { classID, className, classCode, classDesc, members, facultyID } = req.body;
+    const { classID, className, classCode, classDesc, members, facultyID, section } = req.body;
     let membersArr = members;
     if (typeof members === 'string') {
       try { membersArr = JSON.parse(members); } catch { membersArr = [members]; }
@@ -68,13 +125,37 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     } catch (err) {
       console.log('Could not fetch academic year/term, creating class without them');
     }
+
+    // Validate that section matches an actual section from academic settings
+    if (section && currentTerm) {
+      try {
+        const sectionsRes = await fetch(`${req.protocol}://${req.get('host')}/api/terms/${currentTerm._id}/sections`, {
+          headers: { "Authorization": `Bearer ${req.headers.authorization?.split(' ')[1]}` }
+        });
+        
+        if (sectionsRes.ok) {
+          const sections = await sectionsRes.json();
+          const validSection = sections.find(s => s.sectionName === section);
+          
+          if (!validSection) {
+            return res.status(400).json({ 
+              error: `Invalid section. Must be one of the available sections: ${sections.map(s => s.sectionName).join(', ')}` 
+            });
+          }
+          
+          console.log(`Validated section "${section}" matches: ${validSection.sectionName} (${validSection.trackName} - ${validSection.strandName})`);
+        }
+      } catch (err) {
+        console.log('Could not validate section, proceeding with class creation');
+      }
+    }
     
     let imagePath = '';
     if (req.file) {
       imagePath = `/uploads/${req.file.filename}`;
     }
     
-    // Create new class with academic year and term if available
+    // Create new class with academic year, term, and section if available
     const classData = { 
       classID, 
       className, 
@@ -90,6 +171,10 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
       classData.termName = currentTerm.termName;
     }
     
+    if (section) {
+      classData.section = section;
+    }
+    
     const newClass = new Class(classData);
     await newClass.save();
     
@@ -100,7 +185,7 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
       userName: `${req.user.firstname} ${req.user.lastname}`,
       userRole: req.user.role,
       action: `${req.user.role.toUpperCase()}_ADD_CLASS`,
-      details: `Created new class \"${className}\" (${classCode})`,
+      details: `Created new class "${className}" (${classCode})${section ? ` - Section: ${section}` : ''}`,
       ipAddress: req.ip || req.connection.remoteAddress,
       timestamp: new Date()
     });

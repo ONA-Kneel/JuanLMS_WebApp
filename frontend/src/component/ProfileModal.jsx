@@ -210,10 +210,10 @@ function ChangePasswordModal({ userId, onClose }) {
               {otpLockout
                 ? `Locked (${otpLockoutTime}s)`
                 : cooldown > 0
-                  ? `Resend OTP in ${cooldown}s`
-                  : loading
-                    ? 'Sending OTP...'
-                    : 'Resend OTP'}
+                ? `Resend OTP in ${cooldown}s` 
+                : loading 
+                  ? 'Sending OTP...' 
+                  : 'Resend OTP'}
             </button>
             {otpLockout && (
               <div className="text-red-600 text-sm mt-2">Too many failed attempts. Try again in {otpLockoutTime}s.</div>

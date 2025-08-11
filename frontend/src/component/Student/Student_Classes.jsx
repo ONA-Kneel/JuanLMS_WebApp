@@ -150,7 +150,7 @@ export default function Student_Classes() {
                 <div className="flex items-center justify-between bg-[#00418b] px-6 py-4" style={{ borderRadius: 0, borderBottomLeftRadius: '28px', borderBottomRightRadius: '28px', marginTop: 0 }}>
                   <div>
                     <div className="text-lg font-bold text-white">{cls.className || 'Subject Name'}</div>
-                    <div className="text-white text-base">{cls.classCode || 'Section Name'}</div>
+                    <div className="text-white text-base">{cls.section || cls.classCode || 'Section Name'}</div>
                   </div>
                   <img src={arrowRight} alt="Arrow" className="w-6 h-6" />
                 </div>

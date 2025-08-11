@@ -59,6 +59,10 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
     const [lightboxImage, setLightboxImage] = useState(null);
     const [imageUploading, setImageUploading] = useState(false);
 
+    // Add academic year and term states
+    const [academicYear, setAcademicYear] = useState(null);
+    const [currentTerm, setCurrentTerm] = useState(null);
+
     const resetForm = () => setForm({
         type: "multiple",
         question: "",
@@ -167,15 +171,86 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
         }
     }, [editAssignmentId]);
 
-    // Fetch available classes on mount
+    // Fetch academic year and term
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        fetch(`${API_BASE}/classes/my-classes`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
-            .then(res => res.json())
-            .then(data => setAvailableClasses(Array.isArray(data) ? data : []));
+        async function fetchAcademicYear() {
+            try {
+                const token = localStorage.getItem("token");
+                const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (yearRes.ok) {
+                    const year = await yearRes.json();
+                    setAcademicYear(year);
+                }
+            } catch (err) {
+                console.error("Failed to fetch academic year", err);
+            }
+        }
+        fetchAcademicYear();
     }, []);
+
+    useEffect(() => {
+        async function fetchActiveTermForYear() {
+            if (!academicYear) return;
+            try {
+                const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+                const token = localStorage.getItem("token");
+                const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const terms = await res.json();
+                    const active = terms.find(term => term.status === 'active');
+                    setCurrentTerm(active || null);
+                } else {
+                    setCurrentTerm(null);
+                }
+            } catch {
+                setCurrentTerm(null);
+            }
+        }
+        fetchActiveTermForYear();
+    }, [academicYear]);
+
+    // Fetch available classes on mount - updated to filter by term and show only active classes
+    useEffect(() => {
+        async function fetchAvailableClasses() {
+            if (!academicYear || !currentTerm) return;
+            
+            try {
+                const token = localStorage.getItem('token');
+                const userId = localStorage.getItem('userID');
+                
+                const res = await fetch(`${API_BASE}/classes`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    
+                    // Filter classes: only show active classes for current faculty in current term
+                    const filteredClasses = data.filter(cls => 
+                        cls.facultyID === userId && 
+                        cls.isArchived !== true &&
+                        cls.academicYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` &&
+                        cls.termName === currentTerm.termName
+                    );
+                    
+                    console.log('[QuizTab] Available classes for current term:', filteredClasses);
+                    setAvailableClasses(filteredClasses);
+                } else {
+                    console.error('Failed to fetch classes for quiz creation');
+                    setAvailableClasses([]);
+                }
+            } catch (err) {
+                console.error('Error fetching classes:', err);
+                setAvailableClasses([]);
+            }
+        }
+        
+        fetchAvailableClasses();
+    }, [academicYear, currentTerm]);
 
     // Fetch students for each selected class
     useEffect(() => {
@@ -882,7 +957,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                                 <span>
                                     <span className="font-semibold">{cls.className || cls.name}</span>
                                     <br />
-                                    <span className="text-xs text-gray-700">{cls.classCode || 'N/A'}</span>
+                                    <span className="text-xs text-gray-700">{cls.section || cls.classCode || 'N/A'}</span>
                                 </span>
                             </label>
                         ))}
@@ -897,7 +972,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                             return (
                                 <div key={classID} className="p-2 border rounded bg-gray-50">
                                     <div className="font-semibold mb-1">
-                                        {cls.className || cls.name} <span className="text-xs text-gray-700">({cls.classCode || 'N/A'})</span>
+                                        {cls.className || cls.name} <span className="text-xs text-gray-700">({cls.section || cls.classCode || 'N/A'})</span>
                                     </div>
                                     <div className="flex items-center gap-2 mb-2">
                                         <span className="font-semibold">Assign to:</span>
@@ -1054,8 +1129,8 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                                     <option>Yes</option>
                                     <option>No</option>
                                 </select>
-                </div>
-            </div>
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>

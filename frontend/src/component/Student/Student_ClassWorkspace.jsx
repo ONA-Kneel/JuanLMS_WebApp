@@ -38,6 +38,7 @@ export default function Student_ClassWorkspace() {
         const found = data.find(cls => cls.classID === classId);
         setClassInfo(found);
       } catch (err) {
+        console.error('Failed to fetch class info', err);
         setClassInfo(null);
       } finally {
         setLoading(false);
@@ -109,7 +110,13 @@ export default function Student_ClassWorkspace() {
               ) : classInfo ? (
                 <>
                   <h2 className="text-2xl md:text-3xl font-bold">{classInfo.className}</h2>
-                  <p className="text-base md:text-lg text-gray-600">{classInfo.classCode}</p>
+                  <p className="text-base md:text-lg text-gray-600">{classInfo.section || classInfo.classCode}</p>
+                  {(academicYear || currentTerm) && (
+                    <p className="text-sm text-gray-500">
+                      {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''}
+                      {currentTerm ? `${academicYear ? ' | ' : ''}${currentTerm.termName}` : ''}
+                    </p>
+                  )}
                 </>
               ) : (
                 <h2 className="text-2xl md:text-3xl font-bold text-red-600">Class not found</h2>

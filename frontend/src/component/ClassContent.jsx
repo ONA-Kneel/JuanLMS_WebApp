@@ -167,7 +167,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
         );
         // Only show posted assignments/quizzes to students
         const filteredForRole = localStorage.getItem('role') === 'faculty' ? filtered : filtered.filter(isAssignmentPosted);
-        console.log("Filtered assignments/quizzes for class", classId, filteredForRole);
+          console.log("Filtered assignments/quizzes for class", classId, filteredForRole);
 
           // If user is a student, fetch their submissions to filter out completed assignments
         if (localStorage.getItem('role') === 'students') {
@@ -786,18 +786,18 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 </button>
                 <h3 className="text-xl font-bold mb-4 text-blue-900">Create Announcement</h3>
                 <form onSubmit={handleAddAnnouncement} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
-                    <input name="title" required className="w-full border rounded px-3 py-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-blue-900 mb-1">Content</label>
-                    <textarea name="content" required className="w-full border rounded px-3 py-2 text-sm" rows={3} />
-                  </div>
-                  <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm">
-                    Save Announcement
-                  </button>
-                </form>
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
+                <input name="title" required className="w-full border rounded px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Content</label>
+                <textarea name="content" required className="w-full border rounded px-3 py-2 text-sm" rows={3} />
+              </div>
+              <button type="submit" className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm">
+                Save Announcement
+              </button>
+            </form>
               </div>
             </div>
           )}
@@ -844,18 +844,18 @@ export default function ClassContent({ selected, isFaculty = false }) {
         <>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold">Classwork</h2>
-            <div>
-              <label className="mr-2 text-sm text-gray-700">Filter:</label>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded text-sm"
-              >
-                <option value="all">All</option>
-                <option value="quiz">Quiz</option>
-                <option value="assignment">Assignment</option>
-              </select>
-            </div>
+                  <div>
+                    <label className="mr-2 text-sm text-gray-700">Filter:</label>
+                    <select
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value)}
+                      className="px-3 py-1 border border-gray-300 rounded text-sm"
+                    >
+                      <option value="all">All</option>
+                      <option value="quiz">Quiz</option>
+                      <option value="assignment">Assignment</option>
+                    </select>
+                  </div>
             {isFaculty && (
               <div className="relative inline-block" ref={dropdownRef}>
                 <div className="flex items-center gap-3">
@@ -920,32 +920,32 @@ export default function ClassContent({ selected, isFaculty = false }) {
                       <div className="mb-6">
                         <h4 className="text-lg font-semibold text-gray-700 mb-3">Not Yet Posted</h4>
                         {unposted.map(item => (
-                          <div
-                            key={item._id}
+                  <div
+                    key={item._id}
                             className={`p-4 rounded-xl border shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative bg-gray-100 border-gray-300 opacity-75`}
-                            onClick={() => {
-                              if (item.type === 'quiz') {
-                                if (isFaculty) {
-                                  navigate(`/quiz/${item._id}/responses`);
-                                } else {
-                                  navigate(`/quiz/${item._id}`);
-                                }
-                              } else {
-                                navigate(`/assignment/${item._id}`);
-                              }
-                            }}
-                          >
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
+                    onClick={() => {
+                      if (item.type === 'quiz') {
+                        if (isFaculty) {
+                          navigate(`/quiz/${item._id}/responses`);
+                        } else {
+                          navigate(`/quiz/${item._id}`);
+                        }
+                      } else {
+                        navigate(`/assignment/${item._id}`);
+                      }
+                    }}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
                                 <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{item.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
                                 <span className="inline-block px-2 py-1 rounded text-xs font-bold bg-gray-500 text-white">Not Posted Yet</span>
-                              </div>
+                      </div>
                               <span className="text-lg font-bold text-gray-600">{item.title}</span>
                               <div className="text-sm mt-1 text-gray-500">{item.instructions}</div>
-                              {item.dueDate && (
+                      {item.dueDate && (
                                 <div className="text-xs mt-1 text-gray-400">Due: {new Date(item.dueDate).toLocaleString()}</div>
-                              )}
-                              {item.points && (
+                      )}
+                      {item.points && (
                                 <div className="text-xs text-gray-400">Points: {item.points}</div>
                               )}
                               {item.postAt && (
@@ -961,12 +961,12 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                   setValidationModal={setValidationModal}
                                   setConfirmationModal={setConfirmationModal}
                                 />
-                              </div>
-                            )}
+                        </div>
+                      )}
                           </div>
                         ))}
-                      </div>
-                    )}
+                        </div>
+                      )}
                     {/* Posted grouped by date */}
                     {sortedDateKeys.map(dateKey => (
                       <div key={dateKey}>
@@ -974,7 +974,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                           <h4 className="text-lg font-semibold text-gray-700 mb-3">{new Date(dateKey).toLocaleDateString('en-US', {
                             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
                           })}</h4>
-                        </div>
+                    </div>
                         {groupedByDate[dateKey].map(item => (
                           <div
                             key={item._id}
@@ -1004,18 +1004,18 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                 <div className="text-xs text-gray-500">Points: {item.points}</div>
                               )}
                             </div>
-                            {isFaculty && (
-                              <div className="absolute top-2 right-2">
-                                <Menu 
-                                  assignment={item} 
-                                  onDelete={id => setAssignments(assignments => assignments.filter(a => a._id !== id))}
+                    {isFaculty && (
+                      <div className="absolute top-2 right-2">
+                                              <Menu 
+                        assignment={item} 
+                        onDelete={id => setAssignments(assignments => assignments.filter(a => a._id !== id))}
                                   onUpdate={(updatedAssignment) => setAssignments(assignments => assignments.map(a => a._id === updatedAssignment._id ? updatedAssignment : a))}
-                                  setValidationModal={setValidationModal}
-                                  setConfirmationModal={setConfirmationModal}
-                                />
-                              </div>
-                            )}
-                          </div>
+                        setValidationModal={setValidationModal}
+                        setConfirmationModal={setConfirmationModal}
+                      />
+                      </div>
+                    )}
+                  </div>
                         ))}
                       </div>
                     ))}

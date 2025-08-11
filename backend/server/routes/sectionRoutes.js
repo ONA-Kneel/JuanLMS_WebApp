@@ -4,6 +4,16 @@ import Term from '../models/Term.js';
 
 const router = express.Router();
 
+// Get all sections
+router.get('/', async (req, res) => {
+  try {
+    const sections = await Section.find({ status: 'active' }).sort({ sectionName: 1 });
+    res.status(200).json(sections);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Get all sections for a specific track and strand
 router.get('/track/:trackName/strand/:strandName', async (req, res) => {
   try {

@@ -10,6 +10,12 @@ export default function Faculty_Grades() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [activeTab, setActiveTab] = useState('traditional'); // 'traditional' or 'excel'
+  const [classes, setClasses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [selectedSection, setSelectedSection] = useState(null);
+
+  const currentFacultyID = localStorage.getItem("userID");
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -52,6 +58,40 @@ export default function Faculty_Grades() {
     fetchActiveTermForYear();
   }, [academicYear]);
 
+  useEffect(() => {
+    async function fetchClasses() {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/classes`, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
+        const data = await res.json();
+        
+        // Filter classes: only show classes created by current faculty in current term
+        const filtered = data.filter(cls => 
+          cls.facultyID === currentFacultyID && 
+          cls.isArchived !== true &&
+          cls.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
+          cls.termName === currentTerm?.termName
+        );
+        
+        setClasses(filtered);
+        console.log("Faculty Grades - Filtered classes:", filtered);
+      } catch (err) {
+        console.error("Failed to fetch classes", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    // Only fetch classes when we have both academic year and term
+    if (academicYear && currentTerm) {
+      fetchClasses();
+    }
+  }, [currentFacultyID, academicYear, currentTerm]);
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Faculty_Navbar />
@@ -75,6 +115,7 @@ export default function Faculty_Grades() {
           <ProfileMenu/>
         </div>
 
+        
         {/* Tab Navigation */}
         <div className="mb-6">
           <div className="flex gap-4 border-b">

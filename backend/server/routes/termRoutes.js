@@ -3,6 +3,7 @@ import Term from '../models/Term.js';
 import SchoolYear from '../models/SchoolYear.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import FacultyAssignment from '../models/FacultyAssignment.js';
+import Section from '../models/Section.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -205,6 +206,27 @@ router.get('/:id', authenticateToken, async (req, res) => {
     res.json(term);
   } catch (error) {
     res.status(400).json({ message: error.message });
+  }
+});
+
+// Get sections for a specific term by ID
+router.get('/:id/sections', authenticateToken, async (req, res) => {
+  try {
+    const term = await Term.findById(req.params.id);
+    if (!term) {
+      return res.status(404).json({ message: 'Term not found' });
+    }
+
+    // Find sections that match the term's school year and term name
+    const sections = await Section.find({
+      schoolYear: term.schoolYear,
+      termName: term.termName,
+      status: 'active'
+    }).sort({ sectionName: 1 });
+
+    res.json(sections);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 

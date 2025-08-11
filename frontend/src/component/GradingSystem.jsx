@@ -14,10 +14,133 @@ export default function GradingSystem() {
   const [excelFile, setExcelFile] = useState(null);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [sections, setSections] = useState([]);
+  const [allSections, setAllSections] = useState([]); // Store all sections
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationMessage, setValidationMessage] = useState('');
   const [validationType, setValidationType] = useState('error');
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Fetch academic year and term
+  useEffect(() => {
+    async function fetchAcademicYear() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year", err);
+      }
+    }
+    fetchAcademicYear();
+  }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
+
+  // Fetch sections for the current term
+  useEffect(() => {
+    async function fetchSections() {
+      if (!currentTerm) return;
+      try {
+        const token = localStorage.getItem("token");
+        console.log('Fetching sections for term:', currentTerm._id);
+        console.log('API URL:', `${API_BASE}/api/terms/${currentTerm._id}/sections`);
+        
+        const response = await fetch(`${API_BASE}/api/terms/${currentTerm._id}/sections`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        console.log('Sections response status:', response.status);
+        console.log('Sections response headers:', response.headers);
+        
+        if (response.ok) {
+          const sectionsData = await response.json();
+          console.log('Fetched all sections:', sectionsData);
+          setAllSections(sectionsData); // Store all sections
+          setSections(sectionsData); // Initially show all sections
+        } else {
+          const errorText = await response.text();
+          console.error('Failed to fetch sections. Status:', response.status);
+          console.error('Error response:', errorText);
+          
+          // Fallback: try to get all sections for the current term
+          console.log('Trying fallback: fetch all sections for current term');
+          const fallbackResponse = await fetch(`${API_BASE}/api/sections`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (fallbackResponse.ok) {
+            const allSectionsData = await fallbackResponse.json();
+            console.log('Fallback sections data:', allSectionsData);
+            
+            // Filter sections by current term
+            const filteredSections = allSectionsData.filter(section => 
+              section.termName === currentTerm.termName && 
+              section.schoolYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`
+            );
+            console.log('Filtered sections for current term:', filteredSections);
+            
+            setAllSections(filteredSections);
+            setSections(filteredSections);
+          } else {
+            console.error('Fallback also failed. Status:', fallbackResponse.status);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch sections:', error);
+      }
+    }
+    fetchSections();
+  }, [currentTerm, academicYear]);
+
+  // Filter sections based on selected class
+  useEffect(() => {
+    if (selectedClass !== '' && allSections.length > 0) {
+      const selectedClassObj = facultyClasses[selectedClass];
+      if (selectedClassObj && selectedClassObj.section) {
+        // Filter sections to only show those that match the selected class's section
+        const filteredSections = allSections.filter(section => 
+          section.sectionName === selectedClassObj.section
+        );
+        console.log('Filtering sections for class:', selectedClassObj.className);
+        console.log('Class section:', selectedClassObj.section);
+        console.log('Filtered sections:', filteredSections);
+        setSections(filteredSections);
+      } else {
+        // If no section found, show all sections
+        setSections(allSections);
+      }
+    } else {
+      // If no class selected, show all sections
+      setSections(allSections);
+    }
+  }, [selectedClass, allSections, facultyClasses]);
 
   // Fetch faculty classes with sections and assignments
   const fetchFacultyClasses = async () => {
@@ -25,9 +148,10 @@ export default function GradingSystem() {
       setLoading(true);
       console.log('Fetching faculty classes...');
       
-      const response = await fetch(`${API_BASE}/api/grading/faculty-classes-alt/${localStorage.getItem('userId') || 'me'}`, {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/classes`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -37,13 +161,26 @@ export default function GradingSystem() {
       if (response.ok) {
         const data = await response.json();
         console.log('Faculty classes data:', data);
-        console.log('Classes array:', data.classes);
-        console.log('Number of classes:', data.classes?.length || 0);
-        if (data.classes && data.classes.length > 0) {
-          console.log('First class:', data.classes[0]);
-          console.log('First class sections:', data.classes[0].sections);
+        console.log('Number of classes:', data.length);
+        
+        // Filter classes: only show active classes for current faculty in current term
+        const currentFacultyID = localStorage.getItem("userID");
+        let filteredClasses = [];
+        
+        if (academicYear && currentTerm) {
+          filteredClasses = data.filter(cls => 
+            cls.facultyID === currentFacultyID && 
+            cls.isArchived !== true &&
+            cls.academicYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` &&
+            cls.termName === currentTerm.termName
+          );
+          console.log('Filtered classes by term:', filteredClasses);
         }
-        setFacultyClasses(data.classes || []);
+        
+        if (filteredClasses.length > 0) {
+          console.log('First class:', filteredClasses[0]);
+        }
+        setFacultyClasses(filteredClasses);
       } else {
         console.error('Failed to fetch faculty classes');
         setValidationMessage('Failed to fetch faculty classes');
@@ -60,6 +197,13 @@ export default function GradingSystem() {
     }
   };
 
+  // Only fetch classes when we have both academic year and term
+  useEffect(() => {
+    if (academicYear && currentTerm) {
+      fetchFacultyClasses();
+    }
+  }, [academicYear, currentTerm]);
+
   // Export all grades for the selected section
   const exportAllGrades = async () => {
     if (!selectedSection) {
@@ -71,143 +215,19 @@ export default function GradingSystem() {
 
     try {
       setExportLoading(true);
-      const selectedSectionObj = facultyClasses[selectedClass]?.sections[selectedSection];
-      if (!selectedSectionObj) {
-        setValidationMessage('Selected section not found.');
+      const selectedClassObj = facultyClasses[selectedClass];
+      if (!selectedClassObj) {
+        setValidationMessage('Selected class not found.');
         setValidationType('error');
         setShowValidationModal(true);
         return;
       }
 
-      // Get all assignments, activities, and quizzes for this section
-      const assignments = selectedSectionObj.assignments || [];
-      const activities = selectedSectionObj.activities || [];
-      const quizzes = selectedSectionObj.quizzes || [];
-
-      if (assignments.length === 0 && activities.length === 0 && quizzes.length === 0) {
-        setValidationMessage('No assignments, activities, or quizzes found for this section.');
-        setValidationType('error');
-        setShowValidationModal(true);
-        return;
-      }
-
-      // Fetch all grades for this section
-      const token = localStorage.getItem('token');
-      const allGrades = [];
-
-      // Fetch grades for assignments
-      for (const assignment of assignments) {
-        try {
-          const response = await fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (response.ok) {
-            const submissions = await response.json();
-            submissions.forEach(submission => {
-              if (submission.grade !== undefined) {
-                allGrades.push({
-                  type: 'Assignment',
-                  title: assignment.title,
-                  studentName: submission.studentName || 'Unknown Student',
-                  studentId: submission.student,
-                  grade: submission.grade,
-                  feedback: submission.feedback || '',
-                  submittedAt: submission.submittedAt,
-                  status: submission.status
-                });
-              }
-            });
-          }
-        } catch (error) {
-          console.error(`Error fetching grades for assignment ${assignment._id}:`, error);
-        }
-      }
-
-      // Fetch grades for activities (if they have a different endpoint)
-      for (const activity of activities) {
-        try {
-          const response = await fetch(`${API_BASE}/assignments/${activity._id}/submissions`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (response.ok) {
-            const submissions = await response.json();
-            submissions.forEach(submission => {
-              if (submission.grade !== undefined) {
-                allGrades.push({
-                  type: 'Activity',
-                  title: activity.title,
-                  studentName: submission.studentName || 'Unknown Student',
-                  studentId: submission.student,
-                  grade: submission.grade,
-                  feedback: submission.feedback || '',
-                  submittedAt: submission.submittedAt,
-                  status: submission.status
-                });
-              }
-            });
-          }
-        } catch (error) {
-          console.error(`Error fetching grades for activity ${activity._id}:`, error);
-        }
-      }
-
-      // Fetch grades for quizzes
-      for (const quiz of quizzes) {
-        try {
-          const response = await fetch(`${API_BASE}/api/quizzes/${quiz._id}/responses`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (response.ok) {
-            const responses = await response.json();
-            responses.forEach(response => {
-              if (response.grade !== undefined) {
-                allGrades.push({
-                  type: 'Quiz',
-                  title: quiz.title,
-                  studentName: response.studentName || 'Unknown Student',
-                  studentId: response.student,
-                  grade: response.grade,
-                  feedback: response.feedback || '',
-                  submittedAt: response.submittedAt,
-                  status: response.status
-                });
-              }
-            });
-          }
-        } catch (error) {
-          console.error(`Error fetching grades for quiz ${quiz._id}:`, error);
-        }
-      }
-
-      if (allGrades.length === 0) {
-        setValidationMessage('No graded submissions found for this section.');
-        setValidationType('error');
-        setShowValidationModal(true);
-        return;
-      }
-
-      // Create CSV content
-      const csvHeader = 'Type,Title,Student Name,Student ID,Grade,Feedback,Submitted At,Status\n';
-      const csvRows = allGrades.map(grade => {
-        const submittedAt = grade.submittedAt ? new Date(grade.submittedAt).toLocaleDateString() : '';
-        return `"${grade.type}","${grade.title}","${grade.studentName}","${grade.studentId}","${grade.grade}","${grade.feedback}","${submittedAt}","${grade.status}"`;
-      }).join('\n');
-
-      const csvContent = csvHeader + csvRows;
-
-      // Create and download the file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `grades_${selectedSectionObj.sectionName}_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      setSuccessMessage(`Successfully exported ${allGrades.length} grades for ${selectedSectionObj.sectionName}!`);
-      setTimeout(() => setSuccessMessage(''), 5000);
+      // For now, show a message that this feature needs to be implemented
+      // since we don't have the detailed assignment/quiz data in the current class structure
+      setValidationMessage('Grade export feature will be implemented once assignment and quiz data is integrated with the class structure.');
+      setValidationType('info');
+      setShowValidationModal(true);
 
     } catch (error) {
       console.error('Error exporting grades:', error);
@@ -219,10 +239,6 @@ export default function GradingSystem() {
     }
   };
 
-  useEffect(() => {
-    fetchFacultyClasses();
-  }, []);
-
   // Add effect to log state changes for debugging
   useEffect(() => {
     console.log('State updated:', {
@@ -231,15 +247,6 @@ export default function GradingSystem() {
       selectedSection
     });
   }, [facultyClasses, selectedClass, selectedSection]);
-
-  const handleClassSelect = (classIndex) => {
-    setSelectedClass(classIndex);
-    setSelectedSection('');
-  };
-
-  const handleSectionSelect = (sectionIndex) => {
-    setSelectedSection(sectionIndex);
-  };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -277,53 +284,19 @@ export default function GradingSystem() {
     }
 
     try {
-      const selectedSectionObj = facultyClasses[selectedClass]?.sections[selectedSection];
-      if (!selectedSectionObj) {
-        setValidationMessage('Selected section not found.');
+      const selectedClassObj = facultyClasses[selectedClass];
+      if (!selectedClassObj) {
+        setValidationMessage('Selected class not found.');
         setValidationType('error');
         setShowValidationModal(true);
         return;
       }
 
-      // Get students in the section
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/api/grading/debug/students/${selectedSectionObj.sectionName}?trackName=${selectedSectionObj.trackName}&strandName=${selectedSectionObj.strandName}&gradeLevel=${selectedSectionObj.gradeLevel}&schoolYear=${selectedSectionObj.schoolYear}&termName=${selectedSectionObj.termName}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // For now, show a message that this feature needs to be implemented
+      setValidationMessage('Template download feature will be implemented once student data is integrated with the class structure.');
+      setValidationType('info');
+      setShowValidationModal(true);
 
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Create CSV template with all students
-        const csvHeader = 'Student Name,Student ID,Assignment/Activity/Quiz,Grade,Feedback\n';
-        const csvRows = data.students.map(student => {
-          return `"${student.firstname} ${student.lastname}","${student._id}","","",""`;
-        }).join('\n');
-
-        const csvContent = csvHeader + csvRows;
-
-        // Create and download the template
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `grading_template_${selectedSectionObj.sectionName}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        
-        setSuccessMessage('Template downloaded successfully!');
-        setTimeout(() => setSuccessMessage(''), 3000);
-      } else {
-        const errorData = await response.json();
-        setValidationMessage(errorData.message || 'Failed to download template');
-        setValidationType('error');
-        setShowValidationModal(true);
-      }
     } catch (error) {
       console.error('Error downloading template:', error);
       setValidationMessage(`Error downloading template: ${error.message}`);
@@ -342,65 +315,19 @@ export default function GradingSystem() {
 
     try {
       setUploadLoading(true);
-      const formData = new FormData();
-      formData.append('excelFile', excelFile);
-
-      // Get section details from the selected class
-      const selectedSectionObj = facultyClasses[selectedClass]?.sections[selectedSection];
-      if (!selectedSectionObj) {
-        setValidationMessage('Selected section not found.');
+      const selectedClassObj = facultyClasses[selectedClass];
+      if (!selectedClassObj) {
+        setValidationMessage('Selected class not found.');
         setValidationType('error');
         setShowValidationModal(true);
         return;
       }
 
-      formData.append('sectionName', selectedSectionObj.sectionName);
-      formData.append('trackName', selectedSectionObj.trackName);
-      formData.append('strandName', selectedSectionObj.strandName);
-      formData.append('gradeLevel', selectedSectionObj.gradeLevel);
-      formData.append('schoolYear', selectedSectionObj.schoolYear);
-      formData.append('termName', selectedSectionObj.termName);
+      // For now, show a message that this feature needs to be implemented
+      setValidationMessage('Grade upload feature will be implemented once the backend integration is complete.');
+      setValidationType('info');
+      setShowValidationModal(true);
 
-      console.log('Uploading file:', excelFile.name);
-      console.log('Form data:', {
-        sectionName: selectedSectionObj.sectionName,
-        trackName: selectedSectionObj.trackName,
-        strandName: selectedSectionObj.strandName,
-        gradeLevel: selectedSectionObj.gradeLevel,
-        schoolYear: selectedSectionObj.schoolYear,
-        termName: selectedSectionObj.termName
-      });
-
-      // For now, we'll use a generic upload endpoint
-      // You may need to create a new endpoint for bulk grade uploads
-      const response = await fetch(`${API_BASE}/api/grading/upload-bulk`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-
-      console.log('Upload response status:', response.status);
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Upload success:', data);
-        setSuccessMessage(`Grades uploaded successfully! ${data.data?.totalProcessed || 0} students processed.`);
-        setExcelFile(null);
-      } else {
-        const errorData = await response.json();
-        console.error('Upload error:', errorData);
-        
-        // If there are student matching errors, show a helpful message
-        if (errorData.errors && errorData.errors.some(err => err.includes('not found in database'))) {
-          setValidationMessage(`Student matching errors found. Please check the student names in your Excel file. ${errorData.errors.join(', ')}`);
-        } else {
-          setValidationMessage(errorData.message || 'Failed to upload grades');
-        }
-        setValidationType('error');
-        setShowValidationModal(true);
-      }
     } catch (error) {
       console.error('Error uploading grades:', error);
       setValidationMessage(`Error uploading grades: ${error.message}`);
@@ -421,32 +348,19 @@ export default function GradingSystem() {
     }
 
     try {
-      const selectedSectionObj = facultyClasses[selectedClass]?.sections[selectedSection];
-      if (!selectedSectionObj) {
-        setValidationMessage('Selected section not found.');
+      const selectedClassObj = facultyClasses[selectedClass];
+      if (!selectedClassObj) {
+        setValidationMessage('Selected class not found.');
         setValidationType('error');
         setShowValidationModal(true);
         return;
       }
 
-      const response = await fetch(`${API_BASE}/api/grading/debug/students/${selectedSectionObj.sectionName}?trackName=${selectedSectionObj.trackName}&strandName=${selectedSectionObj.strandName}&gradeLevel=${selectedSectionObj.gradeLevel}&schoolYear=${selectedSectionObj.schoolYear}&termName=${selectedSectionObj.termName}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // For now, show a message that this feature needs to be implemented
+      setValidationMessage('Student debug feature will be implemented once student data is integrated with the class structure.');
+      setValidationType('info');
+      setShowValidationModal(true);
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Debug students response:', data);
-        setSuccessMessage(`Found ${data.students.length} students in section ${selectedSectionObj.sectionName}`);
-        setTimeout(() => setSuccessMessage(''), 5000);
-      } else {
-        const errorData = await response.json();
-        setValidationMessage(errorData.message || 'Failed to debug students');
-        setValidationType('error');
-        setShowValidationModal(true);
-      }
     } catch (error) {
       console.error('Error debugging students:', error);
       setValidationMessage(`Error debugging students: ${error.message}`);
@@ -519,51 +433,70 @@ export default function GradingSystem() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">Academic Year</label>
-              <p className="text-lg font-semibold text-gray-900">2025-2026</p>
+              <p className="text-lg font-semibold text-gray-900">
+                {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Loading...'}
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Current Term</label>
-              <p className="text-lg font-semibold text-gray-900">Term 1</p>
+              <p className="text-lg font-semibold text-gray-900">
+                {currentTerm ? currentTerm.termName : 'Loading...'}
+              </p>
             </div>
           </div>
         </div>
 
         {/* Class Selection */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4">Select Class</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="mb-6 p-4 bg-white rounded-lg shadow">
+          <h3 className="text-lg font-semibold mb-3">Select Class</h3>
+          <div className="flex gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Class</label>
-              <select
-                value={selectedClass}
-                onChange={(e) => handleClassSelect(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={loading}
+              <label className="block text-sm font-medium mb-1">Subject (Class):</label>
+              <select 
+                className="border rounded px-3 py-2 min-w-[200px]"
+                value={selectedClass || ""}
+                onChange={(e) => {
+                  setSelectedClass(e.target.value);
+                  setSelectedSection(''); // Reset section when class changes
+                }}
               >
-                <option value="">Select a class</option>
+                <option value="">Select a subject</option>
                 {facultyClasses.map((cls, index) => (
-                  <option key={index} value={index}>
-                    {cls.subjectName || cls.className}
+                  <option key={cls.classID} value={index}>
+                    {cls.className}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Section</label>
-              <select
-                value={selectedSection}
-                onChange={(e) => handleSectionSelect(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={!selectedClass}
+              <label className="block text-sm font-medium mb-1">Section:</label>
+              <select 
+                className="border rounded px-3 py-2 min-w-[200px]"
+                value={selectedSection || ""}
+                onChange={(e) => setSelectedSection(e.target.value)}
               >
                 <option value="">Select a section</option>
-                {facultyClasses[selectedClass]?.sections?.map((section, index) => (
-                  <option key={index} value={index}>
+                {sections.map((section) => (
+                  <option key={section._id} value={section.sectionName}>
                     {section.sectionName} ({section.trackName} - {section.strandName})
                   </option>
-                )) || []}
+                ))}
               </select>
             </div>
+          </div>
+          
+          {/* Debug Info */}
+          <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+            <p><strong>Selected Subject:</strong> {selectedClass !== '' ? facultyClasses[selectedClass]?.className : 'None'}</p>
+            <p><strong>Selected Section:</strong> {selectedSection || 'None'}</p>
+            <p><strong>Class Section:</strong> {selectedClass !== '' ? facultyClasses[selectedClass]?.section || 'None' : 'None'}</p>
+            <p><strong>Class Code:</strong> {selectedClass !== '' ? facultyClasses[selectedClass]?.classCode : 'None'}</p>
+            <p><strong>Total Classes:</strong> {facultyClasses.length}</p>
+            <p><strong>Total Sections Available:</strong> {sections.length}</p>
+            <p><strong>All Sections:</strong> {allSections.length}</p>
+            <p><strong>Loading:</strong> {loading ? 'Yes' : 'No'}</p>
+            <p><strong>Academic Year:</strong> {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Loading...'}</p>
+            <p><strong>Current Term:</strong> {currentTerm ? currentTerm.termName : 'Loading...'}</p>
           </div>
         </div>
 
@@ -597,16 +530,15 @@ export default function GradingSystem() {
             </div>
             
             {/* Debug Information */}
-            {process.env.NODE_ENV === 'development' && (
+            {import.meta.env.MODE === 'development' && (
               <div className="mt-4 p-4 bg-gray-100 rounded-md text-sm">
                 <h4 className="font-semibold mb-2">Debug Info:</h4>
-                <p>Selected Class: {selectedClass !== '' ? facultyClasses[selectedClass]?.subjectName : 'None'}</p>
-                <p>Selected Section: {selectedSection !== '' ? facultyClasses[selectedClass]?.sections[selectedSection]?.sectionName : 'None'}</p>
-                <p>Assignments Count: {facultyClasses[selectedClass]?.sections[selectedSection]?.assignments?.length || 0}</p>
-                <p>Activities Count: {facultyClasses[selectedClass]?.sections[selectedSection]?.activities?.length || 0}</p>
-                <p>Quizzes Count: {facultyClasses[selectedClass]?.sections[selectedSection]?.quizzes?.length || 0}</p>
+                <p>Selected Class: {selectedClass !== '' ? facultyClasses[selectedClass]?.className : 'None'}</p>
+                <p>Selected Section: {selectedSection || 'None'}</p>
+                <p>Class Section: {selectedClass !== '' ? facultyClasses[selectedClass]?.section || 'None' : 'None'}</p>
+                <p>Class Code: {selectedClass !== '' ? facultyClasses[selectedClass]?.classCode : 'None'}</p>
                 <p>Total Classes: {facultyClasses.length}</p>
-                <p>Total Sections: {facultyClasses[selectedClass]?.sections?.length || 0}</p>
+                <p>Total Sections Available: {sections.length}</p>
               </div>
             )}
           </div>

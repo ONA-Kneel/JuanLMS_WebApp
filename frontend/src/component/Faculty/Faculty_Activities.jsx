@@ -20,6 +20,7 @@ export default function Faculty_Activities() {
 
   const [activities, setActivities] = useState([]);
   const [quizzes, setQuizzes] = useState([]);
+  const [facultyClasses, setFacultyClasses] = useState([]);
   const [filter, setFilter] = useState("All");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const filterRef = useRef();
@@ -69,6 +70,51 @@ export default function Faculty_Activities() {
     fetchActiveTermForYear();
   }, [academicYear]);
 
+  // Fetch classes created by the current faculty for the active year/term and not archived
+  useEffect(() => {
+    async function fetchFacultyClasses() {
+      if (!academicYear || !currentTerm) return;
+      try {
+        const token = localStorage.getItem("token");
+        const userId = localStorage.getItem("userID");
+        const res = await fetch(`${API_BASE}/classes`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const filtered = data.filter((cls) =>
+            cls.facultyID === userId &&
+            cls.isArchived !== true &&
+            cls.academicYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` &&
+            cls.termName === currentTerm.termName
+          );
+          setFacultyClasses(filtered);
+          console.log("[Activities] Active faculty classes:", filtered.length, filtered);
+        } else {
+          console.error("Failed to fetch faculty classes for activities page");
+          setFacultyClasses([]);
+        }
+      } catch (err) {
+        console.error("Error fetching faculty classes:", err);
+        setFacultyClasses([]);
+      }
+    }
+    fetchFacultyClasses();
+  }, [academicYear, currentTerm]);
+
+  // Helper: filter items so they belong to one of the active faculty classes for this term
+  const filterByActiveClassesInTerm = (items) => {
+    if (!Array.isArray(items) || facultyClasses.length === 0) return [];
+    const allowedCodes = new Set(facultyClasses.map((c) => c.classCode).filter(Boolean));
+    const allowedIds = new Set(facultyClasses.map((c) => c.classID).filter(Boolean));
+    return items.filter((item) => {
+      const ci = item.classInfo || item.class || {};
+      const code = ci.classCode || item.classCode;
+      const id = ci.classID || item.classID || item.classId;
+      return (code && allowedCodes.has(code)) || (id && allowedIds.has(id));
+    });
+  };
+
   useEffect(() => {
     async function fetchActivitiesAndQuizzes() {
       try {
@@ -87,18 +133,29 @@ export default function Faculty_Activities() {
             activityRes.json(),
             quizRes.json(),
           ]);
-          setActivities(activityData);
-          setQuizzes(quizData);
+          // Only keep items that belong to the faculty's active classes for this year/term
+          const filteredActivities = filterByActiveClassesInTerm(activityData);
+          const filteredQuizzes = filterByActiveClassesInTerm(quizData);
+          setActivities(filteredActivities);
+          setQuizzes(filteredQuizzes);
           
           // Fetch submissions for ready to grade
-          await fetchReadyToGradeItems(activityData, quizData, token);
+          await fetchReadyToGradeItems(filteredActivities, filteredQuizzes, token);
         }
       } catch (err) {
         console.error("Failed to fetch activities or quizzes", err);
       }
     }
-    fetchActivitiesAndQuizzes();
-  }, []);
+    // Run only after faculty classes are resolved for the term
+    if (facultyClasses.length > 0) {
+      fetchActivitiesAndQuizzes();
+    } else {
+      // If there are no active classes, ensure lists are empty
+      setActivities([]);
+      setQuizzes([]);
+      setReadyToGradeItems([]);
+    }
+  }, [facultyClasses]);
 
   const fetchReadyToGradeItems = async (activityData, quizData, token) => {
     try {
