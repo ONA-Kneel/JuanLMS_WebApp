@@ -29,6 +29,9 @@ function ChangePasswordModal({ userId, onClose }) {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [otpAttempts, setOtpAttempts] = useState(0);
+  const [otpLockout, setOtpLockout] = useState(false);
+  const [otpLockoutTime, setOtpLockoutTime] = useState(0);
 
   // Add useEffect for cooldown timer
   useEffect(() => {
@@ -43,9 +46,38 @@ function ChangePasswordModal({ userId, onClose }) {
     };
   }, [cooldown]);
 
+  // Lockout timer effect
+  useEffect(() => {
+    let timer;
+    if (otpLockout && otpLockoutTime > 0) {
+      timer = setInterval(() => {
+        setOtpLockoutTime(prev => {
+          if (prev <= 1) {
+            setOtpLockout(false);
+            setOtpAttempts(0);
+            localStorage.removeItem('otpLockoutUntilChangePw');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [otpLockout, otpLockoutTime]);
+
+  // On mount, check lockout
+  useEffect(() => {
+    const lockoutUntil = localStorage.getItem('otpLockoutUntilChangePw');
+    if (lockoutUntil && Date.now() < parseInt(lockoutUntil)) {
+      setOtpLockout(true);
+      setOtpLockoutTime(Math.ceil((parseInt(lockoutUntil) - Date.now()) / 1000));
+    }
+  }, []);
+
   // --- Request OTP Handler ---
   const handleRequestOTP = async (e) => {
-    e.preventDefault();
+    e.preventDefault && e.preventDefault();
+    if (otpLockout) return;
     setError("");
     setSuccess("");
     setLoading(true);
@@ -53,7 +85,7 @@ function ChangePasswordModal({ userId, onClose }) {
       await axios.post(`${API_BASE}/users/${userId}/request-password-change-otp`);
       setSuccess("OTP sent to your personal email.");
       setStep(2);
-      setCooldown(20); // Start 20 second cooldown
+      setCooldown(20); // 20s cooldown
     } catch (err) {
       setError(err.response?.data?.message || "Failed to send OTP.");
     }
@@ -63,6 +95,7 @@ function ChangePasswordModal({ userId, onClose }) {
   // --- Validate OTP Handler ---
   const handleValidateOTP = async (e) => {
     e.preventDefault();
+    if (otpLockout) return;
     setError("");
     setSuccess("");
     if (!otp) {
@@ -73,7 +106,18 @@ function ChangePasswordModal({ userId, onClose }) {
     try {
       await axios.post(`${API_BASE}/users/${userId}/validate-otp`, { otp });
       setStep(3);
+      setOtpAttempts(0); // reset attempts on success
     } catch (err) {
+      setOtpAttempts(prev => {
+        const newAttempts = prev + 1;
+        if (newAttempts >= 5) {
+          const lockoutUntil = Date.now() + 5 * 60 * 1000;
+          localStorage.setItem('otpLockoutUntilChangePw', lockoutUntil);
+          setOtpLockout(true);
+          setOtpLockoutTime(5 * 60);
+        }
+        return newAttempts;
+      });
       setError(err.response?.data?.message || "Invalid or expired OTP.");
     }
     setLoading(false);
@@ -143,30 +187,37 @@ function ChangePasswordModal({ userId, onClose }) {
               value={otp}
               onChange={e => setOtp(e.target.value)}
               required
+              disabled={otpLockout}
             />
             <button
               type="button"
               className="w-full bg-blue-900 text-white p-3 rounded-lg hover:bg-blue-950 transition mb-2"
               onClick={handleValidateOTP}
+              disabled={otpLockout || loading}
             >
               Next
             </button>
             <button
               type="button"
               className={`w-full p-3 rounded-lg transition mb-2 ${
-                cooldown > 0 || loading
+                cooldown > 0 || loading || otpLockout
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-green-600 text-white hover:bg-green-700'
               }`}
               onClick={handleRequestOTP}
-              disabled={cooldown > 0 || loading}
+              disabled={cooldown > 0 || loading || otpLockout}
             >
-              {cooldown > 0 
-                ? `Resend OTP in ${cooldown}s` 
-                : loading 
-                  ? 'Sending OTP...' 
-                  : 'Resend OTP'}
+              {otpLockout
+                ? `Locked (${otpLockoutTime}s)`
+                : cooldown > 0
+                  ? `Resend OTP in ${cooldown}s`
+                  : loading
+                    ? 'Sending OTP...'
+                    : 'Resend OTP'}
             </button>
+            {otpLockout && (
+              <div className="text-red-600 text-sm mt-2">Too many failed attempts. Try again in {otpLockoutTime}s.</div>
+            )}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={onClose} className="px-4 py-2 rounded bg-gray-300">Cancel</button>
             </div>

@@ -2,7 +2,7 @@
 // Handles the password reset process: requests OTP, verifies OTP, and sets new password.
 // Step-based UI: 1) request OTP, 2) enter OTP, 3) enter new password, 4) success message.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,10 +19,52 @@ export default function ForgotPassword() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const navigate = useNavigate();
+  const [otpAttempts, setOtpAttempts] = useState(0);
+  const [otpLockout, setOtpLockout] = useState(false);
+  const [otpLockoutTime, setOtpLockoutTime] = useState(0);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Lockout timer effect
+  useEffect(() => {
+    let timer;
+    if (otpLockout && otpLockoutTime > 0) {
+      timer = setInterval(() => {
+        setOtpLockoutTime(prev => {
+          if (prev <= 1) {
+            setOtpLockout(false);
+            setOtpAttempts(0);
+            localStorage.removeItem('otpLockoutUntil');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [otpLockout, otpLockoutTime]);
+
+  // On mount, check lockout
+  useEffect(() => {
+    const lockoutUntil = localStorage.getItem('otpLockoutUntil');
+    if (lockoutUntil && Date.now() < parseInt(lockoutUntil)) {
+      setOtpLockout(true);
+      setOtpLockoutTime(Math.ceil((parseInt(lockoutUntil) - Date.now()) / 1000));
+    }
+  }, []);
+
+  // Cooldown timer for resend
+  useEffect(() => {
+    let timer;
+    if (cooldown > 0) {
+      timer = setInterval(() => setCooldown(prev => prev - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
   // --- HANDLER: Request OTP to be sent to user's email ---
   const handleRequestOTP = async (e) => {
     e.preventDefault();
+    if (otpLockout) return;
     setLoading(true);
     setError('');
     setMessage('');
@@ -30,6 +72,7 @@ export default function ForgotPassword() {
       const response = await axios.post(`${API_BASE}/forgot-password`, { email });
       setMessage(response.data.message || 'If your email is registered, a reset link or OTP has been sent.');
       setStep(2); // Move to next step
+      setCooldown(20); // 20s cooldown
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong. Please try again.');
     } finally {
@@ -40,6 +83,7 @@ export default function ForgotPassword() {
   // --- HANDLER: Validate OTP ---
   const handleValidateOTP = async (e) => {
     e.preventDefault();
+    if (otpLockout) return;
     setLoading(true);
     setError('');
     setMessage('');
@@ -50,7 +94,18 @@ export default function ForgotPassword() {
       });
       setMessage('OTP validated. Please enter your new password.');
       setStep(3);
+      setOtpAttempts(0); // reset attempts on success
     } catch (err) {
+      setOtpAttempts(prev => {
+        const newAttempts = prev + 1;
+        if (newAttempts >= 5) {
+          const lockoutUntil = Date.now() + 5 * 60 * 1000;
+          localStorage.setItem('otpLockoutUntil', lockoutUntil);
+          setOtpLockout(true);
+          setOtpLockoutTime(5 * 60);
+        }
+        return newAttempts;
+      });
       setError(err.response?.data?.message || 'Invalid or expired OTP.');
     } finally {
       setLoading(false);
@@ -123,15 +178,40 @@ export default function ForgotPassword() {
                 placeholder="Enter OTP"
                 value={otp}
                 onChange={e => setOtp(e.target.value)}
+                disabled={otpLockout}
               />
             </div>
             <button
               type="submit"
               className="w-full bg-blue-900 text-white p-3 rounded-lg hover:bg-blue-950 transition"
-              disabled={loading}
+              disabled={loading || otpLockout}
             >
               {loading ? 'Validating...' : 'Validate OTP'}
             </button>
+            <button
+              type="button"
+              className={`w-full p-3 rounded-lg transition mb-2 ${
+                cooldown > 0 || loading || otpLockout
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+              onClick={handleRequestOTP}
+              disabled={cooldown > 0 || loading || otpLockout}
+            >
+              {otpLockout
+                ? `Locked (${otpLockoutTime}s)`
+                : cooldown > 0
+                  ? `Resend OTP in ${cooldown}s`
+                  : loading
+                    ? 'Sending OTP...'
+                    : 'Resend OTP'}
+            </button>
+            {otpLockout && (
+              <div className="text-red-600 text-sm mt-2">Too many failed attempts. Try again in {otpLockoutTime}s.</div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => navigate('/')} className="px-4 py-2 rounded bg-gray-300">Cancel</button>
+            </div>
           </form>
         )}
         {/* Step 3: Enter new password */}

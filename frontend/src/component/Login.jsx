@@ -303,9 +303,9 @@ export default function Login() {
       // Check if account should be locked
       if (newFailedAttempts >= 5) {
         setIsLocked(true);
-        const lockoutEndTime = Date.now() + (30 * 60 * 1000); // 30 minutes
+        const lockoutEndTime = Date.now() + (30 * 1000); // 30 minutes
         localStorage.setItem('lockoutEndTime', lockoutEndTime.toString());
-        setLockoutTime(30 * 60); // 30 minutes in seconds
+        setLockoutTime(30); // 30 minutes in seconds
         return;
       }
       
