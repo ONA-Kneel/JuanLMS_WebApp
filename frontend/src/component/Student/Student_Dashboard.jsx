@@ -28,6 +28,7 @@ export default function Student_Dashboard() {
         });
         if (yearRes.ok) {
           const year = await yearRes.json();
+          console.log("Student Dashboard - Fetched academic year:", year);
           setAcademicYear(year);
         }
       } catch (err) {
@@ -42,18 +43,23 @@ export default function Student_Dashboard() {
       if (!academicYear) return;
       try {
         const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        console.log("Student Dashboard - Fetching terms for school year:", schoolYearName);
         const token = localStorage.getItem("token");
         const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
           const terms = await res.json();
+          console.log("Student Dashboard - Fetched terms:", terms);
           const active = terms.find(term => term.status === 'active');
+          console.log("Student Dashboard - Active term:", active);
           setCurrentTerm(active || null);
         } else {
+          console.log("Student Dashboard - Failed to fetch terms, status:", res.status);
           setCurrentTerm(null);
         }
-      } catch {
+      } catch (err) {
+        console.error("Student Dashboard - Error fetching terms:", err);
         setCurrentTerm(null);
       }
     }
@@ -70,8 +76,15 @@ export default function Student_Dashboard() {
           },
         });
         const data = await res.json();
-        // Only include classes where the current user is a member
-        const filtered = data.filter(cls => cls.members.includes(currentUserID));
+        
+        // Filter classes: only show classes from current term where student is a member
+        const filtered = data.filter(cls => 
+          cls.members.includes(currentUserID) &&
+          cls.isArchived !== true &&
+          cls.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
+          cls.termName === currentTerm?.termName
+        );
+        
         setClasses(filtered);
 
         // --- Fetch progress for each class ---
@@ -116,8 +129,12 @@ export default function Student_Dashboard() {
         setLoading(false);
       }
     }
-    fetchClasses();
-  }, [currentUserID]);
+    
+    // Only fetch classes when we have both academic year and term
+    if (academicYear && currentTerm) {
+      fetchClasses();
+    }
+  }, [currentUserID, academicYear, currentTerm]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr">

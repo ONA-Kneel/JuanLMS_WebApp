@@ -26,7 +26,15 @@ export default function Student_Classes() {
           },
         });
         const data = await res.json();
-        const filtered = data.filter(cls => cls.members.includes(currentUserID));
+        
+        // Filter classes: only show classes from current term where student is a member
+        const filtered = data.filter(cls => 
+          cls.members.includes(currentUserID) &&
+          cls.isArchived !== true &&
+          cls.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
+          cls.termName === currentTerm?.termName
+        );
+        
         setClasses(filtered);
       } catch (err) {
         console.error("Failed to fetch classes", err);
@@ -34,8 +42,12 @@ export default function Student_Classes() {
         setLoading(false);
       }
     }
-    fetchClasses();
-  }, [currentUserID, token]);
+    
+    // Only fetch classes when we have both academic year and term
+    if (academicYear && currentTerm) {
+      fetchClasses();
+    }
+  }, [currentUserID, token, academicYear, currentTerm]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -46,6 +58,7 @@ export default function Student_Classes() {
         });
         if (yearRes.ok) {
           const year = await yearRes.json();
+          console.log("Student Classes - Fetched academic year:", year);
           setAcademicYear(year);
         }
       } catch (err) {
@@ -60,18 +73,23 @@ export default function Student_Classes() {
       if (!academicYear) return;
       try {
         const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        console.log("Student Classes - Fetching terms for school year:", schoolYearName);
         const token = localStorage.getItem("token");
         const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
           const terms = await res.json();
+          console.log("Student Classes - Fetched terms:", terms);
           const active = terms.find(term => term.status === 'active');
+          console.log("Student Classes - Active term:", active);
           setCurrentTerm(active || null);
         } else {
+          console.log("Student Classes - Failed to fetch terms, status:", res.status);
           setCurrentTerm(null);
         }
-      } catch {
+      } catch (err) {
+        console.error("Student Classes - Error fetching terms:", err);
         setCurrentTerm(null);
       }
     }

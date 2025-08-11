@@ -25,7 +25,15 @@ export default function Faculty_Dashboard() {
           },
         });
         const data = await res.json();
-        const filtered = data.filter(cls => cls.facultyID === currentFacultyID);
+        
+        // Filter classes: only show active classes for current faculty in current term
+        const filtered = data.filter(cls => 
+          cls.facultyID === currentFacultyID && 
+          cls.isArchived !== true &&
+          cls.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
+          cls.termName === currentTerm?.termName
+        );
+        
         setClasses(filtered);
       } catch (err) {
         console.error("Failed to fetch classes", err);
@@ -33,8 +41,12 @@ export default function Faculty_Dashboard() {
         setLoading(false);
       }
     }
-    fetchClasses();
-  }, [currentFacultyID]);
+    
+    // Only fetch classes when we have both academic year and term
+    if (academicYear && currentTerm) {
+      fetchClasses();
+    }
+  }, [currentFacultyID, academicYear, currentTerm]);
 
   useEffect(() => {
     async function fetchAcademicYear() {

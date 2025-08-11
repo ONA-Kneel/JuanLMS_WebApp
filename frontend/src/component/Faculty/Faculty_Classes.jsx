@@ -27,7 +27,33 @@ export default function Faculty_Classes() {
           },
         });
         const data = await res.json();
-        const filtered = data.filter(cls => cls.facultyID === currentFacultyID);
+        
+        // Filter classes: only show active classes for current faculty in current term
+        console.log("Filtering classes with:", {
+          currentFacultyID,
+          academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : null,
+          currentTerm: currentTerm?.termName,
+          totalClasses: data.length
+        });
+        
+        const filtered = data.filter(cls => {
+          const matches = cls.facultyID === currentFacultyID && 
+            cls.isArchived !== true &&
+            cls.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
+            cls.termName === currentTerm?.termName;
+          
+          console.log(`Class ${cls.className}:`, {
+            facultyID: cls.facultyID,
+            isArchived: cls.isArchived,
+            academicYear: cls.academicYear,
+            termName: cls.termName,
+            matches
+          });
+          
+          return matches;
+        });
+        
+        console.log("Filtered classes:", filtered);
         setClasses(filtered);
       } catch (err) {
         console.error("Failed to fetch classes", err);
@@ -35,8 +61,12 @@ export default function Faculty_Classes() {
         setLoading(false);
       }
     }
-    fetchClasses();
-  }, [currentFacultyID]);
+    
+    // Only fetch classes when we have both academic year and term
+    if (academicYear && currentTerm) {
+      fetchClasses();
+    }
+  }, [currentFacultyID, academicYear, currentTerm]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -47,6 +77,7 @@ export default function Faculty_Classes() {
         });
         if (yearRes.ok) {
           const year = await yearRes.json();
+          console.log("Fetched academic year:", year);
           setAcademicYear(year);
         }
       } catch (err) {
@@ -61,18 +92,23 @@ export default function Faculty_Classes() {
       if (!academicYear) return;
       try {
         const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        console.log("Fetching terms for school year:", schoolYearName);
         const token = localStorage.getItem("token");
         const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
-          headers: { "Authorization": `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
-          // const terms = await res.json();
-          // const active = terms.find(term => term.status === 'active');
+          const terms = await res.json();
+          console.log("Fetched terms:", terms);
+          const active = terms.find(term => term.status === 'active');
+          console.log("Active term:", active);
           setCurrentTerm(active || null);
+        } else {
+          console.log("Failed to fetch terms, status:", res.status);
           setCurrentTerm(null);
         }
-      } catch {
-        // Optionally log error if needed
+      } catch (err) {
+        console.error("Error fetching terms:", err);
         setCurrentTerm(null);
       }
     }

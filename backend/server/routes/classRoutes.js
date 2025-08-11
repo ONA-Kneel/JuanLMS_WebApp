@@ -40,13 +40,59 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     if (!classID || !className || !classCode || !classDesc || !membersArr || !Array.isArray(membersArr) || !facultyID) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+    
+    // Get current academic year and term
+    let academicYear = null;
+    let currentTerm = null;
+    
+    try {
+      // Fetch active academic year
+      const yearRes = await fetch(`${req.protocol}://${req.get('host')}/api/schoolyears/active`, {
+        headers: { "Authorization": `Bearer ${req.headers.authorization?.split(' ')[1]}` }
+      });
+      if (yearRes.ok) {
+        academicYear = await yearRes.json();
+      }
+      
+      // Fetch active term for the year
+      if (academicYear) {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const termRes = await fetch(`${req.protocol}://${req.get('host')}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${req.headers.authorization?.split(' ')[1]}` }
+        });
+        if (termRes.ok) {
+          const terms = await termRes.json();
+          currentTerm = terms.find(term => term.status === 'active');
+        }
+      }
+    } catch (err) {
+      console.log('Could not fetch academic year/term, creating class without them');
+    }
+    
     let imagePath = '';
     if (req.file) {
       imagePath = `/uploads/${req.file.filename}`;
     }
-    // Create new class
-    const newClass = new Class({ classID, className, classCode, classDesc, members: membersArr, facultyID, image: imagePath });
+    
+    // Create new class with academic year and term if available
+    const classData = { 
+      classID, 
+      className, 
+      classCode, 
+      classDesc, 
+      members: membersArr, 
+      facultyID, 
+      image: imagePath 
+    };
+    
+    if (academicYear && currentTerm) {
+      classData.academicYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+      classData.termName = currentTerm.termName;
+    }
+    
+    const newClass = new Class(classData);
     await newClass.save();
+    
     // Create audit log for class creation
     const db = database.getDb();
     await db.collection('AuditLogs').insertOne({
@@ -58,6 +104,7 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
       ipAddress: req.ip || req.connection.remoteAddress,
       timestamp: new Date()
     });
+    
     res.status(201).json({ success: true, class: newClass });
   } catch (err) {
     console.error(err);
