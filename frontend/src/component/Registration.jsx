@@ -25,8 +25,24 @@ export default function Registration() {
   });
   const navigate = useNavigate();
 
+  function isValidName(name) {
+    return /^[A-Za-z\s'-]+$/.test(name);
+  }
+  function isValidContactNo(contactNo) {
+    return /^09\d{9}$/.test(contactNo);
+  }
+
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    let newValue = value;
+    if (name === 'contactNo') {
+      // Only allow numbers, max 11 digits
+      newValue = value.replace(/[^0-9]/g, '').slice(0, 11);
+    } else if (name === 'firstName' || name === 'middleName' || name === 'lastName') {
+      // Only allow letters, spaces, apostrophes, hyphens
+      newValue = value.replace(/[^A-Za-z\s'-]/g, '');
+    }
+    setForm({ ...form, [name]: newValue });
   };
 
   function getSchoolIdPlaceholder() {
@@ -40,6 +56,29 @@ export default function Registration() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    
+    // Validate name fields
+    if (!isValidName(form.firstName) || (form.middleName && !isValidName(form.middleName)) || !isValidName(form.lastName)) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Invalid Name',
+        message: 'Names must only contain letters, spaces, apostrophes, or hyphens.'
+      });
+      setLoading(false);
+      return;
+    }
+    // Validate contact number
+    if (!isValidContactNo(form.contactNo)) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Invalid Contact Number',
+        message: 'Contact number must be 11 digits and start with 09.'
+      });
+      setLoading(false);
+      return;
+    }
     
     // Validate school ID format
     if (!isValidSchoolId(form.schoolID)) {
@@ -65,14 +104,14 @@ export default function Registration() {
       return;
     }
     
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    // Validate email format (must be a valid domain, not just '@com')
+    const emailRegex = /^[^\s@]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
     if (!emailRegex.test(form.personalEmail)) {
       setValidationModal({
         isOpen: true,
         type: 'warning',
         title: 'Invalid Email',
-        message: 'Please enter a valid email address.'
+        message: 'Please enter a valid email address (e.g., username@gmail.com).'
       });
       setLoading(false);
       return;
@@ -148,6 +187,7 @@ export default function Registration() {
               type="text"
               name="firstName"
               required
+              placeholder="First Name"
               className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900"
               value={form.firstName}
               onChange={handleChange}
@@ -159,6 +199,7 @@ export default function Registration() {
             <input
               type="text"
               name="middleName"
+              placeholder="Middle Name"
               className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900"
               value={form.middleName}
               onChange={handleChange}
@@ -171,6 +212,7 @@ export default function Registration() {
               type="text"
               name="lastName"
               required
+              placeholder="Last Name"
               className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900"
               value={form.lastName}
               onChange={handleChange}
@@ -183,6 +225,7 @@ export default function Registration() {
               type="email"
               name="personalEmail"
               required
+              placeholder="username@gmail.com"
               className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900"
               value={form.personalEmail}
               onChange={handleChange}
@@ -195,6 +238,8 @@ export default function Registration() {
               type="text"
               name="contactNo"
               required
+              placeholder="09XXXXXXXXX"
+              maxLength={11}
               className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900"
               value={form.contactNo}
               onChange={handleChange}

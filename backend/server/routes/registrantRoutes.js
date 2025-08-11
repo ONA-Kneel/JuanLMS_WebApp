@@ -31,6 +31,12 @@ router.post('/register', async (req, res) => {
     if (existing) {
       return res.status(409).json({ message: 'A registration with this email already exists.' });
     }
+    // Check for duplicate schoolID in Registrant or User
+    const existingSchoolIdRegistrant = await Registrant.findOne({ schoolID });
+    const existingSchoolIdUser = await User.findOne({ schoolID });
+    if (existingSchoolIdRegistrant || existingSchoolIdUser) {
+      return res.status(409).json({ message: 'A registration or account with this School ID already exists.' });
+    }
     const registrant = new Registrant({
       firstName,
       middleName,
