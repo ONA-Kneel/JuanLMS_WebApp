@@ -311,13 +311,20 @@ export default function Login() {
       
       // Handle specific error cases
       let errorMessage = 'Invalid email or password.';
-      
       if (error.response) {
         const status = error.response.status;
         const data = error.response.data;
-        
+        // Custom error handling for email/password
         if (status === 401) {
-          errorMessage = data.message || 'Invalid email or password.';
+          if (data.message && data.message.toLowerCase().includes('email')) {
+            errorMessage = 'Invalid email address.';
+          } else if (data.message && data.message.toLowerCase().includes('password')) {
+            errorMessage = 'Incorrect password.';
+          } else if (data.message && data.message.toLowerCase().includes('invalid email or password')) {
+            errorMessage = 'Invalid email and password.';
+          } else {
+            errorMessage = data.message || 'Invalid email or password.';
+          }
         } else if (status === 403) {
           errorMessage = data.message || 'Account is disabled or locked.';
         } else if (status === 404) {
@@ -391,7 +398,7 @@ export default function Login() {
             <div className="h-5 mb-2">
               {failedAttempts > 0 && !isLocked && (
                 <div className="text-red-600 font-poppinsr text-sm">
-                  Invalid email or password.
+                  {validationModal.message || 'Invalid email or password.'}
                 </div>
               )}
               {isLocked && (
