@@ -5,6 +5,7 @@
 import express from 'express';
 import multer from 'multer';
 import Lesson from '../models/Lesson.js';
+import mongoose from 'mongoose';
 import path from 'path';
 import database from '../connect.cjs';
 import { ObjectId } from 'mongodb';
@@ -40,16 +41,23 @@ const upload = multer({
 router.post('/', authenticateToken, upload.array('files', 5), async (req, res) => {
   try {
     const { classID, title, link } = req.body;
-    // Validate required fields and at least one file
-    if (!classID || !title || (!req.files || req.files.length === 0) && !link) {
+    if (!classID || !title) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    // Map uploaded files to file info objects for storage in MongoDB
-    const files = req.files.map(file => ({
-      fileUrl: `/uploads/lessons/${file.filename}`,
-      fileName: file.originalname
-    }));
-    // Create and save the lesson document
+
+    // Map uploaded files when present
+    const files = Array.isArray(req.files) && req.files.length > 0
+      ? req.files.map(file => ({
+          fileUrl: `/uploads/lessons/${file.filename}`,
+          fileName: file.originalname
+        }))
+      : [];
+
+    // Disallow empty lessons with neither files nor link
+    if ((!link || String(link).trim() === '') && files.length === 0) {
+      return res.status(400).json({ error: 'Provide at least one file or a link.' });
+    }
+
     const lesson = new Lesson({ classID, title, files, link });
     await lesson.save();
 
@@ -130,34 +138,48 @@ router.get('/lesson-progress', authenticateToken, async (req, res) => {
 // --- DELETE /lessons/:lessonId - delete a lesson and its files (faculty only) ---
 router.delete('/:lessonId', authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
+    console.log('[LESSONS] DELETE lesson', req.params.lessonId, 'by user', req.user?._id, 'role', req.user?.role);
+    if (req.user.role !== 'faculty') {
+      return res.status(403).json({ error: 'Only faculty can delete lessons.' });
+    }
     const { lessonId } = req.params;
+    if (!mongoose.isValidObjectId(lessonId)) {
+      return res.status(400).json({ error: 'Invalid lesson id.' });
+    }
     const lesson = await Lesson.findByIdAndDelete(lessonId);
-    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+    if (!lesson) {
+      return res.status(404).json({ error: 'Lesson not found.' });
+    }
     // Optionally: delete files from disk here
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to delete lesson' });
+    console.error('[LESSONS] Failed to delete lesson', req.params.lessonId, err);
+    return res.status(500).json({ error: 'Failed to delete lesson.' });
   }
 });
 
 // --- DELETE /lessons/:lessonId/file?fileUrl=... - delete a file from a lesson (faculty only) ---
 router.delete('/:lessonId/file', authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
+    console.log('[LESSONS] DELETE file from lesson', req.params.lessonId, 'fileUrl', req.query.fileUrl, 'by role', req.user?.role);
+    if (req.user.role !== 'faculty') {
+      return res.status(403).json({ error: 'Only faculty can delete lesson files.' });
+    }
     const { lessonId } = req.params;
     const { fileUrl } = req.query;
+    if (!mongoose.isValidObjectId(lessonId)) {
+      return res.status(400).json({ error: 'Invalid lesson id.' });
+    }
     if (!fileUrl) return res.status(400).json({ error: 'fileUrl required' });
     const lesson = await Lesson.findById(lessonId);
     if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
-    lesson.files = lesson.files.filter(f => f.fileUrl !== fileUrl);
+    lesson.files = (lesson.files || []).filter(f => f.fileUrl !== fileUrl);
     await lesson.save();
     // Optionally: delete file from disk here
-    res.json({ success: true, lesson });
+    return res.json({ success: true, lesson });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to delete file' });
+    console.error('[LESSONS] Failed to delete file from lesson', req.params.lessonId, err);
+    return res.status(500).json({ error: 'Failed to delete file' });
   }
 });
 

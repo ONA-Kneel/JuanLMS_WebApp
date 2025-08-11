@@ -234,7 +234,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
         .catch(() => setMembersError("Failed to fetch students."));
     }
   }
-}, [selected, classId]);
+}, [selected, classId, isFaculty]);
 
   // --- HANDLERS FOR ADDING CONTENT (Faculty only) ---
 
@@ -471,8 +471,13 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setLessonFiles([]);
       setLessonLink(""); // Clear the link field
 
-      const newLesson = await res.json();
-      setBackendLessons(lessons => [...lessons, newLesson]);
+      const payload = await res.json();
+      const createdLesson = payload.lesson || payload;
+      // Ensure lesson has an _id for future delete/edit ops
+      if (!createdLesson || !createdLesson._id) {
+        console.warn('Unexpected create lesson payload:', payload);
+      }
+      setBackendLessons(lessons => [createdLesson, ...lessons]);
     } else {
       const data = await res.json();
       setValidationModal({
@@ -683,11 +688,12 @@ export default function ClassContent({ selected, isFaculty = false }) {
               message: 'File deleted successfully.'
             });
           } else {
+            const errPayload = await res.json().catch(() => ({}));
             setValidationModal({
               isOpen: true,
               type: 'error',
               title: 'Delete Failed',
-              message: 'Failed to delete file. Please try again.'
+              message: errPayload.error || `Failed to delete file. HTTP ${res.status}`
             });
           }
         } catch {
@@ -723,11 +729,12 @@ export default function ClassContent({ selected, isFaculty = false }) {
               message: 'Material deleted successfully.'
             });
           } else {
+            const errPayload = await res.json().catch(() => ({}));
             setValidationModal({
               isOpen: true,
               type: 'error',
               title: 'Delete Failed',
-              message: 'Failed to delete material. Please try again.'
+              message: errPayload.error || `Failed to delete material. HTTP ${res.status}`
             });
           }
         } catch {
@@ -1138,6 +1145,22 @@ export default function ClassContent({ selected, isFaculty = false }) {
                       </tr>
                     </thead>
                     <tbody>
+                      {lesson.link && (
+                        <tr className="border-b hover:bg-gray-50">
+                          <td className="px-6 py-2 flex items-center gap-2">
+                            <span className="text-blue-700">🔗</span>
+                            <a
+                              href={lesson.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-700 underline"
+                            >
+                              {lesson.link}
+                            </a>
+                          </td>
+                          {isFaculty && editingLessonId !== lesson._id && <td className="px-6 py-2"></td>}
+                        </tr>
+                      )}
                       {lesson.files && lesson.files.length > 0 ? (
                         lesson.files.map(file => {
                           const fileUrl = file.fileUrl.startsWith('http') ? file.fileUrl : `${API_BASE}/${file.fileUrl.replace(/^\/+/,'')}`;
