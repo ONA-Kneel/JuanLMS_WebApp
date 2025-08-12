@@ -8,9 +8,10 @@ export default function GradingSystem() {
   const [facultyClasses, setFacultyClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
-  const [exportLoading, setExportLoading] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [templateLoading, setTemplateLoading] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
@@ -204,203 +205,7 @@ export default function GradingSystem() {
     }
   }, [academicYear, currentTerm]);
 
-  // Export all grades for the selected section
-  const exportAllGrades = async () => {
-    if (!selectedSection) {
-      setValidationMessage('Please select a section first.');
-      setValidationType('error');
-      setShowValidationModal(true);
-      return;
-    }
-
-    try {
-      setExportLoading(true);
-      const selectedClassObj = facultyClasses[selectedClass];
-      if (!selectedClassObj) {
-        setValidationMessage('Selected class not found.');
-        setValidationType('error');
-        setShowValidationModal(true);
-        return;
-      }
-
-      // Fetch comprehensive grade data
-      const token = localStorage.getItem('token');
-      const apiUrl = `${API_BASE}/api/grading/class/${selectedClassObj.classID}/section/${selectedSection}/comprehensive`;
-      
-      console.log('Exporting grades for:', {
-        classID: selectedClassObj.classID,
-        sectionName: selectedSection,
-        apiUrl: apiUrl
-      });
-      
-      const response = await fetch(apiUrl, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`Failed to fetch grade data: ${response.status} ${response.statusText}`);
-      }
-
-      const gradeData = await response.json();
-      
-      if (!gradeData.success) {
-        throw new Error(gradeData.error || 'Failed to retrieve grade data');
-      }
-
-      // Debug the data structure
-      console.log('Export - Full grade data:', gradeData);
-      console.log('Export - Data structure:', gradeData.data);
-      console.log('Export - Students count:', gradeData.data?.students?.length || 0);
-      console.log('Export - Assignments count:', gradeData.data?.assignments?.length || 0);
-      console.log('Export - Quizzes count:', gradeData.data?.quizzes?.length || 0);
-      
-      if (gradeData.data?.students && gradeData.data.students.length > 0) {
-        console.log('Export - Sample student data:', gradeData.data.students[0]);
-      }
-
-      // Generate CSV content
-      const csvContent = generateGradeCSV(gradeData.data);
-      
-      // Download CSV file
-      downloadCSV(csvContent, `${selectedClassObj.className}_${selectedSection}_Grades.csv`);
-
-      setValidationMessage(`Grades exported successfully with ${gradeData.data?.students?.length || 0} students!`);
-      setValidationType('success');
-      setShowValidationModal(true);
-
-    } catch (error) {
-      console.error('Error exporting grades:', error);
-      setValidationMessage(`Error exporting grades: ${error.message}`);
-      setValidationType('error');
-      setShowValidationModal(true);
-    } finally {
-      setExportLoading(false);
-    }
-  };
-
-  // Generate CSV content from grade data
-  const generateGradeCSV = (data) => {
-    console.log('generateGradeCSV - Input data:', data);
-    console.log('generateGradeCSV - Students:', data.students);
-    console.log('generateGradeCSV - Assignments:', data.assignments);
-    console.log('generateGradeCSV - Quizzes:', data.quizzes);
-    
-    if (!data.students || !Array.isArray(data.students) || data.students.length === 0) {
-      console.error('generateGradeCSV - No students data found');
-      return 'Student ID,Student Name,School ID,Total Score,Total Possible,Percentage\n';
-    }
-    
-    if (!data.assignments || !Array.isArray(data.assignments)) {
-      console.error('generateGradeCSV - No assignments data found');
-      data.assignments = [];
-    }
-    
-    if (!data.quizzes || !Array.isArray(data.quizzes)) {
-      console.error('generateGradeCSV - No quizzes data found');
-      data.quizzes = [];
-    }
-
-    const headers = [
-      'Student ID',
-      'Student Name',
-      'School ID',
-      'Total Score',
-      'Total Possible',
-      'Percentage'
-    ];
-
-    // Add assignment score headers
-    data.assignments.forEach(assignment => {
-      headers.push(`${assignment.title} Score (${assignment.points} pts)`);
-    });
-
-    // Add quiz score headers
-    data.quizzes.forEach(quiz => {
-      headers.push(`${quiz.title} Score (${quiz.points} pts)`);
-    });
-
-    // Add assignment feedback headers
-    data.assignments.forEach(assignment => {
-      headers.push(`${assignment.title} Feedback`);
-    });
-
-    // Add quiz feedback headers
-    data.quizzes.forEach(quiz => {
-      headers.push(`${quiz.title} Feedback`);
-    });
-
-    const rows = [headers.join(',')];
-
-    data.students.forEach((student, index) => {
-      console.log(`generateGradeCSV - Processing student ${index + 1}:`, student);
-      
-      const row = [
-        student.userID || '', // Use unencrypted userID
-        student.studentName || '',
-        student.schoolID || '',
-        student.totalScore || 0,
-        student.totalPossible || 0,
-        `${student.percentage || 0}%`
-      ];
-
-      // Add assignment scores
-      data.assignments.forEach(assignment => {
-        const studentAssignment = student.assignments.find(a => a.assignmentId === assignment.id);
-        const score = studentAssignment?.earnedPoints || '';
-        console.log(`generateGradeCSV - Assignment ${assignment.title}: score = ${score}`);
-        row.push(score);
-      });
-
-      // Add quiz scores
-      data.quizzes.forEach(quiz => {
-        const studentQuiz = student.quizzes.find(q => q.quizId === quiz.id);
-        const score = studentQuiz?.earnedPoints || '';
-        console.log(`generateGradeCSV - Quiz ${quiz.title}: score = ${score}`);
-        row.push(score);
-      });
-
-      // Add assignment feedback
-      data.assignments.forEach(assignment => {
-        const studentAssignment = student.assignments.find(a => a.assignmentId === assignment.id);
-        const feedback = studentAssignment?.feedback || '';
-        row.push(feedback);
-      });
-
-      // Add quiz feedback
-      data.quizzes.forEach(quiz => {
-        const studentQuiz = student.quizzes.find(q => q.quizId === quiz.id);
-        const feedback = studentQuiz?.feedback || '';
-        row.push(feedback);
-      });
-
-      console.log(`generateGradeCSV - Row ${index + 1}:`, row);
-      rows.push(row.join(','));
-    });
-
-    console.log('generateGradeCSV - Final CSV rows:', rows);
-    return rows.join('\n');
-  };
-
-  // Download CSV file
-  const downloadCSV = (csvContent, filename) => {
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', filename);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
+  
 
   // Generate Excel template with student names and activity columns
   const generateExcelTemplate = (students, assignments, quizzes, className, sectionName) => {
@@ -514,6 +319,110 @@ export default function GradingSystem() {
     });
 
     console.log('Worksheet created with rows:', Object.keys(worksheet).filter(key => key !== '!cols' && key !== '!rows').length);
+
+    // Set column widths
+    worksheet['!cols'] = headers.map(header => ({ width: Math.max(header.length + 2, 15) }));
+
+    // Set row heights
+    worksheet['!rows'] = [{ hpt: 25 }]; // Header row height
+    for (let i = 1; i <= students.length; i++) {
+      worksheet['!rows'][i] = { hpt: 20 };
+    }
+
+    return workbook;
+  };
+
+  // Generate Excel template with grades and feedback
+  const generateExcelTemplateWithGrades = (students, activities) => {
+    console.log('generateExcelTemplateWithGrades called with:', { students, activities });
+    
+    if (!students || students.length === 0) {
+      console.error('No students provided to generateExcelTemplateWithGrades');
+      return null;
+    }
+
+    if (!activities || activities.length === 0) {
+      console.log('No activities provided, creating basic template');
+    }
+
+    // Create workbook and worksheet
+    const workbook = {};
+    const worksheet = {};
+    workbook.Sheets = { 'Grading Template': worksheet };
+    workbook.SheetNames = ['Grading Template'];
+
+    // Define headers
+    const headers = [
+      'Student ID',
+      'Student Name',
+      'School ID',
+      'Section'
+    ];
+
+    // Add activity columns with scores and feedback
+    activities.forEach((activity) => {
+      if (activity.type === 'Assignment') {
+        headers.push(`${activity.title} Score`);
+        headers.push(`${activity.title} Feedback`);
+      } else if (activity.type === 'Quiz') {
+        headers.push(`${activity.title} Score`);
+        headers.push(`${activity.title} Feedback`);
+      }
+    });
+
+    console.log('Template with grades headers:', headers);
+
+    // Write headers to worksheet
+    headers.forEach((header, colIndex) => {
+      const cellAddress = getCellAddress(0, colIndex);
+      worksheet[cellAddress] = {
+        v: header,
+        t: 's',
+        s: {
+          font: { bold: true },
+          fill: { fgColor: { rgb: "CCCCCC" } },
+          alignment: { horizontal: "center" }
+        }
+      };
+    });
+
+    // Write student data rows with grades
+    students.forEach((student, rowIndex) => {
+      const row = rowIndex + 1; // Start from row 1 (after headers)
+      
+      console.log(`Processing student ${rowIndex + 1}:`, student);
+      
+      // Student basic info
+      worksheet[getCellAddress(row, 0)] = { v: student.id || '', t: 's' };
+      worksheet[getCellAddress(row, 1)] = { v: student.studentName || student.name || '', t: 's' };
+      worksheet[getCellAddress(row, 2)] = { v: student.schoolID || '', t: 's' };
+      worksheet[getCellAddress(row, 3)] = { v: student.section || '', t: 's' };
+      
+      let colIndex = 4; // Starting column for activities
+      
+      // Add activity scores and feedback
+      activities.forEach((activity) => {
+        if (activity.type === 'Assignment') {
+          const submission = activity.submissions?.find(sub => 
+            sub.studentId === student.id || sub.userID === student.id || sub.schoolID === student.id
+          );
+          worksheet[getCellAddress(row, colIndex)] = { v: submission?.grade || submission?.score || '', t: submission?.grade || submission?.score ? 'n' : 's' };
+          colIndex++;
+          worksheet[getCellAddress(row, colIndex)] = { v: submission?.feedback || '', t: 's' };
+          colIndex++;
+        } else if (activity.type === 'Quiz') {
+          const response = activity.responses?.find(resp => 
+            resp.studentId === student.id || resp.userID === student.id || resp.schoolID === student.id
+          );
+          worksheet[getCellAddress(row, colIndex)] = { v: response?.score || '', t: response?.score ? 'n' : 's' };
+          colIndex++;
+          worksheet[getCellAddress(row, colIndex)] = { v: response?.feedback || '', t: 's' };
+          colIndex++;
+        }
+      });
+    });
+
+    console.log('Worksheet with grades created with rows:', Object.keys(worksheet).filter(key => key !== '!cols' && key !== '!rows').length);
 
     // Set column widths
     worksheet['!cols'] = headers.map(header => ({ width: Math.max(header.length + 2, 15) }));
@@ -662,7 +571,7 @@ export default function GradingSystem() {
         return;
       }
 
-      setLoading(true);
+      setTemplateLoading(true);
 
       // Fetch students in the selected section
       const token = localStorage.getItem('token');
@@ -1218,19 +1127,82 @@ export default function GradingSystem() {
         throw new Error('No students found in this section. Please check the section configuration.');
       }
 
-      // Generate Excel template
-      const excelContent = generateExcelTemplate(
-        studentsData.sectionStudents,
-        activitiesData.data?.assignments || [],
-        activitiesData.data?.quizzes || [],
-        selectedClassObj.className,
-        selectedSection
+      // Process students data for the template
+      const processedStudents = studentsData.sectionStudents.map(student => ({
+        id: student.id || student.userID || student.studentID || student._id || '',
+        studentName: student.name || student.studentName || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+        schoolID: student.schoolID || student.userID || student.studentID || '',
+        section: selectedSection
+      }));
+
+      // Create activities array with submissions and responses
+      const activities = [];
+      
+      // Add assignments with submissions
+      if (activitiesData.data?.assignments && Array.isArray(activitiesData.data.assignments)) {
+        for (const assignment of activitiesData.data.assignments) {
+          try {
+            const submissionResponse = await fetch(
+              `${API_BASE}/api/assignments/${assignment._id}/submissions`,
+              { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            if (submissionResponse.ok) {
+              const submissionData = await submissionResponse.json();
+              assignment.submissions = submissionData.submissions || [];
+            }
+          } catch (error) {
+            console.log(`Failed to fetch submissions for assignment ${assignment._id}:`, error);
+            assignment.submissions = [];
+          }
+          activities.push({
+            type: 'Assignment',
+            title: assignment.title,
+            id: assignment._id,
+            maxScore: assignment.maxScore || 100,
+            submissions: assignment.submissions || []
+          });
+        }
+      }
+
+      // Add quizzes with responses
+      if (activitiesData.data?.quizzes && Array.isArray(activitiesData.data.quizzes)) {
+        for (const quiz of activitiesData.data.quizzes) {
+          try {
+            const responseResponse = await fetch(
+              `${API_BASE}/api/quizzes/${quiz._id}/responses`,
+              { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            if (responseResponse.ok) {
+              const responseData = await responseResponse.json();
+              quiz.responses = responseData.responses || [];
+            }
+          } catch (error) {
+            console.log(`Failed to fetch responses for quiz ${quiz._id}:`, error);
+            quiz.responses = [];
+          }
+          activities.push({
+            type: 'Quiz',
+            title: quiz.title,
+            id: quiz._id,
+            maxScore: quiz.maxScore || 100,
+            responses: quiz.responses || []
+          });
+        }
+      }
+
+      console.log('Processed students:', processedStudents);
+      console.log('Activities with submissions/responses:', activities);
+
+      // Generate Excel template with grades
+      const excelContent = generateExcelTemplateWithGrades(
+        processedStudents,
+        activities
       );
 
       // Download the Excel file
-      downloadExcelFile(excelContent, `${selectedClassObj.className}_${selectedSection}_Grading_Template.xlsx`);
+      downloadExcelFile(excelContent, `${selectedClassObj.className}_${selectedSection}_Template_with_Grades.xlsx`);
 
-      setValidationMessage(`Grading template downloaded successfully with ${studentsData.sectionStudents.length} students!`);
+      setValidationMessage(`Template with grades downloaded successfully with ${processedStudents.length} students and ${activities.length} activities!`);
       setValidationType('success');
       setShowValidationModal(true);
 
@@ -1240,7 +1212,7 @@ export default function GradingSystem() {
       setValidationType('error');
       setShowValidationModal(true);
     } finally {
-      setLoading(false);
+      setTemplateLoading(false);
     }
   };
 
@@ -1280,7 +1252,7 @@ export default function GradingSystem() {
   // Test all available endpoints to see what's working
   const testAllEndpoints = async () => {
     try {
-      setLoading(true);
+      setTemplateLoading(true);
       const token = localStorage.getItem('token');
       let testReport = `Endpoint Test Report\n\n`;
       
@@ -1600,25 +1572,16 @@ export default function GradingSystem() {
               Export comprehensive grades for assignments and quizzes in the selected section as a CSV file.
             </p>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
               <div className="flex items-end">
                 <button
-                  onClick={exportAllGrades}
-                  disabled={!selectedSection || exportLoading}
-                  className="w-full bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  onClick={downloadTemplate}
+                   disabled={!selectedSection || templateLoading}
+                  className="w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
-                  {exportLoading ? 'Exporting...' : 'Export Grades (CSV)'}
+                   {templateLoading ? 'Generating...' : 'Download Template with Grades'}
                 </button>
               </div>
-                             <div className="flex items-end">
-                 <button
-                   onClick={downloadTemplate}
-                   disabled={!selectedSection || loading}
-                   className="w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                 >
-                   {loading ? 'Generating...' : 'Download Template'}
-                 </button>
-               </div>
             </div>
             
             {/* Debug Information */}
@@ -1663,11 +1626,11 @@ export default function GradingSystem() {
                 {uploadLoading ? 'Uploading...' : 'Upload Grades'}
               </button>
               
-                             <button
-                 onClick={debugStudents}
+              <button
+                onClick={debugStudents}
                  disabled={!selectedSection || loading}
-                 className="bg-orange-600 text-white px-6 py-2 rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-               >
+                className="bg-orange-600 text-white px-6 py-2 rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
                  {loading ? 'Debugging...' : 'Debug Students'}
                </button>
 
@@ -1677,7 +1640,7 @@ export default function GradingSystem() {
                  className="bg-purple-600 text-white px-6 py-2 rounded-md hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed transition-colors"
                >
                  {loading ? 'Testing...' : 'Test All Endpoints'}
-               </button>
+              </button>
             </div>
           </div>
         </div>
