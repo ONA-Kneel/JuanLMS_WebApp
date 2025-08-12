@@ -42,8 +42,14 @@ router.post('/upload-image', upload.single('image'), (req, res) => {
 router.post('/', authenticateToken, async (req, res) => {
   if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
   try {
+    console.log('[QuizRoutes] Creating quiz with data:', req.body);
+    console.log('[QuizRoutes] Timing data:', req.body.timing);
+    
     const quiz = new Quiz(req.body);
     await quiz.save();
+    
+    console.log('[QuizRoutes] Quiz created successfully:', quiz._id);
+    console.log('[QuizRoutes] Saved timing data:', quiz.timing);
     
     // Create notifications for students in the class(es)
     if (quiz.classID) {
@@ -58,6 +64,7 @@ router.post('/', authenticateToken, async (req, res) => {
     
     res.status(201).json(quiz);
   } catch (err) {
+    console.error('[QuizRoutes] Error creating quiz:', err);
     res.status(400).json({ error: err.message });
   }
 });
@@ -153,6 +160,9 @@ router.get('/:quizId', authenticateToken, async (req, res) => {
     const quiz = await Quiz.findById(req.params.quizId).lean();
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
+    console.log('[QuizRoutes] Fetching quiz:', req.params.quizId);
+    console.log('[QuizRoutes] Quiz timing data:', quiz.timing);
+
     // FIX: Use questionBehaviour.shuffle (boolean)
     if (quiz.questionBehaviour && quiz.questionBehaviour.shuffle && req.user && req.user._id) {
       quiz.questions = seededShuffle(quiz.questions, req.user._id.toString());
@@ -168,10 +178,19 @@ router.get('/:quizId', authenticateToken, async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
   try {
+    console.log('[QuizRoutes] Updating quiz:', req.params.id);
+    console.log('[QuizRoutes] Update data:', req.body);
+    console.log('[QuizRoutes] Update timing data:', req.body.timing);
+    
     const quiz = await Quiz.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+    
+    console.log('[QuizRoutes] Quiz updated successfully');
+    console.log('[QuizRoutes] Updated timing data:', quiz.timing);
+    
     res.json(quiz);
   } catch (err) {
+    console.error('[QuizRoutes] Error updating quiz:', err);
     res.status(400).json({ error: err.message });
   }
 });

@@ -24,11 +24,12 @@ export default function QuizView() {
   const [timeWarned, setTimeWarned] = useState(false);
   const [showUnansweredModal, setShowUnansweredModal] = useState(false);
   const [unansweredNumbers, setUnansweredNumbers] = useState([]);
-  const [violationCount, setViolationCount] = useState(0);
   const violationCountRef = useRef(0);
   const [violationEvents, setViolationEvents] = useState([]); // {question: number, time: ISO string}
   const [questionTimes, setQuestionTimes] = useState([]); // seconds spent per question
   const questionStartTimeRef = useRef(Date.now());
+  const [timerStarted, setTimerStarted] = useState(false); // Track if timer has started
+  const timerStartTimeRef = useRef(null); // Track when timer actually started
 
   // Fetch quiz details
   useEffect(() => {
@@ -58,10 +59,18 @@ export default function QuizView() {
       setAnswers(Array(data.questions.length).fill(null));
       setLoading(false);
 
+      // Debug: Log timing data
+      console.log('[QuizView] Quiz timing data:', data.timing);
+      console.log('[QuizView] timeLimitEnabled:', data.timing?.timeLimitEnabled);
+      console.log('[QuizView] timeLimit:', data.timing?.timeLimit);
+
       // 🕒 Handle quiz time limit
       if (data.timing && data.timing.timeLimitEnabled && data.timing.timeLimit) {
+        console.log('[QuizView] Setting timer with', data.timing.timeLimit, 'minutes');
         setTimeLeft(data.timing.timeLimit * 60);
         setTimeWarned(false); // Reset warning flag on new quiz load
+      } else {
+        console.log('[QuizView] Timer not enabled or missing data');
       }
 
       // 👤 Set student info
@@ -97,21 +106,62 @@ export default function QuizView() {
 
   // Timer logic
   useEffect(() => {
-    if (!quiz || !quiz.timing || !quiz.timing.timeLimitEnabled || !quiz.timing.timeLimit || submitted) return;
-    if (timeLeft === null) return;
-    const totalSeconds = quiz.timing.timeLimit * 60;
-    // Show warning modal at 60% elapsed (40% left)
-    if (!timeWarned && timeLeft <= totalSeconds * 0.4 && timeLeft > 0) {
-      setShowTimeWarning(true);
-      setTimeWarned(true);
-    }
-    if (timeLeft <= 0) {
-      handleSubmit();
+    console.log('[QuizView] Timer effect triggered:', {
+      hasQuiz: !!quiz,
+      hasTiming: !!quiz?.timing,
+      timeLimitEnabled: quiz?.timing?.timeLimitEnabled,
+      timeLimit: quiz?.timing?.timeLimit,
+      timeLeft,
+      submitted,
+      timeWarned,
+      timerStarted,
+      showIntro
+    });
+    
+    // Only start timer when quiz has started (not on intro page) and timer is enabled
+    if (!quiz || !quiz.timing || !quiz.timing.timeLimitEnabled || !quiz.timing.timeLimit || submitted || showIntro || !timerStarted) {
+      console.log('[QuizView] Timer effect early return');
       return;
     }
-    const interval = setInterval(() => setTimeLeft(t => t - 1), 1000);
+    if (timeLeft === null || timerStartTimeRef.current === null) {
+      console.log('[QuizView] Timer effect: timeLeft or timerStartTime is null');
+      return;
+    }
+    
+    const totalSeconds = quiz.timing.timeLimit * 60;
+    console.log('[QuizView] Timer running:', { timeLeft, totalSeconds, warningThreshold: totalSeconds * 0.4 });
+    
+    // Calculate elapsed time and update timeLeft based on actual elapsed time
+    const updateTimer = () => {
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - timerStartTimeRef.current) / 1000);
+      const remainingSeconds = totalSeconds - elapsedSeconds;
+      
+      if (remainingSeconds <= 0) {
+        console.log('[QuizView] Time expired, auto-submitting');
+        setTimeLeft(0);
+        autoSubmit(); // Call auto-submit when timer expires
+        return;
+      }
+      
+      setTimeLeft(remainingSeconds);
+      
+      // Show warning modal at 60% elapsed (40% left)
+      if (!timeWarned && remainingSeconds <= totalSeconds * 0.4 && remainingSeconds > 0) {
+        console.log('[QuizView] Showing time warning modal');
+        setShowTimeWarning(true);
+        setTimeWarned(true);
+      }
+    };
+    
+    // Update timer immediately
+    updateTimer();
+    
+    // Set up interval to update timer every second
+    const interval = setInterval(updateTimer, 1000);
+    
     return () => clearInterval(interval);
-  }, [quiz, timeLeft, submitted, timeWarned]);
+  }, [quiz, submitted, timeWarned, quiz?.timing?.timeLimit, quiz?.timing?.timeLimitEnabled, timerStarted, showIntro, timeLeft]);
 
   // Track time spent per question
   useEffect(() => {
@@ -167,13 +217,23 @@ export default function QuizView() {
     setAnswers(ans => ans.map((a, i) => (i === idx ? value : a)));
   };
 
+  // Function to start the quiz and timer
+  const handleStartQuiz = () => {
+    console.log('[QuizView] Starting quiz and timer');
+    setShowIntro(false);
+    setTimerStarted(true);
+    timerStartTimeRef.current = Date.now(); // Record when timer actually started
+    // Reset question start time when quiz begins
+    questionStartTimeRef.current = Date.now();
+  };
+
   // Canvas-style monitoring: focus loss/tab switch
   useEffect(() => {
     const handleBlur = () => {
       // Record violation event with question number and timestamp
       setViolationEvents(events => [...events, { question: current + 1, time: new Date().toISOString() }]);
       violationCountRef.current += 1;
-      setViolationCount(violationCountRef.current);
+      // setViolationCount(violationCountRef.current); // This line is removed
       alert("You have left the quiz window. Your teacher will be notified.");
       // Optionally, send to backend immediately (for real-time logging)
       /*
@@ -207,15 +267,34 @@ export default function QuizView() {
   const handleSubmit = async () => {
     // Record time for last question
     recordLastQuestionTime();
-    // Check for unanswered required questions
-    const unanswered = quiz.questions
-      .map((q, i) => (q.required && (answers[i] === null || answers[i] === undefined || answers[i] === "")) ? i + 1 : null)
-      .filter(n => n !== null);
-    if (unanswered.length > 0) {
-      setUnansweredNumbers(unanswered);
-      setShowUnansweredModal(true);
-      return;
+    
+    // Only check for unanswered required questions if timer hasn't expired
+    if (quiz.timing?.timeLimitEnabled && quiz.timing?.timeLimit && timeLeft > 0) {
+      const unanswered = quiz.questions
+        .map((q, i) => (q.required && (answers[i] === null || answers[i] === undefined || answers[i] === "")) ? i + 1 : null)
+        .filter(n => n !== null);
+      if (unanswered.length > 0) {
+        setUnansweredNumbers(unanswered);
+        setShowUnansweredModal(true);
+        return;
+      }
     }
+    
+    // If we get here, either timer expired or all required questions are answered
+    await submitQuiz();
+  };
+
+  // Separate function for auto-submit when timer expires (ignores required questions)
+  const autoSubmit = async () => {
+    console.log('[QuizView] Auto-submitting due to time expiration');
+    // Record time for last question
+    recordLastQuestionTime();
+    // Auto-submit regardless of required questions
+    await submitQuiz();
+  };
+
+  // Common submission logic
+  const submitQuiz = async () => {
     setSubmitting(true);
     const token = localStorage.getItem('token');
     try {
@@ -370,11 +449,13 @@ export default function QuizView() {
           <span className="text-lg text-gray-700 font-semibold">{quiz.points || ''} Points</span>
         </div>
         <div className="mb-6 w-full text-gray-700 text-lg text-left">{quiz.instructions || quiz.description}</div>
-        {quiz.timing?.limit && (
-          <div className="mb-6 text-xl font-bold text-blue-900">Timer: {Math.floor(timeLeft/60)}:{String(timeLeft%60).padStart(2,'0')}</div>
+        {quiz.timing?.timeLimitEnabled && quiz.timing?.timeLimit && (
+          <div className="mb-6 text-xl font-bold text-blue-900">
+            Time Limit: {quiz.timing.timeLimit} minutes (Timer will start when you begin the quiz)
+          </div>
         )}
         <div className="mb-8 w-full text-sm text-gray-500 text-left">{studentInfo.name} {studentInfo.section && `| ${studentInfo.section}`}</div>
-        <button className="bg-blue-800 text-white px-8 py-3 rounded-lg text-lg font-semibold shadow" onClick={() => setShowIntro(false)}>Next</button>
+        <button className="bg-blue-800 text-white px-8 py-3 rounded-lg text-lg font-semibold shadow" onClick={handleStartQuiz}>Next</button>
       </div>
     </div>
   );
@@ -428,7 +509,7 @@ export default function QuizView() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
       {/* Timer centered above card */}
-      {quiz.timing?.timeLimitEnabled && quiz.timing?.timeLimit && (
+      {quiz.timing?.timeLimitEnabled && quiz.timing?.timeLimit && timerStarted && timeLeft !== null && (
         <div className="mb-4 text-2xl font-bold text-blue-900 text-center">Timer: {Math.floor(timeLeft/60)}:{String(timeLeft%60).padStart(2,'0')}</div>
       )}
       {/* Time warning modal */}
@@ -489,7 +570,7 @@ export default function QuizView() {
             <button
               className="bg-blue-800 text-white px-8 py-2 rounded-lg text-lg font-semibold"
               onClick={handleSubmit}
-              disabled={submitting}
+              disabled={submitting || (quiz.timing?.timeLimitEnabled && quiz.timing?.timeLimit && timeLeft > 0 && answers[current] == null)}
             >{submitting ? 'Submitting...' : 'Submit'}</button>
           )}
         </div>
