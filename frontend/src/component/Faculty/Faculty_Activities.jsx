@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Faculty_Activities() {
   const [activeTab, setActiveTab] = useState("activities-quiz");
@@ -12,6 +12,7 @@ export default function Faculty_Activities() {
   const tabs = [
     { id: "activities-quiz", label: "Activities/Quiz" },
     { id: "ready-to-grade", label: "Ready to Grade" },
+    { id: "graded", label: "Graded" },
   ];
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
@@ -28,6 +29,10 @@ export default function Faculty_Activities() {
   const [readyToGradeFilter, setReadyToGradeFilter] = useState("All");
   const [showReadyToGradeFilterDropdown, setShowReadyToGradeFilterDropdown] = useState(false);
   const readyToGradeFilterRef = useRef();
+  const [gradedItems, setGradedItems] = useState([]);
+  const [gradedFilter, setGradedFilter] = useState("All");
+  const [showGradedFilterDropdown, setShowGradedFilterDropdown] = useState(false);
+  const gradedFilterRef = useRef();
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -141,6 +146,8 @@ export default function Faculty_Activities() {
           
           // Fetch submissions for ready to grade
           await fetchReadyToGradeItems(filteredActivities, filteredQuizzes, token);
+          // Fetch graded items
+          await fetchGradedItems(filteredActivities, filteredQuizzes, token);
         }
       } catch (err) {
         console.error("Failed to fetch activities or quizzes", err);
@@ -150,10 +157,11 @@ export default function Faculty_Activities() {
     if (facultyClasses.length > 0) {
       fetchActivitiesAndQuizzes();
     } else {
-      // If there are no active classes, ensure lists are empty
-      setActivities([]);
-      setQuizzes([]);
-      setReadyToGradeItems([]);
+              // If there are no active classes, ensure lists are empty
+        setActivities([]);
+        setQuizzes([]);
+        setReadyToGradeItems([]);
+        setGradedItems([]);
     }
   }, [facultyClasses]);
 
@@ -209,7 +217,83 @@ export default function Faculty_Activities() {
     }
   };
 
-
+  const fetchGradedItems = async (activityData, quizData, token) => {
+    try {
+      const gradedItemsList = [];
+      
+      // Check assignments for graded submissions
+      for (const assignment of activityData) {
+        try {
+          const submissionRes = await fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (submissionRes.ok) {
+            const submissions = await submissionRes.json();
+            if (submissions && submissions.length > 0) {
+              // Check if all submissions are graded
+              const allGraded = submissions.every(sub => sub.status === 'graded');
+              if (allGraded) {
+                // Calculate completion date (when the last submission was graded)
+                const lastGradedDate = new Date(Math.max(...submissions
+                  .filter(sub => sub.status === 'graded')
+                  .map(sub => new Date(sub.updatedAt || sub.submittedAt))
+                ));
+                
+                gradedItemsList.push({
+                  ...assignment,
+                  type: 'assignment',
+                  submissions: submissions,
+                  completionDate: lastGradedDate,
+                  totalSubmissions: submissions.length,
+                  gradedSubmissions: submissions.filter(sub => sub.status === 'graded').length
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to fetch submissions for assignment ${assignment._id}:`, err);
+        }
+      }
+      
+      // Check quizzes for graded responses
+      for (const quiz of quizData) {
+        try {
+          const responseRes = await fetch(`${API_BASE}/api/quizzes/${quiz._id}/responses`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (responseRes.ok) {
+            const responses = await responseRes.json();
+            if (responses && responses.length > 0) {
+              // Check if all responses are graded
+              const allGraded = responses.every(resp => resp.graded === true);
+              if (allGraded) {
+                // Calculate completion date (when the last response was graded)
+                const lastGradedDate = new Date(Math.max(...responses
+                  .filter(resp => resp.graded === true)
+                  .map(resp => new Date(resp.updatedAt || resp.submittedAt))
+                ));
+                
+                gradedItemsList.push({
+                  ...quiz,
+                  type: 'quiz',
+                  submissions: responses,
+                  completionDate: lastGradedDate,
+                  totalSubmissions: responses.length,
+                  gradedSubmissions: responses.filter(resp => resp.graded === true).length
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to fetch responses for quiz ${quiz._id}:`, err);
+        }
+      }
+      
+      setGradedItems(gradedItemsList);
+    } catch (err) {
+      console.error("Failed to fetch graded items:", err);
+    }
+  };
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -221,6 +305,9 @@ export default function Faculty_Activities() {
       }
       if (readyToGradeFilterRef.current && !readyToGradeFilterRef.current.contains(event.target)) {
         setShowReadyToGradeFilterDropdown(false);
+      }
+      if (gradedFilterRef.current && !gradedFilterRef.current.contains(event.target)) {
+        setShowGradedFilterDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -538,6 +625,152 @@ export default function Faculty_Activities() {
                               </p>
                               <p className="text-white/70 text-xs mt-1">
                                 {item.submissions?.length || 0} submission(s) ready to grade
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <div className="bg-white/20 text-white px-3 py-1 rounded text-xs uppercase font-bold mb-1">
+                                {item.type === 'assignment' ? 'ASSIGNMENT' : 'QUIZ'}
+                              </div>
+                              <div className="text-white font-bold text-lg">
+                                {item.points || 0} Points
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ));
+                })()
+              )}
+            </div>
+          )}
+
+          {activeTab === "graded" && (
+            <div>
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-black text-2xl font-bold mb-2">Graded Activities</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">Filter:</span>
+                    <div className="relative" ref={gradedFilterRef}>
+                      <button
+                        className="bg-white border border-gray-300 text-gray-700 text-sm px-3 py-1 rounded hover:bg-gray-50 flex items-center gap-2 min-w-[100px] justify-between"
+                        onClick={() => setShowGradedFilterDropdown((prev) => !prev)}
+                      >
+                        {gradedFilter}
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {showGradedFilterDropdown && (
+                        <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-300 rounded shadow-lg z-10">
+                          {["All", "Quiz", "Assignment"].map((option) => (
+                            <button
+                              key={option}
+                              className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${
+                                gradedFilter === option ? "bg-blue-500 text-white" : "text-gray-700"
+                              }`}
+                              onClick={() => {
+                                setGradedFilter(option);
+                                setShowGradedFilterDropdown(false);
+                              }}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {gradedItems.length === 0 ? (
+                <p className="mt-4">No graded activities yet.</p>
+              ) : (
+                (() => {
+                  // Sort graded items by completion date (newest first)
+                  let sortedItems = [...gradedItems]
+                    .sort((a, b) => new Date(b.completionDate || 0) - new Date(a.completionDate || 0));
+                  
+                  // Apply filter
+                  if (gradedFilter === "Quiz") {
+                    sortedItems = sortedItems.filter(item => item.type === "quiz");
+                  } else if (gradedFilter === "Assignment") {
+                    sortedItems = sortedItems.filter(item => item.type === "assignment");
+                  }
+                  
+                  // Group items by completion date
+                  const groupedByDate = {};
+                  sortedItems.forEach(item => {
+                    const date = new Date(item.completionDate || new Date());
+                    const dateKey = date.toDateString();
+                    if (!groupedByDate[dateKey]) {
+                      groupedByDate[dateKey] = [];
+                    }
+                    groupedByDate[dateKey].push(item);
+                  });
+                  
+                  // Sort date keys (newest first)
+                  const sortedDateKeys = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
+                  
+                  return sortedDateKeys.map(dateKey => (
+                    <div key={dateKey}>
+                      {/* Date separator */}
+                      <div className="mb-4 mt-6 first:mt-0">
+                        <h4 className="text-lg font-semibold text-gray-700 mb-3">
+                          Completed on {new Date(dateKey).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </h4>
+                      </div>
+                      
+                      {/* Items for this date */}
+                      {groupedByDate[dateKey].map((item) => (
+                        <div
+                          key={`${item.type}-${item._id || item.id}-${item.classInfo?.classCode || 'unknown'}`}
+                          className="bg-green-600 p-4 rounded-xl shadow-lg mb-4 hover:bg-green-700 cursor-pointer transition-colors"
+                          onClick={() => {
+                            if (item.type === 'assignment') {
+                              navigate(`/assignment/${item._id || item.id}`);
+                            } else if (item.type === 'quiz') {
+                              navigate(`/quiz/${item._id || item.id}/responses`);
+                            }
+                          }}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h3 className="text-white text-xl md:text-2xl font-semibold">{item.title}</h3>
+                                <span className="bg-green-500 text-white px-2 py-1 rounded text-xs font-bold">
+                                  ✓ Graded
+                                </span>
+                              </div>
+                              <p className="text-white/90 text-sm mb-1">
+                                Due at {item.dueDate ? new Date(item.dueDate).toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                  hour12: true
+                                }) : 'No due date'}
+                              </p>
+                              <p className="text-white/80 text-sm font-medium">
+                                {item.classInfo?.classCode || 'N/A'} | {item.classInfo?.className || 'Unknown Class'}
+                              </p>
+                              <p className="text-white/70 text-xs mt-1">
+                                {item.gradedSubmissions || 0} of {item.totalSubmissions || 0} submission(s) graded
+                              </p>
+                              <p className="text-white/60 text-xs mt-1">
+                                Completed on {new Date(item.completionDate || new Date()).toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                  hour12: true
+                                })}
                               </p>
                             </div>
                             <div className="text-right">

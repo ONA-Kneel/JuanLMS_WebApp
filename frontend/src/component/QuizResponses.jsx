@@ -10,12 +10,13 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import { toast } from 'react-toastify';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import ValidationModal from './ValidationModal';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://juanlms-webapp-server.onrender.com';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 function calculateStats(responses, quiz) {
   const scores = responses.map(r => typeof r.score === 'number' ? r.score : 0);
@@ -70,12 +71,15 @@ export default function QuizResponses() {
         const updated = await res.json();
         setResponses(r => r.map((item, i) => i === idx ? { ...item, score: updated.score } : item));
         setEditScoreIdx(null);
+        toast.success(`Score updated successfully to ${updated.score}`);
       } else {
+        const errorData = await res.json();
+        const errorMessage = errorData.error || 'Failed to update score.';
         setValidationModal({
           isOpen: true,
           type: 'error',
           title: 'Update Failed',
-          message: 'Failed to update score.'
+          message: errorMessage
         });
       }
     } catch {
@@ -88,6 +92,40 @@ export default function QuizResponses() {
     }
   };
   const handleScoreCancel = () => setEditScoreIdx(null);
+
+  const handleMarkAllAsGraded = async () => {
+    if (!window.confirm('Are you sure you want to mark all quiz responses as graded? This will move all responses to the "Graded" tab.')) {
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/api/quizzes/${quizId}/responses/mark-all-graded`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+      });
+
+      if (res.ok) {
+        // Refresh the responses list
+        const updatedResponses = responses.map(resp => ({
+          ...resp,
+          graded: true
+        }));
+        setResponses(updatedResponses);
+        
+        toast.success('All quiz responses have been marked as graded!');
+      } else {
+        const err = await res.json();
+        toast.error(`Failed to mark responses as graded: ${err.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error marking responses as graded:', err);
+      toast.error('Network error. Please check your connection and try again.');
+    }
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -164,10 +202,19 @@ export default function QuizResponses() {
         {/* To Grade Tab (default) */}
         {tab === 'toGrade' && responses.length > 0 && (
           <div className="w-full">
-            <div className="flex items-center gap-4 mb-4">
-              <button disabled={selectedIdx === 0} onClick={() => setSelectedIdx(i => i - 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&lt;</button>
-              <span> {selectedIdx + 1} of {responses.length} </span>
-              <button disabled={selectedIdx === responses.length - 1} onClick={() => setSelectedIdx(i => i + 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&gt;</button>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-4">
+                <button disabled={selectedIdx === 0} onClick={() => setSelectedIdx(i => i - 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&lt;</button>
+                <span> {selectedIdx + 1} of {responses.length} </span>
+                <button disabled={selectedIdx === responses.length - 1} onClick={() => setSelectedIdx(i => i + 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&gt;</button>
+              </div>
+              <button
+                onClick={handleMarkAllAsGraded}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2"
+              >
+                <span>✓</span>
+                Mark All as Graded
+              </button>
             </div>
             <div className="mb-2 text-2xl font-bold text-blue-900">{responses[selectedIdx].studentId?.firstname} {responses[selectedIdx].studentId?.lastname}</div>
             <div className="mb-2 text-lg text-gray-700">Submitted: {new Date(responses[selectedIdx].submittedAt).toLocaleString()}</div>
@@ -179,16 +226,29 @@ export default function QuizResponses() {
                     type="number"
                     min={0}
                     max={stats.total}
+                    step="0.01"
                     className="border-2 border-blue-400 rounded px-3 py-1 text-2xl w-24 text-center font-bold mr-2"
                     value={editScoreValue}
                     onChange={e => {
                       let val = Number(e.target.value);
+                      // Handle NaN case
+                      if (isNaN(val)) val = 0;
+                      // Ensure score is within valid range
+                      if (val > stats.total) val = stats.total;
+                      if (val < 0) val = 0;
+                      setEditScoreValue(val);
+                    }}
+                    onBlur={e => {
+                      // Ensure the value is properly formatted on blur
+                      let val = Number(e.target.value);
+                      if (isNaN(val)) val = 0;
                       if (val > stats.total) val = stats.total;
                       if (val < 0) val = 0;
                       setEditScoreValue(val);
                     }}
                   />
                   <span className="text-2xl font-bold">/ {stats.total}</span>
+                  <div className="text-xs text-gray-600 mt-1">Note: 0 is a valid score for students who did not pass anything</div>
                   <button className="ml-2 px-3 py-1 bg-green-600 text-white rounded font-semibold" onClick={() => handleScoreSave(selectedIdx)}>Save</button>
                   <button className="ml-2 px-3 py-1 bg-gray-400 text-white rounded font-semibold" onClick={handleScoreCancel}>Cancel</button>
                 </>
@@ -256,6 +316,34 @@ export default function QuizResponses() {
         {tab === 'status' && (
           <div className="w-full">
             <h2 className="text-lg font-semibold mb-4">Student Quiz Status</h2>
+            
+            {/* Status Summary */}
+            <div className="mb-4 flex gap-4">
+              <div className="bg-blue-100 text-blue-800 px-3 py-2 rounded-lg">
+                <span className="font-semibold">
+                  {responses.filter(r => r.graded).length}
+                </span> Graded
+              </div>
+              <div className="bg-yellow-100 text-yellow-800 px-3 py-2 rounded-lg">
+                <span className="font-semibold">
+                  {responses.filter(r => !r.graded && r.submittedAt).length}
+                </span> Submitted (Not Graded)
+              </div>
+              <div className="bg-gray-100 text-gray-800 px-3 py-2 rounded-lg">
+                <span className="font-semibold">
+                  {members.filter(student => {
+                    const assignedIDs = quiz?.assignedTo?.[0]?.studentIDs || [];
+                    const isAssigned = assignedIDs.includes(student._id) || assignedIDs.includes(student.userID);
+                    const hasResponse = responses.find(r =>
+                      r.studentId?._id === student._id ||
+                      r.studentId === student._id ||
+                      r.studentId?.userID === student.userID
+                    );
+                    return isAssigned && !hasResponse;
+                  }).length}
+                </span> Not Yet Submitted
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
                 <thead className="bg-gray-50">
@@ -281,14 +369,25 @@ export default function QuizResponses() {
                         );
                         let status = "Not Yet Viewed";
                         if (response) {
-                          status = "Submitted";
+                          if (response.graded) {
+                            status = "Graded";
+                          } else {
+                            status = "Submitted";
+                          }
                         } else if (quiz?.views && quiz.views.map(String).includes(String(student._id))) {
                           status = "Viewed";
                         }
                         return (
                           <tr key={student._id}>
                             <td className="p-3 border">{student.lastname}, {student.firstname}</td>
-                            <td className="p-3 border">{status}</td>
+                            <td className={`p-3 border ${
+                              status === "Graded" ? "bg-green-100 text-green-800 font-semibold" : 
+                              status === "Submitted" ? "bg-blue-100 text-blue-800" : 
+                              status === "Viewed" ? "bg-yellow-100 text-yellow-800" : 
+                              "bg-gray-100 text-gray-800"
+                            }`}>
+                              {status}
+                            </td>
                             <td className="p-3 border">{response && typeof response.score === 'number' ? response.score : "-"}</td>
                             {/* Removed Feedback cell */}
                           </tr>

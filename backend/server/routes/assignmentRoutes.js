@@ -490,6 +490,31 @@ router.post('/:id/grade', authenticateToken, async (req, res) => {
   }
 });
 
+// Mark all submissions for an assignment as graded (for faculty convenience)
+router.patch('/:id/mark-all-graded', authenticateToken, async (req, res) => {
+  try {
+    const assignmentId = req.params.id;
+    
+    // Update all submissions for this assignment to mark them as graded
+    const result = await Submission.updateMany(
+      { assignment: assignmentId },
+      { 
+        status: 'graded',
+        updatedAt: new Date()
+      }
+    );
+    
+    res.json({
+      success: true,
+      message: `Marked ${result.modifiedCount} submissions as graded`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (err) {
+    console.error('Error marking submissions as graded:', err);
+    res.status(500).json({ error: 'Failed to mark submissions as graded.' });
+  }
+});
+
 // Student undoes their submission (delete submission)
 router.delete('/:id/submission', authenticateToken, async (req, res) => {
   try {

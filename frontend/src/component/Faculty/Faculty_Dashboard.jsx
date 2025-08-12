@@ -5,7 +5,7 @@ import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 // import createEvent from "../../assets/createEvent.png";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Faculty_Dashboard() {
   const [classes, setClasses] = useState([]);

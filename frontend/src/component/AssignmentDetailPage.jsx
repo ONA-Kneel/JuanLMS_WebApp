@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import Student_Navbar from './Student/Student_Navbar';
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function AssignmentDetailPage() {
   const { assignmentId } = useParams();
@@ -311,6 +312,49 @@ export default function AssignmentDetailPage() {
 
 
 
+  // Mark all submissions as graded
+  const handleMarkAllAsGraded = async () => {
+    if (!window.confirm('Are you sure you want to mark all submissions as graded? This will move all submissions to the "Graded" tab.')) {
+      return;
+    }
+
+    setGradeLoading(true);
+    const token = localStorage.getItem("token");
+
+    try {
+      const res = await fetch(`${API_BASE}/assignments/${assignmentId}/mark-all-graded`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (res.ok) {
+        // Refresh the submissions list
+        const token = localStorage.getItem("token");
+        fetch(`${API_BASE}/assignments/${assignmentId}/submissions`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(submissions => {
+            setSubmissions(submissions);
+          })
+          .catch(err => console.error('Error refreshing submissions:', err));
+        
+        toast.success('All submissions have been marked as graded!');
+      } else {
+        const err = await res.json();
+        toast.error(`Failed to mark submissions as graded: ${err.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error marking submissions as graded:', err);
+      toast.error('Network error. Please check your connection and try again.');
+    } finally {
+      setGradeLoading(false);
+    }
+  };
+
   // Faculty grade handler
   const handleGrade = async (submissionId) => {
     setGradeLoading(true);
@@ -473,7 +517,18 @@ export default function AssignmentDetailPage() {
               )}
               {(activeTab === 'toGrade' || activeTab === 'graded') && (
                 <div>
-                  <h2 className="text-lg font-semibold mb-4">Submissions</h2>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-semibold">Submissions</h2>
+                    {activeTab === 'toGrade' && (
+                      <button
+                        onClick={handleMarkAllAsGraded}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2"
+                      >
+                        <span>✓</span>
+                        Mark All as Graded
+                      </button>
+                    )}
+                  </div>
                   
                   {/* Information about no-file submissions */}
                   <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-4">

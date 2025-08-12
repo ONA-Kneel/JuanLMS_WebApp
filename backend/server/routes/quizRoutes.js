@@ -271,15 +271,58 @@ router.get('/:quizId/responses', authenticateToken, async (req, res) => {
   }
 });
 
+// Mark all quiz responses as graded (for faculty convenience)
+router.patch('/:quizId/responses/mark-all-graded', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { quizId } = req.params;
+    
+    // Update all responses for this quiz to mark them as graded
+    const result = await QuizResponse.updateMany(
+      { quizId },
+      { 
+        graded: true,
+        updatedAt: new Date()
+      }
+    );
+    
+    res.json({
+      success: true,
+      message: `Marked ${result.modifiedCount} responses as graded`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PATCH a quiz response's score by responseId
 router.patch('/:quizId/responses/:responseId', authenticateToken, async (req, res) => {
   if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
   try {
     const { responseId } = req.params;
-    const { score } = req.body;
-    if (typeof score !== 'number') return res.status(400).json({ error: 'Score must be a number.' });
-    const updated = await QuizResponse.findByIdAndUpdate(responseId, { score }, { new: true });
+    const { score, feedback } = req.body;
+    
+    // Validate score - allow 0 as a valid score since students may not pass anything
+    if (typeof score !== 'number' || score < 0) {
+      return res.status(400).json({ 
+        error: 'Score must be a non-negative number. Zero is a valid score for students who did not pass anything.' 
+      });
+    }
+    
+    const updateData = { 
+      score, 
+      graded: true,
+      updatedAt: new Date()
+    };
+    
+    if (feedback !== undefined) {
+      updateData.feedback = feedback;
+    }
+    
+    const updated = await QuizResponse.findByIdAndUpdate(responseId, updateData, { new: true });
     if (!updated) return res.status(404).json({ error: 'Quiz response not found.' });
+    
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
