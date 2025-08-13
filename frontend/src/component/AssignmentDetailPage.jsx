@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { toast } from 'react-toastify';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import Student_Navbar from './Student/Student_Navbar';
@@ -183,9 +182,11 @@ export default function AssignmentDetailPage() {
           formData.append('files', file[i]);
         }
       } else if (submissionType === 'link') {
-        for (let i = 0; i < links.length && i < 5; i++) {
-          if (links[i]) formData.append('links', links[i]);
-        }
+        // Filter out empty links and append to formData
+        const validLinks = links.filter(link => link && link.trim());
+        validLinks.forEach(link => {
+          formData.append('links', link.trim());
+        });
       } else if (submissionType === 'none') {
         // For submissions without files, we still need to send the submission
         // The backend will handle empty files array
@@ -289,28 +290,6 @@ export default function AssignmentDetailPage() {
       setDeletingFile(null);
     }
   };
-
-  const refreshStudentSubmission = async () => {
-    const userID = localStorage.getItem('userID');
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/submissions/assignment/${assignmentId}/student/${userID}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setSubmissions(data); // <- this updates the grade shown
-      }
-    } catch (err) {
-      console.error('Failed to refresh student submission:', err);
-    }
-  };
-
-
-
 
   // Mark all submissions as graded
   const handleMarkAllAsGraded = async () => {
@@ -589,6 +568,8 @@ export default function AssignmentDetailPage() {
                             if (member.submission) {
                               if (member.submission.files && member.submission.files.length > 0) {
                                 submissionDetails = `${member.submission.files.length} file(s)`;
+                              } else if (member.submission.links && member.submission.links.length > 0) {
+                                submissionDetails = `${member.submission.links.length} link(s)`;
                               } else if (member.submission.context) {
                                 submissionDetails = "No files + Context";
                               } else {
@@ -692,6 +673,29 @@ export default function AssignmentDetailPage() {
                                 {file.name}
                               </a>
                             ))}
+                          </div>
+                        </div>
+                      ) : studentSubmission.links && studentSubmission.links.length > 0 ? (
+                        <div className="mt-2">
+                          <span className="font-semibold">Submission Type: </span>
+                          <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
+                            Links ({studentSubmission.links.length})
+                          </span>
+                          <div className="mt-2">
+                            <span className="font-semibold">Submitted Links: </span>
+                            <div className="flex flex-col gap-1 mt-1">
+                              {studentSubmission.links.map((link, idx) => (
+                                <a 
+                                  key={idx}
+                                  href={link} 
+                                  className="text-blue-700 underline bg-blue-50 px-2 py-1 rounded text-sm break-all" 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                >
+                                  {link}
+                                </a>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -944,6 +948,7 @@ export default function AssignmentDetailPage() {
               <h3 className="text-2xl font-extrabold mb-4 text-blue-900">Grade Submission</h3>
               <div className="font-bold text-lg mb-2">Submission Content:</div>
               <div className="flex flex-col gap-3">
+                {/* Show submitted files */}
                 {gradingStudent && gradingStudent.submission && gradingStudent.submission.files && gradingStudent.submission.files.length > 0 ? (
                   gradingStudent.submission.files.map((file, idx) => {
                     const ext = file.name.split('.').pop().toLowerCase();
@@ -966,7 +971,30 @@ export default function AssignmentDetailPage() {
                       </div>
                     );
                   })
-                ) : gradingStudent && gradingStudent.submission && gradingStudent.submission.fileUrl ? (
+                ) : null}
+                
+                {/* Show submitted links */}
+                {gradingStudent && gradingStudent.submission && gradingStudent.submission.links && gradingStudent.submission.links.length > 0 ? (
+                  <div className="bg-blue-50 border border-blue-200 rounded p-4">
+                    <div className="font-semibold text-blue-800 mb-2">Submitted Links:</div>
+                    <div className="flex flex-col gap-2">
+                      {gradingStudent.submission.links.map((link, idx) => (
+                        <a
+                          key={idx}
+                          href={link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-700 underline break-all hover:text-blue-900"
+                        >
+                          {link}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                
+                {/* Show legacy file submission */}
+                {gradingStudent && gradingStudent.submission && !gradingStudent.submission.files?.length && !gradingStudent.submission.links?.length && gradingStudent.submission.fileUrl ? (
                   (() => {
                     const file = gradingStudent.submission;
                     const ext = file.fileName.split('.').pop().toLowerCase();
@@ -989,7 +1017,13 @@ export default function AssignmentDetailPage() {
                       </div>
                     );
                   })()
-                ) : (
+                ) : null}
+                
+                {/* Show no file submission message */}
+                {gradingStudent && gradingStudent.submission && 
+                 (!gradingStudent.submission.files || gradingStudent.submission.files.length === 0) && 
+                 (!gradingStudent.submission.links || gradingStudent.submission.links.length === 0) && 
+                 !gradingStudent.submission.fileUrl ? (
                   <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
@@ -1013,7 +1047,7 @@ export default function AssignmentDetailPage() {
                       </div>
                     )}
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
             {/* Divider */}

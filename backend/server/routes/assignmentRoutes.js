@@ -396,6 +396,7 @@ router.post('/:id/submit', authenticateToken, upload.array('files', 5), async (r
     const student = req.user._id;
     const assignment = req.params.id;
     let files = [];
+    let links = [];
     
     // Handle file uploads if any
     if (req.files && req.files.length > 0) {
@@ -405,6 +406,20 @@ router.post('/:id/submit', authenticateToken, upload.array('files', 5), async (r
       }));
     }
     
+    // Handle links if any
+    if (req.body.links) {
+      // Parse links from form data
+      if (typeof req.body.links === 'string') {
+        // Single link
+        if (req.body.links.trim()) {
+          links = [req.body.links.trim()];
+        }
+      } else if (Array.isArray(req.body.links)) {
+        // Multiple links
+        links = req.body.links.filter(link => link && link.trim());
+      }
+    }
+    
     // Get context from form data if provided
     const context = req.body.context || '';
     
@@ -412,13 +427,14 @@ router.post('/:id/submit', authenticateToken, upload.array('files', 5), async (r
     let submission = await Submission.findOne({ assignment, student });
     if (submission) {
       submission.files = files;
+      submission.links = links;
       submission.context = context;
       submission.submittedAt = new Date();
       submission.status = 'turned-in';
       await submission.save();
     } else {
-      // Create new submission - files can be empty array for no-file submissions
-      submission = new Submission({ assignment, student, files, context });
+      // Create new submission - files and links can be empty arrays for no-file submissions
+      submission = new Submission({ assignment, student, files, links, context });
       await submission.save();
     }
     
