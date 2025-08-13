@@ -36,6 +36,7 @@ export default function AssignmentDetailPage() {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [deletingFile, setDeletingFile] = useState(null);
   const [submissionContext, setSubmissionContext] = useState('');
+  const [filteredSubmissions, setFilteredSubmissions] = useState(submissions); // New state for filtered submissions
 
   // --- Track when a student views an assignment ---
   useEffect(() => {
@@ -126,6 +127,7 @@ export default function AssignmentDetailPage() {
                 };
               });
               setSubmissions(merged);
+              setFilteredSubmissions(merged); // Initialize filtered submissions
             });
         });
     } else if (role === 'students') {
@@ -318,6 +320,7 @@ export default function AssignmentDetailPage() {
           .then(res => res.json())
           .then(submissions => {
             setSubmissions(submissions);
+            setFilteredSubmissions(submissions); // Update filtered submissions
           })
           .catch(err => console.error('Error refreshing submissions:', err));
         
@@ -390,6 +393,7 @@ export default function AssignmentDetailPage() {
             .then(submissions => {
               // Update the submissions state
               setSubmissions(submissions);
+              setFilteredSubmissions(submissions); // Update filtered submissions
             })
             .catch(err => console.error('Error refreshing submissions:', err));
         }
@@ -509,6 +513,45 @@ export default function AssignmentDetailPage() {
                     )}
                   </div>
                   
+                  {/* Search Filter */}
+                  <div className="mb-4">
+                    <div className="flex gap-4 items-center">
+                      <div className="flex-1">
+                        <input
+                          type="text"
+                          placeholder="Search students by name..."
+                          className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          onChange={(e) => {
+                            const searchTerm = e.target.value.toLowerCase();
+                            // Filter submissions based on search term
+                            const filtered = submissions.filter(member => 
+                              member.firstname?.toLowerCase().includes(searchTerm) || 
+                              member.lastname?.toLowerCase().includes(searchTerm)
+                            );
+                            // Update the displayed submissions
+                            setFilteredSubmissions(filtered);
+                          }}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setFilteredSubmissions(submissions);
+                            // Reset search input
+                            const searchInput = document.querySelector('input[placeholder="Search students by name..."]');
+                            if (searchInput) searchInput.value = '';
+                          }}
+                          className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm"
+                        >
+                          Clear Filters
+                        </button>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {filteredSubmissions?.length || submissions.length} of {submissions.length} students
+                      </div>
+                    </div>
+                  </div>
+                  
                   {/* Information about submissions */}
                   <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
                     <div className="flex items-center gap-2 mb-2">
@@ -536,7 +579,7 @@ export default function AssignmentDetailPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {submissions
+                        {filteredSubmissions // Use filteredSubmissions here
                           .filter(member => {
                             if (activeTab === 'toGrade') {
                               // Show all assigned students who have not been graded yet
