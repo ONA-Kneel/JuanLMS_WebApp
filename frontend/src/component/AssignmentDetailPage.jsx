@@ -187,13 +187,13 @@ export default function AssignmentDetailPage() {
         validLinks.forEach(link => {
           formData.append('links', link.trim());
         });
-      } else if (submissionType === 'none') {
-        // For submissions without files, we still need to send the submission
-        // The backend will handle empty files array
-        formData.append('submissionType', 'none');
-        if (submissionContext) {
-          formData.append('context', submissionContext);
-        }
+      }
+      // If no submission type selected or empty submission, still submit
+      // The backend will handle empty files and links arrays
+      
+      // Always include context if provided
+      if (submissionContext) {
+        formData.append('context', submissionContext);
       }
       
       const res = await fetch(`${API_BASE}/assignments/${assignmentId}/submit`, {
@@ -245,9 +245,9 @@ export default function AssignmentDetailPage() {
           const userId = localStorage.getItem('userID');
           const sub = Array.isArray(data) ? data.find(s => s.student && (s.student._id === userId || s.student === userId)) : null;
           setStudentSubmission(sub);
-          setSelectedFiles([]);
-          setFile(null);
-          setSubmissionContext(''); // Reset context on undo
+          // Don't clear selectedFiles and file - keep them visible for resubmission
+          // Don't clear links - keep them visible for resubmission
+          // Don't clear context - keep it visible for resubmission
         });
     } else {
       // Optionally handle error
@@ -509,7 +509,7 @@ export default function AssignmentDetailPage() {
                     )}
                   </div>
                   
-                  {/* Information about no-file submissions */}
+                  {/* Information about submissions */}
                   <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
                     <div className="flex items-center gap-2 mb-2">
                       <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
@@ -518,9 +518,8 @@ export default function AssignmentDetailPage() {
                       <span className="font-semibold text-blue-800">Submission Information</span>
                     </div>
                     <p className="text-blue-700 text-sm">
-                      Students can submit assignments with files, links, or without any attachments. 
-                      Submissions without files may include additional context or be for presentations, 
-                      demonstrations, or other formats. <strong>All submissions can be graded regardless of file attachment.</strong>
+                      Students can submit assignments with files, links, or submit empty submissions. 
+                      <strong>All students can be graded regardless of submission status.</strong>
                     </p>
                   </div>
                   
@@ -540,7 +539,7 @@ export default function AssignmentDetailPage() {
                         {submissions
                           .filter(member => {
                             if (activeTab === 'toGrade') {
-                              // Show all assigned students who have not been graded (regardless of submission)
+                              // Show all assigned students who have not been graded yet
                               // Not graded: no submission, or submission with no grade/feedback
                               return !member.submission || ((member.submission.grade === undefined || member.submission.grade === null) && (!member.submission.feedback || member.submission.feedback === ''));
                             } else if (activeTab === 'graded') {
@@ -550,9 +549,10 @@ export default function AssignmentDetailPage() {
                             return false;
                           })
                           .map((member) => {
-                            let status = "Not Viewed Yet";
+                            let status = "Not Submitted";
                             const userId = String(member._id); // Always use MongoDB ObjectId as string
                             const hasViewed = assignment.views && assignment.views.map(String).includes(userId);
+                            
                             if (member.submission) {
                               if ((member.submission.grade !== undefined && member.submission.grade !== null) || (member.submission.feedback && member.submission.feedback !== '')) {
                                 status = "Graded";
@@ -571,9 +571,9 @@ export default function AssignmentDetailPage() {
                               } else if (member.submission.links && member.submission.links.length > 0) {
                                 submissionDetails = `${member.submission.links.length} link(s)`;
                               } else if (member.submission.context) {
-                                submissionDetails = "No files + Context";
+                                submissionDetails = "Empty + Context";
                               } else {
-                                submissionDetails = "No files";
+                                submissionDetails = "Empty submission";
                               }
                             }
                             
@@ -701,11 +701,11 @@ export default function AssignmentDetailPage() {
                       ) : (
                         <div className="mt-2">
                           <span className="font-semibold">Submission Type: </span>
-                          <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm">
-                            No File (Text/Verbal Submission)
+                          <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm">
+                            Empty Submission
                           </span>
-                          <p className="text-sm mt-1 text-blue-600">
-                            You submitted without files. This is fine for presentations, demonstrations, or other formats.
+                          <p className="text-sm mt-1 text-gray-600">
+                            You submitted without files or links. This submission can still be graded.
                           </p>
                           
                           {/* Show context if provided */}
@@ -732,6 +732,7 @@ export default function AssignmentDetailPage() {
                   <form onSubmit={handleStudentSubmit} className="space-y-2" encType="multipart/form-data">
                     <label className="block text-sm font-medium mb-1">Submission Type</label>
                     <select
+                      key="submission-type-select"
                       className="border rounded px-3 py-2 w-full mb-2"
                       value={submissionType}
                       onChange={e => setSubmissionType(e.target.value)}
@@ -739,7 +740,6 @@ export default function AssignmentDetailPage() {
                     >
                       <option value="file">File</option>
                       <option value="link">Link</option>
-                      <option value="none">No File (Text/Verbal Submission)</option>
                     </select>
                     {submissionType === 'file' ? (
                       <>
@@ -785,12 +785,10 @@ export default function AssignmentDetailPage() {
                       </>
                     ) : (
                       <>
-                        <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
-                          <p className="text-yellow-800 text-sm">
-                            <strong>Note:</strong> You are submitting without any files or links. 
-                            This is useful for verbal presentations, in-class demonstrations, or 
-                            assignments completed in other formats. Your instructor can still grade 
-                            your submission.
+                        <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                          <p className="text-blue-800 text-sm">
+                            <strong>Note:</strong> You can submit without any files or links. 
+                            This submission will be empty but can still be graded by your instructor.
                           </p>
                         </div>
                         <div className="mt-3">
@@ -800,13 +798,13 @@ export default function AssignmentDetailPage() {
                           <textarea
                             className="border rounded px-3 py-2 w-full"
                             rows="3"
-                            placeholder="Describe your submission, presentation details, or any other relevant information..."
+                            placeholder="Describe your submission, presentation details, or any other relevant information... (Optional)"
                             value={submissionContext || ''}
                             onChange={e => setSubmissionContext(e.target.value)}
                             disabled={!!studentSubmission}
                           />
                           <div className="text-xs text-gray-600 mt-1">
-                            This helps your instructor understand your submission better.
+                            This helps your instructor understand your submission better. (Optional)
                           </div>
                         </div>
                       </>
@@ -1024,16 +1022,15 @@ export default function AssignmentDetailPage() {
                  (!gradingStudent.submission.files || gradingStudent.submission.files.length === 0) && 
                  (!gradingStudent.submission.links || gradingStudent.submission.links.length === 0) && 
                  !gradingStudent.submission.fileUrl ? (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
+                  <div className="bg-gray-50 border border-gray-200 rounded p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
-                      <span className="font-semibold text-yellow-800">No File Submitted</span>
+                      <span className="font-semibold text-gray-800">Empty Submission</span>
                     </div>
-                    <p className="text-yellow-700 text-sm">
-                      This student submitted without any files or links. This could be a verbal presentation, 
-                      in-class demonstration, or assignment completed in another format. 
+                    <p className="text-gray-700 text-sm">
+                      This student submitted without any files or links. 
                       <strong>You can still grade this submission.</strong>
                     </p>
                     
@@ -1046,6 +1043,22 @@ export default function AssignmentDetailPage() {
                         </p>
                       </div>
                     )}
+                  </div>
+                ) : null}
+                
+                {/* Show no submission message for students who haven't submitted anything */}
+                {gradingStudent && !gradingStudent.submission ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      <span className="font-semibold text-yellow-800">No Submission</span>
+                    </div>
+                    <p className="text-yellow-700 text-sm">
+                      This student has not submitted anything yet. 
+                      <strong>You can still grade them based on other criteria (attendance, participation, etc.).</strong>
+                    </p>
                   </div>
                 ) : null}
               </div>

@@ -433,7 +433,7 @@ router.post('/:id/submit', authenticateToken, upload.array('files', 5), async (r
       submission.status = 'turned-in';
       await submission.save();
     } else {
-      // Create new submission - files and links can be empty arrays for no-file submissions
+      // Create new submission - files and links can be empty arrays for empty submissions
       submission = new Submission({ assignment, student, files, links, context });
       await submission.save();
     }
