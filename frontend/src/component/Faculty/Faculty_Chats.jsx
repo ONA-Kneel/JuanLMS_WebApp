@@ -1031,7 +1031,11 @@ export default function Faculty_Chats() {
                                 <div>
                                   <div className="flex items-center gap-2 mb-1">
                                     <span className="font-semibold text-sm">
-                                      {sender ? getUserDisplayName(sender, contactNicknames[sender._id?.toString()]) : (msg.senderId === currentUserId ? "You" : "Unknown User")}
+                                      {msg.senderId === currentUserId ? "You" : 
+                                        sender ? getUserDisplayName(sender, contactNicknames[sender._id?.toString()]) :
+                                        selectedChat && selectedChat._id === msg.senderId ? getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()]) :
+                                        "Unknown User"
+                                      }
                                     </span>
                                     {(msg.createdAt || msg.updatedAt) && (
                                       <span className="text-xs text-gray-400 ml-2">

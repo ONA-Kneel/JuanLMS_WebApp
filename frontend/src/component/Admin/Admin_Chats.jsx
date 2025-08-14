@@ -1008,10 +1008,12 @@ export default function Admin_Chats() {
                     
                     // Get sender display name
                     let senderDisplayName = "Unknown User";
-                    if (sender) {
-                      senderDisplayName = getUserDisplayName(sender, contactNicknames[sender._id?.toString()]);
-                    } else if (msg.senderId === currentUserId) {
+                    if (msg.senderId === currentUserId) {
                       senderDisplayName = "You";
+                    } else if (sender) {
+                      senderDisplayName = getUserDisplayName(sender, contactNicknames[sender._id?.toString()]);
+                    } else if (selectedChat && selectedChat._id === msg.senderId) {
+                      senderDisplayName = getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()]);
                     }
                     
                     return (
