@@ -121,11 +121,9 @@ export default function Faculty_Chats() {
         // Update last message for this chat
         const chat = existingChat || users.find(u => u._id === incomingMessage.senderId);
         if (chat) {
-          const contactNickname = contactNicknames[chat._id];
-          const displayName = getUserDisplayName(chat, contactNickname);
           const prefix = incomingMessage.senderId === currentUserId 
             ? "You: " 
-            : `${displayName}: `;
+            : `${chat.lastname}, ${chat.firstname}: `;
           const text = incomingMessage.message 
             ? incomingMessage.message 
             : (incomingMessage.fileUrl ? "File sent" : "");
@@ -286,11 +284,9 @@ export default function Faculty_Chats() {
             const chatMessages = newMessages[chat._id] || [];
             const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
             if (lastMsg) {
-              const contactNickname = contactNicknames[chat._id];
-              const displayName = getUserDisplayName(chat, contactNickname);
               const prefix = lastMsg.senderId === currentUserId 
                 ? "You: " 
-                : `${displayName}: `;
+                : `${chat.lastname}, ${chat.firstname}: `;
               const text = lastMsg.message 
                 ? lastMsg.message 
                 : (lastMsg.fileUrl ? "File sent" : "");
@@ -547,9 +543,7 @@ export default function Faculty_Chats() {
         : (messages[selectedChat._id] || []);
       const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
       if (lastMsg) {
-        const contactNickname = contactNicknames[selectedChat._id];
-        const displayName = getUserDisplayName(selectedChat, contactNickname);
-        let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${displayName}: `;
+        let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
         let text = (lastMsg.message) ? lastMsg.message : (lastMsg.fileUrl ? "File sent" : "");
         setLastMessages(prev => ({
           ...prev,
@@ -588,11 +582,9 @@ export default function Faculty_Chats() {
         const chatMessages = newMessages[chat._id] || [];
         const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
         if (lastMsg) {
-          const contactNickname = contactNicknames[chat._id];
-          const displayName = getUserDisplayName(chat, contactNickname);
           const prefix = lastMsg.senderId === currentUserId 
             ? "You: " 
-            : `${displayName}: `;
+            : `${chat.lastname}, ${chat.firstname}: `;
           const text = lastMsg.message 
             ? lastMsg.message 
             : (lastMsg.fileUrl ? "File sent" : "");

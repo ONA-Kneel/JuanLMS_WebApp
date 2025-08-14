@@ -117,11 +117,9 @@ export default function Admin_Chats() {
         // Update last message for this chat
         const chat = existingChat || users.find(u => u._id === incomingMessage.senderId);
         if (chat) {
-          const contactNickname = contactNicknames[chat._id];
-          const displayName = getUserDisplayName(chat, contactNickname);
           const prefix = incomingMessage.senderId === currentUserId 
             ? "You: " 
-            : `${displayName}: `;
+            : `${chat.lastname}, ${chat.firstname}: `;
           const text = incomingMessage.message 
             ? incomingMessage.message 
             : (incomingMessage.fileUrl ? "File sent" : "");
@@ -279,11 +277,9 @@ export default function Admin_Chats() {
             const chatMessages = newMessages[chat._id] || [];
             const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
             if (lastMsg) {
-              const contactNickname = contactNicknames[chat._id];
-              const displayName = getUserDisplayName(chat, contactNickname);
               const prefix = lastMsg.senderId === currentUserId 
                 ? "You: " 
-                : `${displayName}: `;
+                : `${chat.lastname}, ${chat.firstname}: `;
               const text = lastMsg.message 
                 ? lastMsg.message 
                 : (lastMsg.fileUrl ? "File sent" : "");
@@ -402,11 +398,9 @@ export default function Admin_Chats() {
         const chatMessages = newMessages[chat._id] || [];
         const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
         if (lastMsg) {
-          const contactNickname = contactNicknames[chat._id];
-          const displayName = getUserDisplayName(chat, contactNickname);
           const prefix = lastMsg.senderId === currentUserId 
             ? "You: " 
-            : `${displayName}: `;
+            : `${chat.lastname}, ${chat.firstname}: `;
           const text = lastMsg.message 
             ? lastMsg.message 
             : (lastMsg.fileUrl ? "File sent" : "");
