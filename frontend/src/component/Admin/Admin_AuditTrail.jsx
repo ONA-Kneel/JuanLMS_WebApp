@@ -181,6 +181,110 @@ export default function Admin_AuditTrail() {
     });
   };
 
+  // Export audit logs to Excel
+  const handleExport = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      // Build query parameters for export
+      const params = [];
+      if (selectedAction && selectedAction !== 'all') params.push(`action=${encodeURIComponent(selectedAction)}`);
+      if (selectedRole && selectedRole !== 'all') params.push(`role=${encodeURIComponent(selectedRole)}`);
+      const query = params.length ? `?${params.join('&')}` : '';
+
+      const response = await fetch(`${API_BASE}/audit-logs/export${query}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to export audit logs');
+      }
+
+      const blob = await response.blob();
+      
+      // Get filename from Content-Disposition header
+      let filename = 'audit_logs_export.xlsx';
+      const disposition = response.headers.get('Content-Disposition');
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        const match = disposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error('Error exporting audit logs:', err);
+      alert('Failed to export audit logs. Please try again.');
+    }
+  };
+
+  // Export audit logs to PDF (Admin only)
+  const handleExportPDF = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      // Build query parameters for export
+      const params = [];
+      if (selectedAction && selectedAction !== 'all') params.push(`action=${encodeURIComponent(selectedAction)}`);
+      if (selectedRole && selectedRole !== 'all') params.push(`role=${encodeURIComponent(selectedRole)}`);
+      const query = params.length ? `?${params.join('&')}` : '';
+
+      const response = await fetch(`${API_BASE}/audit-logs/export-pdf${query}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to export audit logs to PDF');
+      }
+
+      const blob = await response.blob();
+      
+      // Get filename from Content-Disposition header
+      let filename = 'audit_logs_export.pdf';
+      const disposition = response.headers.get('Content-Disposition');
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        const match = disposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error('Error exporting audit logs to PDF:', err);
+      alert('Failed to export audit logs to PDF. Please try again.');
+    }
+  };
+
   // Filter logs on the frontend based on selected action and role
   const filteredLogs = auditLogs.filter(log => {
     // Action filter
@@ -218,6 +322,18 @@ export default function Admin_AuditTrail() {
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             >
               Refresh
+            </button>
+            <button
+              onClick={handleExport}
+              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+            >
+              Export to Excel
+            </button>
+            <button
+              onClick={handleExportPDF}
+              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+            >
+              Export to PDF
             </button>
             <ProfileMenu />
           </div>
