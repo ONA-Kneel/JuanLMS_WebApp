@@ -103,12 +103,25 @@ export default function Admin_Chats() {
           ],
         };
         
+        // Check if this is a new chat and add to recentChats if needed
+        const existingChat = recentChats.find(c => c._id === incomingMessage.senderId);
+        if (!existingChat) {
+          // Find the sender user from the users list
+          const senderUser = users.find(u => u._id === incomingMessage.senderId);
+          if (senderUser) {
+            // Add the new chat to recentChats
+            setRecentChats(prev => [senderUser, ...prev]);
+          }
+        }
+        
         // Update last message for this chat
-        const chat = recentChats.find(c => c._id === incomingMessage.senderId);
+        const chat = existingChat || users.find(u => u._id === incomingMessage.senderId);
         if (chat) {
+          const contactNickname = contactNicknames[chat._id];
+          const displayName = getUserDisplayName(chat, contactNickname);
           const prefix = incomingMessage.senderId === currentUserId 
             ? "You: " 
-            : `${chat.lastname}, ${chat.firstname}: `;
+            : `${displayName}: `;
           const text = incomingMessage.message 
             ? incomingMessage.message 
             : (incomingMessage.fileUrl ? "File sent" : "");
@@ -165,7 +178,7 @@ export default function Admin_Chats() {
     return () => {
       socket.current.disconnect();
     };
-  }, [currentUserId, recentChats, userGroups, contactNicknames]);
+  }, [currentUserId, recentChats, userGroups, contactNicknames, users]);
 
   // ================= FETCH USERS =================
   useEffect(() => {
@@ -187,6 +200,47 @@ export default function Admin_Chats() {
     };
     fetchUsers();
   }, [currentUserId]);
+
+  // ================= FETCH EXISTING CONVERSATIONS =================
+  useEffect(() => {
+    const fetchExistingConversations = async () => {
+      if (!currentUserId || users.length === 0) return;
+      
+      try {
+        // Get all users except current user
+        const otherUsers = users.filter(user => user._id !== currentUserId);
+        
+        // Check which users have conversations with current user
+        const conversations = [];
+        for (const user of otherUsers) {
+          try {
+            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${user._id}`);
+            if (res.data && res.data.length > 0) {
+              // This user has a conversation, add to recentChats if not already there
+              if (!recentChats.some(chat => chat._id === user._id)) {
+                conversations.push(user);
+              }
+            }
+          } catch {
+            // No conversation with this user, continue
+          }
+        }
+        
+        // Add new conversations to recentChats
+        if (conversations.length > 0) {
+          setRecentChats(prev => {
+            const existingIds = prev.map(chat => chat._id);
+            const newChats = conversations.filter(user => !existingIds.includes(user._id));
+            return [...newChats, ...prev];
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching existing conversations:", err);
+      }
+    };
+    
+    fetchExistingConversations();
+  }, [currentUserId, users, recentChats]);
 
   // ================= FETCH CONTACT NICKNAMES =================
   useEffect(() => {
@@ -341,7 +395,7 @@ export default function Admin_Chats() {
           try {
             const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
             newMessages[chat._id] = res.data;
-          } catch (err) {
+          } catch {
             newMessages[chat._id] = [];
           }
         }
@@ -1193,7 +1247,7 @@ export default function Admin_Chats() {
             <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4">
               <h3 className="text-lg font-semibold mb-4">Group Members</h3>
               <ul className="mb-4 divide-y divide-gray-200">
-                {selectedChat.participants.map((userId, idx) => {
+                {selectedChat.participants.map((userId) => {
                   const user = users.find((u) => u._id === userId);
                   if (!user) return null;
                   const displayName = getUserDisplayName(user, contactNicknames[userId]);

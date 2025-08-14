@@ -107,8 +107,19 @@ export default function Faculty_Chats() {
           ],
         };
         
+        // Check if this is a new chat and add to recentChats if needed
+        const existingChat = recentChats.find(c => c._id === incomingMessage.senderId);
+        if (!existingChat) {
+          // Find the sender user from the users list
+          const senderUser = users.find(u => u._id === incomingMessage.senderId);
+          if (senderUser) {
+            // Add the new chat to recentChats
+            setRecentChats(prev => [senderUser, ...prev]);
+          }
+        }
+        
         // Update last message for this chat
-        const chat = recentChats.find(c => c._id === incomingMessage.senderId);
+        const chat = existingChat || users.find(u => u._id === incomingMessage.senderId);
         if (chat) {
           const contactNickname = contactNicknames[chat._id];
           const displayName = getUserDisplayName(chat, contactNickname);
@@ -161,7 +172,7 @@ export default function Faculty_Chats() {
     return () => {
       socket.current.disconnect();
     };
-  }, [currentUserId, recentChats]);
+  }, [currentUserId, recentChats, users]);
 
   // ================= FETCH USERS =================
   useEffect(() => {
@@ -183,6 +194,47 @@ export default function Faculty_Chats() {
     };
     fetchUsers();
   }, [currentUserId]);
+
+  // ================= FETCH EXISTING CONVERSATIONS =================
+  useEffect(() => {
+    const fetchExistingConversations = async () => {
+      if (!currentUserId || users.length === 0) return;
+      
+      try {
+        // Get all users except current user
+        const otherUsers = users.filter(user => user._id !== currentUserId);
+        
+        // Check which users have conversations with current user
+        const conversations = [];
+        for (const user of otherUsers) {
+          try {
+            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${user._id}`);
+            if (res.data && res.data.length > 0) {
+              // This user has a conversation, add to recentChats if not already there
+              if (!recentChats.some(chat => chat._id === user._id)) {
+                conversations.push(user);
+              }
+            }
+          } catch {
+            // No conversation with this user, continue
+          }
+        }
+        
+        // Add new conversations to recentChats
+        if (conversations.length > 0) {
+          setRecentChats(prev => {
+            const existingIds = prev.map(chat => chat._id);
+            const newChats = conversations.filter(user => !existingIds.includes(user._id));
+            return [...newChats, ...prev];
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching existing conversations:", err);
+      }
+    };
+    
+    fetchExistingConversations();
+  }, [currentUserId, users, recentChats]);
 
   // ================= FETCH CONTACT NICKNAMES =================
   useEffect(() => {
