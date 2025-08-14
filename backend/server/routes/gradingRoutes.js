@@ -11,6 +11,8 @@ import Submission from '../models/Submission.js';
 import Class from '../models/Class.js';
 import { processGradingExcel, generateGradingTemplate } from '../utils/excelProcessor.js';
 import User from '../models/User.js'; // Added import for User
+import Quiz from '../models/Quiz.js'; // Added import for Quiz
+import QuizResponse from '../models/QuizResponse.js'; // Added import for QuizResponse
 
 const router = express.Router();
 
@@ -605,6 +607,156 @@ router.get('/faculty-classes-alt/:facultyId', authenticateToken, async (req, res
       success: false,
       message: 'Error fetching classes',
       error: error.message
+    });
+  }
+});
+
+// Get comprehensive grade data for a class section (for export)
+router.get('/class/:classId/section/:sectionName/comprehensive', authenticateToken, async (req, res) => {
+  try {
+    const { classId, sectionName } = req.params;
+    const facultyId = req.user.userID;
+    
+    console.log('Comprehensive grade request:', { classId, sectionName, facultyId });
+
+    // Verify faculty has access to this class
+    const classData = await Class.findOne({ 
+      classID: classId, 
+      facultyID: facultyId 
+    });
+    
+    console.log('Class lookup result:', classData ? 'Found' : 'Not found', { classId, facultyId });
+
+    if (!classData) {
+      return res.status(403).json({ error: 'Access denied to this class' });
+    }
+
+    // Get all assignments for this class
+    const assignments = await FacultyAssignment.find({
+      classID: classId,
+      sectionName: sectionName
+    }).populate('subjectId', 'subjectCode subjectDescription');
+
+    // Get all quizzes for this class
+    const quizzes = await Quiz.find({
+      'assignedTo.classID': classId
+    });
+
+    // Get all students in this section
+    const students = await User.find({
+      role: 'students',
+      _id: { $in: classData.studentIDs || [] }
+    }, 'firstname lastname userID schoolID');
+
+    // Get all submissions and quiz responses
+    const assignmentSubmissions = await Submission.find({
+      assignment: { $in: assignments.map(a => a._id) }
+    }).populate('student', 'firstname lastname userID');
+
+    const quizResponses = await QuizResponse.find({
+      quizId: { $in: quizzes.map(q => q._id) }
+    }).populate('studentId', 'firstname lastname userID');
+
+    // Build comprehensive grade data
+    const gradeData = students.map(student => {
+      const studentData = {
+        studentId: student._id,
+        studentName: `${student.firstname} ${student.lastname}`,
+        userID: student.userID,
+        schoolID: student.schoolID,
+        assignments: [],
+        quizzes: [],
+        totalScore: 0,
+        totalPossible: 0
+      };
+
+      // Add assignment grades
+      assignments.forEach(assignment => {
+        const submission = assignmentSubmissions.find(s => 
+          s.assignment.toString() === assignment._id.toString() && 
+          s.student._id.toString() === student._id.toString()
+        );
+
+        studentData.assignments.push({
+          assignmentId: assignment._id,
+          assignmentTitle: assignment.title,
+          subjectCode: assignment.subjectId?.subjectCode || 'N/A',
+          subjectDescription: assignment.subjectId?.subjectDescription || 'N/A',
+          maxPoints: assignment.points || 0,
+          earnedPoints: submission?.grade || 0,
+          status: submission?.status || 'not-submitted',
+          submittedAt: submission?.submittedAt || null,
+          feedback: submission?.feedback || ''
+        });
+
+        if (submission?.grade !== undefined) {
+          studentData.totalScore += submission.grade;
+          studentData.totalPossible += assignment.points || 0;
+        }
+      });
+
+      // Add quiz grades
+      quizzes.forEach(quiz => {
+        const response = quizResponses.find(r => 
+          r.quizId.toString() === quiz._id.toString() && 
+          r.studentId._id.toString() === student._id.toString()
+        );
+
+        studentData.quizzes.push({
+          quizId: quiz._id,
+          quizTitle: quiz.title,
+          maxPoints: quiz.points || 0,
+          earnedPoints: response?.score || 0,
+          status: response ? (response.graded ? 'graded' : 'submitted') : 'not-submitted',
+          submittedAt: response?.submittedAt || null,
+          feedback: response?.feedback || ''
+        });
+
+        if (response?.score !== undefined) {
+          studentData.totalScore += response.score;
+          studentData.totalPossible += quiz.points || 0;
+        }
+      });
+
+      // Calculate percentage
+      studentData.percentage = studentData.totalPossible > 0 
+        ? Math.round((studentData.totalScore / studentData.totalPossible) * 100) 
+        : 0;
+
+      return studentData;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        classInfo: {
+          classID: classData.classID,
+          className: classData.className,
+          sectionName: sectionName,
+          facultyID: classData.facultyID,
+          academicYear: classData.academicYear,
+          termName: classData.termName
+        },
+        assignments: assignments.map(a => ({
+          id: a._id,
+          title: a.title,
+          subjectCode: a.subjectId?.subjectCode || 'N/A',
+          points: a.points || 0
+        })),
+        quizzes: quizzes.map(q => ({
+          id: q._id,
+          title: q.title,
+          points: q.points || 0
+        })),
+        students: gradeData
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting comprehensive grade data:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to retrieve comprehensive grade data' 
     });
   }
 });

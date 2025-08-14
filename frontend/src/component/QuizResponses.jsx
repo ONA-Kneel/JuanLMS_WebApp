@@ -10,6 +10,7 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import { toast } from 'react-toastify';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import ValidationModal from './ValidationModal';
 
@@ -49,13 +50,14 @@ export default function QuizResponses() {
   // Add members state
   const [members, setMembers] = useState([]);
   const [showViolationsModal, setShowViolationsModal] = useState(false);
+  const [filteredResponses, setFilteredResponses] = useState(responses); // New state for filtered responses
 
   const handleScoreEdit = idx => {
     setEditScoreIdx(idx);
-    setEditScoreValue(typeof responses[idx].score === 'number' ? responses[idx].score : 0);
+    setEditScoreValue(typeof filteredResponses[idx]?.score === 'number' ? filteredResponses[idx]?.score : 0);
   };
   const handleScoreSave = async idx => {
-    const resp = responses[idx];
+    const resp = filteredResponses[idx];
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(`${API_BASE}/api/quizzes/${quizId}/responses/${resp._id}`, {
@@ -68,14 +70,19 @@ export default function QuizResponses() {
       });
       if (res.ok) {
         const updated = await res.json();
-        setResponses(r => r.map((item, i) => i === idx ? { ...item, score: updated.score } : item));
+        // Update both responses and filteredResponses
+        setResponses(r => r.map((item, i) => item._id === resp._id ? { ...item, score: updated.score } : item));
+        setFilteredResponses(fr => fr.map((item, i) => item._id === resp._id ? { ...item, score: updated.score } : item));
         setEditScoreIdx(null);
+        toast.success(`Score updated successfully to ${updated.score}`);
       } else {
+        const errorData = await res.json();
+        const errorMessage = errorData.error || 'Failed to update score.';
         setValidationModal({
           isOpen: true,
           type: 'error',
           title: 'Update Failed',
-          message: 'Failed to update score.'
+          message: errorMessage
         });
       }
     } catch {
@@ -89,6 +96,41 @@ export default function QuizResponses() {
   };
   const handleScoreCancel = () => setEditScoreIdx(null);
 
+  const handleMarkAllAsGraded = async () => {
+    if (!window.confirm('Are you sure you want to mark all quiz responses as graded? This will move all responses to the "Graded" tab.')) {
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/api/quizzes/${quizId}/responses/mark-all-graded`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+      });
+
+      if (res.ok) {
+        // Refresh the responses list
+        const updatedResponses = responses.map(resp => ({
+          ...resp,
+          graded: true
+        }));
+        setResponses(updatedResponses);
+        setFilteredResponses(updatedResponses);
+        
+        toast.success('All quiz responses have been marked as graded!');
+      } else {
+        const err = await res.json();
+        toast.error(`Failed to mark responses as graded: ${err.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error marking responses as graded:', err);
+      toast.error('Network error. Please check your connection and try again.');
+    }
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     // Fetch quiz, responses, and members
@@ -98,6 +140,7 @@ export default function QuizResponses() {
     ]).then(async ([quizData, respData]) => {
       setQuiz(quizData);
       setResponses(Array.isArray(respData) ? respData : []);
+      setFilteredResponses(Array.isArray(respData) ? respData : []); // Initialize filtered responses
       let membersData = [];
       // Fetch only assigned students
       const assignedIDs = quizData?.assignedTo?.[0]?.studentIDs || [];
@@ -164,13 +207,92 @@ export default function QuizResponses() {
         {/* To Grade Tab (default) */}
         {tab === 'toGrade' && responses.length > 0 && (
           <div className="w-full">
-            <div className="flex items-center gap-4 mb-4">
-              <button disabled={selectedIdx === 0} onClick={() => setSelectedIdx(i => i - 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&lt;</button>
-              <span> {selectedIdx + 1} of {responses.length} </span>
-              <button disabled={selectedIdx === responses.length - 1} onClick={() => setSelectedIdx(i => i + 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&gt;</button>
+            {/* Search and Filter Section */}
+            <div className="mb-4">
+              <div className="flex gap-4 items-center mb-4">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    placeholder="Search students by name..."
+                    className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    onChange={(e) => {
+                      const searchTerm = e.target.value.toLowerCase();
+                      // Filter responses based on search term
+                      const filtered = responses.filter(resp => 
+                        resp.studentId?.firstname?.toLowerCase().includes(searchTerm) || 
+                        resp.studentId?.lastname?.toLowerCase().includes(searchTerm)
+                      );
+                      // Update the displayed responses
+                      setFilteredResponses(filtered);
+                      // Reset selected index if it's out of bounds
+                      if (selectedIdx >= filtered.length) {
+                        setSelectedIdx(0);
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    onChange={(e) => {
+                      const statusFilter = e.target.value;
+                      let filtered = [...responses];
+                      
+                      if (statusFilter === 'graded') {
+                        filtered = responses.filter(resp => resp.graded);
+                      } else if (statusFilter === 'not-graded') {
+                        filtered = responses.filter(resp => !resp.graded);
+                      }
+                      
+                      setFilteredResponses(filtered);
+                      // Reset selected index if it's out of bounds
+                      if (selectedIdx >= filtered.length) {
+                        setSelectedIdx(0);
+                      }
+                    }}
+                  >
+                    <option value="all">All Status</option>
+                    <option value="graded">Graded</option>
+                    <option value="not-graded">Not Graded</option>
+                  </select>
+                  <button
+                    onClick={() => {
+                      setFilteredResponses(responses);
+                      setSelectedIdx(0);
+                      // Reset search input
+                      const searchInput = document.querySelector('input[placeholder="Search students by name..."]');
+                      if (searchInput) searchInput.value = '';
+                      // Reset status filter
+                      const statusFilter = document.querySelector('select');
+                      if (statusFilter) statusFilter.value = 'all';
+                    }}
+                    className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm"
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+                <div className="text-sm text-gray-600">
+                  {filteredResponses?.length || responses.length} of {responses.length} responses
+                </div>
+              </div>
             </div>
-            <div className="mb-2 text-2xl font-bold text-blue-900">{responses[selectedIdx].studentId?.firstname} {responses[selectedIdx].studentId?.lastname}</div>
-            <div className="mb-2 text-lg text-gray-700">Submitted: {new Date(responses[selectedIdx].submittedAt).toLocaleString()}</div>
+
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-4">
+                <button disabled={selectedIdx === 0} onClick={() => setSelectedIdx(i => i - 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&lt;</button>
+                <span> {selectedIdx + 1} of {filteredResponses?.length || responses.length} </span>
+                <button disabled={selectedIdx === (filteredResponses?.length || responses.length) - 1} onClick={() => setSelectedIdx(i => i + 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&gt;</button>
+              </div>
+              <button
+                onClick={handleMarkAllAsGraded}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2"
+              >
+                <span>✓</span>
+                Mark All as Graded
+              </button>
+            </div>
+            <div className="mb-2 text-2xl font-bold text-blue-900">{filteredResponses[selectedIdx]?.studentId?.firstname} {filteredResponses[selectedIdx]?.studentId?.lastname}</div>
+            <div className="mb-2 text-lg text-gray-700">Submitted: {new Date(filteredResponses[selectedIdx]?.submittedAt).toLocaleString()}</div>
             <div className="mb-4 flex items-center gap-4">
               <span className="text-2xl text-gray-800 font-bold">Score: </span>
               {editScoreIdx === selectedIdx ? (
@@ -179,42 +301,55 @@ export default function QuizResponses() {
                     type="number"
                     min={0}
                     max={stats.total}
+                    step="0.01"
                     className="border-2 border-blue-400 rounded px-3 py-1 text-2xl w-24 text-center font-bold mr-2"
                     value={editScoreValue}
                     onChange={e => {
                       let val = Number(e.target.value);
+                      // Handle NaN case
+                      if (isNaN(val)) val = 0;
+                      // Ensure score is within valid range
+                      if (val > stats.total) val = stats.total;
+                      if (val < 0) val = 0;
+                      setEditScoreValue(val);
+                    }}
+                    onBlur={e => {
+                      // Ensure the value is properly formatted on blur
+                      let val = Number(e.target.value);
+                      if (isNaN(val)) val = 0;
                       if (val > stats.total) val = stats.total;
                       if (val < 0) val = 0;
                       setEditScoreValue(val);
                     }}
                   />
                   <span className="text-2xl font-bold">/ {stats.total}</span>
+                  <div className="text-xs text-gray-600 mt-1">Note: 0 is a valid score for students who did not pass anything</div>
                   <button className="ml-2 px-3 py-1 bg-green-600 text-white rounded font-semibold" onClick={() => handleScoreSave(selectedIdx)}>Save</button>
                   <button className="ml-2 px-3 py-1 bg-gray-400 text-white rounded font-semibold" onClick={handleScoreCancel}>Cancel</button>
                 </>
               ) : (
                 <>
-                  <span className="text-3xl font-extrabold text-blue-800">{typeof responses[selectedIdx].score === 'number' ? responses[selectedIdx].score : 0}</span>
+                  <span className="text-3xl font-extrabold text-blue-800">{typeof filteredResponses[selectedIdx]?.score === 'number' ? filteredResponses[selectedIdx]?.score : 0}</span>
                   <span className="text-2xl font-bold">/ {stats.total}</span>
                   <button className="ml-4 px-4 py-1 bg-blue-700 text-white rounded font-semibold hover:bg-blue-900 transition" onClick={() => handleScoreEdit(selectedIdx)}>Edit</button>
                 </>
               )}
               {/* Show violation count and button */}
-              <span className="ml-8 text-base text-red-600 font-semibold">Tab/Focus Violations: {responses[selectedIdx].violationCount || 0}</span>
+              <span className="ml-8 text-base text-red-600 font-semibold">Tab/Focus Violations: {filteredResponses[selectedIdx]?.violationCount || 0}</span>
               <button
                 className="ml-4 px-4 py-1 bg-red-600 text-white rounded font-semibold hover:bg-red-800 transition"
                 onClick={() => setShowViolationsModal(true)}
               >
-                View Violations ({responses[selectedIdx].violationEvents?.length || 0})
+                View Violations ({filteredResponses[selectedIdx]?.violationEvents?.length || 0})
               </button>
             </div>
-            {responses[selectedIdx].feedback && <div className="mb-2 text-green-700">Feedback: {responses[selectedIdx].feedback}</div>}
+            {filteredResponses[selectedIdx]?.feedback && <div className="mb-2 text-green-700">Feedback: {filteredResponses[selectedIdx]?.feedback}</div>}
             {/* Answers list with time spent per question on the right */}
             <div className="border rounded p-4 bg-gray-50 mb-4">
               <ol className="list-decimal ml-6">
                 {quiz.questions.map((q, idx) => {
-                  const ans = responses[selectedIdx].answers.find(a => (a.questionId === (q._id || idx) || (a.questionId?._id === (q._id || idx))));
-                  const timeSpent = Array.isArray(responses[selectedIdx].questionTimes) ? responses[selectedIdx].questionTimes[idx] : null;
+                  const ans = filteredResponses[selectedIdx]?.answers.find(a => (a.questionId === (q._id || idx) || (a.questionId?._id === (q._id || idx))));
+                  const timeSpent = Array.isArray(filteredResponses[selectedIdx]?.questionTimes) ? filteredResponses[selectedIdx]?.questionTimes[idx] : null;
                   return (
                     <li key={q._id || idx} className="mb-3 flex justify-between items-start">
                       <div>
@@ -256,6 +391,37 @@ export default function QuizResponses() {
         {tab === 'status' && (
           <div className="w-full">
             <h2 className="text-lg font-semibold mb-4">Student Quiz Status</h2>
+            
+            {/* Quiz Completion Summary */}
+            <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <span className="font-semibold text-blue-800">Quiz Completion Summary</span>
+              </div>
+              <div className="flex gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 bg-green-500 rounded-full"></span>
+                  <span className="text-green-700">
+                    Graded: {responses.filter(r => r.graded).length}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 bg-yellow-500 rounded-full"></span>
+                  <span className="text-yellow-700">
+                    Not Graded: {responses.filter(r => !r.graded).length}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
+                  <span className="text-blue-700">
+                    Total Responses: {responses.length}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
             <div className="overflow-x-auto">
               <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
                 <thead className="bg-gray-50">
@@ -281,14 +447,25 @@ export default function QuizResponses() {
                         );
                         let status = "Not Yet Viewed";
                         if (response) {
-                          status = "Submitted";
+                          if (response.graded) {
+                            status = "Graded";
+                          } else {
+                            status = "Submitted";
+                          }
                         } else if (quiz?.views && quiz.views.map(String).includes(String(student._id))) {
                           status = "Viewed";
                         }
                         return (
                           <tr key={student._id}>
                             <td className="p-3 border">{student.lastname}, {student.firstname}</td>
-                            <td className="p-3 border">{status}</td>
+                            <td className={`p-3 border ${
+                              status === "Graded" ? "bg-green-100 text-green-800 font-semibold" : 
+                              status === "Submitted" ? "bg-blue-100 text-blue-800" : 
+                              status === "Viewed" ? "bg-yellow-100 text-yellow-800" : 
+                              "bg-gray-100 text-gray-800"
+                            }`}>
+                              {status}
+                            </td>
                             <td className="p-3 border">{response && typeof response.score === 'number' ? response.score : "-"}</td>
                             {/* Removed Feedback cell */}
                           </tr>
@@ -365,7 +542,7 @@ export default function QuizResponses() {
           <div className="bg-white rounded-xl shadow-xl p-8 max-w-md w-full text-center border-2 border-red-500">
             <h3 className="text-2xl font-bold mb-4 text-red-700">Tab/Focus Violation Timeline</h3>
             <ul className="text-left mb-4">
-              {responses[selectedIdx].violationEvents.map((v, i) => (
+              {filteredResponses[selectedIdx]?.violationEvents.map((v, i) => (
                 <li key={i} className="mb-2 flex items-center">
                   <span className="mr-2 text-red-600">⛔</span>
                   <span>

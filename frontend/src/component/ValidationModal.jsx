@@ -74,18 +74,24 @@ const ValidationModal = ({
         contentLabel="Validation Modal"
         portalClassName="z-[9999]" 
         >
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-modal-pop z-[9999] mt-80">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 animate-modal-pop z-[9999] mt-80">
                 <div className="flex items-center gap-3 mb-4">
                     {getIcon()}
                     <h3 className={`text-xl font-bold ${getTitleColor()}`}>
-                        {title}
+                        {title || (type === 'info' ? 'Information' : type === 'error' ? 'Error' : type === 'success' ? 'Success' : 'Warning')}
                     </h3>
                 </div>
                 
                 <div className="mb-6">
-                    <p className="text-gray-700 leading-relaxed">
-                        {message}
-                    </p>
+                    {message && message.includes('\n') ? (
+                        <pre className="text-gray-700 leading-relaxed whitespace-pre-wrap text-sm bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto">
+                            {message}
+                        </pre>
+                    ) : (
+                        <p className="text-gray-700 leading-relaxed">
+                            {message}
+                        </p>
+                    )}
                 </div>
 
                 <div className={`flex gap-3 ${showCancel ? 'justify-end' : 'justify-center'}`}>

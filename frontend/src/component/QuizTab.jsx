@@ -37,9 +37,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
         title: '',
         message: ''
     });
-    const [showGrading, setShowGrading] = useState(false);
-    const [gradeToPass, setGradeToPass] = useState(0);
-    const [attemptsAllowed, setAttemptsAllowed] = useState('Unlimited');
+
 
     const [showTiming, setShowTiming] = useState(false);
     const [timingOpenEnabled, setTimingOpenEnabled] = useState(false);
@@ -129,13 +127,14 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                         const minutes = String(dueDateLocal.getMinutes()).padStart(2, '0');
                         setDueDate(`${year}-${month}-${day}T${hours}:${minutes}`);
                     }
+                    // Load timing settings
                     if (data.timing) {
                         setTimingOpenEnabled(data.timing.open !== null);
-                        setTimingOpen(data.timing.open || "");
+                        setTimingOpen(data.timing.open ? new Date(data.timing.open).toISOString().slice(0, 16) : '');
                         setTimingCloseEnabled(data.timing.close !== null);
-                        setTimingClose(data.timing.close || "");
-                        setTimingLimitEnabled(data.timing.limit !== null);
-                        setTimingLimit(data.timing.limit || 0);
+                        setTimingClose(data.timing.close ? new Date(data.timing.close).toISOString().slice(0, 16) : '');
+                        setTimingLimitEnabled(data.timing.timeLimitEnabled || false);
+                        setTimingLimit(data.timing.timeLimit ? String(data.timing.timeLimit) : '');
                     }
                     if (data.classID) {
                         setSelectedClassIDs([data.classID]);
@@ -313,7 +312,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             formData.append('image', file);
             try {
                 const token = localStorage.getItem('token');
-                const res = await fetch(`${API_BASE}/quizzes/upload-image`, {
+                const res = await fetch(`${API_BASE}/api/quizzes/upload-image`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -537,8 +536,11 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             questions,
             timing: {
                 open: timingOpenEnabled ? timingOpen : null,
+                openEnabled: timingOpenEnabled,
                 close: timingCloseEnabled ? timingClose : null,
-                limit: timingLimitEnabled ? Number(timingLimit) : null
+                closeEnabled: timingCloseEnabled,
+                timeLimit: timingLimitEnabled ? Number(timingLimit) : null,
+                timeLimitEnabled: timingLimitEnabled
             },
             createdBy: userId,
             questionBehaviour: {
@@ -546,6 +548,10 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             },
             // Remove shuffleQuestions: shuffleQuestions === "Yes"
         };
+
+        // Debug: Log the payload being sent
+        console.log('[QuizTab] Quiz payload being sent:', payload);
+        console.log('[QuizTab] Timing data:', payload.timing);
 
         // Schedule post logic (PH time)
         if (schedulePost && dueDate) {

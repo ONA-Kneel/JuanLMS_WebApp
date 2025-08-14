@@ -8,9 +8,10 @@ export default function GradingSystem() {
   const [facultyClasses, setFacultyClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
-  const [exportLoading, setExportLoading] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [templateLoading, setTemplateLoading] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
@@ -204,38 +205,316 @@ export default function GradingSystem() {
     }
   }, [academicYear, currentTerm]);
 
-  // Export all grades for the selected section
-  const exportAllGrades = async () => {
-    if (!selectedSection) {
-      setValidationMessage('Please select a section first.');
-      setValidationType('error');
-      setShowValidationModal(true);
-      return;
+  
+
+  // Generate Excel template with student names and activity columns
+  const generateExcelTemplate = (students, assignments, quizzes, className, sectionName) => {
+    console.log('Generating template with:', {
+      studentsCount: students?.length || 0,
+      assignmentsCount: assignments?.length || 0,
+      quizzesCount: quizzes?.length || 0,
+      className,
+      sectionName
+    });
+
+    if (!students || students.length === 0) {
+      console.error('No students provided to generateExcelTemplate');
+      throw new Error('No students data available to generate template');
     }
 
-    try {
-      setExportLoading(true);
-      const selectedClassObj = facultyClasses[selectedClass];
-      if (!selectedClassObj) {
-        setValidationMessage('Selected class not found.');
-        setValidationType('error');
-        setShowValidationModal(true);
-        return;
+    // Create workbook and worksheet
+    const workbook = {
+      SheetNames: ['Grading Template'],
+      Sheets: {
+        'Grading Template': {}
       }
+    };
 
-      // For now, show a message that this feature needs to be implemented
-      // since we don't have the detailed assignment/quiz data in the current class structure
-      setValidationMessage('Grade export feature will be implemented once assignment and quiz data is integrated with the class structure.');
-      setValidationType('info');
-      setShowValidationModal(true);
+    const worksheet = workbook.Sheets['Grading Template'];
+    
+    // Define column headers
+    const headers = [
+      'Student ID',
+      'Student Name',
+      'Email',
+      'Total Score',
+      'Total Possible',
+      'Percentage'
+    ];
 
-    } catch (error) {
-      console.error('Error exporting grades:', error);
-      setValidationMessage(`Error exporting grades: ${error.message}`);
-      setValidationType('error');
-      setShowValidationModal(true);
-    } finally {
-      setExportLoading(false);
+    // Add assignment columns
+    assignments.forEach((assignment, index) => {
+      headers.push(`${assignment.title} (${assignment.points || 0} pts)`);
+    });
+
+    // Add quiz columns
+    quizzes.forEach((quiz, index) => {
+      headers.push(`${quiz.title} (${quiz.points || 0} pts)`);
+    });
+
+    // Add feedback columns
+    assignments.forEach((assignment, index) => {
+      headers.push(`${assignment.title} Feedback`);
+    });
+
+    quizzes.forEach((quiz, index) => {
+      headers.push(`${quiz.title} Feedback`);
+    });
+
+    console.log('Template headers:', headers);
+
+    // Write headers to worksheet
+    headers.forEach((header, colIndex) => {
+      const cellAddress = getCellAddress(0, colIndex);
+      worksheet[cellAddress] = {
+        v: header,
+        t: 's',
+        s: {
+          font: { bold: true },
+          fill: { fgColor: { rgb: "CCCCCC" } },
+          alignment: { horizontal: "center" }
+        }
+      };
+    });
+
+    // Write student data rows
+    students.forEach((student, rowIndex) => {
+      const row = rowIndex + 1; // Start from row 1 (after headers)
+      
+      console.log(`Processing student ${rowIndex + 1}:`, student);
+      
+      // Student basic info
+      worksheet[getCellAddress(row, 0)] = { v: student.id || '', t: 's' };
+      worksheet[getCellAddress(row, 1)] = { v: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(), t: 's' };
+      worksheet[getCellAddress(row, 2)] = { v: student.email || '', t: 's' };
+      
+      // Score columns (leave blank for faculty to fill)
+      worksheet[getCellAddress(row, 3)] = { v: '', t: 's' }; // Total Score
+      worksheet[getCellAddress(row, 4)] = { v: '', t: 's' }; // Total Possible
+      worksheet[getCellAddress(row, 5)] = { v: '', t: 's' }; // Percentage
+      
+      // Assignment score columns (blank)
+      assignments.forEach((assignment, colIndex) => {
+        const col = 6 + colIndex;
+        worksheet[getCellAddress(row, col)] = { v: '', t: 's' };
+      });
+      
+      // Quiz score columns (blank)
+      quizzes.forEach((quiz, colIndex) => {
+        const col = 6 + assignments.length + colIndex;
+        worksheet[getCellAddress(row, col)] = { v: '', t: 's' };
+      });
+      
+      // Assignment feedback columns (blank)
+      assignments.forEach((assignment, colIndex) => {
+        const col = 6 + assignments.length + quizzes.length + colIndex;
+        worksheet[getCellAddress(row, col)] = { v: '', t: 's' };
+      });
+      
+      // Quiz feedback columns (blank)
+      quizzes.forEach((quiz, colIndex) => {
+        const col = 6 + assignments.length + quizzes.length + assignments.length + colIndex;
+        worksheet[getCellAddress(row, col)] = { v: '', t: 's' };
+      });
+    });
+
+    console.log('Worksheet created with rows:', Object.keys(worksheet).filter(key => key !== '!cols' && key !== '!rows').length);
+
+    // Set column widths
+    worksheet['!cols'] = headers.map(header => ({ width: Math.max(header.length + 2, 15) }));
+
+    // Set row heights
+    worksheet['!rows'] = [{ hpt: 25 }]; // Header row height
+    for (let i = 1; i <= students.length; i++) {
+      worksheet['!rows'][i] = { hpt: 20 };
+    }
+
+    return workbook;
+  };
+
+  // Generate Excel template with grades and feedback
+  const generateExcelTemplateWithGrades = (students, activities) => {
+    console.log('generateExcelTemplateWithGrades called with:', { students, activities });
+    
+    if (!students || students.length === 0) {
+      console.error('No students provided to generateExcelTemplateWithGrades');
+      return null;
+    }
+
+    if (!activities || activities.length === 0) {
+      console.log('No activities provided, creating basic template');
+    }
+
+    // Create workbook and worksheet
+    const workbook = {};
+    const worksheet = {};
+    workbook.Sheets = { 'Grading Template': worksheet };
+    workbook.SheetNames = ['Grading Template'];
+
+    // Define headers
+    const headers = [
+      'Student ID',
+      'Student Name',
+      'School ID',
+      'Section'
+    ];
+
+    // Add activity columns with scores and feedback
+    activities.forEach((activity) => {
+      if (activity.type === 'Assignment') {
+        headers.push(`${activity.title} Score`);
+        headers.push(`${activity.title} Feedback`);
+      } else if (activity.type === 'Quiz') {
+        headers.push(`${activity.title} Score`);
+        headers.push(`${activity.title} Feedback`);
+      }
+    });
+
+    console.log('Template with grades headers:', headers);
+
+    // Write headers to worksheet
+    headers.forEach((header, colIndex) => {
+      const cellAddress = getCellAddress(0, colIndex);
+      worksheet[cellAddress] = {
+        v: header,
+        t: 's',
+        s: {
+          font: { bold: true },
+          fill: { fgColor: { rgb: "CCCCCC" } },
+          alignment: { horizontal: "center" }
+        }
+      };
+    });
+
+    // Write student data rows with grades
+    students.forEach((student, rowIndex) => {
+      const row = rowIndex + 1; // Start from row 1 (after headers)
+      
+      console.log(`Processing student ${rowIndex + 1}:`, student);
+      
+      // Student basic info
+      worksheet[getCellAddress(row, 0)] = { v: student.id || '', t: 's' };
+      worksheet[getCellAddress(row, 1)] = { v: student.studentName || student.name || '', t: 's' };
+      worksheet[getCellAddress(row, 2)] = { v: student.schoolID || '', t: 's' };
+      worksheet[getCellAddress(row, 3)] = { v: student.section || '', t: 's' };
+      
+      let colIndex = 4; // Starting column for activities
+      
+      // Add activity scores and feedback
+      activities.forEach((activity) => {
+        if (activity.type === 'Assignment') {
+          const submission = activity.submissions?.find(sub => 
+            sub.studentId === student.id || sub.userID === student.id || sub.schoolID === student.id
+          );
+          worksheet[getCellAddress(row, colIndex)] = { v: submission?.grade || submission?.score || '', t: submission?.grade || submission?.score ? 'n' : 's' };
+          colIndex++;
+          worksheet[getCellAddress(row, colIndex)] = { v: submission?.feedback || '', t: 's' };
+          colIndex++;
+        } else if (activity.type === 'Quiz') {
+          const response = activity.responses?.find(resp => 
+            resp.studentId === student.id || resp.userID === student.id || resp.schoolID === student.id
+          );
+          worksheet[getCellAddress(row, colIndex)] = { v: response?.score || '', t: response?.score ? 'n' : 's' };
+          colIndex++;
+          worksheet[getCellAddress(row, colIndex)] = { v: response?.feedback || '', t: 's' };
+          colIndex++;
+        }
+      });
+    });
+
+    console.log('Worksheet with grades created with rows:', Object.keys(worksheet).filter(key => key !== '!cols' && key !== '!rows').length);
+
+    // Set column widths
+    worksheet['!cols'] = headers.map(header => ({ width: Math.max(header.length + 2, 15) }));
+
+    // Set row heights
+    worksheet['!rows'] = [{ hpt: 25 }]; // Header row height
+    for (let i = 1; i <= students.length; i++) {
+      worksheet['!rows'][i] = { hpt: 20 };
+    }
+
+    return workbook;
+  };
+
+  // Helper function to get Excel cell address (e.g., A1, B2, etc.)
+  const getCellAddress = (row, col) => {
+    let address = '';
+    while (col >= 0) {
+      address = String.fromCharCode(65 + (col % 26)) + address;
+      col = Math.floor(col / 26) - 1;
+    }
+    return address + (row + 1);
+  };
+
+  // Download Excel file
+  const downloadExcelFile = (workbook, filename) => {
+    // For now, we'll create a CSV-like structure that can be opened in Excel
+    // In a production environment, you'd use a library like 'xlsx' or 'exceljs'
+    
+    const headers = [
+      'Student ID',
+      'Student Name', 
+      'Email',
+      'Total Score',
+      'Total Possible',
+      'Percentage'
+    ];
+
+    // Get activities from the workbook structure
+    const worksheet = workbook.Sheets['Grading Template'];
+    const maxCol = Object.keys(worksheet).reduce((max, key) => {
+      if (key !== '!cols' && key !== '!rows') {
+        const col = key.replace(/[0-9]/g, '');
+        const colNum = col.split('').reduce((acc, char) => acc * 26 + char.charCodeAt(0) - 64, 0) - 1;
+        return Math.max(max, colNum);
+      }
+      return max;
+    }, 0);
+
+    // Add activity columns
+    for (let col = 6; col <= maxCol; col++) {
+      const cellAddress = getCellAddress(0, col);
+      if (worksheet[cellAddress]) {
+        headers.push(worksheet[cellAddress].v);
+      }
+    }
+
+    // Create CSV content
+    const csvRows = [headers.join(',')];
+    
+    // Add student rows
+    const maxRow = Object.keys(worksheet).reduce((max, key) => {
+      if (key !== '!cols' && key !== '!rows') {
+        const row = parseInt(key.replace(/[A-Z]/g, ''));
+        return Math.max(max, row);
+      }
+      return max;
+    }, 0);
+
+    for (let row = 1; row <= maxRow; row++) {
+      const rowData = [];
+      for (let col = 0; col <= maxCol; col++) {
+        const cellAddress = getCellAddress(row, col);
+        const cell = worksheet[cellAddress];
+        rowData.push(cell ? (cell.v || '') : '');
+      }
+      csvRows.push(rowData.join(','));
+    }
+
+    const csvContent = csvRows.join('\n');
+    
+    // Download as CSV (can be opened in Excel)
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename.replace('.xlsx', '.csv'));
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -292,9 +571,639 @@ export default function GradingSystem() {
         return;
       }
 
-      // For now, show a message that this feature needs to be implemented
-      setValidationMessage('Template download feature will be implemented once student data is integrated with the class structure.');
-      setValidationType('info');
+      setTemplateLoading(true);
+
+      // Fetch students in the selected section
+      const token = localStorage.getItem('token');
+      
+      console.log('Attempting to fetch students for section:', selectedSection);
+      console.log('Class object:', selectedClassObj);
+      
+      // Try multiple methods to fetch students
+      let studentsData = null;
+      
+      // Method 1: Try the debug endpoint
+      try {
+        console.log('Method 1: Trying debug endpoint...');
+        const studentsResponse = await fetch(
+          `${API_BASE}/api/grading/debug/students/${selectedSection}?` + 
+          `trackName=${selectedClassObj.trackName || ''}&` +
+          `strandName=${selectedClassObj.strandName || ''}&` +
+          `gradeLevel=${selectedClassObj.gradeLevel || ''}&` +
+          `schoolYear=${academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''}&` +
+          `termName=${currentTerm ? currentTerm.termName : ''}`,
+          {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }
+        );
+
+        console.log('Debug endpoint response status:', studentsResponse.status);
+        
+        if (studentsResponse.ok) {
+          const responseData = await studentsResponse.json();
+          console.log('Debug endpoint response data:', responseData);
+          
+          if (responseData.success && responseData.sectionStudents && responseData.sectionStudents.length > 0) {
+            studentsData = responseData;
+            console.log('Debug endpoint successful, found students:', responseData.sectionStudents.length);
+          } else {
+            console.log('Debug endpoint returned no students or invalid data');
+          }
+        } else {
+          console.log('Debug endpoint failed with status:', studentsResponse.status);
+        }
+      } catch (error) {
+        console.log('Debug endpoint failed with error:', error);
+      }
+
+      // Method 2: Try comprehensive endpoint
+      if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+        console.log('Method 2: Trying comprehensive endpoint...');
+        
+        try {
+          const altResponse = await fetch(
+            `${API_BASE}/api/grading/class/${selectedClassObj.classID}/section/${selectedSection}/comprehensive`,
+            {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }
+          );
+
+          console.log('Comprehensive endpoint response status:', altResponse.status);
+          
+          if (altResponse.ok) {
+            const altData = await altResponse.json();
+            console.log('Comprehensive endpoint response data:', altData);
+            
+            if (altData.success && altData.data && altData.data.students && altData.data.students.length > 0) {
+              // Transform the data to match expected format
+              studentsData = {
+                success: true,
+                sectionStudents: altData.data.students.map(student => ({
+                  id: student.userID || student.studentId || student._id || '', // Prioritize unencrypted userID
+                  name: student.studentName || student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+                  email: student.email || `${student.studentName || student.name || 'student'}@example.com`
+                }))
+              };
+              console.log('Comprehensive endpoint successful, transformed students:', studentsData.sectionStudents.length);
+            } else {
+              console.log('Comprehensive endpoint returned no students or invalid data');
+            }
+          } else {
+            console.log('Comprehensive endpoint failed with status:', altResponse.status);
+          }
+        } catch (altError) {
+          console.log('Comprehensive endpoint failed with error:', altError);
+        }
+      }
+
+      // Method 3: Try direct student endpoint
+      if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+        console.log('Method 3: Trying direct student endpoint...');
+        
+        try {
+          // Try to get students directly from the students collection
+          const directResponse = await fetch(
+            `${API_BASE}/api/students/section/${selectedSection}`,
+            {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }
+          );
+
+          console.log('Direct student endpoint response status:', directResponse.status);
+          
+          if (directResponse.ok) {
+            const directData = await directResponse.json();
+            console.log('Direct student endpoint response data:', directData);
+            
+            if (directData && directData.length > 0) {
+              studentsData = {
+                success: true,
+                sectionStudents: directData.map(student => ({
+                  id: student.userID || student._id || student.studentID || '', // Prioritize unencrypted userID
+                  name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+                  email: student.email || `${student.name || 'student'}@example.com`
+                }))
+              };
+              console.log('Direct student endpoint successful, found students:', studentsData.sectionStudents.length);
+            } else {
+              console.log('Direct student endpoint returned no students');
+            }
+          } else {
+            console.log('Direct student endpoint failed with status:', directResponse.status);
+          }
+        } catch (directError) {
+          console.log('Direct student endpoint failed with error:', directError);
+        }
+      }
+
+      // Method 4: Try class-based student endpoint
+      if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+        console.log('Method 4: Trying class-based student endpoint...');
+        
+        try {
+          const classResponse = await fetch(
+            `${API_BASE}/classes/${selectedClassObj.classID}/members`,
+            {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }
+          );
+
+          console.log('Class-based student endpoint response status:', classResponse.status);
+          
+          if (classResponse.ok) {
+            const classData = await classResponse.json();
+            console.log('Class-based student endpoint response data:', classData);
+            
+            if (classData && classData.students && classData.students.length > 0) {
+              studentsData = {
+                success: true,
+                sectionStudents: classData.students.map(student => ({
+                  id: student.userID || student._id || student.studentID || '', // Prioritize unencrypted userID
+                  name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+                  email: student.email || `${student.name || 'student'}@example.com`
+                }))
+              };
+              console.log('Class-based student endpoint successful, found students:', studentsData.sectionStudents.length);
+            } else {
+              console.log('Class-based student endpoint returned no students');
+            }
+          } else {
+            console.log('Class-based student endpoint failed with status:', classResponse.status);
+          }
+        } catch (classError) {
+          console.log('Class-based student endpoint failed with error:', classError);
+        }
+      }
+
+      // Method 5: Try to get students directly from the class object if it has student data
+      if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+        console.log('Method 5: Checking if class object has student data...');
+        
+        if (selectedClassObj.students && Array.isArray(selectedClassObj.students) && selectedClassObj.students.length > 0) {
+          console.log('Found students in class object:', selectedClassObj.students.length);
+          studentsData = {
+            success: true,
+            sectionStudents: selectedClassObj.students.map(student => ({
+              id: student.userID || student._id || student.studentID || student.id || '', // Prioritize unencrypted userID
+              name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+              email: student.email || `${student.name || 'student'}@example.com`
+            }))
+          };
+        } else {
+          console.log('No students found in class object');
+        }
+      }
+
+      // Method 6: Try to get students by class code instead of section
+      if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+        console.log('Method 6: Trying to get students by class code...');
+        
+        try {
+          const classCodeResponse = await fetch(
+            `${API_BASE}/api/students/class/${selectedClassObj.classCode || selectedClassObj.classID}`,
+            {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }
+          );
+
+          console.log('Class code endpoint response status:', classCodeResponse.status);
+          
+          if (classCodeResponse.ok) {
+            const classCodeData = await classCodeResponse.json();
+            console.log('Class code endpoint response data:', classCodeData);
+            
+            if (classCodeData && classCodeData.length > 0) {
+              studentsData = {
+                success: true,
+                sectionStudents: classCodeData.map(student => ({
+                  id: student.userID || student._id || student.studentID || student.id || '', // Prioritize unencrypted userID
+                  name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+                  email: student.email || `${student.name || 'student'}@example.com`
+                }))
+              };
+              console.log('Class code endpoint successful, found students:', studentsData.sectionStudents.length);
+            } else {
+              console.log('Class code endpoint returned no students');
+            }
+          } else {
+            console.log('Class code endpoint failed with status:', classCodeResponse.status);
+          }
+        } catch (classCodeError) {
+          console.log('Class code endpoint failed with error:', classCodeError);
+        }
+      }
+
+      // Method 7: Try to get students by class name
+      if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+        console.log('Method 7: Trying to get students by class name...');
+        
+        try {
+          const classNameResponse = await fetch(
+            `${API_BASE}/api/students/className/${encodeURIComponent(selectedClassObj.className)}`,
+            {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }
+          );
+
+          console.log('Class name endpoint response status:', classNameResponse.status);
+          
+          if (classNameResponse.ok) {
+            const classNameData = await classNameResponse.json();
+            console.log('Class name endpoint response data:', classNameData);
+            
+            if (classNameData && classNameData.length > 0) {
+              studentsData = {
+                success: true,
+                sectionStudents: classNameData.map(student => ({
+                  id: student.userID || student._id || student.studentID || student.id || '', // Prioritize unencrypted userID
+                  name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+                  email: student.email || `${student.name || 'student'}@example.com`
+                }))
+              };
+              console.log('Class name endpoint successful, found students:', studentsData.sectionStudents.length);
+            } else {
+              console.log('Class name endpoint returned no students');
+            }
+          } else {
+            console.log('Class name endpoint failed with status:', classNameResponse.status);
+          }
+        } catch (classNameError) {
+          console.log('Class name endpoint failed with error:', classNameError);
+        }
+      }
+
+      // Method 8: Check if class object has any student-related fields we might have missed
+      if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+        console.log('Method 8: Checking class object for any student-related fields...');
+        console.log('Full class object:', selectedClassObj);
+        
+        // Look for any field that might contain student data
+        const possibleStudentFields = ['students', 'enrolledStudents', 'classStudents', 'members', 'enrollment'];
+        
+        for (const field of possibleStudentFields) {
+          if (selectedClassObj[field] && Array.isArray(selectedClassObj[field]) && selectedClassObj[field].length > 0) {
+            console.log(`Found students in field '${field}':`, selectedClassObj[field].length);
+                         studentsData = {
+               success: true,
+               sectionStudents: selectedClassObj[field].map(student => ({
+                 id: student.userID || student._id || student.studentID || student.id || '', // Prioritize unencrypted userID
+                 name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+                 email: student.email || `${student.name || 'student'}@example.com`
+               }))
+             };
+            break;
+          }
+        }
+        
+        if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+          console.log('No student data found in any expected fields');
+        }
+      }
+
+      // Method 9: Try to get students from class members endpoint
+      if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+        console.log('Method 9: Trying to get students from class members endpoint...');
+        
+        try {
+          const membersResponse = await fetch(
+            `${API_BASE}/classes/${selectedClassObj.classID}/members`,
+            {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }
+          );
+
+          console.log('Class members endpoint response status:', membersResponse.status);
+          
+          if (membersResponse.ok) {
+            const membersData = await membersResponse.json();
+            console.log('Class members endpoint response data:', membersData);
+            
+            if (membersData && membersData.students && Array.isArray(membersData.students) && membersData.students.length > 0) {
+              studentsData = {
+                success: true,
+                sectionStudents: membersData.students.map(student => ({
+                  id: student.userID || student._id || student.studentID || student.id || '', // Prioritize unencrypted userID
+                  name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+                  email: student.email || `${student.name || 'student'}@example.com`
+                }))
+              };
+              console.log('Class members endpoint successful, found students:', studentsData.sectionStudents.length);
+            } else {
+              console.log('Class members endpoint returned no students or invalid data structure');
+            }
+          } else {
+            console.log('Class members endpoint failed with status:', membersResponse.status);
+          }
+        } catch (membersError) {
+          console.log('Class members endpoint failed with error:', membersError);
+        }
+      }
+
+      // Method 10: Try to get students from the class members page endpoint (the one that shows "Will Bianca")
+      if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+        console.log('Method 10: Trying to get students from class members page endpoint...');
+        
+        try {
+          // This endpoint should return the same data as shown in the class members page
+          const membersPageResponse = await fetch(
+            `${API_BASE}/classes/${selectedClassObj.classID}/members?includeStudents=true`,
+            {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }
+          );
+
+          console.log('Class members page endpoint response status:', membersPageResponse.status);
+          
+          if (membersPageResponse.ok) {
+            const membersPageData = await membersPageResponse.json();
+            console.log('Class members page endpoint response data:', membersPageData);
+            
+            // Try different possible data structures
+            let foundStudents = null;
+            
+            if (membersPageData && membersPageData.students && Array.isArray(membersPageData.students)) {
+              foundStudents = membersPageData.students;
+            } else if (membersPageData && membersPageData.members && Array.isArray(membersPageData.members)) {
+              foundStudents = membersPageData.members.filter(member => member.role === 'student');
+            } else if (membersPageData && Array.isArray(membersPageData)) {
+              foundStudents = membersPageData.filter(item => item.role === 'student' || item.type === 'student');
+            }
+            
+            if (foundStudents && foundStudents.length > 0) {
+              studentsData = {
+                success: true,
+                sectionStudents: foundStudents.map(student => ({
+                  id: student.userID || student._id || student.studentID || student.id || '', // Prioritize unencrypted userID
+                  name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+                  email: student.email || `${student.name || 'student'}@example.com`
+                }))
+              };
+              console.log('Class members page endpoint successful, found students:', studentsData.sectionStudents.length);
+            } else {
+              console.log('Class members page endpoint returned no students or invalid data structure');
+            }
+          } else {
+            console.log('Class members page endpoint failed with status:', membersPageResponse.status);
+          }
+        } catch (membersPageError) {
+          console.log('Class members page endpoint failed with error:', membersPageError);
+        }
+      }
+
+
+
+      // Method 12: Try to get students from the class members page that shows "Will Bianca"
+      if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+        console.log('Method 12: Trying to get students from the specific class members endpoint...');
+        
+        try {
+          // Try the endpoint that shows the class members page data
+          const classMembersResponse = await fetch(
+            `${API_BASE}/classes/${selectedClassObj.classID}/members?type=all`,
+            {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }
+          );
+
+          console.log('Specific class members endpoint response status:', classMembersResponse.status);
+          
+          if (classMembersResponse.ok) {
+            const classMembersData = await classMembersResponse.json();
+            console.log('Specific class members endpoint response data:', classMembersData);
+            
+            // Try to extract students from various possible data structures
+            let foundStudents = null;
+            
+            if (classMembersData && classMembersData.students) {
+              foundStudents = Array.isArray(classMembersData.students) ? classMembersData.students : [classMembersData.students];
+            } else if (classMembersData && classMembersData.members) {
+              foundStudents = Array.isArray(classMembersData.members) ? classMembersData.members : [classMembersData.members];
+            } else if (classMembersData && Array.isArray(classMembersData)) {
+              foundStudents = classMembersData;
+            }
+            
+            if (foundStudents && foundStudents.length > 0) {
+              // Filter for students only
+              const studentMembers = foundStudents.filter(member => 
+                member && (
+                  member.role === 'student' || 
+                  member.type === 'student' || 
+                  member.userType === 'student' ||
+                  (member.name && !member.role) // If no role specified but has name, assume student
+                )
+              );
+              
+              if (studentMembers.length > 0) {
+                studentsData = {
+                  success: true,
+                  sectionStudents: studentMembers.map(student => ({
+                    id: student.userID || student._id || student.studentID || student.id || '', // Prioritize unencrypted userID
+                    name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+                    email: student.email || `${student.name || 'student'}@example.com`
+                  }))
+                };
+                console.log('Specific class members endpoint successful, found students:', studentsData.sectionStudents.length);
+              } else {
+                console.log('No student members found in the data');
+              }
+            } else {
+              console.log('Specific class members endpoint returned no valid data structure');
+            }
+          } else {
+            console.log('Specific class members endpoint failed with status:', classMembersResponse.status);
+          }
+        } catch (classMembersError) {
+          console.log('Specific class members endpoint failed with error:', classMembersError);
+        }
+      }
+
+      // Final check and error handling
+      if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+        console.error('All student fetching methods failed');
+        console.log('Available data for debugging:');
+        console.log('- Selected class:', selectedClassObj);
+        console.log('- Selected section:', selectedSection);
+        console.log('- Academic year:', academicYear);
+        console.log('- Current term:', currentTerm);
+        
+        // Try one last method: check if we can get students from the class object directly
+        console.log('Final attempt: Checking class object structure...');
+        console.log('Class object keys:', Object.keys(selectedClassObj));
+        console.log('Class object full structure:', JSON.stringify(selectedClassObj, null, 2));
+        
+        // Look for any array that might contain student-like objects
+        for (const [key, value] of Object.entries(selectedClassObj)) {
+          if (Array.isArray(value) && value.length > 0) {
+            console.log(`Found array in key '${key}' with ${value.length} items:`, value);
+            // Check if any item looks like a student
+            const firstItem = value[0];
+            if (firstItem && (firstItem.name || firstItem.firstname || firstItem.lastname || firstItem.email)) {
+              console.log(`Array '${key}' appears to contain student data!`);
+              studentsData = {
+                success: true,
+                sectionStudents: value.map(student => ({
+                  id: student.userID || student._id || student.studentID || student.id || '', // Prioritize unencrypted userID
+                  name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+                  email: student.email || `${student.name || 'student'}@example.com`
+                }))
+              };
+              console.log('Successfully extracted students from class object:', studentsData.sectionStudents.length);
+              break;
+            }
+          }
+        }
+        
+        if (!studentsData || !studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+          throw new Error(`No students found in section "${selectedSection}". All fetching methods failed. Please check the section configuration or contact administrator.`);
+        }
+      }
+
+      console.log('Students data received:', studentsData);
+      console.log('Number of students:', studentsData.sectionStudents?.length || 0);
+      
+      // Validate and clean student data
+      if (studentsData.sectionStudents && studentsData.sectionStudents.length > 0) {
+        console.log('Raw student data sample:', studentsData.sectionStudents[0]);
+        
+        // Clean and validate student data
+        studentsData.sectionStudents = studentsData.sectionStudents.filter(student => {
+          // Check if student has at least a name or ID
+          const hasValidData = student && (
+            student.name || 
+            student.firstname || 
+            student.lastname || 
+            student.id || 
+            student._id || 
+            student.userID || 
+            student.studentID
+          );
+          
+          if (!hasValidData) {
+            console.log('Filtering out invalid student data:', student);
+          }
+          
+          return hasValidData;
+        });
+        
+        console.log('After filtering, students count:', studentsData.sectionStudents.length);
+        
+        // Ensure all students have proper data structure
+        studentsData.sectionStudents = studentsData.sectionStudents.map((student, index) => {
+          const processedStudent = {
+            id: student.userID || student.id || student._id || student.studentID || `student_${index}`, // Prioritize unencrypted userID
+            name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim() || `Student ${index + 1}`,
+            email: student.email || `${student.name || `student_${index + 1}`}@example.com`
+          };
+          
+          console.log(`Processed student ${index + 1}:`, processedStudent);
+          return processedStudent;
+        });
+      }
+
+      // Fetch activities (assignments and quizzes) for this class
+      const activitiesResponse = await fetch(
+        `${API_BASE}/api/grading/class/${selectedClassObj.classID}/section/${selectedSection}/comprehensive`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+
+      if (!activitiesResponse.ok) {
+        throw new Error(`Failed to fetch activities: ${activitiesResponse.status}`);
+      }
+
+      const activitiesData = await activitiesResponse.json();
+      
+      if (!activitiesData.success) {
+        throw new Error(activitiesData.message || 'Failed to retrieve activities data');
+      }
+
+      console.log('Activities data received:', activitiesData);
+      console.log('Number of assignments:', activitiesData.data?.assignments?.length || 0);
+      console.log('Number of quizzes:', activitiesData.data?.quizzes?.length || 0);
+
+      // Check if we have students
+      if (!studentsData.sectionStudents || studentsData.sectionStudents.length === 0) {
+        throw new Error('No students found in this section. Please check the section configuration.');
+      }
+
+      // Process students data for the template
+      const processedStudents = studentsData.sectionStudents.map(student => ({
+        id: student.id || student.userID || student.studentID || student._id || '',
+        studentName: student.name || student.studentName || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+        schoolID: student.schoolID || student.userID || student.studentID || '',
+        section: selectedSection
+      }));
+
+      // Create activities array with submissions and responses
+      const activities = [];
+      
+      // Add assignments with submissions
+      if (activitiesData.data?.assignments && Array.isArray(activitiesData.data.assignments)) {
+        for (const assignment of activitiesData.data.assignments) {
+          try {
+            const submissionResponse = await fetch(
+              `${API_BASE}/api/assignments/${assignment._id}/submissions`,
+              { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            if (submissionResponse.ok) {
+              const submissionData = await submissionResponse.json();
+              assignment.submissions = submissionData.submissions || [];
+            }
+          } catch (error) {
+            console.log(`Failed to fetch submissions for assignment ${assignment._id}:`, error);
+            assignment.submissions = [];
+          }
+          activities.push({
+            type: 'Assignment',
+            title: assignment.title,
+            id: assignment._id,
+            maxScore: assignment.maxScore || 100,
+            submissions: assignment.submissions || []
+          });
+        }
+      }
+
+      // Add quizzes with responses
+      if (activitiesData.data?.quizzes && Array.isArray(activitiesData.data.quizzes)) {
+        for (const quiz of activitiesData.data.quizzes) {
+          try {
+            const responseResponse = await fetch(
+              `${API_BASE}/api/quizzes/${quiz._id}/responses`,
+              { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            if (responseResponse.ok) {
+              const responseData = await responseResponse.json();
+              quiz.responses = responseData.responses || [];
+            }
+          } catch (error) {
+            console.log(`Failed to fetch responses for quiz ${quiz._id}:`, error);
+            quiz.responses = [];
+          }
+          activities.push({
+            type: 'Quiz',
+            title: quiz.title,
+            id: quiz._id,
+            maxScore: quiz.maxScore || 100,
+            responses: quiz.responses || []
+          });
+        }
+      }
+
+      console.log('Processed students:', processedStudents);
+      console.log('Activities with submissions/responses:', activities);
+
+      // Generate Excel template with grades
+      const excelContent = generateExcelTemplateWithGrades(
+        processedStudents,
+        activities
+      );
+
+      // Download the Excel file
+      downloadExcelFile(excelContent, `${selectedClassObj.className}_${selectedSection}_Template_with_Grades.xlsx`);
+
+      setValidationMessage(`Template with grades downloaded successfully with ${processedStudents.length} students and ${activities.length} activities!`);
+      setValidationType('success');
       setShowValidationModal(true);
 
     } catch (error) {
@@ -302,6 +1211,8 @@ export default function GradingSystem() {
       setValidationMessage(`Error downloading template: ${error.message}`);
       setValidationType('error');
       setShowValidationModal(true);
+    } finally {
+      setTemplateLoading(false);
     }
   };
 
@@ -338,6 +1249,65 @@ export default function GradingSystem() {
     }
   };
 
+  // Test all available endpoints to see what's working
+  const testAllEndpoints = async () => {
+    try {
+      setTemplateLoading(true);
+      const token = localStorage.getItem('token');
+      let testReport = `Endpoint Test Report\n\n`;
+      
+      // Test basic endpoints
+      const basicEndpoints = [
+        { name: 'All Students', url: `${API_BASE}/api/students` },
+        { name: 'All Classes', url: `${API_BASE}/api/classes` },
+        { name: 'All Sections', url: `${API_BASE}/api/sections` },
+        { name: 'Active Academic Year', url: `${API_BASE}/api/schoolyears/active` },
+        { name: 'Terms', url: `${API_BASE}/api/terms` }
+      ];
+
+      for (const endpoint of basicEndpoints) {
+        try {
+          testReport += `\n--- ${endpoint.name} ---\n`;
+          testReport += `URL: ${endpoint.url}\n`;
+          
+          const response = await fetch(endpoint.url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          testReport += `Status: ${response.status}\n`;
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (Array.isArray(data)) {
+              testReport += `✅ Found ${data.length} items\n`;
+              if (data.length > 0) {
+                testReport += `Sample: ${JSON.stringify(data[0], null, 2)}\n`;
+              }
+            } else {
+              testReport += `✅ Response: ${JSON.stringify(data, null, 2)}\n`;
+            }
+          } else {
+            testReport += `❌ Failed: ${response.statusText}\n`;
+          }
+        } catch (error) {
+          testReport += `❌ Error: ${error.message}\n`;
+        }
+      }
+
+      setValidationMessage(testReport);
+      setValidationType('info');
+      setShowValidationModal(true);
+
+    } catch (error) {
+      console.error('Error testing endpoints:', error);
+      setValidationMessage(`Error testing endpoints: ${error.message}`);
+      setValidationType('error');
+      setShowValidationModal(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Debug function to check students in section
   const debugStudents = async () => {
     if (!selectedSection) {
@@ -356,8 +1326,100 @@ export default function GradingSystem() {
         return;
       }
 
-      // For now, show a message that this feature needs to be implemented
-      setValidationMessage('Student debug feature will be implemented once student data is integrated with the class structure.');
+      setLoading(true);
+      
+      const token = localStorage.getItem('token');
+      let debugReport = `Student Debug Report for ${selectedSection}\n\n`;
+      
+             // Test all possible endpoints
+       const endpoints = [
+         {
+           name: 'Debug Students Endpoint',
+           url: `${API_BASE}/api/grading/debug/students/${selectedSection}?trackName=${selectedClassObj.trackName || ''}&strandName=${selectedClassObj.strandName || ''}&gradeLevel=${selectedClassObj.gradeLevel || ''}&schoolYear=${academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''}&termName=${currentTerm ? currentTerm.termName : ''}`,
+           transform: (data) => data.success ? data.sectionStudents : null
+         },
+         {
+           name: 'Comprehensive Endpoint',
+           url: `${API_BASE}/api/grading/class/${selectedClassObj.classID}/section/${selectedSection}/comprehensive`,
+           transform: (data) => data.success && data.data ? data.data.students : null
+         },
+         {
+           name: 'Direct Students Endpoint',
+           url: `${API_BASE}/api/students/section/${selectedSection}`,
+           transform: (data) => Array.isArray(data) ? data : null
+         },
+
+         {
+           name: 'Class Code Students Endpoint',
+           url: `${API_BASE}/api/students/class/${selectedClassObj.classCode || selectedClassObj.classID}`,
+           transform: (data) => Array.isArray(data) ? data : null
+         },
+         {
+           name: 'Class Name Students Endpoint',
+           url: `${API_BASE}/api/students/className/${encodeURIComponent(selectedClassObj.className)}`,
+           transform: (data) => Array.isArray(data) ? data : null
+         },
+         {
+           name: 'Class Members Endpoint',
+           url: `${API_BASE}/classes/${selectedClassObj.classID}/members`,
+           transform: (data) => data && data.students ? data.students : null
+         },
+         {
+           name: 'Class Members Page Endpoint',
+           url: `${API_BASE}/classes/${selectedClassObj.classID}/members?includeStudents=true`,
+           transform: (data) => {
+             if (data && data.students) return data.students;
+             if (data && data.members) return data.members.filter(m => m.role === 'student');
+             if (Array.isArray(data)) return data.filter(m => m.role === 'student' || m.type === 'student');
+             return null;
+           }
+         },
+
+         {
+           name: 'All Students Endpoint',
+           url: `${API_BASE}/api/students`,
+           transform: (data) => Array.isArray(data) ? data : null
+         }
+       ];
+
+      for (const endpoint of endpoints) {
+        try {
+          debugReport += `\n--- ${endpoint.name} ---\n`;
+          debugReport += `URL: ${endpoint.url}\n`;
+          
+          const response = await fetch(endpoint.url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          debugReport += `Status: ${response.status}\n`;
+          
+          if (response.ok) {
+            const data = await response.json();
+            debugReport += `Response: ${JSON.stringify(data, null, 2)}\n`;
+            
+            const students = endpoint.transform(data);
+            if (students && students.length > 0) {
+              debugReport += `✅ Found ${students.length} students!\n`;
+              debugReport += `Sample: ${JSON.stringify(students[0], null, 2)}\n`;
+            } else {
+              debugReport += `❌ No students found or invalid data structure\n`;
+            }
+          } else {
+            debugReport += `❌ Failed: ${response.statusText}\n`;
+          }
+        } catch (error) {
+          debugReport += `❌ Error: ${error.message}\n`;
+        }
+      }
+
+      // Add class and section info
+      debugReport += `\n--- Class & Section Info ---\n`;
+      debugReport += `Selected Class: ${JSON.stringify(selectedClassObj, null, 2)}\n`;
+      debugReport += `Selected Section: ${selectedSection}\n`;
+      debugReport += `Academic Year: ${academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Not set'}\n`;
+      debugReport += `Current Term: ${currentTerm ? currentTerm.termName : 'Not set'}\n`;
+
+      setValidationMessage(debugReport);
       setValidationType('info');
       setShowValidationModal(true);
 
@@ -366,6 +1428,8 @@ export default function GradingSystem() {
       setValidationMessage(`Error debugging students: ${error.message}`);
       setValidationType('error');
       setShowValidationModal(true);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -505,26 +1569,17 @@ export default function GradingSystem() {
           <h3 className="text-lg font-semibold mb-4">Export All Grades</h3>
           <div className="space-y-4">
             <p className="text-gray-600">
-              Export all grades for assignments, activities, and quizzes in the selected section.
+              Export comprehensive grades for assignments and quizzes in the selected section as a CSV file.
             </p>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-end">
-                <button
-                  onClick={exportAllGrades}
-                  disabled={!selectedSection || exportLoading}
-                  className="w-full bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  {exportLoading ? 'Exporting...' : 'Export All Grades'}
-                </button>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
               <div className="flex items-end">
                 <button
                   onClick={downloadTemplate}
-                  disabled={!selectedSection}
+                   disabled={!selectedSection || templateLoading}
                   className="w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
-                  Download Template
+                   {templateLoading ? 'Generating...' : 'Download Template with Grades'}
                 </button>
               </div>
             </div>
@@ -573,10 +1628,18 @@ export default function GradingSystem() {
               
               <button
                 onClick={debugStudents}
-                disabled={!selectedSection}
+                 disabled={!selectedSection || loading}
                 className="bg-orange-600 text-white px-6 py-2 rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
               >
-                Debug Students
+                 {loading ? 'Debugging...' : 'Debug Students'}
+               </button>
+
+               <button
+                 onClick={testAllEndpoints}
+                 disabled={loading}
+                 className="bg-purple-600 text-white px-6 py-2 rounded-md hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed transition-colors"
+               >
+                 {loading ? 'Testing...' : 'Test All Endpoints'}
               </button>
             </div>
           </div>

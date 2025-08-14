@@ -396,6 +396,7 @@ router.post('/:id/submit', authenticateToken, upload.array('files', 5), async (r
     const student = req.user._id;
     const assignment = req.params.id;
     let files = [];
+    let links = [];
     
     // Handle file uploads if any
     if (req.files && req.files.length > 0) {
@@ -405,6 +406,20 @@ router.post('/:id/submit', authenticateToken, upload.array('files', 5), async (r
       }));
     }
     
+    // Handle links if any
+    if (req.body.links) {
+      // Parse links from form data
+      if (typeof req.body.links === 'string') {
+        // Single link
+        if (req.body.links.trim()) {
+          links = [req.body.links.trim()];
+        }
+      } else if (Array.isArray(req.body.links)) {
+        // Multiple links
+        links = req.body.links.filter(link => link && link.trim());
+      }
+    }
+    
     // Get context from form data if provided
     const context = req.body.context || '';
     
@@ -412,13 +427,14 @@ router.post('/:id/submit', authenticateToken, upload.array('files', 5), async (r
     let submission = await Submission.findOne({ assignment, student });
     if (submission) {
       submission.files = files;
+      submission.links = links;
       submission.context = context;
       submission.submittedAt = new Date();
       submission.status = 'turned-in';
       await submission.save();
     } else {
-      // Create new submission - files can be empty array for no-file submissions
-      submission = new Submission({ assignment, student, files, context });
+      // Create new submission - files and links can be empty arrays for empty submissions
+      submission = new Submission({ assignment, student, files, links, context });
       await submission.save();
     }
     
@@ -487,6 +503,31 @@ router.post('/:id/grade', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error grading submission:', err);
     res.status(500).json({ error: 'Failed to grade submission.' });
+  }
+});
+
+// Mark all submissions for an assignment as graded (for faculty convenience)
+router.patch('/:id/mark-all-graded', authenticateToken, async (req, res) => {
+  try {
+    const assignmentId = req.params.id;
+    
+    // Update all submissions for this assignment to mark them as graded
+    const result = await Submission.updateMany(
+      { assignment: assignmentId },
+      { 
+        status: 'graded',
+        updatedAt: new Date()
+      }
+    );
+    
+    res.json({
+      success: true,
+      message: `Marked ${result.modifiedCount} submissions as graded`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (err) {
+    console.error('Error marking submissions as graded:', err);
+    res.status(500).json({ error: 'Failed to mark submissions as graded.' });
   }
 });
 

@@ -4,7 +4,7 @@ import ProfileMenu from "../ProfileMenu";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function VPE_AuditTrail() {
   const [auditLogs, setAuditLogs] = useState([]);
@@ -115,16 +115,60 @@ export default function VPE_AuditTrail() {
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleString('en-US', {
+    return new Date(dateString).toLocaleString('en-US', {
       year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
+      month: 'long',
+      day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
     });
+  };
+
+  // Export audit logs to Excel (VPE users can export to Excel)
+  const handleExport = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/audit-logs/export`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to export audit logs');
+      }
+
+      const blob = await response.blob();
+      
+      // Get filename from Content-Disposition header
+      let filename = 'audit_logs_export.xlsx';
+      const disposition = response.headers.get('Content-Disposition');
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        const match = disposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error('Error exporting audit logs:', err);
+      alert('Failed to export audit logs. Please try again.');
+    }
   };
 
   const getActionLabel = (action) => {
@@ -155,6 +199,12 @@ export default function VPE_AuditTrail() {
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-xl font-semibold text-gray-800">System Audit Logs</h3>
+            <button
+              onClick={handleExport}
+              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+            >
+              Export to Excel
+            </button>
           </div>
 
           {loading ? (

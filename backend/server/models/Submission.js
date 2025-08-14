@@ -6,6 +6,7 @@ const submissionSchema = new mongoose.Schema({
     url: String,
     name: String
   }],
+  links: [String], // Add links array for storing submitted links
   fileUrl: { type: String }, // legacy, keep for backward compatibility
   fileName: { type: String }, // legacy, keep for backward compatibility
   context: { type: String }, // Additional context for no-file submissions

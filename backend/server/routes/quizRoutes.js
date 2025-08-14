@@ -15,7 +15,7 @@ import { createQuizNotification } from '../services/notificationService.js';
 const router = express.Router();
 
 // Multer setup for quiz images
-const quizImageDir = path.resolve('backend/server/uploads/quiz-images');
+const quizImageDir = path.resolve('uploads/quiz-images');
 if (!fs.existsSync(quizImageDir)) fs.mkdirSync(quizImageDir, { recursive: true });
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -34,7 +34,9 @@ router.post('/upload-image', upload.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  const imageUrl = `/uploads/quiz-images/${req.file.filename}`;
+  // Return full backend URL for the image
+  const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+  const imageUrl = `${backendUrl}/uploads/quiz-images/${req.file.filename}`;
   res.json({ url: imageUrl });
 });
 
@@ -42,8 +44,14 @@ router.post('/upload-image', upload.single('image'), (req, res) => {
 router.post('/', authenticateToken, async (req, res) => {
   if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
   try {
+    console.log('[QuizRoutes] Creating quiz with data:', req.body);
+    console.log('[QuizRoutes] Timing data:', req.body.timing);
+    
     const quiz = new Quiz(req.body);
     await quiz.save();
+    
+    console.log('[QuizRoutes] Quiz created successfully:', quiz._id);
+    console.log('[QuizRoutes] Saved timing data:', quiz.timing);
     
     // Create notifications for students in the class(es)
     if (quiz.classID) {
@@ -58,6 +66,7 @@ router.post('/', authenticateToken, async (req, res) => {
     
     res.status(201).json(quiz);
   } catch (err) {
+    console.error('[QuizRoutes] Error creating quiz:', err);
     res.status(400).json({ error: err.message });
   }
 });
@@ -153,6 +162,9 @@ router.get('/:quizId', authenticateToken, async (req, res) => {
     const quiz = await Quiz.findById(req.params.quizId).lean();
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
+    console.log('[QuizRoutes] Fetching quiz:', req.params.quizId);
+    console.log('[QuizRoutes] Quiz timing data:', quiz.timing);
+
     // FIX: Use questionBehaviour.shuffle (boolean)
     if (quiz.questionBehaviour && quiz.questionBehaviour.shuffle && req.user && req.user._id) {
       quiz.questions = seededShuffle(quiz.questions, req.user._id.toString());
@@ -168,10 +180,19 @@ router.get('/:quizId', authenticateToken, async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
   try {
+    console.log('[QuizRoutes] Updating quiz:', req.params.id);
+    console.log('[QuizRoutes] Update data:', req.body);
+    console.log('[QuizRoutes] Update timing data:', req.body.timing);
+    
     const quiz = await Quiz.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+    
+    console.log('[QuizRoutes] Quiz updated successfully');
+    console.log('[QuizRoutes] Updated timing data:', quiz.timing);
+    
     res.json(quiz);
   } catch (err) {
+    console.error('[QuizRoutes] Error updating quiz:', err);
     res.status(400).json({ error: err.message });
   }
 });
@@ -252,15 +273,58 @@ router.get('/:quizId/responses', authenticateToken, async (req, res) => {
   }
 });
 
+// Mark all quiz responses as graded (for faculty convenience)
+router.patch('/:quizId/responses/mark-all-graded', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { quizId } = req.params;
+    
+    // Update all responses for this quiz to mark them as graded
+    const result = await QuizResponse.updateMany(
+      { quizId },
+      { 
+        graded: true,
+        updatedAt: new Date()
+      }
+    );
+    
+    res.json({
+      success: true,
+      message: `Marked ${result.modifiedCount} responses as graded`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PATCH a quiz response's score by responseId
 router.patch('/:quizId/responses/:responseId', authenticateToken, async (req, res) => {
   if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
   try {
     const { responseId } = req.params;
-    const { score } = req.body;
-    if (typeof score !== 'number') return res.status(400).json({ error: 'Score must be a number.' });
-    const updated = await QuizResponse.findByIdAndUpdate(responseId, { score }, { new: true });
+    const { score, feedback } = req.body;
+    
+    // Validate score - allow 0 as a valid score since students may not pass anything
+    if (typeof score !== 'number' || score < 0) {
+      return res.status(400).json({ 
+        error: 'Score must be a non-negative number. Zero is a valid score for students who did not pass anything.' 
+      });
+    }
+    
+    const updateData = { 
+      score, 
+      graded: true,
+      updatedAt: new Date()
+    };
+    
+    if (feedback !== undefined) {
+      updateData.feedback = feedback;
+    }
+    
+    const updated = await QuizResponse.findByIdAndUpdate(responseId, updateData, { new: true });
     if (!updated) return res.status(404).json({ error: 'Quiz response not found.' });
+    
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });

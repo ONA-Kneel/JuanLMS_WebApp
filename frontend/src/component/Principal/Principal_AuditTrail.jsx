@@ -139,6 +139,52 @@ export default function Principal_AuditTrail() {
     });
   };
 
+  // Export audit logs to Excel (Principal users can export to Excel)
+  const handleExport = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/audit-logs/export`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to export audit logs');
+      }
+
+      const blob = await response.blob();
+      
+      // Get filename from Content-Disposition header
+      let filename = 'audit_logs_export.xlsx';
+      const disposition = response.headers.get('Content-Disposition');
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        const match = disposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error('Error exporting audit logs:', err);
+      alert('Failed to export audit logs. Please try again.');
+    }
+  };
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Principal_Navbar />
@@ -164,6 +210,12 @@ export default function Principal_AuditTrail() {
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             >
               Refresh
+            </button>
+            <button
+              onClick={handleExport}
+              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+            >
+              Export to Excel
             </button>
             <ProfileMenu />
           </div>
