@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Settings } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function ContactNicknameManager({ currentUserId, contactId, contactName, onNicknameUpdate, className = "", originalName = "" }) {
   const [nickname, setNickname] = useState("");

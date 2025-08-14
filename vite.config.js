@@ -1,7 +1,7 @@
 export default {
   server: {
     proxy: {
-      '/uploads': 'http://localhost:5000',
+      '/uploads': 'https://juanlms-webapp-server.onrender.com',
     },
   },
 }; 
