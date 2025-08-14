@@ -462,10 +462,19 @@ export default function Admin_Chats() {
     const fetchUserGroups = async () => {
       try {
         const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
-        setUserGroups(res.data);
+        // Validate and clean participants array for each group
+        const validatedGroups = res.data.map(group => {
+          if (group.participants && Array.isArray(group.participants)) {
+            // Filter out invalid participant IDs and ensure uniqueness
+            const validParticipants = [...new Set(group.participants.filter(id => id && typeof id === 'string'))];
+            return { ...group, participants: validParticipants };
+          }
+          return group;
+        });
+        setUserGroups(validatedGroups);
         
         // Join all groups in socket
-        res.data.forEach(group => {
+        validatedGroups.forEach(group => {
           socket.current?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
         });
       } catch (err) {
@@ -851,7 +860,11 @@ export default function Admin_Chats() {
                           {chat.type === 'group' ? chat.name : getUserDisplayName(chat, contactNicknames[chat._id])}
                         </strong>
                         {chat.type === 'group' ? (
-                          <span className="text-xs text-gray-500">{chat.participants?.length || 0} participants</span>
+                          <span className="text-xs text-gray-500">
+                            {chat.participants ? 
+                              chat.participants.filter(id => users.some(user => user._id === id)).length : 0
+                            } participants
+                          </span>
                         ) : (
                           lastMessages[chat._id] && (
                             <span className="text-xs text-gray-500 truncate">
@@ -914,7 +927,11 @@ export default function Admin_Chats() {
                         {item.isNewUser ? (
                           <span className="text-xs text-blue-600">Click to start new chat</span>
                         ) : item.type === 'group' ? (
-                          <span className="text-xs text-gray-500">{item.participants?.length || 0} participants</span>
+                          <span className="text-xs text-gray-500">
+                            {item.participants ? 
+                              item.participants.filter(id => users.some(user => user._id === id)).length : 0
+                            } participants
+                          </span>
                         ) : (
                           lastMessages[item._id] && (
                             <span className="text-xs text-gray-500 truncate">
@@ -972,7 +989,11 @@ export default function Admin_Chats() {
                               className="relative z-10"
                             />
                           </div>
-                          <p className="text-sm text-gray-600">{selectedChat.participants.length} participants</p>
+                          <p className="text-sm text-gray-600">
+                            {selectedChat.participants ? 
+                              selectedChat.participants.filter(id => users.some(user => user._id === id)).length : 0
+                            } participants
+                          </p>
                         </div>
                       </>
                     ) : (

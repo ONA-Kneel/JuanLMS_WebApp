@@ -244,7 +244,16 @@ export default function Principal_Chats() {
     const fetchGroups = async () => {
       try {
         const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
-        setGroups(res.data);
+        // Validate and clean participants array for each group
+        const validatedGroups = res.data.map(group => {
+          if (group.participants && Array.isArray(group.participants)) {
+            // Filter out invalid participant IDs and ensure uniqueness
+            const validParticipants = [...new Set(group.participants.filter(id => id && typeof id === 'string'))];
+            return { ...group, participants: validParticipants };
+          }
+          return group;
+        });
+        setGroups(validatedGroups);
       } catch (err) {
         console.error("Error fetching groups:", err);
       }

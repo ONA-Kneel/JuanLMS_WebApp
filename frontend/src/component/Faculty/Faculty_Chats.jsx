@@ -261,7 +261,16 @@ export default function Faculty_Chats() {
     const fetchGroups = async () => {
       try {
         const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
-        setGroups(res.data);
+        // Validate and clean participants array for each group
+        const validatedGroups = res.data.map(group => {
+          if (group.participants && Array.isArray(group.participants)) {
+            // Filter out invalid participant IDs and ensure uniqueness
+            const validParticipants = [...new Set(group.participants.filter(id => id && typeof id === 'string'))];
+            return { ...group, participants: validParticipants };
+          }
+          return group;
+        });
+        setGroups(validatedGroups);
       } catch (err) {
         console.error("Error fetching groups:", err);
       }
@@ -876,7 +885,11 @@ export default function Faculty_Chats() {
                         {item.isNewUser ? (
                           <span className="text-xs text-blue-600">Click to start new chat</span>
                         ) : item.type === 'group' ? (
-                          <span className="text-xs text-gray-500">{item.participants?.length || 0} participants</span>
+                          <span className="text-xs text-gray-500">
+                            {item.participants ? 
+                              item.participants.filter(id => users.some(user => user._id === id)).length : 0
+                            } participants
+                          </span>
                         ) : (
                           lastMessages[item._id] && (
                             <span className="text-xs text-gray-500 truncate">
@@ -963,7 +976,9 @@ export default function Faculty_Chats() {
                       </div>
                       {isGroupChat && (
                         <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                          {(selectedChat?.participants?.length || 0)} members
+                          {selectedChat?.participants ? 
+                            selectedChat.participants.filter(id => users.some(user => user._id === id)).length : 0
+                          } members
                           <button
                             className="ml-1 text-gray-700 hover:text-blue-900 focus:outline-none"
                             onClick={() => setShowMembersModal(true)}
@@ -1376,24 +1391,26 @@ export default function Faculty_Chats() {
             <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
               <h3 className="text-lg font-semibold mb-4">Group Members</h3>
               <ul className="mb-4 max-h-60 overflow-y-auto divide-y">
-                {(selectedChat?.participants || []).map(userId => {
-                  const user = users.find(u => u._id === userId);
-                  if (!user) return null;
-                  const isCreator = selectedChat?.createdBy === userId;
-                  return (
-                    <li key={userId} className="flex items-center justify-between py-2">
-                      <span>{getUserDisplayName(user, contactNicknames[user._id])} {isCreator && <span className="text-xs text-blue-700">(Creator)</span>}</span>
-                      {selectedChat?.createdBy === currentUserId && !isCreator && (
-                        <button
-                          className="text-red-500 hover:text-red-700 text-xs px-2 py-1 border border-red-300 rounded"
-                          onClick={() => { setMemberToRemove(user); setShowRemoveConfirm(true); }}
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </li>
-                  );
-                })}
+                {(selectedChat?.participants || [])
+                  .filter(userId => users.some(user => user._id === userId))
+                  .map(userId => {
+                    const user = users.find(u => u._id === userId);
+                    if (!user) return null;
+                    const isCreator = selectedChat?.createdBy === userId;
+                    return (
+                      <li key={userId} className="flex items-center justify-between py-2">
+                        <span>{getUserDisplayName(user, contactNicknames[user._id])} {isCreator && <span className="text-xs text-blue-700">(Creator)</span>}</span>
+                        {selectedChat?.createdBy === currentUserId && !isCreator && (
+                          <button
+                            className="text-red-500 hover:text-red-700 text-xs px-2 py-1 border border-red-300 rounded"
+                            onClick={() => { setMemberToRemove(user); setShowRemoveConfirm(true); }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
               </ul>
               <div className="flex gap-2">
                 <button
