@@ -5,7 +5,7 @@ import ProfileMenu from "../ProfileMenu";
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Admin_Dashboard() {
   const [recentAuditLogs, setRecentAuditLogs] = useState([]);
@@ -20,6 +20,10 @@ export default function Admin_Dashboard() {
   const [lastLoginsError, setLastLoginsError] = useState(null);
   const [lastLoginsPage, setLastLoginsPage] = useState(1);
   const LAST_LOGINS_PER_PAGE = 7;
+
+  // Announcement modal state
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [announcementToShow, setAnnouncementToShow] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -136,6 +140,57 @@ export default function Admin_Dashboard() {
         setLastLoginsLoading(false);
       });
   }, []);
+
+  // Fetch active general announcements for admin and show the latest in a modal
+  useEffect(() => {
+    async function fetchActiveAnnouncements() {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const res = await fetch(`${API_BASE}/api/general-announcements`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+
+        const announcements = await res.json(); // API now returns only the most recent unacknowledged announcement
+        if (!announcements || announcements.length === 0) return;
+
+        // Show the announcement (only one will be returned)
+        setAnnouncementToShow(announcements[0]);
+        setShowAnnouncementModal(true);
+      } catch (err) {
+        console.error('Failed to fetch general announcements', err);
+      }
+    }
+
+    // Show on initial dashboard load
+    fetchActiveAnnouncements();
+  }, []);
+
+  const acknowledgeAnnouncement = async () => {
+    if (!announcementToShow?._id) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/api/general-announcements/${announcementToShow._id}/acknowledge`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        // Close modal and clear announcement
+        setShowAnnouncementModal(false);
+        setAnnouncementToShow(null);
+      } else {
+        console.error('Failed to acknowledge announcement');
+      }
+    } catch (error) {
+      console.error('Error acknowledging announcement:', error);
+    }
+  };
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -414,6 +469,42 @@ export default function Admin_Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Announcement Modal */}
+      {showAnnouncementModal && announcementToShow && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full relative">
+            <h3 className="text-xl font-semibold mb-2 text-gray-900">{announcementToShow.title}</h3>
+            <div className="text-sm text-gray-500 mb-4">
+              {announcementToShow.termName} • {announcementToShow.schoolYear}
+            </div>
+            <div className="mb-6 text-gray-800 whitespace-pre-wrap">
+              {announcementToShow.body}
+            </div>
+            
+            {/* Footer with signature and button - symmetrical layout */}
+            <div className="flex justify-between items-end">
+              {/* Signature - Bottom Left */}
+              <div className="text-xs text-gray-600">
+                {announcementToShow.createdBy?.firstname || announcementToShow.createdBy?.lastname ? (
+                  <span>
+                    {(announcementToShow.createdBy?.firstname || '') + (announcementToShow.createdBy?.lastname ? ' ' + announcementToShow.createdBy.lastname : '')}
+                    {announcementToShow.createdBy?.role ? ` - ${announcementToShow.createdBy.role}` : ''}
+                  </span>
+                ) : null}
+              </div>
+              
+              {/* Button - Bottom Right */}
+              <button
+                onClick={acknowledgeAnnouncement}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+              >
+                Acknowledge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

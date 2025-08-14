@@ -7,6 +7,7 @@ const studentReportRoutes = express.Router();
 
 // Test route to verify the server is working
 studentReportRoutes.get("/test", (req, res) => {
+  console.log("🧪 Test route hit!");
   res.json({ message: "Student report routes are working!" });
 });
 
@@ -19,7 +20,10 @@ studentReportRoutes.post("/studentreports", authenticateToken, async (req, res) 
       studentReport,
       termName,
       schoolYear,
-      studentId
+      studentId,
+      behavior,
+      classParticipation,
+      classActivity
     } = req.body;
 
     // Get faculty ID from the authenticated user
@@ -46,7 +50,10 @@ studentReportRoutes.post("/studentreports", authenticateToken, async (req, res) 
       termName,
       schoolYear,
       facultyId,
-      studentId
+      studentId,
+      behavior,
+      classParticipation,
+      classActivity
     });
 
     const savedReport = await newReport.save();
@@ -65,21 +72,43 @@ studentReportRoutes.post("/studentreports", authenticateToken, async (req, res) 
 // Get all student reports (with optional filters)
 studentReportRoutes.get("/studentreports", authenticateToken, async (req, res) => {
   try {
-    const { facultyId, studentId, schoolYear, termName, page = 1, limit = 10 } = req.query;
+    console.log("🔍 GET /studentreports route hit");
+    console.log("🔍 Query parameters:", req.query);
+    console.log("🔍 User:", req.user);
+    
+    const { facultyId, studentId, schoolYear, termName, sentToVPE, show, page = 1, limit = 10 } = req.query;
     
     const filter = {};
     
     // Add filters if provided
-    if (facultyId) filter.facultyId = facultyId;
+    if (facultyId) {
+      filter.facultyId = facultyId;
+      console.log("🔍 Filtering by facultyId:", facultyId);
+    }
     if (studentId) filter.studentId = studentId;
     if (schoolYear) filter.schoolYear = schoolYear;
     if (termName) filter.termName = termName;
+    if (sentToVPE !== undefined) {
+      filter.sentToVPE = sentToVPE === 'true';
+      console.log("🔍 Filtering by sentToVPE:", filter.sentToVPE);
+    }
+    if (show !== undefined) {
+      filter.show = show;
+      console.log("🔍 Filtering by show:", filter.show);
+    }
 
     // If user is faculty, only show their reports
     if (req.user.role === 'faculty') {
       filter.facultyId = req.user._id;
     }
 
+    // If user is VPE, only show reports that have been sent to VPE and are marked as visible
+    if (req.user.role === 'vpe') {
+      filter.sentToVPE = true;
+      filter.show = 'yes';
+    }
+
+    console.log("🔍 Final filter:", filter);
     const skip = (page - 1) * limit;
     
     const reports = await StudentReport.find(filter)
@@ -90,6 +119,9 @@ studentReportRoutes.get("/studentreports", authenticateToken, async (req, res) =
       .populate('studentId', 'firstname lastname email schoolID');
 
     const total = await StudentReport.countDocuments(filter);
+    
+    console.log("🔍 Found reports:", reports.length);
+    console.log("🔍 Total reports:", total);
 
     res.json({
       reports,
@@ -102,7 +134,7 @@ studentReportRoutes.get("/studentreports", authenticateToken, async (req, res) =
     });
 
   } catch (error) {
-    console.error("Error fetching student reports:", error);
+    console.error("❌ Error fetching student reports:", error);
     res.status(500).json({ error: "Failed to fetch student reports" });
   }
 });
@@ -134,6 +166,14 @@ studentReportRoutes.get("/studentreports/:id", authenticateToken, async (req, re
 // Update a student report
 studentReportRoutes.put("/studentreports/:id", authenticateToken, async (req, res) => {
   try {
+    const {
+      facultyName,
+      studentName,
+      studentReport,
+      termName,
+      schoolYear
+    } = req.body;
+
     const report = await StudentReport.findById(req.params.id);
 
     if (!report) {
@@ -145,11 +185,19 @@ studentReportRoutes.put("/studentreports/:id", authenticateToken, async (req, re
       return res.status(403).json({ error: "Access denied" });
     }
 
+    // Update the report
     const updatedReport = await StudentReport.findByIdAndUpdate(
       req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
+      {
+        facultyName,
+        studentName,
+        studentReport,
+        termName,
+        schoolYear
+      },
+      { new: true }
+    ).populate('facultyId', 'firstname lastname email')
+     .populate('studentId', 'firstname lastname email schoolID');
 
     res.json({
       message: "Student report updated successfully",
@@ -186,19 +234,26 @@ studentReportRoutes.delete("/studentreports/:id", authenticateToken, async (req,
   }
 });
 
-// Get reports by faculty
+// Get reports by faculty (for faculty dashboard)
 studentReportRoutes.get("/studentreports/faculty/:facultyId", authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
-    const skip = (page - 1) * limit;
+    const facultyId = req.params.facultyId;
 
-    const reports = await StudentReport.find({ facultyId: req.params.facultyId })
+    // Check if user has permission to view these reports
+    if (req.user.role === 'faculty' && req.user._id.toString() !== facultyId) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const skip = (page - 1) * limit;
+    
+    const reports = await StudentReport.find({ facultyId })
       .sort({ date: -1 })
       .skip(skip)
       .limit(parseInt(limit))
       .populate('studentId', 'firstname lastname email schoolID');
 
-    const total = await StudentReport.countDocuments({ facultyId: req.params.facultyId });
+    const total = await StudentReport.countDocuments({ facultyId });
 
     res.json({
       reports,
@@ -216,19 +271,26 @@ studentReportRoutes.get("/studentreports/faculty/:facultyId", authenticateToken,
   }
 });
 
-// Get reports by student
+// Get reports by student (for student dashboard)
 studentReportRoutes.get("/studentreports/student/:studentId", authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
-    const skip = (page - 1) * limit;
+    const studentId = req.params.studentId;
 
-    const reports = await StudentReport.find({ studentId: req.params.studentId })
+    // Check if user has permission to view these reports
+    if (req.user.role === 'students' && req.user._id.toString() !== studentId) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const skip = (page - 1) * limit;
+    
+    const reports = await StudentReport.find({ studentId })
       .sort({ date: -1 })
       .skip(skip)
       .limit(parseInt(limit))
       .populate('facultyId', 'firstname lastname email');
 
-    const total = await StudentReport.countDocuments({ studentId: req.params.studentId });
+    const total = await StudentReport.countDocuments({ studentId });
 
     res.json({
       reports,
@@ -246,4 +308,66 @@ studentReportRoutes.get("/studentreports/student/:studentId", authenticateToken,
   }
 });
 
+// Send faculty reports to VPE
+studentReportRoutes.post("/studentreports/send-to-vpe", authenticateToken, async (req, res) => {
+  try {
+    // Only principals can send reports to VPE
+    if (req.user.role !== 'principal') {
+      return res.status(403).json({ error: "Only principals can send reports to VPE" });
+    }
+
+    const { facultyId, facultyName, termName, schoolYear } = req.body;
+
+    if (!facultyId || !termName || !schoolYear) {
+      return res.status(400).json({ 
+        error: "facultyId, termName, and schoolYear are required" 
+      });
+    }
+
+    // Find all reports for this faculty in the current term and school year
+    const reports = await StudentReport.find({
+      facultyId,
+      termName,
+      schoolYear
+    });
+
+    if (reports.length === 0) {
+      return res.status(404).json({ 
+        error: "No reports found for this faculty in the specified term and school year" 
+      });
+    }
+
+    // Update all reports to mark them as sent to VPE and visible
+    const updateResult = await StudentReport.updateMany(
+      {
+        facultyId,
+        termName,
+        schoolYear
+      },
+      {
+        $set: {
+          sentToVPE: true,
+          sentToVPEDate: new Date(),
+          show: 'yes'
+        }
+      }
+    );
+
+    console.log(`📤 Sent ${updateResult.modifiedCount} reports to VPE for faculty ${facultyName}`);
+
+    res.json({
+      message: `Successfully sent ${updateResult.modifiedCount} reports to VPE`,
+      facultyName,
+      termName,
+      schoolYear,
+      reportsSent: updateResult.modifiedCount
+    });
+
+  } catch (error) {
+    console.error("Error sending reports to VPE:", error);
+    res.status(500).json({ error: "Failed to send reports to VPE" });
+  }
+});
+
 export default studentReportRoutes;
+

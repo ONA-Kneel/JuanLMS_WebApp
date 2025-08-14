@@ -8,6 +8,7 @@ import progressIcon from "../../assets/progress.png";
 import gradesIcon from "../../assets/grades.png";
 import calendarIcon from "../../assets/calendar.png";
 import facultyReportIcon from "../../assets/facultyreport.png";
+import postAnnouncementIcon from "../../assets/announcement.png";
 import logo5 from "../../assets/logo/Logo5.svg";
 import logo6 from "../../assets/logo/SJDD Logo.svg";
 import { Menu, X } from 'lucide-react';
@@ -22,6 +23,7 @@ const Principal_Navbar = () => {
         { path: "/principal_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
         { path: "/principal_calendar", icon: calendarIcon, label: "CALENDAR" },
         { path: "/principal_faculty_report", icon: facultyReportIcon, label: "FACULTY REPORT" },
+        { path: "/principal_post_announcement", icon: postAnnouncementIcon, label: "ANNOUNCEMENT" },
         { path: "/principal_grades", icon: gradesIcon, label: "GRADES" },
         { path: "/principal_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
         { path: "/principal_chats", icon: chatsIcon, label: "CHATS" },

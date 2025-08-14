@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
+import * as XLSX from "xlsx";
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+// Use localhost for development - local server is running on port 5000
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Faculty_StudentReport() {
   const [academicYear, setAcademicYear] = useState(null);
@@ -22,8 +24,30 @@ export default function Faculty_StudentReport() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showStoredReports, setShowStoredReports] = useState(false);
   const [storedReports, setStoredReports] = useState([]);
+  // Rubric states
+  const [behavior, setBehavior] = useState(null);
+  const [classParticipation, setClassParticipation] = useState(null);
+  const [classActivity, setClassActivity] = useState(null);
+  // Batch upload states
+  const [showBatch, setShowBatch] = useState(false);
+  const [allowedStudents, setAllowedStudents] = useState([]);
+  const [loadingAllowed, setLoadingAllowed] = useState(false);
+  const [uploadingBatch, setUploadingBatch] = useState(false);
+  const [uploadSummary, setUploadSummary] = useState(null);
   
   const searchTimeoutRef = useRef(null);
+
+  // Report limits
+  const MIN_CHARS = 1;
+  const MAX_CHARS = 120;
+  const MIN_WORDS = 1;
+  const MAX_WORDS = 25;
+  const charCount = reportContent.length;
+  const wordCount = reportContent.trim() ? reportContent.trim().split(/\s+/).length : 0;
+  const charsLeft = Math.max(0, MAX_CHARS - charCount);
+  const withinCharRange = charCount >= MIN_CHARS && charCount <= MAX_CHARS;
+  const withinWordRange = wordCount >= MIN_WORDS && wordCount <= MAX_WORDS;
+  const canSubmit = !!selectedStudent && !isSubmitting && withinCharRange && withinWordRange;
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -65,6 +89,190 @@ export default function Faculty_StudentReport() {
     }
     fetchActiveTermForYear();
   }, [academicYear]);
+
+  // Fetch allowed students for batch template (students in faculty's sections for the active term)
+  const fetchAllowedStudents = async () => {
+    try {
+      setLoadingAllowed(true);
+      const token = localStorage.getItem("token");
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (!user || !currentTerm) return [];
+
+      // 1) Fetch faculty assignments for the term
+      const faRes = await fetch(`${API_BASE}/api/faculty-assignments`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const facultyAssignments = faRes.ok ? await faRes.json() : [];
+      const myAssignments = facultyAssignments.filter(
+        (a) => a.facultyId === user._id && a.termId === currentTerm._id
+      );
+      const mySections = new Set(myAssignments.map((a) => a.sectionName).filter(Boolean));
+
+      if (mySections.size === 0) {
+        setAllowedStudents([]);
+        return [];
+      }
+
+      // 2) Fetch student assignments for the term (then filter by our sections)
+      const saRes = await fetch(`${API_BASE}/api/student-assignments?termId=${currentTerm._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const allStudentAssignments = saRes.ok ? await saRes.json() : [];
+      const filtered = allStudentAssignments.filter((s) => mySections.has(s.sectionName));
+
+      // 3) Map to unique students
+      const byStudentId = new Map();
+      for (const a of filtered) {
+        const id = a.studentId;
+        if (!byStudentId.has(id)) {
+          byStudentId.set(id, a);
+        }
+      }
+      const unique = Array.from(byStudentId.values()).map((a) => ({
+        studentId: a.studentId,
+        lastname: a.lastname,
+        firstname: a.firstname,
+        email: a.email,
+        sectionName: a.sectionName,
+        trackName: a.trackName,
+        strandName: a.strandName,
+        schoolID: a.schoolID,
+        displayName: `${a.lastname}, ${a.firstname}`,
+      }));
+
+      setAllowedStudents(unique);
+      return unique;
+    } catch (e) {
+      console.error("Failed to fetch allowed students:", e);
+      setAllowedStudents([]);
+      return [];
+    } finally {
+      setLoadingAllowed(false);
+    }
+  };
+
+  const ensureAllowedStudentsLoaded = async () => {
+    if (allowedStudents.length === 0) {
+      await fetchAllowedStudents();
+    }
+  };
+
+  // Download Excel template with two sheets
+  const downloadBatchTemplate = async () => {
+    await ensureAllowedStudentsLoaded();
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Template headers only
+    const templateRows = [{ "Student Name": "", Report: "", Behavior: "", "Class Participation": "", "Class Activity": "" }];
+    const ws1 = XLSX.utils.json_to_sheet(templateRows, { header: ["Student Name", "Report", "Behavior", "Class Participation", "Class Activity"], skipHeader: false });
+    XLSX.utils.book_append_sheet(wb, ws1, "Template");
+
+    // Sheet 2: Allowed Students for guidance
+    const ws2 = XLSX.utils.json_to_sheet(
+      allowedStudents.map((s) => ({
+        "Student Name": s.displayName,
+        Email: s.email || "",
+        Section: s.sectionName || "",
+        Track: s.trackName || "",
+        Strand: s.strandName || "",
+        "School ID": s.schoolID || "",
+        "Scoring Guide": "1-very poor, 2-below average, 3-average, 4-good, 5-excellent"
+      })),
+      { header: ["Student Name", "Email", "Section", "Track", "Strand", "School ID", "Scoring Guide"], skipHeader: false }
+    );
+    XLSX.utils.book_append_sheet(wb, ws2, "Allowed Students");
+
+    const filename = "StudentReports_BatchTemplate.xlsx";
+    XLSX.writeFile(wb, filename);
+  };
+
+  // Upload and process Excel file
+  const handleBatchFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await ensureAllowedStudentsLoaded();
+
+    setUploadingBatch(true);
+    setUploadSummary(null);
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: "array" });
+      const firstSheetName = wb.SheetNames[0];
+      const ws = wb.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+      const user = JSON.parse(localStorage.getItem("user"));
+      const token = localStorage.getItem("token");
+      const results = { created: 0, skipped: 0, errors: [] };
+
+      // Create a fast lookup map for allowed students by normalized display name
+      const normalize = (s) => (s || "").trim().toLowerCase();
+      const nameMap = new Map(allowedStudents.map((s) => [normalize(s.displayName), s]));
+
+      for (const row of rows) {
+        const studentNameRaw = row["Student Name"] || row["student name"] || row["Student"] || "";
+        const reportText = row["Report"] || row["report"] || "";
+        const b = row["Behavior"] ?? row["behavior"] ?? null;
+        const cp = row["Class Participation"] ?? row["classParticipation"] ?? null;
+        const ca = row["Class Activity"] ?? row["classActivity"] ?? null;
+
+        if (!studentNameRaw || !reportText) {
+          results.skipped += 1;
+          continue;
+        }
+
+        const match = nameMap.get(normalize(studentNameRaw));
+        if (!match) {
+          results.errors.push({ studentName: studentNameRaw, error: "Student not in your assigned sections" });
+          results.skipped += 1;
+          continue;
+        }
+
+        const payload = {
+          facultyName: `${user.firstname} ${user.lastname}`,
+          studentName: match.displayName,
+          studentReport: String(reportText).slice(0, 120),
+          termName: currentTerm ? currentTerm.termName : "Unknown",
+          schoolYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Unknown",
+          studentId: match.studentId,
+          behavior: typeof b === 'number' ? b : (b ? Number(b) : undefined),
+          classParticipation: typeof cp === 'number' ? cp : (cp ? Number(cp) : undefined),
+          classActivity: typeof ca === 'number' ? ca : (ca ? Number(ca) : undefined),
+        };
+
+        try {
+          const resp = await fetch(`${API_BASE}/api/studentreports`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(payload),
+          });
+          if (resp.ok) {
+            results.created += 1;
+          } else {
+            const t = await resp.text();
+            results.errors.push({ studentName: match.displayName, error: t || resp.status });
+          }
+        } catch (err) {
+          results.errors.push({ studentName: match.displayName, error: err?.message || "Network error" });
+        }
+      }
+
+      setUploadSummary(results);
+      if (results.created > 0) {
+        await fetchStoredReports();
+      }
+    } catch (err) {
+      console.error("Failed processing batch file:", err);
+      setUploadSummary({ created: 0, skipped: 0, errors: [{ error: err?.message || "File read error" }] });
+    } finally {
+      setUploadingBatch(false);
+      // reset file input value so same file can be re-selected if needed
+      e.target.value = "";
+    }
+  };
 
   // Search students function
   const searchStudents = async (query) => {
@@ -161,6 +369,15 @@ export default function Faculty_StudentReport() {
       alert("Please write a report.");
       return;
     }
+    // Validate limits before submitting
+    if (!withinCharRange) {
+      alert(`Report must be between ${MIN_CHARS}-${MAX_CHARS} characters. Currently ${charCount}.`);
+      return;
+    }
+    if (!withinWordRange) {
+      alert(`Report must be between ${MIN_WORDS}-${MAX_WORDS} words. Currently ${wordCount}.`);
+      return;
+    }
     
     setIsSubmitting(true);
     try {
@@ -173,50 +390,39 @@ export default function Faculty_StudentReport() {
         studentReport: reportContent,
         termName: currentTerm ? currentTerm.termName : "Unknown",
         schoolYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Unknown",
-        studentId: selectedStudent._id
+        studentId: selectedStudent._id,
+        behavior: behavior ?? undefined,
+        classParticipation: classParticipation ?? undefined,
+        classActivity: classActivity ?? undefined
       };
       
       console.log("Sending request to:", `${API_BASE}/api/studentreports`);
       console.log("Request data:", reportData);
       
-      // Temporary solution: Store in localStorage until backend is deployed
-      console.log("Storing report data locally (temporary solution)");
-      
-      // Create a unique ID for the report
-      const reportId = Date.now().toString();
-      
-      // Store the report in localStorage
-      const storedReports = JSON.parse(localStorage.getItem('studentReports') || '[]');
-      const newReport = {
-        id: reportId,
-        ...reportData,
-        createdAt: new Date().toISOString()
-      };
-      
-      storedReports.push(newReport);
-      localStorage.setItem('studentReports', JSON.stringify(storedReports));
-      
-      console.log("Report stored successfully:", newReport);
-      
-      // Simulate API response
-      const response = {
-        ok: true,
-        json: async () => ({ message: "Report submitted successfully", report: newReport })
-      };
-      
-      console.log("Response status:", response.status);
-      console.log("Response headers:", response.headers);
+      // Call the API to store in database
+      console.log("Attempting to call API...");
+      const response = await fetch(`${API_BASE}/api/studentreports`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(reportData)
+      });
       
       if (response.ok) {
+        console.log("API call successful!");
         const result = await response.json();
-        alert("Report submitted successfully!");
+        alert("Report submitted!");
         setReportContent("");
         setSelectedStudent(null);
         setSearchTerm("");
+        setBehavior(null);
+        setClassParticipation(null);
+        setClassActivity(null);
         
-        // Refresh stored reports list
-        const reports = JSON.parse(localStorage.getItem('studentReports') || '[]');
-        setStoredReports(reports);
+        // Refresh stored reports list from database
+        await fetchStoredReports();
       } else {
         const errorData = await response.json();
         alert(`Failed to submit report: ${errorData.error || 'Unknown error'}`);
@@ -229,10 +435,30 @@ export default function Faculty_StudentReport() {
     }
   };
 
+  // Function to fetch reports from database
+  const fetchStoredReports = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/api/studentreports`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setStoredReports(data.reports || []);
+      } else {
+        console.error("Failed to fetch reports:", response.status);
+        setStoredReports([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch reports:", err);
+      setStoredReports([]);
+    }
+  };
+
   // Load stored reports on component mount
   useEffect(() => {
-    const reports = JSON.parse(localStorage.getItem('studentReports') || '[]');
-    setStoredReports(reports);
+    fetchStoredReports();
   }, []);
 
   // Clear search when clicking outside
@@ -269,18 +495,75 @@ export default function Faculty_StudentReport() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-                                     <button
-              onClick={() => setShowStoredReports(!showStoredReports)}
-              className="px-4 py-2 bg-[#010a51] text-white rounded hover:bg-[#1a237e] transition-colors"
-            >
-              {showStoredReports ? 'Hide Reports' : `View Reports (${storedReports.length})`}
-            </button>
             <ProfileMenu />
           </div>
         </div>
 
         {/* Main Content Area */}
         <div className="bg-white rounded-lg shadow-md p-6">
+          {/* Card header actions */}
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold">Create Student Report</h3>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowBatch(true);
+                  await ensureAllowedStudentsLoaded();
+                }}
+                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Batch Upload
+              </button>
+            </div>
+          </div>
+
+          {showBatch && (
+            <div className="mb-6 border rounded p-4 bg-gray-50">
+              <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
+                <div>
+                  <p className="font-medium text-gray-800">Batch Upload Reports</p>
+                  <p className="text-sm text-gray-600">Download the template, fill it, then upload. Only students assigned to your sections for the active term are allowed.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={downloadBatchTemplate}
+                    disabled={loadingAllowed}
+                    className="px-3 py-2 rounded bg-[#010a51] text-white hover:bg-[#1a237e] disabled:opacity-50"
+                  >
+                    {loadingAllowed ? "Preparing..." : "Download Template"}
+                  </button>
+                  <label className="cursor-pointer px-3 py-2 rounded bg-green-600 text-white hover:bg-green-700">
+                    {uploadingBatch ? "Uploading..." : "Upload Template"}
+                    <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleBatchFile} disabled={uploadingBatch} />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowBatch(false)}
+                    className="px-3 py-2 rounded border border-gray-300 text-gray-700 hover:bg-white"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              {uploadSummary && (
+                <div className="mt-3 text-sm text-gray-700">
+                  <p>Created: {uploadSummary.created} | Skipped: {uploadSummary.skipped}</p>
+                  {uploadSummary.errors?.length > 0 && (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer">View errors ({uploadSummary.errors.length})</summary>
+                      <ul className="list-disc ml-6 mt-1">
+                        {uploadSummary.errors.map((e, idx) => (
+                          <li key={idx}>{e.studentName ? `${e.studentName}: ` : ""}{e.error}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-6">
                          {/* Search Student Section */}
              <div className="search-container relative">
@@ -343,35 +626,88 @@ export default function Faculty_StudentReport() {
                </div>
              )}
 
+            {/* Rubric Section */}
+            <div className="mb-2 text-xs sm:text-sm text-gray-600">
+              <span className="mr-4">1 - very poor</span>
+              <span className="mr-4">2 - below average</span>
+              <span className="mr-4">3 - average</span>
+              <span className="mr-4">4 - good</span>
+              <span>5 - excellent</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center gap-4">
+                <label className="w-48 text-base font-semibold text-gray-800">Behavior</label>
+                <div className="flex items-center gap-4">
+                  {[1,2,3,4,5].map(n => (
+                    <label key={`beh-${n}`} className="flex items-center gap-2 text-sm">
+                      <input className="w-5 h-5" type="radio" name="behavior" value={n} checked={behavior===n} onChange={() => setBehavior(n)} />
+                      <span>{n === 1 ? '1' : n === 2 ? '2' : n === 3 ? '3' : n === 4 ? '4' : '5'}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="w-48 text-base font-semibold text-gray-800">Class Participation</label>
+                <div className="flex items-center gap-4">
+                  {[1,2,3,4,5].map(n => (
+                    <label key={`cp-${n}`} className="flex items-center gap-2 text-sm">
+                      <input className="w-5 h-5" type="radio" name="classParticipation" value={n} checked={classParticipation===n} onChange={() => setClassParticipation(n)} />
+                      <span>{n === 1 ? '1 ' : n === 2 ? '2' : n === 3 ? '3' : n === 4 ? '4' : '5'}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="w-48 text-base font-semibold text-gray-800">Class Activity</label>
+                <div className="flex items-center gap-4">
+                  {[1,2,3,4,5].map(n => (
+                    <label key={`ca-${n}`} className="flex items-center gap-2 text-sm">
+                      <input className="w-5 h-5" type="radio" name="classActivity" value={n} checked={classActivity===n} onChange={() => setClassActivity(n)} />
+                      <span>{n === 1 ? '1' : n === 2 ? '2' : n === 3 ? '3' : n === 4 ? '4' : '5'}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             {/* Report Content Section */}
             <div>
-              <label htmlFor="reportContent" className="block text-sm font-medium text-gray-700 mb-2">
-                Report Content
-              </label>
-                             <textarea
-                 id="reportContent"
-                 value={reportContent}
-                 onChange={(e) => setReportContent(e.target.value)}
-                 placeholder="Write your report here..."
-                 rows={10}
-                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#010a51] focus:border-transparent resize-vertical"
-                 required
-               />
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="reportContent" className="block text-sm font-medium text-gray-700">
+                  Report Content
+                </label>
+                <span className={`text-xs ${withinCharRange ? 'text-[#010a51]' : 'text-red-600'}`}>
+                  {charsLeft} left
+                </span>
+              </div>
+              <textarea
+                id="reportContent"
+                value={reportContent}
+                onChange={(e) => setReportContent(e.target.value)}
+                placeholder="Write your report here..."
+                rows={10}
+                maxLength={MAX_CHARS}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#010a51] focus:border-transparent resize-vertical ${
+                  withinCharRange && withinWordRange ? 'border-gray-300' : 'border-red-500'
+                }`}
+                required
+              />
+
             </div>
 
             {/* Submit Button */}
             <div className="flex justify-end">
-                           <button
-               type="submit"
-               disabled={isSubmitting || !selectedStudent}
-               className={`px-6 py-2 rounded-md text-white font-medium ${
-                 isSubmitting || !selectedStudent
-                   ? 'bg-gray-400 cursor-not-allowed'
-                   : 'bg-[#010a51] hover:bg-[#1a237e] focus:outline-none focus:ring-2 focus:ring-[#010a51] focus:ring-offset-2'
-               }`}
-             >
-               {isSubmitting ? 'Submitting...' : 'Submit Report'}
-             </button>
+              <button
+                type="submit"
+                disabled={!canSubmit}
+                className={`px-6 py-2 rounded-md text-white font-medium ${
+                  !canSubmit
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-[#010a51] hover:bg-[#1a237e] focus:outline-none focus:ring-2 focus:ring-[#010a51] focus:ring-offset-2'
+                }`}
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Report'}
+              </button>
             </div>
           </form>
           

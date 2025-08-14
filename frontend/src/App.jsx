@@ -41,6 +41,7 @@ import Principal_Grades from './component/Principal/Principal_Grades';
 import Principal_Calendar from './component/Principal/Principal_Calendar';
 import Principal_AuditTrail from './component/Principal/Principal_AuditTrail';
 import Principal_FacultyReport from './component/Principal/Principal_FacultyReport';
+import Principal_PostAnnouncement from './component/Principal/Principal_PostAnnouncement';
 
 // Admin Access
 import Admin_Dashboard from './component/Admin/Admin_Dashboard';
@@ -63,6 +64,7 @@ import VPE_Chats from './component/VPE/VPE_Chats';
 import VPE_Calendar from './component/VPE/VPE_Calendar';
 import VPE_AuditTrail from './component/VPE/VPE_AuditTrail';
 import VPE_FacultyReport from './component/VPE/VPE_FacultyReport';
+import VPE_PostAnnouncement from './component/VPE/VPE_PostAnnouncement';
 
 // All Around
 import ActivityTab from './component/ActivityTab';
@@ -110,6 +112,7 @@ function App() {
         <Route path="/principal_calendar" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Calendar /></ProtectedRoute>}/>
         <Route path="/principal_audit_trail" element={<ProtectedRoute allowedRoles={['principal']}><Principal_AuditTrail/></ProtectedRoute>}/>
         <Route path="/principal_faculty_report" element={<ProtectedRoute allowedRoles={['principal']}><Principal_FacultyReport/></ProtectedRoute>}/>
+        <Route path="/principal_post_announcement" element={<ProtectedRoute allowedRoles={['principal']}><Principal_PostAnnouncement/></ProtectedRoute>}/>
 
         {/* Admin */}
         <Route path="/admin_dashboard" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Dashboard/></ProtectedRoute>}/>
@@ -132,6 +135,7 @@ function App() {
         <Route path="/VPE_calendar" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Calendar /></ProtectedRoute>}/>
         <Route path="/VPE_audit_trail" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_AuditTrail/></ProtectedRoute>}/>
         <Route path="/VPE_faculty_report" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_FacultyReport/></ProtectedRoute>}/>
+        <Route path="/vpe_post_announcement" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_PostAnnouncement/></ProtectedRoute>}/>
 
         {/* Assignment Creation Page */}
         <Route path="/create-assignment" element={<ProtectedRoute allowedRoles={['faculty']}><ActivityTab /></ProtectedRoute>} />
