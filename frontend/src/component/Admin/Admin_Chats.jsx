@@ -484,6 +484,38 @@ export default function Admin_Chats() {
         setGroupMessages((prev) => {
           const newMessages = { ...prev, [selectedChat._id]: res.data };
           
+          // Ensure all group message senders are in the users array
+          const messageSenders = new Set();
+          res.data.forEach(msg => {
+            if (msg.senderId && msg.senderId !== currentUserId) {
+              messageSenders.add(msg.senderId);
+            }
+          });
+          
+          // Add missing senders to users array if they're not already there
+          const missingSenders = Array.from(messageSenders).filter(senderId => 
+            !users.some(user => user._id === senderId)
+          );
+          
+          if (missingSenders.length > 0) {
+            // Fetch missing users
+            missingSenders.forEach(async (senderId) => {
+              try {
+                const userRes = await axios.get(`${API_BASE}/users/${senderId}`);
+                if (userRes.data) {
+                  setUsers(prev => {
+                    if (!prev.some(user => user._id === senderId)) {
+                      return [...prev, userRes.data];
+                    }
+                    return prev;
+                  });
+                }
+              } catch (err) {
+                console.error("Error fetching user:", senderId, err);
+              }
+            });
+          }
+          
           // Compute last messages for all groups
           const newLastMessages = {};
           userGroups.forEach(group => {
@@ -512,7 +544,7 @@ export default function Admin_Chats() {
     };
 
     fetchGroupMessages();
-  }, [selectedChat, currentUserId, userGroups, contactNicknames]);
+  }, [selectedChat, currentUserId, userGroups, contactNicknames, users]);
 
   // Fetch users for participant selection
   useEffect(() => {
