@@ -235,6 +235,7 @@ app.use("/classes", classRoutes);
 app.use("/", auditTrailRoutes);
 app.use("/lessons", lessonRoutes);
 app.use('/uploads/lessons', express.static('uploads/lessons'));
+app.use('/uploads/quiz-images', express.static('uploads/quiz-images'));
 app.use("/announcements", announcementRoutes);
 app.use("/assignments", assignmentRoutes);
 app.use('/api/tickets', ticketsRouter);

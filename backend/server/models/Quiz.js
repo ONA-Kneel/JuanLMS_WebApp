@@ -20,7 +20,8 @@ const quizSchema = new mongoose.Schema({
       correctAnswers: [Number], // for multiple choice (indexes)
       correctAnswer: mongoose.Schema.Types.Mixed, // for true/false or identification
       points: { type: Number, default: 1 },
-      required: { type: Boolean, default: true }
+      required: { type: Boolean, default: true },
+      image: { type: String } // URL for question image
     }
   ],
   environment: { type: String },

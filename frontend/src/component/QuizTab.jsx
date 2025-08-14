@@ -37,9 +37,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
         title: '',
         message: ''
     });
-    const [showGrading, setShowGrading] = useState(false);
-    const [gradeToPass, setGradeToPass] = useState(0);
-    const [attemptsAllowed, setAttemptsAllowed] = useState('Unlimited');
+
 
     const [showTiming, setShowTiming] = useState(false);
     const [timingOpenEnabled, setTimingOpenEnabled] = useState(false);
@@ -314,7 +312,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             formData.append('image', file);
             try {
                 const token = localStorage.getItem('token');
-                const res = await fetch(`${API_BASE}/quizzes/upload-image`, {
+                const res = await fetch(`${API_BASE}/api/quizzes/upload-image`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`

@@ -15,7 +15,7 @@ import { createQuizNotification } from '../services/notificationService.js';
 const router = express.Router();
 
 // Multer setup for quiz images
-const quizImageDir = path.resolve('backend/server/uploads/quiz-images');
+const quizImageDir = path.resolve('uploads/quiz-images');
 if (!fs.existsSync(quizImageDir)) fs.mkdirSync(quizImageDir, { recursive: true });
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -34,7 +34,9 @@ router.post('/upload-image', upload.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  const imageUrl = `/uploads/quiz-images/${req.file.filename}`;
+  // Return full backend URL for the image
+  const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+  const imageUrl = `${backendUrl}/uploads/quiz-images/${req.file.filename}`;
   res.json({ url: imageUrl });
 });
 

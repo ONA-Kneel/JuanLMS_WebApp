@@ -30,6 +30,7 @@ export default function QuizView() {
   const questionStartTimeRef = useRef(Date.now());
   const [timerStarted, setTimerStarted] = useState(false); // Track if timer has started
   const timerStartTimeRef = useRef(null); // Track when timer actually started
+  const [lightboxImage, setLightboxImage] = useState(null); // For image zoom modal
 
   // Fetch quiz details
   useEffect(() => {
@@ -538,12 +539,57 @@ export default function QuizView() {
           </div>
         </div>
       )}
+      
+      {/* Image Lightbox Modal */}
+      {lightboxImage && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/80 z-50">
+          <div className="relative max-w-4xl max-h-full p-4">
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="absolute top-2 right-2 bg-white/20 hover:bg-white/40 text-white rounded-full p-2 transition-colors z-10"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <img
+              src={lightboxImage}
+              alt="Question"
+              className="max-w-full max-h-full object-contain rounded shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
       {/* Card */}
       <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border-4 border-blue-800 flex flex-col items-stretch p-12 mb-8">
         <div className="flex w-full justify-between items-center mb-6">
           <span className="text-2xl font-bold text-blue-900">{current + 1}. {q.question}</span>
           <span className="text-lg text-gray-700 font-semibold">{q.points || quiz.points || ''} Points</span>
         </div>
+        
+        {/* Display question image if exists */}
+        {q.image && (
+          <div className="mb-6 relative group w-fit mx-auto">
+            <button
+              type="button"
+              onClick={() => setLightboxImage(q.image)}
+              className="focus:outline-none"
+            >
+              <img
+                src={q.image}
+                alt="Question"
+                className="max-h-64 rounded border transition-transform duration-200 group-hover:scale-105 group-hover:brightness-90 cursor-zoom-in"
+              />
+              {/* Zoom icon overlay */}
+              <span className="absolute bottom-2 right-2 bg-white/80 rounded-full p-1 shadow group-hover:bg-blue-100">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l5 5m-5-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </span>
+            </button>
+          </div>
+        )}
+        
         <div className="mb-2 w-full">{renderChoices()}</div>
       </div>
       {/* Progress bar and navigation below card */}
