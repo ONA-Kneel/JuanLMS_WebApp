@@ -184,6 +184,7 @@ export default function Principal_Chats() {
         const res = await axios.get(`${API_BASE}/users/with-nicknames`);
         // Support both array and paginated object
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
+
         setUsers(userArray);
         setSelectedChat(null);
         localStorage.removeItem("selectedChatId_principal");
@@ -197,6 +198,8 @@ export default function Principal_Chats() {
     };
     fetchUsers();
   }, [currentUserId]);
+
+
 
   // ================= FETCH EXISTING CONVERSATIONS =================
   useEffect(() => {
@@ -693,12 +696,27 @@ export default function Principal_Chats() {
     ...users
       .filter(user => user._id !== currentUserId)
       .filter(user => !recentChats.some(chat => chat._id === user._id))
-      .filter(user =>
-        user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+      .filter(user => {
+        const matches = user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                       user.lastname?.toLowerCase().includes(searchTerm.toLowerCase());
+        return matches;
+      })
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
+
+  // Also include users that ARE in recent chats but match the search
+  const searchResultsWithRecent = searchTerm.trim() === '' ? [] : [
+    ...searchResults,
+    ...recentChats
+      .filter(chat => chat.type === 'individual')
+      .filter(chat => 
+        chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .map(chat => ({ ...chat, type: 'existing_chat' }))
+  ];
+
+
 
   return (
     <div className="flex min-h-screen h-screen max-h-screen">
@@ -826,8 +844,8 @@ export default function Principal_Chats() {
                 )
               ) : (
                 // Show search results when searching
-                searchResults.length > 0 ? (
-                  searchResults.map((item) => (
+                searchResultsWithRecent.length > 0 ? (
+                  searchResultsWithRecent.map((item) => (
                     <div
                       key={item._id}
                       className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
@@ -1413,3 +1431,4 @@ export default function Principal_Chats() {
     </div>
   );
 }
+

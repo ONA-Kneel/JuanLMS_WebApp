@@ -185,6 +185,7 @@ export default function Admin_Chats() {
         const res = await axios.get(`${API_BASE}/users/with-nicknames`);
         // Support both array and paginated object
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
+
         setUsers(userArray);
         setSelectedChat(null);
         localStorage.removeItem("selectedChatId_admin");
@@ -747,14 +748,34 @@ export default function Admin_Chats() {
       .filter(user => !recentChats.some(chat => chat._id === user._id))
       .filter(user => {
         const displayName = getUserDisplayName(user, contactNicknames[user._id]);
-        return (
+        const matches = (
           user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           user.lastname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           displayName.toLowerCase().includes(searchTerm.toLowerCase())
         );
+
+        return matches;
       })
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
+
+  // Also include users that ARE in recent chats but match the search
+  const searchResultsWithRecent = searchTerm.trim() === '' ? [] : [
+    ...searchResults,
+    ...recentChats
+      .filter(chat => chat.type === 'individual')
+      .filter(chat => {
+        const displayName = getUserDisplayName(chat, contactNicknames[chat._id]);
+        return (
+          chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          displayName.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      })
+      .map(chat => ({ ...chat, type: 'existing_chat' }))
+  ];
+
+
 
   // Unified chat interface with tabs, left/right panels, and modals
   return (
@@ -885,8 +906,8 @@ export default function Admin_Chats() {
                 )
               ) : (
                 // Show search results when searching
-                searchResults.length > 0 ? (
-                  searchResults.map((item) => (
+                searchResultsWithRecent.length > 0 ? (
+                  searchResultsWithRecent.map((item) => (
                     <div
                       key={item._id}
                       className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${

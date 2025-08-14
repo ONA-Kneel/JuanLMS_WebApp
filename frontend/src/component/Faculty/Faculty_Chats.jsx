@@ -717,6 +717,18 @@ export default function Faculty_Chats() {
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
 
+  // Also include users that ARE in recent chats but match the search
+  const searchResultsWithRecent = searchTerm.trim() === '' ? [] : [
+    ...searchResults,
+    ...recentChats
+      .filter(chat => chat.type === 'individual')
+      .filter(chat => 
+        chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .map(chat => ({ ...chat, type: 'existing_chat' }))
+  ];
+
   return (
     <div className="flex min-h-screen h-screen max-h-screen">
       <Faculty_Navbar />
@@ -843,8 +855,8 @@ export default function Faculty_Chats() {
                 )
               ) : (
                 // Show search results when searching
-                searchResults.length > 0 ? (
-                  searchResults.map((item) => (
+                searchResultsWithRecent.length > 0 ? (
+                  searchResultsWithRecent.map((item) => (
                     <div
                       key={item._id}
                       className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
