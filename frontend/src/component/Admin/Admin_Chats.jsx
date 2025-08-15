@@ -41,6 +41,10 @@ export default function Admin_Chats() {
   // Add state for member search
   const [memberSearchTerm, setMemberSearchTerm] = useState("");
   const [users, setUsers] = useState([]);
+  
+  // Add missing state variables for new chat functionality
+  const [_showNewChatModal, setShowNewChatModal] = useState(false);
+  const [_userSearchTerm, setUserSearchTerm] = useState("");
 
   // Add missing validationModal state
   const [validationModal, setValidationModal] = useState({
@@ -313,7 +317,7 @@ export default function Admin_Chats() {
           try {
             const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
             newMessages[chat._id] = res.data;
-          } catch (err) {
+          } catch (_err) {
             newMessages[chat._id] = [];
           }
         }
@@ -441,8 +445,8 @@ export default function Admin_Chats() {
         const res = await axios.get(`${API_BASE}/users`);
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
-      } catch (err) {
-        console.error("Error fetching users:", err);
+      } catch (_err) {
+        console.error("Error fetching users:", _err);
       }
     };
     fetchUsers();
@@ -572,6 +576,7 @@ export default function Admin_Chats() {
         groupId: selectedChat._id,
         text: sentMessage.message,
         fileUrl: sentMessage.fileUrl || null,
+        senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
       });
 
       setGroupMessages((prev) => ({
@@ -1113,7 +1118,7 @@ export default function Admin_Chats() {
             <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4">
               <h3 className="text-lg font-semibold mb-4">Group Members</h3>
               <ul className="mb-4 divide-y divide-gray-200">
-                {selectedChat.participants.map((userId, idx) => {
+                                        {selectedChat.participants.map((userId, _idx) => {
                   const user = users.find((u) => u._id === userId);
                   if (!user) return null;
                   return (

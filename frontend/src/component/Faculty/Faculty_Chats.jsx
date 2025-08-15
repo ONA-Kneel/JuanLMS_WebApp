@@ -132,7 +132,7 @@ export default function Faculty_Chats() {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
-        senderName: data.senderName,
+        senderName: data.senderName || "Unknown",
         timestamp: new Date(),
       };
 
