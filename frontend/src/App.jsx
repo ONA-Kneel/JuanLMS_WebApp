@@ -90,7 +90,6 @@ function App() {
         <Route path="/student_grades" element={<ProtectedRoute allowedRoles={['students']}><Student_Grades /></ProtectedRoute>}/>
         <Route path="/student_calendar" element={<ProtectedRoute allowedRoles={['students']}><Student_Calendar /></ProtectedRoute>}/>
         <Route path="/student_class/:classId" element={<ProtectedRoute allowedRoles={['students']}><Student_ClassWorkspace /></ProtectedRoute>} />
-        <Route path="/student/support-center" element={<ProtectedRoute allowedRoles={['students']}><SupportModal onClose={() => {}} /></ProtectedRoute>} />
 
         
         {/* Faculty */}
@@ -105,7 +104,6 @@ function App() {
         <Route path="/faculty_class/:classId" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_ClassWorkspace /></ProtectedRoute>} />
         <Route path="/faculty_meeting" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Meeting /></ProtectedRoute>} />
         <Route path="/faculty_student_report" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_StudentReport /></ProtectedRoute>} />
-        <Route path="/faculty/support-center" element={<ProtectedRoute allowedRoles={['faculty']}><SupportModal onClose={() => {}} /></ProtectedRoute>} />
 
 
         {/* Principal */}
@@ -116,7 +114,6 @@ function App() {
         <Route path="/principal_grades" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Grades /></ProtectedRoute>}/>
         <Route path="/principal_audit_trail" element={<ProtectedRoute allowedRoles={['principal']}><Principal_AuditTrail /></ProtectedRoute>}/>
         <Route path="/principal_chats" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Chats /></ProtectedRoute>}/>
-        <Route path="/principal/support-center" element={<ProtectedRoute allowedRoles={['principal']}><SupportModal onClose={() => {}} /></ProtectedRoute>} />
 
         {/* Admin */}
         <Route path="/admin_dashboard" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Dashboard/></ProtectedRoute>}/>
@@ -140,7 +137,6 @@ function App() {
         <Route path="/VPE_audit_trail" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_AuditTrail/></ProtectedRoute>}/>
         <Route path="/VPE_faculty_report" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_FacultyReport/></ProtectedRoute>}/>
         <Route path="/vpe_post_announcement" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_PostAnnouncement/></ProtectedRoute>}/>
-        <Route path="/vpe/support-center" element={<ProtectedRoute allowedRoles={['vice president of education']}><SupportModal onClose={() => {}} /></ProtectedRoute>} />
 
         {/* Assignment Creation Page */}
         <Route path="/create-assignment" element={<ProtectedRoute allowedRoles={['faculty']}><ActivityTab /></ProtectedRoute>} />

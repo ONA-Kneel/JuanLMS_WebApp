@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import dashboardIcon from "../../assets/dashboard.png";
 import classesIcon from "../../assets/classes.png";
 import activitiesIcon from "../../assets/activities.png";
@@ -7,7 +7,7 @@ import chatsIcon from "../../assets/chats.png";
 import gradesIcon from "../../assets/grades.png";
 import calendarIcon from "../../assets/calendar.png";
 import logo5 from "../../assets/logo/Logo5.svg";
-import { Menu, X, HelpCircle } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import meetingIcon from "../../assets/editEvent.png";
 import logo6 from "../../assets/logo/SJDD Logo.svg";
 import facultyReportIcon from "../../assets/facultyreport.png";
@@ -15,7 +15,6 @@ import facultyReportIcon from "../../assets/facultyreport.png";
 const Faculty_Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
     const location = useLocation();
-    const navigate = useNavigate();
 
     const navItems = [
 
@@ -69,17 +68,6 @@ const Faculty_Navbar = () => {
                             <span>{item.label}</span>
                         </button>
                     ))}
-                    <button
-                        onClick={() => {
-                            navigate('/faculty/support-center');
-                            setIsOpen(false);
-                        }}
-                        className={`text-lg flex items-center space-x-3 p-2 w-full rounded-lg transition-colors 
-                        ${location.pathname === '/faculty/support-center' ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"}`}
-                    >
-                        <HelpCircle className="w-6 h-6" />
-                        <span>SUPPORT CENTER</span>
-                    </button>
                 </nav>
             </div>
         </>
