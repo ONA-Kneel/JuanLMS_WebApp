@@ -67,52 +67,192 @@ export default function GradingSystem() {
   // Fetch sections for the current term
   useEffect(() => {
     async function fetchSections() {
-      if (!currentTerm) return;
+      if (!currentTerm || !academicYear) return;
       try {
         const token = localStorage.getItem("token");
         console.log('Fetching sections for term:', currentTerm._id);
-        console.log('API URL:', `${API_BASE}/api/terms/${currentTerm._id}/sections`);
+        console.log('Current term name:', currentTerm.termName);
+        console.log('Current school year:', `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`);
         
-        const response = await fetch(`${API_BASE}/api/terms/${currentTerm._id}/sections`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // Try multiple approaches to get sections
+        let sectionsData = [];
         
-        console.log('Sections response status:', response.status);
-        console.log('Sections response headers:', response.headers);
-        
-        if (response.ok) {
-          const sectionsData = await response.json();
-          console.log('Fetched all sections:', sectionsData);
-          setAllSections(sectionsData); // Store all sections
-          setSections(sectionsData); // Initially show all sections
-        } else {
-          const errorText = await response.text();
-          console.error('Failed to fetch sections. Status:', response.status);
-          console.error('Error response:', errorText);
-          
-          // Fallback: try to get all sections for the current term
-          console.log('Trying fallback: fetch all sections for current term');
-          const fallbackResponse = await fetch(`${API_BASE}/api/sections`, {
+        // Approach 1: Try the term-specific endpoint
+        try {
+          const response = await fetch(`${API_BASE}/api/terms/${currentTerm._id}/sections`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           
-          if (fallbackResponse.ok) {
-            const allSectionsData = await fallbackResponse.json();
-            console.log('Fallback sections data:', allSectionsData);
+          console.log('Term-specific sections response status:', response.status);
+          
+          if (response.ok) {
+            sectionsData = await response.json();
+            console.log('Fetched sections from term endpoint:', sectionsData);
+          }
+        } catch (error) {
+          console.log('Term-specific endpoint failed, trying fallback');
+        }
+        
+        // Approach 2: If no sections from term endpoint, try the general sections endpoint
+        if (!sectionsData || sectionsData.length === 0) {
+          try {
+            console.log('Trying general sections endpoint');
+            const fallbackResponse = await fetch(`${API_BASE}/api/sections`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
             
-            // Filter sections by current term
-            const filteredSections = allSectionsData.filter(section => 
-              section.termName === currentTerm.termName && 
-              section.schoolYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`
-            );
-            console.log('Filtered sections for current term:', filteredSections);
-            
-            setAllSections(filteredSections);
-            setSections(filteredSections);
-          } else {
-            console.error('Fallback also failed. Status:', fallbackResponse.status);
+            if (fallbackResponse.ok) {
+              const allSectionsData = await fallbackResponse.json();
+              console.log('All sections from general endpoint:', allSectionsData);
+              console.log('Looking for sections with:');
+              console.log('  termName:', currentTerm.termName);
+              console.log('  schoolYear:', `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`);
+              
+              // Filter sections by current term and school year
+              sectionsData = allSectionsData.filter(section => {
+                const matches = section.termName === currentTerm.termName && 
+                  section.schoolYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` &&
+                  section.status === 'active';
+                
+                if (!matches) {
+                  console.log(`Section ${section.sectionName} doesn't match:`, {
+                    sectionTermName: section.termName,
+                    sectionSchoolYear: section.schoolYear,
+                    sectionStatus: section.status,
+                    expectedTermName: currentTerm.termName,
+                    expectedSchoolYear: `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`
+                  });
+                }
+                
+                return matches;
+              });
+              console.log('Filtered sections for current term:', sectionsData);
+            }
+          } catch (error) {
+            console.log('General sections endpoint also failed');
           }
         }
+        
+        // Approach 3: If still no sections, try to get sections by track/strand
+        if (!sectionsData || sectionsData.length === 0) {
+          try {
+            console.log('Trying to fetch sections by track/strand');
+            // First get tracks
+            const tracksResponse = await fetch(`${API_BASE}/api/tracks`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            if (tracksResponse.ok) {
+              const tracks = await tracksResponse.json();
+              console.log('Available tracks:', tracks);
+              
+              // For each track, get strands and sections
+              for (const track of tracks) {
+                if (track.status === 'active') {
+                  const strandsResponse = await fetch(`${API_BASE}/api/strands/track/${track.trackName}?schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}&termName=${currentTerm.termName}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                  });
+                  
+                  if (strandsResponse.ok) {
+                    const strands = await strandsResponse.json();
+                    console.log(`Strands for track ${track.trackName}:`, strands);
+                    
+                    for (const strand of strands) {
+                      if (strand.status === 'active') {
+                        const sectionsResponse = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}&termName=${currentTerm.termName}`, {
+                          headers: { Authorization: `Bearer ${token}` }
+                        });
+                        
+                        if (sectionsResponse.ok) {
+                          const trackStrandSections = await sectionsResponse.json();
+                          console.log(`Sections for track ${track.trackName}, strand ${strand.strandName}:`, trackStrandSections);
+                          sectionsData.push(...trackStrandSections.filter(s => s.status === 'active'));
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.log('Track/strand approach failed:', error);
+          }
+        }
+        
+        // Approach 4: If still no sections, try to get ALL sections without filtering
+        if (!sectionsData || sectionsData.length === 0) {
+          try {
+            console.log('Trying to get ALL sections without filtering');
+            const allSectionsResponse = await fetch(`${API_BASE}/api/sections`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            if (allSectionsResponse.ok) {
+              const allSectionsData = await allSectionsResponse.json();
+              console.log('ALL sections in database:', allSectionsData);
+              
+              // Show what we have vs what we're looking for
+              console.log('Current term data:', {
+                termId: currentTerm._id,
+                termName: currentTerm.termName,
+                schoolYear: currentTerm.schoolYear
+              });
+              
+              console.log('Current academic year data:', {
+                start: academicYear.schoolYearStart,
+                end: academicYear.schoolYearEnd,
+                fullYear: `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`
+              });
+              
+              // Try to find any sections that might be close
+              const closeMatches = allSectionsData.filter(section => 
+                section.status === 'active' && (
+                  section.termName === currentTerm.termName ||
+                  section.schoolYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` ||
+                  section.schoolYear === currentTerm.schoolYear
+                )
+              );
+              
+              console.log('Close matches found:', closeMatches);
+              
+              // Use close matches if available
+              if (closeMatches.length > 0) {
+                sectionsData = closeMatches;
+              }
+            }
+          } catch (error) {
+            console.log('Getting all sections failed:', error);
+          }
+        }
+        
+        // Final fallback: if we still have no sections, show all active sections
+        if (!sectionsData || sectionsData.length === 0) {
+          try {
+            console.log('Final fallback: showing all active sections');
+            const fallbackResponse = await fetch(`${API_BASE}/api/sections`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            if (fallbackResponse.ok) {
+              const allSectionsData = await fallbackResponse.json();
+              sectionsData = allSectionsData.filter(s => s.status === 'active');
+              console.log('Fallback sections (all active):', sectionsData);
+            }
+          } catch (error) {
+            console.log('Final fallback failed:', error);
+          }
+        }
+        
+        console.log('Final sections data:', sectionsData);
+        console.log('Sections data type:', typeof sectionsData);
+        console.log('Sections data length:', sectionsData?.length || 'undefined');
+        if (sectionsData.length > 0) {
+          console.log('First section sample:', sectionsData[0]);
+        }
+        
+        setAllSections(sectionsData);
+        setSections(sectionsData);
+        
       } catch (error) {
         console.error('Failed to fetch sections:', error);
       }
@@ -124,17 +264,15 @@ export default function GradingSystem() {
   useEffect(() => {
     if (selectedClass !== '' && allSections.length > 0) {
       const selectedClassObj = facultyClasses[selectedClass];
-      if (selectedClassObj && selectedClassObj.section) {
-        // Filter sections to only show those that match the selected class's section
-        const filteredSections = allSections.filter(section => 
-          section.sectionName === selectedClassObj.section
-        );
-        console.log('Filtering sections for class:', selectedClassObj.className);
-        console.log('Class section:', selectedClassObj.section);
-        console.log('Filtered sections:', filteredSections);
-        setSections(filteredSections);
+      if (selectedClassObj) {
+        // Show all available sections for the selected class
+        // The teacher should be able to select from available sections for grading
+        console.log('Showing all sections for class:', selectedClassObj.className);
+        console.log('Class assigned section:', selectedClassObj.section);
+        console.log('Available sections:', allSections);
+        setSections(allSections);
       } else {
-        // If no section found, show all sections
+        // If no class found, show all sections
         setSections(allSections);
       }
     } else {
@@ -1513,6 +1651,12 @@ export default function GradingSystem() {
         {/* Class Selection */}
         <div className="mb-6 p-4 bg-white rounded-lg shadow">
           <h3 className="text-lg font-semibold mb-3">Select Class</h3>
+          <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+            <p className="text-sm text-blue-800">
+              <strong>Note:</strong> If sections are not showing up, this might be due to a data mismatch between the current academic term and the sections in the database. 
+              The system will try multiple approaches to load sections, and you can use the refresh (🔄) and test (🧪) buttons to troubleshoot.
+            </p>
+          </div>
           <div className="flex gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium mb-1">Subject (Class):</label>
@@ -1534,18 +1678,79 @@ export default function GradingSystem() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Section:</label>
-              <select 
-                className="border rounded px-3 py-2 min-w-[200px]"
-                value={selectedSection || ""}
-                onChange={(e) => setSelectedSection(e.target.value)}
-              >
-                <option value="">Select a section</option>
-                {sections.map((section) => (
-                  <option key={section._id} value={section.sectionName}>
-                    {section.sectionName} ({section.trackName} - {section.strandName})
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select 
+                  className="border rounded px-3 py-2 min-w-[200px]"
+                  value={selectedSection || ""}
+                  onChange={(e) => setSelectedSection(e.target.value)}
+                >
+                  <option value="">Select a section</option>
+                  {sections.map((section) => (
+                    <option key={section._id} value={section.sectionName}>
+                      {section.sectionName} ({section.trackName} - {section.strandName})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    // Manually trigger sections refresh
+                    if (currentTerm && academicYear) {
+                      const event = { currentTerm, academicYear };
+                      // This will trigger the useEffect that fetches sections
+                      setCurrentTerm({ ...currentTerm });
+                    }
+                  }}
+                  className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                  title="Refresh sections"
+                >
+                  🔄
+                </button>
+                <button
+                  onClick={async () => {
+                    // Test sections API directly
+                    try {
+                      const token = localStorage.getItem("token");
+                      console.log('Testing sections API directly...');
+                      
+                      // Test 1: General sections endpoint
+                      const response1 = await fetch(`${API_BASE}/api/sections`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                      });
+                      if (response1.ok) {
+                        const data1 = await response1.json();
+                        console.log('Direct API test - All sections:', data1);
+                      }
+                      
+                      // Test 2: Term-specific endpoint
+                      if (currentTerm) {
+                        const response2 = await fetch(`${API_BASE}/api/terms/${currentTerm._id}/sections`, {
+                          headers: { Authorization: `Bearer ${token}` }
+                        });
+                        if (response2.ok) {
+                          const data2 = await response2.json();
+                          console.log('Direct API test - Term sections:', data2);
+                        }
+                      }
+                    } catch (error) {
+                      console.error('Direct API test failed:', error);
+                    }
+                  }}
+                  className="px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                  title="Test sections API"
+                >
+                  🧪
+                </button>
+              </div>
+              {sections.length === 0 && (
+                <p className="text-sm text-orange-600 mt-1">
+                  ⚠️ No sections loaded. Click the refresh button (🔄) or test button (🧪) to troubleshoot.
+                </p>
+              )}
+              {sections.length > 0 && (
+                <p className="text-sm text-green-600 mt-1">
+                  ✅ {sections.length} section(s) loaded successfully
+                </p>
+              )}
             </div>
           </div>
           
@@ -1561,6 +1766,21 @@ export default function GradingSystem() {
             <p><strong>Loading:</strong> {loading ? 'Yes' : 'No'}</p>
             <p><strong>Academic Year:</strong> {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Loading...'}</p>
             <p><strong>Current Term:</strong> {currentTerm ? currentTerm.termName : 'Loading...'}</p>
+            <p><strong>Current Term ID:</strong> {currentTerm ? currentTerm._id : 'None'}</p>
+            <p><strong>Sections Data:</strong> {sections.length > 0 ? `${sections.length} sections loaded` : 'No sections loaded'}</p>
+            {sections.length > 0 && (
+              <div className="mt-2">
+                <p><strong>Available Sections:</strong></p>
+                <ul className="list-disc list-inside ml-2">
+                  {sections.slice(0, 5).map((section, index) => (
+                    <li key={index}>
+                      {section.sectionName} ({section.trackName} - {section.strandName})
+                    </li>
+                  ))}
+                  {sections.length > 5 && <li>... and {sections.length - 5} more</li>}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
 
