@@ -327,13 +327,45 @@ export default function Student_Chats() {
           
           return newMessages;
         });
+
+        // Ensure all message senders are in the users array
+        const messageSenders = new Set();
+        res.data.forEach(msg => {
+          if (msg.senderId && msg.senderId !== currentUserId) {
+            messageSenders.add(msg.senderId);
+          }
+        });
+        
+        // Add missing senders to users array if they're not already there
+        const missingSenders = Array.from(messageSenders).filter(senderId => 
+          !users.some(user => user._id === senderId)
+        );
+        
+        if (missingSenders.length > 0) {
+          // Fetch missing users
+          missingSenders.forEach(async (senderId) => {
+            try {
+              const userRes = await axios.get(`${API_BASE}/users/${senderId}`);
+              if (userRes.data) {
+                setUsers(prev => {
+                  if (!prev.some(user => user._id === senderId)) {
+                    return [...prev, userRes.data];
+                  }
+                  return prev;
+                });
+              }
+            } catch (err) {
+              console.error("Error fetching user:", senderId, err);
+            }
+          });
+        }
       } catch (err) {
         console.error("Error fetching messages:", err);
       }
     };
 
     fetchMessages();
-  }, [selectedChat, currentUserId, recentChats]);
+  }, [selectedChat, currentUserId, recentChats, users]);
 
   // ================= FETCH GROUP MESSAGES =================
   useEffect(() => {
