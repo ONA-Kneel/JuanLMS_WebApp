@@ -826,11 +826,9 @@ export default function VPE_Chats() {
                         </strong>
                         {chat.type === 'group' ? (
                           <span className="text-xs text-gray-500 truncate">
-                            {lastMessages[chat._id] && (
-                              <span className="text-xs text-gray-500 truncate">
-                                {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
-                              </span>
-                            )}
+                            {chat.participants ? 
+                              chat.participants.filter(id => users.some(user => user._id === id)).length : 0
+                            } participants
                           </span>
                         ) : (
                           lastMessages[chat._id] && (
@@ -894,7 +892,11 @@ export default function VPE_Chats() {
                         {item.isNewUser ? (
                           <span className="text-xs text-blue-600">Click to start new chat</span>
                         ) : item.type === 'group' ? (
-                          <span className="text-xs text-gray-500">{item.participants?.length || 0} participants</span>
+                          <span className="text-xs text-gray-500">
+                            {item.participants ? 
+                              item.participants.filter(id => users.some(user => user._id === id)).length : 0
+                            } participants
+                          </span>
                         ) : (
                           lastMessages[item._id] && (
                             <span className="text-xs text-gray-500 truncate">
@@ -948,7 +950,9 @@ export default function VPE_Chats() {
                       </h3>
                       {isGroupChat && (
                         <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                          {(selectedChat?.participants?.length || 0)} members
+                          {selectedChat?.participants ? 
+                            selectedChat.participants.filter(id => users.some(user => user._id === id)).length : 0
+                          } members
                           <button
                             className="ml-1 text-gray-700 hover:text-blue-900 focus:outline-none"
                             onClick={() => setShowMembersModal(true)}

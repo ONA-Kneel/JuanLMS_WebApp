@@ -849,11 +849,9 @@ export default function Faculty_Chats() {
                         </strong>
                         {chat.type === 'group' ? (
                           <span className="text-xs text-gray-500 truncate">
-                            {lastMessages[chat._id] && (
-                              <span className="text-xs text-gray-500 truncate">
-                                {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
-                              </span>
-                            )}
+                            {chat.participants ? 
+                              chat.participants.filter(id => users.some(user => user._id === id)).length : 0
+                            } participants
                           </span>
                         ) : (
                           lastMessages[chat._id] && (
