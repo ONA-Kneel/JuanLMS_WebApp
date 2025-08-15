@@ -53,14 +53,17 @@ io.on("connection", (socket) => {
     });
 
     // Send message to group chat
-    socket.on("sendGroupMessage", ({ senderId, groupId, text, fileUrl, senderName }) => {
+    socket.on("sendGroupMessage", ({ senderId, groupId, text, fileUrl, senderName, senderFirstname, senderLastname, senderProfilePic }) => {
         // Broadcast to all users in the group (except sender)
         socket.to(groupId).emit("getGroupMessage", {
             senderId,
             groupId,
             text,
             fileUrl,
-            senderName
+            senderName: senderName || "Unknown",
+            senderFirstname: senderFirstname || "Unknown",
+            senderLastname: senderLastname || "User",
+            senderProfilePic: senderProfilePic || null
         });
     });
 

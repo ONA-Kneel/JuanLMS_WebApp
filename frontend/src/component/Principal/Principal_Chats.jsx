@@ -133,6 +133,9 @@ export default function Principal_Chats() {
         message: data.text,
         fileUrl: data.fileUrl || null,
         senderName: data.senderName || "Unknown",
+        senderFirstname: data.senderFirstname || "Unknown",
+        senderLastname: data.senderLastname || "User",
+        senderProfilePic: data.senderProfilePic || null,
         timestamp: new Date(),
       };
 
@@ -285,6 +288,9 @@ export default function Principal_Chats() {
           text: sentMessage.message,
           fileUrl: sentMessage.fileUrl || null,
           senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
+          senderFirstname: storedUser ? JSON.parse(storedUser).firstname : "Unknown",
+          senderLastname: storedUser ? JSON.parse(storedUser).lastname : "User",
+          senderProfilePic: storedUser ? JSON.parse(storedUser).profilePic : null,
         });
 
         setGroupMessages((prev) => ({
@@ -847,7 +853,6 @@ export default function Principal_Chats() {
 
                 <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
                   {selectedChatMessages.map((msg, index) => {
-                    const isRecipient = msg.senderId !== currentUserId;
                     const sender = users.find(u => u._id === msg.senderId);
                     const prevMsg = selectedChatMessages[index - 1];
                     const showHeader =
@@ -915,7 +920,7 @@ export default function Principal_Chats() {
                             {showHeader ? (
                               <>
                                 <img
-                                  src={sender && sender.profilePic ? `${API_BASE}/uploads/${sender.profilePic}` : defaultAvatar}
+                                  src={isGroupChat ? (msg.senderProfilePic ? `${API_BASE}/uploads/${msg.senderProfilePic}` : defaultAvatar) : (sender && sender.profilePic ? `${API_BASE}/uploads/${sender.profilePic}` : defaultAvatar)}
                                   alt="Profile"
                                   className="w-10 h-10 rounded-full object-cover border"
                                   onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}

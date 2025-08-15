@@ -129,6 +129,10 @@ export default function Admin_Chats() {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
+        senderName: data.senderName || "Unknown",
+        senderFirstname: data.senderFirstname || "Unknown",
+        senderLastname: data.senderLastname || "User",
+        senderProfilePic: data.senderProfilePic || null,
       };
 
       setGroupMessages((prev) => {
@@ -143,10 +147,9 @@ export default function Admin_Chats() {
         // Update last message for this group
         const group = userGroups.find(g => g._id === incomingGroupMessage.groupId);
         if (group) {
-          const sender = userGroups.find(u => u._id === incomingGroupMessage.senderId);
           const prefix = incomingGroupMessage.senderId === currentUserId 
             ? "You: " 
-            : `${sender?.lastname || 'Unknown'}, ${sender?.firstname || 'User'}: `;
+            : `${incomingGroupMessage.senderName || 'Unknown'}: `;
           const text = incomingGroupMessage.message 
             ? incomingGroupMessage.message 
             : (incomingGroupMessage.fileUrl ? "File sent" : "");
@@ -317,9 +320,9 @@ export default function Admin_Chats() {
           try {
             const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
             newMessages[chat._id] = res.data;
-          } catch (_err) {
-            newMessages[chat._id] = [];
-          }
+                  } catch (_err) {
+          newMessages[chat._id] = [];
+        }
         }
         const chatMessages = newMessages[chat._id] || [];
         const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
@@ -445,8 +448,8 @@ export default function Admin_Chats() {
         const res = await axios.get(`${API_BASE}/users`);
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
-      } catch (_err) {
-        console.error("Error fetching users:", _err);
+      } catch (err) {
+        console.error("Error fetching users:", err);
       }
     };
     fetchUsers();
@@ -571,13 +574,16 @@ export default function Admin_Chats() {
 
       const sentMessage = res.data;
 
-      socket.current.emit("sendGroupMessage", {
-        senderId: currentUserId,
-        groupId: selectedChat._id,
-        text: sentMessage.message,
-        fileUrl: sentMessage.fileUrl || null,
-        senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
-      });
+              socket.current.emit("sendGroupMessage", {
+          senderId: currentUserId,
+          groupId: selectedChat._id,
+          text: sentMessage.message,
+          fileUrl: sentMessage.fileUrl || null,
+          senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
+          senderFirstname: storedUser ? JSON.parse(storedUser).firstname : "Unknown",
+          senderLastname: storedUser ? JSON.parse(storedUser).lastname : "User",
+          senderProfilePic: storedUser ? JSON.parse(storedUser).profilePic : null,
+        });
 
       setGroupMessages((prev) => ({
         ...prev,
@@ -884,7 +890,6 @@ export default function Admin_Chats() {
 
                 <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
                   {(selectedChat.isGroup ? groupMessages[selectedChat._id] || [] : messages[selectedChat._id] || []).map((msg, index, arr) => {
-                    const isRecipient = msg.senderId !== currentUserId;
                     const sender = users.find(u => u._id === msg.senderId);
                     const prevMsg = arr[index - 1];
                     const showHeader =
@@ -892,14 +897,14 @@ export default function Admin_Chats() {
                       msg.senderId !== prevMsg?.senderId ||
                       Math.abs(new Date(msg.createdAt || msg.updatedAt) - new Date(prevMsg?.createdAt || prevMsg?.updatedAt)) > 5 * 60 * 1000;
                     return (
-                      <div key={msg._id} className={`flex ${isRecipient ? "justify-start" : "justify-end"}`}>
-                        <div className={`max-w-xs lg:max-w-md ${isRecipient ? "order-1" : "order-2"}`}>
-                          {showHeader && isRecipient && (
+                      <div key={msg._id} className={`flex ${msg.senderId !== currentUserId ? "justify-start" : "justify-end"}`}>
+                        <div className={`max-w-xs lg:max-w-md ${msg.senderId !== currentUserId ? "order-1" : "order-2"}`}>
+                          {showHeader && msg.senderId !== currentUserId && (
                             <div className="text-xs text-gray-500 mb-1">
-                              {sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown User"}
+                              {selectedChat.isGroup ? (msg.senderName || "Unknown User") : (sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown User")}
                             </div>
                           )}
-                          <div className={`rounded-lg px-4 py-2 ${isRecipient ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>
+                          <div className={`rounded-lg px-4 py-2 ${msg.senderId !== currentUserId ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>
                             {msg.message && <p className="break-words">{msg.message}</p>}
                             {msg.fileUrl && (
                               <div className="mt-2">
@@ -913,7 +918,7 @@ export default function Admin_Chats() {
                                 </a>
                               </div>
                             )}
-                            <div className={`text-xs mt-1 ${isRecipient ? "text-gray-500" : "text-blue-100"}`}>
+                            <div className={`text-xs mt-1 ${msg.senderId !== currentUserId ? "text-gray-500" : "text-blue-100"}`}>
                               {new Date(msg.createdAt).toLocaleTimeString()}
                             </div>
                           </div>
@@ -1118,7 +1123,7 @@ export default function Admin_Chats() {
             <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4">
               <h3 className="text-lg font-semibold mb-4">Group Members</h3>
               <ul className="mb-4 divide-y divide-gray-200">
-                                        {selectedChat.participants.map((userId, _idx) => {
+                                        {selectedChat.participants.map((userId) => {
                   const user = users.find((u) => u._id === userId);
                   if (!user) return null;
                   return (

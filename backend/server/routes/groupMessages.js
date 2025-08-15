@@ -4,6 +4,7 @@
 import express from 'express';
 import GroupMessage from '../models/GroupMessage.js';
 import GroupChat from '../models/GroupChat.js';
+import User from '../models/User.js';
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -110,8 +111,46 @@ router.get('/:groupId', async (req, res) => {
     
     // Sort by createdAt (oldest first)
     groupMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    // Populate sender information for each message
+    const populatedMessages = await Promise.all(
+      groupMessages.map(async (msg) => {
+        try {
+          const sender = await User.findById(msg.senderId);
+          if (sender) {
+            return {
+              ...msg,
+              senderName: `${sender.getDecryptedLastname()}, ${sender.getDecryptedFirstname()}`,
+              senderFirstname: sender.getDecryptedFirstname(),
+              senderLastname: sender.getDecryptedLastname(),
+              senderProfilePic: sender.getDecryptedProfilePic(),
+              senderRole: sender.role
+            };
+          } else {
+            return {
+              ...msg,
+              senderName: "Unknown User",
+              senderFirstname: "Unknown",
+              senderLastname: "User",
+              senderProfilePic: null,
+              senderRole: null
+            };
+          }
+        } catch (err) {
+          console.error("Error populating sender info for message:", msg._id, err);
+          return {
+            ...msg,
+            senderName: "Unknown User",
+            senderFirstname: "Unknown",
+            senderLastname: "User",
+            senderProfilePic: null,
+            senderRole: null
+          };
+        }
+      })
+    );
     
-    res.json(groupMessages);
+    res.json(populatedMessages);
   } catch (err) {
     console.error("Error fetching group messages:", err);
     res.status(500).json({ error: "Server error fetching group messages" });
