@@ -125,6 +125,7 @@ export default function Admin_Chats() {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
+        senderName: data.senderName || null,
       };
 
       setGroupMessages((prev) => {

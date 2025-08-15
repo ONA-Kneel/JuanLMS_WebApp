@@ -132,14 +132,36 @@ export default function VPE_Chats() {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
-        senderName: data.senderName,
-        timestamp: new Date(),
+        senderName: data.senderName || null,
       };
 
-      setGroupMessages((prev) => ({
-        ...prev,
-        [data.groupId]: [...(prev[data.groupId] || []), incomingGroupMessage],
-      }));
+      setGroupMessages((prev) => {
+        const newGroupMessages = {
+          ...prev,
+          [incomingGroupMessage.groupId]: [
+            ...(prev[incomingGroupMessage.groupId] || []),
+            incomingGroupMessage,
+          ],
+        };
+        
+        // Update last message for this group
+        const group = groups.find(g => g._id === incomingGroupMessage.groupId);
+        if (group) {
+          const sender = groups.find(u => u._id === incomingGroupMessage.senderId);
+          const prefix = incomingGroupMessage.senderId === currentUserId 
+            ? "You: " 
+            : `${sender?.lastname || 'Unknown'}, ${sender?.firstname || 'User'}: `;
+          const text = incomingGroupMessage.message 
+            ? incomingGroupMessage.message 
+            : (incomingGroupMessage.fileUrl ? "File sent" : "");
+          setLastMessages(prev => ({
+            ...prev,
+            [group._id]: { prefix, text }
+          }));
+        }
+        
+        return newGroupMessages;
+      });
     });
 
     socket.current.on("groupCreated", (group) => {
@@ -158,7 +180,7 @@ export default function VPE_Chats() {
     return () => {
       socket.current.disconnect();
     };
-  }, [currentUserId, recentChats]);
+  }, [currentUserId, recentChats, groups]);
 
   // ================= FETCH USERS =================
   useEffect(() => {

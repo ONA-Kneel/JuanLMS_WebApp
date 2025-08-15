@@ -7,6 +7,7 @@ import GroupChat from '../models/GroupChat.js';
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import User from '../models/User.js'; // Added import for User
 
 const router = express.Router();
 
@@ -56,13 +57,25 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     await newMessage.save();
 
-    // Return decrypted message to frontend
+    // Get sender information to include in response
+    let senderName = "Unknown User";
+    try {
+      const sender = await User.findById(senderId);
+      if (sender) {
+        senderName = `${sender.getDecryptedFirstname()} ${sender.getDecryptedLastname()}`;
+      }
+    } catch (err) {
+      console.error("Error fetching sender info:", err);
+    }
+
+    // Return decrypted message to frontend with sender name
     res.status(201).json({
       _id: newMessage._id,
       groupId: newMessage.getDecryptedGroupId(),
       senderId: newMessage.getDecryptedSenderId(),
       message: newMessage.getDecryptedMessage(),
       fileUrl: newMessage.getDecryptedFileUrl(),
+      senderName: senderName,
       createdAt: newMessage.createdAt,
       updatedAt: newMessage.updatedAt,
     });
@@ -94,15 +107,35 @@ router.get('/:groupId', async (req, res) => {
 
     const messages = await GroupMessage.find({});
     
-    // Decrypt all fields
-    const decryptedMessages = messages.map(msg => ({
-      _id: msg._id,
-      groupId: msg.getDecryptedGroupId(),
-      senderId: msg.getDecryptedSenderId(),
-      message: msg.getDecryptedMessage(),
-      fileUrl: msg.getDecryptedFileUrl(),
-      createdAt: msg.createdAt,
-      updatedAt: msg.updatedAt,
+    // Decrypt all fields and populate sender information
+    const decryptedMessages = await Promise.all(messages.map(async (msg) => {
+      const decryptedMessage = {
+        _id: msg._id,
+        groupId: msg.getDecryptedGroupId(),
+        senderId: msg.getDecryptedSenderId(),
+        message: msg.getDecryptedMessage(),
+        fileUrl: msg.getDecryptedFileUrl(),
+        createdAt: msg.createdAt,
+        updatedAt: msg.updatedAt,
+      };
+
+      // Only add sender info if this message belongs to the requested group
+      if (decryptedMessage.groupId === groupId) {
+        try {
+          // Find the sender user and get their decrypted name
+          const sender = await User.findById(decryptedMessage.senderId);
+          if (sender) {
+            decryptedMessage.senderName = `${sender.getDecryptedFirstname()} ${sender.getDecryptedLastname()}`;
+          } else {
+            decryptedMessage.senderName = "Unknown User";
+          }
+        } catch (err) {
+          console.error("Error fetching sender info:", err);
+          decryptedMessage.senderName = "Unknown User";
+        }
+      }
+
+      return decryptedMessage;
     }));
 
     // Filter messages for this group
