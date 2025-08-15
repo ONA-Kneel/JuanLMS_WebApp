@@ -25,8 +25,10 @@ export default function AdminSupportCenter() {
   const fetchUserDetails = async (tickets) => {
     try {
       // Fetch all users at once (like the chat system does)
-      const response = await axios.get(`${import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com"}/api/users`);
+      const response = await axios.get(`${API_BASE}/users`);
+      console.log('Users API response:', response);
       const allUsers = Array.isArray(response.data) ? response.data : response.data.users || [];
+      console.log('Processed users:', allUsers);
       
       // Create a map of userId to user details for quick lookup
       const userMap = {};
@@ -45,6 +47,7 @@ export default function AdminSupportCenter() {
           };
         }
       });
+      console.log('User map created:', userMap);
 
       // Map user details to tickets
       const userDetailsMap = {};
@@ -497,4 +500,4 @@ export default function AdminSupportCenter() {
       </div>
     </div>
   );
-} 
+}
