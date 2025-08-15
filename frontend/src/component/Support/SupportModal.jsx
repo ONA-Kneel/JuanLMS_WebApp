@@ -34,12 +34,14 @@ export default function SupportModal({ onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeFilter, setActiveFilter] = useState('all'); // all, new, opened, closed
+  const [user, setUser] = useState(null);
 
   // Get user role on component mount
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const role = user.role || localStorage.getItem('role') || '';
+    const userData = JSON.parse(localStorage.getItem('user') || '{}');
+    const role = userData.role || localStorage.getItem('role') || '';
     setUserRole(role);
+    setUser(userData);
   }, []);
 
   // Auto-close toast and modal after 2.5s
@@ -212,7 +214,6 @@ export default function SupportModal({ onClose }) {
       });
 
       if (response.status === 201) {
-        setSubmitted(true);
         setShowToast(true);
         // Refresh tickets list
         fetchUserTickets();
@@ -643,5 +644,4 @@ export default function SupportModal({ onClose }) {
       </div>
     </div>
   );
-} 
 } 
