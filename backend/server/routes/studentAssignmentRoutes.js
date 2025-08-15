@@ -196,4 +196,25 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Unarchive a student assignment
+router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
+  try {
+    const assignment = await StudentAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (assignment.status !== 'archived') {
+      return res.status(400).json({ message: 'Assignment is not archived' });
+    }
+
+    assignment.status = 'active';
+    const updatedAssignment = await assignment.save();
+    
+    res.json(updatedAssignment);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 export default router; 

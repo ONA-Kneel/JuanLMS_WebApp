@@ -1172,6 +1172,32 @@ export default function TermDetails() {
     }
   };
 
+  const handleUnarchiveFacultyAssignment = async (assignment) => {
+    if (window.confirm("Are you sure you want to unarchive this faculty assignment?")) {
+      try {
+        const token = localStorage.getItem('token');
+
+        const res = await fetch(`${API_BASE}/api/faculty-assignments/${assignment._id}/unarchive`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+        });
+
+        if (res.ok) {
+          window.alert('Faculty assignment unarchived successfully!');
+          fetchFacultyAssignments(); // Refresh assignments list
+        } else {
+          const data = await res.json();
+          setFacultyError(data.message || 'Failed to unarchive faculty assignment');
+        }
+      } catch (err) {
+        setFacultyError('Error unarchiving faculty assignment');
+        console.error("Error in handleUnarchiveFacultyAssignment:", err);
+      }
+    }
+  };
+
   const handleAddStudentAssignment = async (e) => {
     e.preventDefault();
     setStudentError('');
@@ -1325,6 +1351,32 @@ export default function TermDetails() {
       } catch (err) {
         setStudentError('Error removing student assignment');
         console.error("Error in handleDeleteStudentAssignment:", err);
+      }
+    }
+  };
+
+  const handleUnarchiveStudentAssignment = async (assignment) => {
+    if (window.confirm("Are you sure you want to unarchive this student assignment?")) {
+      try {
+        const token = localStorage.getItem('token');
+
+        const res = await fetch(`${API_BASE}/api/student-assignments/${assignment._id}/unarchive`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+        });
+
+        if (res.ok) {
+          window.alert('Student assignment unarchived successfully!');
+          fetchStudentAssignments(); // Refresh assignments list
+        } else {
+          const data = await res.json();
+          setStudentError(data.message || 'Failed to unarchive student assignment');
+        }
+      } catch (err) {
+        setStudentError('Error unarchiving student assignment');
+        console.error("Error in handleUnarchiveStudentAssignment:", err);
       }
     }
   };
@@ -5354,6 +5406,18 @@ Actual import to database is coming soon!`;
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
                                 </button>
+                                {assignment.status === 'archived' && (
+                                  <button
+                                    onClick={() => handleUnarchiveFacultyAssignment(assignment)}
+                                    className="p-1 rounded hover:bg-green-100 group relative"
+                                    title="Unarchive"
+                                    disabled={termDetails.status === 'archived'}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-green-600">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -5845,6 +5909,18 @@ Actual import to database is coming soon!`;
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                     </svg>
                                   </button>
+                                  {assignment.status === 'archived' && (
+                                    <button
+                                      onClick={() => handleUnarchiveStudentAssignment(assignment)}
+                                      className="p-1 rounded hover:bg-green-100 group relative"
+                                      title="Unarchive"
+                                      disabled={termDetails.status === 'archived'}
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-green-600">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                      </svg>
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
