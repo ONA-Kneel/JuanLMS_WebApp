@@ -1,4 +1,4 @@
-// Admin_Chats.jsx
+//Student_Chats.jsx
 
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
@@ -10,6 +10,8 @@ import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
 
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+
 export default function Student_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -17,14 +19,12 @@ export default function Student_Chats() {
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
-  const [onlineUsers, setOnlineUsers] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
     const stored = localStorage.getItem("recentChats_student");
     return stored ? JSON.parse(stored) : [];
   });
-  const [lastMessage, setLastMessage] = useState(null);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
 
@@ -64,60 +64,20 @@ export default function Student_Chats() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
-  const navigate = useNavigate();
 
-  const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+  const API_URL = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
   const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
 
   const storedUser = localStorage.getItem("user");
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!currentUserId) {
       navigate("/", { replace: true });
     }
   }, [currentUserId, navigate]);
-
-  useEffect(() => {
-    async function fetchAcademicYear() {
-      try {
-        const token = localStorage.getItem("token");
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (yearRes.ok) {
-          const year = await yearRes.json();
-          setAcademicYear(year);
-        }
-      } catch (err) {
-        console.error("Failed to fetch academic year", err);
-      }
-    }
-    fetchAcademicYear();
-  }, []);
-
-  useEffect(() => {
-    async function fetchActiveTermForYear() {
-      if (!academicYear) return;
-      try {
-        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const terms = await res.json();
-          const active = terms.find(term => term.status === 'active');
-          setCurrentTerm(active || null);
-        } else {
-          setCurrentTerm(null);
-        }
-      } catch {
-        setCurrentTerm(null);
-      }
-    }
-    fetchActiveTermForYear();
-  }, [academicYear]);
 
   // ================= SOCKET.IO SETUP =================
   useEffect(() => {
@@ -128,10 +88,6 @@ export default function Student_Chats() {
     });
 
     socket.current.emit("addUser", currentUserId);
-
-    socket.current.on("getUsers", (users) => {
-      setOnlineUsers(users);
-    });
 
     socket.current.on("getMessage", (data) => {
       const incomingMessage = {
@@ -150,19 +106,8 @@ export default function Student_Chats() {
           ],
         };
         
-        // Check if this is a new chat and add to recentChats if needed
-        const existingChat = recentChats.find(c => c._id === incomingMessage.senderId);
-        if (!existingChat) {
-          // Find the sender user from the users list
-          const senderUser = users.find(u => u._id === incomingMessage.senderId);
-          if (senderUser) {
-            // Add the new chat to recentChats
-            setRecentChats(prev => [senderUser, ...prev]);
-          }
-        }
-        
         // Update last message for this chat
-        const chat = existingChat || users.find(u => u._id === incomingMessage.senderId);
+        const chat = recentChats.find(c => c._id === incomingMessage.senderId);
         if (chat) {
           const prefix = incomingMessage.senderId === currentUserId 
             ? "You: " 
@@ -213,13 +158,13 @@ export default function Student_Chats() {
     return () => {
       socket.current.disconnect();
     };
-  }, [currentUserId, recentChats, users]);
+  }, [currentUserId, recentChats]);
 
   // ================= FETCH USERS =================
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/users/with-nicknames`);
+        const res = await axios.get(`${API_BASE}/users`);
         // Support both array and paginated object
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
@@ -236,62 +181,12 @@ export default function Student_Chats() {
     fetchUsers();
   }, [currentUserId]);
 
-  // ================= FETCH EXISTING CONVERSATIONS =================
-  useEffect(() => {
-    const fetchExistingConversations = async () => {
-      if (!currentUserId || users.length === 0) return;
-      
-      try {
-        // Get all users except current user
-        const otherUsers = users.filter(user => user._id !== currentUserId);
-        
-        // Check which users have conversations with current user
-        const conversations = [];
-        for (const user of otherUsers) {
-          try {
-            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${user._id}`);
-            if (res.data && res.data.length > 0) {
-              // This user has a conversation, add to recentChats if not already there
-              if (!recentChats.some(chat => chat._id === user._id)) {
-                conversations.push(user);
-              }
-            }
-          } catch {
-            // No conversation with this user, continue
-          }
-        }
-        
-        // Add new conversations to recentChats
-        if (conversations.length > 0) {
-          setRecentChats(prev => {
-            const existingIds = prev.map(chat => chat._id);
-            const newChats = conversations.filter(user => !existingIds.includes(user._id));
-            return [...newChats, ...prev];
-          });
-        }
-      } catch (err) {
-        console.error("Error fetching existing conversations:", err);
-      }
-    };
-    
-    fetchExistingConversations();
-  }, [currentUserId, users, recentChats]);
-
   // ================= FETCH GROUPS =================
   useEffect(() => {
     const fetchGroups = async () => {
       try {
         const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
-        // Validate and clean participants array for each group
-        const validatedGroups = res.data.map(group => {
-          if (group.participants && Array.isArray(group.participants)) {
-            // Filter out invalid participant IDs and ensure uniqueness
-            const validParticipants = [...new Set(group.participants.filter(id => id && typeof id === 'string'))];
-            return { ...group, participants: validParticipants };
-          }
-          return group;
-        });
-        setGroups(validatedGroups);
+        setGroups(res.data);
       } catch (err) {
         console.error("Error fetching groups:", err);
       }
@@ -327,45 +222,13 @@ export default function Student_Chats() {
           
           return newMessages;
         });
-
-        // Ensure all message senders are in the users array
-        const messageSenders = new Set();
-        res.data.forEach(msg => {
-          if (msg.senderId && msg.senderId !== currentUserId) {
-            messageSenders.add(msg.senderId);
-          }
-        });
-        
-        // Add missing senders to users array if they're not already there
-        const missingSenders = Array.from(messageSenders).filter(senderId => 
-          !users.some(user => user._id === senderId)
-        );
-        
-        if (missingSenders.length > 0) {
-          // Fetch missing users
-          missingSenders.forEach(async (senderId) => {
-            try {
-              const userRes = await axios.get(`${API_BASE}/users/${senderId}`);
-              if (userRes.data) {
-                setUsers(prev => {
-                  if (!prev.some(user => user._id === senderId)) {
-                    return [...prev, userRes.data];
-                  }
-                  return prev;
-                });
-              }
-            } catch (err) {
-              console.error("Error fetching user:", senderId, err);
-            }
-          });
-        }
       } catch (err) {
         console.error("Error fetching messages:", err);
       }
     };
 
     fetchMessages();
-  }, [selectedChat, currentUserId, recentChats, users]);
+  }, [selectedChat, currentUserId, recentChats]);
 
   // ================= FETCH GROUP MESSAGES =================
   useEffect(() => {
@@ -377,45 +240,13 @@ export default function Student_Chats() {
           ...prev,
           [selectedChat._id]: res.data,
         }));
-        
-        // Ensure all group message senders are in the users array
-        const messageSenders = new Set();
-        res.data.forEach(msg => {
-          if (msg.senderId && msg.senderId !== currentUserId) {
-            messageSenders.add(msg.senderId);
-          }
-        });
-        
-        // Add missing senders to users array if they're not already there
-        const missingSenders = Array.from(messageSenders).filter(senderId => 
-          !users.some(user => user._id === senderId)
-        );
-        
-        if (missingSenders.length > 0) {
-          // Fetch missing users
-          missingSenders.forEach(async (senderId) => {
-            try {
-              const userRes = await axios.get(`${API_BASE}/users/${senderId}`);
-              if (userRes.data) {
-                setUsers(prev => {
-                  if (!prev.some(user => user._id === senderId)) {
-                    return [...prev, userRes.data];
-                  }
-                  return prev;
-                });
-              }
-            } catch (err) {
-              console.error("Error fetching user:", senderId, err);
-            }
-          });
-        }
       } catch (err) {
         console.error("Error fetching group messages:", err);
       }
     };
 
     fetchGroupMessages();
-  }, [selectedChat, isGroupChat, users]);
+  }, [selectedChat, isGroupChat]);
 
   // Auto-scroll
   const selectedChatMessages = isGroupChat 
@@ -612,6 +443,7 @@ export default function Student_Chats() {
     }
   };
 
+  // Update confirmLeaveGroup to check if user is creator
   const confirmLeaveGroup = (group) => {
     if (group.createdBy === currentUserId) {
       setShowCreatorLeaveError(true);
@@ -638,12 +470,21 @@ export default function Student_Chats() {
       if (lastMsg) {
         let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
         let text = (lastMsg.message) ? lastMsg.message : (lastMsg.fileUrl ? "File sent" : "");
-        setLastMessage({ prefix, text });
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix, text }
+        }));
       } else {
-        setLastMessage(null);
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: null
+        }));
       }
     } else {
-      setLastMessage(null);
+      setLastMessages(prev => ({
+        ...prev,
+        [selectedChat?._id]: null
+      }));
     }
   }, [selectedChat, messages, currentUserId, groupMessages, isGroupChat]);
 
@@ -659,7 +500,7 @@ export default function Student_Chats() {
           try {
             const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
             newMessages[chat._id] = res.data;
-          } catch (err) {
+          } catch {
             newMessages[chat._id] = [];
           }
         }
@@ -681,6 +522,47 @@ export default function Student_Chats() {
     fetchAllRecentMessages();
     // eslint-disable-next-line
   }, [recentChats, currentUserId]);
+
+  useEffect(() => {
+    async function fetchAcademicYear() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year", err);
+      }
+    }
+    fetchAcademicYear();
+  }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+    }, [academicYear]);
 
   // 1. Remove activeTab and all tab logic
   // 2. Add state for dropdown menu (showGroupMenu)
@@ -819,9 +701,11 @@ export default function Student_Chats() {
                         </strong>
                         {chat.type === 'group' ? (
                           <span className="text-xs text-gray-500 truncate">
-                            {chat.participants ? 
-                              chat.participants.filter(id => users.some(user => user._id === id)).length : 0
-                            } participants
+                            {lastMessages[chat._id] && (
+                              <span className="text-xs text-gray-500 truncate">
+                                {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
+                              </span>
+                            )}
                           </span>
                         ) : (
                           lastMessages[chat._id] && (
@@ -885,11 +769,7 @@ export default function Student_Chats() {
                         {item.isNewUser ? (
                           <span className="text-xs text-blue-600">Click to start new chat</span>
                         ) : item.type === 'group' ? (
-                          <span className="text-xs text-gray-500">
-                            {item.participants ? 
-                              item.participants.filter(id => users.some(user => user._id === id)).length : 0
-                            } participants
-                          </span>
+                          <span className="text-xs text-gray-500">{item.participants?.length || 0} participants</span>
                         ) : (
                           lastMessages[item._id] && (
                             <span className="text-xs text-gray-500 truncate">
@@ -943,9 +823,7 @@ export default function Student_Chats() {
                       </h3>
                       {isGroupChat && (
                         <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                          {selectedChat?.participants ? 
-                            selectedChat.participants.filter(id => users.some(user => user._id === id)).length : 0
-                          } members
+                          {(selectedChat?.participants?.length || 0)} members
                           <button
                             className="ml-1 text-gray-700 hover:text-blue-900 focus:outline-none"
                             onClick={() => setShowMembersModal(true)}
@@ -1006,7 +884,7 @@ export default function Student_Chats() {
                           </div>
                         )}
                         {msg.senderId === currentUserId ? (
-                          // Current user's message (right aligned, time above message)
+                          // Current user's message
                           <div>
                             {showHeader && (msg.createdAt || msg.updatedAt) && (
                               <div className="flex justify-end mb-1">
@@ -1032,7 +910,7 @@ export default function Student_Chats() {
                             </div>
                           </div>
                         ) : (
-                          // Recipient's message (left aligned, profile pic, name, timestamp)
+                          // Recipient's message
                           <div className="flex items-end gap-2">
                             {showHeader ? (
                               <>
@@ -1044,7 +922,9 @@ export default function Student_Chats() {
                                 />
                                 <div>
                                   <div className="flex items-center gap-2 mb-1">
-                                    <span className="font-semibold text-sm">{sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown"}</span>
+                                    <span className="font-semibold text-sm">
+                                      {isGroupChat ? (msg.senderName || "Unknown") : (sender ? `${sender.lastname}, ${sender.firstname}` : "")}
+                                    </span>
                                     {(msg.createdAt || msg.updatedAt) && (
                                       <span className="text-xs text-gray-400 ml-2">
                                         {dateLabel ? `${dateLabel}, ` : ""}{timeLabel}
@@ -1227,7 +1107,7 @@ export default function Student_Chats() {
                   )
                 }
               </div>
-            )}
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={handleCreateGroup}

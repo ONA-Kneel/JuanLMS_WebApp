@@ -9,9 +9,6 @@ import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
-import ContactNicknameManager from "../ContactNicknameManager";
-import GroupNicknameManager from "../GroupNicknameManager";
-import { getUserDisplayName } from "../../utils/userDisplayUtils";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -29,7 +26,6 @@ export default function Admin_Chats() {
   });
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [contactNicknames, setContactNicknames] = useState({});
   
   // Group Chat States
   const [userGroups, setUserGroups] = useState([]);
@@ -103,19 +99,8 @@ export default function Admin_Chats() {
           ],
         };
         
-        // Check if this is a new chat and add to recentChats if needed
-        const existingChat = recentChats.find(c => c._id === incomingMessage.senderId);
-        if (!existingChat) {
-          // Find the sender user from the users list
-          const senderUser = users.find(u => u._id === incomingMessage.senderId);
-          if (senderUser) {
-            // Add the new chat to recentChats
-            setRecentChats(prev => [senderUser, ...prev]);
-          }
-        }
-        
         // Update last message for this chat
-        const chat = existingChat || users.find(u => u._id === incomingMessage.senderId);
+        const chat = recentChats.find(c => c._id === incomingMessage.senderId);
         if (chat) {
           const prefix = incomingMessage.senderId === currentUserId 
             ? "You: " 
@@ -154,12 +139,10 @@ export default function Admin_Chats() {
         // Update last message for this group
         const group = userGroups.find(g => g._id === incomingGroupMessage.groupId);
         if (group) {
-          const sender = users.find(u => u._id === incomingGroupMessage.senderId);
-          const contactNickname = contactNicknames[incomingGroupMessage.senderId];
-          const displayName = sender ? getUserDisplayName(sender, contactNickname) : 'Unknown User';
+          const sender = userGroups.find(u => u._id === incomingGroupMessage.senderId);
           const prefix = incomingGroupMessage.senderId === currentUserId 
             ? "You: " 
-            : `${displayName}: `;
+            : `${sender?.lastname || 'Unknown'}, ${sender?.firstname || 'User'}: `;
           const text = incomingGroupMessage.message 
             ? incomingGroupMessage.message 
             : (incomingGroupMessage.fileUrl ? "File sent" : "");
@@ -176,13 +159,13 @@ export default function Admin_Chats() {
     return () => {
       socket.current.disconnect();
     };
-  }, [currentUserId, recentChats, userGroups, contactNicknames, users]);
+  }, [currentUserId, recentChats]);
 
   // ================= FETCH USERS =================
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/users/with-nicknames`);
+        const res = await axios.get(`${API_BASE}/users`);
         // Support both array and paginated object
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
@@ -197,69 +180,6 @@ export default function Admin_Chats() {
       }
     };
     fetchUsers();
-  }, [currentUserId]);
-
-  // ================= FETCH EXISTING CONVERSATIONS =================
-  useEffect(() => {
-    const fetchExistingConversations = async () => {
-      if (!currentUserId || users.length === 0) return;
-      
-      try {
-        // Get all users except current user
-        const otherUsers = users.filter(user => user._id !== currentUserId);
-        
-        // Check which users have conversations with current user
-        const conversations = [];
-        for (const user of otherUsers) {
-          try {
-            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${user._id}`);
-            if (res.data && res.data.length > 0) {
-              // This user has a conversation, add to recentChats if not already there
-              if (!recentChats.some(chat => chat._id === user._id)) {
-                conversations.push(user);
-              }
-            }
-          } catch {
-            // No conversation with this user, continue
-          }
-        }
-        
-        // Add new conversations to recentChats
-        if (conversations.length > 0) {
-          setRecentChats(prev => {
-            const existingIds = prev.map(chat => chat._id);
-            const newChats = conversations.filter(user => !existingIds.includes(user._id));
-            return [...newChats, ...prev];
-          });
-        }
-      } catch (err) {
-        console.error("Error fetching existing conversations:", err);
-      }
-    };
-    
-    fetchExistingConversations();
-  }, [currentUserId, users, recentChats]);
-
-  // ================= FETCH CONTACT NICKNAMES =================
-  useEffect(() => {
-    const fetchContactNicknames = async () => {
-      if (!currentUserId) return;
-      try {
-        const res = await axios.get(`${API_BASE}/users/${currentUserId}/contacts/nicknames`);
-        const nicknamesMap = {};
-        res.data.forEach(item => {
-          // Ensure contactId is properly handled as a string
-          const contactId = item.contactId?.toString() || item.contactId;
-          if (contactId && item.nickname) {
-            nicknamesMap[contactId] = item.nickname;
-          }
-        });
-        setContactNicknames(nicknamesMap);
-      } catch (err) {
-        console.error("Error fetching contact nicknames:", err);
-      }
-    };
-    fetchContactNicknames();
   }, [currentUserId]);
 
   // ================= FETCH MESSAGES =================
@@ -290,45 +210,13 @@ export default function Admin_Chats() {
           
           return newMessages;
         });
-
-        // Ensure all message senders are in the users array
-        const messageSenders = new Set();
-        res.data.forEach(msg => {
-          if (msg.senderId && msg.senderId !== currentUserId) {
-            messageSenders.add(msg.senderId);
-          }
-        });
-        
-        // Add missing senders to users array if they're not already there
-        const missingSenders = Array.from(messageSenders).filter(senderId => 
-          !users.some(user => user._id === senderId)
-        );
-        
-        if (missingSenders.length > 0) {
-          // Fetch missing users
-          missingSenders.forEach(async (senderId) => {
-            try {
-              const userRes = await axios.get(`${API_BASE}/users/${senderId}`);
-              if (userRes.data) {
-                setUsers(prev => {
-                  if (!prev.some(user => user._id === senderId)) {
-                    return [...prev, userRes.data];
-                  }
-                  return prev;
-                });
-              }
-            } catch (err) {
-              console.error("Error fetching user:", senderId, err);
-            }
-          });
-        }
       } catch (err) {
         console.error("Error fetching messages:", err);
       }
     };
 
     fetchMessages();
-  }, [selectedChat, currentUserId, recentChats, contactNicknames, users]);
+  }, [selectedChat, currentUserId, recentChats]);
 
   // Auto-scroll
   const selectedChatMessages = messages[selectedChat?._id] || [];
@@ -404,6 +292,8 @@ export default function Admin_Chats() {
       setRecentChats(updated);
       localStorage.setItem("recentChats_admin", JSON.stringify(updated));
     }
+    setShowNewChatModal(false);
+    setUserSearchTerm("");
   };
 
   // Keep recentChats in sync with localStorage
@@ -423,7 +313,7 @@ export default function Admin_Chats() {
           try {
             const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
             newMessages[chat._id] = res.data;
-          } catch {
+          } catch (err) {
             newMessages[chat._id] = [];
           }
         }
@@ -444,7 +334,7 @@ export default function Admin_Chats() {
     };
     fetchAllRecentMessages();
     // eslint-disable-next-line
-  }, [recentChats, currentUserId, contactNicknames]);
+  }, [recentChats, currentUserId]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -494,19 +384,10 @@ export default function Admin_Chats() {
     const fetchUserGroups = async () => {
       try {
         const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
-        // Validate and clean participants array for each group
-        const validatedGroups = res.data.map(group => {
-          if (group.participants && Array.isArray(group.participants)) {
-            // Filter out invalid participant IDs and ensure uniqueness
-            const validParticipants = [...new Set(group.participants.filter(id => id && typeof id === 'string'))];
-            return { ...group, participants: validParticipants };
-          }
-          return group;
-        });
-        setUserGroups(validatedGroups);
+        setUserGroups(res.data);
         
         // Join all groups in socket
-        validatedGroups.forEach(group => {
+        res.data.forEach(group => {
           socket.current?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
         });
       } catch (err) {
@@ -525,50 +406,16 @@ export default function Admin_Chats() {
         setGroupMessages((prev) => {
           const newMessages = { ...prev, [selectedChat._id]: res.data };
           
-          // Ensure all group message senders are in the users array
-          const messageSenders = new Set();
-          res.data.forEach(msg => {
-            if (msg.senderId && msg.senderId !== currentUserId) {
-              messageSenders.add(msg.senderId);
-            }
-          });
-          
-          // Add missing senders to users array if they're not already there
-          const missingSenders = Array.from(messageSenders).filter(senderId => 
-            !users.some(user => user._id === senderId)
-          );
-          
-          if (missingSenders.length > 0) {
-            // Fetch missing users
-            missingSenders.forEach(async (senderId) => {
-              try {
-                const userRes = await axios.get(`${API_BASE}/users/${senderId}`);
-                if (userRes.data) {
-                  setUsers(prev => {
-                    if (!prev.some(user => user._id === senderId)) {
-                      return [...prev, userRes.data];
-                    }
-                    return prev;
-                  });
-                }
-              } catch (err) {
-                console.error("Error fetching user:", senderId, err);
-              }
-            });
-          }
-          
           // Compute last messages for all groups
           const newLastMessages = {};
           userGroups.forEach(group => {
             const groupMessages = newMessages[group._id] || [];
             const lastMsg = groupMessages.length > 0 ? groupMessages[groupMessages.length - 1] : null;
             if (lastMsg) {
-              const sender = users.find(u => u._id === lastMsg.senderId);
-              const contactNickname = contactNicknames[lastMsg.senderId];
-              const displayName = sender ? getUserDisplayName(sender, contactNickname) : 'Unknown User';
+              const sender = userGroups.find(u => u._id === lastMsg.senderId);
               const prefix = lastMsg.senderId === currentUserId 
                 ? "You: " 
-                : `${displayName}: `;
+                : `${sender?.lastname || 'Unknown'}, ${sender?.firstname || 'User'}: `;
               const text = lastMsg.message 
                 ? lastMsg.message 
                 : (lastMsg.fileUrl ? "File sent" : "");
@@ -585,13 +432,13 @@ export default function Admin_Chats() {
     };
 
     fetchGroupMessages();
-  }, [selectedChat, currentUserId, userGroups, contactNicknames, users]);
+  }, [selectedChat, currentUserId, userGroups]);
 
   // Fetch users for participant selection
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/users/with-nicknames`);
+        const res = await axios.get(`${API_BASE}/users`);
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
       } catch (err) {
@@ -599,7 +446,7 @@ export default function Admin_Chats() {
       }
     };
     fetchUsers();
-  }, [currentUserId]);
+  }, []);
 
   // ================= GROUP CHAT HANDLERS =================
 
@@ -763,11 +610,9 @@ export default function Admin_Chats() {
     // First show existing chats/groups that match
     ...unifiedChats.filter(chat => {
       if (chat.type === 'individual') {
-        const displayName = getUserDisplayName(chat, contactNicknames[chat._id]);
         return (
           chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          displayName.toLowerCase().includes(searchTerm.toLowerCase())
+          chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
         );
       } else {
         return chat.name?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -777,14 +622,10 @@ export default function Admin_Chats() {
     ...users
       .filter(user => user._id !== currentUserId)
       .filter(user => !recentChats.some(chat => chat._id === user._id))
-      .filter(user => {
-        const displayName = getUserDisplayName(user, contactNicknames[user._id]);
-        return (
-          user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.lastname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          displayName.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      })
+      .filter(user =>
+        user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
 
@@ -889,14 +730,10 @@ export default function Admin_Chats() {
                       )}
                       <div className="flex flex-col min-w-0 ml-2">
                         <strong className="truncate text-sm">
-                          {chat.type === 'group' ? chat.name : getUserDisplayName(chat, contactNicknames[chat._id])}
+                          {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
                         </strong>
                         {chat.type === 'group' ? (
-                          <span className="text-xs text-gray-500">
-                            {chat.participants ? 
-                              chat.participants.filter(id => users.some(user => user._id === id)).length : 0
-                            } participants
-                          </span>
+                          <span className="text-xs text-gray-500">{chat.participants?.length || 0} participants</span>
                         ) : (
                           lastMessages[chat._id] && (
                             <span className="text-xs text-gray-500 truncate">
@@ -954,16 +791,12 @@ export default function Admin_Chats() {
                       )}
                       <div className="flex flex-col min-w-0 ml-2">
                         <strong className="truncate text-sm">
-                          {item.type === 'group' ? item.name : getUserDisplayName(item, contactNicknames[item._id])}
+                          {item.type === 'group' ? item.name : `${item.lastname}, ${item.firstname}`}
                         </strong>
                         {item.isNewUser ? (
                           <span className="text-xs text-blue-600">Click to start new chat</span>
                         ) : item.type === 'group' ? (
-                          <span className="text-xs text-gray-500">
-                            {item.participants ? 
-                              item.participants.filter(id => users.some(user => user._id === id)).length : 0
-                            } participants
-                          </span>
+                          <span className="text-xs text-gray-500">{item.participants?.length || 0} participants</span>
                         ) : (
                           lastMessages[item._id] && (
                             <span className="text-xs text-gray-500 truncate">
@@ -1004,28 +837,8 @@ export default function Admin_Chats() {
                           {selectedChat.name.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-semibold">{selectedChat.name}</h3>
-                            <GroupNicknameManager
-                              currentUserId={currentUserId}
-                              groupName={selectedChat.name}
-                              participants={selectedChat.participants}
-                              users={users}
-                              contactNicknames={contactNicknames}
-                              onNicknameUpdate={(contactId, nickname) => {
-                                setContactNicknames(prev => ({
-                                  ...prev,
-                                  [contactId]: nickname
-                                }));
-                              }}
-                              className="relative z-10"
-                            />
-                          </div>
-                          <p className="text-sm text-gray-600">
-                            {selectedChat.participants ? 
-                              selectedChat.participants.filter(id => users.some(user => user._id === id)).length : 0
-                            } participants
-                          </p>
+                          <h3 className="text-lg font-semibold">{selectedChat.name}</h3>
+                          <p className="text-sm text-gray-600">{selectedChat.participants.length} participants</p>
                         </div>
                       </>
                     ) : (
@@ -1037,26 +850,9 @@ export default function Admin_Chats() {
                           onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
                         />
                         <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-semibold">
-                              {getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()])}
-                            </h3>
-                            {!selectedChat.isGroup && (
-                              <ContactNicknameManager
-                                currentUserId={currentUserId}
-                                contactId={selectedChat._id}
-                                contactName={getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()])}
-                                originalName={`${selectedChat.firstname || ''} ${selectedChat.lastname || ''}`.trim()}
-                                onNicknameUpdate={(contactId, nickname) => {
-                                  setContactNicknames(prev => ({
-                                    ...prev,
-                                    [contactId?.toString() || contactId]: nickname
-                                  }));
-                                }}
-                                className="relative z-10"
-                              />
-                            )}
-                          </div>
+                          <h3 className="text-lg font-semibold">
+                            {selectedChat.lastname}, {selectedChat.firstname}
+                          </h3>
                         </div>
                       </>
                     )}
@@ -1090,23 +886,12 @@ export default function Admin_Chats() {
                       index === 0 ||
                       msg.senderId !== prevMsg?.senderId ||
                       Math.abs(new Date(msg.createdAt || msg.updatedAt) - new Date(prevMsg?.createdAt || prevMsg?.updatedAt)) > 5 * 60 * 1000;
-                    
-                    // Get sender display name
-                    let senderDisplayName = "Unknown User";
-                    if (msg.senderId === currentUserId) {
-                      senderDisplayName = "You";
-                    } else if (sender) {
-                      senderDisplayName = getUserDisplayName(sender, contactNicknames[sender._id?.toString()]);
-                    } else if (selectedChat && selectedChat._id === msg.senderId) {
-                      senderDisplayName = getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()]);
-                    }
-                    
                     return (
                       <div key={msg._id} className={`flex ${isRecipient ? "justify-start" : "justify-end"}`}>
                         <div className={`max-w-xs lg:max-w-md ${isRecipient ? "order-1" : "order-2"}`}>
                           {showHeader && isRecipient && (
                             <div className="text-xs text-gray-500 mb-1">
-                              {senderDisplayName}
+                              {sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown User"}
                             </div>
                           )}
                           <div className={`rounded-lg px-4 py-2 ${isRecipient ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>
@@ -1328,19 +1113,13 @@ export default function Admin_Chats() {
             <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4">
               <h3 className="text-lg font-semibold mb-4">Group Members</h3>
               <ul className="mb-4 divide-y divide-gray-200">
-                {selectedChat.participants.map((userId) => {
+                {selectedChat.participants.map((userId, idx) => {
                   const user = users.find((u) => u._id === userId);
                   if (!user) return null;
-                  const displayName = getUserDisplayName(user, contactNicknames[userId]);
                   return (
                     <li key={userId} className="flex items-center gap-2 py-2">
                       <img src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar} alt="Profile" className="w-8 h-8 rounded-full object-cover border" />
-                      <div className="flex flex-col">
-                        <span className="font-medium">{displayName}</span>
-                        {contactNicknames[userId] && (
-                          <span className="text-xs text-gray-500">Nickname: {contactNicknames[userId]}</span>
-                        )}
-                      </div>
+                      <span>{user.lastname}, {user.firstname}</span>
                       {selectedChat.createdBy === user._id && (
                         <span className="text-xs text-blue-600 ml-2">(Creator)</span>
                       )}
