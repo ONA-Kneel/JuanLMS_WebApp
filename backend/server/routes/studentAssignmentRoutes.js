@@ -145,6 +145,42 @@ router.post('/bulk', authenticateToken, async (req, res) => {
   }
 });
 
+// Delete a student assignment
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const assignment = await StudentAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    await assignment.deleteOne();
+    res.json({ message: 'Assignment deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Unarchive a student assignment (must come before the general PATCH route)
+router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
+  try {
+    const assignment = await StudentAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (assignment.status !== 'archived') {
+      return res.status(400).json({ message: 'Assignment is not archived' });
+    }
+
+    assignment.status = 'active';
+    const updatedAssignment = await assignment.save();
+    
+    res.json(updatedAssignment);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Update a student assignment (e.g., if track/strand/section changes)
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
@@ -178,42 +214,6 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     } else {
       res.status(400).json({ message: err.message });
     }
-  }
-});
-
-// Delete a student assignment
-router.delete('/:id', authenticateToken, async (req, res) => {
-  try {
-    const assignment = await StudentAssignment.findById(req.params.id);
-    if (!assignment) {
-      return res.status(404).json({ message: 'Assignment not found' });
-    }
-
-    await assignment.deleteOne();
-    res.json({ message: 'Assignment deleted' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Unarchive a student assignment
-router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
-  try {
-    const assignment = await StudentAssignment.findById(req.params.id);
-    if (!assignment) {
-      return res.status(404).json({ message: 'Assignment not found' });
-    }
-
-    if (assignment.status !== 'archived') {
-      return res.status(400).json({ message: 'Assignment is not archived' });
-    }
-
-    assignment.status = 'active';
-    const updatedAssignment = await assignment.save();
-    
-    res.json(updatedAssignment);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
   }
 });
 
