@@ -33,7 +33,7 @@ import Faculty_CreateClass from './component/Faculty/Faculty_CreateClass';
 import Faculty_ClassWorkspace from './component/Faculty/Faculty_ClassWorkspace';
 import Faculty_Meeting from './component/Faculty/Faculty_Meeting';
 import Faculty_StudentReport from './component/Faculty/Faculty_StudentReport';
-import SupportModal from './component/SupportModal';
+import SupportModal from './component/Support/SupportModal';
 
 // Principal Access
 import Principal_Dashboard from './component/Principal/Principal_Dashboard';
