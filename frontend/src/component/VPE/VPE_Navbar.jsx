@@ -9,7 +9,7 @@ import facultyReportIcon from "../../assets/facultyreport.png";
 import postAnnouncementIcon from "../../assets/announcement.png";
 import logo5 from "../../assets/logo/Logo5.svg";
 import logo6 from "../../assets/logo/SJDD Logo.svg";
-import { Menu, X } from 'lucide-react';
+import { Menu, X, HelpCircle } from 'lucide-react';
 
 const VPE_Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -67,6 +67,17 @@ const VPE_Navbar = () => {
                             <span>{item.label}</span>
                         </button>
                     ))}
+                    <button
+                        onClick={() => {
+                            navigate('/vpe/support-center');
+                            setIsOpen(false);
+                        }}
+                        className={`text-lg flex items-center space-x-3 p-2 w-full rounded-lg transition-colors 
+                        ${location.pathname === '/vpe/support-center' ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"}`}
+                    >
+                        <HelpCircle className="w-6 h-6" />
+                        <span>SUPPORT CENTER</span>
+                    </button>
                 </nav>
             </div>
         </>

@@ -25,32 +25,63 @@ export default function AdminSupportCenter() {
   const fetchUserDetails = async (tickets) => {
     const userDetailsMap = {};
     for (const ticket of tickets) {
+      if (!ticket.userId) {
+        console.warn(`Ticket ${ticket._id} has no userId`);
+        userDetailsMap[ticket._id] = {
+          name: 'Unknown User',
+          role: 'Unknown'
+        };
+        continue;
+      }
+
       // Check if userId is a valid MongoDB ObjectId (24 character hex string)
-      const isValidObjectId = ticket.userId && /^[0-9a-fA-F]{24}$/.test(ticket.userId);
+      const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(ticket.userId);
       
-      if (ticket.userId && isValidObjectId && !userDetailsMap[ticket.userId]) {
+      if (isValidObjectId && !userDetailsMap[ticket.userId]) {
         try {
           const userData = await getUserById(ticket.userId);
-          userDetailsMap[ticket.userId] = {
-            name: `${userData.firstname || ''} ${userData.lastname || ''}`.trim(),
-            role: userData.role || 'Unknown'
-          };
+          if (userData && userData.firstname && userData.lastname) {
+            userDetailsMap[ticket.userId] = {
+              name: `${userData.firstname} ${userData.lastname}`.trim(),
+              role: userData.role || 'Unknown'
+            };
+          } else {
+            throw new Error('User data incomplete');
+          }
         } catch (err) {
           console.error(`Failed to fetch user details for ${ticket.userId}:`, err);
-          userDetailsMap[ticket.userId] = {
-            name: 'Unknown User',
-            role: 'Unknown'
-          };
+          // Try to find user by userID as a fallback
+          try {
+            const userData = await getUserByUserID(ticket.userId);
+            if (userData && userData.firstname && userData.lastname) {
+              userDetailsMap[ticket.userId] = {
+                name: `${userData.firstname} ${userData.lastname}`.trim(),
+                role: userData.role || 'Unknown'
+              };
+            } else {
+              throw new Error('User data incomplete');
+            }
+          } catch (fallbackErr) {
+            console.error(`Failed to fetch user details by userID for ${ticket.userId}:`, fallbackErr);
+            userDetailsMap[ticket.userId] = {
+              name: 'User Not Found',
+              role: 'Unknown'
+            };
+          }
         }
-      } else if (ticket.userId && !isValidObjectId) {
+      } else if (!isValidObjectId) {
         console.warn(`Invalid userId format for ticket ${ticket._id}: ${ticket.userId}`);
         // Try to find user by userID as a fallback
         try {
           const userData = await getUserByUserID(ticket.userId);
-          userDetailsMap[ticket.userId] = {
-            name: `${userData.firstname || ''} ${userData.lastname || ''}`.trim(),
-            role: userData.role || 'Unknown'
-          };
+          if (userData && userData.firstname && userData.lastname) {
+            userDetailsMap[ticket.userId] = {
+              name: `${userData.firstname} ${userData.lastname}`.trim(),
+              role: userData.role || 'Unknown'
+            };
+          } else {
+            throw new Error('User data incomplete');
+          }
         } catch (err) {
           console.error(`Failed to fetch user details by userID for ${ticket.userId}:`, err);
           userDetailsMap[ticket.userId] = {
