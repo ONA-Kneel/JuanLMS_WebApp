@@ -892,7 +892,7 @@ export default function Admin_Chats() {
                         <div className={`max-w-xs lg:max-w-md ${isRecipient ? "order-1" : "order-2"}`}>
                           {showHeader && isRecipient && (
                             <div className="text-xs text-gray-500 mb-1">
-                              {sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown User"}
+                              {selectedChat.isGroup ? (msg.senderName || "Unknown") : (sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown User")}
                             </div>
                           )}
                           <div className={`rounded-lg px-4 py-2 ${isRecipient ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>

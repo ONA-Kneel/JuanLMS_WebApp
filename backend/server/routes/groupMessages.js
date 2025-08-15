@@ -62,7 +62,9 @@ router.post('/', upload.single('file'), async (req, res) => {
     try {
       const sender = await User.findById(senderId);
       if (sender) {
-        senderName = `${sender.getDecryptedFirstname()} ${sender.getDecryptedLastname()}`;
+        const firstName = sender.getDecryptedFirstname();
+        const lastName = sender.getDecryptedLastname();
+        senderName = `${firstName} ${lastName}`;
       }
     } catch (err) {
       console.error("Error fetching sender info:", err);
@@ -105,7 +107,13 @@ router.get('/:groupId', async (req, res) => {
       return res.status(403).json({ error: "You are not a participant in this group" });
     }
 
-    const messages = await GroupMessage.find({});
+    // Try to find messages by querying with encrypted groupId
+    // First, let's encrypt the groupId to match what's stored in the database
+    const { encrypt } = await import('../utils/encryption.js');
+    const encryptedGroupId = encrypt(groupId);
+    
+    // Query for messages with the encrypted groupId
+    const messages = await GroupMessage.find({ groupId: encryptedGroupId });
     
     // Decrypt all fields and populate sender information
     const decryptedMessages = await Promise.all(messages.map(async (msg) => {
@@ -119,32 +127,28 @@ router.get('/:groupId', async (req, res) => {
         updatedAt: msg.updatedAt,
       };
 
-      // Only add sender info if this message belongs to the requested group
-      if (decryptedMessage.groupId === groupId) {
-        try {
-          // Find the sender user and get their decrypted name
-          const sender = await User.findById(decryptedMessage.senderId);
-          if (sender) {
-            decryptedMessage.senderName = `${sender.getDecryptedFirstname()} ${sender.getDecryptedLastname()}`;
-          } else {
-            decryptedMessage.senderName = "Unknown User";
-          }
-        } catch (err) {
-          console.error("Error fetching sender info:", err);
+      try {
+        // Find the sender user and get their decrypted name
+        const sender = await User.findById(decryptedMessage.senderId);
+        if (sender) {
+          const firstName = sender.getDecryptedFirstname();
+          const lastName = sender.getDecryptedLastname();
+          decryptedMessage.senderName = `${firstName} ${lastName}`;
+        } else {
           decryptedMessage.senderName = "Unknown User";
         }
+      } catch (err) {
+        console.error("Error fetching sender info:", err);
+        decryptedMessage.senderName = "Unknown User";
       }
 
       return decryptedMessage;
     }));
 
-    // Filter messages for this group
-    const groupMessages = decryptedMessages.filter(m => m.groupId === groupId);
-    
     // Sort by createdAt (oldest first)
-    groupMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    decryptedMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     
-    res.json(groupMessages);
+    res.json(decryptedMessages);
   } catch (err) {
     console.error("Error fetching group messages:", err);
     res.status(500).json({ error: "Server error fetching group messages" });
