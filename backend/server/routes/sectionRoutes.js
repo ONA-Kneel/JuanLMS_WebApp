@@ -7,7 +7,14 @@ const router = express.Router();
 // Get all sections
 router.get('/', async (req, res) => {
   try {
-    const sections = await Section.find({ status: 'active' }).sort({ sectionName: 1 });
+    const { schoolYear, termName } = req.query;
+    const filter = { status: 'active' };
+    
+    // If schoolYear and termName are provided, filter by them
+    if (schoolYear) filter.schoolYear = schoolYear;
+    if (termName) filter.termName = termName;
+    
+    const sections = await Section.find(filter).sort({ sectionName: 1 });
     res.status(200).json(sections);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -34,7 +41,7 @@ router.get('/track/:trackName/strand/:strandName', async (req, res) => {
 
 // Create a new section
 router.post('/', async (req, res) => {
-  const { sectionName, trackName, strandName, gradeLevel } = req.body;
+  const { sectionName, trackName, strandName, gradeLevel, schoolYear, termName } = req.body;
 
   if (!sectionName || !trackName || !strandName || !gradeLevel) {
     return res.status(400).json({ message: 'Section name, track name, strand name, and grade level are required' });
@@ -44,10 +51,17 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    // Get the current active term
-    const currentTerm = await Term.findOne({ status: 'active' });
-    if (!currentTerm) {
-      return res.status(400).json({ message: 'No active term found' });
+    // Use provided schoolYear and termName, or fall back to current active term
+    let targetSchoolYear = schoolYear;
+    let targetTermName = termName;
+    
+    if (!targetSchoolYear || !targetTermName) {
+      const currentTerm = await Term.findOne({ status: 'active' });
+      if (!currentTerm) {
+        return res.status(400).json({ message: 'No active term found and no school year/term provided' });
+      }
+      targetSchoolYear = currentTerm.schoolYear;
+      targetTermName = currentTerm.termName;
     }
 
     // Check for existing section with same name in the same track, strand, school year, and term
@@ -55,11 +69,11 @@ router.post('/', async (req, res) => {
       sectionName: new RegExp(`^${sectionName}$`, 'i'),
       trackName,
       strandName,
-      schoolYear: currentTerm.schoolYear,
-      termName: currentTerm.termName
+      schoolYear: targetSchoolYear,
+      termName: targetTermName
     });
     if (existingSection) {
-      return res.status(409).json({ message: 'Section name must be unique within the same track, strand, school year, and term.' });
+      return res.status(409).json({ message: 'Section already exists in this track, strand, school year, and term.' });
     }
 
     const newSection = new Section({ 
@@ -67,8 +81,8 @@ router.post('/', async (req, res) => {
       trackName, 
       strandName, 
       gradeLevel,
-      schoolYear: currentTerm.schoolYear,
-      termName: currentTerm.termName
+      schoolYear: targetSchoolYear,
+      termName: targetTermName
     });
     await newSection.save();
     res.status(201).json(newSection);
