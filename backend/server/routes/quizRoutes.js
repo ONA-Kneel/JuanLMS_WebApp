@@ -35,7 +35,7 @@ router.post('/upload-image', upload.single('image'), (req, res) => {
     return res.status(400).json({ error: 'No file uploaded' });
   }
   // Return full backend URL for the image
-  const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+  const backendUrl = process.env.BACKEND_URL || 'https://juanlms-webapp-server.onrender.com';
   const imageUrl = `${backendUrl}/uploads/quiz-images/${req.file.filename}`;
   res.json({ url: imageUrl });
 });
