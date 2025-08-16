@@ -160,9 +160,9 @@ npm run dev
 ## 🌐 Access Points
 
 - **Frontend Application**: http://localhost:5173
-- **Backend API**: http://localhost:5000
+- **Backend API**: https://juanlms-webapp-server.onrender.com
 - **Socket.io Server**: Integrated on port 5000
-- **File Uploads**: http://localhost:5000/uploads
+- **File Uploads**: https://juanlms-webapp-server.onrender.com/uploads
 
 ## 📊 System Status
 

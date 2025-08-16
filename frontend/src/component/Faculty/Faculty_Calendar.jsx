@@ -9,7 +9,7 @@ import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileModal from "../ProfileModal";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Faculty_Calendar() {
   const [showProfileModal, setShowProfileModal] = useState(false);

@@ -5,7 +5,7 @@ import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 import Student_Navbar from "./Student_Navbar";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Student_Classes() {
   const navigate = useNavigate();
