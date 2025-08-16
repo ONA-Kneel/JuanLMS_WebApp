@@ -4,6 +4,9 @@ import SchoolYear from '../models/SchoolYear.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import FacultyAssignment from '../models/FacultyAssignment.js';
 import Section from '../models/Section.js';
+import Subject from '../models/Subject.js';
+import Track from '../models/Track.js';
+import Strand from '../models/Strand.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -117,9 +120,34 @@ router.patch('/:termId/archive', authenticateToken, async (req, res) => {
     term.status = 'archived';
     await term.save();
 
-    // Archive all assignments for this term
-    await StudentAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } });
-    await FacultyAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } });
+    // Archive all related entities for this term
+    console.log(`Archiving all entities for term: ${term.termName} (${term.schoolYear})`);
+    
+    await Promise.all([
+      // Archive assignments
+      StudentAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
+      FacultyAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
+      
+      // Archive structural entities by schoolYear and termName
+      Track.updateMany(
+        { schoolYear: term.schoolYear, termName: term.termName }, 
+        { $set: { status: 'archived' } }
+      ),
+      Strand.updateMany(
+        { schoolYear: term.schoolYear, termName: term.termName }, 
+        { $set: { status: 'archived' } }
+      ),
+      Section.updateMany(
+        { schoolYear: term.schoolYear, termName: term.termName }, 
+        { $set: { status: 'archived' } }
+      ),
+      Subject.updateMany(
+        { schoolYear: term.schoolYear, termName: term.termName }, 
+        { $set: { status: 'archived' } }
+      )
+    ]);
+    
+    console.log(`Successfully archived all entities for term: ${term.termName}`);
     
     res.json(term);
   } catch (err) {
@@ -156,7 +184,76 @@ router.patch('/:id', authenticateToken, async (req, res) => {
         { _id: { $ne: term._id }, schoolYear: term.schoolYear },
         { status: 'archived' }
       );
+      
       term.status = 'active';
+      
+      // Reactivate all related entities for this term
+      console.log(`Reactivating all entities for term: ${term.termName} (${term.schoolYear})`);
+      
+      await Promise.all([
+        // Reactivate assignments
+        StudentAssignment.updateMany(
+          { termId: term._id }, 
+          { $set: { status: 'active' } }
+        ),
+        FacultyAssignment.updateMany(
+          { termId: term._id }, 
+          { $set: { status: 'active' } }
+        ),
+        
+        // Reactivate structural entities by schoolYear and termName
+        Track.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'active' } }
+        ),
+        Strand.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'active' } }
+        ),
+        Section.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'active' } }
+        ),
+        Subject.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'active' } }
+        )
+      ]);
+      
+      console.log(`Successfully reactivated all entities for term: ${term.termName}`);
+      
+    } else if (req.body.status === 'archived') {
+      term.status = 'archived';
+      
+      // Archive all related entities for this term (same logic as archive endpoint)
+      console.log(`Archiving all entities for term: ${term.termName} (${term.schoolYear})`);
+      
+      await Promise.all([
+        // Archive assignments
+        StudentAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
+        FacultyAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
+        
+        // Archive structural entities by schoolYear and termName
+        Track.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'archived' } }
+        ),
+        Strand.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'archived' } }
+        ),
+        Section.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'archived' } }
+        ),
+        Subject.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'archived' } }
+        )
+      ]);
+      
+      console.log(`Successfully archived all entities for term: ${term.termName}`);
+      
     } else if (req.body.status) {
       term.status = req.body.status;
     }
@@ -241,8 +338,7 @@ router.get('/:id/sections', authenticateToken, async (req, res) => {
     // Find sections that match the term's school year and term name
     const sections = await Section.find({
       schoolYear: term.schoolYear,
-      termName: term.termName,
-      status: 'active'
+      termName: term.termName
     }).sort({ sectionName: 1 });
 
     res.json(sections);
