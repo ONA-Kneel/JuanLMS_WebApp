@@ -28,10 +28,17 @@ router.post('/', async (req, res) => {
   try {
     const { subjectName, trackName, strandName, gradeLevel, schoolYear, termName } = req.body;
 
-    // Absolute uniqueness: check for any subject with the same name (case-insensitive)
-    const existingSubject = await Subject.findOne({ subjectName: new RegExp(`^${subjectName}$`, 'i') });
+    // Check for existing subject with same combination (using the compound unique index)
+    const existingSubject = await Subject.findOne({ 
+      subjectName: new RegExp(`^${subjectName}$`, 'i'),
+      trackName,
+      strandName,
+      gradeLevel,
+      termName,
+      schoolYear
+    });
     if (existingSubject) {
-      return res.status(400).json({ message: 'Subject name must be unique across the system.' });
+      return res.status(400).json({ message: 'Subject already exists in this track, strand, grade, term, and school year.' });
     }
 
     const subject = new Subject({
@@ -46,7 +53,12 @@ router.post('/', async (req, res) => {
     const savedSubject = await subject.save();
     res.status(201).json(savedSubject);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    if (error.code === 11000) {
+      // Duplicate key error from the compound unique index
+      res.status(400).json({ message: 'Subject already exists in this track, strand, grade, term, and school year.' });
+    } else {
+      res.status(400).json({ message: error.message });
+    }
   }
 });
 
@@ -56,10 +68,18 @@ router.patch('/:id', async (req, res) => {
     const { id } = req.params;
     const { subjectName, trackName, strandName, gradeLevel, schoolYear, termName } = req.body;
 
-    // Absolute uniqueness: check for any subject with the same name (case-insensitive), excluding current
-    const existingSubject = await Subject.findOne({ subjectName: new RegExp(`^${subjectName}$`, 'i'), _id: { $ne: id } });
+    // Check for existing subject with same combination, excluding current subject
+    const existingSubject = await Subject.findOne({ 
+      subjectName: new RegExp(`^${subjectName}$`, 'i'),
+      trackName,
+      strandName,
+      gradeLevel,
+      termName,
+      schoolYear,
+      _id: { $ne: id }
+    });
     if (existingSubject) {
-      return res.status(400).json({ message: 'Subject name must be unique across the system.' });
+      return res.status(400).json({ message: 'Subject already exists in this track, strand, grade, term, and school year.' });
     }
 
     const updatedSubject = await Subject.findByIdAndUpdate(
@@ -74,7 +94,11 @@ router.patch('/:id', async (req, res) => {
 
     res.json(updatedSubject);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    if (error.code === 11000) {
+      res.status(400).json({ message: 'Subject already exists in this track, strand, grade, term, and school year.' });
+    } else {
+      res.status(400).json({ message: error.message });
+    }
   }
 });
 
