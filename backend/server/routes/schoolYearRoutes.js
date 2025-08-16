@@ -3,6 +3,10 @@ import SchoolYear from '../models/SchoolYear.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import FacultyAssignment from '../models/FacultyAssignment.js';
 import Term from '../models/Term.js';
+import Track from '../models/Track.js';
+import Strand from '../models/Strand.js';
+import Section from '../models/Section.js';
+import Subject from '../models/Subject.js';
 
 const router = express.Router();
 
@@ -147,13 +151,27 @@ router.patch('/:id', async (req, res) => {
       
       schoolYear.status = req.body.status;
 
-      // Archive all terms and assignments for this school year if archiving or inactivating
+      // Archive all terms and related entities for this school year if archiving or inactivating
       if (req.body.status === 'archived' || req.body.status === 'inactive') {
         const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
-        // Archive all terms for this school year
-        await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
-        await StudentAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
-        await FacultyAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
+        console.log(`Archiving all entities for school year: ${schoolYearName}`);
+        
+        await Promise.all([
+          // Archive all terms for this school year
+          Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' }),
+          
+          // Archive all assignments for this school year
+          StudentAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
+          FacultyAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
+          
+          // Archive all structural entities for this school year
+          Track.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
+          Strand.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
+          Section.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
+          Subject.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } })
+        ]);
+        
+        console.log(`Successfully archived all entities for school year: ${schoolYearName}`);
       }
     }
 

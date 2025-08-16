@@ -3,11 +3,37 @@ import Track from '../models/Track.js';
 
 const router = express.Router();
 
-// Get all tracks for a specific term
-router.get('/term/:termId', async (req, res) => {
+// Get all tracks for a specific term by term name (keeping for backward compatibility)
+router.get('/term/:termName', async (req, res) => {
+  try {
+    const { termName } = req.params;
+    // Get all tracks for this term name, regardless of status, but show their actual status
+    const tracks = await Track.find({ termName: termName });
+    res.json(tracks);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get all tracks for a specific term by term ID (more precise)
+router.get('/termId/:termId', async (req, res) => {
   try {
     const { termId } = req.params;
-    const tracks = await Track.find({ termName: termId, status: 'active' });
+    
+    // First get the term details to get schoolYear and termName
+    const Term = (await import('../models/Term.js')).default;
+    const term = await Term.findById(termId);
+    
+    if (!term) {
+      return res.status(404).json({ message: 'Term not found' });
+    }
+    
+    // Get tracks for this specific school year and term, regardless of status
+    const tracks = await Track.find({ 
+      schoolYear: term.schoolYear, 
+      termName: term.termName 
+    });
+    
     res.json(tracks);
   } catch (error) {
     res.status(500).json({ message: error.message });
