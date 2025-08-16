@@ -1722,10 +1722,10 @@ export default function GradingSystem() {
 
         {/* Export All Grades */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4">Export All Grades</h3>
+          <h3 className="text-lg font-semibold mb-4">Grading Table Template</h3>
           <div className="space-y-4">
             <p className="text-gray-600">
-              Export comprehensive grades for assignments and quizzes in the selected section as a CSV file.
+              Download template of grades for assignments and quizzes in the selected section as a xlsx file.
             </p>
             
             <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
