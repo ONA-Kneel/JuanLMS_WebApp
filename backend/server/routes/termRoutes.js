@@ -11,6 +11,16 @@ import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+// Get all terms
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const terms = await Term.find().sort({ schoolYear: -1, termName: 1 });
+    res.json(terms);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Get all terms for a school year by its name
 router.get('/schoolyear/:schoolYearName', authenticateToken, async (req, res) => {
   try {

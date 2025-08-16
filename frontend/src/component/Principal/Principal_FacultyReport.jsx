@@ -24,6 +24,11 @@ export default function Principal_FacultyReport() {
   const [loadingReports, setLoadingReports] = useState(false);
   const [termReportsByFaculty, setTermReportsByFaculty] = useState({});
   const [studentFilter, setStudentFilter] = useState("");
+  const [schoolYears, setSchoolYears] = useState([]);
+  const [terms, setTerms] = useState([]);
+  const [selectedSchoolYear, setSelectedSchoolYear] = useState("");
+  const [selectedTerm, setSelectedTerm] = useState("");
+  const [loadingTermData, setLoadingTermData] = useState(false);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -65,6 +70,89 @@ export default function Principal_FacultyReport() {
     }
     fetchActiveTermForYear();
   }, [academicYear]);
+
+  // Fetch all school years and terms
+  useEffect(() => {
+    async function fetchSchoolYearsAndTerms() {
+      try {
+        const token = localStorage.getItem("token");
+        
+        // Fetch all school years first
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const years = await yearRes.json();
+          const activeYears = years.filter(year => year.status !== 'archived');
+          setSchoolYears(activeYears);
+          
+          // Auto-select the active school year
+          const activeYear = activeYears.find(year => year.status === 'active');
+          if (activeYear) {
+            const yearString = `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`;
+            setSelectedSchoolYear(yearString);
+            
+            // Now fetch terms for this school year
+            const termRes = await fetch(`${API_BASE}/api/terms`, {
+              headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (termRes.ok) {
+              const allTerms = await termRes.json();
+              const activeTerms = allTerms.filter(term => term.status !== 'archived');
+              setTerms(activeTerms);
+              
+              // Auto-select the active term for this school year
+              const activeTerm = activeTerms.find(term => 
+                term.schoolYear === yearString && term.status === 'active'
+              );
+              if (activeTerm) {
+                setSelectedTerm(activeTerm.termName);
+              }
+            }
+          }
+        }
+        
+        // If no active school year found, still fetch all terms for manual selection
+        if (!activeYear) {
+          const termRes = await fetch(`${API_BASE}/api/terms`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          if (termRes.ok) {
+            const allTerms = await termRes.json();
+            const activeTerms = allTerms.filter(term => term.status !== 'archived');
+            setTerms(activeTerms);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch school years and terms", err);
+      }
+    }
+    fetchSchoolYearsAndTerms();
+  }, []);
+
+  // Handle manual school year changes
+  useEffect(() => {
+    if (selectedSchoolYear && terms.length > 0) {
+      // Auto-select the active term for the selected school year
+      const activeTerm = terms.find(term => 
+        term.schoolYear === selectedSchoolYear && term.status === 'active'
+      );
+      if (activeTerm) {
+        setSelectedTerm(activeTerm.termName);
+      } else {
+        setSelectedTerm(""); // Clear term if no active term found
+      }
+    }
+  }, [selectedSchoolYear, terms]);
+
+  // Update filters when current term changes
+  useEffect(() => {
+    if (currentTerm && academicYear) {
+      const yearString = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+      setSelectedSchoolYear(yearString);
+      setSelectedTerm(currentTerm.termName);
+    }
+  }, [currentTerm, academicYear]);
 
   // Periodically refresh active school year and term so the Status column reflects changes
   useEffect(() => {
@@ -116,15 +204,16 @@ export default function Principal_FacultyReport() {
     };
   }, []);
 
-  // Fetch all student reports for the current term and school year to compute per-faculty status
+  // Fetch all student reports for the selected term and school year to compute per-faculty status
   useEffect(() => {
     async function fetchReportsForTerm() {
-      if (!currentTerm || !academicYear) return;
+      if (!selectedTerm || !selectedSchoolYear) return;
+      
+      setLoadingTermData(true);
       try {
         const token = localStorage.getItem("token");
-        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
         const res = await fetch(
-          `${API_BASE}/api/studentreports?termName=${encodeURIComponent(currentTerm.termName)}&schoolYear=${encodeURIComponent(schoolYearName)}&limit=10000`,
+          `${API_BASE}/api/studentreports?termName=${encodeURIComponent(selectedTerm)}&schoolYear=${encodeURIComponent(selectedSchoolYear)}&limit=10000`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (res.ok) {
@@ -159,10 +248,12 @@ export default function Principal_FacultyReport() {
         }
       } catch (e) {
         setTermReportsByFaculty({});
+      } finally {
+        setLoadingTermData(false);
       }
     }
     fetchReportsForTerm();
-  }, [currentTerm, academicYear]);
+  }, [selectedTerm, selectedSchoolYear]);
 
   // Fetch faculty data
   useEffect(() => {
@@ -196,8 +287,9 @@ export default function Principal_FacultyReport() {
   // Fetch faculty assignments
   useEffect(() => {
     async function fetchFacultyAssignments() {
-      if (!currentTerm) return;
+      if (!selectedTerm || !selectedSchoolYear) return;
       
+      setLoadingTermData(true);
       try {
         const token = localStorage.getItem("token");
         const response = await fetch(`${API_BASE}/api/faculty-assignments`, {
@@ -206,27 +298,37 @@ export default function Principal_FacultyReport() {
         
         if (response.ok) {
           const assignments = await response.json();
-          setFacultyAssignments(assignments);
+          // Filter assignments by selected term and school year
+          const filteredAssignments = assignments.filter(assignment => 
+            assignment.termName === selectedTerm && assignment.schoolYear === selectedSchoolYear
+          );
+          setFacultyAssignments(filteredAssignments);
         } else {
           console.error("Failed to fetch faculty assignments:", response.status);
         }
       } catch (err) {
         console.error("Failed to fetch faculty assignments:", err);
+      } finally {
+        setLoadingTermData(false);
       }
     }
     fetchFacultyAssignments();
-  }, [currentTerm]);
+  }, [selectedTerm, selectedSchoolYear]);
 
   // Combine faculty data with assignments
   const facultyWithAssignments = facultyData.map(faculty => {
-    // Find assignments for this faculty in the current term
-    const facultyAssignmentsForTerm = facultyAssignments.filter(assignment => 
-      assignment.facultyId === faculty._id && 
-      assignment.termId === currentTerm?._id
+    // Find assignments for this faculty in the selected term and school year
+    const facultyAssignmentsForFaculty = facultyAssignments.filter(assignment => 
+      assignment.facultyId === faculty._id
     );
 
+    // Only include faculty who have assignments in the selected term
+    if (facultyAssignmentsForFaculty.length === 0) {
+      return null;
+    }
+
     // Get unique track and strand combinations
-    const uniqueAssignments = facultyAssignmentsForTerm.reduce((acc, assignment) => {
+    const uniqueAssignments = facultyAssignmentsForFaculty.reduce((acc, assignment) => {
       const key = `${assignment.trackName}-${assignment.strandName}`;
       if (!acc[key]) {
         acc[key] = {
@@ -240,11 +342,13 @@ export default function Principal_FacultyReport() {
     const assignments = Object.values(uniqueAssignments);
     const trackNames = [...new Set(assignments.map(a => a.trackName).filter(Boolean))];
     const strandNames = [...new Set(assignments.map(a => a.strandName).filter(Boolean))];
-    const sectionNames = [...new Set(facultyAssignmentsForTerm.map(a => a.sectionName).filter(Boolean))];
-    const rawAssignments = facultyAssignmentsForTerm.map(a => ({
+    const sectionNames = [...new Set(facultyAssignmentsForFaculty.map(a => a.sectionName).filter(Boolean))];
+    const rawAssignments = facultyAssignmentsForFaculty.map(a => ({
       trackName: a.trackName,
       strandName: a.strandName,
       sectionName: a.sectionName,
+      schoolYear: a.schoolYear,
+      termName: a.termName
     }));
 
     return {
@@ -257,17 +361,23 @@ export default function Principal_FacultyReport() {
       sectionNames,
       rawAssignments
     };
-  });
+  }).filter(Boolean); // Remove null entries
 
   // Build lookup maps for cascading filters
-  const uniqueTracks = [...new Set(facultyAssignments.map(a => a.trackName).filter(Boolean))].sort();
-  const strandsByTrack = facultyAssignments.reduce((acc, a) => {
+  const filteredAssignments = facultyAssignments.filter(a => {
+    if (selectedSchoolYear && a.schoolYear !== selectedSchoolYear) return false;
+    if (selectedTerm && a.termName !== selectedTerm) return false;
+    return true;
+  });
+
+  const uniqueTracks = [...new Set(filteredAssignments.map(a => a.trackName).filter(Boolean))].sort();
+  const strandsByTrack = filteredAssignments.reduce((acc, a) => {
     if (!a.trackName || !a.strandName) return acc;
     if (!acc[a.trackName]) acc[a.trackName] = new Set();
     acc[a.trackName].add(a.strandName);
     return acc;
   }, {});
-  const sectionsByTrackStrand = facultyAssignments.reduce((acc, a) => {
+  const sectionsByTrackStrand = filteredAssignments.reduce((acc, a) => {
     if (!a.trackName || !a.strandName || !a.sectionName) return acc;
     const key = `${a.trackName}|${a.strandName}`;
     if (!acc[key]) acc[key] = new Set();
@@ -325,8 +435,20 @@ export default function Principal_FacultyReport() {
         matchesSection = sectionList.includes(selectedSection.toLowerCase());
       }
     }
+
+    // School Year filter: faculty must have assignments in the selected school year
+    let matchesSchoolYear = true;
+    if (selectedSchoolYear) {
+      matchesSchoolYear = faculty.rawAssignments?.some(a => a.schoolYear === selectedSchoolYear);
+    }
+
+    // Term filter: faculty must have assignments in the selected term
+    let matchesTerm = true;
+    if (selectedTerm) {
+      matchesTerm = faculty.rawAssignments?.some(a => a.termName === selectedTerm);
+    }
     
-    return matchesSearch && matchesTrack && matchesStrand && matchesSection;
+    return matchesSearch && matchesTrack && matchesStrand && matchesSection && matchesSchoolYear && matchesTerm;
   });
 
   // Clear all filters
@@ -334,6 +456,22 @@ export default function Principal_FacultyReport() {
     setSearchTerm("");
     setSelectedTrack("");
     setSelectedStrand("");
+    setSelectedSection("");
+    
+    // Reset to current active school year and term
+    if (academicYear) {
+      const yearString = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+      setSelectedSchoolYear(yearString);
+      
+      if (currentTerm) {
+        setSelectedTerm(currentTerm.termName);
+      } else {
+        setSelectedTerm("");
+      }
+    } else {
+      setSelectedSchoolYear("");
+      setSelectedTerm("");
+    }
   };
 
   // Fetch faculty reports
@@ -341,20 +479,15 @@ export default function Principal_FacultyReport() {
     setLoadingReports(true);
     try {
       const token = localStorage.getItem("token");
-      console.log("Fetching reports for faculty ID:", facultyId);
       
       const response = await fetch(`${API_BASE}/api/studentreports?facultyId=${facultyId}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       
-      console.log("Response status:", response.status);
-      
       if (response.ok) {
         const data = await response.json();
-        console.log("Raw API response:", data);
         // Handle paginated response - extract reports array
         const reports = data.reports || data;
-        console.log("Processed faculty reports:", reports);
         setFacultyReports(reports);
       } else {
         console.error("Failed to fetch faculty reports:", response.status);
@@ -372,8 +505,6 @@ export default function Principal_FacultyReport() {
 
   // Handle faculty selection
   const handleFacultyView = (faculty) => {
-    console.log("Selected faculty:", faculty);
-    console.log("Faculty ID:", faculty._id);
     setSelectedFaculty(faculty);
     setSelectedReport(null);
     setStudentFilter("");
@@ -400,10 +531,10 @@ export default function Principal_FacultyReport() {
 
     const workbook = XLSX.utils.book_new();
 
-    const currentYearLabel = academicYear
+    const currentYearLabel = selectedSchoolYear || (academicYear
       ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`
-      : "";
-    const currentTermLabel = currentTerm?.termName || "";
+      : "");
+    const currentTermLabel = selectedTerm || currentTerm?.termName || "";
     const currentKey = currentTermLabel && currentYearLabel
       ? `${currentTermLabel} (${currentYearLabel})`
       : "Current";
@@ -461,8 +592,8 @@ export default function Principal_FacultyReport() {
         body: JSON.stringify({
           facultyId: faculty._id,
           facultyName: `${faculty.firstname} ${faculty.lastname}`,
-          termName: currentTerm?.termName,
-          schoolYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''
+          termName: selectedTerm || currentTerm?.termName,
+          schoolYear: selectedSchoolYear || (academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : '')
         })
       });
 
@@ -512,6 +643,48 @@ export default function Principal_FacultyReport() {
               <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
                 <h3 className="text-xl font-semibold text-gray-800">Faculty Details</h3>
                 <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                  {/* School Year Filter */}
+                  <select
+                    value={selectedSchoolYear}
+                    onChange={(e) => { 
+                      setSelectedSchoolYear(e.target.value); 
+                      setSelectedTerm(""); 
+                      setSelectedTrack(""); 
+                      setSelectedStrand(""); 
+                      setSelectedSection(""); 
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="">All School Years</option>
+                    {schoolYears.map(year => (
+                      <option key={year._id} value={`${year.schoolYearStart}-${year.schoolYearEnd}`}>
+                        {year.schoolYearStart}-{year.schoolYearEnd}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Term Filter (depends on selected School Year) */}
+                  <select
+                    value={selectedTerm}
+                    onChange={(e) => { 
+                      setSelectedTerm(e.target.value); 
+                      setSelectedTrack(""); 
+                      setSelectedStrand(""); 
+                      setSelectedSection(""); 
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    disabled={!selectedSchoolYear}
+                  >
+                    <option value="">All Terms</option>
+                    {selectedSchoolYear && terms
+                      .filter(term => term.schoolYear === selectedSchoolYear)
+                      .map(term => (
+                        <option key={term._id} value={term.termName}>
+                          {term.termName}
+                        </option>
+                      ))}
+                  </select>
+
                   {/* Search Bar */}
                   <input
                     type="text"
@@ -561,12 +734,29 @@ export default function Principal_FacultyReport() {
                 </div>
               </div>
 
+              {/* Clear Filters Button */}
+              <div className="flex justify-end mb-4">
+                <button
+                  onClick={clearFilters}
+                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm"
+                >
+                  Reset to Current Term
+                </button>
+              </div>
+
               {/* Faculty Table */}
               <div className="mt-8">
-                {loading ? (
+                {!selectedTerm || !selectedSchoolYear ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <p className="text-gray-500 text-lg mb-2">Select a School Year and Term</p>
+                    <p className="text-gray-400 text-sm">Choose a school year and term from the filters above to view faculty assignments and their evaluation status.</p>
+                  </div>
+                ) : loading || loadingTermData ? (
                   <div className="text-center py-8">
                     <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    <p className="mt-2 text-gray-600">Loading faculty data...</p>
+                    <p className="mt-2 text-gray-600">
+                      {loading ? "Loading faculty data..." : "Loading term data..."}
+                    </p>
                   </div>
                 ) : error ? (
                   <div className="text-center py-8">
@@ -576,9 +766,23 @@ export default function Principal_FacultyReport() {
                   <>
                     {/* Results Summary */}
                     <div className="mb-4 text-sm text-gray-600">
-                      Showing {filteredFaculty.length} of {facultyData.length} faculty members
-                      {selectedTrack && ` in ${selectedTrack}`}
-                      {selectedStrand && ` in ${selectedStrand}`}
+                      {selectedTerm && selectedSchoolYear ? (
+                        <>
+                          Showing {filteredFaculty.length} faculty members with assignments in {selectedTerm} ({selectedSchoolYear})
+                          {selectedTrack && ` in ${selectedTrack}`}
+                          {selectedStrand && ` in ${selectedStrand}`}
+                          {selectedSection && ` in ${selectedSection}`}
+                        </>
+                      ) : (
+                        <>
+                          Showing {filteredFaculty.length} of {facultyData.length} faculty members
+                          {selectedSchoolYear && ` in ${selectedSchoolYear}`}
+                          {selectedTerm && ` in ${selectedTerm}`}
+                          {selectedTrack && ` in ${selectedTrack}`}
+                          {selectedStrand && ` in ${selectedStrand}`}
+                          {selectedSection && ` in ${selectedSection}`}
+                        </>
+                      )}
                     </div>
                     
                     <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
@@ -596,9 +800,11 @@ export default function Principal_FacultyReport() {
                         {filteredFaculty.length === 0 ? (
                           <tr>
                             <td colSpan="6" className="p-8 text-center text-gray-500">
-                              {searchTerm || selectedTrack || selectedStrand 
+                              {!selectedTerm || !selectedSchoolYear 
+                                ? 'Please select a school year and term to view faculty.' 
+                                : searchTerm || selectedTrack || selectedStrand || selectedSection
                                 ? 'No faculty found matching your filters.' 
-                                : 'No faculty data available.'}
+                                : 'No faculty have assignments in the selected term.'}
                             </td>
                           </tr>
                         ) : (
@@ -617,20 +823,36 @@ export default function Principal_FacultyReport() {
                                 {faculty.sectionNames && faculty.sectionNames.length > 0 ? faculty.sectionNames.join(', ') : '-'}
                               </td>
                               <td className="p-3 border text-gray-900 whitespace-nowrap">
-                                {termReportsByFaculty[faculty._id]
-                                  ? `Submitted - ${new Date(termReportsByFaculty[faculty._id].latestDate).toLocaleDateString()}`
-                                  : 'Pending'}
-                                {termReportsByFaculty[faculty._id] && (
-                                  <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
-                                    termReportsByFaculty[faculty._id].hasVisibleReports 
-                                      ? 'bg-green-100 text-green-800' 
-                                      : 'bg-yellow-100 text-yellow-800'
-                                  }`}>
-                                    {termReportsByFaculty[faculty._id].hasVisibleReports 
-                                      ? 'Visible to VPE' 
-                                      : 'Not visible to VPE'}
-                                  </span>
-                                )}
+                                {(() => {
+                                  // Check if faculty has assignments in the selected term
+                                  const hasAssignments = faculty.rawAssignments && faculty.rawAssignments.length > 0;
+                                  
+                                  if (!hasAssignments) {
+                                    return <span className="text-gray-500">No Assignments</span>;
+                                  }
+                                  
+                                  // Check if faculty has submitted reports for the selected term
+                                  if (termReportsByFaculty[faculty._id]) {
+                                    return (
+                                      <>
+                                        <span className="text-green-600 font-medium">
+                                          Submitted - {new Date(termReportsByFaculty[faculty._id].latestDate).toLocaleDateString()}
+                                        </span>
+                                        <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
+                                          termReportsByFaculty[faculty._id].hasVisibleReports 
+                                            ? 'bg-green-100 text-green-800' 
+                                            : 'bg-yellow-100 text-yellow-800'
+                                        }`}>
+                                          {termReportsByFaculty[faculty._id].hasVisibleReports 
+                                            ? 'Visible to VPE' 
+                                            : 'Not visible to VPE'}
+                                        </span>
+                                      </>
+                                    );
+                                  } else {
+                                    return <span className="text-orange-600 font-medium">Pending</span>;
+                                  }
+                                })()}
                               </td>
                               <td className="p-3 border text-gray-900 whitespace-nowrap">
                                 <button 
