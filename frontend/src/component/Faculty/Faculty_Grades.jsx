@@ -162,14 +162,29 @@ export default function Faculty_Grades() {
     ];
     setSubjects(defaultSubjects);
     
-    // Initialize grades for default subjects
+    // Initialize grades for default subjects based on current term
     const initialGrades = {};
     defaultSubjects.forEach(subject => {
-      initialGrades[subject._id] = {
-        quarter1: '',
-        quarter2: '',
-        semesterFinal: ''
-      };
+      if (currentTerm?.termName === 'Term 1') {
+        initialGrades[subject._id] = {
+          quarter1: '',
+          quarter2: '',
+          semesterFinal: ''
+        };
+      } else if (currentTerm?.termName === 'Term 2') {
+        initialGrades[subject._id] = {
+          quarter3: '',
+          quarter4: '',
+          semesterFinal: ''
+        };
+      } else {
+        // Default fallback
+        initialGrades[subject._id] = {
+          quarter1: '',
+          quarter2: '',
+          semesterFinal: ''
+        };
+      }
     });
     setGrades(initialGrades);
   };
@@ -217,18 +232,40 @@ export default function Faculty_Grades() {
       }
       
       // Transform students data to include grades structure
-      const transformedStudents = studentsData.map(student => ({
-        _id: student._id || student.userID || student.studentID,
-        name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
-        schoolID: student.schoolID || student.userID || student.studentID,
-        grades: {
-          prelims: '',
-          midterms: '',
-          final: '',
-          finalGrade: '',
-          remarks: ''
+      const transformedStudents = studentsData.map(student => {
+        let gradesStructure = {};
+        
+        if (currentTerm?.termName === 'Term 1') {
+          gradesStructure = {
+            quarter1: '',
+            quarter2: '',
+            semesterFinal: '',
+            remarks: ''
+          };
+        } else if (currentTerm?.termName === 'Term 2') {
+          gradesStructure = {
+            quarter3: '',
+            quarter4: '',
+            semesterFinal: '',
+            remarks: ''
+          };
+        } else {
+          // Default structure
+          gradesStructure = {
+            quarter1: '',
+            quarter2: '',
+            semesterFinal: '',
+            remarks: ''
+          };
         }
-      }));
+        
+        return {
+          _id: student._id || student.userID || student.studentID,
+          name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+          schoolID: student.schoolID || student.userID || student.studentID,
+          grades: gradesStructure
+        };
+      });
       
       setStudents(transformedStudents);
     } catch {
@@ -254,7 +291,34 @@ export default function Faculty_Grades() {
     if (studentId && students.length > 0) {
       const student = students.find(s => s._id === studentId);
       if (student) {
-        setStudentGrades(student.grades || {});
+        // Initialize grades structure based on current term
+        let initialGrades = {};
+        
+        if (currentTerm?.termName === 'Term 1') {
+          initialGrades = {
+            quarter1: student.grades?.quarter1 || '',
+            quarter2: student.grades?.quarter2 || '',
+            semesterFinal: student.grades?.semesterFinal || '',
+            remarks: student.grades?.remarks || ''
+          };
+        } else if (currentTerm?.termName === 'Term 2') {
+          initialGrades = {
+            quarter3: student.grades?.quarter3 || '',
+            quarter4: student.grades?.quarter4 || '',
+            semesterFinal: student.grades?.semesterFinal || '',
+            remarks: student.grades?.remarks || ''
+          };
+        } else {
+          // Default structure
+          initialGrades = {
+            quarter1: student.grades?.quarter1 || '',
+            quarter2: student.grades?.quarter2 || '',
+            semesterFinal: student.grades?.semesterFinal || '',
+            remarks: student.grades?.remarks || ''
+          };
+        }
+        
+        setStudentGrades(initialGrades);
       }
     } else {
       setStudentGrades({});
@@ -268,22 +332,57 @@ export default function Faculty_Grades() {
         [field]: value
       };
       
-      // Calculate final grade if all three grades are present
-      if (field === 'prelims' || field === 'midterms' || field === 'final') {
-        const prelims = field === 'prelims' ? value : prevGrades.prelims;
-        const midterms = field === 'midterms' ? value : prevGrades.midterms;
-        const final = field === 'final' ? value : prevGrades.final;
-        
-        if (prelims && midterms && final) {
-          const prelimsNum = parseFloat(prelims) || 0;
-          const midtermsNum = parseFloat(midterms) || 0;
-          const finalNum = parseFloat(final) || 0;
+      // Calculate semester final grade based on current term
+      if (currentTerm?.termName === 'Term 1') {
+        // Term 1: Calculate average of Q1 and Q2
+        if (field === 'quarter1' || field === 'quarter2') {
+          const quarter1 = field === 'quarter1' ? value : prevGrades.quarter1;
+          const quarter2 = field === 'quarter2' ? value : prevGrades.quarter2;
           
-          const finalGrade = (prelimsNum * 0.3) + (midtermsNum * 0.3) + (finalNum * 0.4);
-          const remarks = finalGrade >= 75 ? 'PASSED' : 'FAILED';
+          if (quarter1 && quarter2) {
+            const q1Num = parseFloat(quarter1) || 0;
+            const q2Num = parseFloat(quarter2) || 0;
+            
+            const semesterGrade = (q1Num + q2Num) / 2;
+            const remarks = semesterGrade >= 75 ? 'PASSED' : 'FAILED';
+            
+            updatedGrades.semesterFinal = semesterGrade.toFixed(2);
+            updatedGrades.remarks = remarks;
+          }
+        }
+      } else if (currentTerm?.termName === 'Term 2') {
+        // Term 2: Calculate average of Q3 and Q4
+        if (field === 'quarter3' || field === 'quarter4') {
+          const quarter3 = field === 'quarter3' ? value : prevGrades.quarter3;
+          const quarter4 = field === 'quarter4' ? value : prevGrades.quarter4;
           
-          updatedGrades.finalGrade = finalGrade.toFixed(2);
-          updatedGrades.remarks = remarks;
+          if (quarter3 && quarter4) {
+            const q3Num = parseFloat(quarter3) || 0;
+            const q4Num = parseFloat(quarter4) || 0;
+            
+            const semesterGrade = (q3Num + q4Num) / 2;
+            const remarks = semesterGrade >= 75 ? 'PASSED' : 'FAILED';
+            
+            updatedGrades.semesterFinal = semesterGrade.toFixed(2);
+            updatedGrades.remarks = remarks;
+          }
+        }
+      } else {
+        // Default: Calculate average of Q1 and Q2 (fallback)
+        if (field === 'quarter1' || field === 'quarter2') {
+          const quarter1 = field === 'quarter1' ? value : prevGrades.quarter1;
+          const quarter2 = field === 'quarter2' ? value : prevGrades.quarter2;
+          
+          if (quarter1 && quarter2) {
+            const q1Num = parseFloat(quarter1) || 0;
+            const q2Num = parseFloat(quarter2) || 0;
+            
+            const semesterGrade = (q1Num + q2Num) / 2;
+            const remarks = semesterGrade >= 75 ? 'PASSED' : 'FAILED';
+            
+            updatedGrades.semesterFinal = semesterGrade.toFixed(2);
+            updatedGrades.remarks = remarks;
+          }
         }
       }
       
@@ -368,7 +467,13 @@ export default function Faculty_Grades() {
         // Update local state
         const updatedStudents = students.map(student => {
           if (student._id === selectedStudent) {
-            return { ...student, grades: studentGrades };
+            return { 
+              ...student, 
+              grades: {
+                ...student.grades,
+                ...studentGrades
+              }
+            };
           }
           return student;
         });
@@ -409,8 +514,18 @@ export default function Faculty_Grades() {
         const subjectGrades = grades[subject._id];
         if (!subjectGrades) return null;
         
-        if (quarter === 'quarter1') return parseFloat(subjectGrades.quarter1) || null;
-        if (quarter === 'quarter2') return parseFloat(subjectGrades.quarter2) || null;
+        if (currentTerm?.termName === 'Term 1') {
+          if (quarter === 'quarter1') return parseFloat(subjectGrades.quarter1) || null;
+          if (quarter === 'quarter2') return parseFloat(subjectGrades.quarter2) || null;
+        } else if (currentTerm?.termName === 'Term 2') {
+          if (quarter === 'quarter3') return parseFloat(subjectGrades.quarter3) || null;
+          if (quarter === 'quarter4') return parseFloat(subjectGrades.quarter4) || null;
+        } else {
+          // Default fallback
+          if (quarter === 'quarter1') return parseFloat(subjectGrades.quarter1) || null;
+          if (quarter === 'quarter2') return parseFloat(subjectGrades.quarter2) || null;
+        }
+        
         if (quarter === 'semesterFinal') return parseFloat(subjectGrades.semesterFinal) || null;
         return null;
       })
@@ -429,20 +544,37 @@ export default function Faculty_Grades() {
     if (!selectedClass || subjects.length === 0) return;
     
     const selectedClassObj = classes[selectedClass];
-    let csvContent = 'Subject Code,Subject Description,Quarter 1,Quarter 2,Semester Final Grade\n';
+    let csvContent = '';
     
-    subjects.forEach(subject => {
-      const subjectGrades = grades[subject._id] || {};
-      csvContent += `${subject.subjectCode},${subject.subjectDescription},${subjectGrades.quarter1 || ''},${subjectGrades.quarter2 || ''},${subjectGrades.semesterFinal || ''}\n`;
-    });
-    
-    csvContent += `General Average,,${calculateGeneralAverage('quarter1')},${calculateGeneralAverage('quarter2')},${calculateGeneralAverage('semesterFinal')}\n`;
+    if (currentTerm?.termName === 'Term 1') {
+      csvContent = 'Subject Code,Subject Description,1st Quarter,2nd Quarter,Semester Final Grade\n';
+      subjects.forEach(subject => {
+        const subjectGrades = grades[subject._id] || {};
+        csvContent += `${subject.subjectCode},${subject.subjectDescription},${subjectGrades.quarter1 || ''},${subjectGrades.quarter2 || ''},${subjectGrades.semesterFinal || ''}\n`;
+      });
+      csvContent += `General Average,,${calculateGeneralAverage('quarter1')},${calculateGeneralAverage('quarter2')},${calculateGeneralAverage('semesterFinal')}\n`;
+    } else if (currentTerm?.termName === 'Term 2') {
+      csvContent = 'Subject Code,Subject Description,3rd Quarter,4th Quarter,Semester Final Grade\n';
+      subjects.forEach(subject => {
+        const subjectGrades = grades[subject._id] || {};
+        csvContent += `${subject.subjectCode},${subject.subjectDescription},${subjectGrades.quarter3 || ''},${subjectGrades.quarter4 || ''},${subjectGrades.semesterFinal || ''}\n`;
+      });
+      csvContent += `General Average,,${calculateGeneralAverage('quarter3')},${calculateGeneralAverage('quarter4')},${calculateGeneralAverage('semesterFinal')}\n`;
+    } else {
+      // Default fallback
+      csvContent = 'Subject Code,Subject Description,Quarter 1,Quarter 2,Semester Final Grade\n';
+      subjects.forEach(subject => {
+        const subjectGrades = grades[subject._id] || {};
+        csvContent += `${subject.subjectCode},${subject.subjectDescription},${subjectGrades.quarter1 || ''},${subjectGrades.quarter2 || ''},${subjectGrades.semesterFinal || ''}\n`;
+      });
+      csvContent += `General Average,,${calculateGeneralAverage('quarter1')},${calculateGeneralAverage('quarter2')},${calculateGeneralAverage('semesterFinal')}\n`;
+    }
     
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `${selectedClassObj.className}_FirstSemester_Grades.csv`);
+    link.setAttribute('download', `${selectedClassObj.className}_${currentTerm?.termName || 'Semester'}_Grades.csv`);
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -459,18 +591,44 @@ export default function Faculty_Grades() {
       const selectedClassObj = classes[selectedClass];
       const token = localStorage.getItem("token");
       
-      // Prepare grades data
+      // Prepare grades data based on current term
       const gradesData = {
         classID: selectedClassObj.classID,
         academicYear: `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
         termName: currentTerm?.termName,
         facultyID: currentFacultyID,
-        subjects: subjects.map(subject => ({
-          subjectID: subject._id,
-          subjectCode: subject.subjectCode,
-          subjectDescription: subject.subjectDescription,
-          grades: grades[subject._id] || {}
-        }))
+        subjects: subjects.map(subject => {
+          const subjectGrades = grades[subject._id] || {};
+          let gradesStructure = {};
+          
+          if (currentTerm?.termName === 'Term 1') {
+            gradesStructure = {
+              quarter1: subjectGrades.quarter1 || '',
+              quarter2: subjectGrades.quarter2 || '',
+              semesterFinal: subjectGrades.semesterFinal || ''
+            };
+          } else if (currentTerm?.termName === 'Term 2') {
+            gradesStructure = {
+              quarter3: subjectGrades.quarter3 || '',
+              quarter4: subjectGrades.quarter4 || '',
+              semesterFinal: subjectGrades.semesterFinal || ''
+            };
+          } else {
+            // Default fallback
+            gradesStructure = {
+              quarter1: subjectGrades.quarter1 || '',
+              quarter2: subjectGrades.quarter2 || '',
+              semesterFinal: subjectGrades.semesterFinal || ''
+            };
+          }
+          
+          return {
+            subjectID: subject._id,
+            subjectCode: subject.subjectCode,
+            subjectDescription: subject.subjectDescription,
+            grades: gradesStructure
+          };
+        })
       };
 
       // Save to backend
@@ -483,16 +641,16 @@ export default function Faculty_Grades() {
         body: JSON.stringify(gradesData)
       });
 
-             if (response.ok) {
-         alert('Grades saved successfully!');
-       } else {
-         const errorData = await response.json();
-         alert(`Failed to save grades: ${errorData.message || 'Unknown error'}`);
-       }
-         } catch (error) {
-       console.error('Error saving grades:', error);
-       alert('Failed to save grades. Please try again.');
-     }
+      if (response.ok) {
+        alert('Grades saved successfully!');
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to save grades: ${errorData.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error saving grades:', error);
+      alert('Failed to save grades. Please try again.');
+    }
   };
 
 
@@ -586,69 +744,118 @@ export default function Faculty_Grades() {
             {/* Individual Student Grade Management */}
             {selectedStudent && (
               <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Individual Student Grade Management</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                  Individual Student Grade Management - {currentTerm?.termName || 'Current Term'}
+                </h3>
                 
                 {/* Student Grade Inputs */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                  {currentTerm?.termName === 'Term 1' ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">1st Quarter</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          placeholder="Grade"
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={studentGrades.quarter1 || ''}
+                          onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">2nd Quarter</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          placeholder="Grade"
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={studentGrades.quarter2 || ''}
+                          onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
+                        />
+                      </div>
+                    </>
+                  ) : currentTerm?.termName === 'Term 2' ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">3rd Quarter</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          placeholder="Grade"
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={studentGrades.quarter3 || ''}
+                          onChange={(e) => handleStudentGradeChange('quarter3', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">4th Quarter</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          placeholder="Grade"
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={studentGrades.quarter4 || ''}
+                          onChange={(e) => handleStudentGradeChange('quarter4', e.target.value)}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Quarter 1</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          placeholder="Grade"
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={studentGrades.quarter1 || ''}
+                          onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Quarter 2</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          placeholder="Grade"
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={studentGrades.quarter2 || ''}
+                          onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Prelims</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      placeholder="Grade"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={studentGrades.prelims || ''}
-                      onChange={(e) => handleStudentGradeChange('prelims', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Midterms</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      placeholder="Grade"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={studentGrades.midterms || ''}
-                      onChange={(e) => handleStudentGradeChange('midterms', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Finals</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      placeholder="Grade"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={studentGrades.final || ''}
-                      onChange={(e) => handleStudentGradeChange('final', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Final Grade</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Semester Final Grade</label>
                     <input
                       type="text"
                       readOnly
                       className="w-full p-2 border border-gray-300 rounded-md bg-gray-100"
-                      value={studentGrades.finalGrade || ''}
+                      value={studentGrades.semesterFinal || ''}
                     />
                   </div>
-                </div>
-
-                {/* Remarks */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                  <input
-                    type="text"
-                    readOnly
-                    className="w-full p-2 border border-gray-300 rounded-md bg-gray-100"
-                    value={studentGrades.remarks || ''}
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                    <input
+                      type="text"
+                      readOnly
+                      className="w-full p-2 border border-gray-300 rounded-md bg-gray-100"
+                      value={studentGrades.remarks || ''}
+                    />
+                  </div>
                 </div>
 
                 {/* Student Grade Actions */}
@@ -707,7 +914,11 @@ export default function Faculty_Grades() {
             {/* First Semester Section */}
             <div className="mb-8">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-gray-800">First Semester</h2>
+                <h2 className="text-xl font-bold text-gray-800">
+                  {currentTerm?.termName === 'Term 1' ? 'First Semester (Q1 & Q2)' : 
+                   currentTerm?.termName === 'Term 2' ? 'Second Semester (Q3 & Q4)' : 
+                   'Semester Grades'}
+                </h2>
                 <div className="flex gap-2">
                     
 
@@ -748,48 +959,128 @@ export default function Faculty_Grades() {
                     </tr>
                     <tr>
                       <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
-                      <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">1</th>
-                      <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">2</th>
+                      {currentTerm?.termName === 'Term 1' ? (
+                        <>
+                          <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">1</th>
+                          <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">2</th>
+                        </>
+                      ) : currentTerm?.termName === 'Term 2' ? (
+                        <>
+                          <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">3</th>
+                          <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">4</th>
+                        </>
+                      ) : (
+                        <>
+                          <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">1</th>
+                          <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">2</th>
+                        </>
+                      )}
                       <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {selectedClass !== null && subjects.length > 0 ? (
                       subjects.map((subject) => {
-                                                 const subjectGrades = grades[subject._id] || {};
-                         const semesterGrade = calculateSemesterGrade(subjectGrades.quarter1, subjectGrades.quarter2);
-                         
-                         return (
-                           <tr key={subject._id} className="hover:bg-gray-50">
-                             <td className="border border-gray-300 p-2 h-12 font-medium">
-                               <div className="flex items-center gap-2">
-                                 {subject.subjectCode} - {subject.subjectDescription}
-                               </div>
-                             </td>
-                             <td className="border border-gray-300 p-2 text-center">
-                               <input
-                                 type="number"
-                                 min="0"
-                                 max="100"
-                                 step="0.01"
-                                 placeholder="Grade"
-                                 className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                 value={subjectGrades.quarter1 || ''}
-                                 onChange={(e) => handleGradeChange(subject._id, 'quarter1', e.target.value)}
-                               />
-                             </td>
-                             <td className="border border-gray-300 p-2 text-center">
-                               <input
-                                 type="number"
-                                 min="0"
-                                 max="100"
-                                 step="0.01"
-                                 placeholder="Grade"
-                                 className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                 value={subjectGrades.quarter2 || ''}
-                                 onChange={(e) => handleGradeChange(subject._id, 'quarter2', e.target.value)}
-                               />
-                             </td>
+                        const subjectGrades = grades[subject._id] || {};
+                        let semesterGrade = '';
+                        
+                        if (currentTerm?.termName === 'Term 1') {
+                          semesterGrade = calculateSemesterGrade(subjectGrades.quarter1, subjectGrades.quarter2);
+                        } else if (currentTerm?.termName === 'Term 2') {
+                          semesterGrade = calculateSemesterGrade(subjectGrades.quarter3, subjectGrades.quarter4);
+                        } else {
+                          semesterGrade = calculateSemesterGrade(subjectGrades.quarter1, subjectGrades.quarter2);
+                        }
+                        
+                        return (
+                          <tr key={subject._id} className="hover:bg-gray-50">
+                            <td className="border border-gray-300 p-2 h-12 font-medium">
+                              <div className="flex items-center gap-2">
+                                {subject.subjectCode} - {subject.subjectDescription}
+                              </div>
+                            </td>
+                            {currentTerm?.termName === 'Term 1' ? (
+                              <>
+                                <td className="border border-gray-300 p-2 text-center">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                    placeholder="Grade"
+                                    className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={subjectGrades.quarter1 || ''}
+                                    onChange={(e) => handleGradeChange(subject._id, 'quarter1', e.target.value)}
+                                  />
+                                </td>
+                                <td className="border border-gray-300 p-2 text-center">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                    placeholder="Grade"
+                                    className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={subjectGrades.quarter2 || ''}
+                                    onChange={(e) => handleGradeChange(subject._id, 'quarter2', e.target.value)}
+                                  />
+                                </td>
+                              </>
+                            ) : currentTerm?.termName === 'Term 2' ? (
+                              <>
+                                <td className="border border-gray-300 p-2 text-center">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                    placeholder="Grade"
+                                    className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={subjectGrades.quarter3 || ''}
+                                    onChange={(e) => handleGradeChange(subject._id, 'quarter3', e.target.value)}
+                                  />
+                                </td>
+                                <td className="border border-gray-300 p-2 text-center">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                    placeholder="Grade"
+                                    className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={subjectGrades.quarter4 || ''}
+                                    onChange={(e) => handleGradeChange(subject._id, 'quarter4', e.target.value)}
+                                  />
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="border border-gray-300 p-2 text-center">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                    placeholder="Grade"
+                                    className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={subjectGrades.quarter1 || ''}
+                                    onChange={(e) => handleGradeChange(subject._id, 'quarter1', e.target.value)}
+                                  />
+                                </td>
+                                <td className="border border-gray-300 p-2 text-center">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                    placeholder="Grade"
+                                    className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={subjectGrades.quarter2 || ''}
+                                    onChange={(e) => handleGradeChange(subject._id, 'quarter2', e.target.value)}
+                                  />
+                                </td>
+                              </>
+                            )}
                             <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
                               {semesterGrade}
                             </td>
@@ -802,7 +1093,7 @@ export default function Faculty_Grades() {
                         <tr key={index}>
                           <td className="border border-gray-300 p-2 h-12"></td>
                           <td className="border border-gray-300 p-2 text-center"></td>
-                          <td className="border border-gray-300 p-2 text-center"></td>
+                          <td className="border border-gray-300 p-3 text-center"></td>
                           <td className="border border-gray-300 p-2 text-center"></td>
                         </tr>
                       ))
@@ -811,12 +1102,34 @@ export default function Faculty_Grades() {
                     {/* General Average */}
                     <tr className="bg-gray-50">
                       <td className="border border-gray-300 p-2 font-bold text-gray-800">General Average</td>
-                      <td className="border border-gray-300 p-2 text-center font-bold">
-                        {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter1') : ''}
-                      </td>
-                      <td className="border border-gray-300 p-2 text-center font-bold">
-                        {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter2') : ''}
-                      </td>
+                      {currentTerm?.termName === 'Term 1' ? (
+                        <>
+                          <td className="border border-gray-300 p-2 text-center font-bold">
+                            {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter1') : ''}
+                          </td>
+                          <td className="border border-gray-300 p-2 text-center font-bold">
+                            {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter2') : ''}
+                          </td>
+                        </>
+                      ) : currentTerm?.termName === 'Term 2' ? (
+                        <>
+                          <td className="border border-gray-300 p-2 text-center font-bold">
+                            {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter3') : ''}
+                          </td>
+                          <td className="border border-gray-300 p-2 text-center font-bold">
+                            {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter4') : ''}
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="border border-gray-300 p-2 text-center font-bold">
+                            {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter1') : ''}
+                          </td>
+                          <td className="border border-gray-300 p-2 text-center font-bold">
+                            {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter2') : ''}
+                          </td>
+                        </>
+                      )}
                       <td className="border border-gray-300 p-2 text-center font-bold">
                         {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
                       </td>
