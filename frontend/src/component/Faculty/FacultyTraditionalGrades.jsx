@@ -7,9 +7,11 @@ import './FacultyTraditionalGrades.css';
 const FacultyTraditionalGrades = () => {
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
   const [students, setStudents] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -42,17 +44,31 @@ const FacultyTraditionalGrades = () => {
   const handleClassChange = async (e) => {
     const classId = e.target.value;
     setSelectedClass(classId);
+    setSelectedSection(''); // Reset section selection
     setSelectedSubject(''); // Reset subject selection
     
     if (classId) {
       try {
         setLoading(true);
         const token = localStorage.getItem('token');
-        const response = await axios.get(`/api/traditional-grades/faculty/students/${classId}`, {
+        
+        // Fetch sections for the selected class
+        const sectionsResponse = await axios.get(`/api/traditional-grades/faculty/class/${classId}/sections`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        if (response.data.success) {
+        if (sectionsResponse.data.success) {
+          setSections(sectionsResponse.data.sections);
+        } else {
+          setSections([]);
+        }
+        
+        // Fetch students for the selected class
+        const studentsResponse = await axios.get(`/api/traditional-grades/faculty/students/${classId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (studentsResponse.data.success) {
           setStudents(response.data.students);
           
           // Extract unique subjects from students
@@ -75,8 +91,61 @@ const FacultyTraditionalGrades = () => {
           setSubjects([]);
         }
       } catch (error) {
-        console.error('Error fetching students:', error);
-        toast.error('Failed to fetch students');
+        console.error('Error fetching class data:', error);
+        toast.error('Failed to fetch class data');
+        setStudents([]);
+        setSubjects([]);
+        setSections([]);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setStudents([]);
+      setSubjects([]);
+      setSections([]);
+    }
+  };
+
+  const handleSectionChange = async (e) => {
+    const sectionId = e.target.value;
+    setSelectedSection(sectionId);
+    setSelectedSubject(''); // Reset subject selection
+    
+    if (sectionId && selectedClass) {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        
+        // Fetch students for the specific section
+        const response = await axios.get(`/api/traditional-grades/faculty/class/${selectedClass}/section/${sectionId}/students`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (response.data.success) {
+          setStudents(response.data.students);
+          
+          // Extract unique subjects from students in this section
+          const uniqueSubjects = [];
+          const subjectMap = new Map();
+          
+          response.data.students.forEach(student => {
+            student.subjects.forEach(subject => {
+              if (!subjectMap.has(subject._id)) {
+                subjectMap.set(subject._id, subject);
+                uniqueSubjects.push(subject);
+              }
+            });
+          });
+          
+          setSubjects(uniqueSubjects);
+        } else {
+          toast.error('Failed to fetch section students');
+          setStudents([]);
+          setSubjects([]);
+        }
+      } catch (error) {
+        console.error('Error fetching section students:', error);
+        toast.error('Failed to fetch section students');
         setStudents([]);
         setSubjects([]);
       } finally {
@@ -98,10 +167,15 @@ const FacultyTraditionalGrades = () => {
       return;
     }
 
+    if (!selectedSection) {
+      toast.warning('Please select a section first');
+      return;
+    }
+
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await axios.get(`/api/traditional-grades/faculty/template/${selectedClass}`, {
+      const response = await axios.get(`/api/traditional-grades/faculty/template/${selectedClass}/${selectedSection}`, {
         headers: { Authorization: `Bearer ${token}` },
         responseType: 'blob'
       });
@@ -109,7 +183,7 @@ const FacultyTraditionalGrades = () => {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'traditional-grades-template.csv');
+      link.setAttribute('download', `traditional-grades-template-${selectedSection}.csv`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -134,8 +208,8 @@ const FacultyTraditionalGrades = () => {
       return;
     }
 
-    if (!selectedClass) {
-      toast.warning('Please select a class first');
+    if (!selectedClass || !selectedSection) {
+      toast.warning('Please select both class and section first');
       return;
     }
 
@@ -145,6 +219,7 @@ const FacultyTraditionalGrades = () => {
       const formData = new FormData();
       formData.append('file', selectedFile);
       formData.append('classId', selectedClass);
+      formData.append('sectionId', selectedSection);
 
       const response = await axios.post('/api/traditional-grades/faculty/upload', formData, {
         headers: { 
@@ -159,7 +234,7 @@ const FacultyTraditionalGrades = () => {
         document.getElementById('file-input').value = '';
         
         // Refresh students list to show updated grades
-        handleClassChange({ target: { value: selectedClass } });
+        handleSectionChange({ target: { value: selectedSection } });
       } else {
         toast.error(response.data.message || 'Failed to upload grades');
       }
@@ -179,7 +254,8 @@ const FacultyTraditionalGrades = () => {
         subjectId,
         field,
         value,
-        classId: selectedClass
+        classId: selectedClass,
+        sectionId: selectedSection
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -219,6 +295,9 @@ const FacultyTraditionalGrades = () => {
   // Get the selected subject object
   const currentSubject = subjects.find(subject => subject._id === selectedSubject);
 
+  // Get the selected section object
+  const currentSection = sections.find(section => section._id === selectedSection);
+
   return (
     <div className="faculty-traditional-grades">
       <div className="grades-header">
@@ -228,7 +307,7 @@ const FacultyTraditionalGrades = () => {
 
       <div className="class-selection">
         <div className="form-group">
-          <label htmlFor="class-select">Select Class & Section:</label>
+          <label htmlFor="class-select">Select Class:</label>
           <select
             id="class-select"
             value={selectedClass}
@@ -238,13 +317,32 @@ const FacultyTraditionalGrades = () => {
             <option value="">Choose a class...</option>
             {classes.map((cls) => (
               <option key={cls.classId} value={cls.classId}>
-                {cls.className} - {cls.sectionName} ({cls.trackName} | {cls.strandName} | {cls.gradeLevel})
+                {cls.className} ({cls.trackName} | {cls.strandName} | {cls.gradeLevel})
               </option>
             ))}
           </select>
         </div>
 
-        {selectedClass && subjects.length > 0 && (
+        {selectedClass && sections.length > 0 && (
+          <div className="form-group section-selection">
+            <label htmlFor="section-select">Select Section:</label>
+            <select
+              id="section-select"
+              value={selectedSection}
+              onChange={handleSectionChange}
+              disabled={loading}
+            >
+              <option value="">Choose a section...</option>
+              {sections.map((section) => (
+                <option key={section._id} value={section._id}>
+                  {section.sectionName} - {section.strandName}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {selectedClass && selectedSection && subjects.length > 0 && (
           <div className="form-group subject-selection">
             <label htmlFor="subject-select">Select Subject:</label>
             <select
@@ -264,7 +362,7 @@ const FacultyTraditionalGrades = () => {
         )}
       </div>
 
-      {selectedClass && (
+      {selectedClass && selectedSection && (
         <div className="template-actions">
           <button 
             onClick={downloadTemplate}
@@ -293,14 +391,14 @@ const FacultyTraditionalGrades = () => {
         </div>
       )}
 
-      {selectedClass && selectedSubject && currentSubject && (
+      {selectedClass && selectedSection && selectedSubject && currentSubject && currentSection && (
         <div className="subject-info">
           <h3>Subject: {currentSubject.subjectCode} - {currentSubject.subjectDescription}</h3>
-          <p>Managing grades for {filteredStudents.length} students</p>
+          <p>Section: {currentSection.sectionName} | Managing grades for {filteredStudents.length} students</p>
         </div>
       )}
 
-      {selectedClass && selectedSubject && filteredStudents.length > 0 && (
+      {selectedClass && selectedSection && selectedSubject && filteredStudents.length > 0 && (
         <div className="grades-table-container">
           <h3>Student Grades - {currentSubject?.subjectCode}</h3>
           <div className="table-responsive">
@@ -379,15 +477,21 @@ const FacultyTraditionalGrades = () => {
         </div>
       )}
 
-      {selectedClass && selectedSubject && filteredStudents.length === 0 && (
+      {selectedClass && selectedSection && selectedSubject && filteredStudents.length === 0 && (
         <div className="no-data">
-          <p>No students found for the selected subject.</p>
+          <p>No students found for the selected subject in this section.</p>
         </div>
       )}
 
-      {selectedClass && !selectedSubject && (
+      {selectedClass && selectedSection && !selectedSubject && (
         <div className="no-data">
           <p>Please select a subject to view and manage grades.</p>
+        </div>
+      )}
+
+      {selectedClass && !selectedSection && (
+        <div className="no-data">
+          <p>Please select a section to continue.</p>
         </div>
       )}
 
