@@ -90,7 +90,7 @@ export default function GradingSystem() {
             sectionsData = await response.json();
             console.log('Fetched sections from term endpoint:', sectionsData);
           }
-        } catch (error) {
+        } catch {
           console.log('Term-specific endpoint failed, trying fallback');
         }
         
@@ -129,9 +129,9 @@ export default function GradingSystem() {
               });
               console.log('Filtered sections for current term:', sectionsData);
             }
-          } catch (error) {
-            console.log('General sections endpoint also failed');
-          }
+                  } catch {
+          console.log('General sections endpoint also failed');
+        }
         }
         
         // Approach 3: If still no sections, try to get sections by track/strand
@@ -346,110 +346,7 @@ export default function GradingSystem() {
 
   
 
-  // Generate Excel template with student names and activity columns
-  const generateExcelTemplate = (students, assignments, quizzes, className, sectionName) => {
-    console.log('Generating template with:', {
-      studentsCount: students?.length || 0,
-      assignmentsCount: assignments?.length || 0,
-      quizzesCount: quizzes?.length || 0,
-      className,
-      sectionName
-    });
 
-    if (!students || students.length === 0) {
-      console.error('No students provided to generateExcelTemplate');
-      throw new Error('No students data available to generate template');
-    }
-
-    // Define column headers
-    const headers = [
-      'Student ID',
-      'Student Name',
-      'Email',
-      'Total Score',
-      'Total Possible',
-      'Percentage'
-    ];
-
-    // Add assignment columns
-    assignments.forEach((assignment) => {
-      headers.push(`${assignment.title} (${assignment.points || 0} pts)`);
-    });
-
-    // Add quiz columns
-    quizzes.forEach((quiz) => {
-      headers.push(`${quiz.title} (${quiz.points || 0} pts)`);
-    });
-
-    // Add feedback columns
-    assignments.forEach((assignment) => {
-      headers.push(`${assignment.title} Feedback`);
-    });
-
-    quizzes.forEach((quiz) => {
-      headers.push(`${quiz.title} Feedback`);
-    });
-
-    console.log('Template headers:', headers);
-
-    // Create data array for the worksheet
-    const worksheetData = [headers]; // First row is headers
-
-    // Add student data rows
-    students.forEach((student, rowIndex) => {
-      const row = [];
-      
-      console.log(`Processing student ${rowIndex + 1}:`, student);
-      
-      // Student basic info
-      row.push(student.id || '');
-      row.push(student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim());
-      row.push(student.email || '');
-      
-      // Score columns (leave blank for faculty to fill)
-      row.push(''); // Total Score
-      row.push(''); // Total Possible
-      row.push(''); // Percentage
-      
-      // Assignment score columns (blank)
-      assignments.forEach(() => {
-        row.push('');
-      });
-      
-      // Quiz score columns (blank)
-      quizzes.forEach(() => {
-        row.push('');
-      });
-      
-      // Assignment feedback columns (blank)
-      assignments.forEach(() => {
-        row.push('');
-      });
-      
-      // Quiz feedback columns (blank)
-      quizzes.forEach(() => {
-        row.push('');
-      });
-      
-      worksheetData.push(row);
-    });
-
-    console.log('Worksheet data created with rows:', worksheetData.length);
-
-    // Create worksheet from array data
-    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-
-    // Set column widths
-    worksheet['!cols'] = headers.map(header => ({ width: Math.max(header.length + 2, 15) }));
-
-    // Set row heights
-    worksheet['!rows'] = [{ hpt: 25 }]; // Header row height
-    for (let i = 1; i <= students.length; i++) {
-      worksheet['!rows'][i] = { hpt: 20 };
-    }
-
-    return worksheet;
-  };
 
   // Generate Excel template with grades and feedback
   const generateExcelTemplateWithGrades = (students, activities) => {
@@ -464,7 +361,17 @@ export default function GradingSystem() {
       console.log('No activities provided, creating basic template');
     }
 
-    // Define headers
+    // Create workbook and worksheet structure that matches your client's requirements
+    const workbook = {
+      SheetNames: ['Grading Template'],
+      Sheets: {
+        'Grading Template': {}
+      }
+    };
+
+    const worksheet = workbook.Sheets['Grading Template'];
+    
+    // Define headers for the grading template
     const headers = [
       'Student ID',
       'Student Name',
@@ -485,20 +392,33 @@ export default function GradingSystem() {
 
     console.log('Template with grades headers:', headers);
 
-    // Create data array for the worksheet
-    const worksheetData = [headers]; // First row is headers
+    // Write headers to worksheet
+    headers.forEach((header, colIndex) => {
+      const cellAddress = getCellAddress(0, colIndex);
+      worksheet[cellAddress] = {
+        v: header,
+        t: 's',
+        s: {
+          font: { bold: true },
+          fill: { fgColor: { rgb: "CCCCCC" } },
+          alignment: { horizontal: "center" }
+        }
+      };
+    });
 
-    // Add student data rows with grades
+    // Write student data rows with grades
     students.forEach((student, rowIndex) => {
-      const row = [];
+      const row = rowIndex + 1; // Start from row 1 (after headers)
       
       console.log(`Processing student ${rowIndex + 1}:`, student);
       
       // Student basic info
-      row.push(student.id || '');
-      row.push(student.studentName || student.name || '');
-      row.push(student.schoolID || '');
-      row.push(student.section || '');
+      worksheet[getCellAddress(row, 0)] = { v: student.id || '', t: 's' };
+      worksheet[getCellAddress(row, 1)] = { v: student.studentName || student.name || '', t: 's' };
+      worksheet[getCellAddress(row, 2)] = { v: student.schoolID || '', t: 's' };
+      worksheet[getCellAddress(row, 3)] = { v: student.section || '', t: 's' };
+      
+      let colIndex = 4; // Starting column for activities
       
       // Add activity scores and feedback
       activities.forEach((activity) => {
@@ -506,24 +426,23 @@ export default function GradingSystem() {
           const submission = activity.submissions?.find(sub => 
             sub.studentId === student.id || sub.userID === student.id || sub.schoolID === student.id
           );
-          row.push(submission?.grade || submission?.score || '');
-          row.push(submission?.feedback || '');
+          worksheet[getCellAddress(row, colIndex)] = { v: submission?.grade || submission?.score || '', t: submission?.grade || submission?.score ? 'n' : 's' };
+          colIndex++;
+          worksheet[getCellAddress(row, colIndex)] = { v: submission?.feedback || '', t: 's' };
+          colIndex++;
         } else if (activity.type === 'Quiz') {
           const response = activity.responses?.find(resp => 
             resp.studentId === student.id || resp.userID === student.id || resp.schoolID === student.id
           );
-          row.push(response?.score || '');
-          row.push(response?.feedback || '');
+          worksheet[getCellAddress(row, colIndex)] = { v: response?.score || '', t: response?.score ? 'n' : 's' };
+          colIndex++;
+          worksheet[getCellAddress(row, colIndex)] = { v: response?.feedback || '', t: 's' };
+          colIndex++;
         }
       });
-      
-      worksheetData.push(row);
     });
 
-    console.log('Worksheet with grades created with rows:', worksheetData.length);
-
-    // Create worksheet from array data
-    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    console.log('Worksheet with grades created with rows:', Object.keys(worksheet).filter(key => key !== '!cols' && key !== '!rows').length);
 
     // Set column widths
     worksheet['!cols'] = headers.map(header => ({ width: Math.max(header.length + 2, 15) }));
@@ -534,21 +453,144 @@ export default function GradingSystem() {
       worksheet['!rows'][i] = { hpt: 20 };
     }
 
-    return worksheet;
+    return workbook;
   };
 
-
+  // Helper function to get Excel cell address (e.g., A1, B2, etc.)
+  const getCellAddress = (row, col) => {
+    let address = '';
+    while (col >= 0) {
+      address = String.fromCharCode(65 + (col % 26)) + address;
+      col = Math.floor(col / 26) - 1;
+    }
+    return address + (row + 1);
+  };
 
   // Download Excel file
-  const downloadExcelFile = (worksheet, filename = "Student_GradeSheet.xlsx") => {
-    // Create a new workbook
-    const workbook = XLSX.utils.book_new();
-    
-    // Add the worksheet to the workbook
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Grading Template");
-    
-    // Write and download the file
-    XLSX.writeFile(workbook, filename.endsWith(".xlsx") ? filename : "Student_GradeSheet.xlsx");
+  const downloadExcelFile = (workbook, filename = "Student_GradeSheet.xlsx") => {
+    // 1) Create a fresh workbook for the formatted export
+    const wb = XLSX.utils.book_new();
+  
+    // 2) Try to extract students from the provided workbook (optional)
+    //    It looks for columns named "Student ID" and "Student Name" in "Grading Template".
+    const students = [];
+    if (workbook?.Sheets?.["Grading Template"]) {
+      const src = workbook.Sheets["Grading Template"];
+      const rows = XLSX.utils.sheet_to_json(src, { header: 1, defval: "" });
+      const header = rows[0] || [];
+      const idCol = header.findIndex(h => String(h).toLowerCase().includes("student id"));
+      const nameCol = header.findIndex(h => String(h).toLowerCase().includes("student name"));
+  
+      for (let r = 1; r < rows.length; r++) {
+        const id = idCol >= 0 ? rows[r][idCol] : r;
+        const name = nameCol >= 0 ? rows[r][nameCol] : "";
+        if (name) students.push({ id, name });
+      }
+    }
+  
+    // 3) Build the layout (23 columns: A..W)
+    //    Rows are 0-indexed here; Excel will show them 1-indexed.
+    const wsData = [
+      ["SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC."],                        // A1:W1 (merged)
+      ["2772-2774 Roxas Boulevard, Pasay City 1300 Philippines"],               // A2:W2 (merged)
+      [""],
+      ["Inquiries, Investigations and Immersions"],                             // A4:W4 (merged)
+      ["Track:", "STEM", "", "Semester:", "2nd", "", "School Year:", "2024-2025"],
+      ["Subject Code:", "Applied subject 7", "", "Grade Sheet:", "APPLIED"],
+      [""],
+  
+      // Row 8 (index 7): top band for quarters + fixed columns
+      [
+        "Student No.",
+        "STUDENT'S NAME (Alphabetical Order with Middle Initials)",
+        "THIRD QUARTER", "", "", "", "", "", "", "", "", "",     // C..L (merged band)
+        "FOURTH QUARTER", "", "", "", "", "", "", "", "",        // M..V (merged band)
+        "FINAL GRADE"                                            // W (merged down)
+      ],
+  
+      // Row 9 (index 8): group headers inside each quarter
+      [
+        "", "",
+        "WRITTEN WORKS 40%", "", "", "",                         // C..F (merge)
+        "PERFORMANCE TASKS 60%", "", "", "",                     // G..J (merge)
+        "INITIAL GRADE",                                         // K
+        "QUARTERLY GRADE",                                       // L
+        "WRITTEN WORKS 40%", "", "", "",                         // M..P (merge)
+        "PERFORMANCE TASKS 60%", "", "", "",                     // Q..T (merge)
+        "INITIAL GRADE",                                         // U
+        "QUARTERLY GRADE",                                       // V
+        ""                                                       // W (merged from row above)
+      ],
+  
+      // Row 10 (index 9): sub-headers
+      [
+        "", "",
+        "RAW", "HPS", "PS", "WS",                                // C..F
+        "RAW", "HPS", "PS", "WS",                                // G..J
+        "", "",                                                  // K, L (single columns, no sublabel)
+        "RAW", "HPS", "PS", "WS",                                // M..P
+        "RAW", "HPS", "PS", "WS",                                // Q..T
+        "", "" ,                                                 // U, V
+        ""                                                       // W
+      ],
+    ];
+  
+    // 4) Append student rows (start at row 11 visually)
+    const EMPTY_21 = Array(21).fill(""); // columns C..W
+    if (students.length === 0) {
+      // Put 15 empty rows if no students were parsed
+      for (let i = 0; i < 15; i++) {
+        wsData.push([i + 1, "", ...EMPTY_21]);
+      }
+    } else {
+      students.forEach((s, i) => {
+        wsData.push([i + 1, s.name, ...EMPTY_21]);
+      });
+    }
+  
+    // 5) Create worksheet
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+  
+    // 6) Set merges to match the grouped headers
+    ws["!merges"] = [
+      // Title merges
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 22 } }, // A1:W1
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 22 } }, // A2:W2
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 22 } }, // A4:W4
+  
+      // Freeze A/B labels across two header rows
+      { s: { r: 7, c: 0 }, e: { r: 8, c: 0 } }, // A8:A9  (Student No.)
+      { s: { r: 7, c: 1 }, e: { r: 8, c: 1 } }, // B8:B9  (Name)
+  
+      // Quarter bands
+      { s: { r: 7, c: 2 }, e: { r: 7, c: 11 } }, // C8:L8  THIRD QUARTER
+      { s: { r: 7, c: 12 }, e: { r: 7, c: 21 } }, // M8:V8  FOURTH QUARTER
+      { s: { r: 7, c: 22 }, e: { r: 8, c: 22 } }, // W8:W9  FINAL GRADE
+  
+      // Group headers inside each quarter (row 9)
+      { s: { r: 8, c: 2 }, e: { r: 8, c: 5 } },  // C9:F9  WW 40%
+      { s: { r: 8, c: 6 }, e: { r: 8, c: 9 } },  // G9:J9  PT 60%
+      // K9, L9 single columns
+      { s: { r: 8, c: 12 }, e: { r: 8, c: 15 } },// M9:P9  WW 40% (Q4)
+      { s: { r: 8, c: 16 }, e: { r: 8, c: 19 } },// Q9:T9  PT 60% (Q4)
+      // U9, V9 single columns
+    ];
+  
+    // 7) Column widths (tweak as needed)
+    ws["!cols"] = [
+      { wch: 12 },   // A - Student No.
+      { wch: 42 },   // B - Name
+      ...Array(20).fill({ wch: 10 }), // C..V
+      { wch: 12 },   // W - Final Grade
+    ];
+  
+    // (Optional) Freeze panes under the headers
+    // Many Excel viewers honor this; harmless if ignored.
+    ws["!freeze"] = { xSplit: 2, ySplit: 10 };
+  
+    // 8) Append & download
+    XLSX.utils.book_append_sheet(wb, ws, "Grade Sheet");
+    XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : "Student_GradeSheet.xlsx");
   };
 
   // Add effect to log state changes for debugging
