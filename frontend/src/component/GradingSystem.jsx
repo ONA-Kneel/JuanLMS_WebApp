@@ -14,6 +14,8 @@ export default function GradingSystem() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [templateLoading, setTemplateLoading] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState('');
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [sections, setSections] = useState([]);
@@ -90,7 +92,7 @@ export default function GradingSystem() {
             sectionsData = await response.json();
             console.log('Fetched sections from term endpoint:', sectionsData);
           }
-        } catch {
+        } catch (error) {
           console.log('Term-specific endpoint failed, trying fallback');
         }
         
@@ -129,9 +131,9 @@ export default function GradingSystem() {
               });
               console.log('Filtered sections for current term:', sectionsData);
             }
-                  } catch {
-          console.log('General sections endpoint also failed');
-        }
+          } catch (error) {
+            console.log('General sections endpoint also failed');
+          }
         }
         
         // Approach 3: If still no sections, try to get sections by track/strand
@@ -346,22 +348,22 @@ export default function GradingSystem() {
 
   
 
+  // Generate Excel template with student names and activity columns
+  const generateExcelTemplate = (students, assignments, quizzes, className, sectionName) => {
+    console.log('Generating template with:', {
+      studentsCount: students?.length || 0,
+      assignmentsCount: assignments?.length || 0,
+      quizzesCount: quizzes?.length || 0,
+      className,
+      sectionName
+    });
 
-
-  // Generate Excel template with grades and feedback
-  const generateExcelTemplateWithGrades = (students, activities) => {
-    console.log('generateExcelTemplateWithGrades called with:', { students, activities });
-    
     if (!students || students.length === 0) {
-      console.error('No students provided to generateExcelTemplateWithGrades');
-      return null;
+      console.error('No students provided to generateExcelTemplate');
+      throw new Error('No students data available to generate template');
     }
 
-    if (!activities || activities.length === 0) {
-      console.log('No activities provided, creating basic template');
-    }
-
-    // Create workbook and worksheet structure that matches your client's requirements
+    // Create workbook and worksheet
     const workbook = {
       SheetNames: ['Grading Template'],
       Sheets: {
@@ -371,26 +373,36 @@ export default function GradingSystem() {
 
     const worksheet = workbook.Sheets['Grading Template'];
     
-    // Define headers for the grading template
+    // Define column headers
     const headers = [
       'Student ID',
       'Student Name',
-      'School ID',
-      'Section'
+      'Email',
+      'Total Score',
+      'Total Possible',
+      'Percentage'
     ];
 
-    // Add activity columns with scores and feedback
-    activities.forEach((activity) => {
-      if (activity.type === 'Assignment') {
-        headers.push(`${activity.title} Score`);
-        headers.push(`${activity.title} Feedback`);
-      } else if (activity.type === 'Quiz') {
-        headers.push(`${activity.title} Score`);
-        headers.push(`${activity.title} Feedback`);
-      }
+    // Add assignment columns
+    assignments.forEach((assignment, index) => {
+      headers.push(`${assignment.title} (${assignment.points || 0} pts)`);
     });
 
-    console.log('Template with grades headers:', headers);
+    // Add quiz columns
+    quizzes.forEach((quiz, index) => {
+      headers.push(`${quiz.title} (${quiz.points || 0} pts)`);
+    });
+
+    // Add feedback columns
+    assignments.forEach((assignment, index) => {
+      headers.push(`${assignment.title} Feedback`);
+    });
+
+    quizzes.forEach((quiz, index) => {
+      headers.push(`${quiz.title} Feedback`);
+    });
+
+    console.log('Template headers:', headers);
 
     // Write headers to worksheet
     headers.forEach((header, colIndex) => {
@@ -406,7 +418,7 @@ export default function GradingSystem() {
       };
     });
 
-    // Write student data rows with grades
+    // Write student data rows
     students.forEach((student, rowIndex) => {
       const row = rowIndex + 1; // Start from row 1 (after headers)
       
@@ -414,35 +426,40 @@ export default function GradingSystem() {
       
       // Student basic info
       worksheet[getCellAddress(row, 0)] = { v: student.id || '', t: 's' };
-      worksheet[getCellAddress(row, 1)] = { v: student.studentName || student.name || '', t: 's' };
-      worksheet[getCellAddress(row, 2)] = { v: student.schoolID || '', t: 's' };
-      worksheet[getCellAddress(row, 3)] = { v: student.section || '', t: 's' };
+      worksheet[getCellAddress(row, 1)] = { v: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(), t: 's' };
+      worksheet[getCellAddress(row, 2)] = { v: student.email || '', t: 's' };
       
-      let colIndex = 4; // Starting column for activities
+      // Score columns (leave blank for faculty to fill)
+      worksheet[getCellAddress(row, 3)] = { v: '', t: 's' }; // Total Score
+      worksheet[getCellAddress(row, 4)] = { v: '', t: 's' }; // Total Possible
+      worksheet[getCellAddress(row, 5)] = { v: '', t: 's' }; // Percentage
       
-      // Add activity scores and feedback
-      activities.forEach((activity) => {
-        if (activity.type === 'Assignment') {
-          const submission = activity.submissions?.find(sub => 
-            sub.studentId === student.id || sub.userID === student.id || sub.schoolID === student.id
-          );
-          worksheet[getCellAddress(row, colIndex)] = { v: submission?.grade || submission?.score || '', t: submission?.grade || submission?.score ? 'n' : 's' };
-          colIndex++;
-          worksheet[getCellAddress(row, colIndex)] = { v: submission?.feedback || '', t: 's' };
-          colIndex++;
-        } else if (activity.type === 'Quiz') {
-          const response = activity.responses?.find(resp => 
-            resp.studentId === student.id || resp.userID === student.id || resp.schoolID === student.id
-          );
-          worksheet[getCellAddress(row, colIndex)] = { v: response?.score || '', t: response?.score ? 'n' : 's' };
-          colIndex++;
-          worksheet[getCellAddress(row, colIndex)] = { v: response?.feedback || '', t: 's' };
-          colIndex++;
-        }
+      // Assignment score columns (blank)
+      assignments.forEach((assignment, colIndex) => {
+        const col = 6 + colIndex;
+        worksheet[getCellAddress(row, col)] = { v: '', t: 's' };
+      });
+      
+      // Quiz score columns (blank)
+      quizzes.forEach((quiz, colIndex) => {
+        const col = 6 + assignments.length + colIndex;
+        worksheet[getCellAddress(row, col)] = { v: '', t: 's' };
+      });
+      
+      // Assignment feedback columns (blank)
+      assignments.forEach((assignment, colIndex) => {
+        const col = 6 + assignments.length + quizzes.length + colIndex;
+        worksheet[getCellAddress(row, col)] = { v: '', t: 's' };
+      });
+      
+      // Quiz feedback columns (blank)
+      quizzes.forEach((quiz, colIndex) => {
+        const col = 6 + assignments.length + quizzes.length + assignments.length + colIndex;
+        worksheet[getCellAddress(row, col)] = { v: '', t: 's' };
       });
     });
 
-    console.log('Worksheet with grades created with rows:', Object.keys(worksheet).filter(key => key !== '!cols' && key !== '!rows').length);
+    console.log('Worksheet created with rows:', Object.keys(worksheet).filter(key => key !== '!cols' && key !== '!rows').length);
 
     // Set column widths
     worksheet['!cols'] = headers.map(header => ({ width: Math.max(header.length + 2, 15) }));
@@ -456,40 +473,23 @@ export default function GradingSystem() {
     return workbook;
   };
 
-  // Helper function to get Excel cell address (e.g., A1, B2, etc.)
-  const getCellAddress = (row, col) => {
-    let address = '';
-    while (col >= 0) {
-      address = String.fromCharCode(65 + (col % 26)) + address;
-      col = Math.floor(col / 26) - 1;
+  // Generate Excel template with grades and feedback
+  const generateExcelTemplateWithGrades = (students, activities) => {
+    console.log('generateExcelTemplateWithGrades called with:', { students, activities });
+    
+    if (!students || students.length === 0) {
+      console.error('No students provided to generateExcelTemplateWithGrades');
+      return null;
     }
-    return address + (row + 1);
-  };
 
-  // Download Excel file
-  const downloadExcelFile = (workbook, filename = "Student_GradeSheet.xlsx") => {
-    // 1) Create a fresh workbook for the formatted export
-    const wb = XLSX.utils.book_new();
-  
-    // 2) Try to extract students from the provided workbook (optional)
-    //    It looks for columns named "Student ID" and "Student Name" in "Grading Template".
-    const students = [];
-    if (workbook?.Sheets?.["Grading Template"]) {
-      const src = workbook.Sheets["Grading Template"];
-      const rows = XLSX.utils.sheet_to_json(src, { header: 1, defval: "" });
-      const header = rows[0] || [];
-      const idCol = header.findIndex(h => String(h).toLowerCase().includes("student id"));
-      const nameCol = header.findIndex(h => String(h).toLowerCase().includes("student name"));
-  
-      for (let r = 1; r < rows.length; r++) {
-        const id = idCol >= 0 ? rows[r][idCol] : r;
-        const name = nameCol >= 0 ? rows[r][nameCol] : "";
-        if (name) students.push({ id, name });
-      }
+    if (!activities || activities.length === 0) {
+      console.log('No activities provided, creating basic template');
     }
-  
-    // 3) Build the layout (23 columns: A..W)
-    //    Rows are 0-indexed here; Excel will show them 1-indexed.
+
+    // Create workbook using XLSX
+    const wb = XLSX.utils.book_new();
+
+    // Build the EXACT layout as required by the client - "Inquiries, Investigations and Immersions" grade sheet
     const wsData = [
       ["SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC."],                        // A1:W1 (merged)
       ["2772-2774 Roxas Boulevard, Pasay City 1300 Philippines"],               // A2:W2 (merged)
@@ -498,7 +498,7 @@ export default function GradingSystem() {
       ["Track:", "STEM", "", "Semester:", "2nd", "", "School Year:", "2024-2025"],
       ["Subject Code:", "Applied subject 7", "", "Grade Sheet:", "APPLIED"],
       [""],
-  
+
       // Row 8 (index 7): top band for quarters + fixed columns
       [
         "Student No.",
@@ -507,7 +507,7 @@ export default function GradingSystem() {
         "FOURTH QUARTER", "", "", "", "", "", "", "", "",        // M..V (merged band)
         "FINAL GRADE"                                            // W (merged down)
       ],
-  
+
       // Row 9 (index 8): group headers inside each quarter
       [
         "", "",
@@ -521,7 +521,7 @@ export default function GradingSystem() {
         "QUARTERLY GRADE",                                       // V
         ""                                                       // W (merged from row above)
       ],
-  
+
       // Row 10 (index 9): sub-headers
       [
         "", "",
@@ -534,39 +534,57 @@ export default function GradingSystem() {
         ""                                                       // W
       ],
     ];
-  
-    // 4) Append student rows (start at row 11 visually)
-    const EMPTY_21 = Array(21).fill(""); // columns C..W
-    if (students.length === 0) {
-      // Put 15 empty rows if no students were parsed
-      for (let i = 0; i < 15; i++) {
-        wsData.push([i + 1, "", ...EMPTY_21]);
-      }
-    } else {
-      students.forEach((s, i) => {
-        wsData.push([i + 1, s.name, ...EMPTY_21]);
-      });
+
+    // Add student rows with their data
+    students.forEach((student, rowIndex) => {
+      console.log(`Processing student ${rowIndex + 1}:`, student);
+      
+      // Create row with student info and empty grade columns
+      const studentRow = [
+        rowIndex + 1, // Student No.
+        student.studentName || student.name || '', // Student Name
+        // Empty columns for THIRD QUARTER (C..L)
+        "", "", "", "", "", "", "", "", "", "", "", // 12 empty columns
+        // Empty columns for FOURTH QUARTER (M..V) 
+        "", "", "", "", "", "", "", "", "", "", "", // 12 empty columns
+        "" // FINAL GRADE (W)
+      ];
+      
+      wsData.push(studentRow);
+    });
+
+    // Add additional empty rows if needed to match the 15 rows shown in your image
+    const remainingRows = Math.max(0, 15 - students.length);
+    for (let i = 0; i < remainingRows; i++) {
+      const emptyRow = [
+        students.length + i + 1, // Student No.
+        "", // Empty name
+        ...Array(21).fill("") // Empty columns C..W
+      ];
+      wsData.push(emptyRow);
     }
-  
-    // 5) Create worksheet
+
+    console.log('Worksheet data created with rows:', wsData.length);
+
+    // Create worksheet using XLSX
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-  
-    // 6) Set merges to match the grouped headers
+
+    // Set merges to match the grouped headers EXACTLY as in your image
     ws["!merges"] = [
       // Title merges
       { s: { r: 0, c: 0 }, e: { r: 0, c: 22 } }, // A1:W1
       { s: { r: 1, c: 0 }, e: { r: 1, c: 22 } }, // A2:W2
       { s: { r: 3, c: 0 }, e: { r: 3, c: 22 } }, // A4:W4
-  
+
       // Freeze A/B labels across two header rows
       { s: { r: 7, c: 0 }, e: { r: 8, c: 0 } }, // A8:A9  (Student No.)
       { s: { r: 7, c: 1 }, e: { r: 8, c: 1 } }, // B8:B9  (Name)
-  
+
       // Quarter bands
       { s: { r: 7, c: 2 }, e: { r: 7, c: 11 } }, // C8:L8  THIRD QUARTER
       { s: { r: 7, c: 12 }, e: { r: 7, c: 21 } }, // M8:V8  FOURTH QUARTER
       { s: { r: 7, c: 22 }, e: { r: 8, c: 22 } }, // W8:W9  FINAL GRADE
-  
+
       // Group headers inside each quarter (row 9)
       { s: { r: 8, c: 2 }, e: { r: 8, c: 5 } },  // C9:F9  WW 40%
       { s: { r: 8, c: 6 }, e: { r: 8, c: 9 } },  // G9:J9  PT 60%
@@ -575,23 +593,556 @@ export default function GradingSystem() {
       { s: { r: 8, c: 16 }, e: { r: 8, c: 19 } },// Q9:T9  PT 60% (Q4)
       // U9, V9 single columns
     ];
-  
-    // 7) Column widths (tweak as needed)
+
+    // Set column widths
     ws["!cols"] = [
       { wch: 12 },   // A - Student No.
       { wch: 42 },   // B - Name
       ...Array(20).fill({ wch: 10 }), // C..V
       { wch: 12 },   // W - Final Grade
     ];
-  
-    // (Optional) Freeze panes under the headers
-    // Many Excel viewers honor this; harmless if ignored.
+
+    // Freeze panes under the headers
     ws["!freeze"] = { xSplit: 2, ySplit: 10 };
-  
-    // 8) Append & download
+
+    // Add worksheet to workbook
     XLSX.utils.book_append_sheet(wb, ws, "Grade Sheet");
-    XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : "Student_GradeSheet.xlsx");
+
+    return wb;
   };
+
+  // Process uploaded grades from Excel/CSV file
+  const processUploadedGrades = async (file, classObj, sectionName) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      
+             reader.onload = async (e) => {
+         try {
+           let data = [];
+           
+           console.log('Processing file:', file.name);
+           console.log('File type:', file.type);
+           
+           // Add immediate debugging
+           alert(`Debug: File loaded!\nFile: ${file.name}\nType: ${file.type}`);
+          
+          if (file.name.endsWith('.csv')) {
+            // Process CSV
+            const csvText = e.target.result;
+            const lines = csvText.split('\n');
+            data = lines.map(line => line.split(',').map(cell => cell.trim()));
+            console.log('CSV data loaded:', data.length, 'rows');
+          } else {
+            // Process Excel
+            const workbook = XLSX.read(e.target.result, { type: 'binary' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            data = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+            console.log('Excel data loaded:', data.length, 'rows');
+            console.log('Sheet names:', workbook.SheetNames);
+          }
+          
+          console.log('Raw data sample (first 3 rows):', data.slice(0, 3));
+          console.log('Raw data sample (first 3 rows) - detailed:');
+          data.slice(0, 3).forEach((row, index) => {
+            console.log(`Row ${index}:`, row);
+            console.log(`Row ${index} length:`, row.length);
+            console.log(`Row ${index} first cell:`, row[0]);
+            console.log(`Row ${index} second cell:`, row[1]);
+          });
+          
+          // Validate file format
+          const validationResult = validateUploadedFileFormat(data);
+          console.log('Validation result:', validationResult);
+          
+          if (!validationResult.isValid) {
+            resolve({ 
+              success: false, 
+              error: `Invalid file format: ${validationResult.error}` 
+            });
+            return;
+          }
+          
+          // Remove empty rows and filter out header rows
+          // Filter out the exact header rows from the download template
+          data = data.filter(row => {
+            // Skip completely empty rows
+            if (row.length === 0 || !row.some(cell => cell !== '')) {
+              return false;
+            }
+            
+            const firstCell = row[0]?.toString().toLowerCase().trim();
+            
+            // Skip header rows (more flexible matching)
+            if (firstCell.includes('san juan') ||
+                firstCell.includes('2772') ||
+                firstCell.includes('inquiries') ||
+                firstCell.includes('track:') ||
+                firstCell.includes('subject code:') ||
+                firstCell.includes('student no') ||
+                firstCell.includes('written works') ||
+                firstCell.includes('performance tasks') ||
+                firstCell.includes('raw') ||
+                firstCell.includes('hps') ||
+                firstCell.includes('ps') ||
+                firstCell.includes('ws') ||
+                firstCell.includes('third quarter') ||
+                firstCell.includes('fourth quarter') ||
+                firstCell.includes('final grade') ||
+                firstCell.includes('semester:') ||
+                firstCell.includes('school year:') ||
+                firstCell.includes('grade sheet:')) {
+              return false;
+            }
+            
+            // Skip completely empty first cell
+            if (firstCell === '') {
+              return false;
+            }
+            
+            // Accept rows with student numbers (1, 2, 3, etc.) or names
+            // This should catch the actual student data rows
+            return true;
+          });
+          
+          console.log('After filtering, data rows:', data.length);
+          console.log('Filtered data sample:', data.slice(0, 3));
+          
+          if (data.length === 0) {
+            resolve({ success: false, error: 'No valid data found in file' });
+            return;
+          }
+          
+          // Process each student row
+          const processedGrades = [];
+          let processedCount = 0;
+          
+          // Update progress callback
+          const updateProgress = (progress) => {
+            setUploadProgress(25 + (progress * 50)); // 25% to 75%
+            setUploadStatus(`Processing students... ${progress.toFixed(0)}%`);
+          };
+          
+          for (let i = 0; i < data.length; i++) {
+            try {
+              const studentData = processStudentRow(data[i], classObj, sectionName);
+              if (studentData) {
+                processedGrades.push(studentData);
+                processedCount++;
+              }
+              
+              // Update progress every 10 rows or at the end
+              if (i % 10 === 0 || i === data.length - 1) {
+                const progress = (i + 1) / data.length;
+                updateProgress(progress);
+              }
+            } catch (rowError) {
+              console.warn('Error processing row:', rowError, data[i]);
+              // Continue processing other rows
+            }
+          }
+          
+          if (processedCount === 0) {
+            resolve({ success: false, error: 'No valid student grades found in file' });
+            return;
+          }
+          
+          console.log('Successfully processed grades:', processedGrades);
+          console.log('Total processed:', processedCount);
+          
+          setUploadProgress(75);
+          setUploadStatus('Saving to backend...');
+          
+          // Save grades to backend
+          const saveResult = await saveGradesToBackend(processedGrades, classObj, sectionName);
+          
+          setUploadProgress(100);
+          setUploadStatus('Upload complete!');
+          
+          if (saveResult.success) {
+            resolve({ 
+              success: true, 
+              processedCount,
+              message: `Successfully processed ${processedCount} students`
+            });
+          } else {
+            resolve({ 
+              success: false, 
+              error: saveResult.error 
+            });
+          }
+          
+        } catch (error) {
+          console.error('Error processing file:', error);
+          resolve({ 
+            success: false, 
+            error: `File processing error: ${error.message}` 
+          });
+        }
+      };
+      
+      reader.onerror = () => {
+        resolve({ 
+          success: false, 
+          error: 'Error reading file' 
+        });
+      };
+      
+      if (file.name.endsWith('.csv')) {
+        reader.readAsText(file);
+      } else {
+        reader.readAsBinaryString(file);
+      }
+    });
+  };
+
+  // Validate uploaded file format
+  const validateUploadedFileFormat = (data) => {
+    if (!data || data.length === 0) {
+      return { isValid: false, error: 'File is empty' };
+    }
+    
+    console.log('Validating file format...');
+    console.log('Total rows:', data.length);
+    console.log('First row length:', data[0]?.length);
+    
+    // Check if we have at least one data row (excluding headers)
+    // Filter out the exact header rows from the download template
+    const dataRows = data.filter(row => 
+      row.length > 0 && 
+      row.some(cell => cell !== '') &&
+      !row[0]?.toString().toLowerCase().includes('san juan') &&
+      !row[0]?.toString().toLowerCase().includes('2772') &&
+      !row[0]?.toString().toLowerCase().includes('inquiries') &&
+      !row[0]?.toString().toLowerCase().includes('track:') &&
+      !row[0]?.toString().toLowerCase().includes('subject code:') &&
+      !row[0]?.toString().toLowerCase().includes('student no') &&
+      !row[0]?.toString().toLowerCase().includes('written works') &&
+      !row[0]?.toString().toLowerCase().includes('performance tasks') &&
+      !row[0]?.toString().toLowerCase().includes('raw') &&
+      !row[0]?.toString().toLowerCase().includes('hps') &&
+      !row[0]?.toString().toLowerCase().includes('ps') &&
+      !row[0]?.toString().toLowerCase().includes('ws') &&
+      !row[0]?.toString().toLowerCase().includes('third quarter') &&
+      !row[0]?.toString().toLowerCase().includes('fourth quarter') &&
+      !row[0]?.toString().toLowerCase().includes('final grade')
+    );
+    
+    console.log('Data rows after filtering:', dataRows.length);
+    if (dataRows.length > 0) {
+      console.log('First data row:', dataRows[0]);
+      console.log('First data row length:', dataRows[0].length);
+    }
+    
+    if (dataRows.length === 0) {
+      return { isValid: false, error: 'No valid data rows found. Please ensure the file contains student data.' };
+    }
+    
+    // Check if we have the minimum required columns (Student No, Student Name, at least some grade columns)
+    const firstDataRow = dataRows[0];
+    if (firstDataRow.length < 3) {
+      return { isValid: false, error: 'File must have at least 3 columns: Student No, Student Name, and at least one grade column' };
+    }
+    
+    // Check if first few columns contain valid data
+    const studentNo = firstDataRow[0]?.toString().trim();
+    const studentName = firstDataRow[1]?.toString().trim();
+    
+    console.log('Student No:', studentNo, 'Student Name:', studentName);
+    
+    if (!studentNo || !studentName) {
+      return { isValid: false, error: 'First two columns must contain Student No and Student Name' };
+    }
+    
+    // Check if student number is numeric (but be more flexible)
+    const studentNoNum = parseInt(studentNo);
+    if (isNaN(studentNoNum) && studentNo !== '') {
+      console.log('Student No is not numeric, but continuing...');
+    }
+    
+         // Accept files with any reasonable number of columns (your actual format has 18)
+     console.log(`File has ${firstDataRow.length} columns`);
+     if (firstDataRow.length < 3) {
+       console.log('Warning: File has very few columns, but continuing...');
+     }
+    
+    return { isValid: true };
+  };
+
+  // Process individual student row from uploaded file
+  const processStudentRow = (row, classObj, sectionName) => {
+    console.log('Processing row:', row);
+    console.log('Row length:', row.length);
+    
+    if (row.length < 2) {
+      console.log('Row too short, skipping');
+      return null; // Skip rows with insufficient data
+    }
+    
+    const studentNo = row[0]?.toString().trim();
+    const studentName = row[1]?.toString().trim();
+    
+    console.log('Student No:', studentNo, 'Student Name:', studentName);
+    
+    // Validate required fields
+    if (!studentNo || !studentName) {
+      console.log('Missing student info, skipping');
+      return null;
+    }
+    
+    // Extract ALL grade data from the remaining columns (2-17 for 18 total columns)
+    const grades = {};
+    
+    // Process all remaining columns as grade data
+    for (let i = 2; i < row.length; i++) {
+      const columnValue = row[i]?.toString().trim() || '';
+      if (columnValue !== '') {
+        // Create meaningful column names based on position
+        let columnName;
+        if (i >= 2 && i <= 5) {
+          columnName = `third_quarter_written_works_${['raw', 'hps', 'ps', 'ws'][i-2]}`;
+        } else if (i >= 6 && i <= 9) {
+          columnName = `third_quarter_performance_tasks_${['raw', 'hps', 'ps', 'ws'][i-6]}`;
+        } else if (i === 10) {
+          columnName = 'third_quarter_initial_grade';
+        } else if (i === 11) {
+          columnName = 'third_quarter_quarterly_grade';
+        } else if (i >= 12 && i <= 15) {
+          columnName = `fourth_quarter_written_works_${['raw', 'hps', 'ps', 'ws'][i-12]}`;
+        } else if (i >= 16 && i <= 17) {
+          columnName = `fourth_quarter_performance_tasks_${['raw', 'hps'][i-16]}`;
+        } else {
+          columnName = `column_${i}`;
+        }
+        
+        grades[columnName] = columnValue;
+      }
+    }
+    
+    console.log('Extracted grades:', grades);
+    
+    return {
+      studentNo,
+      studentName,
+      grades,
+      classID: classObj.classID,
+      sectionName,
+      academicYear: `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
+      termName: currentTerm?.termName,
+      facultyID: localStorage.getItem("userID"),
+      uploadDate: new Date().toISOString()
+    };
+  };
+
+  // Save processed grades to backend
+  const saveGradesToBackend = async (gradesData, classObj, sectionName) => {
+    try {
+      const token = localStorage.getItem("token");
+      
+      // Prepare the data for backend
+      const uploadData = {
+        classID: classObj.classID,
+        sectionName,
+        academicYear: `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
+        termName: currentTerm?.termName,
+        facultyID: localStorage.getItem("userID"),
+        grades: gradesData,
+        uploadTimestamp: new Date().toISOString()
+      };
+      
+      // Try to save to backend
+      const response = await fetch(`${API_BASE}/api/grades/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(uploadData)
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        return { success: true, data: result };
+      } else if (response.status === 404) {
+        // Backend endpoint doesn't exist yet, show preview instead
+        console.log('Backend endpoint not found, showing preview of processed data:', uploadData);
+        return { 
+          success: true, 
+          data: uploadData,
+          preview: true,
+          message: 'Backend endpoint not yet implemented. Showing preview of processed data.'
+        };
+      } else {
+        const errorData = await response.json();
+        return { 
+          success: false, 
+          error: errorData.message || `HTTP ${response.status}: ${response.statusText}` 
+        };
+      }
+      
+    } catch (error) {
+      console.error('Error saving to backend:', error);
+      // If it's a network error, show preview instead
+      if (error.message.includes('fetch') || error.message.includes('network')) {
+        const uploadData = {
+          classID: classObj.classID,
+          sectionName,
+          academicYear: `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
+          termName: currentTerm?.termName,
+          facultyID: localStorage.getItem("userID"),
+          grades: gradesData,
+          uploadTimestamp: new Date().toISOString()
+        };
+        
+        console.log('Network error, showing preview of processed data:', uploadData);
+        return { 
+          success: true, 
+          data: uploadData,
+          preview: true,
+          message: 'Network error occurred. Showing preview of processed data.'
+        };
+      }
+      
+      return { 
+        success: false, 
+        error: `Network error: ${error.message}` 
+      };
+    }
+  };
+
+  // Helper function to get Excel cell address (e.g., A1, B2, etc.)
+  const getCellAddress = (row, col) => {
+    let address = '';
+    while (col >= 0) {
+      address = String.fromCharCode(65 + (col % 26)) + address;
+      col = Math.floor(col / 26) - 1;
+    }
+    return address + (row + 1);
+  };
+
+  // Download Excel file using XLSX library
+  const downloadExcelFile = (workbook, filename = "Student_GradeSheet.xlsx") => {
+    try {
+      // Check if XLSX is available
+      if (typeof XLSX === 'undefined') {
+        throw new Error('XLSX library not loaded. Please check the import.');
+      }
+
+      // If we have a workbook with grades, use it directly
+      if (workbook && workbook.Sheets && workbook.SheetNames) {
+        // The workbook is already in XLSX format, download it directly
+        XLSX.writeFile(workbook, filename);
+        return;
+      }
+
+      // Create the specific grade sheet layout as required by the client
+      const wb = XLSX.utils.book_new();
+      
+      // Build the layout (23 columns: A..W) - EXACTLY as shown in your image
+      const wsData = [
+        ["SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC."],                        // A1:W1 (merged)
+        ["2772-2774 Roxas Boulevard, Pasay City 1300 Philippines"],               // A2:W2 (merged)
+        [""],
+        ["Inquiries, Investigations and Immersions"],                             // A4:W4 (merged)
+        ["Track:", "STEM", "", "Semester:", "2nd", "", "School Year:", "2024-2025"],
+        ["Subject Code:", "Applied subject 7", "", "Grade Sheet:", "APPLIED"],
+        [""],
+
+        // Row 8 (index 7): top band for quarters + fixed columns
+        [
+          "Student No.",
+          "STUDENT'S NAME (Alphabetical Order with Middle Initials)",
+          "THIRD QUARTER", "", "", "", "", "", "", "", "", "",     // C..L (merged band)
+          "FOURTH QUARTER", "", "", "", "", "", "", "", "",        // M..V (merged band)
+          "FINAL GRADE"                                            // W (merged down)
+        ],
+
+        // Row 9 (index 8): group headers inside each quarter
+        [
+          "", "",
+          "WRITTEN WORKS 40%", "", "", "",                         // C..F (merge)
+          "PERFORMANCE TASKS 60%", "", "", "",                     // G..J (merge)
+          "INITIAL GRADE",                                         // K
+          "QUARTERLY GRADE",                                       // L
+          "WRITTEN WORKS 40%", "", "", "",                         // M..P (merge)
+          "PERFORMANCE TASKS 60%", "", "", "",                     // Q..T (merge)
+          "INITIAL GRADE",                                         // U
+          "QUARTERLY GRADE",                                       // V
+          ""                                                       // W (merged from row above)
+        ],
+
+        // Row 10 (index 9): sub-headers
+        [
+          "", "",
+          "RAW", "HPS", "PS", "WS",                                // C..F
+          "RAW", "HPS", "PS", "WS",                                // G..J
+          "", "",                                                  // K, L (single columns, no sublabel)
+          "RAW", "HPS", "PS", "WS",                                // M..P
+          "RAW", "HPS", "PS", "WS",                                // Q..T
+          "", "" ,                                                 // U, V
+          ""                                                       // W
+        ],
+      ];
+
+      // Append student rows (start at row 11 visually)
+      const EMPTY_21 = Array(21).fill(""); // columns C..W
+      
+      // Add 15 empty rows for students (as shown in your image)
+      for (let i = 0; i < 15; i++) {
+        wsData.push([i + 1, "", ...EMPTY_21]);
+      }
+
+      // Create worksheet
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Set merges to match the grouped headers EXACTLY as in your image
+      ws["!merges"] = [
+        // Title merges
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 22 } }, // A1:W1
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 22 } }, // A2:W2
+        { s: { r: 3, c: 0 }, e: { r: 3, c: 22 } }, // A4:W4
+
+        // Freeze A/B labels across two header rows
+        { s: { r: 7, c: 0 }, e: { r: 8, c: 0 } }, // A8:A9  (Student No.)
+        { s: { r: 7, c: 1 }, e: { r: 8, c: 1 } }, // B8:B9  (Name)
+
+        // Quarter bands
+        { s: { r: 7, c: 2 }, e: { r: 7, c: 11 } }, // C8:L8  THIRD QUARTER
+        { s: { r: 7, c: 12 }, e: { r: 7, c: 21 } }, // M8:V8  FOURTH QUARTER
+        { s: { r: 7, c: 22 }, e: { r: 8, c: 22 } }, // W8:W9  FINAL GRADE
+
+        // Group headers inside each quarter (row 9)
+        { s: { r: 8, c: 2 }, e: { r: 8, c: 5 } },  // C9:F9  WW 40%
+        { s: { r: 8, c: 6 }, e: { r: 8, c: 9 } },  // G9:J9  PT 60%
+        // K9, L9 single columns
+        { s: { r: 8, c: 12 }, e: { r: 8, c: 15 } },// M9:P9  WW 40% (Q4)
+        { s: { r: 8, c: 16 }, e: { r: 8, c: 19 } },// Q9:T9  PT 60% (Q4)
+        // U9, V9 single columns
+      ];
+
+      // Set column widths (tweak as needed)
+      ws["!cols"] = [
+        { wch: 12 },   // A - Student No.
+        { wch: 42 },   // B - Name
+        ...Array(20).fill({ wch: 10 }), // C..V
+        { wch: 12 },   // W - Final Grade
+      ];
+
+      // Freeze panes under the headers
+      ws["!freeze"] = { xSplit: 2, ySplit: 10 };
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Grade Sheet");
+      
+      // Download the file
+      XLSX.writeFile(wb, filename);
+      
+    } catch (error) {
+      console.error('Error in downloadExcelFile:', error);
+      throw new Error(`Failed to generate Excel file: ${error.message}`);
+    }
+  };
+
 
   // Add effect to log state changes for debugging
   useEffect(() => {
@@ -1292,6 +1843,13 @@ export default function GradingSystem() {
   };
 
   const uploadGrades = async () => {
+    console.log('Upload button clicked!');
+    console.log('Selected section:', selectedSection);
+    console.log('Excel file:', excelFile);
+    
+    // Add immediate debugging
+    alert(`Debug: Upload button clicked!\nFile: ${excelFile?.name}\nSection: ${selectedSection}`);
+    
     if (!selectedSection) {
       setValidationMessage('Please select a section first.');
       setValidationType('error');
@@ -1299,8 +1857,18 @@ export default function GradingSystem() {
       return;
     }
 
+    if (!excelFile) {
+      setValidationMessage('Please select a file first.');
+      setValidationType('error');
+      setShowValidationModal(true);
+      return;
+    }
+
     try {
       setUploadLoading(true);
+      setUploadProgress(0);
+      setUploadStatus('Starting upload...');
+      
       const selectedClassObj = facultyClasses[selectedClass];
       if (!selectedClassObj) {
         setValidationMessage('Selected class not found.');
@@ -1309,18 +1877,48 @@ export default function GradingSystem() {
         return;
       }
 
-      // For now, show a message that this feature needs to be implemented
-      setValidationMessage('Grade upload feature will be implemented once the backend integration is complete.');
-      setValidationType('info');
-      setShowValidationModal(true);
+      setUploadProgress(25);
+      setUploadStatus('Processing file...');
+
+      // Process the uploaded file
+      const result = await processUploadedGrades(excelFile, selectedClassObj, selectedSection);
+      
+      if (result.success) {
+        if (result.preview) {
+          // Show preview of processed data
+          setValidationMessage(`${result.message} Processed ${result.processedCount} students. Check console for data preview.`);
+          setValidationType('info');
+          setSuccessMessage(`File processed successfully! ${result.processedCount} students processed. (Preview mode - backend not yet implemented)`);
+          setTimeout(() => setSuccessMessage(''), 8000);
+        } else {
+          // Successfully saved to backend
+          setValidationMessage(`Successfully uploaded grades for ${result.processedCount} students!`);
+          setValidationType('success');
+          setSuccessMessage(`Grades uploaded successfully! ${result.processedCount} students processed.`);
+          setTimeout(() => setSuccessMessage(''), 5000);
+        }
+        
+        // Clear the file input
+        setExcelFile(null);
+        // Reset the file input element
+        const fileInput = document.querySelector('input[type="file"]');
+        if (fileInput) fileInput.value = '';
+      } else {
+        setValidationMessage(`Upload failed: ${result.error}`);
+        setValidationType('error');
+      }
 
     } catch (error) {
       console.error('Error uploading grades:', error);
       setValidationMessage(`Error uploading grades: ${error.message}`);
       setValidationType('error');
-      setShowValidationModal(true);
     } finally {
       setUploadLoading(false);
+      // Reset progress after a delay
+      setTimeout(() => {
+        setUploadProgress(0);
+        setUploadStatus('');
+      }, 2000);
     }
   };
 
@@ -1632,6 +2230,7 @@ export default function GradingSystem() {
                   onClick={() => {
                     // Manually trigger sections refresh
                     if (currentTerm && academicYear) {
+                      const event = { currentTerm, academicYear };
                       // This will trigger the useEffect that fetches sections
                       setCurrentTerm({ ...currentTerm });
                     }
@@ -1722,10 +2321,10 @@ export default function GradingSystem() {
 
         {/* Export All Grades */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4">Grading Table Template</h3>
+          <h3 className="text-lg font-semibold mb-4">Export All Grades</h3>
           <div className="space-y-4">
             <p className="text-gray-600">
-              Download template of grades for assignments and quizzes in the selected section as a xlsx file.
+              Export comprehensive grades for assignments and quizzes in the selected section as a CSV file.
             </p>
             
             <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
@@ -1768,9 +2367,9 @@ export default function GradingSystem() {
                 className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled={!selectedSection}
               />
-              <p className="text-sm text-gray-500 mt-1">
-                Upload an Excel file with columns: Student Name, Student ID, Assignment/Activity/Quiz, Grade, Feedback (optional).
-              </p>
+                             <p className="text-sm text-gray-500 mt-1">
+                 Upload an Excel file with grades. The file should have Student No, Student Name, and grade columns.
+               </p>
             </div>
             
             <div className="flex space-x-4">
@@ -1781,6 +2380,19 @@ export default function GradingSystem() {
               >
                 {uploadLoading ? 'Uploading...' : 'Upload Grades'}
               </button>
+              
+              {/* Upload Progress */}
+              {uploadLoading && (
+                <div className="flex-1 ml-4">
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">{uploadStatus}</p>
+                </div>
+              )}
               
               <button
                 onClick={debugStudents}
