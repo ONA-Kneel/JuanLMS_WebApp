@@ -111,7 +111,12 @@ export default function Admin_AcademicSettings() {
 
   const fetchSchoolYears = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/schoolyears`);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/schoolyears`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await res.json();
       if (res.ok) {
         setSchoolYears(data.filter(year => year.status !== 'archived'));
@@ -154,9 +159,13 @@ export default function Admin_AcademicSettings() {
 
     const createSchoolYear = async (startYear, setAsActive) => {
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE}/api/schoolyears`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           schoolYearStart: startYear,
           setAsActive
@@ -229,7 +238,10 @@ export default function Admin_AcademicSettings() {
         });
         const res = await fetch(`${API_BASE}/api/schoolyears/${editingYear._id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
           body: JSON.stringify({
             schoolYearStart: startYear,
             status: formData.status
@@ -451,7 +463,10 @@ export default function Admin_AcademicSettings() {
     try {
       const res = await fetch(`${API_BASE}/api/schoolyears/${year._id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({ status: newStatus })
       });
       if (res.ok) {
@@ -672,7 +687,10 @@ export default function Admin_AcademicSettings() {
     try {
       const res = await fetch(`${API_BASE}/api/schoolyears/${year._id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({ status: 'archived' })
       });
       if (res.ok) {
@@ -949,7 +967,7 @@ export default function Admin_AcademicSettings() {
                             <td className="p-3 border">
                               {selectedYear.status !== 'active' ? (
                                 <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                                  archived
+                                  inactive
                                 </span>
                               ) : (
                                 <button
