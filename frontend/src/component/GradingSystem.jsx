@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import ValidationModal from './ValidationModal';
+import * as XLSX from 'xlsx';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -360,16 +361,6 @@ export default function GradingSystem() {
       throw new Error('No students data available to generate template');
     }
 
-    // Create workbook and worksheet
-    const workbook = {
-      SheetNames: ['Grading Template'],
-      Sheets: {
-        'Grading Template': {}
-      }
-    };
-
-    const worksheet = workbook.Sheets['Grading Template'];
-    
     // Define column headers
     const headers = [
       'Student ID',
@@ -381,82 +372,72 @@ export default function GradingSystem() {
     ];
 
     // Add assignment columns
-    assignments.forEach((assignment, index) => {
+    assignments.forEach((assignment) => {
       headers.push(`${assignment.title} (${assignment.points || 0} pts)`);
     });
 
     // Add quiz columns
-    quizzes.forEach((quiz, index) => {
+    quizzes.forEach((quiz) => {
       headers.push(`${quiz.title} (${quiz.points || 0} pts)`);
     });
 
     // Add feedback columns
-    assignments.forEach((assignment, index) => {
+    assignments.forEach((assignment) => {
       headers.push(`${assignment.title} Feedback`);
     });
 
-    quizzes.forEach((quiz, index) => {
+    quizzes.forEach((quiz) => {
       headers.push(`${quiz.title} Feedback`);
     });
 
     console.log('Template headers:', headers);
 
-    // Write headers to worksheet
-    headers.forEach((header, colIndex) => {
-      const cellAddress = getCellAddress(0, colIndex);
-      worksheet[cellAddress] = {
-        v: header,
-        t: 's',
-        s: {
-          font: { bold: true },
-          fill: { fgColor: { rgb: "CCCCCC" } },
-          alignment: { horizontal: "center" }
-        }
-      };
-    });
+    // Create data array for the worksheet
+    const worksheetData = [headers]; // First row is headers
 
-    // Write student data rows
+    // Add student data rows
     students.forEach((student, rowIndex) => {
-      const row = rowIndex + 1; // Start from row 1 (after headers)
+      const row = [];
       
       console.log(`Processing student ${rowIndex + 1}:`, student);
       
       // Student basic info
-      worksheet[getCellAddress(row, 0)] = { v: student.id || '', t: 's' };
-      worksheet[getCellAddress(row, 1)] = { v: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(), t: 's' };
-      worksheet[getCellAddress(row, 2)] = { v: student.email || '', t: 's' };
+      row.push(student.id || '');
+      row.push(student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim());
+      row.push(student.email || '');
       
       // Score columns (leave blank for faculty to fill)
-      worksheet[getCellAddress(row, 3)] = { v: '', t: 's' }; // Total Score
-      worksheet[getCellAddress(row, 4)] = { v: '', t: 's' }; // Total Possible
-      worksheet[getCellAddress(row, 5)] = { v: '', t: 's' }; // Percentage
+      row.push(''); // Total Score
+      row.push(''); // Total Possible
+      row.push(''); // Percentage
       
       // Assignment score columns (blank)
-      assignments.forEach((assignment, colIndex) => {
-        const col = 6 + colIndex;
-        worksheet[getCellAddress(row, col)] = { v: '', t: 's' };
+      assignments.forEach(() => {
+        row.push('');
       });
       
       // Quiz score columns (blank)
-      quizzes.forEach((quiz, colIndex) => {
-        const col = 6 + assignments.length + colIndex;
-        worksheet[getCellAddress(row, col)] = { v: '', t: 's' };
+      quizzes.forEach(() => {
+        row.push('');
       });
       
       // Assignment feedback columns (blank)
-      assignments.forEach((assignment, colIndex) => {
-        const col = 6 + assignments.length + quizzes.length + colIndex;
-        worksheet[getCellAddress(row, col)] = { v: '', t: 's' };
+      assignments.forEach(() => {
+        row.push('');
       });
       
       // Quiz feedback columns (blank)
-      quizzes.forEach((quiz, colIndex) => {
-        const col = 6 + assignments.length + quizzes.length + assignments.length + colIndex;
-        worksheet[getCellAddress(row, col)] = { v: '', t: 's' };
+      quizzes.forEach(() => {
+        row.push('');
       });
+      
+      worksheetData.push(row);
     });
 
-    console.log('Worksheet created with rows:', Object.keys(worksheet).filter(key => key !== '!cols' && key !== '!rows').length);
+    console.log('Worksheet data created with rows:', worksheetData.length);
+
+    // Create worksheet from array data
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
 
     // Set column widths
     worksheet['!cols'] = headers.map(header => ({ width: Math.max(header.length + 2, 15) }));
@@ -467,7 +448,7 @@ export default function GradingSystem() {
       worksheet['!rows'][i] = { hpt: 20 };
     }
 
-    return workbook;
+    return worksheet;
   };
 
   // Generate Excel template with grades and feedback
@@ -482,12 +463,6 @@ export default function GradingSystem() {
     if (!activities || activities.length === 0) {
       console.log('No activities provided, creating basic template');
     }
-
-    // Create workbook and worksheet
-    const workbook = {};
-    const worksheet = {};
-    workbook.Sheets = { 'Grading Template': worksheet };
-    workbook.SheetNames = ['Grading Template'];
 
     // Define headers
     const headers = [
@@ -510,33 +485,20 @@ export default function GradingSystem() {
 
     console.log('Template with grades headers:', headers);
 
-    // Write headers to worksheet
-    headers.forEach((header, colIndex) => {
-      const cellAddress = getCellAddress(0, colIndex);
-      worksheet[cellAddress] = {
-        v: header,
-        t: 's',
-        s: {
-          font: { bold: true },
-          fill: { fgColor: { rgb: "CCCCCC" } },
-          alignment: { horizontal: "center" }
-        }
-      };
-    });
+    // Create data array for the worksheet
+    const worksheetData = [headers]; // First row is headers
 
-    // Write student data rows with grades
+    // Add student data rows with grades
     students.forEach((student, rowIndex) => {
-      const row = rowIndex + 1; // Start from row 1 (after headers)
+      const row = [];
       
       console.log(`Processing student ${rowIndex + 1}:`, student);
       
       // Student basic info
-      worksheet[getCellAddress(row, 0)] = { v: student.id || '', t: 's' };
-      worksheet[getCellAddress(row, 1)] = { v: student.studentName || student.name || '', t: 's' };
-      worksheet[getCellAddress(row, 2)] = { v: student.schoolID || '', t: 's' };
-      worksheet[getCellAddress(row, 3)] = { v: student.section || '', t: 's' };
-      
-      let colIndex = 4; // Starting column for activities
+      row.push(student.id || '');
+      row.push(student.studentName || student.name || '');
+      row.push(student.schoolID || '');
+      row.push(student.section || '');
       
       // Add activity scores and feedback
       activities.forEach((activity) => {
@@ -544,23 +506,24 @@ export default function GradingSystem() {
           const submission = activity.submissions?.find(sub => 
             sub.studentId === student.id || sub.userID === student.id || sub.schoolID === student.id
           );
-          worksheet[getCellAddress(row, colIndex)] = { v: submission?.grade || submission?.score || '', t: submission?.grade || submission?.score ? 'n' : 's' };
-          colIndex++;
-          worksheet[getCellAddress(row, colIndex)] = { v: submission?.feedback || '', t: 's' };
-          colIndex++;
+          row.push(submission?.grade || submission?.score || '');
+          row.push(submission?.feedback || '');
         } else if (activity.type === 'Quiz') {
           const response = activity.responses?.find(resp => 
             resp.studentId === student.id || resp.userID === student.id || resp.schoolID === student.id
           );
-          worksheet[getCellAddress(row, colIndex)] = { v: response?.score || '', t: response?.score ? 'n' : 's' };
-          colIndex++;
-          worksheet[getCellAddress(row, colIndex)] = { v: response?.feedback || '', t: 's' };
-          colIndex++;
+          row.push(response?.score || '');
+          row.push(response?.feedback || '');
         }
       });
+      
+      worksheetData.push(row);
     });
 
-    console.log('Worksheet with grades created with rows:', Object.keys(worksheet).filter(key => key !== '!cols' && key !== '!rows').length);
+    console.log('Worksheet with grades created with rows:', worksheetData.length);
+
+    // Create worksheet from array data
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
 
     // Set column widths
     worksheet['!cols'] = headers.map(header => ({ width: Math.max(header.length + 2, 15) }));
@@ -571,89 +534,21 @@ export default function GradingSystem() {
       worksheet['!rows'][i] = { hpt: 20 };
     }
 
-    return workbook;
+    return worksheet;
   };
 
-  // Helper function to get Excel cell address (e.g., A1, B2, etc.)
-  const getCellAddress = (row, col) => {
-    let address = '';
-    while (col >= 0) {
-      address = String.fromCharCode(65 + (col % 26)) + address;
-      col = Math.floor(col / 26) - 1;
-    }
-    return address + (row + 1);
-  };
+
 
   // Download Excel file
-  const downloadExcelFile = (workbook, filename) => {
-    // For now, we'll create a CSV-like structure that can be opened in Excel
-    // In a production environment, you'd use a library like 'xlsx' or 'exceljs'
+  const downloadExcelFile = (worksheet, filename = "Student_GradeSheet.xlsx") => {
+    // Create a new workbook
+    const workbook = XLSX.utils.book_new();
     
-    const headers = [
-      'Student ID',
-      'Student Name', 
-      'Email',
-      'Total Score',
-      'Total Possible',
-      'Percentage'
-    ];
-
-    // Get activities from the workbook structure
-    const worksheet = workbook.Sheets['Grading Template'];
-    const maxCol = Object.keys(worksheet).reduce((max, key) => {
-      if (key !== '!cols' && key !== '!rows') {
-        const col = key.replace(/[0-9]/g, '');
-        const colNum = col.split('').reduce((acc, char) => acc * 26 + char.charCodeAt(0) - 64, 0) - 1;
-        return Math.max(max, colNum);
-      }
-      return max;
-    }, 0);
-
-    // Add activity columns
-    for (let col = 6; col <= maxCol; col++) {
-      const cellAddress = getCellAddress(0, col);
-      if (worksheet[cellAddress]) {
-        headers.push(worksheet[cellAddress].v);
-      }
-    }
-
-    // Create CSV content
-    const csvRows = [headers.join(',')];
+    // Add the worksheet to the workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Grading Template");
     
-    // Add student rows
-    const maxRow = Object.keys(worksheet).reduce((max, key) => {
-      if (key !== '!cols' && key !== '!rows') {
-        const row = parseInt(key.replace(/[A-Z]/g, ''));
-        return Math.max(max, row);
-      }
-      return max;
-    }, 0);
-
-    for (let row = 1; row <= maxRow; row++) {
-      const rowData = [];
-      for (let col = 0; col <= maxCol; col++) {
-        const cellAddress = getCellAddress(row, col);
-        const cell = worksheet[cellAddress];
-        rowData.push(cell ? (cell.v || '') : '');
-      }
-      csvRows.push(rowData.join(','));
-    }
-
-    const csvContent = csvRows.join('\n');
-    
-    // Download as CSV (can be opened in Excel)
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', filename.replace('.xlsx', '.csv'));
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+    // Write and download the file
+    XLSX.writeFile(workbook, filename.endsWith(".xlsx") ? filename : "Student_GradeSheet.xlsx");
   };
 
   // Add effect to log state changes for debugging
@@ -1695,7 +1590,6 @@ export default function GradingSystem() {
                   onClick={() => {
                     // Manually trigger sections refresh
                     if (currentTerm && academicYear) {
-                      const event = { currentTerm, academicYear };
                       // This will trigger the useEffect that fetches sections
                       setCurrentTerm({ ...currentTerm });
                     }
