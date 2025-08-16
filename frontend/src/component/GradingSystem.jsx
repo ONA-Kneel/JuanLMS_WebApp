@@ -411,12 +411,25 @@ export default function GradingSystem() {
       const row = rowIndex + 1; // Start from row 1 (after headers)
       
       console.log(`Processing student ${rowIndex + 1}:`, student);
+      console.log(`Student data:`, {
+        id: student.id || '',
+        name: student.studentName || student.name || '',
+        schoolID: student.schoolID || '',
+        section: student.section || ''
+      });
       
       // Student basic info
-      worksheet[getCellAddress(row, 0)] = { v: student.id || '', t: 's' };
-      worksheet[getCellAddress(row, 1)] = { v: student.studentName || student.name || '', t: 's' };
-      worksheet[getCellAddress(row, 2)] = { v: student.schoolID || '', t: 's' };
-      worksheet[getCellAddress(row, 3)] = { v: student.section || '', t: 's' };
+      const cellA = getCellAddress(row, 0);
+      const cellB = getCellAddress(row, 1);
+      const cellC = getCellAddress(row, 2);
+      const cellD = getCellAddress(row, 3);
+      
+      console.log(`Writing to cells: A${row+1}=${cellA}, B${row+1}=${cellB}, C${row+1}=${cellC}, D${row+1}=${cellD}`);
+      
+      worksheet[cellA] = { v: student.id || '', t: 's' };
+      worksheet[cellB] = { v: student.studentName || student.name || '', t: 's' };
+      worksheet[cellC] = { v: student.schoolID || '', t: 's' };
+      worksheet[cellD] = { v: student.section || '', t: 's' };
       
       let colIndex = 4; // Starting column for activities
       
@@ -443,6 +456,14 @@ export default function GradingSystem() {
     });
 
     console.log('Worksheet with grades created with rows:', Object.keys(worksheet).filter(key => key !== '!cols' && key !== '!rows').length);
+    
+    // Debug: Log all worksheet keys to see what was written
+    console.log('Worksheet keys:', Object.keys(worksheet));
+    console.log('Worksheet content sample:', {
+      headers: worksheet[getCellAddress(0, 0)] ? worksheet[getCellAddress(0, 0)].v : 'NO HEADER',
+      firstStudent: worksheet[getCellAddress(1, 0)] ? worksheet[getCellAddress(1, 0)].v : 'NO STUDENT DATA',
+      firstStudentName: worksheet[getCellAddress(1, 1)] ? worksheet[getCellAddress(1, 1)].v : 'NO STUDENT NAME'
+    });
 
     // Set column widths
     worksheet['!cols'] = headers.map(header => ({ width: Math.max(header.length + 2, 15) }));
@@ -459,35 +480,71 @@ export default function GradingSystem() {
   // Helper function to get Excel cell address (e.g., A1, B2, etc.)
   const getCellAddress = (row, col) => {
     let address = '';
-    while (col >= 0) {
-      address = String.fromCharCode(65 + (col % 26)) + address;
-      col = Math.floor(col / 26) - 1;
+    let tempCol = col;
+    while (tempCol >= 0) {
+      address = String.fromCharCode(65 + (tempCol % 26)) + address;
+      tempCol = Math.floor(tempCol / 26) - 1;
     }
-    return address + (row + 1);
+    const result = address + (row + 1);
+    console.log(`getCellAddress(${row}, ${col}) = ${result}`);
+    return result;
   };
 
   // Download Excel file
-  const downloadExcelFile = (workbook, filename = "Student_GradeSheet.xlsx") => {
+  const downloadExcelFile = (workbook, filename = "Student_GradeSheet.xlsx", fallbackStudents = []) => {
     // 1) Create a fresh workbook for the formatted export
     const wb = XLSX.utils.book_new();
   
-    // 2) Try to extract students from the provided workbook (optional)
-    //    It looks for columns named "Student ID" and "Student Name" in "Grading Template".
-    const students = [];
+        // 2) Extract students from the provided workbook
+    let students = [];
     if (workbook?.Sheets?.["Grading Template"]) {
       const src = workbook.Sheets["Grading Template"];
       const rows = XLSX.utils.sheet_to_json(src, { header: 1, defval: "" });
       const header = rows[0] || [];
-      const idCol = header.findIndex(h => String(h).toLowerCase().includes("student id"));
-      const nameCol = header.findIndex(h => String(h).toLowerCase().includes("student name"));
-  
+      
+      // Look for student name column (more flexible matching)
+      const nameCol = header.findIndex(h => 
+        String(h).toLowerCase().includes("student name") || 
+        String(h).toLowerCase().includes("name") ||
+        String(h).toLowerCase().includes("student")
+      );
+      
+      // Look for student ID column (more flexible matching)
+      const idCol = header.findIndex(h => 
+        String(h).toLowerCase().includes("student id") || 
+        String(h).toLowerCase().includes("id") ||
+        String(h).toLowerCase().includes("school id")
+      );
+      
+      console.log('Found columns:', { nameCol, idCol, header });
+      
       for (let r = 1; r < rows.length; r++) {
-        const id = idCol >= 0 ? rows[r][idCol] : r;
-        const name = nameCol >= 0 ? rows[r][nameCol] : "";
-        if (name) students.push({ id, name });
+        const row = rows[r];
+        if (row && row.length > 0) {
+          const id = idCol >= 0 ? row[idCol] : r;
+          const name = nameCol >= 0 ? row[nameCol] : "";
+          
+          // Only add if we have a valid name
+          if (name && name.toString().trim() !== "") {
+            students.push({ id, name });
+            console.log('Added student:', { id, name });
+          }
+        }
       }
     }
-  
+    
+    console.log('Extracted students:', students);
+    
+    // If no students were extracted from the workbook, use fallback data
+    if (students.length === 0 && fallbackStudents.length > 0) {
+      console.log('Using fallback students data:', fallbackStudents);
+      students = fallbackStudents.map((student, index) => ({
+        id: student.id || student.studentID || index + 1,
+        name: student.studentName || student.name || `Student ${index + 1}`
+      }));
+      console.log('Transformed fallback students:', students);
+    }
+    
     // 3) Build the layout (23 columns: A..W)
     //    Rows are 0-indexed here; Excel will show them 1-indexed.
     const wsData = [
@@ -1275,7 +1332,7 @@ export default function GradingSystem() {
       );
 
       // Download the Excel file
-      downloadExcelFile(excelContent, `${selectedClassObj.className}_${selectedSection}_Template_with_Grades.xlsx`);
+      downloadExcelFile(excelContent, `${selectedClassObj.className}_${selectedSection}_Template_with_Grades.xlsx`, processedStudents);
 
       setValidationMessage(`Template with grades downloaded successfully with ${processedStudents.length} students and ${activities.length} activities!`);
       setValidationType('success');
