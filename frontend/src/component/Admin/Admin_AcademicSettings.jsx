@@ -33,6 +33,10 @@ export default function Admin_AcademicSettings() {
   const [promptSchoolYear, setPromptSchoolYear] = useState(null);
   const [selectedPromptTerm, setSelectedPromptTerm] = useState("");
   
+  // Status toggle confirmation modal state
+  const [showStatusToggleModal, setShowStatusToggleModal] = useState(false);
+  const [pendingStatusToggle, setPendingStatusToggle] = useState(null);
+  
   // Term editing states
   const [showEditTermModal, setShowEditTermModal] = useState(false);
   const [editingTerm, setEditingTerm] = useState(null);
@@ -432,7 +436,18 @@ export default function Admin_AcademicSettings() {
 
   const handleToggleStatus = async (year) => {
     const newStatus = year.status === 'active' ? 'inactive' : 'active';
-    if (!window.confirm(`Set school year ${year.schoolYearStart}-${year.schoolYearEnd} as ${newStatus}?`)) return;
+    
+    // Set pending status toggle and show confirmation modal
+    setPendingStatusToggle({ year, newStatus });
+    setShowStatusToggleModal(true);
+  };
+
+  // Handle the actual status toggle after confirmation
+  const handleConfirmStatusToggle = async () => {
+    if (!pendingStatusToggle) return;
+    
+    const { year, newStatus } = pendingStatusToggle;
+    
     try {
       const res = await fetch(`${API_BASE}/api/schoolyears/${year._id}`, {
         method: 'PATCH',
@@ -447,6 +462,8 @@ export default function Admin_AcademicSettings() {
             setPromptTerms(data.terms);
             setPromptSchoolYear(data.schoolYear);
             setShowTermActivationPrompt(true);
+            setShowStatusToggleModal(false);
+            setPendingStatusToggle(null);
             return; // Wait for admin to choose
           }
         } else {
@@ -462,6 +479,10 @@ export default function Admin_AcademicSettings() {
     } catch {
       setError('Error updating school year status');
     }
+    
+    // Close modal and clear pending toggle
+    setShowStatusToggleModal(false);
+    setPendingStatusToggle(null);
   };
 
   // Handler for activating a term from the prompt
@@ -1298,6 +1319,47 @@ export default function Admin_AcademicSettings() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* Status Toggle Confirmation Modal */}
+          {showStatusToggleModal && pendingStatusToggle && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+                <h3 className="text-lg font-semibold mb-4">Confirm Status Change</h3>
+                <p className="text-gray-700 mb-4">
+                  Are you sure you want to set School Year {pendingStatusToggle.year.schoolYearStart}-{pendingStatusToggle.year.schoolYearEnd} as {pendingStatusToggle.newStatus}?
+                </p>
+                
+                {pendingStatusToggle.newStatus === 'active' && (
+                  <div className="mb-6 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-yellow-800 font-medium">WARNING! Will deactivate the previous Active SY</span>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex justify-end gap-3">
+                  <button
+                    className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
+                    onClick={() => {
+                      setShowStatusToggleModal(false);
+                      setPendingStatusToggle(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                    onClick={handleConfirmStatusToggle}
+                  >
+                    Confirm
+                  </button>
+                </div>
               </div>
             </div>
           )}
