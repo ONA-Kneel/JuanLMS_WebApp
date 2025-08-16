@@ -11,10 +11,16 @@ export const authenticateToken = (req, res, next) => {
       return res.status(401).json({ message: 'No authorization header' });
     }
 
+    // Check if the header starts with 'Bearer '
+    if (!authHeader.startsWith('Bearer ')) {
+      console.log('Invalid auth header format');
+      return res.status(401).json({ message: 'Invalid authorization header format' });
+    }
+
     const token = authHeader.split(' ')[1];
-    if (!token) {
-      console.log('No token found in auth header');
-      return res.status(401).json({ message: 'No token provided' });
+    if (!token || token === 'null' || token === 'undefined') {
+      console.log('No valid token found in auth header');
+      return res.status(401).json({ message: 'No valid token provided' });
     }
 
     console.log('Verifying token...');

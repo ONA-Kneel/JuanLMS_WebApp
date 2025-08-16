@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: juanlms-backend
+    env: node
+    plan: starter
+    buildCommand: cd backend/server && npm install
+    startCommand: cd backend/server && npm start
+    healthCheckPath: /render-health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        sync: false
+      - key: ATLAS_URI
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - backend/**
+        - package.json
+        - package-lock.json
+    healthCheckTimeout: 300
+    maxStableInstances: 1
+    minInstances: 0
