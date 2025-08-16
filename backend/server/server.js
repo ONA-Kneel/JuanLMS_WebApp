@@ -186,6 +186,12 @@ console.log('   Environment:', process.env.NODE_ENV);
 console.log('   Frontend URL:', process.env.FRONTEND_URL);
 console.log('   CORS Origins:', corsOptions.origin);
 
+// Log route configuration
+console.log('🔧 Route Configuration:');
+console.log('   API Routes: /api/*');
+console.log('   Auth Routes: /auth/*');
+console.log('   Static Routes: /uploads/*');
+
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
@@ -368,19 +374,16 @@ app.get('/user-counts', async (req, res) => {
 });
 
 // ✅ Routes
-app.use('/', userRoutes);
-app.use('/messages', messageRoutes);
-app.use('/group-chats', groupChatRoutes);
-app.use('/group-messages', groupMessageRoutes);
-app.use('/uploads', express.static('uploads'));
-app.use("/events", eventRoutes);
-app.use("/classes", classRoutes);
-app.use("/", auditTrailRoutes);
-app.use("/lessons", lessonRoutes);
-app.use('/uploads/lessons', express.static('uploads/lessons'));
-app.use('/uploads/quiz-images', express.static('uploads/quiz-images'));
-app.use("/announcements", announcementRoutes);
-app.use("/assignments", assignmentRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/group-chats', groupChatRoutes);
+app.use('/api/group-messages', groupMessageRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/classes', classRoutes);
+app.use('/api/audit-trail', auditTrailRoutes);
+app.use('/api/lessons', lessonRoutes);
+app.use('/api/announcements', announcementRoutes);
+app.use('/api/assignments', assignmentRoutes);
 app.use('/api/tickets', ticketsRouter);
 app.use('/api/schoolyears', schoolYearRoutes);
 app.use('/api/terms', termRoutes);
@@ -388,18 +391,25 @@ app.use('/api/tracks', trackRoutes);
 app.use('/api/strands', strandRoutes);
 app.use('/api/sections', sectionRoutes);
 app.use('/api/meetings', meetingRoutes);
-app.use('/api/classes', classRoutes);
 app.use("/api/faculty-assignments", facultyAssignmentRoutes);
 app.use("/api/student-assignments", studentAssignmentRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use('/api/registrants', registrantRoutes);
 app.use('/api/class-dates', classDateRoutes);
 app.use('/api/quizzes', quizRoutes);
-app.use('/notifications', notificationRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/grading', gradingRoutes);
 app.use('/api/traditional-grades', traditionalGradeRoutes);
-app.use('/api', studentReportRoutes);
+app.use('/api/reports', studentReportRoutes);
 app.use('/api/general-announcements', generalAnnouncementRoutes);
+
+// Public authentication routes (no /api prefix)
+app.use('/auth', userRoutes);
+
+// Static file serving routes
+app.use('/uploads', express.static('uploads'));
+app.use('/uploads/lessons', express.static('uploads/lessons'));
+app.use('/uploads/quiz-images', express.static('uploads/quiz-images'));
 
 // Start server with socket.io
 const startServer = () => {
