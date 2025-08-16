@@ -335,23 +335,71 @@ export default function TermDetails() {
   const fetchSections = async () => {
     setSectionError('');
     try {
-      const allSections = [];
-      for (const track of tracks) {
-        const strandsInTrack = strands.filter(strand => strand.trackName === track.trackName);
-        for (const strand of strandsInTrack) {
-          const res = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
-          if (res.ok) {
-            const data = await res.json();
-            allSections.push(...data);
-          } else {
-            const data = await res.json();
-            setSectionError(data.message || `Failed to fetch sections for track ${track.trackName}, strand ${strand.strandName}`);
-            return;
+      console.log('Fetching sections for term:', termDetails.termName, 'school year:', termDetails.schoolYear);
+      
+      // Fetch sections for the current term using the general endpoint with query params
+      const res = await fetch(`${API_BASE}/api/sections?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Fetched sections for current term:', data);
+        setSections(data);
+      } else {
+        console.log('No sections found for current term, checking for orphaned sections...');
+        
+        // If no sections found for current term, fetch all sections and filter/update orphaned ones
+        const allRes = await fetch(`${API_BASE}/api/sections`);
+        if (allRes.ok) {
+          const allData = await allRes.json();
+          console.log('All sections in database:', allData);
+          
+          // Filter sections that match our tracks and strands but don't have term info
+          const orphanedSections = allData.filter(section => {
+            const hasMatchingTrack = tracks.some(track => track.trackName === section.trackName);
+            const hasMatchingStrand = strands.some(strand => 
+              strand.trackName === section.trackName && strand.strandName === section.strandName
+            );
+            const isOrphaned = !section.schoolYear || !section.termName;
+            
+            return hasMatchingTrack && hasMatchingStrand && isOrphaned;
+          });
+          
+          console.log('Orphaned sections that should belong to current term:', orphanedSections);
+          
+          if (orphanedSections.length > 0) {
+            // Update these sections to belong to the current term
+            console.log('Updating orphaned sections to current term...');
+            for (const section of orphanedSections) {
+              try {
+                const updateRes = await fetch(`${API_BASE}/api/sections/${section._id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    schoolYear: termDetails.schoolYear,
+                    termName: termDetails.termName
+                  })
+                });
+                
+                if (updateRes.ok) {
+                  console.log(`Updated section ${section.sectionName} to current term`);
+                  section.schoolYear = termDetails.schoolYear;
+                  section.termName = termDetails.termName;
+                } else {
+                  console.error(`Failed to update section ${section.sectionName}:`, await updateRes.json());
+                }
+              } catch (err) {
+                console.error(`Error updating section ${section.sectionName}:`, err);
+              }
+            }
           }
+          
+          setSections(orphanedSections);
+        } else {
+          const errorData = await allRes.json();
+          setSectionError(errorData.message || 'Failed to fetch sections');
         }
       }
-      setSections(allSections);
     } catch (err) {
+      console.error('Error fetching sections:', err);
       setSectionError('Error fetching sections');
     }
   };
@@ -3754,19 +3802,280 @@ export default function TermDetails() {
         }
       });
 
-      let alertMessage = `Import process complete.
-Successfully processed ${importedCount} new entries.`;
+      // NOW PERFORM THE ACTUAL IMPORT IN CORRECT ORDER
+      let tracksImported = 0;
+      let strandsImported = 0;
+      let sectionsImported = 0;
+      let subjectsImported = 0;
+      let facultyAssignmentsImported = 0;
+      let studentAssignmentsImported = 0;
+
+      console.log('Starting import process...');
+
+      // STEP 1: Import Tracks
+      if (validTracks.length > 0) {
+        console.log('Importing tracks:', validTracks);
+        for (const track of validTracks) {
+          try {
+            const res = await fetch(`${API_BASE}/api/tracks`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                trackName: track.trackName,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName
+              })
+            });
+
+            if (res.ok) {
+              tracksImported++;
+              console.log(`Track ${track.trackName} imported successfully`);
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              if (errorData.message && (errorData.message.includes('already exists') || errorData.message.includes('must be unique'))) {
+                console.log(`Track ${track.trackName} already exists, skipping...`);
+              } else {
+                console.error(`Failed to import track ${track.trackName}:`, errorData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error importing track ${track.trackName}:`, err);
+          }
+        }
+      }
+
+      // STEP 2: Import Strands
+      if (validStrands.length > 0) {
+        console.log('Importing strands:', validStrands);
+        for (const strand of validStrands) {
+          try {
+            const res = await fetch(`${API_BASE}/api/strands`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                strandName: strand.strandName,
+                trackName: strand.trackName,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName
+              })
+            });
+
+            if (res.ok) {
+              strandsImported++;
+              console.log(`Strand ${strand.strandName} imported successfully`);
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              if (errorData.message && (errorData.message.includes('already exists') || errorData.message.includes('must be unique'))) {
+                console.log(`Strand ${strand.strandName} already exists, skipping...`);
+              } else {
+                console.error(`Failed to import strand ${strand.strandName}:`, errorData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error importing strand ${strand.strandName}:`, err);
+          }
+        }
+      }
+
+      // STEP 3: Import Sections
+      if (validSections.length > 0) {
+        console.log('Importing sections:', validSections);
+        for (const section of validSections) {
+          try {
+            const res = await fetch(`${API_BASE}/api/sections`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sectionName: section.sectionName,
+                trackName: section.trackName,
+                strandName: section.strandName,
+                gradeLevel: section.gradeLevel,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName
+              })
+            });
+
+            if (res.ok) {
+              sectionsImported++;
+              console.log(`Section ${section.sectionName} imported successfully`);
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              if (errorData.message && (errorData.message.includes('already exists') || errorData.message.includes('must be unique'))) {
+                console.log(`Section ${section.sectionName} already exists, skipping...`);
+              } else {
+                console.error(`Failed to import section ${section.sectionName}:`, errorData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error importing section ${section.sectionName}:`, err);
+          }
+        }
+      }
+
+      // STEP 4: Import Subjects
+      if (validSubjects.length > 0) {
+        console.log('Importing subjects:', validSubjects);
+        for (const subject of validSubjects) {
+          try {
+            const res = await fetch(`${API_BASE}/api/subjects`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                subjectName: subject.subjectName,
+                trackName: subject.trackName,
+                strandName: subject.strandName,
+                gradeLevel: subject.gradeLevel,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName
+              })
+            });
+
+            if (res.ok) {
+              subjectsImported++;
+              console.log(`Subject ${subject.subjectName} imported successfully`);
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              if (errorData.message && (errorData.message.includes('already exists') || errorData.message.includes('must be unique'))) {
+                console.log(`Subject ${subject.subjectName} already exists, skipping...`);
+              } else {
+                console.error(`Failed to import subject ${subject.subjectName}:`, errorData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error importing subject ${subject.subjectName}:`, err);
+          }
+        }
+      }
+
+      // STEP 5: Import Faculty Assignments
+      if (validFacultyAssignments.length > 0) {
+        console.log('Importing faculty assignments:', validFacultyAssignments);
+        for (const assignment of validFacultyAssignments) {
+          try {
+            // Find faculty by name
+            const faculty = faculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === assignment.facultyName.toLowerCase());
+            if (!faculty) {
+              console.error(`Faculty ${assignment.facultyName} not found for assignment`);
+              continue;
+            }
+
+            const res = await fetch(`${API_BASE}/api/faculty-assignments`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              },
+              body: JSON.stringify({
+                facultyId: faculty._id,
+                facultyName: assignment.facultyName,
+                trackName: assignment.trackName,
+                strandName: assignment.strandName,
+                sectionName: assignment.sectionName,
+                gradeLevel: assignment.gradeLevel,
+                subjectName: assignment.subjectName,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName,
+                termId: termDetails._id
+              })
+            });
+
+            if (res.ok) {
+              facultyAssignmentsImported++;
+              console.log(`Faculty assignment for ${assignment.facultyName} imported successfully`);
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              if (errorData.message && (errorData.message.includes('already exists') || errorData.message.includes('must be unique'))) {
+                console.log(`Faculty assignment for ${assignment.facultyName} already exists, skipping...`);
+              } else {
+                console.error(`Failed to import faculty assignment for ${assignment.facultyName}:`, errorData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error importing faculty assignment for ${assignment.facultyName}:`, err);
+          }
+        }
+      }
+
+      // STEP 6: Import Student Assignments
+      if (validStudentAssignments.length > 0) {
+        console.log('Importing student assignments:', validStudentAssignments);
+        for (const assignment of validStudentAssignments) {
+          try {
+            // Find student by name
+            const student = students.find(s => `${s.firstname} ${s.lastname}`.toLowerCase() === assignment.studentName.toLowerCase());
+            if (!student) {
+              console.error(`Student ${assignment.studentName} not found for assignment`);
+              continue;
+            }
+
+            const res = await fetch(`${API_BASE}/api/student-assignments`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              },
+              body: JSON.stringify({
+                studentId: student._id,
+                studentName: assignment.studentName,
+                trackName: assignment.trackName,
+                strandName: assignment.strandName,
+                sectionName: assignment.sectionName,
+                gradeLevel: assignment.gradeLevel,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName,
+                termId: termDetails._id
+              })
+            });
+
+            if (res.ok) {
+              studentAssignmentsImported++;
+              console.log(`Student assignment for ${assignment.studentName} imported successfully`);
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              if (errorData.message && (errorData.message.includes('already exists') || errorData.message.includes('must be unique'))) {
+                console.log(`Student assignment for ${assignment.studentName} already exists, skipping...`);
+              } else {
+                console.error(`Failed to import student assignment for ${assignment.studentName}:`, errorData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error importing student assignment for ${assignment.studentName}:`, err);
+          }
+        }
+      }
+
+      // Summary of what was actually imported
+      const totalImported = tracksImported + strandsImported + sectionsImported + subjectsImported + facultyAssignmentsImported + studentAssignmentsImported;
+      
+      let alertMessage = `Import process complete!
+
+Successfully imported:
+- ${tracksImported} tracks
+- ${strandsImported} strands  
+- ${sectionsImported} sections
+- ${subjectsImported} subjects
+- ${facultyAssignmentsImported} faculty assignments
+- ${studentAssignmentsImported} student assignments
+
+Total: ${totalImported} items imported`;
+
       if (skippedCount > 0) {
         alertMessage += `
-Skipped ${skippedCount} duplicate or invalid entries:
+
+Validation issues (${skippedCount} items):
 - ${skippedMessages.join('\n- ')}`;
       }
-      alertMessage += `
 
-Actual import to database is coming soon!`;
       window.alert(alertMessage);
-
-      // TODO: Here is where the actual API calls for bulk upload would go, using the valid* arrays
+      console.log('Import process completed:', {
+        tracksImported,
+        strandsImported,
+        sectionsImported,
+        subjectsImported,
+        facultyAssignmentsImported,
+        studentAssignmentsImported,
+        totalImported
+      });
 
       setImportModalOpen(false);
       setImportExcelFile(null);
@@ -3837,6 +4146,9 @@ Actual import to database is coming soon!`;
     t => t.schoolYear === termDetails?.schoolYear && t.termName === termDetails?.termName
   );
   const filteredSubjects = subjects.filter(
+    s => s.schoolYear === termDetails?.schoolYear && s.termName === termDetails?.termName
+  );
+  const filteredSections = sections.filter(
     s => s.schoolYear === termDetails?.schoolYear && s.termName === termDetails?.termName
   );
 
@@ -4071,7 +4383,7 @@ Actual import to database is coming soon!`;
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('sections')}>
                     <img src={sectionsIcon} alt="Sections Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
-                      sections.filter(sec => sec.status === 'active' && filteredTracks.find(t => t.trackName === sec.trackName && t.status === 'active')).length
+                      filteredSections.filter(sec => sec.status === 'active').length
                     }</span>
                     <span className="text-gray-600 mt-2">Active Sections</span>
                     <button
@@ -4229,7 +4541,9 @@ Actual import to database is coming soon!`;
                           </td>
                         </tr>
                       ) : (
-                        filteredTracks.map(track => (
+                        filteredTracks.filter((track, index, self) => 
+                          index === self.findIndex(t => t._id === track._id)
+                        ).map(track => (
                           <tr key={track._id}>
                             <td className="p-3 border">{track.trackName}</td>
                             <td className="p-3 border">{track.status}</td>
@@ -4655,14 +4969,16 @@ Actual import to database is coming soon!`;
                     </tr>
                   </thead>
                   <tbody>
-                    {sections.length === 0 ? (
+                    {filteredSections.length === 0 ? (
                       <tr>
                         <td colSpan="6" className="p-3 border text-center text-gray-500">
                           No sections found.
                         </td>
                       </tr>
                     ) : (
-                      sections.map((section) => (
+                      filteredSections.filter((section, index, self) => 
+                        index === self.findIndex(s => s._id === section._id)
+                      ).map((section) => (
                         <tr key={section._id}>
                           <td className="p-3 border">{section.trackName}</td>
                           <td className="p-3 border">{section.strandName}</td>
@@ -4964,7 +5280,9 @@ Actual import to database is coming soon!`;
                         </td>
                       </tr>
                     ) : (
-                      filteredSubjects.map((subject) => (
+                      filteredSubjects.filter((subject, index, self) => 
+                        index === self.findIndex(s => s._id === subject._id)
+                      ).map((subject) => (
                         <tr key={subject._id}>
                           <td className="p-3 border">{subject.trackName}</td>
                           <td className="p-3 border">{subject.strandName}</td>
@@ -5369,7 +5687,9 @@ Actual import to database is coming soon!`;
                           </td>
                         </tr>
                       ) : (
-                        facultyAssignments.map((assignment) => (
+                        facultyAssignments.filter((assignment, index, self) => 
+                          index === self.findIndex(a => a._id === assignment._id)
+                        ).map((assignment) => (
                           <tr key={assignment._id}>
                             <td className="p-3 border">{assignment.facultyName}</td>
                             <td className="p-3 border">{assignment.trackName}</td>
@@ -5871,7 +6191,9 @@ Actual import to database is coming soon!`;
                           </td>
                         </tr>
                       ) : (
-                        studentAssignments.map((assignment) => {
+                        studentAssignments.filter((assignment, index, self) => 
+                          index === self.findIndex(a => a._id === assignment._id)
+                        ).map((assignment) => {
                           const student = students.find(s => s._id === assignment.studentId);
                           return (
                             <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
@@ -6398,7 +6720,7 @@ const validateSubjectsImport = async (subjectsToValidate, existingSubjects, term
 const validateFacultyAssignmentsImport = async (assignmentsToValidate, existingAssignments, allFaculties, allTracks, allStrands, allSections, allSubjects, termDetails) => {
   const results = [];
   const activeAssignments = existingAssignments.filter(a => a.status === 'active' && a.schoolYear === termDetails.schoolYear && a.termName === termDetails.termName);
-  const activeFaculties = allFaculties.filter(f => f.status === 'active');
+  const activeFaculties = allFaculties.filter(f => f.role === 'faculty');
   const activeTracks = allTracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
   const activeStrands = allStrands.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
   const activeSections = allSections.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
@@ -6411,39 +6733,14 @@ const validateFacultyAssignmentsImport = async (assignmentsToValidate, existingA
     }
 
     // Check if faculty exists
-    const faculty = activeFaculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === assignment.facultyName.toLowerCase() && f.role === 'faculty');
+    const faculty = activeFaculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === assignment.facultyName.toLowerCase());
     if (!faculty) {
       results.push({ valid: false, message: `Faculty '${assignment.facultyName}' not found` });
       continue;
     }
 
-    // Check if track exists
-    const track = activeTracks.find(t => t.trackName.toLowerCase() === assignment.trackName.toLowerCase());
-    if (!track) {
-      results.push({ valid: false, message: `Track '${assignment.trackName}' not found for current term` });
-      continue;
-    }
-
-    // Check if strand exists within the track
-    const strand = activeStrands.find(s => s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase());
-    if (!strand) {
-      results.push({ valid: false, message: `Strand '${assignment.strandName}' not found in track '${assignment.trackName}'` });
-      continue;
-    }
-
-    // Check if section exists within the track, strand and grade level
-    const section = activeSections.find(s => s.sectionName.toLowerCase() === assignment.sectionName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase() && s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.gradeLevel.toLowerCase() === assignment.gradeLevel.toLowerCase());
-    if (!section) {
-      results.push({ valid: false, message: `Section '${assignment.sectionName}' not found in track/strand/grade` });
-      continue;
-    }
-
-    // Check if subject exists within the track, strand and grade level
-    const subject = activeSubjects.find(s => s.subjectName.toLowerCase() === assignment.subjectName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase() && s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.gradeLevel.toLowerCase() === assignment.gradeLevel.toLowerCase());
-    if (!subject) {
-      results.push({ valid: false, message: `Subject '${assignment.subjectName}' not found for selected track/strand/grade` });
-      continue;
-    }
+    // Note: For import validation, we allow tracks, strands, sections, and subjects to be created during import
+    // So we only validate that faculty exists, not the structural data
 
     // Check for duplicate assignment
     const exists = activeAssignments.some(ea =>
@@ -6464,7 +6761,7 @@ const validateFacultyAssignmentsImport = async (assignmentsToValidate, existingA
 const validateStudentAssignmentsImport = async (assignmentsToValidate, existingAssignments, allStudents, allTracks, allStrands, allSections, termDetails) => {
   const results = [];
   const activeAssignments = existingAssignments.filter(a => a.status === 'active' && a.schoolYear === termDetails.schoolYear && a.termName === termDetails.termName);
-  const activeStudents = allStudents.filter(s => s.status === 'active');
+  const activeStudents = allStudents.filter(s => s.role === 'students');
   const activeTracks = allTracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
   const activeStrands = allStrands.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
   const activeSections = allSections.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
@@ -6476,32 +6773,14 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
     }
 
     // Check if student exists
-    const student = activeStudents.find(s => `${s.firstname} ${s.lastname}`.toLowerCase() === assignment.studentName.toLowerCase() && s.role === 'students');
+    const student = activeStudents.find(s => `${s.firstname} ${s.lastname}`.toLowerCase() === assignment.studentName.toLowerCase());
     if (!student) {
       results.push({ valid: false, message: `Student '${assignment.studentName}' not found` });
       continue;
     }
 
-    // Check if track exists
-    const track = activeTracks.find(t => t.trackName.toLowerCase() === assignment.trackName.toLowerCase());
-    if (!track) {
-      results.push({ valid: false, message: `Track '${assignment.trackName}' not found for current term` });
-      continue;
-    }
-
-    // Check if strand exists within the track
-    const strand = activeStrands.find(s => s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase());
-    if (!strand) {
-      results.push({ valid: false, message: `Strand '${assignment.strandName}' not found in track '${assignment.trackName}'` });
-      continue;
-    }
-
-    // Check if section exists within the track, strand and grade level
-    const section = activeSections.find(s => s.sectionName.toLowerCase() === assignment.sectionName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase() && s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.gradeLevel.toLowerCase() === assignment.gradeLevel.toLowerCase());
-    if (!section) {
-      results.push({ valid: false, message: `Section '${assignment.sectionName}' not found in track/strand/grade` });
-      continue;
-    }
+    // Note: For import validation, we allow tracks, strands, and sections to be created during import
+    // So we only validate that student exists, not the structural data
 
     // Check for duplicate assignment
     const exists = activeAssignments.some(ea =>
