@@ -52,6 +52,12 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
+// Set default environment if not specified
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'development';
+  console.log('⚠️  NODE_ENV not set, defaulting to development');
+}
+
 console.log('✅ Environment variables validated successfully');
 
 const { ObjectId } = mongoose.Types;
@@ -59,12 +65,15 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST"]
+    origin: process.env.NODE_ENV === 'production' 
+      ? ['https://juan-lms.vercel.app', 'https://juanlms.vercel.app']
+      : ["http://localhost:5173", "http://localhost:3000"],
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 // Socket.io connection handling
 let activeUsers = [];
@@ -160,16 +169,50 @@ io.on("connection", (socket) => {
 // Middleware
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL || 'https://your-frontend-domain.onrender.com']
+    ? [
+        process.env.FRONTEND_URL || 'https://juan-lms.vercel.app',
+        'https://juan-lms.vercel.app',
+        'https://juanlms.vercel.app'
+      ]
     : ['http://localhost:5173', 'http://localhost:3000'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept']
 };
+
+// Log CORS configuration
+console.log('🔧 CORS Configuration:');
+console.log('   Environment:', process.env.NODE_ENV);
+console.log('   Frontend URL:', process.env.FRONTEND_URL);
+console.log('   CORS Origins:', corsOptions.origin);
 
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
+
+// Handle preflight requests for CORS
+app.options('*', cors(corsOptions));
+
+// Additional CORS headers middleware
+app.use((req, res, next) => {
+  // Log CORS-related headers for debugging
+  console.log(`[CORS] ${req.method} ${req.path}`);
+  console.log(`[CORS] Origin: ${req.headers.origin}`);
+  console.log(`[CORS] User-Agent: ${req.headers['user-agent']}`);
+  
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', true);
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    console.log('[CORS] Handling preflight request');
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
 
 // Health check endpoint for deployment (no auth required)
 app.get('/health', (req, res) => {
@@ -198,6 +241,16 @@ app.get('/', (req, res) => {
 // Render-specific health check (responds immediately)
 app.get('/render-health', (req, res) => {
   res.status(200).send('OK');
+});
+
+// CORS test endpoint
+app.get('/cors-test', (req, res) => {
+  res.json({
+    message: 'CORS is working!',
+    origin: req.headers.origin,
+    method: req.method,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // MongoDB connection
@@ -358,6 +411,8 @@ const startServer = () => {
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`📅 Started at: ${new Date().toISOString()}`);
       console.log(`✅ Health check available at: http://localhost:${PORT}/health`);
+      console.log(`✅ CORS test available at: http://localhost:${PORT}/cors-test`);
+      console.log(`🌐 Server URL: ${process.env.NODE_ENV === 'production' ? 'https://juanlms-webapp-server.onrender.com' : `http://localhost:${PORT}`}`);
     });
 
     // Graceful shutdown handling
