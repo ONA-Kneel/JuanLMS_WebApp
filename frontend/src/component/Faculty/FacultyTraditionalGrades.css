@@ -306,3 +306,36 @@
     font-size: 0.8rem;
   }
 } 
+
+.debug-info {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.8rem;
+  color: #667eea;
+  font-style: italic;
+}
+
+.debug-panel {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 15px;
+  margin-top: 20px;
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+.debug-panel h4 {
+  margin: 0 0 10px 0;
+  color: #495057;
+  font-size: 1rem;
+}
+
+.debug-panel p {
+  margin: 5px 0;
+  color: #6c757d;
+}
+
+.debug-panel p:last-child {
+  margin-bottom: 0;
+} 
