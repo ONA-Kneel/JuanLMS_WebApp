@@ -6,7 +6,7 @@ import MeetingList from '../Meeting/MeetingList';
 import VideoMeetingRoom from '../Meeting/VideoMeetingRoom';
 import { Video, Users, Calendar, Plus } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const Faculty_Meeting = () => {
   const [academicYear, setAcademicYear] = useState(null);
@@ -180,7 +180,7 @@ const Faculty_Meeting = () => {
   console.log('[DEBUG] handleJoinMeeting received:', meeting);
     // meeting is the original meeting object from MeetingList
     const token = localStorage.getItem('token');
-    const response = await fetch(`${import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com"}/api/meetings/${meeting._id}/join`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/meetings/${meeting._id}/join`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` }
     });
