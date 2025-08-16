@@ -364,18 +364,29 @@ const startServer = () => {
     const gracefulShutdown = (signal) => {
       console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
       
-      serverInstance.close(() => {
-        console.log('✅ HTTP server closed');
+      // Close socket.io connections gracefully
+      io.close(() => {
+        console.log('✅ Socket.io server closed');
         
-        // Close MongoDB connection
-        if (mongoose.connection.readyState === 1) {
-          mongoose.connection.close(false, () => {
-            console.log('✅ MongoDB connection closed');
+        // Close HTTP server
+        serverInstance.close(() => {
+          console.log('✅ HTTP server closed');
+          
+          // Close MongoDB connection
+          if (mongoose.connection.readyState === 1) {
+            mongoose.connection.close()
+              .then(() => {
+                console.log('✅ MongoDB connection closed');
+                process.exit(0);
+              })
+              .catch((error) => {
+                console.error('❌ Error closing MongoDB connection:', error);
+                process.exit(1);
+              });
+          } else {
             process.exit(0);
-          });
-        } else {
-          process.exit(0);
-        }
+          }
+        });
       });
 
       // Force close after 10 seconds
