@@ -4,7 +4,7 @@ import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
 // Use localhost for development - local server is running on port 5000
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Faculty_StudentReport() {
   const [academicYear, setAcademicYear] = useState(null);
