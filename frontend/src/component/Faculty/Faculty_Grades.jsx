@@ -24,6 +24,7 @@ export default function Faculty_Grades() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedClass, setSelectedClass] = useState(null);
+  const [selectedSection, setSelectedSection] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [grades, setGrades] = useState({});
   const [students, setStudents] = useState([]);
@@ -116,6 +117,13 @@ export default function Faculty_Grades() {
       fetchStudents();
     }
   }, [selectedClass]);
+
+  useEffect(() => {
+    if (selectedClass !== null && selectedSection) {
+      // Filter students by section if needed
+      // This will be handled in the render logic
+    }
+  }, [selectedClass, selectedSection]);
 
   const fetchSubjects = async () => {
     try {
@@ -263,6 +271,7 @@ export default function Faculty_Grades() {
           _id: student._id || student.userID || student.studentID,
           name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
           schoolID: student.schoolID || student.userID || student.studentID,
+          section: student.section || student.sectionName || 'default',
           grades: gradesStructure
         };
       });
@@ -277,9 +286,17 @@ export default function Faculty_Grades() {
   const handleClassChange = (e) => {
     const classIndex = parseInt(e.target.value);
     setSelectedClass(classIndex);
+    setSelectedSection(null);
     setSubjects([]);
     setGrades({});
     setStudents([]);
+    setSelectedStudent(null);
+    setStudentGrades({});
+  };
+
+  const handleSectionChange = (e) => {
+    const section = e.target.value;
+    setSelectedSection(section);
     setSelectedStudent(null);
     setStudentGrades({});
   };
@@ -574,7 +591,8 @@ export default function Faculty_Grades() {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `${selectedClassObj.className}_${currentTerm?.termName || 'Semester'}_Grades.csv`);
+    const sectionInfo = selectedSection && selectedSection !== 'default' ? `_${selectedSection}` : '';
+    link.setAttribute('download', `${selectedClassObj.className}${sectionInfo}_${currentTerm?.termName || 'Semester'}_Grades.csv`);
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -716,14 +734,34 @@ export default function Faculty_Grades() {
                 <option value="">Choose a class...</option>
                 {classes.map((cls, index) => (
                   <option key={cls.classID} value={index}>
-                    {cls.className} - {cls.sectionName || 'No Section'} ({cls.trackName || 'N/A'} | {cls.strandName || 'N/A'} | {cls.gradeLevel || 'N/A'})
+                    {cls.className}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Student Selection */}
+            {/* Section Selection */}
             {selectedClass !== null && students.length > 0 && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Section:</label>
+                <select
+                  className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={selectedSection || ""}
+                  onChange={handleSectionChange}
+                >
+                  <option value="">Choose a section...</option>
+                  {Array.from(new Set(students.map(student => student.section || 'default')))
+                    .map(section => (
+                      <option key={section} value={section}>
+                        {section === 'default' ? 'Default Section' : section}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            {/* Student Selection */}
+            {selectedClass !== null && selectedSection && students.length > 0 && (
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Student:</label>
                 <select
@@ -732,11 +770,16 @@ export default function Faculty_Grades() {
                   onChange={handleStudentChange}
                 >
                   <option value="">Choose a student...</option>
-                  {students.map((student) => (
-                    <option key={student._id} value={student._id}>
-                      {student.name} - {student.schoolID}
-                    </option>
-                  ))}
+                  {students
+                    .filter(student => {
+                      const studentSection = student.section || 'default';
+                      return studentSection === selectedSection;
+                    })
+                    .map((student) => (
+                      <option key={student._id} value={student._id}>
+                        {student.name} - {student.schoolID}
+                      </option>
+                    ))}
                 </select>
               </div>
             )}
@@ -746,6 +789,11 @@ export default function Faculty_Grades() {
               <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">
                   Individual Student Grade Management - {currentTerm?.termName || 'Current Term'}
+                  {selectedSection && selectedSection !== 'default' && (
+                    <span className="text-sm font-normal text-gray-600 ml-2">
+                      (Section: {selectedSection})
+                    </span>
+                  )}
                 </h3>
                 
                 {/* Student Grade Inputs */}
@@ -918,6 +966,11 @@ export default function Faculty_Grades() {
                   {currentTerm?.termName === 'Term 1' ? 'First Semester (Q1 & Q2)' : 
                    currentTerm?.termName === 'Term 2' ? 'Second Semester (Q3 & Q4)' : 
                    'Semester Grades'}
+                   {selectedSection && selectedSection !== 'default' && (
+                     <span className="text-sm font-normal text-gray-600 ml-2">
+                       - Section: {selectedSection}
+                     </span>
+                   )}
                 </h2>
                 <div className="flex gap-2">
                     
