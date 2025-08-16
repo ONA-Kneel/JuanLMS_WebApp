@@ -34,7 +34,7 @@ import registrantRoutes from "./routes/registrantRoutes.js";
 import classDateRoutes  from './routes/classDateRoutes.js';
 import quizRoutes from './routes/quizRoutes.js';
 import meetingRoutes from './routes/meetingRoutes.js';
-import notificationRoutes from "./routes/notificationRoutes.js";
+import notificationRoutes from './routes/notificationRoutes.js';
 import gradingRoutes from './routes/gradingRoutes.js';
 import traditionalGradeRoutes from './routes/traditionalGradeRoutes.js';
 import studentReportRoutes from './routes/studentReportRoutes.js';
@@ -43,37 +43,17 @@ import generalAnnouncementRoutes from './routes/generalAnnouncementRoutes.js';
 
 dotenv.config({ path: './config.env' });
 
-// Validate required environment variables
-const requiredEnvVars = ['JWT_SECRET', 'ATLAS_URI'];
-for (const envVar of requiredEnvVars) {
-  if (!process.env[envVar]) {
-    console.error(`❌ Missing required environment variable: ${envVar}`);
-    process.exit(1);
-  }
-}
-
-// Set default environment if not specified
-if (!process.env.NODE_ENV) {
-  process.env.NODE_ENV = 'development';
-  console.log('⚠️  NODE_ENV not set, defaulting to development');
-}
-
-console.log('✅ Environment variables validated successfully');
-
 const { ObjectId } = mongoose.Types;
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' 
-      ? ['https://juan-lms.vercel.app', 'https://juanlms.vercel.app']
-      : ["http://localhost:5173", "http://localhost:3000"],
-    methods: ["GET", "POST"],
-    credentials: true
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST"]
   }
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = 5000;
 
 // Socket.io connection handling
 let activeUsers = [];
@@ -167,144 +147,17 @@ io.on("connection", (socket) => {
 });
 
 // Middleware
-const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        process.env.FRONTEND_URL || 'https://juan-lms.vercel.app',
-        'https://juan-lms.vercel.app',
-        'https://juanlms.vercel.app'
-      ]
-    : ['http://localhost:5173', 'http://localhost:3000'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept']
-};
-
-// Log CORS configuration
-console.log('🔧 CORS Configuration:');
-console.log('   Environment:', process.env.NODE_ENV);
-console.log('   Frontend URL:', process.env.FRONTEND_URL);
-console.log('   CORS Origins:', corsOptions.origin);
-
-// Log route configuration
-console.log('🔧 Route Configuration:');
-console.log('   API Routes: /api/*');
-console.log('   Auth Routes: /auth/*');
-console.log('   Static Routes: /uploads/*');
-
-app.use(cors(corsOptions));
+app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
-// Handle preflight requests for CORS
-app.options('*', cors(corsOptions));
-
-// Additional CORS headers middleware
-app.use((req, res, next) => {
-  // Log CORS-related headers for debugging
-  console.log(`[CORS] ${req.method} ${req.path}`);
-  console.log(`[CORS] Origin: ${req.headers.origin}`);
-  console.log(`[CORS] User-Agent: ${req.headers['user-agent']}`);
-  
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Credentials', true);
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
-  // Handle preflight
-  if (req.method === 'OPTIONS') {
-    console.log('[CORS] Handling preflight request');
-    res.sendStatus(200);
-  } else {
-    next();
-  }
-});
-
-// Health check endpoint for deployment (no auth required)
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    message: 'Server is running',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development',
-    version: '1.0.0'
-  });
-});
-
-app.get('/', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    message: 'JuanLMS API Server',
-    timestamp: new Date().toISOString(),
-    endpoints: {
-      health: '/health',
-      docs: 'API documentation available'
-    }
-  });
-});
-
-// Render-specific health check (responds immediately)
-app.get('/render-health', (req, res) => {
-  res.status(200).send('OK');
-});
-
-// CORS test endpoint
-app.get('/cors-test', (req, res) => {
-  res.json({
-    message: 'CORS is working!',
-    origin: req.headers.origin,
-    method: req.method,
-    timestamp: new Date().toISOString()
-  });
-});
-
 // MongoDB connection
-const mongoOptions = {
-  serverSelectionTimeoutMS: 10000, // 10 seconds
-  socketTimeoutMS: 45000, // 45 seconds
-  connectTimeoutMS: 10000, // 10 seconds
-  maxPoolSize: 10,
-  minPoolSize: 1,
-  maxIdleTimeMS: 30000,
-  retryWrites: true,
-  w: 'majority'
-};
+mongoose.connect(process.env.ATLAS_URI)
+  .then(() => console.log("Connected to MongoDB"))
+  .catch((error) => console.error("Error connecting to MongoDB:", error));
 
-let mongoRetryCount = 0;
-const maxRetries = 3;
-
-const connectToMongo = async () => {
-  try {
-    await mongoose.connect(process.env.ATLAS_URI, mongoOptions);
-    console.log("✅ Connected to MongoDB successfully");
-    console.log(`📊 Database: ${process.env.ATLAS_URI.split('/').pop().split('?')[0]}`);
-    mongoRetryCount = 0; // Reset retry count on success
-  } catch (error) {
-    mongoRetryCount++;
-    console.error(`❌ MongoDB connection attempt ${mongoRetryCount} failed:`, error.message);
-    
-    if (mongoRetryCount < maxRetries) {
-      console.log(`🔄 Retrying MongoDB connection in 5 seconds... (${mongoRetryCount}/${maxRetries})`);
-      setTimeout(connectToMongo, 5000);
-    } else {
-      console.error("❌ Max MongoDB connection retries reached. Server will start without DB connection.");
-      console.log("🔄 Database operations will be retried on first request.");
-    }
-  }
-};
-
-// Start MongoDB connection
-connectToMongo();
-
-mongoose.connection.on('connected', () => console.log("🔄 MongoDB connection established"));
-mongoose.connection.on('error', (err) => {
-  console.error("❌ MongoDB connection error:", err.message);
-  if (err.name === 'MongoNetworkError') {
-    console.error("🌐 Network error - check your internet connection and MongoDB Atlas settings");
-  }
-});
-mongoose.connection.on('disconnected', () => console.log("🔌 MongoDB disconnected"));
+mongoose.connection.on('connected', () => console.log("MongoDB connected successfully"));
+mongoose.connection.on('error', (err) => console.error("MongoDB connection error:", err));
 
 // File upload config
 const uploadDir = './uploads';
@@ -374,16 +227,19 @@ app.get('/user-counts', async (req, res) => {
 });
 
 // ✅ Routes
-app.use('/api/users', userRoutes);
-app.use('/api/messages', messageRoutes);
-app.use('/api/group-chats', groupChatRoutes);
-app.use('/api/group-messages', groupMessageRoutes);
-app.use('/api/events', eventRoutes);
-app.use('/api/classes', classRoutes);
-app.use('/api/audit-trail', auditTrailRoutes);
-app.use('/api/lessons', lessonRoutes);
-app.use('/api/announcements', announcementRoutes);
-app.use('/api/assignments', assignmentRoutes);
+app.use('/', userRoutes);
+app.use('/messages', messageRoutes);
+app.use('/group-chats', groupChatRoutes);
+app.use('/group-messages', groupMessageRoutes);
+app.use('/uploads', express.static('uploads'));
+app.use("/events", eventRoutes);
+app.use("/classes", classRoutes);
+app.use("/", auditTrailRoutes);
+app.use("/lessons", lessonRoutes);
+app.use('/uploads/lessons', express.static('uploads/lessons'));
+app.use('/uploads/quiz-images', express.static('uploads/quiz-images'));
+app.use("/announcements", announcementRoutes);
+app.use("/assignments", assignmentRoutes);
 app.use('/api/tickets', ticketsRouter);
 app.use('/api/schoolyears', schoolYearRoutes);
 app.use('/api/terms', termRoutes);
@@ -391,95 +247,22 @@ app.use('/api/tracks', trackRoutes);
 app.use('/api/strands', strandRoutes);
 app.use('/api/sections', sectionRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/classes', classRoutes);
 app.use("/api/faculty-assignments", facultyAssignmentRoutes);
 app.use("/api/student-assignments", studentAssignmentRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use('/api/registrants', registrantRoutes);
 app.use('/api/class-dates', classDateRoutes);
 app.use('/api/quizzes', quizRoutes);
-app.use('/api/notifications', notificationRoutes);
+app.use('/notifications', notificationRoutes);
 app.use('/api/grading', gradingRoutes);
 app.use('/api/traditional-grades', traditionalGradeRoutes);
-app.use('/api/reports', studentReportRoutes);
+app.use('/api', studentReportRoutes);
 app.use('/api/general-announcements', generalAnnouncementRoutes);
 
-// Public authentication routes (no /api prefix)
-app.use('/auth', userRoutes);
-
-// Static file serving routes
-app.use('/uploads', express.static('uploads'));
-app.use('/uploads/lessons', express.static('uploads/lessons'));
-app.use('/uploads/quiz-images', express.static('uploads/quiz-images'));
-
 // Start server with socket.io
-const startServer = () => {
-  try {
-    const serverInstance = server.listen(PORT, () => {
-      connect.connectToServer();
-      console.log(`🚀 Server is running on port: ${PORT}`);
-      console.log(`🔌 Socket.io server is running on port: ${PORT}`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`📅 Started at: ${new Date().toISOString()}`);
-      console.log(`✅ Health check available at: http://localhost:${PORT}/health`);
-      console.log(`✅ CORS test available at: http://localhost:${PORT}/cors-test`);
-      console.log(`🌐 Server URL: ${process.env.NODE_ENV === 'production' ? 'https://juanlms-webapp-server.onrender.com' : `http://localhost:${PORT}`}`);
-    });
-
-    // Graceful shutdown handling
-    const gracefulShutdown = (signal) => {
-      console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
-      
-      // Close socket.io connections gracefully
-      io.close(() => {
-        console.log('✅ Socket.io server closed');
-        
-        // Close HTTP server
-        serverInstance.close(() => {
-          console.log('✅ HTTP server closed');
-          
-          // Close MongoDB connection
-          if (mongoose.connection.readyState === 1) {
-            mongoose.connection.close()
-              .then(() => {
-                console.log('✅ MongoDB connection closed');
-                process.exit(0);
-              })
-              .catch((error) => {
-                console.error('❌ Error closing MongoDB connection:', error);
-                process.exit(1);
-              });
-          } else {
-            process.exit(0);
-          }
-        });
-      });
-
-      // Force close after 10 seconds
-      setTimeout(() => {
-        console.error('❌ Could not close connections in time, forcefully shutting down');
-        process.exit(1);
-      }, 10000);
-    };
-
-    // Handle shutdown signals
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-    // Handle uncaught exceptions
-    process.on('uncaughtException', (error) => {
-      console.error('❌ Uncaught Exception:', error);
-      gracefulShutdown('uncaughtException');
-    });
-
-    process.on('unhandledRejection', (reason, promise) => {
-      console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-      gracefulShutdown('unhandledRejection');
-    });
-
-  } catch (error) {
-    console.error('❌ Failed to start server:', error.message);
-    process.exit(1);
-  }
-};
-
-startServer();
+server.listen(PORT, () => {
+  connect.connectToServer();
+  console.log(`Server is running on port: ${PORT}`);
+  console.log(`Socket.io server is running on port: ${PORT}`);
+});
