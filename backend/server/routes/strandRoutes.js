@@ -1,6 +1,10 @@
 import express from 'express';
 import Strand from '../models/Strand.js';
 import Term from '../models/Term.js';
+import Section from '../models/Section.js';
+import Subject from '../models/Subject.js';
+import StudentAssignment from '../models/StudentAssignment.js';
+import FacultyAssignment from '../models/FacultyAssignment.js';
 
 const router = express.Router();
 
@@ -134,28 +138,215 @@ router.patch('/:id', async (req, res) => {
       return res.status(409).json({ message: 'Strand name must be unique within the same track, school year, and term.' });
     }
 
+    // Store original values for cascading updates
+    const originalStrandName = strand.strandName;
+    const originalTrackName = strand.trackName;
+
     strand.strandName = strandName;
     strand.trackName = trackName;
     strand.schoolYear = currentTerm.schoolYear;
     strand.termName = currentTerm.termName;
 
     await strand.save();
+
+    // Cascade update to all related entities if strand name or track name changed
+    if (originalStrandName !== strandName || originalTrackName !== trackName) {
+      console.log(`Cascading strand update from "${originalTrackName}/${originalStrandName}" to "${trackName}/${strandName}"`);
+      
+      await Promise.all([
+        // Update sections
+        Section.updateMany(
+          { 
+            trackName: originalTrackName,
+            strandName: originalStrandName, 
+            schoolYear: currentTerm.schoolYear, 
+            termName: currentTerm.termName 
+          },
+          { $set: { trackName: trackName, strandName: strandName } }
+        ),
+        
+        // Update subjects
+        Subject.updateMany(
+          { 
+            trackName: originalTrackName,
+            strandName: originalStrandName, 
+            schoolYear: currentTerm.schoolYear, 
+            termName: currentTerm.termName 
+          },
+          { $set: { trackName: trackName, strandName: strandName } }
+        ),
+        
+        // Update student assignments
+        StudentAssignment.updateMany(
+          { 
+            trackName: originalTrackName,
+            strandName: originalStrandName, 
+            schoolYear: currentTerm.schoolYear, 
+            termName: currentTerm.termName 
+          },
+          { $set: { trackName: trackName, strandName: strandName } }
+        ),
+        
+        // Update faculty assignments
+        FacultyAssignment.updateMany(
+          { 
+            trackName: originalTrackName,
+            strandName: originalStrandName, 
+            schoolYear: currentTerm.schoolYear, 
+            termName: currentTerm.termName 
+          },
+          { $set: { trackName: trackName, strandName: strandName } }
+        )
+      ]);
+      
+      console.log(`Successfully cascaded strand update to all related entities`);
+    }
+
     res.status(200).json(strand);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 });
 
-// Delete a strand
+// Check strand dependencies before deletion
+router.get('/:id/dependencies', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const strand = await Strand.findById(id);
+    
+    if (!strand) {
+      return res.status(404).json({ message: 'Strand not found' });
+    }
+
+    // Check all dependencies
+    const [sections, subjects, studentAssignments, facultyAssignments] = await Promise.all([
+      Section.find({ 
+        trackName: strand.trackName,
+        strandName: strand.strandName, 
+        schoolYear: strand.schoolYear, 
+        termName: strand.termName 
+      }),
+      Subject.find({ 
+        trackName: strand.trackName,
+        strandName: strand.strandName, 
+        schoolYear: strand.schoolYear, 
+        termName: strand.termName 
+      }),
+      StudentAssignment.find({ 
+        trackName: strand.trackName,
+        strandName: strand.strandName, 
+        schoolYear: strand.schoolYear, 
+        termName: strand.termName 
+      }),
+      FacultyAssignment.find({ 
+        trackName: strand.trackName,
+        strandName: strand.strandName, 
+        schoolYear: strand.schoolYear, 
+        termName: strand.termName 
+      })
+    ]);
+
+    const dependencies = {
+      strand: strand,
+      sections: sections,
+      subjects: subjects,
+      studentAssignments: studentAssignments,
+      facultyAssignments: facultyAssignments,
+      totalConnections: sections.length + subjects.length + studentAssignments.length + facultyAssignments.length
+    };
+
+    res.json(dependencies);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete a strand and all its dependencies
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const deletedStrand = await Strand.findByIdAndDelete(id);
+    const { confirmCascade } = req.query;
 
-    if (!deletedStrand) {
+    const strand = await Strand.findById(id);
+    if (!strand) {
       return res.status(404).json({ message: 'Strand not found' });
     }
-    res.status(200).json({ message: 'Strand deleted successfully' });
+
+    // If cascade confirmation is not provided, check dependencies first
+    if (!confirmCascade) {
+      const dependencies = await Promise.all([
+        Section.countDocuments({ 
+          trackName: strand.trackName,
+          strandName: strand.strandName, 
+          schoolYear: strand.schoolYear, 
+          termName: strand.termName 
+        }),
+        Subject.countDocuments({ 
+          trackName: strand.trackName,
+          strandName: strand.strandName, 
+          schoolYear: strand.schoolYear, 
+          termName: strand.termName 
+        }),
+        StudentAssignment.countDocuments({ 
+          trackName: strand.trackName,
+          strandName: strand.strandName, 
+          schoolYear: strand.schoolYear, 
+          termName: strand.termName 
+        }),
+        FacultyAssignment.countDocuments({ 
+          trackName: strand.trackName,
+          strandName: strand.strandName, 
+          schoolYear: strand.schoolYear, 
+          termName: strand.termName 
+        })
+      ]);
+
+      const totalDependencies = dependencies.reduce((sum, count) => sum + count, 0);
+      
+      if (totalDependencies > 0) {
+        return res.status(409).json({ 
+          message: `Cannot delete strand: It has ${totalDependencies} connected records. Use confirmCascade=true to delete all connected data.`,
+          dependencyCount: totalDependencies
+        });
+      }
+    }
+
+    // Proceed with cascading deletion
+    console.log(`Cascading deletion of strand: ${strand.trackName}/${strand.strandName}`);
+    
+    await Promise.all([
+      // Delete all related entities
+      Section.deleteMany({ 
+        trackName: strand.trackName,
+        strandName: strand.strandName, 
+        schoolYear: strand.schoolYear, 
+        termName: strand.termName 
+      }),
+      Subject.deleteMany({ 
+        trackName: strand.trackName,
+        strandName: strand.strandName, 
+        schoolYear: strand.schoolYear, 
+        termName: strand.termName 
+      }),
+      StudentAssignment.deleteMany({ 
+        trackName: strand.trackName,
+        strandName: strand.strandName, 
+        schoolYear: strand.schoolYear, 
+        termName: strand.termName 
+      }),
+      FacultyAssignment.deleteMany({ 
+        trackName: strand.trackName,
+        strandName: strand.strandName, 
+        schoolYear: strand.schoolYear, 
+        termName: strand.termName 
+      })
+    ]);
+
+    // Finally delete the strand
+    await Strand.findByIdAndDelete(id);
+    
+    console.log(`Successfully deleted strand and all connected data`);
+    res.status(200).json({ message: 'Strand and all connected data deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

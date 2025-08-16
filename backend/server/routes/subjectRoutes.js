@@ -1,6 +1,7 @@
 import express from 'express';
 import Subject from '../models/Subject.js';
 import Term from '../models/Term.js';
+import FacultyAssignment from '../models/FacultyAssignment.js';
 
 const router = express.Router();
 
@@ -114,14 +115,43 @@ router.patch('/:id', async (req, res) => {
       return res.status(400).json({ message: 'Subject already exists in this track, strand, grade, term, and school year.' });
     }
 
+    // Get the original subject to compare for cascading updates
+    const originalSubject = await Subject.findById(id);
+    if (!originalSubject) {
+      return res.status(404).json({ message: 'Subject not found' });
+    }
+
     const updatedSubject = await Subject.findByIdAndUpdate(
       id,
       { subjectName, trackName, strandName, gradeLevel, schoolYear, termName },
       { new: true, runValidators: true }
     );
 
-    if (!updatedSubject) {
-      return res.status(404).json({ message: 'Subject not found' });
+    // Cascade update to faculty assignments if subject name or related fields changed
+    if (originalSubject.subjectName !== subjectName || 
+        originalSubject.trackName !== trackName || 
+        originalSubject.strandName !== strandName || 
+        originalSubject.gradeLevel !== gradeLevel) {
+      console.log(`Cascading subject update from "${originalSubject.trackName}/${originalSubject.strandName}/${originalSubject.subjectName}" to "${trackName}/${strandName}/${subjectName}"`);
+      
+      await FacultyAssignment.updateMany(
+        { 
+          trackName: originalSubject.trackName,
+          strandName: originalSubject.strandName,
+          subjectName: originalSubject.subjectName,
+          gradeLevel: originalSubject.gradeLevel,
+          schoolYear: originalSubject.schoolYear,
+          termName: originalSubject.termName
+        },
+        { $set: { 
+          trackName: trackName,
+          strandName: strandName,
+          subjectName: subjectName,
+          gradeLevel: gradeLevel
+        } }
+      );
+      
+      console.log(`Successfully cascaded subject update to faculty assignments`);
     }
 
     res.json(updatedSubject);
@@ -242,6 +272,88 @@ router.get('/schoolyear/:schoolYear/term/:termName', async (req, res) => {
       if (!unique.has(key)) unique.set(key, s);
     }
     res.json(Array.from(unique.values()));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Check subject dependencies before deletion
+router.get('/:id/dependencies', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const subject = await Subject.findById(id);
+    
+    if (!subject) {
+      return res.status(404).json({ message: 'Subject not found' });
+    }
+
+    // Check all dependencies
+    const facultyAssignments = await FacultyAssignment.find({ 
+      trackName: subject.trackName,
+      strandName: subject.strandName,
+      subjectName: subject.subjectName, 
+      schoolYear: subject.schoolYear, 
+      termName: subject.termName 
+    });
+
+    const dependencies = {
+      subject: subject,
+      facultyAssignments: facultyAssignments,
+      totalConnections: facultyAssignments.length
+    };
+
+    res.json(dependencies);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete a subject and all its dependencies
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { confirmCascade } = req.query;
+    
+    const subject = await Subject.findById(id);
+    if (!subject) {
+      return res.status(404).json({ message: 'Subject not found' });
+    }
+
+    // If cascade confirmation is not provided, check dependencies first
+    if (!confirmCascade) {
+      const dependencyCount = await FacultyAssignment.countDocuments({ 
+        trackName: subject.trackName,
+        strandName: subject.strandName,
+        subjectName: subject.subjectName, 
+        schoolYear: subject.schoolYear, 
+        termName: subject.termName 
+      });
+      
+      if (dependencyCount > 0) {
+        return res.status(409).json({ 
+          message: `Cannot delete subject: It has ${dependencyCount} connected records. Use confirmCascade=true to delete all connected data.`,
+          dependencyCount: dependencyCount
+        });
+      }
+    }
+
+    // Proceed with cascading deletion
+    console.log(`Cascading deletion of subject: ${subject.trackName}/${subject.strandName}/${subject.subjectName}`);
+    
+    // Delete all related faculty assignments
+    await FacultyAssignment.deleteMany({ 
+      trackName: subject.trackName,
+      strandName: subject.strandName,
+      subjectName: subject.subjectName, 
+      schoolYear: subject.schoolYear, 
+      termName: subject.termName 
+      });
+    
+    // Finally delete the subject
+    await Subject.findByIdAndDelete(id);
+    
+    console.log(`Successfully deleted subject and all connected data`);
+    res.status(200).json({ message: 'Subject and all connected data deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

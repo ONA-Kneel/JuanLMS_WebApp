@@ -382,4 +382,96 @@ router.get('/current', authenticateToken, async (req, res) => {
   }
 });
 
+// Check term dependencies before deletion
+router.get('/:id/dependencies', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const term = await Term.findById(id);
+    
+    if (!term) {
+      return res.status(404).json({ message: 'Term not found' });
+    }
+
+    // Check all dependencies
+    const [tracks, strands, sections, subjects, studentAssignments, facultyAssignments] = await Promise.all([
+      Track.find({ schoolYear: term.schoolYear, termName: term.termName }),
+      Strand.find({ schoolYear: term.schoolYear, termName: term.termName }),
+      Section.find({ schoolYear: term.schoolYear, termName: term.termName }),
+      Subject.find({ schoolYear: term.schoolYear, termName: term.termName }),
+      StudentAssignment.find({ termId: term._id }),
+      FacultyAssignment.find({ termId: term._id })
+    ]);
+
+    const dependencies = {
+      term: term,
+      tracks: tracks,
+      strands: strands,
+      sections: sections,
+      subjects: subjects,
+      studentAssignments: studentAssignments,
+      facultyAssignments: facultyAssignments,
+      totalConnections: tracks.length + strands.length + sections.length + subjects.length + studentAssignments.length + facultyAssignments.length
+    };
+
+    res.json(dependencies);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete a term and all its dependencies
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { confirmCascade } = req.query;
+    
+    const term = await Term.findById(id);
+    if (!term) {
+      return res.status(404).json({ message: 'Term not found' });
+    }
+
+    // If cascade confirmation is not provided, check dependencies first
+    if (!confirmCascade) {
+      const dependencies = await Promise.all([
+        Track.countDocuments({ schoolYear: term.schoolYear, termName: term.termName }),
+        Strand.countDocuments({ schoolYear: term.schoolYear, termName: term.termName }),
+        Section.countDocuments({ schoolYear: term.schoolYear, termName: term.termName }),
+        Subject.countDocuments({ schoolYear: term.schoolYear, termName: term.termName }),
+        StudentAssignment.countDocuments({ termId: term._id }),
+        FacultyAssignment.countDocuments({ termId: term._id })
+      ]);
+
+      const totalDependencies = dependencies.reduce((sum, count) => sum + count, 0);
+      
+      if (totalDependencies > 0) {
+        return res.status(409).json({ 
+          message: `Cannot delete term: It has ${totalDependencies} connected records. Use confirmCascade=true to delete all connected data.`,
+          dependencyCount: totalDependencies
+        });
+      }
+    }
+
+    // Proceed with cascading deletion
+    console.log(`Cascading deletion of term: ${term.termName} (${term.schoolYear})`);
+    
+    await Promise.all([
+      // Delete all related entities
+      Track.deleteMany({ schoolYear: term.schoolYear, termName: term.termName }),
+      Strand.deleteMany({ schoolYear: term.schoolYear, termName: term.termName }),
+      Section.deleteMany({ schoolYear: term.schoolYear, termName: term.termName }),
+      Subject.deleteMany({ schoolYear: term.schoolYear, termName: term.termName }),
+      StudentAssignment.deleteMany({ termId: term._id }),
+      FacultyAssignment.deleteMany({ termId: term._id })
+    ]);
+
+    // Finally delete the term
+    await Term.findByIdAndDelete(id);
+    
+    console.log(`Successfully deleted term and all connected data`);
+    res.json({ message: 'Term and all connected data deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 export default router; 
