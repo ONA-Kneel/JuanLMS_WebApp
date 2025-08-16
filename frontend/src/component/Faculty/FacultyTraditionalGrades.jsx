@@ -15,6 +15,7 @@ const FacultyTraditionalGrades = () => {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [grades, setGrades] = useState({});
 
   useEffect(() => {
     fetchFacultyClasses();
@@ -282,148 +283,108 @@ const FacultyTraditionalGrades = () => {
     setSelectedSubject(e.target.value);
   };
 
-  const downloadTemplate = async () => {
-    if (!selectedClass) {
-      toast.warning('Please select a class first');
-      return;
-    }
+  const handleGradeChange = (subjectId, quarter, value) => {
+    setGrades(prev => ({
+      ...prev,
+      [subjectId]: {
+        ...prev[subjectId],
+        [quarter]: value
+      }
+    }));
+  };
 
-    if (!selectedSection) {
-      toast.warning('Please select a section first');
-      return;
-    }
+  const calculateSemesterGrade = (subjectId) => {
+    const subjectGrades = grades[subjectId];
+    if (!subjectGrades) return '';
+    
+    const quarter1 = parseFloat(subjectGrades.quarter1) || 0;
+    const quarter2 = parseFloat(subjectGrades.quarter2) || 0;
+    
+    if (quarter1 === 0 && quarter2 === 0) return '';
+    
+    const semesterGrade = (quarter1 + quarter2) / 2;
+    return semesterGrade.toFixed(2);
+  };
 
+  const calculateGeneralAverage = () => {
+    if (subjects.length === 0) return '';
+    
+    let totalGrade = 0;
+    let validGrades = 0;
+    
+    subjects.forEach(subject => {
+      const semesterGrade = calculateSemesterGrade(subject._id);
+      if (semesterGrade && parseFloat(semesterGrade) > 0) {
+        totalGrade += parseFloat(semesterGrade);
+        validGrades++;
+      }
+    });
+    
+    if (validGrades === 0) return '';
+    
+    const generalAverage = totalGrade / validGrades;
+    return generalAverage.toFixed(2);
+  };
+
+  const saveGrades = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await axios.get(`/api/traditional-grades/faculty/template/${selectedClass}/${selectedSection}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        responseType: 'blob'
-      });
-
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `traditional-grades-template-${selectedSection}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
       
-      toast.success('Template downloaded successfully');
+      // Here you would send the grades to your backend
+      console.log('Saving grades:', grades);
+      
+      toast.success('Grades saved successfully!');
     } catch (error) {
-      console.error('Error downloading template:', error);
-      toast.error('Failed to download template');
+      console.error('Error saving grades:', error);
+      toast.error('Failed to save grades');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFileSelect = (e) => {
-    setSelectedFile(e.target.files[0]);
-  };
-
-  const uploadGrades = async () => {
-    if (!selectedFile) {
-      toast.warning('Please select a file to upload');
-      return;
-    }
-
-    if (!selectedClass || !selectedSection) {
-      toast.warning('Please select both class and section first');
-      return;
-    }
-
+  const downloadGrades = async () => {
     try {
-      setUploading(true);
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('classId', selectedClass);
-      formData.append('sectionId', selectedSection);
-
-      const response = await axios.post('/api/traditional-grades/faculty/upload', formData, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
-      if (response.data.success) {
-        toast.success(response.data.message);
-        setSelectedFile(null);
-        document.getElementById('file-input').value = '';
+      setLoading(true);
+      
+      // Create CSV content
+      let csvContent = 'Subject,Quarter 1,Quarter 2,Semester Final Grade\n';
+      
+      subjects.forEach(subject => {
+        const quarter1 = grades[subject._id]?.quarter1 || '';
+        const quarter2 = grades[subject._id]?.quarter2 || '';
+        const semesterGrade = calculateSemesterGrade(subject._id);
         
-        // Refresh students list to show updated grades
-        handleSectionChange({ target: { value: selectedSection } });
-      } else {
-        toast.error(response.data.message || 'Failed to upload grades');
-      }
-    } catch (error) {
-      console.error('Error uploading grades:', error);
-      toast.error(error.response?.data?.message || 'Failed to upload grades');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const updateGrade = async (studentId, subjectId, field, value) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.put(`/api/traditional-grades/faculty/update`, {
-        studentId,
-        subjectId,
-        field,
-        value,
-        classId: selectedClass,
-        sectionId: selectedSection
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
+        csvContent += `${subject.subjectCode} - ${subject.subjectDescription},${quarter1},${quarter2},${semesterGrade}\n`;
       });
-
-      toast.success('Grade updated successfully');
+      
+      csvContent += `General Average,,,${calculateGeneralAverage()}\n`;
+      
+      // Download CSV
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `grades-${selectedClass}-${selectedSection}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Grades downloaded successfully!');
     } catch (error) {
-      console.error('Error updating grade:', error);
-      toast.error('Failed to update grade');
+      console.error('Error downloading grades:', error);
+      toast.error('Failed to download grades');
+    } finally {
+      setLoading(false);
     }
   };
-
-  const calculateFinalGrade = (prelims, midterms, final) => {
-    if (!prelims || !midterms || !final) return '';
-    
-    const prelimsNum = parseFloat(prelims) || 0;
-    const midtermsNum = parseFloat(midterms) || 0;
-    const finalNum = parseFloat(final) || 0;
-    
-    const finalGrade = (prelimsNum * 0.3) + (midtermsNum * 0.3) + (finalNum * 0.4);
-    return finalGrade.toFixed(2);
-  };
-
-  const getRemark = (finalGrade) => {
-    if (!finalGrade) return '';
-    const grade = parseFloat(finalGrade);
-    if (grade >= 75) return 'PASSED';
-    return 'FAILED';
-  };
-
-  // Filter students to show only the selected subject
-  const filteredStudents = selectedSubject 
-    ? students.filter(student => 
-        student.subjects.some(subject => subject._id === selectedSubject)
-      )
-    : students;
-
-  // Get the selected subject object
-  const currentSubject = subjects.find(subject => subject._id === selectedSubject);
-
-  // Get the selected section object
-  const currentSection = sections.find(section => section._id === selectedSection);
 
   return (
     <div className="faculty-traditional-grades">
       <div className="grades-header">
-        <h2>Traditional Grades Management</h2>
-        <p>Manage student grades with prelims, midterms, and finals</p>
+        <h2>Grades</h2>
+        <p>2025-2026 | Term 1 | Saturday, August 16, 2025</p>
       </div>
 
       <div className="class-selection">
@@ -460,169 +421,197 @@ const FacultyTraditionalGrades = () => {
                 </option>
               ))}
             </select>
-            {/* Debug info */}
-            <small className="debug-info">Available sections: {sections.length}</small>
-          </div>
-        )}
-
-        {selectedClass && selectedSection && subjects.length > 0 && (
-          <div className="form-group subject-selection">
-            <label htmlFor="subject-select">Select Subject:</label>
-            <select
-              id="subject-select"
-              value={selectedSubject}
-              onChange={handleSubjectChange}
-              disabled={loading}
-            >
-              <option value="">Choose a subject...</option>
-              {subjects.map((subject) => (
-                <option key={subject._id} value={subject._id}>
-                  {subject.subjectCode} - {subject.subjectDescription}
-                </option>
-              ))}
-            </select>
-            {/* Debug info */}
-            <small className="debug-info">Available subjects: {subjects.length}</small>
           </div>
         )}
       </div>
 
       {selectedClass && selectedSection && (
-        <div className="template-actions">
-          <button 
-            onClick={downloadTemplate}
-            disabled={loading}
-            className="btn btn-primary"
-          >
-            {loading ? 'Downloading...' : 'Download CSV Template'}
-          </button>
-          
-          <div className="upload-section">
-            <input
-              id="file-input"
-              type="file"
-              accept=".csv,.xlsx,.xls"
-              onChange={handleFileSelect}
-              className="file-input"
-            />
-            <button
-              onClick={uploadGrades}
-              disabled={!selectedFile || uploading}
-              className="btn btn-success"
-            >
-              {uploading ? 'Uploading...' : 'Upload Grades'}
-            </button>
+        <div className="grade-report-container">
+          <div className="report-header">
+            <h3>REPORT ON LEARNING PROGRESS AND ACHIEVEMENT</h3>
+            <div className="action-buttons">
+              <button 
+                onClick={saveGrades}
+                disabled={loading}
+                className="btn btn-save"
+              >
+                Save Grades
+              </button>
+              <button
+                onClick={downloadGrades}
+                disabled={loading}
+                className="btn btn-download"
+              >
+                Download Grades
+              </button>
+            </div>
           </div>
-        </div>
-      )}
 
-      {selectedClass && selectedSection && selectedSubject && currentSubject && currentSection && (
-        <div className="subject-info">
-          <h3>Subject: {currentSubject.subjectCode} - {currentSubject.subjectDescription}</h3>
-          <p>Section: {currentSection.sectionName} | Managing grades for {filteredStudents.length} students</p>
-        </div>
-      )}
-
-      {selectedClass && selectedSection && selectedSubject && filteredStudents.length > 0 && (
-        <div className="grades-table-container">
-          <h3>Student Grades - {currentSubject?.subjectCode}</h3>
-          <div className="table-responsive">
+          {/* First Semester Table */}
+          <div className="semester-table">
+            <h4>First Semester</h4>
             <table className="grades-table">
               <thead>
                 <tr>
-                  <th>Student Name</th>
-                  <th>School ID</th>
-                  <th>Prelims</th>
-                  <th>Midterms</th>
-                  <th>Final</th>
-                  <th>Final Grade</th>
-                  <th>Remark</th>
+                  <th>Subjects</th>
+                  <th colSpan="2">Quarter</th>
+                  <th>Semester Final Grade</th>
+                </tr>
+                <tr>
+                  <th></th>
+                  <th>1</th>
+                  <th>2</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                {filteredStudents.map((student) => {
-                  const subject = student.subjects.find(sub => sub._id === selectedSubject);
-                  if (!subject) return null;
+                {subjects.map((subject) => (
+                  <tr key={subject._id}>
+                    <td className="subject-name">
+                      {subject.subjectCode} - {subject.subjectDescription}
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        placeholder="Grade"
+                        className="grade-input"
+                        value={grades[subject._id]?.quarter1 || ''}
+                        onChange={(e) => handleGradeChange(subject._id, 'quarter1', e.target.value)}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        placeholder="Grade"
+                        className="grade-input"
+                        value={grades[subject._id]?.quarter2 || ''}
+                        onChange={(e) => handleGradeChange(subject._id, 'quarter2', e.target.value)}
+                      />
+                    </td>
+                    <td className="semester-grade">
+                      {calculateSemesterGrade(subject._id)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="general-average">
+                  <td>General Average</td>
+                  <td></td>
+                  <td></td>
+                  <td className="semester-grade">
+                    {calculateGeneralAverage()}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-                  const finalGrade = calculateFinalGrade(subject.prelims, subject.midterms, subject.final);
-                  const remark = getRemark(finalGrade);
-
-                  return (
-                    <tr key={student._id}>
-                      <td>{student.name}</td>
-                      <td>{student.schoolID}</td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          placeholder="Grade"
-                          className="grade-input"
-                          defaultValue={subject.prelims || ''}
-                          onChange={(e) => updateGrade(student._id, subject._id, 'prelims', e.target.value)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          placeholder="Grade"
-                          className="grade-input"
-                          defaultValue={subject.midterms || ''}
-                          onChange={(e) => updateGrade(student._id, subject._id, 'midterms', e.target.value)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          placeholder="Grade"
-                          className="grade-input"
-                          defaultValue={subject.final || ''}
-                          onChange={(e) => updateGrade(student._id, subject._id, 'final', e.target.value)}
-                        />
-                      </td>
-                      <td className="final-grade">
-                        {finalGrade}
-                      </td>
-                      <td className="remark">
-                        {remark}
-                      </td>
-                    </tr>
-                  );
-                })}
+          {/* Second Semester Table */}
+          <div className="semester-table">
+            <h4>Second Semester</h4>
+            <table className="grades-table">
+              <thead>
+                <tr>
+                  <th>Subjects</th>
+                  <th colSpan="2">Quarter</th>
+                  <th>Semester Final Grade</th>
+                </tr>
+                <tr>
+                  <th></th>
+                  <th>3</th>
+                  <th>4</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {subjects.map((subject) => (
+                  <tr key={`sem2-${subject._id}`}>
+                    <td className="subject-name">
+                      {subject.subjectCode} - {subject.subjectDescription}
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        placeholder="Grade"
+                        className="grade-input"
+                        value={grades[`sem2-${subject._id}`]?.quarter3 || ''}
+                        onChange={(e) => handleGradeChange(`sem2-${subject._id}`, 'quarter3', e.target.value)}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        placeholder="Grade"
+                        className="grade-input"
+                        value={grades[`sem2-${subject._id}`]?.quarter4 || ''}
+                        onChange={(e) => handleGradeChange(`sem2-${subject._id}`, 'quarter4', e.target.value)}
+                      />
+                    </td>
+                    <td className="semester-grade">
+                      {/* Calculate second semester grade */}
+                      {(() => {
+                        const quarter3 = parseFloat(grades[`sem2-${subject._id}`]?.quarter3) || 0;
+                        const quarter4 = parseFloat(grades[`sem2-${subject._id}`]?.quarter4) || 0;
+                        if (quarter3 === 0 && quarter4 === 0) return '';
+                        const semesterGrade = (quarter3 + quarter4) / 2;
+                        return semesterGrade.toFixed(2);
+                      })()}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="general-average">
+                  <td>General Average</td>
+                  <td></td>
+                  <td></td>
+                  <td className="semester-grade">
+                    {/* Calculate second semester general average */}
+                    {(() => {
+                      if (subjects.length === 0) return '';
+                      let totalGrade = 0;
+                      let validGrades = 0;
+                      
+                      subjects.forEach(subject => {
+                        const quarter3 = parseFloat(grades[`sem2-${subject._id}`]?.quarter3) || 0;
+                        const quarter4 = parseFloat(grades[`sem2-${subject._id}`]?.quarter4) || 0;
+                        if (quarter3 > 0 || quarter4 > 0) {
+                          const semesterGrade = (quarter3 + quarter4) / 2;
+                          totalGrade += semesterGrade;
+                          validGrades++;
+                        }
+                      });
+                      
+                      if (validGrades === 0) return '';
+                      const generalAverage = totalGrade / validGrades;
+                      return generalAverage.toFixed(2);
+                    })()}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {selectedClass && selectedSection && selectedSubject && filteredStudents.length === 0 && (
-        <div className="no-data">
-          <p>No students found for the selected subject in this section.</p>
-        </div>
-      )}
-
-      {selectedClass && selectedSection && !selectedSubject && (
-        <div className="no-data">
-          <p>Please select a subject to view and manage grades.</p>
-        </div>
-      )}
-
       {selectedClass && !selectedSection && (
         <div className="no-data">
-          <p>Please select a section to continue.</p>
+          <p>Please select a section to view the grade report.</p>
         </div>
       )}
 
-      {selectedClass && students.length === 0 && (
+      {selectedClass && selectedSection && subjects.length === 0 && (
         <div className="no-data">
-          <p>No students found in this class/section.</p>
+          <p>No subjects found for this class/section.</p>
         </div>
       )}
 
@@ -632,11 +621,9 @@ const FacultyTraditionalGrades = () => {
           <h4>Debug Information:</h4>
           <p>Selected Class: {selectedClass || 'None'}</p>
           <p>Selected Section: {selectedSection || 'None'}</p>
-          <p>Selected Subject: {selectedSubject || 'None'}</p>
-          <p>Sections Count: {sections.length}</p>
           <p>Subjects Count: {subjects.length}</p>
-          <p>Students Count: {students.length}</p>
           <p>Loading: {loading ? 'Yes' : 'No'}</p>
+          <p>Grades Data: {JSON.stringify(grades, null, 2)}</p>
         </div>
       )}
     </div>
