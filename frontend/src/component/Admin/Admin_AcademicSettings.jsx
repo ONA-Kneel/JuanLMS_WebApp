@@ -15,36 +15,36 @@ export default function Admin_AcademicSettings() {
   const [selectedYear, setSelectedYear] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showViewModal, setShowViewModal] = useState(false);
-  const [semesters, setSemesters] = useState([]);
-  const [showAddSemesterModal, setShowAddSemesterModal] = useState(false);
-  const [semesterFormData, setSemesterFormData] = useState({
+  const [terms, setTerms] = useState([]);
+  const [showAddTermModal, setShowAddTermModal] = useState(false);
+  const [termFormData, setTermFormData] = useState({
     startDate: '',
     endDate: ''
   });
-  const [semesterError, setSemesterError] = useState('');
+  const [termError, setTermError] = useState('');
   const navigate = useNavigate();
   const [academicYear, setAcademicYear] = useState(null);
-  const [currentSemester, setCurrentSemester] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   const [showActivateModal, setShowActivateModal] = useState(false);
   const [pendingSchoolYear, setPendingSchoolYear] = useState(null);
-  const [showSemesterActivationPrompt, setShowSemesterActivationPrompt] = useState(false);
-  const [promptSemesters, setPromptSemesters] = useState([]);
+  const [showTermActivationPrompt, setShowTermActivationPrompt] = useState(false);
+  const [promptTerms, setPromptTerms] = useState([]);
   const [promptSchoolYear, setPromptSchoolYear] = useState(null);
-  const [selectedPromptSemester, setSelectedPromptSemester] = useState("");
+  const [selectedPromptTerm, setSelectedPromptTerm] = useState("");
   
   // Status toggle confirmation modal state
   const [showStatusToggleModal, setShowStatusToggleModal] = useState(false);
   const [pendingStatusToggle, setPendingStatusToggle] = useState(null);
   
-  // Semester editing states
-  const [showEditSemesterModal, setShowEditSemesterModal] = useState(false);
-  const [editingSemester, setEditingSemester] = useState(null);
-  const [editSemesterFormData, setEditSemesterFormData] = useState({
+  // Term editing states
+  const [showEditTermModal, setShowEditTermModal] = useState(false);
+  const [editingTerm, setEditingTerm] = useState(null);
+  const [editTermFormData, setEditTermFormData] = useState({
     startDate: '',
     endDate: ''
   });
-  const [editSemesterError, setEditSemesterError] = useState('');
+  const [editTermError, setEditTermError] = useState('');
 
   const [formData, setFormData] = useState({
     schoolYearStart: "",
@@ -59,10 +59,10 @@ export default function Admin_AcademicSettings() {
       fetchSchoolYears();
   }, []);
 
-  // Fetch semesters when a school year is selected
+  // Fetch terms when a school year is selected
   useEffect(() => {
     if (selectedYear) {
-      fetchSemesters(selectedYear);
+      fetchTerms(selectedYear);
     }
   }, [selectedYear]);
 
@@ -85,7 +85,7 @@ export default function Admin_AcademicSettings() {
   }, []);
 
   useEffect(() => {
-    async function fetchActiveSemesterForYear() {
+    async function fetchActiveTermForYear() {
       if (!academicYear) return;
       try {
         const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
@@ -96,17 +96,17 @@ export default function Admin_AcademicSettings() {
           }
         });
         if (res.ok) {
-          const semesters = await res.json();
-          const active = semesters.find(semester => semester.status === 'active');
-          setCurrentSemester(active || null);
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
         } else {
-          setCurrentSemester(null);
+          setCurrentTerm(null);
         }
       } catch {
-        setCurrentSemester(null);
+        setCurrentTerm(null);
       }
     }
-    fetchActiveSemesterForYear();
+    fetchActiveTermForYear();
   }, [academicYear]);
 
   const fetchSchoolYears = async () => {
@@ -123,7 +123,7 @@ export default function Admin_AcademicSettings() {
     }
   };
 
-  const fetchSemesters = async (year) => {
+  const fetchTerms = async (year) => {
     try {
       const schoolYearName = `${year.schoolYearStart}-${year.schoolYearEnd}`;
       const token = localStorage.getItem('token');
@@ -134,13 +134,13 @@ export default function Admin_AcademicSettings() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSemesters(data);
+        setTerms(data);
       } else {
         const data = await res.json();
-        console.error('Failed to fetch semesters:', data.message);
+        console.error('Failed to fetch terms:', data.message);
       }
     } catch (err) {
-      console.error('Error fetching semesters:', err);
+      console.error('Error fetching terms:', err);
     }
   };
 
@@ -291,8 +291,8 @@ export default function Admin_AcademicSettings() {
     setShowViewModal(true);
   };
 
-  const handleViewSemester = (semester) => {
-    navigate(`/admin/academic-settings/semesters/${semester._id}`, { state: { semester } });
+  const handleViewTerm = (term) => {
+    navigate(`/admin/academic-settings/terms/${term._id}`, { state: { term } });
   };
 
   const handleBack = () => {
@@ -467,9 +467,8 @@ export default function Admin_AcademicSettings() {
             return; // Wait for admin to choose
           }
         } else {
-          // When setting to inactive, the backend automatically archives it
           fetchSchoolYears();
-          alert(`School year set as archived`);
+          alert(`School year set as ${newStatus}`);
         }
         // If no terms or not activating, just refresh
         fetchSchoolYears();
@@ -527,9 +526,9 @@ export default function Admin_AcademicSettings() {
       await createSchoolYear(pendingSchoolYear.schoolYearStart, false); // false = not active
       setShowActivateModal(false);
       setPendingSchoolYear(null);
-      alert('School year added as archived.');
+      alert('School year added as inactive.');
     } catch {
-      setError('Failed to add school year as archived.');
+      setError('Failed to add school year as inactive.');
     }
   };
 
@@ -631,8 +630,9 @@ export default function Admin_AcademicSettings() {
 
   const handleToggleTermStatus = async (term) => {
     const newStatus = term.status === 'active' ? 'inactive' : 'active';
-    const action = newStatus === 'active' ? 'activate' : 'archive'; // Changed from 'deactivate' to 'archive'
+    const action = newStatus === 'active' ? 'activate' : 'deactivate';
     
+    // Show confirmation modal instead of window.confirm
     if (!window.confirm(`Are you sure you want to ${action} ${term.termName}?`)) return;
     
     try {
@@ -647,11 +647,13 @@ export default function Admin_AcademicSettings() {
         const updatedTerm = await res.json();
         console.log('Status updated successfully:', updatedTerm);
         setTerms(terms.map(t => t._id === term._id ? updatedTerm : t));
+        
         // Update alert message to reflect that inactive terms are now archived
         const alertMessage = newStatus === 'active' ? 
           `${term.termName} has been activated` : 
           `${term.termName} has been archived`;
         alert(alertMessage);
+        
         fetchTerms(selectedYear);
       } else {
         const data = await res.json();
@@ -687,7 +689,7 @@ export default function Admin_AcademicSettings() {
 
   const tabs = [
     { id: 'dashboard', label: 'School Year Dashboard' },
-    { id: 'semesters', label: 'Semester' },
+    { id: 'terms', label: 'Term/Semester' },
     { id: 'tracks', label: 'Tracks' },
     { id: 'strands', label: 'Strands' },
     { id: 'sections', label: 'Sections' },
@@ -827,9 +829,9 @@ export default function Admin_AcademicSettings() {
                                 className={`px-3 py-1 rounded-full text-xs font-semibold border border-gray-300
                                   ${year.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 hover:bg-green-200'}
                                   hover:shadow`}
-                                title={year.status === 'active' ? 'Set as archived' : 'Set as active'}
+                                title={year.status === 'active' ? 'Set as inactive' : 'Set as active'}
                               >
-                                {year.status === 'active' ? 'Active' : 'Archived'}
+                                {year.status === 'active' ? 'Active' : 'Inactive'}
                               </button>
                             </td>
                             <td className="p-3 border">
@@ -862,7 +864,7 @@ export default function Admin_AcademicSettings() {
                                 >
                                   {/* Heroicons Trash (red) */}
                                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.625 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
                                 </button>
                               </div>
@@ -908,7 +910,7 @@ export default function Admin_AcademicSettings() {
                     </div>
                 </div>
 
-                                 {/* Semesters Table */}
+                {/* Terms Table */}
                 <div className="flex-1 overflow-y-auto p-4">
                   {/* Show archived message when school year is not active */}
                   {selectedYear.status !== 'active' && (
@@ -920,7 +922,7 @@ export default function Admin_AcademicSettings() {
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
                       <thead>
                         <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border">Semester Name</th>
+                        <th className="p-3 border">Term Name</th>
                         <th className="p-3 border">Start Date</th>
                         <th className="p-3 border">End Date</th>
                         <th className="p-3 border">Status</th>
@@ -931,7 +933,7 @@ export default function Admin_AcademicSettings() {
                       {terms.length === 0 ? (
                         <tr>
                           <td colSpan="5" className="p-3 border text-center text-gray-500">
-                            No semesters found
+                            No terms found
                             </td>
                           </tr>
                       ) : (
@@ -955,7 +957,7 @@ export default function Admin_AcademicSettings() {
                                   className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer hover:shadow ${
                                     term.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-red-100 hover:text-red-800' : 'bg-gray-100 text-gray-800 hover:bg-green-100 hover:text-green-800'
                                   }`}
-                                  title={`Click to ${term.status === 'active' ? 'archive' : 'activate'} ${term.termName}`}
+                                  title={`Click to ${term.status === 'active' ? 'deactivate' : 'activate'} ${term.termName}`}
                                 >
                                   {term.status === 'archived' ? 'archived' : term.status}
                                 </button>
@@ -964,7 +966,7 @@ export default function Admin_AcademicSettings() {
                             <td className="p-3 border">
                               <div className="inline-flex space-x-2">
                         <button
-                                                                     onClick={() => handleViewSemester(term)}
+                                  onClick={() => handleViewTerm(term)}
                                   className="p-1 rounded hover:bg-blue-100 group relative"
                                   title="View"
                                 >
@@ -1001,7 +1003,7 @@ export default function Admin_AcademicSettings() {
                                     <button
                                       disabled
                                       className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
-                                      title="School year is not active"
+                                      title="School year is archived"
                                     >
                                       {/* Heroicons Minus (gray) */}
                                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
@@ -1011,39 +1013,30 @@ export default function Admin_AcademicSettings() {
                                   ) : term.status === 'active' ? (
                                     <button
                                       onClick={() => handleArchiveTerm(term)}
-                                      className={`p-1 rounded hover:bg-red-100 group relative ${
-                                        selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
-                                      }`}
+                                      className="p-1 rounded hover:bg-red-100 group relative"
                                       title="Archive"
-                                      disabled={selectedYear.status !== 'active'}
                                     >
                                       {/* Heroicons Trash (red) */}
                                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.625 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                       </svg>
                                     </button>
                                   ) : term.status === 'inactive' ? (
                                     <button
                                       onClick={() => handleArchiveTerm(term)}
-                                      className={`p-1 rounded hover:bg-red-100 group relative ${
-                                        selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
-                                      }`}
+                                      className="p-1 rounded hover:bg-red-100 group relative"
                                       title="Archive"
-                                      disabled={selectedYear.status !== 'active'}
                                     >
                                       {/* Heroicons Trash (red) */}
                                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.625 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                       </svg>
                                     </button>
                                   ) : (
                                     <button
                                       onClick={() => handleActivateTerm(term)}
-                                      className={`bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded ${
-                                        selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
-                                      }`}
+                                      className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
                                       title="Activate"
-                                      disabled={selectedYear.status !== 'active'}
                                     >
                                       <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
@@ -1062,12 +1055,12 @@ export default function Admin_AcademicSettings() {
                       </div>
           )}
 
-                     {/* Add Semester Modal */}
+          {/* Add Term Modal */}
           {showAddTermModal && (
             <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
               <div className="bg-white rounded-lg shadow-xl w-96 p-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold">Add New Semester</h3>
+                  <h3 className="text-lg font-semibold">Add New Term</h3>
                                     <button
                     onClick={() => setShowAddTermModal(false)}
                     className="text-gray-500 hover:text-gray-700"
@@ -1088,10 +1081,10 @@ export default function Admin_AcademicSettings() {
                     value={termFormData.startDate}
                     onChange={(e) => setTermFormData({ ...termFormData, startDate: e.target.value })}
                     className={`w-full p-2 border rounded-md ${
-                      selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
+                      selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                     }`}
                     required
-                    disabled={selectedYear.status !== 'active'}
+                    disabled={selectedYear && selectedYear.status !== 'active'}
                   />
                 </div>
 
@@ -1104,10 +1097,10 @@ export default function Admin_AcademicSettings() {
                     value={termFormData.endDate}
                     onChange={(e) => setTermFormData({ ...termFormData, endDate: e.target.value })}
                     className={`w-full p-2 border rounded-md ${
-                      selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
+                      selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                     }`}
                     required
-                    disabled={selectedYear.status !== 'active'}
+                    disabled={selectedYear && selectedYear.status !== 'active'}
                   />
                     </div>
 
@@ -1128,11 +1121,11 @@ export default function Admin_AcademicSettings() {
                     <button
                       type="submit"
                     className={`px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 ${
-                      selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
+                      selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                     }`}
-                    disabled={selectedYear.status !== 'active'}
+                    disabled={selectedYear && selectedYear.status !== 'active'}
                     >
-                                         Add Semester
+                    Add Term
                     </button>
                   </div>
                 </form>
@@ -1229,7 +1222,7 @@ export default function Admin_AcademicSettings() {
                     className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                     onClick={handleAddSchoolYearInactive}
                   >
-                    Add as Archived SY
+                    Add as Inactive SY
                   </button>
                   <button
                     className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"
@@ -1247,10 +1240,10 @@ export default function Admin_AcademicSettings() {
           {showTermActivationPrompt && promptSchoolYear && (
             <div className="fixed inset-0 backdrop-blur-sm bg-white/10 flex items-center justify-center z-50">
               <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
-                                 <h2 className="text-xl font-semibold mb-4">Activate Semesters for School Year {promptSchoolYear.schoolYearStart}-{promptSchoolYear.schoolYearEnd}</h2>
-                                 <p className="text-gray-700 mb-6">
-                   The following semesters are currently inactive for this school year. Do you want to activate them?
-                 </p>
+                <h2 className="text-xl font-semibold mb-4">Activate Terms for School Year {promptSchoolYear.schoolYearStart}-{promptSchoolYear.schoolYearEnd}</h2>
+                <p className="text-gray-700 mb-6">
+                  The following terms are currently inactive for this school year. Do you want to activate them?
+                </p>
                 <div className="grid gap-2 mb-4">
                   {promptTerms.map(term => (
                     <div key={term._id} className="flex items-center justify-between bg-gray-100 p-2 rounded-md">
@@ -1282,12 +1275,12 @@ export default function Admin_AcademicSettings() {
             </div>
           )}
 
-          {/* Edit Semester Modal */}
+          {/* Edit Term Modal */}
           {showEditTermModal && editingTerm && (
             <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
               <div className="bg-white rounded-lg shadow-xl w-96 p-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold">Edit Semester: {editingSemester.semesterName}</h3>
+                  <h3 className="text-lg font-semibold">Edit Term: {editingTerm.termName}</h3>
                   <button
                     onClick={() => {
                       setShowEditTermModal(false);
@@ -1311,8 +1304,11 @@ export default function Admin_AcademicSettings() {
                       type="date"
                       value={editTermFormData.startDate}
                       onChange={(e) => setEditTermFormData({ ...editTermFormData, startDate: e.target.value })}
-                      className="w-full p-2 border rounded-md"
+                      className={`w-full p-2 border rounded-md ${
+                        selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                       required
+                      disabled={selectedYear && selectedYear.status !== 'active'}
                     />
                   </div>
 
@@ -1324,8 +1320,11 @@ export default function Admin_AcademicSettings() {
                       type="date"
                       value={editTermFormData.endDate}
                       onChange={(e) => setEditTermFormData({ ...editTermFormData, endDate: e.target.value })}
-                      className="w-full p-2 border rounded-md"
+                      className={`w-full p-2 border rounded-md ${
+                        selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                       required
+                      disabled={selectedYear && selectedYear.status !== 'active'}
                     />
                   </div>
 
@@ -1349,9 +1348,12 @@ export default function Admin_AcademicSettings() {
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
+                      className={`px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 ${
+                        selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                      disabled={selectedYear && selectedYear.status !== 'active'}
                     >
-                                             Update Semester
+                      Update Term
                     </button>
                   </div>
                 </form>

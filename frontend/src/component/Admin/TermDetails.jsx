@@ -17,12 +17,12 @@ import studentIcon from "../../assets/student.png";
 import termDashboardIcon from "../../assets/termdashboard.png"; // Reverted to dashboard.png as per user's last manual change
 import * as XLSX from 'xlsx'; // Add this import for Excel handling
 
-export default function SemesterDetails() {
-  const { semesterId } = useParams();
+export default function TermDetails() {
+  const { termId } = useParams();
   const navigate = useNavigate();
   const importFileInputRef = useRef(null); // Initialize useRef for the file input
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [semesterDetails, setSemesterDetails] = useState(null);
+  const [termDetails, setTermDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -3914,13 +3914,6 @@ Actual import to database is coming soon!`;
           <div className="p-4">
             {activeTab === 'dashboard' && (
               <div>
-                {/* Show archived message when term is archived */}
-                {termDetails.status === 'archived' && (
-                  <div className="mb-4 p-3 bg-yellow-100 text-yellow-800 rounded text-center font-semibold">
-                    This term is archived. Editing is disabled.
-                  </div>
-                )}
-                
                 {/* Dashboard Summary */}
                 <div className="flex justify-end gap-4 mb-6">
                   <button
@@ -4215,7 +4208,6 @@ Actual import to database is coming soon!`;
                         setEditingTrack(null);
                         setTrackFormData({ trackName: '' });
                       }}
-                      disabled={termDetails.status === 'archived'}
                     >
                       Add New Track
                     </button>

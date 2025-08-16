@@ -14,7 +14,7 @@ export default function GradingSystem() {
   const [templateLoading, setTemplateLoading] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
   const [academicYear, setAcademicYear] = useState(null);
-  const [currentSemester, setCurrentSemester] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
   const [sections, setSections] = useState([]);
   const [allSections, setAllSections] = useState([]); // Store all sections
   const [showValidationModal, setShowValidationModal] = useState(false);
@@ -22,7 +22,7 @@ export default function GradingSystem() {
   const [validationType, setValidationType] = useState('error');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Fetch academic year and semester
+  // Fetch academic year and term
   useEffect(() => {
     async function fetchAcademicYear() {
       try {
@@ -42,7 +42,7 @@ export default function GradingSystem() {
   }, []);
 
   useEffect(() => {
-    async function fetchActiveSemesterForYear() {
+    async function fetchActiveTermForYear() {
       if (!academicYear) return;
       try {
         const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
@@ -51,49 +51,49 @@ export default function GradingSystem() {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
-          const semesters = await res.json();
-          const active = semesters.find(semester => semester.status === 'active');
-          setCurrentSemester(active || null);
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
         } else {
-          setCurrentSemester(null);
+          setCurrentTerm(null);
         }
       } catch {
-        setCurrentSemester(null);
+        setCurrentTerm(null);
       }
     }
-    fetchActiveSemesterForYear();
+    fetchActiveTermForYear();
   }, [academicYear]);
 
-  // Fetch sections for the current semester
+  // Fetch sections for the current term
   useEffect(() => {
     async function fetchSections() {
-              if (!currentSemester || !academicYear) return;
+      if (!currentTerm || !academicYear) return;
       try {
         const token = localStorage.getItem("token");
-        console.log('Fetching sections for semester:', currentSemester._id);
-        console.log('Current semester name:', currentSemester.termName);
+        console.log('Fetching sections for term:', currentTerm._id);
+        console.log('Current term name:', currentTerm.termName);
         console.log('Current school year:', `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`);
         
         // Try multiple approaches to get sections
         let sectionsData = [];
         
-        // Approach 1: Try the semester-specific endpoint
+        // Approach 1: Try the term-specific endpoint
         try {
-                      const response = await fetch(`${API_BASE}/api/terms/${currentSemester._id}/sections`, {
+          const response = await fetch(`${API_BASE}/api/terms/${currentTerm._id}/sections`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           
-                      console.log('Semester-specific sections response status:', response.status);
+          console.log('Term-specific sections response status:', response.status);
           
           if (response.ok) {
             sectionsData = await response.json();
-                          console.log('Fetched sections from semester endpoint:', sectionsData);
+            console.log('Fetched sections from term endpoint:', sectionsData);
           }
         } catch (error) {
           console.log('Term-specific endpoint failed, trying fallback');
         }
         
-        // Approach 2: If no sections from semester endpoint, try the general sections endpoint
+        // Approach 2: If no sections from term endpoint, try the general sections endpoint
         if (!sectionsData || sectionsData.length === 0) {
           try {
             console.log('Trying general sections endpoint');
@@ -108,9 +108,9 @@ export default function GradingSystem() {
               console.log('  termName:', currentTerm.termName);
               console.log('  schoolYear:', `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`);
               
-              // Filter sections by current semester and school year
+              // Filter sections by current term and school year
               sectionsData = allSectionsData.filter(section => {
-                                  const matches = section.termName === currentSemester.termName && 
+                const matches = section.termName === currentTerm.termName && 
                   section.schoolYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` &&
                   section.status === 'active';
                 
@@ -126,7 +126,7 @@ export default function GradingSystem() {
                 
                 return matches;
               });
-              console.log('Filtered sections for current semester:', sectionsData);
+              console.log('Filtered sections for current term:', sectionsData);
             }
           } catch (error) {
             console.log('General sections endpoint also failed');
@@ -192,11 +192,11 @@ export default function GradingSystem() {
               console.log('ALL sections in database:', allSectionsData);
               
               // Show what we have vs what we're looking for
-                      console.log('Current semester data:', {
-          semesterId: currentSemester._id,
-          semesterName: currentSemester.termName,
-          schoolYear: currentSemester.schoolYear
-        });
+              console.log('Current term data:', {
+                termId: currentTerm._id,
+                termName: currentTerm.termName,
+                schoolYear: currentTerm.schoolYear
+              });
               
               console.log('Current academic year data:', {
                 start: academicYear.schoolYearStart,
