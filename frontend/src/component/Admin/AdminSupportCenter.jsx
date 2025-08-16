@@ -16,7 +16,7 @@ export default function AdminSupportCenter() {
   const [replyError, setReplyError] = useState('');
   const [replySuccess, setReplySuccess] = useState('');
   const [academicYear, setAcademicYear] = useState(null);
-  const [currentTerm, setCurrentTerm] = useState(null);
+  const [currentSemester, setCurrentSemester] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all'); // all, new, opened, closed
   const [allTickets, setAllTickets] = useState([]); // Store all tickets for counting
   const [userDetails, setUserDetails] = useState({}); // Store user details for each ticket
@@ -169,7 +169,7 @@ export default function AdminSupportCenter() {
   }, []);
 
   useEffect(() => {
-    async function fetchActiveTermForYear() {
+    async function fetchActiveSemesterForYear() {
       if (!academicYear) return;
       try {
         const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
@@ -178,17 +178,17 @@ export default function AdminSupportCenter() {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
-          const terms = await res.json();
-          const active = terms.find(term => term.status === 'active');
-          setCurrentTerm(active || null);
+          const semesters = await res.json();
+          const active = semesters.find(semester => semester.status === 'active');
+          setCurrentSemester(active || null);
         } else {
-          setCurrentTerm(null);
+          setCurrentSemester(null);
         }
       } catch {
-        setCurrentTerm(null);
+        setCurrentSemester(null);
       }
     }
-    fetchActiveTermForYear();
+    fetchActiveSemesterForYear();
   }, [academicYear]);
 
   async function handleReply(ticketId) {
@@ -332,7 +332,7 @@ export default function AdminSupportCenter() {
             <h2 className="text-2xl md:text-3xl font-bold">Support Center</h2>
             <p className="text-base md:text-lg">
               <span> </span>{academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
-              <span> </span>{currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
+                               <span> </span>{currentSemester ? `${currentSemester.termName}` : "Loading..."} | 
               <span> </span>{new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",

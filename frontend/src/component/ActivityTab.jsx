@@ -32,9 +32,9 @@ export default function ActivityTab({ onAssignmentCreated }) {
     const [isEditMode, setIsEditMode] = useState(false);
     const [loading, setLoading] = useState(false);
     
-    // Add academic year and term states
-    const [academicYear, setAcademicYear] = useState(null);
-    const [currentTerm, setCurrentTerm] = useState(null);
+      // Add academic year and semester states
+  const [academicYear, setAcademicYear] = useState(null);
+  const [currentSemester, setCurrentSemester] = useState(null);
     
     // Validation modal state
     const [validationModal, setValidationModal] = useState({
@@ -44,7 +44,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
         message: ''
     });
 
-    // Fetch academic year and term
+    // Fetch academic year and semester
     useEffect(() => {
         async function fetchAcademicYear() {
             try {
@@ -64,7 +64,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
     }, []);
 
     useEffect(() => {
-        async function fetchActiveTermForYear() {
+        async function fetchActiveSemesterForYear() {
             if (!academicYear) return;
             try {
                 const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
@@ -73,23 +73,23 @@ export default function ActivityTab({ onAssignmentCreated }) {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 if (res.ok) {
-                    const terms = await res.json();
-                    const active = terms.find(term => term.status === 'active');
-                    setCurrentTerm(active || null);
+                    const semesters = await res.json();
+                    const active = semesters.find(semester => semester.status === 'active');
+                    setCurrentSemester(active || null);
                 } else {
-                    setCurrentTerm(null);
+                    setCurrentSemester(null);
                 }
             } catch {
-                setCurrentTerm(null);
+                setCurrentSemester(null);
             }
         }
-        fetchActiveTermForYear();
+        fetchActiveSemesterForYear();
     }, [academicYear]);
 
-    // Fetch available classes on mount - updated to filter by term and show only active classes
+    // Fetch available classes on mount - updated to filter by semester and show only active classes
     useEffect(() => {
         async function fetchAvailableClasses() {
-            if (!academicYear || !currentTerm) return;
+            if (!academicYear || !currentSemester) return;
             
             try {
                 const token = localStorage.getItem('token');
@@ -107,10 +107,10 @@ export default function ActivityTab({ onAssignmentCreated }) {
                         cls.facultyID === userId && 
                         cls.isArchived !== true &&
                         cls.academicYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` &&
-                        cls.termName === currentTerm.termName
+                        cls.termName === currentSemester.termName
                     );
                     
-                    console.log('[ActivityTab] Available classes for current term:', filteredClasses);
+                    console.log('[ActivityTab] Available classes for current semester:', filteredClasses);
                     setAvailableClasses(filteredClasses);
                 } else {
                     console.error('Failed to fetch classes for activity creation');
@@ -123,7 +123,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
         }
         
         fetchAvailableClasses();
-    }, [academicYear, currentTerm]);
+    }, [academicYear, currentSemester]);
 
     // Load assignment data if in edit mode
     useEffect(() => {

@@ -75,6 +75,19 @@ router.post('/', async (req, res) => {
     });
 
     const savedYear = await schoolYear.save();
+    
+    // If the school year was created as inactive, automatically archive it and its terms/assignments
+    if (!setAsActive) {
+      savedYear.status = 'archived';
+      await savedYear.save();
+      
+      const schoolYearName = `${savedYear.schoolYearStart}-${savedYear.schoolYearEnd}`;
+      // Archive all terms for this school year
+      await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
+      await StudentAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
+      await FacultyAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
+    }
+    
     res.status(201).json(savedYear);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -129,12 +142,21 @@ router.patch('/:id', async (req, res) => {
         const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
         const terms = await Term.find({ schoolYear: schoolYearName });
         return res.json({ schoolYear: updatedSchoolYear, terms });
+      } else if (req.body.status === 'inactive') {
+        // When setting school year to inactive, automatically archive it and its terms/assignments
+        schoolYear.status = 'archived';
+        
+        const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
+        // Archive all terms for this school year
+        await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
+        await StudentAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
+        await FacultyAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } });
+      } else {
+        schoolYear.status = req.body.status;
       }
       
-      schoolYear.status = req.body.status;
-
-      // Archive all terms and assignments for this school year if archiving or inactivating
-      if (req.body.status === 'archived' || req.body.status === 'inactive') {
+      // Archive all terms and assignments for this school year if archiving
+      if (req.body.status === 'archived') {
         const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
         // Archive all terms for this school year
         await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });

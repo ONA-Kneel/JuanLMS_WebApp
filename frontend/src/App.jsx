@@ -55,7 +55,7 @@ import Admin_Progress from './component/Admin/Admin_Progress';
 import Admin_AuditTrail from './component/Admin/Admin_AuditTrail';
 import { AdminSupportCenter } from './component/Admin';
 import Admin_AcademicSettings from './component/Admin/Admin_AcademicSettings';
-import TermDetails from './component/Admin/TermDetails';
+import SemesterDetails from './component/Admin/SemesterDetails';
 import Admin_Registrants from './component/Admin/Admin_Registrants';
 
 // VPE Access
@@ -126,7 +126,7 @@ function App() {
         <Route path="/admin_progress" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Progress /></ProtectedRoute>}/>
         <Route path="/admin_audit_trail" element={<ProtectedRoute allowedRoles={['admin']}><Admin_AuditTrail /></ProtectedRoute>}/>
         <Route path="/admin/support-center" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupportCenter /></ProtectedRoute>} />
-        <Route path="/admin/academic-settings/terms/:termId" element={<ProtectedRoute allowedRoles={['admin']}><TermDetails /></ProtectedRoute>} />
+        <Route path="/admin/academic-settings/semesters/:semesterId" element={<ProtectedRoute allowedRoles={['admin']}><SemesterDetails /></ProtectedRoute>} />
         <Route path="/admin_registrants" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Registrants /></ProtectedRoute>} />
 
         {/* VPE */}

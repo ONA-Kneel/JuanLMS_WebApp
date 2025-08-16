@@ -136,6 +136,13 @@ router.patch('/:id', authenticateToken, async (req, res) => {
         { status: 'archived' }
       );
       term.status = 'active';
+    } else if (req.body.status === 'inactive') {
+      // When setting term to inactive, automatically archive it and its assignments
+      term.status = 'archived';
+      
+      // Archive all assignments for this term
+      await StudentAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } });
+      await FacultyAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } });
     } else if (req.body.status) {
       term.status = req.body.status;
     }

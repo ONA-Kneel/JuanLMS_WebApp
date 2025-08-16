@@ -8,7 +8,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.
 
 export default function Faculty_Grades() {
   const [academicYear, setAcademicYear] = useState(null);
-  const [currentTerm, setCurrentTerm] = useState(null);
+  const [currentSemester, setCurrentSemester] = useState(null);
   const [activeTab, setActiveTab] = useState('traditional'); // 'traditional' or 'excel'
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +36,7 @@ export default function Faculty_Grades() {
   }, []);
 
   useEffect(() => {
-    async function fetchActiveTermForYear() {
+    async function fetchActiveSemesterForYear() {
       if (!academicYear) return;
       try {
         const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
@@ -45,17 +45,17 @@ export default function Faculty_Grades() {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
-          const terms = await res.json();
-          const active = terms.find(term => term.status === 'active');
-          setCurrentTerm(active || null);
+          const semesters = await res.json();
+          const active = semesters.find(semester => semester.status === 'active');
+          setCurrentSemester(active || null);
         } else {
-          setCurrentTerm(null);
+          setCurrentSemester(null);
         }
       } catch {
-        setCurrentTerm(null);
+        setCurrentSemester(null);
       }
     }
-    fetchActiveTermForYear();
+    fetchActiveSemesterForYear();
   }, [academicYear]);
 
   useEffect(() => {
@@ -69,12 +69,12 @@ export default function Faculty_Grades() {
         });
         const data = await res.json();
         
-        // Filter classes: only show classes created by current faculty in current term
+        // Filter classes: only show classes created by current faculty in current semester
         const filtered = data.filter(cls => 
           cls.facultyID === currentFacultyID && 
           cls.isArchived !== true &&
           cls.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
-          cls.termName === currentTerm?.termName
+          cls.termName === currentSemester?.termName
         );
         
         setClasses(filtered);
@@ -86,11 +86,11 @@ export default function Faculty_Grades() {
       }
     }
     
-    // Only fetch classes when we have both academic year and term
-    if (academicYear && currentTerm) {
+    // Only fetch classes when we have both academic year and semester
+    if (academicYear && currentSemester) {
       fetchClasses();
     }
-  }, [currentFacultyID, academicYear, currentTerm]);
+  }, [currentFacultyID, academicYear, currentSemester]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -103,7 +103,7 @@ export default function Faculty_Grades() {
             <h2 className="text-2xl md:text-3xl font-bold">Grades</h2>
             <p className="text-base md:text-lg">
               <span> </span>{academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
-              <span> </span>{currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
+              <span> </span>{currentSemester ? `${currentSemester.termName}` : "Loading..."} | 
               <span> </span>{new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
