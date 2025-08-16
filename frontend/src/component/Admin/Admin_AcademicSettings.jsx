@@ -273,6 +273,12 @@ export default function Admin_AcademicSettings() {
   };
 
   const handleEdit = (year) => {
+    // Prevent editing inactive school years
+    if (year.status === 'inactive') {
+      alert('Cannot edit inactive school years. Only status changes are allowed.');
+      return;
+    }
+    
     console.log('Edit clicked for year:', year);
     setIsEditMode(true);
     setEditingYear(year);
@@ -301,6 +307,12 @@ export default function Admin_AcademicSettings() {
   };
 
   const handleArchiveTerm = async (term) => {
+    // Prevent archiving terms of inactive school years
+    if (selectedYear && selectedYear.status !== 'active') {
+      alert('Cannot archive terms of inactive school years. Only terms of active school years can be archived.');
+      return;
+    }
+    
     if (window.confirm(`Are you sure you want to archive ${term.termName}?`)) {
       try {
         const token = localStorage.getItem('token');
@@ -328,6 +340,12 @@ export default function Admin_AcademicSettings() {
   };
 
   const handleActivateTerm = async (term) => {
+    // Prevent activating terms of inactive school years
+    if (selectedYear && selectedYear.status !== 'active') {
+      alert('Cannot activate terms of inactive school years. Please activate the school year first.');
+      return;
+    }
+    
     if (!window.confirm(`Are you sure you want to activate ${term.termName}?`)) return;
     try {
       const token = localStorage.getItem('token');
@@ -356,6 +374,12 @@ export default function Admin_AcademicSettings() {
   const handleAddTerm = async (e) => {
     e.preventDefault();
     setTermError('');
+
+    // Prevent adding terms to inactive school years
+    if (selectedYear && selectedYear.status !== 'active') {
+      setTermError('Cannot add terms to inactive school years. Please activate the school year first.');
+      return;
+    }
 
     if (!termFormData.startDate || !termFormData.endDate) {
       setTermError('Please fill in all fields');
@@ -467,6 +491,10 @@ export default function Admin_AcademicSettings() {
             return; // Wait for admin to choose
           }
         } else {
+          // If deactivating, refresh terms to show archived status
+          if (selectedYear && selectedYear._id === year._id) {
+            fetchTerms(selectedYear);
+          }
           fetchSchoolYears();
           alert(`School year set as ${newStatus}`);
         }
@@ -534,6 +562,12 @@ export default function Admin_AcademicSettings() {
 
   // Term editing functions
   const handleEditTerm = (term) => {
+    // Prevent editing terms of inactive school years
+    if (selectedYear && selectedYear.status !== 'active') {
+      alert('Cannot edit terms of inactive school years. Only status changes are allowed.');
+      return;
+    }
+    
     setEditingTerm(term);
     setEditTermFormData({
       startDate: term.startDate.split('T')[0], // Convert to YYYY-MM-DD format
@@ -661,6 +695,12 @@ export default function Admin_AcademicSettings() {
 
   // Archive (delete) a school year
   const handleDelete = async (year) => {
+    // Prevent archiving inactive school years
+    if (year.status === 'inactive') {
+      alert('Cannot archive inactive school years. Only active school years can be archived.');
+      return;
+    }
+    
     if (!window.confirm(`Are you sure you want to archive school year ${year.schoolYearStart}-${year.schoolYearEnd}? This will also archive all its terms and assignments.`)) return;
     try {
       const res = await fetch(`${API_BASE}/api/schoolyears/${year._id}`, {
@@ -763,110 +803,161 @@ export default function Admin_AcademicSettings() {
             // Original School Year Management Section
             <>
               {/* School Years List */}
-              <div className="bg-white p-4 rounded-xl shadow mb-4">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2 gap-2">
-                  <h4 className="text-xl md:text-2xl font-semibold">School Years</h4>
-                  <button
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded"
-                    onClick={() => setShowCreateModal(true)}
-                  >
-                    Add New School Year
-                  </button>
+              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 className="text-xl font-semibold mb-4">School Years</h2>
+                <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-gray-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-gray-700 text-sm">
+                      <strong>Note:</strong> Terms are automatically archived when a school year becomes inactive. Inactive school years cannot be edited.
+                    </span>
+                  </div>
                 </div>
-                <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
-                  <thead>
-                    <tr className="bg-gray-100 text-left">
-                      <th className="p-3 border">Start Year</th>
-                      <th className="p-3 border">End Year</th>
-                      <th className="p-3 border">Status</th>
-                      <th className="p-3 border">Actions</th>
-                    </tr>
-                    <tr className="bg-white text-left">
-                      <th className="p-2 border-b">
-                        <input type="text" placeholder="Search Start Year" className="w-full border rounded px-2 py-1 text-sm" value={searchTerms.start} onChange={e => setSearchTerms(prev => ({ ...prev, start: e.target.value }))} />
-                      </th>
-                      <th className="p-2 border-b">
-                        <input type="text" placeholder="Search End Year" className="w-full border rounded px-2 py-1 text-sm" value={searchTerms.end} onChange={e => setSearchTerms(prev => ({ ...prev, end: e.target.value }))} />
-                      </th>
-                      <th className="p-2 border-b"></th>
-                      <th className="p-2 border-b"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {schoolYears
-                      .filter(year => year.status !== 'archived')
-                      .filter(year =>
-                        (searchTerms.start === '' || year.schoolYearStart.toString().includes(searchTerms.start)) &&
-                        (searchTerms.end === '' || year.schoolYearEnd.toString().includes(searchTerms.end))
-                      )
-                      .length === 0 ? (
-                      <tr>
-                        <td colSpan="4" className="p-3 border text-center text-gray-500">
-                          No school years found
-                        </td>
+                <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                  <input type="text" placeholder="Search Start Year" className="w-full sm:w-1/2 p-2 border rounded px-2 py-1 text-sm" value={searchTerms.start} onChange={e => setSearchTerms(prev => ({ ...prev, start: e.target.value }))} />
+                  <input type="text" placeholder="Search End Year" className="w-full sm:w-1/2 p-2 border rounded px-2 py-1 text-sm" value={searchTerms.end} onChange={e => setSearchTerms(prev => ({ ...prev, end: e.target.value }))} />
+                </div>
+                <div className="bg-white p-4 rounded-xl shadow mb-4">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2 gap-2">
+                    <h4 className="text-xl md:text-2xl font-semibold">School Years</h4>
+                    <button
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded"
+                      onClick={() => setShowCreateModal(true)}
+                    >
+                      Add New School Year
+                    </button>
+                  </div>
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-3 border">Start Year</th>
+                        <th className="p-3 border">End Year</th>
+                        <th className="p-3 border">Status</th>
+                        <th className="p-3 border">Archived Terms</th>
+                        <th className="p-3 border">Actions</th>
                       </tr>
-                    ) : (
-                      schoolYears
+                      <tr className="bg-white text-left">
+                        <th className="p-2 border-b">
+                          <input type="text" placeholder="Search Start Year" className="w-full border rounded px-2 py-1 text-sm" value={searchTerms.start} onChange={e => setSearchTerms(prev => ({ ...prev, start: e.target.value }))} />
+                        </th>
+                        <th className="p-2 border-b">
+                          <input type="text" placeholder="Search End Year" className="w-full border rounded px-2 py-1 text-sm" value={searchTerms.end} onChange={e => setSearchTerms(prev => ({ ...prev, end: e.target.value }))} />
+                        </th>
+                        <th className="p-2 border-b"></th>
+                        <th className="p-2 border-b"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {schoolYears
                         .filter(year => year.status !== 'archived')
                         .filter(year =>
                           (searchTerms.start === '' || year.schoolYearStart.toString().includes(searchTerms.start)) &&
                           (searchTerms.end === '' || year.schoolYearEnd.toString().includes(searchTerms.end))
                         )
-                        .map((year) => (
-                          <tr key={year._id} className="hover:bg-gray-50 transition">
-                            <td className="p-3 border">{year.schoolYearStart}</td>
-                            <td className="p-3 border">{year.schoolYearEnd}</td>
-                            <td className="p-3 border">
-                              <button
-                                onClick={() => handleToggleStatus(year)}
-                                className={`px-3 py-1 rounded-full text-xs font-semibold border border-gray-300
-                                  ${year.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 hover:bg-green-200'}
-                                  hover:shadow`}
-                                title={year.status === 'active' ? 'Set as inactive' : 'Set as active'}
-                              >
-                                {year.status === 'active' ? 'Active' : 'Inactive'}
-                              </button>
-                            </td>
-                            <td className="p-3 border">
-                              <div className="inline-flex space-x-2">
+                        .length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="p-3 border text-center text-gray-500">
+                            No school years found
+                          </td>
+                        </tr>
+                      ) : (
+                        schoolYears
+                          .filter(year => year.status !== 'archived')
+                          .filter(year =>
+                            (searchTerms.start === '' || year.schoolYearStart.toString().includes(searchTerms.start)) &&
+                            (searchTerms.end === '' || year.schoolYearEnd.toString().includes(searchTerms.end))
+                          )
+                          .map((year) => (
+                            <tr key={year._id} className="hover:bg-gray-50 transition">
+                              <td className="p-3 border">{year.schoolYearStart}</td>
+                              <td className="p-3 border">{year.schoolYearEnd}</td>
+                              <td className="p-3 border">
                                 <button
-                                  onClick={() => { handleEdit(year); setShowCreateModal(true); }}
-                                  className="p-1 rounded hover:bg-yellow-100 group relative"
-                                  title="Edit"
+                                  onClick={() => handleToggleStatus(year)}
+                                  className={`px-3 py-1 rounded-full text-xs font-semibold border border-gray-300
+                                    ${year.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 hover:bg-green-200'}
+                                    hover:shadow`}
+                                  title={year.status === 'active' ? 'Set as inactive' : 'Set as active'}
                                 >
-                                  {/* Heroicons Pencil Square (black) */}
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
-                                  </svg>
+                                  {year.status === 'active' ? 'Active' : 'Inactive'}
                                 </button>
-                                <button
-                                  onClick={() => handleView(year)}
-                                  className="p-1 rounded hover:bg-blue-100 group relative"
-                                  title="View"
-                                >
-                                  {/* Heroicons Eye (black) */}
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12Z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(year)}
-                                  className="p-1 rounded hover:bg-red-100 group relative"
-                                  title="Archive"
-                                >
-                                  {/* Heroicons Trash (red) */}
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                    )}
-                  </tbody>
-                </table>
+                              </td>
+                              <td className="p-3 border">
+                                {(() => {
+                                  const schoolYearName = `${year.schoolYearStart}-${year.schoolYearEnd}`;
+                                  return terms.filter(term => term.schoolYear === schoolYearName && term.status === 'archived').length;
+                                })()}
+                              </td>
+                              <td className="p-3 border">
+                                <div className="inline-flex space-x-2">
+                                  {year.status === 'active' ? (
+                                    <>
+                                      <button
+                                        onClick={() => { handleEdit(year); setShowCreateModal(true); }}
+                                        className="p-1 rounded hover:bg-yellow-100 group relative"
+                                        title="Edit"
+                                      >
+                                        {/* Heroicons Pencil Square (black) */}
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                        </svg>
+                                      </button>
+                                      <button
+                                        onClick={() => handleDelete(year)}
+                                        className="p-1 rounded hover:bg-red-100 group relative"
+                                        title="Archive"
+                                      >
+                                        {/* Heroicons Trash (red) */}
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                        </svg>
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button
+                                        disabled
+                                        className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
+                                        title="Cannot edit inactive school year"
+                                      >
+                                        {/* Heroicons Pencil Square (gray) */}
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                        </svg>
+                                      </button>
+                                      <button
+                                        disabled
+                                        className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
+                                        title="Cannot archive inactive school year"
+                                      >
+                                        {/* Heroicons Trash (gray) */}
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                        </svg>
+                                      </button>
+                                    </>
+                                  )}
+                                  <button
+                                    onClick={() => handleView(year)}
+                                    className="p-1 rounded hover:bg-blue-100 group relative"
+                                    title="View"
+                                  >
+                                    {/* Heroicons Eye (black) */}
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12Z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </>
           )}
@@ -881,14 +972,28 @@ export default function Admin_AcademicSettings() {
                     School Year {selectedYear.schoolYearStart}-{selectedYear.schoolYearEnd}
                   </h3>
                   <div className="flex items-center gap-4">
-                        <button
-                      onClick={() => setShowAddTermModal(true)}
-                      className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                      </svg>
-                        </button>
+                        {selectedYear.status === 'active' ? (
+                          <button
+                            onClick={() => setShowAddTermModal(true)}
+                            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add Term
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            className="px-4 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed flex items-center gap-2"
+                            title="Cannot add terms to inactive school year"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add Term
+                          </button>
+                        )}
                       <button
                       onClick={() => setShowViewModal(false)}
                       className="text-gray-500 hover:text-gray-700"
@@ -902,6 +1007,18 @@ export default function Admin_AcademicSettings() {
 
                 {/* Terms Table */}
                 <div className="flex-1 overflow-y-auto p-4">
+                    {selectedYear.status !== 'active' && (
+                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center">
+                          <svg className="w-5 h-5 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-blue-800 text-sm">
+                            <strong>Note:</strong> This school year is inactive. All terms are automatically archived and cannot be edited.
+                          </span>
+                        </div>
+                      </div>
+                    )}
                     <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
                       <thead>
                         <tr className="bg-gray-100 text-left">
@@ -932,7 +1049,7 @@ export default function Admin_AcademicSettings() {
                             <td className="p-3 border">
                               {selectedYear.status !== 'active' ? (
                                 <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                                  inactive
+                                  archived
                                 </span>
                               ) : (
                                 <button
@@ -959,16 +1076,29 @@ export default function Admin_AcademicSettings() {
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
                                   </svg>
                         </button>
-                      <button
-                        onClick={() => handleEditTerm(term)}
-                        className="p-1 rounded hover:bg-yellow-100 group relative"
-                        title="Edit"
-                      >
-                        {/* Heroicons Pencil Square (black) */}
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
-                        </svg>
-                      </button>
+                      {selectedYear.status === 'active' ? (
+                        <button
+                          onClick={() => handleEditTerm(term)}
+                          className="p-1 rounded hover:bg-yellow-100 group relative"
+                          title="Edit"
+                        >
+                          {/* Heroicons Pencil Square (black) */}
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
+                          title="Cannot edit terms of inactive school year"
+                        >
+                          {/* Heroicons Pencil Square (gray) */}
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                          </svg>
+                        </button>
+                      )}
                                   {term.status === 'archived' && selectedYear.status === 'active' ? (
                                     <button
                                       onClick={() => handleActivateTerm(term)}
