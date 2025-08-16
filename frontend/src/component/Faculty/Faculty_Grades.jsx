@@ -15,7 +15,7 @@ import GradingSystem from '../GradingSystem';
  * - Real-time Grade Calculation: Automatic calculation of final grades and remarks
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Faculty_Grades() {
   const [academicYear, setAcademicYear] = useState(null);
