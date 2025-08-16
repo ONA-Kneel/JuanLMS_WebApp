@@ -75,6 +75,13 @@ router.post('/', async (req, res) => {
     });
 
     const savedYear = await schoolYear.save();
+
+    // If creating as inactive, archive any existing terms for this school year
+    if (!setAsActive) {
+      const schoolYearName = `${schoolYearStart}-${schoolYearStart + 1}`;
+      await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
+    }
+
     res.status(201).json(savedYear);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -87,6 +94,13 @@ router.patch('/:id', async (req, res) => {
     const schoolYear = await SchoolYear.findById(req.params.id);
     if (!schoolYear) {
       return res.status(404).json({ message: 'School year not found' });
+    }
+
+    // Prevent editing of inactive school years (except for status changes)
+    if (schoolYear.status === 'inactive' && req.body.schoolYearStart) {
+      return res.status(403).json({ 
+        message: 'Cannot edit details of an inactive school year. Only status changes are allowed.' 
+      });
     }
 
     // Handle school year start year update

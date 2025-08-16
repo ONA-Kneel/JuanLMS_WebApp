@@ -30,6 +30,13 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'School year not found' });
     }
 
+    // Prevent creating terms for inactive school years
+    if (schoolYear.status === 'inactive') {
+      return res.status(403).json({ 
+        message: 'Cannot create terms for an inactive school year. Please activate the school year first.' 
+      });
+    }
+
     const fullSchoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
 
     // Get all terms for this school year (by name)
@@ -126,6 +133,20 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     const term = await Term.findById(req.params.id);
     if (!term) {
       return res.status(404).json({ message: 'Term not found' });
+    }
+
+    // Check if the school year is inactive and prevent editing
+    const schoolYearName = term.schoolYear;
+    const [startYear, endYear] = schoolYearName.split('-');
+    const schoolYear = await SchoolYear.findOne({ 
+      schoolYearStart: parseInt(startYear), 
+      schoolYearEnd: parseInt(endYear) 
+    });
+
+    if (schoolYear && schoolYear.status === 'inactive') {
+      return res.status(403).json({ 
+        message: 'Cannot edit terms of an inactive school year. Only status changes are allowed.' 
+      });
     }
 
     // Handle status updates
