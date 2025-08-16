@@ -1,4 +1,4 @@
-// Admin_Chats.jsx
+//Student_Chats.jsx
 
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
@@ -10,6 +10,8 @@ import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function Student_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -17,14 +19,12 @@ export default function Student_Chats() {
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
-  const [onlineUsers, setOnlineUsers] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
     const stored = localStorage.getItem("recentChats_student");
     return stored ? JSON.parse(stored) : [];
   });
-  const [lastMessage, setLastMessage] = useState(null);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
 
@@ -64,60 +64,20 @@ export default function Student_Chats() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
-  const navigate = useNavigate();
 
-  const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
   const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
 
   const storedUser = localStorage.getItem("user");
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!currentUserId) {
       navigate("/", { replace: true });
     }
   }, [currentUserId, navigate]);
-
-  useEffect(() => {
-    async function fetchAcademicYear() {
-      try {
-        const token = localStorage.getItem("token");
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (yearRes.ok) {
-          const year = await yearRes.json();
-          setAcademicYear(year);
-        }
-      } catch (err) {
-        console.error("Failed to fetch academic year", err);
-      }
-    }
-    fetchAcademicYear();
-  }, []);
-
-  useEffect(() => {
-    async function fetchActiveTermForYear() {
-      if (!academicYear) return;
-      try {
-        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const terms = await res.json();
-          const active = terms.find(term => term.status === 'active');
-          setCurrentTerm(active || null);
-        } else {
-          setCurrentTerm(null);
-        }
-      } catch {
-        setCurrentTerm(null);
-      }
-    }
-    fetchActiveTermForYear();
-  }, [academicYear]);
 
   // ================= SOCKET.IO SETUP =================
   useEffect(() => {
@@ -128,10 +88,6 @@ export default function Student_Chats() {
     });
 
     socket.current.emit("addUser", currentUserId);
-
-    socket.current.on("getUsers", (users) => {
-      setOnlineUsers(users);
-    });
 
     socket.current.on("getMessage", (data) => {
       const incomingMessage = {
@@ -176,7 +132,10 @@ export default function Student_Chats() {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
-        senderName: data.senderName,
+        senderName: data.senderName || "Unknown",
+        senderFirstname: data.senderFirstname || "Unknown",
+        senderLastname: data.senderLastname || "User",
+        senderProfilePic: data.senderProfilePic || null,
         timestamp: new Date(),
       };
 
@@ -329,6 +288,9 @@ export default function Student_Chats() {
           text: sentMessage.message,
           fileUrl: sentMessage.fileUrl || null,
           senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
+          senderFirstname: storedUser ? JSON.parse(storedUser).firstname : "Unknown",
+          senderLastname: storedUser ? JSON.parse(storedUser).lastname : "User",
+          senderProfilePic: storedUser ? JSON.parse(storedUser).profilePic : null,
         });
 
         setGroupMessages((prev) => ({
@@ -487,6 +449,7 @@ export default function Student_Chats() {
     }
   };
 
+  // Update confirmLeaveGroup to check if user is creator
   const confirmLeaveGroup = (group) => {
     if (group.createdBy === currentUserId) {
       setShowCreatorLeaveError(true);
@@ -513,12 +476,21 @@ export default function Student_Chats() {
       if (lastMsg) {
         let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
         let text = (lastMsg.message) ? lastMsg.message : (lastMsg.fileUrl ? "File sent" : "");
-        setLastMessage({ prefix, text });
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix, text }
+        }));
       } else {
-        setLastMessage(null);
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: null
+        }));
       }
     } else {
-      setLastMessage(null);
+      setLastMessages(prev => ({
+        ...prev,
+        [selectedChat?._id]: null
+      }));
     }
   }, [selectedChat, messages, currentUserId, groupMessages, isGroupChat]);
 
@@ -534,7 +506,7 @@ export default function Student_Chats() {
           try {
             const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
             newMessages[chat._id] = res.data;
-          } catch (err) {
+          } catch {
             newMessages[chat._id] = [];
           }
         }
@@ -556,6 +528,47 @@ export default function Student_Chats() {
     fetchAllRecentMessages();
     // eslint-disable-next-line
   }, [recentChats, currentUserId]);
+
+  useEffect(() => {
+    async function fetchAcademicYear() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year", err);
+      }
+    }
+    fetchAcademicYear();
+  }, []);
+
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+    }, [academicYear]);
 
   // 1. Remove activeTab and all tab logic
   // 2. Add state for dropdown menu (showGroupMenu)
@@ -694,7 +707,11 @@ export default function Student_Chats() {
                         </strong>
                         {chat.type === 'group' ? (
                           <span className="text-xs text-gray-500 truncate">
-                            {(selectedChat?.participants?.length || 0)} members
+                            {lastMessages[chat._id] && (
+                              <span className="text-xs text-gray-500 truncate">
+                                {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
+                              </span>
+                            )}
                           </span>
                         ) : (
                           lastMessages[chat._id] && (
@@ -836,7 +853,6 @@ export default function Student_Chats() {
 
                 <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
                   {selectedChatMessages.map((msg, index) => {
-                    const isRecipient = msg.senderId !== currentUserId;
                     const sender = users.find(u => u._id === msg.senderId);
                     const prevMsg = selectedChatMessages[index - 1];
                     const showHeader =
@@ -873,7 +889,7 @@ export default function Student_Chats() {
                           </div>
                         )}
                         {msg.senderId === currentUserId ? (
-                          // Current user's message (right aligned, time above message)
+                          // Current user's message
                           <div>
                             {showHeader && (msg.createdAt || msg.updatedAt) && (
                               <div className="flex justify-end mb-1">
@@ -899,19 +915,21 @@ export default function Student_Chats() {
                             </div>
                           </div>
                         ) : (
-                          // Recipient's message (left aligned, profile pic, name, timestamp)
+                          // Recipient's message
                           <div className="flex items-end gap-2">
                             {showHeader ? (
                               <>
                                 <img
-                                  src={sender && sender.profilePic ? `${API_BASE}/uploads/${sender.profilePic}` : defaultAvatar}
+                                  src={isGroupChat ? (msg.senderProfilePic ? `${API_BASE}/uploads/${msg.senderProfilePic}` : defaultAvatar) : (sender && sender.profilePic ? `${API_BASE}/uploads/${sender.profilePic}` : defaultAvatar)}
                                   alt="Profile"
                                   className="w-10 h-10 rounded-full object-cover border"
                                   onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
                                 />
                                 <div>
                                   <div className="flex items-center gap-2 mb-1">
-                                    <span className="font-semibold text-sm">{sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown"}</span>
+                                    <span className="font-semibold text-sm">
+                                      {isGroupChat ? (msg.senderName || "Unknown") : (sender ? `${sender.lastname}, ${sender.firstname}` : "")}
+                                    </span>
                                     {(msg.createdAt || msg.updatedAt) && (
                                       <span className="text-xs text-gray-400 ml-2">
                                         {dateLabel ? `${dateLabel}, ` : ""}{timeLabel}
@@ -1094,7 +1112,7 @@ export default function Student_Chats() {
                   )
                 }
               </div>
-            )}
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={handleCreateGroup}

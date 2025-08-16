@@ -9,11 +9,8 @@ import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
-import ContactNicknameManager from "../ContactNicknameManager";
-import GroupNicknameManager from "../GroupNicknameManager";
-import { getUserDisplayName } from "../../utils/userDisplayUtils";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Admin_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
@@ -29,7 +26,6 @@ export default function Admin_Chats() {
   });
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [contactNicknames, setContactNicknames] = useState({});
   
   // Group Chat States
   const [userGroups, setUserGroups] = useState([]);
@@ -45,6 +41,10 @@ export default function Admin_Chats() {
   // Add state for member search
   const [memberSearchTerm, setMemberSearchTerm] = useState("");
   const [users, setUsers] = useState([]);
+  
+  // Add missing state variables for new chat functionality
+  const [_showNewChatModal, setShowNewChatModal] = useState(false);
+  const [_userSearchTerm, setUserSearchTerm] = useState("");
 
   // Add missing validationModal state
   const [validationModal, setValidationModal] = useState({
@@ -62,7 +62,7 @@ export default function Admin_Chats() {
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
 
-  const API_URL = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
   const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
 
   const storedUser = localStorage.getItem("user");
@@ -129,6 +129,10 @@ export default function Admin_Chats() {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
+        senderName: data.senderName || "Unknown",
+        senderFirstname: data.senderFirstname || "Unknown",
+        senderLastname: data.senderLastname || "User",
+        senderProfilePic: data.senderProfilePic || null,
       };
 
       setGroupMessages((prev) => {
@@ -143,12 +147,9 @@ export default function Admin_Chats() {
         // Update last message for this group
         const group = userGroups.find(g => g._id === incomingGroupMessage.groupId);
         if (group) {
-          const sender = users.find(u => u._id === incomingGroupMessage.senderId);
-          const contactNickname = contactNicknames[incomingGroupMessage.senderId];
-          const displayName = sender ? getUserDisplayName(sender, contactNickname) : 'Unknown User';
           const prefix = incomingGroupMessage.senderId === currentUserId 
             ? "You: " 
-            : `${displayName}: `;
+            : `${incomingGroupMessage.senderName || 'Unknown'}: `;
           const text = incomingGroupMessage.message 
             ? incomingGroupMessage.message 
             : (incomingGroupMessage.fileUrl ? "File sent" : "");
@@ -165,13 +166,13 @@ export default function Admin_Chats() {
     return () => {
       socket.current.disconnect();
     };
-  }, [currentUserId, recentChats, userGroups, contactNicknames]);
+  }, [currentUserId, recentChats]);
 
   // ================= FETCH USERS =================
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/users/with-nicknames`);
+        const res = await axios.get(`${API_BASE}/users`);
         // Support both array and paginated object
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
@@ -186,28 +187,6 @@ export default function Admin_Chats() {
       }
     };
     fetchUsers();
-  }, [currentUserId]);
-
-  // ================= FETCH CONTACT NICKNAMES =================
-  useEffect(() => {
-    const fetchContactNicknames = async () => {
-      if (!currentUserId) return;
-      try {
-        const res = await axios.get(`${API_BASE}/users/${currentUserId}/contacts/nicknames`);
-        const nicknamesMap = {};
-        res.data.forEach(item => {
-          // Ensure contactId is properly handled as a string
-          const contactId = item.contactId?.toString() || item.contactId;
-          if (contactId && item.nickname) {
-            nicknamesMap[contactId] = item.nickname;
-          }
-        });
-        setContactNicknames(nicknamesMap);
-      } catch (err) {
-        console.error("Error fetching contact nicknames:", err);
-      }
-    };
-    fetchContactNicknames();
   }, [currentUserId]);
 
   // ================= FETCH MESSAGES =================
@@ -225,11 +204,9 @@ export default function Admin_Chats() {
             const chatMessages = newMessages[chat._id] || [];
             const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
             if (lastMsg) {
-              const contactNickname = contactNicknames[chat._id];
-              const displayName = getUserDisplayName(chat, contactNickname);
               const prefix = lastMsg.senderId === currentUserId 
                 ? "You: " 
-                : `${displayName}: `;
+                : `${chat.lastname}, ${chat.firstname}: `;
               const text = lastMsg.message 
                 ? lastMsg.message 
                 : (lastMsg.fileUrl ? "File sent" : "");
@@ -246,7 +223,7 @@ export default function Admin_Chats() {
     };
 
     fetchMessages();
-  }, [selectedChat, currentUserId, recentChats, contactNicknames]);
+  }, [selectedChat, currentUserId, recentChats]);
 
   // Auto-scroll
   const selectedChatMessages = messages[selectedChat?._id] || [];
@@ -322,6 +299,8 @@ export default function Admin_Chats() {
       setRecentChats(updated);
       localStorage.setItem("recentChats_admin", JSON.stringify(updated));
     }
+    setShowNewChatModal(false);
+    setUserSearchTerm("");
   };
 
   // Keep recentChats in sync with localStorage
@@ -341,18 +320,16 @@ export default function Admin_Chats() {
           try {
             const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
             newMessages[chat._id] = res.data;
-          } catch (err) {
-            newMessages[chat._id] = [];
-          }
+                  } catch (_err) {
+          newMessages[chat._id] = [];
+        }
         }
         const chatMessages = newMessages[chat._id] || [];
         const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
         if (lastMsg) {
-          const contactNickname = contactNicknames[chat._id];
-          const displayName = getUserDisplayName(chat, contactNickname);
           const prefix = lastMsg.senderId === currentUserId 
             ? "You: " 
-            : `${displayName}: `;
+            : `${chat.lastname}, ${chat.firstname}: `;
           const text = lastMsg.message 
             ? lastMsg.message 
             : (lastMsg.fileUrl ? "File sent" : "");
@@ -364,7 +341,7 @@ export default function Admin_Chats() {
     };
     fetchAllRecentMessages();
     // eslint-disable-next-line
-  }, [recentChats, currentUserId, contactNicknames]);
+  }, [recentChats, currentUserId]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -442,12 +419,10 @@ export default function Admin_Chats() {
             const groupMessages = newMessages[group._id] || [];
             const lastMsg = groupMessages.length > 0 ? groupMessages[groupMessages.length - 1] : null;
             if (lastMsg) {
-              const sender = users.find(u => u._id === lastMsg.senderId);
-              const contactNickname = contactNicknames[lastMsg.senderId];
-              const displayName = sender ? getUserDisplayName(sender, contactNickname) : 'Unknown User';
+              const sender = userGroups.find(u => u._id === lastMsg.senderId);
               const prefix = lastMsg.senderId === currentUserId 
                 ? "You: " 
-                : `${displayName}: `;
+                : `${sender?.lastname || 'Unknown'}, ${sender?.firstname || 'User'}: `;
               const text = lastMsg.message 
                 ? lastMsg.message 
                 : (lastMsg.fileUrl ? "File sent" : "");
@@ -464,13 +439,13 @@ export default function Admin_Chats() {
     };
 
     fetchGroupMessages();
-  }, [selectedChat, currentUserId, userGroups, contactNicknames]);
+  }, [selectedChat, currentUserId, userGroups]);
 
   // Fetch users for participant selection
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/users/with-nicknames`);
+        const res = await axios.get(`${API_BASE}/users`);
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
       } catch (err) {
@@ -478,7 +453,7 @@ export default function Admin_Chats() {
       }
     };
     fetchUsers();
-  }, [currentUserId]);
+  }, []);
 
   // ================= GROUP CHAT HANDLERS =================
 
@@ -599,12 +574,16 @@ export default function Admin_Chats() {
 
       const sentMessage = res.data;
 
-      socket.current.emit("sendGroupMessage", {
-        senderId: currentUserId,
-        groupId: selectedChat._id,
-        text: sentMessage.message,
-        fileUrl: sentMessage.fileUrl || null,
-      });
+              socket.current.emit("sendGroupMessage", {
+          senderId: currentUserId,
+          groupId: selectedChat._id,
+          text: sentMessage.message,
+          fileUrl: sentMessage.fileUrl || null,
+          senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
+          senderFirstname: storedUser ? JSON.parse(storedUser).firstname : "Unknown",
+          senderLastname: storedUser ? JSON.parse(storedUser).lastname : "User",
+          senderProfilePic: storedUser ? JSON.parse(storedUser).profilePic : null,
+        });
 
       setGroupMessages((prev) => ({
         ...prev,
@@ -642,11 +621,9 @@ export default function Admin_Chats() {
     // First show existing chats/groups that match
     ...unifiedChats.filter(chat => {
       if (chat.type === 'individual') {
-        const displayName = getUserDisplayName(chat, contactNicknames[chat._id]);
         return (
           chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          displayName.toLowerCase().includes(searchTerm.toLowerCase())
+          chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
         );
       } else {
         return chat.name?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -656,14 +633,10 @@ export default function Admin_Chats() {
     ...users
       .filter(user => user._id !== currentUserId)
       .filter(user => !recentChats.some(chat => chat._id === user._id))
-      .filter(user => {
-        const displayName = getUserDisplayName(user, contactNicknames[user._id]);
-        return (
-          user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.lastname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          displayName.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      })
+      .filter(user =>
+        user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
 
@@ -768,7 +741,7 @@ export default function Admin_Chats() {
                       )}
                       <div className="flex flex-col min-w-0 ml-2">
                         <strong className="truncate text-sm">
-                          {chat.type === 'group' ? chat.name : getUserDisplayName(chat, contactNicknames[chat._id])}
+                          {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
                         </strong>
                         {chat.type === 'group' ? (
                           <span className="text-xs text-gray-500">{chat.participants?.length || 0} participants</span>
@@ -829,7 +802,7 @@ export default function Admin_Chats() {
                       )}
                       <div className="flex flex-col min-w-0 ml-2">
                         <strong className="truncate text-sm">
-                          {item.type === 'group' ? item.name : getUserDisplayName(item, contactNicknames[item._id])}
+                          {item.type === 'group' ? item.name : `${item.lastname}, ${item.firstname}`}
                         </strong>
                         {item.isNewUser ? (
                           <span className="text-xs text-blue-600">Click to start new chat</span>
@@ -875,23 +848,7 @@ export default function Admin_Chats() {
                           {selectedChat.name.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-semibold">{selectedChat.name}</h3>
-                            <GroupNicknameManager
-                              currentUserId={currentUserId}
-                              groupName={selectedChat.name}
-                              participants={selectedChat.participants}
-                              users={users}
-                              contactNicknames={contactNicknames}
-                              onNicknameUpdate={(contactId, nickname) => {
-                                setContactNicknames(prev => ({
-                                  ...prev,
-                                  [contactId]: nickname
-                                }));
-                              }}
-                              className="relative z-10"
-                            />
-                          </div>
+                          <h3 className="text-lg font-semibold">{selectedChat.name}</h3>
                           <p className="text-sm text-gray-600">{selectedChat.participants.length} participants</p>
                         </div>
                       </>
@@ -904,26 +861,9 @@ export default function Admin_Chats() {
                           onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
                         />
                         <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-semibold">
-                              {getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()])}
-                            </h3>
-                            {!selectedChat.isGroup && (
-                              <ContactNicknameManager
-                                currentUserId={currentUserId}
-                                contactId={selectedChat._id}
-                                contactName={getUserDisplayName(selectedChat, contactNicknames[selectedChat._id?.toString()])}
-                                originalName={`${selectedChat.firstname || ''} ${selectedChat.lastname || ''}`.trim()}
-                                onNicknameUpdate={(contactId, nickname) => {
-                                  setContactNicknames(prev => ({
-                                    ...prev,
-                                    [contactId?.toString() || contactId]: nickname
-                                  }));
-                                }}
-                                className="relative z-10"
-                              />
-                            )}
-                          </div>
+                          <h3 className="text-lg font-semibold">
+                            {selectedChat.lastname}, {selectedChat.firstname}
+                          </h3>
                         </div>
                       </>
                     )}
@@ -950,31 +890,21 @@ export default function Admin_Chats() {
 
                 <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
                   {(selectedChat.isGroup ? groupMessages[selectedChat._id] || [] : messages[selectedChat._id] || []).map((msg, index, arr) => {
-                    const isRecipient = msg.senderId !== currentUserId;
                     const sender = users.find(u => u._id === msg.senderId);
                     const prevMsg = arr[index - 1];
                     const showHeader =
                       index === 0 ||
                       msg.senderId !== prevMsg?.senderId ||
                       Math.abs(new Date(msg.createdAt || msg.updatedAt) - new Date(prevMsg?.createdAt || prevMsg?.updatedAt)) > 5 * 60 * 1000;
-                    
-                    // Get sender display name
-                    let senderDisplayName = "Unknown User";
-                    if (sender) {
-                      senderDisplayName = getUserDisplayName(sender, contactNicknames[sender._id?.toString()]);
-                    } else if (msg.senderId === currentUserId) {
-                      senderDisplayName = "You";
-                    }
-                    
                     return (
-                      <div key={msg._id} className={`flex ${isRecipient ? "justify-start" : "justify-end"}`}>
-                        <div className={`max-w-xs lg:max-w-md ${isRecipient ? "order-1" : "order-2"}`}>
-                          {showHeader && isRecipient && (
+                      <div key={msg._id} className={`flex ${msg.senderId !== currentUserId ? "justify-start" : "justify-end"}`}>
+                        <div className={`max-w-xs lg:max-w-md ${msg.senderId !== currentUserId ? "order-1" : "order-2"}`}>
+                          {showHeader && msg.senderId !== currentUserId && (
                             <div className="text-xs text-gray-500 mb-1">
-                              {senderDisplayName}
+                              {selectedChat.isGroup ? (msg.senderName || "Unknown User") : (sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown User")}
                             </div>
                           )}
-                          <div className={`rounded-lg px-4 py-2 ${isRecipient ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>
+                          <div className={`rounded-lg px-4 py-2 ${msg.senderId !== currentUserId ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>
                             {msg.message && <p className="break-words">{msg.message}</p>}
                             {msg.fileUrl && (
                               <div className="mt-2">
@@ -988,7 +918,7 @@ export default function Admin_Chats() {
                                 </a>
                               </div>
                             )}
-                            <div className={`text-xs mt-1 ${isRecipient ? "text-gray-500" : "text-blue-100"}`}>
+                            <div className={`text-xs mt-1 ${msg.senderId !== currentUserId ? "text-gray-500" : "text-blue-100"}`}>
                               {new Date(msg.createdAt).toLocaleTimeString()}
                             </div>
                           </div>
@@ -1193,19 +1123,13 @@ export default function Admin_Chats() {
             <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4">
               <h3 className="text-lg font-semibold mb-4">Group Members</h3>
               <ul className="mb-4 divide-y divide-gray-200">
-                {selectedChat.participants.map((userId, idx) => {
+                                        {selectedChat.participants.map((userId) => {
                   const user = users.find((u) => u._id === userId);
                   if (!user) return null;
-                  const displayName = getUserDisplayName(user, contactNicknames[userId]);
                   return (
                     <li key={userId} className="flex items-center gap-2 py-2">
                       <img src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar} alt="Profile" className="w-8 h-8 rounded-full object-cover border" />
-                      <div className="flex flex-col">
-                        <span className="font-medium">{displayName}</span>
-                        {contactNicknames[userId] && (
-                          <span className="text-xs text-gray-500">Nickname: {contactNicknames[userId]}</span>
-                        )}
-                      </div>
+                      <span>{user.lastname}, {user.firstname}</span>
                       {selectedChat.createdBy === user._id && (
                         <span className="text-xs text-blue-600 ml-2">(Creator)</span>
                       )}

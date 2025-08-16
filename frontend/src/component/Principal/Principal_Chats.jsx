@@ -19,14 +19,12 @@ export default function Principal_Chats() {
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
-
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
     const stored = localStorage.getItem("recentChats_principal");
     return stored ? JSON.parse(stored) : [];
   });
-
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
 
@@ -67,7 +65,7 @@ export default function Principal_Chats() {
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
 
-  const API_URL = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
   const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
 
   const storedUser = localStorage.getItem("user");
@@ -90,10 +88,6 @@ export default function Principal_Chats() {
     });
 
     socket.current.emit("addUser", currentUserId);
-
-    socket.current.on("getUsers", () => {
-      // Online users tracking removed
-    });
 
     socket.current.on("getMessage", (data) => {
       const incomingMessage = {
@@ -138,7 +132,10 @@ export default function Principal_Chats() {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
-        senderName: data.senderName,
+        senderName: data.senderName || "Unknown",
+        senderFirstname: data.senderFirstname || "Unknown",
+        senderLastname: data.senderLastname || "User",
+        senderProfilePic: data.senderProfilePic || null,
         timestamp: new Date(),
       };
 
@@ -291,6 +288,9 @@ export default function Principal_Chats() {
           text: sentMessage.message,
           fileUrl: sentMessage.fileUrl || null,
           senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
+          senderFirstname: storedUser ? JSON.parse(storedUser).firstname : "Unknown",
+          senderLastname: storedUser ? JSON.parse(storedUser).lastname : "User",
+          senderProfilePic: storedUser ? JSON.parse(storedUser).profilePic : null,
         });
 
         setGroupMessages((prev) => ({
@@ -889,7 +889,7 @@ export default function Principal_Chats() {
                           </div>
                         )}
                         {msg.senderId === currentUserId ? (
-                          // Current user's message (right aligned, time above message)
+                          // Current user's message
                           <div>
                             {showHeader && (msg.createdAt || msg.updatedAt) && (
                               <div className="flex justify-end mb-1">
@@ -915,19 +915,21 @@ export default function Principal_Chats() {
                             </div>
                           </div>
                         ) : (
-                          // Recipient's message (left aligned, profile pic, name, timestamp)
+                          // Recipient's message
                           <div className="flex items-end gap-2">
                             {showHeader ? (
                               <>
                                 <img
-                                  src={sender && sender.profilePic ? `${API_BASE}/uploads/${sender.profilePic}` : defaultAvatar}
+                                  src={isGroupChat ? (msg.senderProfilePic ? `${API_BASE}/uploads/${msg.senderProfilePic}` : defaultAvatar) : (sender && sender.profilePic ? `${API_BASE}/uploads/${sender.profilePic}` : defaultAvatar)}
                                   alt="Profile"
                                   className="w-10 h-10 rounded-full object-cover border"
                                   onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
                                 />
                                 <div>
                                   <div className="flex items-center gap-2 mb-1">
-                                    <span className="font-semibold text-sm">{sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown"}</span>
+                                    <span className="font-semibold text-sm">
+                                      {isGroupChat ? (msg.senderName || "Unknown") : (sender ? `${sender.lastname}, ${sender.firstname}` : "")}
+                                    </span>
                                     {(msg.createdAt || msg.updatedAt) && (
                                       <span className="text-xs text-gray-400 ml-2">
                                         {dateLabel ? `${dateLabel}, ` : ""}{timeLabel}

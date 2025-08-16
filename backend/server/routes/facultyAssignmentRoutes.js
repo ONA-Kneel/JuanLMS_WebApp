@@ -109,6 +109,32 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Unarchive a faculty assignment (must come before the general PATCH route)
+router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
+  try {
+    const assignment = await FacultyAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (assignment.status !== 'archived') {
+      return res.status(400).json({ message: 'Assignment is not archived' });
+    }
+
+    assignment.status = 'active';
+    const updatedAssignment = await assignment.save();
+    
+    // Transform response to match the format used in GET requests
+    const response = updatedAssignment.toObject();
+    delete response.schoolYear;
+    delete response.termName;
+    
+    res.json(response);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // PATCH route for updating faculty assignment
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {

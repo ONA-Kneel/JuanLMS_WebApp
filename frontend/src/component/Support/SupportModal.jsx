@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Headphones, Search, FileText, Clock, CheckCircle, XCircle, Copy, ArrowLeft } from 'lucide-react';
+import { Headphones, Search, FileText, Clock, CheckCircle, XCircle, Copy, ArrowLeft, MessageCircle, Plus } from 'lucide-react';
 import axios from 'axios';
-import { getTicketByNumber, getUserTickets } from '../../services/ticketService';
+import { getUserTickets } from '../../services/ticketService';
 
 export default function SupportModal({ onClose }) {
-  const [view, setView] = useState('main'); // main | active | new | submitted | myTickets
-  const [ticketInput, setTicketInput] = useState('');
-  const [showTicket, setShowTicket] = useState(false);
+  const [view, setView] = useState('main'); // main | new | submitted | myTickets
   // Generate ticket number function
   function generateTicketNumber() {
     let num = '';
@@ -23,7 +21,7 @@ export default function SupportModal({ onClose }) {
     file: null
   });
 
-  // New state for user tickets
+  // Enhanced state for user tickets
   const [userTickets, setUserTickets] = useState([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
   const [ticketsError, setTicketsError] = useState('');
@@ -32,17 +30,18 @@ export default function SupportModal({ onClose }) {
   const [showAllTickets, setShowAllTickets] = useState(false);
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' or 'oldest'
   const [userRole, setUserRole] = useState('');
-  const [submitted, setSubmitted] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [ticketData, setTicketData] = useState(null);
   const [error, setError] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all'); // all, new, opened, closed
+  const [user, setUser] = useState(null);
 
   // Get user role on component mount
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const role = user.role || localStorage.getItem('role') || '';
+    const userData = JSON.parse(localStorage.getItem('user') || '{}');
+    const role = userData.role || localStorage.getItem('role') || '';
     setUserRole(role);
+    setUser(userData);
   }, []);
 
   // Auto-close toast and modal after 2.5s
@@ -59,16 +58,14 @@ export default function SupportModal({ onClose }) {
   // Reset state when modal closes
   const handleClose = () => {
     setView('main');
-    setTicketInput('');
-    setShowTicket(false);
     setNewTicket({ number: generateTicketNumber(), subject: '', content: '', file: null });
-    setSubmitted(false);
     setUserTickets([]);
     setSearchTerm('');
     setSelectedUserTicket(null);
     setTicketsError('');
     setShowAllTickets(false);
     setSortOrder('newest');
+    setActiveFilter('all');
     onClose();
   };
 
@@ -78,7 +75,6 @@ export default function SupportModal({ onClose }) {
     setTicketsError('');
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
-      const userID = localStorage.getItem('userID');
       
       // Always use _id for tickets (MongoDB ObjectId)
       const userId = user._id;
@@ -105,83 +101,88 @@ export default function SupportModal({ onClose }) {
     }
   };
 
-  // Filter tickets based on search term
-  const filteredTickets = userTickets.filter(ticket => 
-    ticket.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    ticket.number?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter tickets based on search term and status
+  const filteredTickets = userTickets.filter(ticket => {
+    const matchesSearch = ticket.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         ticket.number?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter = activeFilter === 'all' || ticket.status === activeFilter;
+    return matchesSearch && matchesFilter;
+  });
 
   // Sort tickets based on sort order
   const sortedTickets = [...filteredTickets].sort((a, b) => {
-    const dateA = new Date(a.createdAt);
-    const dateB = new Date(b.createdAt);
-    return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    if (sortOrder === 'newest') {
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    } else {
+      return new Date(a.createdAt) - new Date(b.createdAt);
+    }
   });
 
-  // Get most recent ticket for quick view
-  const mostRecentTicket = userTickets.length > 0 ? userTickets[0] : null;
+  // Get most recent ticket for summary view
+  const mostRecentTicket = sortedTickets[0];
 
-  // Get status info for display
+  // Get status info for styling
   const getStatusInfo = (status) => {
     switch (status) {
       case 'new':
-        return { icon: <Clock size={12} />, color: 'text-blue-600', bgColor: 'bg-blue-100' };
+        return {
+          icon: <Clock size={16} />,
+          bgColor: 'bg-blue-100',
+          color: 'text-blue-800',
+          label: 'New'
+        };
       case 'opened':
-        return { icon: <FileText size={12} />, color: 'text-orange-600', bgColor: 'bg-orange-100' };
+        return {
+          icon: <MessageCircle size={16} />,
+          bgColor: 'bg-yellow-100',
+          color: 'text-yellow-800',
+          label: 'Opened'
+        };
       case 'closed':
-        return { icon: <CheckCircle size={12} />, color: 'text-green-600', bgColor: 'bg-green-100' };
+        return {
+          icon: <CheckCircle size={16} />,
+          color: 'text-green-800',
+          label: 'Closed'
+        };
       default:
-        return { icon: <Clock size={12} />, color: 'text-gray-600', bgColor: 'bg-gray-100' };
+        return {
+          icon: <FileText size={16} />,
+          bgColor: 'bg-gray-100',
+          color: 'text-gray-800',
+          label: status
+        };
     }
   };
 
-  // Active Ticket view: handle fetch by number
-  async function handleViewTicket(e) {
+  // Get ticket counts for each status
+  const getTicketCounts = () => {
+    const counts = { all: userTickets.length, new: 0, opened: 0, closed: 0 };
+    userTickets.forEach(ticket => {
+      if (counts[ticket.status] !== undefined) {
+        counts[ticket.status]++;
+      }
+    });
+    return counts;
+  };
+
+  const ticketCounts = getTicketCounts();
+
+  // Handle ticket submission
+  async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setShowTicket(false);
-    setTicketData(null);
+    
+    if (!newTicket.subject.trim() || !newTicket.content.trim()) {
+      setError('Please fill in all required fields');
+      setLoading(false);
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        setError('User not authenticated. Please log in again.');
-        setLoading(false);
-        return;
-      }
-      
-      const ticket = await getTicketByNumber(ticketInput);
-      setTicketData(ticket);
-      setShowTicket(true);
-    } catch (err) {
-      console.error('Ticket fetch error:', err);
-      if (err.response) {
-        // Server responded with error status
-        const errorMessage = err.response.data?.error || err.response.data?.message || 'Ticket not found';
-        setError(errorMessage);
-      } else if (err.request) {
-        // Network error
-        setError('Network error. Please check your connection and try again.');
-      } else {
-        // Other error
-        setError('Ticket not found');
-      }
-    }
-    setLoading(false);
-  }
-
-  // New Request view: handle submit
-  async function handleSubmitNewTicket(e) {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const token = localStorage.getItem('token');
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      const userID = localStorage.getItem('userID');
-      
-      if (!token || (!user._id && !userID)) {
-        setError('User not authenticated. Please log in again.');
+        setError('Authentication token not found. Please log in again.');
         setLoading(false);
         return;
       }
@@ -205,7 +206,7 @@ export default function SupportModal({ onClose }) {
         formData.append('file', newTicket.file);
       }
 
-      const response = await axios.post(`${import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com"}/api/tickets`, formData, {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/tickets`, formData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -213,8 +214,9 @@ export default function SupportModal({ onClose }) {
       });
 
       if (response.status === 201) {
-        setSubmitted(true);
         setShowToast(true);
+        // Refresh tickets list
+        fetchUserTickets();
       }
     } catch (err) {
       console.error('Ticket submission error:', err);
@@ -293,7 +295,7 @@ export default function SupportModal({ onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
       <div
-        className="animate-support-modal w-[400px] p-8 rounded-2xl shadow-2xl relative"
+        className="animate-support-modal w-[90vw] max-w-6xl h-[90vh] p-8 rounded-2xl shadow-2xl relative overflow-hidden"
         style={{
           background: 'linear-gradient(90deg, #ede7f6 0%, #9575cd 100%)',
           boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)'
@@ -301,10 +303,11 @@ export default function SupportModal({ onClose }) {
       >
         <button
           onClick={handleClose}
-          className="absolute top-4 left-4 text-gray-500 text-2xl font-bold hover:text-gray-700"
+          className="absolute top-4 left-4 text-gray-500 text-2xl font-bold hover:text-gray-700 z-10"
         >
           &lt;
         </button>
+
         {/* Main view: two buttons */}
         {view === 'main' && (
           <>
@@ -335,10 +338,11 @@ export default function SupportModal({ onClose }) {
             </div>
           </>
         )}
-        {/* My Tickets view */}
+
+        {/* My Tickets view - Enhanced */}
         {view === 'myTickets' && (
-          <div className="transition-all">
-            <div className="flex items-center justify-between mb-4">
+          <div className="h-full flex flex-col">
+            <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">{getRoleWelcomeMessage()}<br /><span className="text-lg font-semibold">My Tickets</span></h2>
                 <div className="text-lg mt-2">
@@ -356,6 +360,28 @@ export default function SupportModal({ onClose }) {
               </div>
             </div>
             
+            {/* Filter Tabs */}
+            <div className="flex space-x-2 mb-4">
+              {[
+                { key: 'all', label: `All (${ticketCounts.all})` },
+                { key: 'new', label: `New (${ticketCounts.new})` },
+                { key: 'opened', label: `Opened (${ticketCounts.opened})` },
+                { key: 'closed', label: `Closed (${ticketCounts.closed})` }
+              ].map(filter => (
+                <button
+                  key={filter.key}
+                  onClick={() => setActiveFilter(filter.key)}
+                  className={`px-3 py-2 rounded-lg font-medium transition-colors text-sm ${
+                    activeFilter === filter.key
+                      ? 'bg-[#9575cd] text-white'
+                      : 'bg-white bg-opacity-30 text-gray-700 hover:bg-opacity-50'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
             {/* Search Bar */}
             <div className="relative mb-4">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
@@ -369,27 +395,30 @@ export default function SupportModal({ onClose }) {
             </div>
 
             {/* Sort Controls - Only show when viewing all tickets */}
-            {showAllTickets && sortedTickets.length > 0 && (
+            {showAllTickets && (
               <div className="flex items-center justify-between mb-4">
-                <div className="text-sm text-gray-600">
-                  {sortedTickets.length} ticket{sortedTickets.length !== 1 ? 's' : ''} found
-                </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-600">Sort by:</span>
                   <select
                     value={sortOrder}
                     onChange={(e) => setSortOrder(e.target.value)}
-                    className="text-xs bg-white bg-opacity-30 text-gray-900 px-2 py-1 rounded border border-white focus:outline-none focus:border-[#9575cd]"
+                    className="px-3 py-1 rounded-lg border border-gray-300 text-sm bg-white bg-opacity-30"
                   >
                     <option value="newest">Newest First</option>
                     <option value="oldest">Oldest First</option>
                   </select>
                 </div>
+                <button
+                  onClick={() => setShowAllTickets(false)}
+                  className="text-sm text-[#9575cd] hover:text-[#7e57c2] underline"
+                >
+                  Show Summary
+                </button>
               </div>
             )}
 
             {/* Tickets List */}
-            <div className="max-h-96 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto">
               {ticketsLoading ? (
                 <div className="text-center text-gray-500 py-4">Loading your tickets...</div>
               ) : ticketsError ? (
@@ -439,19 +468,15 @@ export default function SupportModal({ onClose }) {
                   {/* View All Tickets Button */}
                   <button
                     onClick={() => setShowAllTickets(true)}
-                    className="w-full mt-4 rounded-full px-4 py-3 bg-[#9575cd] text-white font-semibold text-center hover:bg-[#7e57c2] transition border border-white"
+                    className="w-full py-2 px-4 bg-white bg-opacity-20 text-gray-700 rounded-lg hover:bg-opacity-30 transition-colors text-sm font-medium"
                   >
                     View All Tickets ({userTickets.length})
                   </button>
                 </div>
-              ) : sortedTickets.length === 0 ? (
-                <div className="text-center text-gray-500 py-4">
-                  {searchTerm ? 'No tickets match your search' : 'You haven\'t submitted any tickets yet'}
-                </div>
               ) : (
-                // Show all tickets with sorting
+                // Show all tickets
                 <div className="space-y-3">
-                  {sortedTickets.map((ticket) => {
+                  {sortedTickets.map(ticket => {
                     const statusInfo = getStatusInfo(ticket.status);
                     return (
                       <div
@@ -487,168 +512,135 @@ export default function SupportModal({ onClose }) {
                       </div>
                     );
                   })}
+                  
+                  {/* Back to Summary Button */}
+                  <button
+                    onClick={() => setShowAllTickets(false)}
+                    className="w-full py-2 px-4 bg-white bg-opacity-20 text-gray-700 rounded-lg hover:bg-opacity-30 transition-colors text-sm font-medium"
+                  >
+                    Back to Summary
+                  </button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* New Ticket Form */}
+        {view === 'new' && (
+          <div className="h-full flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">{getRoleWelcomeMessage()}<br /><span className="text-lg font-semibold">New Support Request</span></h2>
+                <p className="text-sm text-gray-600">Submit a new support ticket</p>
+              </div>
+              <div className="ml-4">
+                <div className="bg-white bg-opacity-30 rounded-full p-3">
+                  <Plus size={48} className="text-[#9575cd]" />
+                </div>
+              </div>
             </div>
 
-            {/* Back button */}
-            <button
-              className="w-full mt-4 rounded-full px-4 py-3 bg-white bg-opacity-30 text-gray-900 font-semibold text-center hover:bg-opacity-50 transition border border-white"
-              onClick={() => {
-                if (showAllTickets) {
-                  setShowAllTickets(false);
-                } else {
-                  setView('main');
-                }
-              }}
-            >
-              {showAllTickets ? 'Back to Recent Ticket' : 'Back to Main Menu'}
-            </button>
-          </div>
-        )}
-        {/* Active Ticket view */}
-        {view === 'active' && (
-          <div className="transition-all">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">{getRoleWelcomeMessage()}<br /><span className="text-lg font-semibold">Active ticket</span></h2>
-                <div className="text-lg mt-2">Enter your ticket number to check status</div>
-              </div>
-              <div className="ml-4">
-                <div className="bg-white bg-opacity-30 rounded-full p-3">
-                  <Headphones size={48} className="text-[#9575cd]" />
-                </div>
-              </div>
-            </div>
-            <form
-              className="flex flex-col gap-4"
-              onSubmit={handleViewTicket}
-            >
-              <input
-                className="w-full rounded-full px-4 py-3 bg-[#9575cd] bg-opacity-80 text-white placeholder-white text-center border border-white focus:outline-none"
-                placeholder="enter ticket here"
-                value={ticketInput}
-                onChange={e => setTicketInput(e.target.value)}
-              />
-              {loading && <div className="text-center text-gray-500">Loading...</div>}
-              {error && <div className="text-center text-red-500">{error}</div>}
-              {showTicket && ticketData && (
-                <div className="w-full rounded-2xl bg-white bg-opacity-60 p-6 text-gray-900 border border-[#9575cd] mt-2">
-                  <div className="mb-2 font-semibold">Ticket Number: {ticketData.number}</div>
-                  <div className="mb-2">Status: {ticketData.status}</div>
-                  <div className="text-center text-lg mt-4">{ticketData.description}</div>
-                </div>
-              )}
-              {!showTicket && !loading && (
-                <button
-                  type="submit"
-                  className="w-full rounded-full px-4 py-3 bg-[#9575cd] text-white font-semibold text-center hover:bg-[#7e57c2] transition border border-white"
-                >
-                  View Ticket
-                </button>
-              )}
-            </form>
-          </div>
-        )}
-        {/* New Request view */}
-        {view === 'new' && (
-          <div className="transition-all">
-            {/* Toast message */}
-            {showToast && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-lg z-50 flex items-center gap-2 animate-fade-in">
-                <span className="font-semibold">Report submitted</span>
-                <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              </div>
-            )}
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">{getRoleWelcomeMessage()}<br /><span className="text-lg font-semibold">New Request</span></h2>
-              </div>
-              <div className="ml-4">
-                <div className="bg-white bg-opacity-30 rounded-full p-3">
-                  <Headphones size={48} className="text-[#9575cd]" />
-                </div>
-              </div>
-            </div>
-            {!submitted ? (
-              <form
-                className="flex flex-col gap-4"
-                onSubmit={handleSubmitNewTicket}
-              >
-                <div className="text-sm text-gray-700 mb-1 flex items-center gap-2">
-                  <span>Ticket Number: <span className="font-mono">{newTicket.number}</span></span>
+            <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Ticket Number</label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={newTicket.number}
+                    readOnly
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                  />
                   <button
                     type="button"
-                    onClick={() => setNewTicket(prev => ({ ...prev, number: generateTicketNumber() }))}
-                    className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-                  >
-                    Regenerate
-                  </button>
-                  <button
                     id="copy-ticket-number"
-                    type="button"
                     onClick={copyTicketNumber}
-                    className="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600 flex items-center gap-1 transition-colors"
-                    title="Copy ticket number"
+                    className="px-3 py-2 bg-[#9575cd] text-white rounded-lg hover:bg-[#7e57c2] transition-colors"
                   >
-                    <Copy size={12} />
                     Copy
                   </button>
                 </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Subject *</label>
                 <input
-                  className="w-full rounded-full px-4 py-2 bg-white bg-opacity-30 text-gray-900 placeholder-gray-500 text-center border border-white focus:outline-none"
-                  placeholder="Enter subject"
+                  type="text"
                   value={newTicket.subject}
-                  onChange={e => setNewTicket({ ...newTicket, subject: e.target.value })}
+                  onChange={(e) => setNewTicket({ ...newTicket, subject: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9575cd] focus:border-transparent"
+                  placeholder="Brief description of your issue"
                   required
                 />
+              </div>
+
+              <div className="mb-4 flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
                 <textarea
-                  className="w-full rounded-2xl px-4 py-4 bg-white bg-opacity-30 text-gray-900 placeholder-gray-500 text-center border border-white focus:outline-none min-h-[100px]"
-                  placeholder="Enter content"
                   value={newTicket.content}
-                  onChange={e => setNewTicket({ ...newTicket, content: e.target.value })}
+                  onChange={(e) => setNewTicket({ ...newTicket, content: e.target.value })}
+                  className="w-full h-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9575cd] focus:border-transparent resize-none"
+                  placeholder="Please provide detailed information about your issue..."
                   required
                 />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Attachment (Optional)</label>
                 <input
                   type="file"
-                  className="w-full rounded-full px-4 py-2 bg-white bg-opacity-30 text-gray-900 border border-white focus:outline-none"
-                  onChange={e => setNewTicket({ ...newTicket, file: e.target.files[0] })}
+                  onChange={(e) => setNewTicket({ ...newTicket, file: e.target.files[0] })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9575cd] focus:border-transparent"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                 />
-                {loading && <div className="text-center text-gray-500">Submitting...</div>}
-                {error && <div className="text-center text-red-500">{error}</div>}
+                <p className="text-xs text-gray-500 mt-1">Supported formats: PDF, DOC, DOCX, JPG, JPEG, PNG</p>
+              </div>
+
+              {error && <div className="text-red-500 mb-4 text-sm">{error}</div>}
+
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setView('main')}
+                  className="flex-1 py-3 px-4 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
                 <button
                   type="submit"
-                  className="w-full rounded-full px-4 py-3 bg-[#9575cd] text-white font-semibold text-center hover:bg-[#7e57c2] transition border border-white mt-2"
                   disabled={loading}
+                  className="flex-1 py-3 px-4 bg-[#9575cd] text-white rounded-lg hover:bg-[#7e57c2] transition-colors disabled:opacity-50"
                 >
-                  Submit
+                  {loading ? 'Submitting...' : 'Submit Ticket'}
                 </button>
-              </form>
-            ) : null}
+              </div>
+            </form>
           </div>
         )}
-      <style>{`
-        .animate-support-modal {
-          animation: supportModalPop 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .animate-fade-in {
-          animation: fadeIn 0.3s;
-        }
-        .line-clamp-1 {
-          display: -webkit-box;
-          -webkit-line-clamp: 1;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-        @keyframes fadeIn {
-          0% { opacity: 0; transform: translateY(-10px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes supportModalPop {
-          0% { opacity: 0; transform: scale(0.85); }
-          100% { opacity: 1; transform: scale(1); }
-        }
-      `}</style>
+
+        {/* Submitted Success View */}
+        {view === 'submitted' && (
+          <div className="text-center">
+            <div className="mb-6">
+              <div className="bg-green-100 rounded-full p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                <CheckCircle size={40} className="text-green-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Ticket Submitted Successfully!</h2>
+              <p className="text-gray-600 mb-4">Your support request has been submitted. We'll get back to you soon.</p>
+              <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                <p className="text-sm text-gray-600 mb-2">Ticket Number:</p>
+                <p className="text-lg font-mono font-semibold text-[#9575cd]">{newTicket.number}</p>
+                <p className="text-xs text-gray-500 mt-2">Please save this number for future reference</p>
+              </div>
+            </div>
+            <button
+              onClick={handleClose}
+              className="px-6 py-3 bg-[#9575cd] text-white rounded-lg hover:bg-[#7e57c2] transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

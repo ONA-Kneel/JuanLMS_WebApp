@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -16,14 +16,13 @@ import facultyIcon from "../../assets/faculty.png";
 import studentIcon from "../../assets/student.png";
 import termDashboardIcon from "../../assets/termdashboard.png"; // Reverted to dashboard.png as per user's last manual change
 import * as XLSX from 'xlsx'; // Add this import for Excel handling
-import DependencyWarningModal from './DependencyWarningModal';
 
-export default function TermDetails() {
-  const { termId } = useParams();
+export default function SemesterDetails() {
+  const { semesterId } = useParams();
   const navigate = useNavigate();
   const importFileInputRef = useRef(null); // Initialize useRef for the file input
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [termDetails, setTermDetails] = useState(null);
+  const [semesterDetails, setSemesterDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -99,15 +98,6 @@ export default function TermDetails() {
   const [showStudentSuggestions, setShowStudentSuggestions] = useState(false);
 
   const [excelFile, setExcelFile] = useState(null);
-
-  // State for dependency warning modal
-  const [dependencyModal, setDependencyModal] = useState({
-    isOpen: false,
-    entityName: '',
-    entityType: '',
-    dependencies: {},
-    onConfirm: null
-  });
   const [excelError, setExcelError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
@@ -249,17 +239,12 @@ export default function TermDetails() {
 
   const fetchTracks = async () => {
     try {
-      console.log('Fetching tracks for term:', termDetails.termName, 'School Year:', termDetails.schoolYear);
-      // Use the more precise endpoint that filters by both schoolYear and termName
-      const res = await fetch(`${API_BASE}/api/tracks/termId/${termDetails._id}`);
+      console.log('Fetching tracks for term:', termDetails.termName);
+      const res = await fetch(`${API_BASE}/api/tracks/term/${termDetails.termName}`);
       if (res.ok) {
         const data = await res.json();
         console.log('Tracks loaded:', data);
-        // Deduplicate tracks by _id to prevent React key collisions
-        const uniqueTracks = data.filter((track, index, arr) => 
-          arr.findIndex(t => t._id === track._id) === index
-        );
-        setTracks(uniqueTracks);
+        setTracks(data);
       } else {
         const data = await res.json();
         console.error('Failed to fetch tracks:', data);
@@ -461,62 +446,28 @@ export default function TermDetails() {
 
   const handleDeleteTrack = async (track) => {
     if (termDetails.status === 'archived') return;
-    
-    try {
-      // First, check dependencies
-      const dependenciesRes = await fetch(`${API_BASE}/api/tracks/${track._id}/dependencies`);
-      
-      if (dependenciesRes.ok) {
-        const dependencies = await dependenciesRes.json();
-        
-        if (dependencies.totalConnections > 0) {
-          // Show detailed dependency modal
-          const message = `⚠️ WARNING: Deleting this track will also delete ALL connected data!\n\n` +
-            `📊 CONNECTED DATA:\n` +
-            `• ${dependencies.strands.length} Strands\n` +
-            `• ${dependencies.sections.length} Sections\n` +
-            `• ${dependencies.subjects.length} Subjects\n` +
-            `• ${dependencies.studentAssignments.length} Student Assignments\n` +
-            `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
-            `Total: ${dependencies.totalConnections} connected records\n\n` +
-            `This action CANNOT be undone!\n\n` +
-            `Do you want to proceed?`;
-            
-          if (!window.confirm(message)) {
-            return;
-          }
-        } else {
-          // No dependencies, simple confirmation
-          if (!window.confirm(`Are you sure you want to delete the track "${track.trackName}"?`)) {
-            return;
-          }
-        }
-        
-        // Proceed with deletion (with cascade if needed)
-        const deleteRes = await fetch(`${API_BASE}/api/tracks/${track._id}?confirmCascade=true`, {
+    // Check for associated strands
+    const associatedStrands = strands.filter(strand => strand.trackName === track.trackName);
+    if (associatedStrands.length > 0) {
+      window.alert('Cannot delete track: It has associated strands.');
+      return;
+    }
+    if (window.confirm("Are you sure you want to delete this track?")) {
+      try {
+        const res = await fetch(`${API_BASE}/api/tracks/${track._id}`, {
           method: 'DELETE'
         });
 
-        if (deleteRes.ok) {
-          // Refresh all data since we may have deleted related records
-          fetchTracks();
-          fetchStrands();
-          fetchSections();
-          fetchSubjects();
-          fetchFacultyAssignments();
-          fetchStudentAssignments();
-          
-          window.alert('Track and all connected data deleted successfully!');
+        if (res.ok) {
+          setTracks(tracks.filter(t => t._id !== track._id));
+          window.alert('Track deleted successfully!');
         } else {
-          const data = await deleteRes.json();
+          const data = await res.json();
           setTrackError(data.message || 'Failed to delete track');
         }
-      } else {
-        setTrackError('Failed to check track dependencies');
+      } catch (err) {
+        setTrackError('Error deleting track');
       }
-    } catch (err) {
-      setTrackError('Error deleting track');
-      console.error('Error in handleDeleteTrack:', err);
     }
   };
 
@@ -622,60 +573,42 @@ export default function TermDetails() {
 
   const handleDeleteStrand = async (strand) => {
     if (termDetails.status === 'archived') return;
-    
-    try {
-      // First, check dependencies
-      const dependenciesRes = await fetch(`${API_BASE}/api/strands/${strand._id}/dependencies`);
-      
-      if (dependenciesRes.ok) {
-        const dependencies = await dependenciesRes.json();
-        
-        if (dependencies.totalConnections > 0) {
-          // Show detailed dependency modal
-          const message = `⚠️ WARNING: Deleting this strand will also delete ALL connected data!\n\n` +
-            `📊 CONNECTED DATA:\n` +
-            `• ${dependencies.sections.length} Sections\n` +
-            `• ${dependencies.subjects.length} Subjects\n` +
-            `• ${dependencies.studentAssignments.length} Student Assignments\n` +
-            `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
-            `Total: ${dependencies.totalConnections} connected records\n\n` +
-            `This action CANNOT be undone!\n\n` +
-            `Do you want to proceed?`;
-            
-          if (!window.confirm(message)) {
-            return;
-          }
-        } else {
-          // No dependencies, simple confirmation
-          if (!window.confirm(`Are you sure you want to delete the strand "${strand.strandName}"?`)) {
-            return;
-          }
-        }
-        
-        // Proceed with deletion (with cascade if needed)
-        const deleteRes = await fetch(`${API_BASE}/api/strands/${strand._id}?confirmCascade=true`, {
+    // Check for associated sections
+    const associatedSections = sections.filter(section =>
+      section.trackName === strand.trackName &&
+      section.strandName === strand.strandName
+    );
+    if (associatedSections.length > 0) {
+      window.alert('Cannot delete strand: It has associated sections.');
+      return;
+    }
+
+    // Check for associated subjects
+    const associatedSubjects = subjects.filter(subject =>
+      subject.trackName === strand.trackName &&
+      subject.strandName === strand.strandName
+    );
+    if (associatedSubjects.length > 0) {
+      window.alert('Cannot delete strand: It has associated subjects.');
+      return;
+    }
+
+    if (window.confirm("Are you sure you want to delete this strand?")) {
+      try {
+        const res = await fetch(`${API_BASE}/api/strands/${strand._id}`, {
           method: 'DELETE'
         });
 
-        if (deleteRes.ok) {
-          // Refresh all data since we may have deleted related records
-          fetchStrands();
-          fetchSections();
-          fetchSubjects();
-          fetchFacultyAssignments();
-          fetchStudentAssignments();
-          
-          window.alert('Strand and all connected data deleted successfully!');
+        if (res.ok) {
+          setStrands(strands.filter(s => s._id !== strand._id));
+          window.alert('Strand deleted successfully!');
         } else {
-          const data = await deleteRes.json();
+          const data = await res.json();
           setStrandError(data.message || 'Failed to delete strand');
         }
-      } else {
-        setStrandError('Failed to check strand dependencies');
+      } catch (err) {
+        setStrandError('Error deleting strand');
       }
-    } catch (err) {
-      setStrandError('Error deleting strand');
-      console.error('Error in handleDeleteStrand:', err);
     }
   };
 
@@ -787,57 +720,44 @@ export default function TermDetails() {
   };
 
   const handleDeleteSection = async (section) => {
-    if (termDetails.status === 'archived') return;
-    
-    try {
-      // First, check dependencies
-      const dependenciesRes = await fetch(`${API_BASE}/api/sections/${section._id}/dependencies`);
-      
-      if (dependenciesRes.ok) {
-        const dependencies = await dependenciesRes.json();
-        
-        if (dependencies.totalConnections > 0) {
-          // Show detailed dependency modal
-          const message = `⚠️ WARNING: Deleting this section will also delete ALL connected data!\n\n` +
-            `📊 CONNECTED DATA:\n` +
-            `• ${dependencies.studentAssignments.length} Student Assignments\n` +
-            `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
-            `Total: ${dependencies.totalConnections} connected records\n\n` +
-            `This action CANNOT be undone!\n\n` +
-            `Do you want to proceed?`;
-            
-          if (!window.confirm(message)) {
-            return;
-          }
-        } else {
-          // No dependencies, simple confirmation
-          if (!window.confirm(`Are you sure you want to delete the section "${section.sectionName}"?`)) {
-            return;
-          }
-        }
-        
-        // Proceed with deletion (with cascade if needed)
-        const deleteRes = await fetch(`${API_BASE}/api/sections/${section._id}?confirmCascade=true`, {
+    // Check for associated faculty assignments
+    const associatedFacultyAssignments = facultyAssignments.filter(assignment =>
+      assignment.trackName === section.trackName &&
+      assignment.strandName === section.strandName &&
+      assignment.sectionName === section.sectionName
+    );
+    if (associatedFacultyAssignments.length > 0) {
+      window.alert('Cannot delete section: It has associated faculty assignments.');
+      return;
+    }
+
+    // Check for associated student assignments
+    const associatedStudentAssignments = studentAssignments.filter(assignment =>
+      assignment.trackName === section.trackName &&
+      assignment.strandName === section.strandName &&
+      assignment.sectionName === section.sectionName
+    );
+    if (associatedStudentAssignments.length > 0) {
+      window.alert('Cannot delete section: It has associated student assignments.');
+      return;
+    }
+
+    if (window.confirm("Are you sure you want to delete this section?")) {
+      try {
+        const res = await fetch(`${API_BASE}/api/sections/${section._id}`, {
           method: 'DELETE'
         });
 
-        if (deleteRes.ok) {
-          // Refresh all data since we may have deleted related records
-          fetchSections();
-          fetchFacultyAssignments();
-          fetchStudentAssignments();
-          
-          window.alert('Section and all connected data deleted successfully!');
+        if (res.ok) {
+          setSections(sections.filter(s => s._id !== section._id));
+          window.alert('Section deleted successfully!');
         } else {
-          const data = await deleteRes.json();
+          const data = await res.json();
           setSectionError(data.message || 'Failed to delete section');
         }
-      } else {
-        setSectionError('Failed to check section dependencies');
+      } catch (err) {
+        setSectionError('Error deleting section');
       }
-    } catch (err) {
-      setSectionError('Error deleting section');
-      console.error('Error in handleDeleteSection:', err);
     }
   };
 
@@ -1333,18 +1253,13 @@ export default function TermDetails() {
   const handleEditStudentAssignment = (assignment) => {
     setIsStudentEditMode(true);
     setEditingStudentAssignment(assignment);
-    setIsStudentModalOpen(true); // This was missing!
 
     const trackId = tracks.find(t => t.trackName === assignment.trackName)?._id || '';
     const strandId = strands.find(s => s.strandName === assignment.strandName && s.trackName === assignment.trackName)?._id || '';
     const sectionId = sections.find(s => s.sectionName === assignment.sectionName && s.trackName === assignment.trackName && s.strandName === assignment.strandName && s.gradeLevel === assignment.gradeLevel)?._id || '';
 
-    // Use the student name from the assignment data (which includes archived students)
-    // or fall back to looking up in the students array for active students
     const student = students.find(s => s._id === assignment.studentId);
-    if (assignment.studentName) {
-      setStudentSearchTerm(assignment.studentName);
-    } else if (student) {
+    if (student) {
       setStudentSearchTerm(`${student.firstname} ${student.lastname}`);
     } else {
       setStudentSearchTerm('');
@@ -3195,55 +3110,27 @@ export default function TermDetails() {
   };
 
   const handleDeleteSubject = async (subject) => {
-    if (termDetails.status === 'archived') return;
-    
-    try {
-      // First, check dependencies
-      const dependenciesRes = await fetch(`${API_BASE}/api/subjects/${subject._id}/dependencies`);
-      
-      if (dependenciesRes.ok) {
-        const dependencies = await dependenciesRes.json();
-        
-        if (dependencies.totalConnections > 0) {
-          // Show detailed dependency modal
-          const message = `⚠️ WARNING: Deleting this subject will also delete ALL connected data!\n\n` +
-            `📊 CONNECTED DATA:\n` +
-            `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
-            `Total: ${dependencies.totalConnections} connected records\n\n` +
-            `This action CANNOT be undone!\n\n` +
-            `Do you want to proceed?`;
-            
-          if (!window.confirm(message)) {
-            return;
-          }
-        } else {
-          // No dependencies, simple confirmation
-          if (!window.confirm(`Are you sure you want to delete the subject "${subject.subjectName}"?`)) {
-            return;
-          }
-        }
-        
-        // Proceed with deletion (with cascade if needed)
-        const deleteRes = await fetch(`${API_BASE}/api/subjects/${subject._id}?confirmCascade=true`, {
-          method: 'DELETE'
-        });
+    // Check for associated faculty assignments
+    const associatedFacultyAssignments = facultyAssignments.filter(assignment =>
+      assignment.subjectName === subject.subjectName
+    );
+    if (associatedFacultyAssignments.length > 0) {
+      window.alert('Cannot delete subject: It has associated faculty assignments.');
+      return;
+    }
 
-        if (deleteRes.ok) {
-          // Refresh all data since we may have deleted related records
-          fetchSubjects();
-          fetchFacultyAssignments();
-          
-          window.alert('Subject and all connected data deleted successfully!');
+    if (window.confirm('Are you sure you want to delete this subject?')) {
+      try {
+        const res = await fetch(`${API_BASE}/api/subjects/${subject._id}`, { method: 'DELETE' });
+        if (res.ok) {
+          await fetchSubjects();
         } else {
-          const data = await deleteRes.json();
+          const data = await res.json();
           setSubjectError(data.message || 'Failed to delete subject');
         }
-      } else {
-        setSubjectError('Failed to check subject dependencies');
+      } catch (err) {
+        setSubjectError('Error deleting subject');
       }
-    } catch (err) {
-      setSubjectError('Error deleting subject');
-      console.error('Error in handleDeleteSubject:', err);
     }
   };
 
@@ -4027,6 +3914,13 @@ Actual import to database is coming soon!`;
           <div className="p-4">
             {activeTab === 'dashboard' && (
               <div>
+                {/* Show archived message when term is archived */}
+                {termDetails.status === 'archived' && (
+                  <div className="mb-4 p-3 bg-yellow-100 text-yellow-800 rounded text-center font-semibold">
+                    This term is archived. Editing is disabled.
+                  </div>
+                )}
+                
                 {/* Dashboard Summary */}
                 <div className="flex justify-end gap-4 mb-6">
                   <button
@@ -4256,13 +4150,7 @@ Actual import to database is coming soon!`;
          >
            ×
          </button>
-         <form onSubmit={async (e) => {
-                          if (isEditMode) {
-                            await handleUpdateTrack(e);
-                          } else {
-                            await handleAddTrack(e);
-                          }
-                        }} className="space-y-4 mt-6">
+         <form onSubmit={handleAddTrack} className="space-y-4 mt-6">
                   <div className="flex flex-col md:flex-row md:space-x-4 md:space-y-0 mb-4">
                     <div className="flex-1">
                       <label htmlFor="trackName" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
@@ -4327,6 +4215,7 @@ Actual import to database is coming soon!`;
                         setEditingTrack(null);
                         setTrackFormData({ trackName: '' });
                       }}
+                      disabled={termDetails.status === 'archived'}
                     >
                       Add New Track
                     </button>
@@ -5994,7 +5883,7 @@ Actual import to database is coming soon!`;
                           const student = students.find(s => s._id === assignment.studentId);
                           return (
                             <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
-                              <td className="p-3 border">{assignment.studentName || 'Unknown'}</td>
+                              <td className="p-3 border">{student ? `${student.firstname} ${student.lastname}` : 'Unknown'}</td>
                               <td className="p-3 border">{assignment.trackName}</td>
                               <td className="p-3 border">{assignment.strandName}</td>
                               <td className="p-3 border">{assignment.gradeLevel}</td>

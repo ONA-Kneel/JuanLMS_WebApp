@@ -4,6 +4,9 @@ import SchoolYear from '../models/SchoolYear.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import FacultyAssignment from '../models/FacultyAssignment.js';
 import Section from '../models/Section.js';
+import Subject from '../models/Subject.js';
+import Track from '../models/Track.js';
+import Strand from '../models/Strand.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -38,6 +41,13 @@ router.post('/', authenticateToken, async (req, res) => {
     const schoolYear = await SchoolYear.findById(schoolYearId);
     if (!schoolYear) {
       return res.status(404).json({ message: 'School year not found' });
+    }
+
+    // Prevent creating terms for inactive school years
+    if (schoolYear.status === 'inactive') {
+      return res.status(403).json({ 
+        message: 'Cannot create terms for an inactive school year. Please activate the school year first.' 
+      });
     }
 
     const fullSchoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
@@ -120,9 +130,34 @@ router.patch('/:termId/archive', authenticateToken, async (req, res) => {
     term.status = 'archived';
     await term.save();
 
-    // Archive all assignments for this term
-    await StudentAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } });
-    await FacultyAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } });
+    // Archive all related entities for this term
+    console.log(`Archiving all entities for term: ${term.termName} (${term.schoolYear})`);
+    
+    await Promise.all([
+      // Archive assignments
+      StudentAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
+      FacultyAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
+      
+      // Archive structural entities by schoolYear and termName
+      Track.updateMany(
+        { schoolYear: term.schoolYear, termName: term.termName }, 
+        { $set: { status: 'archived' } }
+      ),
+      Strand.updateMany(
+        { schoolYear: term.schoolYear, termName: term.termName }, 
+        { $set: { status: 'archived' } }
+      ),
+      Section.updateMany(
+        { schoolYear: term.schoolYear, termName: term.termName }, 
+        { $set: { status: 'archived' } }
+      ),
+      Subject.updateMany(
+        { schoolYear: term.schoolYear, termName: term.termName }, 
+        { $set: { status: 'archived' } }
+      )
+    ]);
+    
+    console.log(`Successfully archived all entities for term: ${term.termName}`);
     
     res.json(term);
   } catch (err) {
@@ -138,6 +173,20 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Term not found' });
     }
 
+    // Check if the school year is inactive and prevent editing
+    const schoolYearName = term.schoolYear;
+    const [startYear, endYear] = schoolYearName.split('-');
+    const schoolYear = await SchoolYear.findOne({ 
+      schoolYearStart: parseInt(startYear), 
+      schoolYearEnd: parseInt(endYear) 
+    });
+
+    if (schoolYear && schoolYear.status === 'inactive') {
+      return res.status(403).json({ 
+        message: 'Cannot edit terms of an inactive school year. Only status changes are allowed.' 
+      });
+    }
+
     // Handle status updates
     if (req.body.status === 'active') {
       // Archive other terms in the same school year only
@@ -145,7 +194,76 @@ router.patch('/:id', authenticateToken, async (req, res) => {
         { _id: { $ne: term._id }, schoolYear: term.schoolYear },
         { status: 'archived' }
       );
+      
       term.status = 'active';
+      
+      // Reactivate all related entities for this term
+      console.log(`Reactivating all entities for term: ${term.termName} (${term.schoolYear})`);
+      
+      await Promise.all([
+        // Reactivate assignments
+        StudentAssignment.updateMany(
+          { termId: term._id }, 
+          { $set: { status: 'active' } }
+        ),
+        FacultyAssignment.updateMany(
+          { termId: term._id }, 
+          { $set: { status: 'active' } }
+        ),
+        
+        // Reactivate structural entities by schoolYear and termName
+        Track.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'active' } }
+        ),
+        Strand.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'active' } }
+        ),
+        Section.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'active' } }
+        ),
+        Subject.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'active' } }
+        )
+      ]);
+      
+      console.log(`Successfully reactivated all entities for term: ${term.termName}`);
+      
+    } else if (req.body.status === 'archived') {
+      term.status = 'archived';
+      
+      // Archive all related entities for this term (same logic as archive endpoint)
+      console.log(`Archiving all entities for term: ${term.termName} (${term.schoolYear})`);
+      
+      await Promise.all([
+        // Archive assignments
+        StudentAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
+        FacultyAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
+        
+        // Archive structural entities by schoolYear and termName
+        Track.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'archived' } }
+        ),
+        Strand.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'archived' } }
+        ),
+        Section.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'archived' } }
+        ),
+        Subject.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'archived' } }
+        )
+      ]);
+      
+      console.log(`Successfully archived all entities for term: ${term.termName}`);
+      
     } else if (req.body.status) {
       term.status = req.body.status;
     }
@@ -230,8 +348,7 @@ router.get('/:id/sections', authenticateToken, async (req, res) => {
     // Find sections that match the term's school year and term name
     const sections = await Section.find({
       schoolYear: term.schoolYear,
-      termName: term.termName,
-      status: 'active'
+      termName: term.termName
     }).sort({ sectionName: 1 });
 
     res.json(sections);
@@ -272,6 +389,98 @@ router.get('/current', authenticateToken, async (req, res) => {
       success: false, 
       message: err.message 
     });
+  }
+});
+
+// Check term dependencies before deletion
+router.get('/:id/dependencies', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const term = await Term.findById(id);
+    
+    if (!term) {
+      return res.status(404).json({ message: 'Term not found' });
+    }
+
+    // Check all dependencies
+    const [tracks, strands, sections, subjects, studentAssignments, facultyAssignments] = await Promise.all([
+      Track.find({ schoolYear: term.schoolYear, termName: term.termName }),
+      Strand.find({ schoolYear: term.schoolYear, termName: term.termName }),
+      Section.find({ schoolYear: term.schoolYear, termName: term.termName }),
+      Subject.find({ schoolYear: term.schoolYear, termName: term.termName }),
+      StudentAssignment.find({ termId: term._id }),
+      FacultyAssignment.find({ termId: term._id })
+    ]);
+
+    const dependencies = {
+      term: term,
+      tracks: tracks,
+      strands: strands,
+      sections: sections,
+      subjects: subjects,
+      studentAssignments: studentAssignments,
+      facultyAssignments: facultyAssignments,
+      totalConnections: tracks.length + strands.length + sections.length + subjects.length + studentAssignments.length + facultyAssignments.length
+    };
+
+    res.json(dependencies);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete a term and all its dependencies
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { confirmCascade } = req.query;
+    
+    const term = await Term.findById(id);
+    if (!term) {
+      return res.status(404).json({ message: 'Term not found' });
+    }
+
+    // If cascade confirmation is not provided, check dependencies first
+    if (!confirmCascade) {
+      const dependencies = await Promise.all([
+        Track.countDocuments({ schoolYear: term.schoolYear, termName: term.termName }),
+        Strand.countDocuments({ schoolYear: term.schoolYear, termName: term.termName }),
+        Section.countDocuments({ schoolYear: term.schoolYear, termName: term.termName }),
+        Subject.countDocuments({ schoolYear: term.schoolYear, termName: term.termName }),
+        StudentAssignment.countDocuments({ termId: term._id }),
+        FacultyAssignment.countDocuments({ termId: term._id })
+      ]);
+
+      const totalDependencies = dependencies.reduce((sum, count) => sum + count, 0);
+      
+      if (totalDependencies > 0) {
+        return res.status(409).json({ 
+          message: `Cannot delete term: It has ${totalDependencies} connected records. Use confirmCascade=true to delete all connected data.`,
+          dependencyCount: totalDependencies
+        });
+      }
+    }
+
+    // Proceed with cascading deletion
+    console.log(`Cascading deletion of term: ${term.termName} (${term.schoolYear})`);
+    
+    await Promise.all([
+      // Delete all related entities
+      Track.deleteMany({ schoolYear: term.schoolYear, termName: term.termName }),
+      Strand.deleteMany({ schoolYear: term.schoolYear, termName: term.termName }),
+      Section.deleteMany({ schoolYear: term.schoolYear, termName: term.termName }),
+      Subject.deleteMany({ schoolYear: term.schoolYear, termName: term.termName }),
+      StudentAssignment.deleteMany({ termId: term._id }),
+      FacultyAssignment.deleteMany({ termId: term._id })
+    ]);
+
+    // Finally delete the term
+    await Term.findByIdAndDelete(id);
+    
+    console.log(`Successfully deleted term and all connected data`);
+    res.json({ message: 'Term and all connected data deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 

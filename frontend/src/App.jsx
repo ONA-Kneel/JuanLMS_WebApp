@@ -33,6 +33,7 @@ import Faculty_CreateClass from './component/Faculty/Faculty_CreateClass';
 import Faculty_ClassWorkspace from './component/Faculty/Faculty_ClassWorkspace';
 import Faculty_Meeting from './component/Faculty/Faculty_Meeting';
 import Faculty_StudentReport from './component/Faculty/Faculty_StudentReport';
+import SupportModal from './component/Support/SupportModal';
 
 // Principal Access
 import Principal_Dashboard from './component/Principal/Principal_Dashboard';
@@ -81,7 +82,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/pdf-viewer" element={<PdfViewer />} />
         {/* Students */}
-        <Route path="/student_dashboard" element={<ProtectedRoute allowedRoles={['students']}><Student_Dashboard /></ProtectedRoute>} />
+        <Route path="/student_dashboard" element={<ProtectedRoute allowedRoles={['students']}><Student_Dashboard /></ProtectedRoute>}/>
         <Route path="/student_classes" element={<ProtectedRoute allowedRoles={['students']}><Student_Classes /></ProtectedRoute>}/>
         <Route path="/student_activities" element={<ProtectedRoute allowedRoles={['students']}><Student_Activities /></ProtectedRoute>}/>
         <Route path="/student_chats" element={<ProtectedRoute allowedRoles={['students']}><Student_Chats /></ProtectedRoute>}/>
@@ -98,7 +99,7 @@ function App() {
         <Route path="/faculty_chats" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Chats /></ProtectedRoute>}/>
         <Route path="/faculty_progress" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Progress /></ProtectedRoute>}/>
         <Route path="/faculty_grades" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Grades /></ProtectedRoute>}/>
-        <Route path="/faculty_calendar" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Calendar /></ProtectedRoute>}/> 
+        <Route path="/faculty_calendar" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Calendar /></ProtectedRoute>} /> 
         <Route path="/faculty_createclass" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_CreateClass/></ProtectedRoute>}/> 
         <Route path="/faculty_class/:classId" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_ClassWorkspace /></ProtectedRoute>} />
         <Route path="/faculty_meeting" element={<ProtectedRoute allowedRoles={['faculty']}><Faculty_Meeting /></ProtectedRoute>} />
@@ -107,12 +108,12 @@ function App() {
 
         {/* Principal */}
         <Route path="/principal_dashboard" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Dashboard/></ProtectedRoute>}/>
-        <Route path="/principal_chats" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Chats /></ProtectedRoute>}/>
-        <Route path="/principal_grades" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Grades /></ProtectedRoute>}/>
         <Route path="/principal_calendar" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Calendar /></ProtectedRoute>}/>
-        <Route path="/principal_audit_trail" element={<ProtectedRoute allowedRoles={['principal']}><Principal_AuditTrail/></ProtectedRoute>}/>
-        <Route path="/principal_faculty_report" element={<ProtectedRoute allowedRoles={['principal']}><Principal_FacultyReport/></ProtectedRoute>}/>
-        <Route path="/principal_post_announcement" element={<ProtectedRoute allowedRoles={['principal']}><Principal_PostAnnouncement/></ProtectedRoute>}/>
+        <Route path="/principal_faculty_report" element={<ProtectedRoute allowedRoles={['principal']}><Principal_FacultyReport /></ProtectedRoute>}/>
+        <Route path="/principal_post_announcement" element={<ProtectedRoute allowedRoles={['principal']}><Principal_PostAnnouncement /></ProtectedRoute>}/>
+        <Route path="/principal_grades" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Grades /></ProtectedRoute>}/>
+        <Route path="/principal_audit_trail" element={<ProtectedRoute allowedRoles={['principal']}><Principal_AuditTrail /></ProtectedRoute>}/>
+        <Route path="/principal_chats" element={<ProtectedRoute allowedRoles={['principal']}><Principal_Chats /></ProtectedRoute>}/>
 
         {/* Admin */}
         <Route path="/admin_dashboard" element={<ProtectedRoute allowedRoles={['admin']}><Admin_Dashboard/></ProtectedRoute>}/>

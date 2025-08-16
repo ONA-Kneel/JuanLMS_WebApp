@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import { getAllTickets, replyToTicket, openTicket } from '../../services/ticketService';
-import { getUserById, getUserByUserID } from '../../services/userService';
+import axios from 'axios'; // Added axios import
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function AdminSupportCenter() {
   const [tickets, setTickets] = useState([]);
@@ -21,46 +21,76 @@ export default function AdminSupportCenter() {
   const [allTickets, setAllTickets] = useState([]); // Store all tickets for counting
   const [userDetails, setUserDetails] = useState({}); // Store user details for each ticket
 
-  // Function to fetch user details for tickets
+  // Fetch user details for tickets
   const fetchUserDetails = async (tickets) => {
-    const userDetailsMap = {};
-    for (const ticket of tickets) {
-      // Check if userId is a valid MongoDB ObjectId (24 character hex string)
-      const isValidObjectId = ticket.userId && /^[0-9a-fA-F]{24}$/.test(ticket.userId);
+    try {
+      // Fetch all users at once (like the chat system does)
+      const response = await axios.get(`${API_BASE}/users`);
+      console.log('Users API response:', response);
+      const allUsers = Array.isArray(response.data) ? response.data : response.data.users || [];
+      console.log('Processed users:', allUsers);
       
-      if (ticket.userId && isValidObjectId && !userDetailsMap[ticket.userId]) {
-        try {
-          const userData = await getUserById(ticket.userId);
-          userDetailsMap[ticket.userId] = {
-            name: `${userData.firstname || ''} ${userData.lastname || ''}`.trim(),
-            role: userData.role || 'Unknown'
+      // Create a map of userId to user details for quick lookup
+      const userMap = {};
+      allUsers.forEach(user => {
+        if (user._id) {
+          userMap[user._id] = {
+            name: `${user.firstname || ''} ${user.lastname || ''}`.trim() || 'Unknown User',
+            role: user.role || 'Unknown'
           };
-        } catch (err) {
-          console.error(`Failed to fetch user details for ${ticket.userId}:`, err);
-          userDetailsMap[ticket.userId] = {
+        }
+        // Also map by userID (string identifier) as fallback
+        if (user.userID) {
+          userMap[user.userID] = {
+            name: `${user.firstname || ''} ${user.lastname || ''}`.trim() || 'Unknown User',
+            role: user.role || 'Unknown'
+          };
+        }
+      });
+      console.log('User map created:', userMap);
+
+      // Map user details to tickets
+      const userDetailsMap = {};
+      tickets.forEach(ticket => {
+        if (!ticket.userId) {
+          userDetailsMap[ticket._id] = {
             name: 'Unknown User',
             role: 'Unknown'
           };
+          return;
         }
-      } else if (ticket.userId && !isValidObjectId) {
-        console.warn(`Invalid userId format for ticket ${ticket._id}: ${ticket.userId}`);
-        // Try to find user by userID as a fallback
-        try {
-          const userData = await getUserByUserID(ticket.userId);
-          userDetailsMap[ticket.userId] = {
-            name: `${userData.firstname || ''} ${userData.lastname || ''}`.trim(),
-            role: userData.role || 'Unknown'
-          };
-        } catch (err) {
-          console.error(`Failed to fetch user details by userID for ${ticket.userId}:`, err);
-          userDetailsMap[ticket.userId] = {
-            name: 'Invalid User ID',
+
+        // Try to find user by userId (MongoDB ObjectId)
+        let userDetails = userMap[ticket.userId];
+        
+        // If not found by ObjectId, try by userID (string identifier)
+        if (!userDetails) {
+          userDetails = userMap[ticket.userId];
+        }
+
+        if (userDetails) {
+          userDetailsMap[ticket._id] = userDetails;
+        } else {
+          userDetailsMap[ticket._id] = {
+            name: 'User Not Found',
             role: 'Unknown'
           };
         }
-      }
+      });
+
+      setUserDetails(userDetailsMap);
+    } catch (err) {
+      console.error('Error fetching user details:', err);
+      // Set default values if fetch fails
+      const userDetailsMap = {};
+      tickets.forEach(ticket => {
+        userDetailsMap[ticket._id] = {
+          name: 'Error Loading User',
+          role: 'Unknown'
+        };
+      });
+      setUserDetails(userDetailsMap);
     }
-    setUserDetails(userDetailsMap);
   };
 
   useEffect(() => {
@@ -224,7 +254,7 @@ export default function AdminSupportCenter() {
   async function handleStatusChange(ticketId, newStatus) {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
       
       const endpoint = newStatus === 'opened' ? 'open' : 'close';
       const response = await fetch(`${API_BASE}/api/tickets/${ticketId}/${endpoint}`, {
@@ -381,7 +411,7 @@ export default function AdminSupportCenter() {
                   }}
                 >
                   <div className="text-xs text-gray-600 mb-1">
-                    {userDetails[ticket.userId]?.name || 'Loading...'} ({userDetails[ticket.userId]?.role || 'Unknown'})
+                    {userDetails[ticket._id]?.name || 'Loading...'} ({userDetails[ticket._id]?.role || 'Unknown'})
                   </div>
                   <b className="block text-base">{ticket.subject}</b>
                   <span className="block text-xs text-gray-500">{ticket.number}</span>
@@ -401,10 +431,10 @@ export default function AdminSupportCenter() {
                     <div className="mb-2 text-sm text-[#7e57c2] font-semibold">Ticket No: {ticket.number} | Status: {ticket.status}</div>
                     <div className="mb-3 p-3 bg-gray-50 rounded-lg border-l-4 border-blue-500">
                       <div className="text-sm font-medium text-gray-700">
-                        Submitted by: <span className="font-semibold text-blue-600">{userDetails[ticket.userId]?.name || 'Loading...'}</span>
+                        Submitted by: <span className="font-semibold text-blue-600">{userDetails[ticket._id]?.name || 'Loading...'}</span>
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
-                        Role: {userDetails[ticket.userId]?.role || 'Unknown'}
+                        Role: {userDetails[ticket._id]?.role || 'Unknown'}
                       </div>
                     </div>
                     <p className="mb-4 text-gray-700">{ticket.description}</p>
@@ -470,4 +500,4 @@ export default function AdminSupportCenter() {
       </div>
     </div>
   );
-} 
+}
