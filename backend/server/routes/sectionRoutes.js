@@ -8,7 +8,7 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const { schoolYear, termName } = req.query;
-    const filter = { status: 'active' };
+    const filter = {};
     
     // If schoolYear and termName are provided, filter by them
     if (schoolYear) filter.schoolYear = schoolYear;
@@ -31,9 +31,33 @@ router.get('/track/:trackName/strand/:strandName', async (req, res) => {
       strandName, 
       schoolYear,
       termName,
-      status: 'active' 
+      // status: 'active' // Remove status filter to show actual status 
     });
     res.status(200).json(sections);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get all sections for a specific term by term ID (more precise)
+router.get('/termId/:termId', async (req, res) => {
+  try {
+    const { termId } = req.params;
+    
+    // First get the term details to get schoolYear and termName
+    const term = await Term.findById(termId);
+    
+    if (!term) {
+      return res.status(404).json({ message: 'Term not found' });
+    }
+    
+    // Get sections for this specific school year and term, regardless of status
+    const sections = await Section.find({ 
+      schoolYear: term.schoolYear, 
+      termName: term.termName 
+    }).sort({ sectionName: 1 });
+    
+    res.json(sections);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -12,8 +12,7 @@ router.get('/track/:trackName', async (req, res) => {
     const strands = await Strand.find({ 
       trackName, 
       schoolYear,
-      termName,
-      status: 'active' 
+      termName
     });
     res.status(200).json(strands);
   } catch (error) {
@@ -25,13 +24,44 @@ router.get('/track/:trackName', async (req, res) => {
 router.get('/schoolyear/:schoolYear/term/:termName', async (req, res) => {
   try {
     const { schoolYear, termName } = req.params;
-    const strands = await Strand.find({ schoolYear, termName, status: 'active' });
+    const strands = await Strand.find({ schoolYear, termName });
     // Deduplicate by strandName, trackName, schoolYear, termName
     const unique = new Map();
     for (const s of strands) {
       const key = `${s.strandName}|${s.trackName}|${s.schoolYear}|${s.termName}`;
       if (!unique.has(key)) unique.set(key, s);
     }
+    res.json(Array.from(unique.values()));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get all strands for a specific term by term ID (more precise)
+router.get('/termId/:termId', async (req, res) => {
+  try {
+    const { termId } = req.params;
+    
+    // First get the term details to get schoolYear and termName
+    const term = await Term.findById(termId);
+    
+    if (!term) {
+      return res.status(404).json({ message: 'Term not found' });
+    }
+    
+    // Get strands for this specific school year and term, regardless of status
+    const strands = await Strand.find({ 
+      schoolYear: term.schoolYear, 
+      termName: term.termName 
+    });
+    
+    // Deduplicate by strandName, trackName, schoolYear, termName
+    const unique = new Map();
+    for (const s of strands) {
+      const key = `${s.strandName}|${s.trackName}|${s.schoolYear}|${s.termName}`;
+      if (!unique.has(key)) unique.set(key, s);
+    }
+    
     res.json(Array.from(unique.values()));
   } catch (error) {
     res.status(500).json({ message: error.message });
