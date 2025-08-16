@@ -163,77 +163,15 @@ export default function Faculty_Grades() {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* CORE SUBJECTS */}
-                    <tr>
-                      <td className="border border-gray-300 p-2 font-bold text-gray-700 bg-gray-100 pl-4">CORE SUBJECTS</td>
-                      <td className="border border-gray-300 p-2"></td>
-                      <td className="border border-gray-300 p-2"></td>
-                      <td className="border border-gray-300 p-2"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Oral Communication</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Komunikasyon at Pananaliksik sa Wika at Kulturang Pilipino</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">General Mathematics</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Earth and Life Science</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Personal Development</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Introduction to the Philosophy of the Human Person</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Physical Education and Health 1</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    
-                    {/* STRAND SUBJECTS */}
-                    <tr>
-                      <td className="border border-gray-300 p-2 font-bold text-gray-700 bg-gray-100 pl-4">STRAND SUBJECTS</td>
-                      <td className="border border-gray-300 p-2"></td>
-                      <td className="border border-gray-300 p-2"></td>
-                      <td className="border border-gray-300 p-2"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Housekeeping NCII</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    
-                    {/* Other Subject */}
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-4">Christian Vincentian Living 1</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
+                    {/* Empty rows for dynamic content */}
+                    {Array.from({ length: 10 }).map((_, index) => (
+                      <tr key={index}>
+                        <td className="border border-gray-300 p-2 h-12"></td>
+                        <td className="border border-gray-300 p-2 text-center"></td>
+                        <td className="border border-gray-300 p-2 text-center"></td>
+                        <td className="border border-gray-300 p-2 text-center"></td>
+                      </tr>
+                    ))}
                     
                     {/* General Average */}
                     <tr className="bg-gray-50">
@@ -266,85 +204,15 @@ export default function Faculty_Grades() {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* CORE SUBJECTS */}
-                    <tr>
-                      <td className="border border-gray-300 p-2 font-bold text-gray-700 bg-gray-100 pl-4">CORE SUBJECTS</td>
-                      <td className="border border-gray-300 p-2"></td>
-                      <td className="border border-gray-300 p-2"></td>
-                      <td className="border border-gray-300 p-2"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Reading and Writing Skills</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Pagbasa at Pagsusuri ng Ibat-ibang Teksto Tungo sa Pananaliksik</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Statistics and Probability</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Physical Education and Health 2</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    
-                    {/* APPLIED SUBJECTS */}
-                    <tr>
-                      <td className="border border-gray-300 p-2 font-bold text-gray-700 bg-gray-100 pl-4">APPLIED SUBJECTS</td>
-                      <td className="border border-gray-300 p-2"></td>
-                      <td className="border border-gray-300 p-2"></td>
-                      <td className="border border-gray-300 p-2"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">English for Academic and Professional Purposes</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Practical Research 1</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Empowerment Technologies: ICT for TVL</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    
-                    {/* STRAND SUBJECTS */}
-                    <tr>
-                      <td className="border border-gray-300 p-2 font-bold text-gray-700 bg-gray-100 pl-4">STRAND SUBJECTS</td>
-                      <td className="border border-gray-300 p-2"></td>
-                      <td className="border border-gray-300 p-2"></td>
-                      <td className="border border-gray-300 p-2"></td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-8">Food and Beverage Services NC II</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
-                    
-                    {/* Other Subject */}
-                    <tr>
-                      <td className="border border-gray-300 p-2 pl-4">Christian Vincentian Living 2</td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                      <td className="border border-gray-300 p-2 text-center"></td>
-                    </tr>
+                    {/* Empty rows for dynamic content */}
+                    {Array.from({ length: 10 }).map((_, index) => (
+                      <tr key={index}>
+                        <td className="border border-gray-300 p-2 h-12"></td>
+                        <td className="border border-gray-300 p-2 text-center"></td>
+                        <td className="border border-gray-300 p-2 text-center"></td>
+                        <td className="border border-gray-300 p-2 text-center"></td>
+                      </tr>
+                    ))}
                     
                     {/* General Average */}
                     <tr className="bg-gray-50">
