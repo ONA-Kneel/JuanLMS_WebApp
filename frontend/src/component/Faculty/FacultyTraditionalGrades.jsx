@@ -7,7 +7,9 @@ import './FacultyTraditionalGrades.css';
 const FacultyTraditionalGrades = () => {
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState('');
   const [students, setStudents] = useState([]);
+  const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -40,6 +42,7 @@ const FacultyTraditionalGrades = () => {
   const handleClassChange = async (e) => {
     const classId = e.target.value;
     setSelectedClass(classId);
+    setSelectedSubject(''); // Reset subject selection
     
     if (classId) {
       try {
@@ -51,20 +54,42 @@ const FacultyTraditionalGrades = () => {
         
         if (response.data.success) {
           setStudents(response.data.students);
+          
+          // Extract unique subjects from students
+          const uniqueSubjects = [];
+          const subjectMap = new Map();
+          
+          response.data.students.forEach(student => {
+            student.subjects.forEach(subject => {
+              if (!subjectMap.has(subject._id)) {
+                subjectMap.set(subject._id, subject);
+                uniqueSubjects.push(subject);
+              }
+            });
+          });
+          
+          setSubjects(uniqueSubjects);
         } else {
           toast.error('Failed to fetch students');
           setStudents([]);
+          setSubjects([]);
         }
       } catch (error) {
         console.error('Error fetching students:', error);
         toast.error('Failed to fetch students');
         setStudents([]);
+        setSubjects([]);
       } finally {
         setLoading(false);
       }
     } else {
       setStudents([]);
+      setSubjects([]);
     }
+  };
+
+  const handleSubjectChange = (e) => {
+    setSelectedSubject(e.target.value);
   };
 
   const downloadTemplate = async () => {
@@ -184,6 +209,16 @@ const FacultyTraditionalGrades = () => {
     return 'FAILED';
   };
 
+  // Filter students to show only the selected subject
+  const filteredStudents = selectedSubject 
+    ? students.filter(student => 
+        student.subjects.some(subject => subject._id === selectedSubject)
+      )
+    : students;
+
+  // Get the selected subject object
+  const currentSubject = subjects.find(subject => subject._id === selectedSubject);
+
   return (
     <div className="faculty-traditional-grades">
       <div className="grades-header">
@@ -208,6 +243,25 @@ const FacultyTraditionalGrades = () => {
             ))}
           </select>
         </div>
+
+        {selectedClass && subjects.length > 0 && (
+          <div className="form-group subject-selection">
+            <label htmlFor="subject-select">Select Subject:</label>
+            <select
+              id="subject-select"
+              value={selectedSubject}
+              onChange={handleSubjectChange}
+              disabled={loading}
+            >
+              <option value="">Choose a subject...</option>
+              {subjects.map((subject) => (
+                <option key={subject._id} value={subject._id}>
+                  {subject.subjectCode} - {subject.subjectDescription}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {selectedClass && (
@@ -239,17 +293,22 @@ const FacultyTraditionalGrades = () => {
         </div>
       )}
 
-      {selectedClass && students.length > 0 && (
+      {selectedClass && selectedSubject && currentSubject && (
+        <div className="subject-info">
+          <h3>Subject: {currentSubject.subjectCode} - {currentSubject.subjectDescription}</h3>
+          <p>Managing grades for {filteredStudents.length} students</p>
+        </div>
+      )}
+
+      {selectedClass && selectedSubject && filteredStudents.length > 0 && (
         <div className="grades-table-container">
-          <h3>Student Grades</h3>
+          <h3>Student Grades - {currentSubject?.subjectCode}</h3>
           <div className="table-responsive">
             <table className="grades-table">
               <thead>
                 <tr>
                   <th>Student Name</th>
                   <th>School ID</th>
-                  <th>Subject Code</th>
-                  <th>Subject Description</th>
                   <th>Prelims</th>
                   <th>Midterms</th>
                   <th>Final</th>
@@ -258,17 +317,17 @@ const FacultyTraditionalGrades = () => {
                 </tr>
               </thead>
               <tbody>
-                {students.map((student) => 
-                  student.subjects.map((subject, subjectIndex) => (
-                    <tr key={`${student._id}-${subject._id}`}>
-                      {subjectIndex === 0 ? (
-                        <>
-                          <td rowSpan={student.subjects.length}>{student.name}</td>
-                          <td rowSpan={student.subjects.length}>{student.schoolID}</td>
-                        </>
-                      ) : null}
-                      <td>{subject.subjectCode}</td>
-                      <td>{subject.subjectDescription}</td>
+                {filteredStudents.map((student) => {
+                  const subject = student.subjects.find(sub => sub._id === selectedSubject);
+                  if (!subject) return null;
+
+                  const finalGrade = calculateFinalGrade(subject.prelims, subject.midterms, subject.final);
+                  const remark = getRemark(finalGrade);
+
+                  return (
+                    <tr key={student._id}>
+                      <td>{student.name}</td>
+                      <td>{student.schoolID}</td>
                       <td>
                         <input
                           type="number"
@@ -277,6 +336,7 @@ const FacultyTraditionalGrades = () => {
                           step="0.01"
                           placeholder="Grade"
                           className="grade-input"
+                          defaultValue={subject.prelims || ''}
                           onChange={(e) => updateGrade(student._id, subject._id, 'prelims', e.target.value)}
                         />
                       </td>
@@ -288,6 +348,7 @@ const FacultyTraditionalGrades = () => {
                           step="0.01"
                           placeholder="Grade"
                           className="grade-input"
+                          defaultValue={subject.midterms || ''}
                           onChange={(e) => updateGrade(student._id, subject._id, 'midterms', e.target.value)}
                         />
                       </td>
@@ -299,21 +360,34 @@ const FacultyTraditionalGrades = () => {
                           step="0.01"
                           placeholder="Grade"
                           className="grade-input"
+                          defaultValue={subject.final || ''}
                           onChange={(e) => updateGrade(student._id, subject._id, 'final', e.target.value)}
                         />
                       </td>
                       <td className="final-grade">
-                        {/* This will be calculated automatically */}
+                        {finalGrade}
                       </td>
                       <td className="remark">
-                        {/* This will be calculated automatically */}
+                        {remark}
                       </td>
                     </tr>
-                  ))
-                )}
+                  );
+                })}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {selectedClass && selectedSubject && filteredStudents.length === 0 && (
+        <div className="no-data">
+          <p>No students found for the selected subject.</p>
+        </div>
+      )}
+
+      {selectedClass && !selectedSubject && (
+        <div className="no-data">
+          <p>Please select a subject to view and manage grades.</p>
         </div>
       )}
 

@@ -78,40 +78,96 @@ export default function Student_Grades() {
           <ProfileMenu/>
         </div>
 
-        {/* Grades Table */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border border-gray-300 text-sm">
-            <thead>
-              <tr>
-                <th colSpan="7" className="text-center p-3 border-b font-bold">
-                  2024-2025 2nd Semester
-                </th>
-              </tr>
-              <tr className="bg-gray-100 table-fixed border-collapse">
-                <th className="p-2 border">Subject Code</th>
-                <th className="p-2 border">Subject Description</th>
-                <th className="p-2 border">Prelims</th>
-                <th className="p-2 border">Midterms</th>
-                <th className="p-2 border">Final</th>
-                <th className="p-2 border">Finals Grade</th>
-                <th className="p-2 border">Remark</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* 5 Empty rows */}
-              {Array.from({ length: 5 }).map((_, index) => (
-                <tr key={index}>
-                  <td className="p-2 border h-12"></td>
-                  <td className="p-2 border"></td>
-                  <td className="p-2 border"></td>
-                  <td className="p-2 border"></td>
-                  <td className="p-2 border"></td>
-                  <td className="p-2 border"></td>
-                  <td className="p-2 border"></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* Traditional Grades Layout */}
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          {/* Main Title */}
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold text-gray-800 uppercase tracking-wide">
+              Report on Learning Progress and Achievement
+            </h1>
+          </div>
+
+          {/* First Semester Section */}
+          <div className="mb-8">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">First Semester</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border border-gray-300 text-sm">
+                <thead>
+                  <tr>
+                    <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Subjects</th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50" colSpan="2">Quarter</th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
+                  </tr>
+                  <tr>
+                    <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">1</th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">2</th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Empty rows for dynamic content */}
+                  {Array.from({ length: 10 }).map((_, index) => (
+                    <tr key={index}>
+                      <td className="border border-gray-300 p-2 h-12"></td>
+                      <td className="border border-gray-300 p-2 text-center"></td>
+                      <td className="border border-gray-300 p-2 text-center"></td>
+                      <td className="border border-gray-300 p-2 text-center"></td>
+                    </tr>
+                  ))}
+                  
+                  {/* General Average */}
+                  <tr className="bg-gray-50">
+                    <td className="border border-gray-300 p-2 font-bold text-gray-800">General Average</td>
+                    <td className="border border-gray-300 p-2"></td>
+                    <td className="border border-gray-300 p-2"></td>
+                    <td className="border border-gray-300 p-2 text-center font-bold"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Second Semester Section */}
+          <div className="mb-8">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Second Semester</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border border-gray-300 text-sm">
+                <thead>
+                  <tr>
+                    <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Subjects</th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50" colSpan="2">Quarter</th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
+                  </tr>
+                  <tr>
+                    <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">3</th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">4</th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Empty rows for dynamic content */}
+                  {Array.from({ length: 10 }).map((_, index) => (
+                    <tr key={index}>
+                      <td className="border border-gray-300 p-2 h-12"></td>
+                      <td className="border border-gray-300 p-2 text-center"></td>
+                      <td className="border border-gray-300 p-2 text-center"></td>
+                      <td className="border border-gray-300 p-2 text-center"></td>
+                    </tr>
+                  ))}
+                  
+                  {/* General Average */}
+                  <tr className="bg-gray-50">
+                    <td className="border border-gray-300 p-2 font-bold text-gray-800">General Average</td>
+                    <td className="border border-gray-300 p-2"></td>
+                    <td className="border border-gray-300 p-2"></td>
+                    <td className="border border-gray-300 p-2 text-center font-bold"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
