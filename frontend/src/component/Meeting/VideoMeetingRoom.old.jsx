@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Mic, MicOff, Video, VideoOff, PhoneOff, Settings, Users } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 const VideoMeetingRoom = ({ meetingData: originalMeetingData, userInfo, onClose, onMeetingEnd }) => {
   // Create a new object with meetingId if missing

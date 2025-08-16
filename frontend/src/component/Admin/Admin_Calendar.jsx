@@ -13,7 +13,7 @@ import ProfileModal from "../ProfileModal";
 import interactionPlugin from "@fullcalendar/interaction";
 import ValidationModal from "../ValidationModal";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 const PRESET_COLORS = [
   "#1890ff", // blue
