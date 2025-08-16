@@ -214,4 +214,104 @@ router.get('/current', async (req, res) => {
   }
 });
 
+// Check school year dependencies before deletion
+router.get('/:id/dependencies', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const schoolYear = await SchoolYear.findById(id);
+    
+    if (!schoolYear) {
+      return res.status(404).json({ message: 'School year not found' });
+    }
+
+    const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
+
+    // Check all dependencies
+    const [terms, tracks, strands, sections, subjects, studentAssignments, facultyAssignments] = await Promise.all([
+      Term.find({ schoolYear: schoolYearName }),
+      Track.find({ schoolYear: schoolYearName }),
+      Strand.find({ schoolYear: schoolYearName }),
+      Section.find({ schoolYear: schoolYearName }),
+      Subject.find({ schoolYear: schoolYearName }),
+      StudentAssignment.find({ schoolYear: schoolYearName }),
+      FacultyAssignment.find({ schoolYear: schoolYearName })
+    ]);
+
+    const dependencies = {
+      schoolYear: schoolYear,
+      terms: terms,
+      tracks: tracks,
+      strands: strands,
+      sections: sections,
+      subjects: subjects,
+      studentAssignments: studentAssignments,
+      facultyAssignments: facultyAssignments,
+      totalConnections: terms.length + tracks.length + strands.length + sections.length + subjects.length + studentAssignments.length + facultyAssignments.length
+    };
+
+    res.json(dependencies);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete a school year and all its dependencies
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { confirmCascade } = req.query;
+    
+    const schoolYear = await SchoolYear.findById(id);
+    if (!schoolYear) {
+      return res.status(404).json({ message: 'School year not found' });
+    }
+
+    const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
+
+    // If cascade confirmation is not provided, check dependencies first
+    if (!confirmCascade) {
+      const dependencies = await Promise.all([
+        Term.countDocuments({ schoolYear: schoolYearName }),
+        Track.countDocuments({ schoolYear: schoolYearName }),
+        Strand.countDocuments({ schoolYear: schoolYearName }),
+        Section.countDocuments({ schoolYear: schoolYearName }),
+        Subject.countDocuments({ schoolYear: schoolYearName }),
+        StudentAssignment.countDocuments({ schoolYear: schoolYearName }),
+        FacultyAssignment.countDocuments({ schoolYear: schoolYearName })
+      ]);
+
+      const totalDependencies = dependencies.reduce((sum, count) => sum + count, 0);
+      
+      if (totalDependencies > 0) {
+        return res.status(409).json({ 
+          message: `Cannot delete school year: It has ${totalDependencies} connected records. Use confirmCascade=true to delete all connected data.`,
+          dependencyCount: totalDependencies
+        });
+      }
+    }
+
+    // Proceed with cascading deletion
+    console.log(`Cascading deletion of school year: ${schoolYearName}`);
+    
+    await Promise.all([
+      // Delete all related entities
+      Term.deleteMany({ schoolYear: schoolYearName }),
+      Track.deleteMany({ schoolYear: schoolYearName }),
+      Strand.deleteMany({ schoolYear: schoolYearName }),
+      Section.deleteMany({ schoolYear: schoolYearName }),
+      Subject.deleteMany({ schoolYear: schoolYearName }),
+      StudentAssignment.deleteMany({ schoolYear: schoolYearName }),
+      FacultyAssignment.deleteMany({ schoolYear: schoolYearName })
+    ]);
+
+    // Finally delete the school year
+    await SchoolYear.findByIdAndDelete(id);
+    
+    console.log(`Successfully deleted school year and all connected data`);
+    res.json({ message: 'School year and all connected data deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 export default router; 
