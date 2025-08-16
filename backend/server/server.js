@@ -34,7 +34,7 @@ import registrantRoutes from "./routes/registrantRoutes.js";
 import classDateRoutes  from './routes/classDateRoutes.js';
 import quizRoutes from './routes/quizRoutes.js';
 import meetingRoutes from './routes/meetingRoutes.js';
-import notificationRoutes from './routes/notificationRoutes.js';
+import notificationRoutes from "./routes/notificationRoutes.js";
 import gradingRoutes from './routes/gradingRoutes.js';
 import traditionalGradeRoutes from './routes/traditionalGradeRoutes.js';
 import studentReportRoutes from './routes/studentReportRoutes.js';
@@ -42,6 +42,17 @@ import generalAnnouncementRoutes from './routes/generalAnnouncementRoutes.js';
 
 
 dotenv.config({ path: './config.env' });
+
+// Validate required environment variables
+const requiredEnvVars = ['JWT_SECRET', 'ATLAS_URI'];
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    console.error(`❌ Missing required environment variable: ${envVar}`);
+    process.exit(1);
+  }
+}
+
+console.log('✅ Environment variables validated successfully');
 
 const { ObjectId } = mongoose.Types;
 const app = express();
@@ -147,17 +158,94 @@ io.on("connection", (socket) => {
 });
 
 // Middleware
-app.use(cors());
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? [process.env.FRONTEND_URL || 'https://your-frontend-domain.onrender.com']
+    : ['http://localhost:5173', 'http://localhost:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
-// MongoDB connection
-mongoose.connect(process.env.ATLAS_URI)
-  .then(() => console.log("Connected to MongoDB"))
-  .catch((error) => console.error("Error connecting to MongoDB:", error));
+// Health check endpoint for deployment (no auth required)
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    version: '1.0.0'
+  });
+});
 
-mongoose.connection.on('connected', () => console.log("MongoDB connected successfully"));
-mongoose.connection.on('error', (err) => console.error("MongoDB connection error:", err));
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    message: 'JuanLMS API Server',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/health',
+      docs: 'API documentation available'
+    }
+  });
+});
+
+// Render-specific health check (responds immediately)
+app.get('/render-health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+// MongoDB connection
+const mongoOptions = {
+  serverSelectionTimeoutMS: 10000, // 10 seconds
+  socketTimeoutMS: 45000, // 45 seconds
+  connectTimeoutMS: 10000, // 10 seconds
+  maxPoolSize: 10,
+  minPoolSize: 1,
+  maxIdleTimeMS: 30000,
+  retryWrites: true,
+  w: 'majority'
+};
+
+let mongoRetryCount = 0;
+const maxRetries = 3;
+
+const connectToMongo = async () => {
+  try {
+    await mongoose.connect(process.env.ATLAS_URI, mongoOptions);
+    console.log("✅ Connected to MongoDB successfully");
+    console.log(`📊 Database: ${process.env.ATLAS_URI.split('/').pop().split('?')[0]}`);
+    mongoRetryCount = 0; // Reset retry count on success
+  } catch (error) {
+    mongoRetryCount++;
+    console.error(`❌ MongoDB connection attempt ${mongoRetryCount} failed:`, error.message);
+    
+    if (mongoRetryCount < maxRetries) {
+      console.log(`🔄 Retrying MongoDB connection in 5 seconds... (${mongoRetryCount}/${maxRetries})`);
+      setTimeout(connectToMongo, 5000);
+    } else {
+      console.error("❌ Max MongoDB connection retries reached. Server will start without DB connection.");
+      console.log("🔄 Database operations will be retried on first request.");
+    }
+  }
+};
+
+// Start MongoDB connection
+connectToMongo();
+
+mongoose.connection.on('connected', () => console.log("🔄 MongoDB connection established"));
+mongoose.connection.on('error', (err) => {
+  console.error("❌ MongoDB connection error:", err.message);
+  if (err.name === 'MongoNetworkError') {
+    console.error("🌐 Network error - check your internet connection and MongoDB Atlas settings");
+  }
+});
+mongoose.connection.on('disconnected', () => console.log("🔌 MongoDB disconnected"));
 
 // File upload config
 const uploadDir = './uploads';
@@ -261,8 +349,61 @@ app.use('/api', studentReportRoutes);
 app.use('/api/general-announcements', generalAnnouncementRoutes);
 
 // Start server with socket.io
-server.listen(PORT, () => {
-  connect.connectToServer();
-  console.log(`Server is running on port: ${PORT}`);
-  console.log(`Socket.io server is running on port: ${PORT}`);
-});
+const startServer = () => {
+  try {
+    const serverInstance = server.listen(PORT, () => {
+      connect.connectToServer();
+      console.log(`🚀 Server is running on port: ${PORT}`);
+      console.log(`🔌 Socket.io server is running on port: ${PORT}`);
+      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`📅 Started at: ${new Date().toISOString()}`);
+      console.log(`✅ Health check available at: http://localhost:${PORT}/health`);
+    });
+
+    // Graceful shutdown handling
+    const gracefulShutdown = (signal) => {
+      console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+      
+      serverInstance.close(() => {
+        console.log('✅ HTTP server closed');
+        
+        // Close MongoDB connection
+        if (mongoose.connection.readyState === 1) {
+          mongoose.connection.close(false, () => {
+            console.log('✅ MongoDB connection closed');
+            process.exit(0);
+          });
+        } else {
+          process.exit(0);
+        }
+      });
+
+      // Force close after 10 seconds
+      setTimeout(() => {
+        console.error('❌ Could not close connections in time, forcefully shutting down');
+        process.exit(1);
+      }, 10000);
+    };
+
+    // Handle shutdown signals
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      console.error('❌ Uncaught Exception:', error);
+      gracefulShutdown('uncaughtException');
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+      gracefulShutdown('unhandledRejection');
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to start server:', error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
