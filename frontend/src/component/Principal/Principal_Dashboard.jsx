@@ -7,7 +7,7 @@ import ProfileMenu from "../ProfileMenu";
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Principal_Dashboard() {
   const [academicYear, setAcademicYear] = useState(null);
