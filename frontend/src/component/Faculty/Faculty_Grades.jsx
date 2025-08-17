@@ -38,6 +38,13 @@ export default function Faculty_Grades() {
 
   const currentFacultyID = localStorage.getItem("userID");
 
+  // Helper function to validate grade values (0-100 range)
+  const isValidGrade = (grade) => {
+    if (!grade || grade === '') return true; // Empty grades are valid
+    const gradeNum = parseFloat(grade);
+    return !isNaN(gradeNum) && gradeNum >= 0 && gradeNum <= 100;
+  };
+
   useEffect(() => {
     async function fetchAcademicYear() {
       try {
@@ -370,6 +377,21 @@ export default function Faculty_Grades() {
 
 
   const handleStudentGradeChange = (field, value) => {
+    // Validate grade input for quarter grades (0-100 range)
+    if (field.includes('quarter') && value !== '') {
+      const gradeNum = parseFloat(value);
+      
+      // Check if grade is within valid range (0-100)
+      if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
+        // Show error message and don't update the grade
+        alert(`❌ Invalid grade! Grades must be between 0 and 100.\n\nYou entered: ${value}\n\nPlease enter a valid grade.`);
+        return; // Exit early, don't update the grade
+      }
+      
+      // Limit to 2 decimal places
+      value = gradeNum.toFixed(2);
+    }
+
     setStudentGrades(prevGrades => {
       const updatedGrades = {
         ...prevGrades,
@@ -571,6 +593,24 @@ export default function Faculty_Grades() {
 
     if (!hasValidGrades) {
       alert('Please enter at least one quarter grade before saving');
+      return;
+    }
+
+    // Additional validation: Check if all quarter grades are within valid range (0-100)
+    const quarterFields = ['quarter1', 'quarter2', 'quarter3', 'quarter4'];
+    const invalidGrades = [];
+    
+    quarterFields.forEach(field => {
+      if (studentGrades[field] && studentGrades[field] !== '') {
+        const gradeNum = parseFloat(studentGrades[field]);
+        if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
+          invalidGrades.push(`${field}: ${studentGrades[field]}`);
+        }
+      }
+    });
+    
+    if (invalidGrades.length > 0) {
+      alert(`❌ Invalid grades detected! All grades must be between 0 and 100.\n\nInvalid grades:\n${invalidGrades.join('\n')}\n\nPlease correct these grades before saving.`);
       return;
     }
 
@@ -855,6 +895,27 @@ export default function Faculty_Grades() {
     
     try {
       const selectedClassObj = classes[selectedClass];
+      
+      // Validate all grades before saving
+      const invalidGrades = [];
+      students.forEach((student, index) => {
+        const studentGrades = grades[student._id] || {};
+        const quarterFields = ['quarter1', 'quarter2', 'quarter3', 'quarter4'];
+        
+        quarterFields.forEach(field => {
+          if (studentGrades[field] && studentGrades[field] !== '') {
+            const gradeNum = parseFloat(studentGrades[field]);
+            if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
+              invalidGrades.push(`Student ${student.name} - ${field}: ${studentGrades[field]}`);
+            }
+          }
+        });
+      });
+      
+      if (invalidGrades.length > 0) {
+        alert(`❌ Invalid grades detected! All grades must be between 0 and 100.\n\nInvalid grades:\n${invalidGrades.join('\n')}\n\nPlease correct these grades before posting.`);
+        return;
+      }
       
       // Prepare grades data based on current term
       const gradesData = {
@@ -1279,6 +1340,12 @@ export default function Faculty_Grades() {
                                value={studentGrades.quarter1 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
                              />
+                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
+                             {studentGrades.quarter1 && (
+                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter1) ? 'text-green-600' : 'text-red-600'}`}>
+                                 {isValidGrade(studentGrades.quarter1) ? '✅ Valid grade' : '❌ Invalid grade'}
+                               </p>
+                             )}
                            </div>
                            <div>
                              <label className="block text-sm font-medium text-gray-700 mb-1">2nd Quarter</label>
@@ -1292,6 +1359,12 @@ export default function Faculty_Grades() {
                                value={studentGrades.quarter2 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
                              />
+                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
+                             {studentGrades.quarter2 && (
+                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter2) ? 'text-green-600' : 'text-red-600'}`}>
+                                 {isValidGrade(studentGrades.quarter2) ? '✅ Valid grade' : '❌ Invalid grade'}
+                               </p>
+                             )}
                            </div>
                          </>
                        );
@@ -1310,6 +1383,12 @@ export default function Faculty_Grades() {
                                value={studentGrades.quarter3 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter3', e.target.value)}
                              />
+                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
+                             {studentGrades.quarter3 && (
+                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter3) ? 'text-green-600' : 'text-red-600'}`}>
+                                 {isValidGrade(studentGrades.quarter3) ? '✅ Valid grade' : '❌ Invalid grade'}
+                               </p>
+                             )}
                            </div>
                            <div>
                              <label className="block text-sm font-medium text-gray-700 mb-1">4th Quarter</label>
@@ -1323,6 +1402,12 @@ export default function Faculty_Grades() {
                                value={studentGrades.quarter4 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter4', e.target.value)}
                              />
+                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
+                             {studentGrades.quarter4 && (
+                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter4) ? 'text-green-600' : 'text-red-600'}`}>
+                                 {isValidGrade(studentGrades.quarter4) ? '✅ Valid grade' : '❌ Invalid grade'}
+                               </p>
+                             )}
                            </div>
                          </>
                        );
@@ -1341,6 +1426,12 @@ export default function Faculty_Grades() {
                                value={studentGrades.quarter1 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
                              />
+                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
+                             {studentGrades.quarter1 && (
+                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter1) ? 'text-green-600' : 'text-red-600'}`}>
+                                 {isValidGrade(studentGrades.quarter1) ? '✅ Valid grade' : '❌ Invalid grade'}
+                               </p>
+                             )}
                            </div>
                            <div>
                              <label className="block text-sm font-medium text-gray-700 mb-1">Quarter 2</label>
@@ -1354,6 +1445,12 @@ export default function Faculty_Grades() {
                                value={studentGrades.quarter2 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
                              />
+                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
+                             {studentGrades.quarter2 && (
+                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter2) ? 'text-green-600' : 'text-red-600'}`}>
+                                 {isValidGrade(studentGrades.quarter2) ? '✅ Valid grade' : '❌ Invalid grade'}
+                               </p>
+                             )}
                            </div>
                          </>
                        );
