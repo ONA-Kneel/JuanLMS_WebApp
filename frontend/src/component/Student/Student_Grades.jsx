@@ -2,8 +2,6 @@
 
 import Student_Navbar from "./Student_Navbar";
 import ProfileModal from "../ProfileModal";
-
-// import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../ProfileMenu";
 import React, { useEffect, useState } from 'react';
 
@@ -15,6 +13,7 @@ export default function Student_Grades() {
   const [studentSubjects, setStudentSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [grades, setGrades] = useState({});
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -93,11 +92,9 @@ export default function Student_Grades() {
             const subjects = currentTermClasses.map(cls => ({
               subjectCode: cls.classCode || 'N/A',
               subjectDescription: cls.className || 'N/A',
-              prelims: '', // Will be populated when grades are available
-              midterms: '',
-              final: '',
-              finalGrade: '',
-              remark: ''
+              quarter1: '', // Will be populated when grades are available
+              quarter2: '',
+              semestralGrade: ''
             }));
             
             setStudentSubjects(subjects);
@@ -105,22 +102,11 @@ export default function Student_Grades() {
             // If no specific endpoint, create sample data for demonstration
             setStudentSubjects([
               {
-                subjectCode: 'MATH101',
-                subjectDescription: 'Mathematics',
-                prelims: '',
-                midterms: '',
-                final: '',
-                finalGrade: '',
-                remark: ''
-              },
-              {
-                subjectCode: 'ENG101',
-                subjectDescription: 'English',
-                prelims: '',
-                midterms: '',
-                final: '',
-                finalGrade: '',
-                remark: ''
+                subjectCode: 'INT-CK-25',
+                subjectDescription: 'Introduction to Cooking',
+                quarter1: '',
+                quarter2: '',
+                semestralGrade: ''
               }
             ]);
           }
@@ -130,22 +116,11 @@ export default function Student_Grades() {
         // Set sample data for demonstration
         setStudentSubjects([
           {
-            subjectCode: 'MATH101',
-            subjectDescription: 'Mathematics',
-            prelims: '',
-            midterms: '',
-            final: '',
-            finalGrade: '',
-            remark: ''
-          },
-          {
-            subjectCode: 'ENG101',
-            subjectDescription: 'English',
-            prelims: '',
-            midterms: '',
-            final: '',
-            finalGrade: '',
-            remark: ''
+            subjectCode: 'INT-CK-25',
+            subjectDescription: 'Introduction to Cooking',
+            quarter1: '',
+            quarter2: '',
+            semestralGrade: ''
           }
         ]);
       } finally {
@@ -177,10 +152,9 @@ export default function Student_Grades() {
             data.grades.forEach(grade => {
               const key = grade.subjectCode || grade.subjectDescription;
               gradesMap[key] = {
-                prelims: grade.prelims,
-                midterms: grade.midterms,
-                final: grade.final,
-                finalGrade: grade.finalGrade
+                quarter1: grade.quarter1 || grade.prelims || '',
+                quarter2: grade.quarter2 || grade.midterms || '',
+                semestralGrade: grade.semestralGrade || grade.finalGrade || ''
               };
             });
             setGrades(gradesMap);
@@ -201,25 +175,29 @@ export default function Student_Grades() {
     return termName;
   };
 
-  // Helper function to calculate final grade
-  const calculateFinalGrade = (prelims, midterms, final) => {
-    if (!prelims || !midterms || !final) return '';
-    
-    const prelimsNum = parseFloat(prelims) || 0;
-    const midtermsNum = parseFloat(midterms) || 0;
-    const finalNum = parseFloat(final) || 0;
-    
-    const finalGrade = (prelimsNum * 0.3) + (midtermsNum * 0.3) + (finalNum * 0.4);
-    return finalGrade.toFixed(2);
+  // Helper function to get quarter labels based on current term
+  const getQuarterLabels = () => {
+    if (currentTerm?.termName === 'Term 1') {
+      return { q1: '1st Quarter', q2: '2nd Quarter' };
+    } else if (currentTerm?.termName === 'Term 2') {
+      return { q1: '3rd Quarter', q2: '4th Quarter' };
+    } else {
+      return { q1: '1st Quarter', q2: '2nd Quarter' };
+    }
   };
 
-  // Helper function to get remark
-  const getRemark = (finalGrade) => {
-    if (!finalGrade) return '';
-    const grade = parseFloat(finalGrade);
-    if (grade >= 75) return 'PASSED';
-    return 'FAILED';
+  // Helper function to calculate semestral grade
+  const calculateSemestralGrade = (quarter1, quarter2) => {
+    if (!quarter1 || !quarter2) return '';
+    
+    const q1 = parseFloat(quarter1) || 0;
+    const q2 = parseFloat(quarter2) || 0;
+    
+    const semestralGrade = (q1 + q2) / 2;
+    return semestralGrade.toFixed(2);
   };
+
+
 
   if (loading) {
     return (
@@ -234,17 +212,22 @@ export default function Student_Grades() {
     );
   }
 
+  const quarterLabels = getQuarterLabels();
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Student_Navbar />
 
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Grades</h1>
-          <p className="text-gray-600">
-            View your academic performance for the current term
-          </p>
+        {/* Header with Profile Menu */}
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Grades</h1>
+            <p className="text-gray-600">
+              View your academic performance for the current term
+            </p>
+          </div>
+          <ProfileMenu onOpen={() => setShowProfileModal(true)} />
         </div>
 
         {/* Current Academic Period Info */}
@@ -272,18 +255,16 @@ export default function Student_Grades() {
             <table className="min-w-full border border-gray-300 text-sm">
               <thead>
                 <tr>
-                  <th colSpan="7" className="text-center p-3 border-b font-bold text-lg bg-blue-50">
+                  <th colSpan="5" className="text-center p-3 border-b font-bold text-lg bg-blue-50">
                     {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''} {currentTerm ? getSemesterName(currentTerm.termName) : ''}
                   </th>
                 </tr>
                 <tr className="bg-gray-100">
                   <th className="p-3 border border-gray-300 font-semibold text-left">Subject Code</th>
                   <th className="p-3 border border-gray-300 font-semibold text-left">Subject Description</th>
-                  <th className="p-3 border border-gray-300 font-semibold text-center">Prelims</th>
-                  <th className="p-3 border border-gray-300 font-semibold text-center">Midterms</th>
-                  <th className="p-3 border border-gray-300 font-semibold text-center">Final</th>
-                  <th className="p-3 border border-gray-300 font-semibold text-center">Finals Grade</th>
-                  <th className="p-3 border border-gray-300 font-semibold text-center">Remark</th>
+                  <th className="p-3 border border-gray-300 font-semibold text-center">{quarterLabels.q1}</th>
+                  <th className="p-3 border border-gray-300 font-semibold text-center">{quarterLabels.q2}</th>
+                  <th className="p-3 border border-gray-300 font-semibold text-center">Semestral Grade</th>
                 </tr>
               </thead>
               <tbody>
@@ -291,11 +272,9 @@ export default function Student_Grades() {
                   studentSubjects.map((subject, index) => {
                     // Get grades for this subject if available
                     const subjectGrades = grades[subject.subjectCode] || grades[subject.subjectDescription] || {};
-                    const prelims = subjectGrades.prelims || subject.prelims || '';
-                    const midterms = subjectGrades.midterms || subject.midterms || '';
-                    const final = subjectGrades.final || subject.final || '';
-                    const finalGrade = subjectGrades.finalGrade || calculateFinalGrade(prelims, midterms, final);
-                    const remark = getRemark(finalGrade);
+                    const quarter1 = subjectGrades.quarter1 || subject.quarter1 || '';
+                    const quarter2 = subjectGrades.quarter2 || subject.quarter2 || '';
+                    const semestralGrade = subjectGrades.semestralGrade || calculateSemestralGrade(quarter1, quarter2);
                     
                     return (
                       <tr key={index} className="hover:bg-gray-50">
@@ -306,25 +285,13 @@ export default function Student_Grades() {
                           {subject.subjectDescription}
                         </td>
                         <td className="p-3 border border-gray-300 text-center">
-                          {prelims || '-'}
+                          {quarter1 || '-'}
                         </td>
                         <td className="p-3 border border-gray-300 text-center">
-                          {midterms || '-'}
-                        </td>
-                        <td className="p-3 border border-gray-300 text-center">
-                          {final || '-'}
+                          {quarter2 || '-'}
                         </td>
                         <td className="p-3 border border-gray-300 text-center font-semibold">
-                          {finalGrade || '-'}
-                        </td>
-                        <td className="p-3 border border-gray-300 text-center">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            remark === 'PASSED' ? 'bg-green-100 text-green-800' : 
-                            remark === 'FAILED' ? 'bg-red-100 text-red-800' : 
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {remark || '-'}
-                          </span>
+                          {semestralGrade || '-'}
                         </td>
                       </tr>
                     );
@@ -334,8 +301,6 @@ export default function Student_Grades() {
                   Array.from({ length: 5 }).map((_, index) => (
                     <tr key={index}>
                       <td className="p-3 border border-gray-300 h-12"></td>
-                      <td className="p-3 border border-gray-300"></td>
-                      <td className="p-3 border border-gray-300"></td>
                       <td className="p-3 border border-gray-300"></td>
                       <td className="p-3 border border-gray-300"></td>
                       <td className="p-3 border border-gray-300"></td>
@@ -362,9 +327,9 @@ export default function Student_Grades() {
           <h3 className="text-lg font-semibold mb-4">Grade Legend</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
-              <p><strong>Prelims:</strong> 30% of final grade</p>
-              <p><strong>Midterms:</strong> 30% of final grade</p>
-              <p><strong>Final:</strong> 40% of final grade</p>
+              <p><strong>{quarterLabels.q1}:</strong> First quarter grade</p>
+              <p><strong>{quarterLabels.q2}:</strong> Second quarter grade</p>
+              <p><strong>Semestral Grade:</strong> Average of {quarterLabels.q1} and {quarterLabels.q2}</p>
             </div>
             <div>
               <p><strong>Passing Grade:</strong> 75 and above</p>
@@ -373,6 +338,11 @@ export default function Student_Grades() {
             </div>
           </div>
         </div>
+
+        {/* Profile Modal */}
+        {showProfileModal && (
+          <ProfileModal onClose={() => setShowProfileModal(false)} />
+        )}
       </div>
     </div>
   );
