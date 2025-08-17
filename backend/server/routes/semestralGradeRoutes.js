@@ -418,6 +418,126 @@ router.get('/class/:classID', authenticateToken, async (req, res) => {
   }
 });
 
+// Get all grades across all classes (for principals)
+router.get('/class/all', authenticateToken, async (req, res) => {
+  try {
+    const { termName, academicYear } = req.query;
+    
+    // Only principals can access this endpoint
+    if (req.user.role !== 'principal') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Principals only.'
+      });
+    }
+
+    if (!termName || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'termName and academicYear query parameters are required'
+      });
+    }
+
+    const grades = await SemestralGrade.find({
+      termName: termName,
+      academicYear: academicYear
+    }).sort({ studentName: 1, subjectName: 1 });
+
+    res.json({
+      success: true,
+      message: `Found ${grades.length} grade records`,
+      grades: grades
+    });
+
+  } catch (error) {
+    console.error('Error fetching all grades:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch all grades',
+      error: error.message
+    });
+  }
+});
+
+// Get list of all classes with grades (for principals)
+router.get('/class/list', authenticateToken, async (req, res) => {
+  try {
+    const { termName, academicYear } = req.query;
+    
+    // Only principals can access this endpoint
+    if (req.user.role !== 'principal') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Principals only.'
+      });
+    }
+
+    if (!termName || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'termName and academicYear query parameters are required'
+      });
+    }
+
+    // Get unique classes from grades with proper field mapping
+    const classes = await SemestralGrade.aggregate([
+      {
+        $match: {
+          termName: termName,
+          academicYear: academicYear
+        }
+      },
+      {
+        $group: {
+          _id: {
+            classID: '$classID',
+            className: '$subjectName',
+            classCode: '$subjectCode'
+          },
+          // Use the correct field names from the database
+          sectionName: { $first: '$sectionName' },
+          section: { $first: '$section' }, // Keep for backward compatibility
+          trackName: { $first: '$trackName' },
+          strandName: { $first: '$strandName' },
+          gradeLevel: { $first: '$gradeLevel' },
+          studentCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          classID: '$_id.classID',
+          className: '$_id.className',
+          classCode: '$_id.classCode',
+          // Include both field names for compatibility
+          sectionName: '$sectionName',
+          section: '$section',
+          trackName: '$trackName',
+          strandName: '$strandName',
+          gradeLevel: '$gradeLevel',
+          studentCount: '$studentCount'
+        }
+      },
+      {
+        $sort: { className: 1, sectionName: 1 }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      message: `Found ${classes.length} classes`,
+      classes: classes
+    });
+
+  } catch (error) {
+    console.error('Error fetching class list:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch class list',
+      error: error.message
+    });
+  }
+});
+
 // Get grades by faculty
 router.get('/faculty/:facultyID', authenticateToken, async (req, res) => {
   try {
@@ -452,6 +572,88 @@ router.get('/faculty/:facultyID', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch faculty grades',
+      error: error.message
+    });
+  }
+});
+
+// Principal view - Get grades by grade level, strand, section, and subject
+router.get('/principal-view', authenticateToken, async (req, res) => {
+  try {
+    const { gradeLevel, strand, section, subject, termName, academicYear } = req.query;
+    
+    // Only principals can access this endpoint
+    if (req.user.role !== 'principal') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Principals only.'
+      });
+    }
+
+    // Validate required parameters
+    if (!gradeLevel || !strand || !section || !subject || !termName || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters: gradeLevel, strand, section, subject, termName, academicYear'
+      });
+    }
+
+    // Build query to find grades matching the criteria
+    const query = {
+      termName: termName,
+      academicYear: academicYear
+    };
+
+    // Try to find grades by subject name or code
+    const grades = await SemestralGrade.find({
+      ...query,
+      $or: [
+        { subjectName: { $regex: subject, $options: 'i' } },
+        { subjectCode: { $regex: subject, $options: 'i' } }
+      ]
+    }).sort({ studentName: 1 });
+
+    if (grades.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No grades found for the specified criteria',
+        grades: [],
+        students: []
+      });
+    }
+
+    // Filter grades by section if available in the grade data
+    const filteredGrades = grades.filter(grade => 
+      !grade.section || grade.section === section
+    );
+
+    // Extract unique students
+    const students = [...new Set(filteredGrades.map(grade => ({
+      _id: grade.studentId,
+      name: grade.studentName,
+      schoolID: grade.schoolID
+    })))];
+
+    res.json({
+      success: true,
+      message: `Found ${filteredGrades.length} grade records`,
+      grades: filteredGrades,
+      students: students,
+      filters: {
+        gradeLevel,
+        strand,
+        section,
+        subject,
+        termName,
+        academicYear
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching principal view grades:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch grades for principal view',
       error: error.message
     });
   }

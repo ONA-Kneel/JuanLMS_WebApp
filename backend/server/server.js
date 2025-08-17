@@ -41,6 +41,7 @@ import semestralGradeRoutes from './routes/semestralGradeRoutes.js';
 import studentReportRoutes from './routes/studentReportRoutes.js';
 import generalAnnouncementRoutes from './routes/generalAnnouncementRoutes.js';
 import gradeUploadRoutes from './routes/gradeUploadRoutes.js';
+import principalRoutes from './routes/principalRoutes.js';
 
 
 dotenv.config({ path: './config.env' });
@@ -263,6 +264,7 @@ app.use('/api/semestral-grades', semestralGradeRoutes);
 app.use('/api', studentReportRoutes);
 app.use('/api/general-announcements', generalAnnouncementRoutes);
 app.use('/api/grades', gradeUploadRoutes);
+app.use('/api/principal', principalRoutes);
 
 // Start server with socket.io
 server.listen(PORT, () => {
