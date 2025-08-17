@@ -188,7 +188,10 @@ export default function Faculty_Chats() {
   useEffect(() => {
     const fetchGroups = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         setGroups(res.data);
       } catch (err) {
         console.error("Error fetching groups:", err);
@@ -238,7 +241,10 @@ export default function Faculty_Chats() {
     const fetchGroupMessages = async () => {
       if (!selectedChat || !isGroupChat) return;
       try {
-        const res = await axios.get(`${API_BASE}/group-messages/${selectedChat._id}?userId=${currentUserId}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/group-messages/${selectedChat._id}?userId=${currentUserId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         setGroupMessages((prev) => ({
           ...prev,
           [selectedChat._id]: res.data,
@@ -276,8 +282,12 @@ export default function Faculty_Chats() {
       }
 
       try {
+        const token = localStorage.getItem("token");
         const res = await axios.post(`${API_BASE}/group-messages`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: { 
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          },
         });
 
         const sentMessage = res.data;
@@ -314,8 +324,12 @@ export default function Faculty_Chats() {
       }
 
       try {
+        const token = localStorage.getItem("token");
         const res = await axios.post(`${API_BASE}/messages`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: { 
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          },
         });
 
         const sentMessage = res.data;
@@ -374,10 +388,13 @@ export default function Faculty_Chats() {
     if (!newGroupName.trim() || selectedGroupMembers.length === 0) return;
 
     try {
+      const token = localStorage.getItem("token");
       const res = await axios.post(`${API_BASE}/group-chats`, {
         name: newGroupName,
         createdBy: currentUserId,
         participants: [...selectedGroupMembers, currentUserId],
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
       const newGroup = { ...res.data, type: 'group' };
@@ -399,12 +416,17 @@ export default function Faculty_Chats() {
     if (!joinGroupCode.trim()) return;
 
     try {
+      const token = localStorage.getItem("token");
       await axios.post(`${API_BASE}/group-chats/${joinGroupCode}/join`, {
         userId: currentUserId,
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
       // Refresh user groups
-      const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
+      const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       setGroups(res.data);
       setShowJoinGroupModal(false);
       setJoinGroupCode("");
@@ -417,8 +439,11 @@ export default function Faculty_Chats() {
     if (!groupToLeave) return;
 
     try {
+      const token = localStorage.getItem("token");
       await axios.post(`${API_BASE}/group-chats/${groupToLeave._id}/leave`, {
         userId: currentUserId,
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
       // Remove group from state
@@ -504,7 +529,10 @@ export default function Faculty_Chats() {
         // Only fetch if not already loaded
         if (!newMessages[chat._id] || newMessages[chat._id].length === 0) {
           try {
-            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
+            const token = localStorage.getItem("token");
+            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`, {
+              headers: { "Authorization": `Bearer ${token}` }
+            });
             newMessages[chat._id] = res.data;
           } catch {
             newMessages[chat._id] = [];
@@ -899,75 +927,56 @@ export default function Faculty_Chats() {
                               </div>
                             )}
                             <div className="flex justify-end">
-                              <div className="px-4 py-2 rounded-lg text-sm max-w-xs bg-blue-900 text-white mt-0.5">
-                                {msg.message && <p>{msg.message}</p>}
+                              <div className="max-w-xs lg:max-w-md bg-blue-900 text-white p-3 rounded-lg shadow">
+                                <div className="text-sm">{msg.message}</div>
                                 {msg.fileUrl && (
-                                  <a
-                                    href={`${API_BASE}/${msg.fileUrl}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="underline text-xs block mt-1"
-                                  >
-                                    📎 {msg.fileUrl.split("-").slice(1).join("-")}
-                                  </a>
+                                  <div className="mt-2">
+                                    <a
+                                      href={`${API_BASE}/uploads/${msg.fileUrl}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-200 hover:text-blue-100 underline"
+                                    >
+                                      📎 File attached
+                                    </a>
+                                  </div>
                                 )}
                               </div>
                             </div>
                           </div>
                         ) : (
-                          // Recipient's message
-                          <div className="flex items-end gap-2">
-                            {showHeader ? (
-                              <>
+                          // Other user's message
+                          <div>
+                            {showHeader && (msg.createdAt || msg.updatedAt) && (
+                              <div className="flex items-center gap-2 mb-1">
                                 <img
-                                  src={isGroupChat ? (msg.senderProfilePic ? `${API_BASE}/uploads/${msg.senderProfilePic}` : defaultAvatar) : (sender && sender.profilePic ? `${API_BASE}/uploads/${sender.profilePic}` : defaultAvatar)}
+                                  src={sender?.profilePic ? `${API_BASE}/uploads/${sender.profilePic}` : defaultAvatar}
                                   alt="Profile"
-                                  className="w-10 h-10 rounded-full object-cover border"
+                                  className="w-6 h-6 rounded-full object-cover border"
                                   onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
                                 />
-                                <div>
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="font-semibold text-sm">
-                                      {isGroupChat ? (msg.senderName || "Unknown") : (sender ? `${sender.lastname}, ${sender.firstname}` : "")}
-                                    </span>
-                                    {(msg.createdAt || msg.updatedAt) && (
-                                      <span className="text-xs text-gray-400 ml-2">
-                                        {dateLabel ? `${dateLabel}, ` : ""}{timeLabel}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="px-4 py-2 rounded-lg text-sm max-w-xs bg-gray-300 text-black w-fit mt-0.5">
-                                    {msg.message && <p>{msg.message}</p>}
-                                    {msg.fileUrl && (
-                                      <a
-                                        href={`${API_BASE}/${msg.fileUrl}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="underline text-xs block mt-1"
-                                      >
-                                        📎 {msg.fileUrl.split("-").slice(1).join("-")}
-                                      </a>
-                                    )}
-                                  </div>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="ml-[52px]">
-                                <div className="px-4 py-2 rounded-lg text-sm max-w-xs bg-gray-300 text-black w-fit mt-0.5">
-                                  {msg.message && <p>{msg.message}</p>}
-                                  {msg.fileUrl && (
-                                    <a
-                                      href={`${API_BASE}/${msg.fileUrl}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="underline text-xs block mt-1"
-                                    >
-                                      📎 {msg.fileUrl.split("-").slice(1).join("-")}
-                                    </a>
-                                  )}
-                                </div>
+                                <span className="text-xs text-gray-400">
+                                  {isGroupChat ? `${sender?.firstname || "Unknown"} ${sender?.lastname || "User"}` : ""} • {dateLabel ? `${dateLabel}, ` : ""}{timeLabel}
+                                </span>
                               </div>
                             )}
+                            <div className="flex justify-start">
+                              <div className="max-w-xs lg:max-w-md bg-white border p-3 rounded-lg shadow">
+                                <div className="text-sm">{msg.message}</div>
+                                {msg.fileUrl && (
+                                  <div className="mt-2">
+                                    <a
+                                      href={`${API_BASE}/uploads/${msg.fileUrl}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:text-blue-800 underline"
+                                    >
+                                      📎 File attached
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -976,60 +985,63 @@ export default function Faculty_Chats() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input Area */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Type your message..."
-                    className="flex-1 p-2 border rounded-lg text-sm"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                  />
-
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    style={{ display: "none" }}
-                    onChange={handleFileSelect}
-                  />
-
-                  <img
-                    src={uploadfile}
-                    alt="Upload File"
-                    className="w-6 h-6 cursor-pointer hover:opacity-75"
-                    onClick={openFilePicker}
-                  />
-
-                  {selectedFile && (
-                    <span className="text-xs text-gray-600 truncate max-w-[100px] flex items-center gap-1">
-                      📎 {selectedFile.name}
+                {/* Message Input */}
+                <div className="border-t border-gray-300 pt-4">
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <textarea
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Type a message..."
+                        className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        rows="1"
+                        style={{ minHeight: "44px", maxHeight: "120px" }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setSelectedFile(null)}
-                        className="ml-1 text-red-500 hover:text-red-700 text-xs"
-                        title="Remove file"
+                        onClick={openFilePicker}
+                        className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
+                        title="Attach file"
                       >
-                        ❌
+                        <img src={uploadfile} alt="Attach" className="w-6 h-6" />
                       </button>
-                    </span>
-                  )}
-
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={!newMessage.trim() && !selectedFile}
-                    className={`px-4 py-2 rounded-lg text-sm ${
-                      newMessage.trim() || selectedFile ? "bg-blue-900 text-white" : "bg-gray-400 text-white cursor-not-allowed"
-                    }`}
-                  >
-                    Send
-                  </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        onChange={handleFileSelect}
+                        style={{ display: "none" }}
+                        accept="image/*,.pdf,.doc,.docx,.txt"
+                      />
+                      {selectedFile && (
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <span className="truncate max-w-20">{selectedFile.name}</span>
+                          <button
+                            onClick={() => setSelectedFile(null)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+                      <button
+                        onClick={handleSendMessage}
+                        disabled={!newMessage.trim() && !selectedFile}
+                        className="px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Send
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center text-gray-500">
-                  <h3 className="text-xl font-semibold mb-2">Select a chat to start!</h3>
-                  <p className="text-sm">Choose a conversation from the left panel to begin messaging.</p>
+                  <div className="text-6xl mb-4">💬</div>
+                  <h3 className="text-xl font-semibold mb-2">No chat selected</h3>
+                  <p>Choose a chat from the left panel to start messaging</p>
                 </div>
               </div>
             )}
@@ -1041,101 +1053,72 @@ export default function Faculty_Chats() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
               <h3 className="text-lg font-semibold mb-4">Create New Group</h3>
-              <input
-                type="text"
-                placeholder="Group name"
-                className="w-full p-2 border rounded-lg mb-4"
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-              />
-              {/* Member search box */}
-              <input
-                type="text"
-                placeholder="Search users by name..."
-                className="w-full p-2 border rounded-lg mb-2"
-                value={memberSearchTerm}
-                onChange={e => setMemberSearchTerm(e.target.value)}
-              />
-              {/* Selected members chips/list */}
-              {selectedGroupMembers.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {selectedGroupMembers.map(userId => {
-                    const user = users.find(u => u._id === userId);
-                    if (!user) return null;
-                    return (
-                      <span key={userId} className="flex items-center bg-blue-100 text-blue-900 px-2 py-1 rounded-full text-xs">
-                        {user.lastname}, {user.firstname}
-                        <button
-                          className="ml-1 text-red-500 hover:text-red-700"
-                          onClick={() => setSelectedGroupMembers(prev => prev.filter(id => id !== userId))}
-                          title="Remove"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    );
-                  })}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Group Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter group name"
+                  />
                 </div>
-              )}
-              {/* Filtered user list: only show if search term is entered */}
-              {memberSearchTerm.trim() !== "" && (
-                <div className="max-h-40 overflow-y-auto mb-4 border border-gray-200 rounded-lg">
-                  {users
-                    .filter(user => user._id !== currentUserId)
-                    .filter(user =>
-                      user.firstname?.toLowerCase().includes(memberSearchTerm.toLowerCase()) ||
-                      user.lastname?.toLowerCase().includes(memberSearchTerm.toLowerCase())
-                    )
-                    .filter(user => !selectedGroupMembers.includes(user._id))
-                    .length === 0 ? (
-                    <div className="text-gray-400 text-center p-2 text-xs">No users found</div>
-                  ) : (
-                    users
-                      .filter(user => user._id !== currentUserId)
-                      .filter(user =>
-                        user.firstname?.toLowerCase().includes(memberSearchTerm.toLowerCase()) ||
-                        user.lastname?.toLowerCase().includes(memberSearchTerm.toLowerCase())
-                      )
-                      .filter(user => !selectedGroupMembers.includes(user._id))
-                      .map(user => (
-                        <div
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Select Members
+                  </label>
+                  <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-2">
+                    {users
+                      .filter((user) => user._id !== currentUserId)
+                      .map((user) => (
+                        <label
                           key={user._id}
-                          className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer"
-                          onClick={() => {
-                            setSelectedGroupMembers(prev => [...prev, user._id]);
-                            setMemberSearchTerm("");
-                          }}
+                          className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer"
                         >
-                          <span className="text-sm">{user.lastname}, {user.firstname}</span>
-                        </div>
-                      ))
-                  )
-                }
-              </div>
-              )}
-              <div className="flex gap-2">
-                <button
-                  onClick={handleCreateGroup}
-                  disabled={!newGroupName.trim() || selectedGroupMembers.length === 0}
-                  className={`flex-1 py-2 rounded-lg text-sm ${
-                    newGroupName.trim() && selectedGroupMembers.length > 0
-                      ? "bg-blue-900 text-white"
-                      : "bg-gray-400 text-white cursor-not-allowed"
-                  }`}
-                >
-                  Create Group
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCreateGroupModal(false);
-                    setNewGroupName("");
-                    setSelectedGroupMembers([]);
-                    setMemberSearchTerm("");
-                  }}
-                  className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
-                >
-                  Cancel
-                </button>
+                          <input
+                            type="checkbox"
+                            checked={selectedGroupMembers.some((m) => m._id === user._id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedGroupMembers([...selectedGroupMembers, user]);
+                              } else {
+                                setSelectedGroupMembers(
+                                  selectedGroupMembers.filter((m) => m._id !== user._id)
+                                );
+                              }
+                            }}
+                          />
+                          <img
+                            src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar}
+                            alt="Profile"
+                            className="w-6 h-6 rounded-full object-cover border"
+                            onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                          />
+                          <span className="text-sm">
+                            {user.lastname}, {user.firstname}
+                          </span>
+                        </label>
+                      ))}
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setShowCreateGroupModal(false)}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreateGroup}
+                    disabled={!newGroupName.trim() || selectedGroupMembers.length === 0}
+                    className="px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Create Group
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1146,65 +1129,59 @@ export default function Faculty_Chats() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
               <h3 className="text-lg font-semibold mb-4">Join Group</h3>
-              <input
-                type="text"
-                placeholder="Enter group code"
-                className="w-full p-2 border rounded-lg mb-4"
-                value={joinGroupCode}
-                onChange={(e) => setJoinGroupCode(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={handleJoinGroup}
-                  disabled={!joinGroupCode.trim()}
-                  className={`flex-1 py-2 rounded-lg text-sm ${
-                    joinGroupCode.trim()
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-400 text-white cursor-not-allowed"
-                  }`}
-                >
-                  Join Group
-                </button>
-                <button
-                  onClick={() => {
-                    setShowJoinGroupModal(false);
-                    setJoinGroupCode("");
-                  }}
-                  className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
-                >
-                  Cancel
-                </button>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Group Code
+                  </label>
+                  <input
+                    type="text"
+                    value={joinGroupCode}
+                    onChange={(e) => setJoinGroupCode(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter group code"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setShowJoinGroupModal(false)}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleJoinGroup}
+                    disabled={!joinGroupCode.trim()}
+                    className="px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Join Group
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {/* Leave Group Confirmation Modal */}
-        {showLeaveGroupModal && groupToLeave && (
+        {showLeaveGroupModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
               <h3 className="text-lg font-semibold mb-4">Leave Group</h3>
-              <p className="text-gray-600 mb-6">
-                Are you sure you want to leave <strong>"{groupToLeave.name}"</strong>?
+              <p className="text-gray-600 mb-4">
+                Are you sure you want to leave "{groupToLeave?.name}"? You won't be able to see messages from this group anymore.
               </p>
-              <p className="text-sm text-gray-500 mb-6">
-                You will no longer be able to send or receive messages in this group.
-              </p>
-              <div className="flex gap-2">
+              <div className="flex gap-2 justify-end">
                 <button
-                  onClick={handleLeaveGroup}
-                  className="flex-1 py-2 rounded-lg text-sm bg-red-500 text-white hover:bg-red-600"
-                >
-                  Leave Group
-                </button>
-                <button
-                  onClick={() => {
-                    setShowLeaveGroupModal(false);
-                    setGroupToLeave(null);
-                  }}
-                  className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
+                  onClick={() => setShowLeaveGroupModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
                 >
                   Cancel
+                </button>
+                <button
+                  onClick={handleLeaveGroup}
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  Leave Group
                 </button>
               </div>
             </div>
@@ -1215,14 +1192,14 @@ export default function Faculty_Chats() {
         {showCreatorLeaveError && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-semibold mb-4 text-red-600">Action Not Allowed</h3>
-              <p className="text-gray-600 mb-6">
-                The creator of the group cannot leave the group chat.
+              <h3 className="text-lg font-semibold mb-4 text-red-600">Cannot Leave Group</h3>
+              <p className="text-gray-600 mb-4">
+                You cannot leave this group because you are the creator. You must either delete the group or transfer ownership to another member.
               </p>
-              <div className="flex gap-2">
+              <div className="flex justify-end">
                 <button
                   onClick={() => setShowCreatorLeaveError(false)}
-                  className="flex-1 py-2 rounded-lg text-sm bg-blue-900 text-white"
+                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
                 >
                   OK
                 </button>
@@ -1232,37 +1209,51 @@ export default function Faculty_Chats() {
         )}
 
         {/* Members Modal */}
-        {showMembersModal && (
+        {showMembersModal && selectedChat && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-semibold mb-4">Group Members</h3>
-              <ul className="mb-4 max-h-60 overflow-y-auto divide-y">
-                {(selectedChat?.participants || []).map(userId => {
-                  const user = users.find(u => u._id === userId);
-                  if (!user) return null;
-                  const isCreator = selectedChat?.createdBy === userId;
-                  return (
-                    <li key={userId} className="flex items-center justify-between py-2">
-                      <span>{user.lastname}, {user.firstname} {isCreator && <span className="text-xs text-blue-700">(Creator)</span>}</span>
-                      {selectedChat?.createdBy === currentUserId && !isCreator && (
-                        <button
-                          className="text-red-500 hover:text-red-700 text-xs px-2 py-1 border border-red-300 rounded"
-                          onClick={() => { setMemberToRemove(user); setShowRemoveConfirm(true); }}
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-              <div className="flex gap-2">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-96 overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Group Members</h3>
                 <button
                   onClick={() => setShowMembersModal(false)}
-                  className="flex-1 py-2 rounded-lg text-sm bg-blue-900 text-white"
+                  className="text-gray-500 hover:text-gray-700"
                 >
-                  Close
+                  ✕
                 </button>
+              </div>
+              
+              <div className="space-y-2">
+                {selectedChat.participants?.map((participant) => (
+                  <div key={participant._id} className="flex items-center justify-between p-2 border rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={participant.profilePic ? `${API_BASE}/uploads/${participant.profilePic}` : defaultAvatar}
+                        alt="Profile"
+                        className="w-8 h-8 rounded-full object-cover border"
+                        onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                      />
+                      <span className="text-sm">
+                        {participant.lastname}, {participant.firstname}
+                      </span>
+                      {participant._id === selectedChat.createdBy && (
+                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                          Creator
+                        </span>
+                      )}
+                    </div>
+                    {selectedChat.createdBy === currentUserId && participant._id !== currentUserId && (
+                      <button
+                        onClick={() => {
+                          setMemberToRemove(participant);
+                          setShowRemoveConfirm(true);
+                        }}
+                        className="text-red-500 hover:text-red-700 text-sm"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -1272,53 +1263,41 @@ export default function Faculty_Chats() {
         {showRemoveConfirm && memberToRemove && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-semibold mb-4 text-red-600">Remove Member</h3>
-              <p className="text-gray-600 mb-6">
-                Are you sure you want to remove <strong>{memberToRemove.lastname}, {memberToRemove.firstname}</strong> from the group?
+              <h3 className="text-lg font-semibold mb-4">Remove Member</h3>
+              <p className="text-gray-600 mb-4">
+                Are you sure you want to remove {memberToRemove.firstname} {memberToRemove.lastname} from the group?
               </p>
-              <div className="flex gap-2">
+              <div className="flex gap-2 justify-end">
                 <button
-                  onClick={async () => {
-                    try {
-                      await axios.post(`${API_BASE}/group-chats/${selectedChat._id}/remove-member`, {
-                        userId: currentUserId,
-                        memberId: memberToRemove._id,
-                      });
-                      // Remove from UI
-                      setGroups(prev => prev.map(g => g._id === selectedChat._id ? { ...g, participants: g.participants.filter(id => id !== memberToRemove._id) } : g));
-                      setShowRemoveConfirm(false);
-                      setMemberToRemove(null);
-                    } catch (err) {
-                      setValidationModal({
-                        isOpen: true,
-                        type: 'error',
-                        title: 'Remove Failed',
-                        message: err.response?.data?.error || 'Error removing member'
-                      });
-                    }
-                  }}
-                  className="flex-1 py-2 rounded-lg text-sm bg-red-500 text-white hover:bg-red-600"
-                >
-                  Remove
-                </button>
-                <button
-                  onClick={() => { setShowRemoveConfirm(false); setMemberToRemove(null); }}
-                  className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
+                  onClick={() => setShowRemoveConfirm(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
                 >
                   Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    handleRemoveFromGroup(memberToRemove._id);
+                    setShowRemoveConfirm(false);
+                    setMemberToRemove(null);
+                  }}
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  Remove
                 </button>
               </div>
             </div>
           </div>
         )}
+
+        {/* Validation Modal */}
+        <ValidationModal
+          isOpen={validationModal.isOpen}
+          type={validationModal.type}
+          title={validationModal.title}
+          message={validationModal.message}
+          onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        />
       </div>
-      <ValidationModal
-        isOpen={validationModal.isOpen}
-        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
-        type={validationModal.type}
-        title={validationModal.title}
-        message={validationModal.message}
-      />
     </div>
   );
 }

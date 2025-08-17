@@ -167,7 +167,10 @@ export default function Principal_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/users`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/users`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         // Support both array and paginated object
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
@@ -188,7 +191,10 @@ export default function Principal_Chats() {
   useEffect(() => {
     const fetchGroups = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         setGroups(res.data);
       } catch (err) {
         console.error("Error fetching groups:", err);
@@ -202,7 +208,10 @@ export default function Principal_Chats() {
     const fetchMessages = async () => {
       if (!selectedChat) return;
       try {
-        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         setMessages((prev) => {
           const newMessages = { ...prev, [selectedChat._id]: res.data };
           
@@ -238,7 +247,10 @@ export default function Principal_Chats() {
     const fetchGroupMessages = async () => {
       if (!selectedChat || !isGroupChat) return;
       try {
-        const res = await axios.get(`${API_BASE}/group-messages/${selectedChat._id}?userId=${currentUserId}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/group-messages/${selectedChat._id}?userId=${currentUserId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         setGroupMessages((prev) => ({
           ...prev,
           [selectedChat._id]: res.data,
@@ -276,8 +288,12 @@ export default function Principal_Chats() {
       }
 
       try {
+        const token = localStorage.getItem("token");
         const res = await axios.post(`${API_BASE}/group-messages`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: { 
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          },
         });
 
         const sentMessage = res.data;
@@ -314,8 +330,12 @@ export default function Principal_Chats() {
       }
 
       try {
+        const token = localStorage.getItem("token");
         const res = await axios.post(`${API_BASE}/messages`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: { 
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          },
         });
 
         const sentMessage = res.data;
@@ -374,10 +394,13 @@ export default function Principal_Chats() {
     if (!newGroupName.trim() || selectedGroupMembers.length === 0) return;
 
     try {
+      const token = localStorage.getItem("token");
       const res = await axios.post(`${API_BASE}/group-chats`, {
         name: newGroupName,
         createdBy: currentUserId,
         participants: [...selectedGroupMembers, currentUserId],
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
       const newGroup = { ...res.data, type: 'group' };
@@ -399,12 +422,17 @@ export default function Principal_Chats() {
     if (!joinGroupCode.trim()) return;
 
     try {
+      const token = localStorage.getItem("token");
       await axios.post(`${API_BASE}/group-chats/${joinGroupCode}/join`, {
         userId: currentUserId,
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
       // Refresh user groups
-      const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
+      const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       setGroups(res.data);
       setShowJoinGroupModal(false);
       setJoinGroupCode("");
@@ -417,8 +445,11 @@ export default function Principal_Chats() {
     if (!groupToLeave) return;
 
     try {
+      const token = localStorage.getItem("token");
       await axios.post(`${API_BASE}/group-chats/${groupToLeave._id}/leave`, {
         userId: currentUserId,
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
       // Remove group from state
@@ -504,7 +535,10 @@ export default function Principal_Chats() {
         // Only fetch if not already loaded
         if (!newMessages[chat._id] || newMessages[chat._id].length === 0) {
           try {
-            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
+            const token = localStorage.getItem("token");
+            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`, {
+              headers: { "Authorization": `Bearer ${token}` }
+            });
             newMessages[chat._id] = res.data;
           } catch {
             newMessages[chat._id] = [];
