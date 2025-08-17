@@ -516,6 +516,17 @@ export default function Faculty_Grades() {
         [quarter]: value
       }
     }));
+    
+    // Also update the individual student grades if this student is currently selected
+    if (selectedStudentName) {
+      const student = students.find(s => s.name === selectedStudentName);
+      if (student && student._id === subjectId) {
+        setStudentGrades(prev => ({
+          ...prev,
+          [quarter]: value
+        }));
+      }
+    }
   };
 
   const calculateSemesterGrade = (quarter1, quarter2) => {
