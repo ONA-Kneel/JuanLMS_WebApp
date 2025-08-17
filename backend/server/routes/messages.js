@@ -9,6 +9,7 @@ import path from "path";
 import fs from "fs";
 import { createMessageNotification } from '../services/notificationService.js';
 import User from '../models/User.js';
+import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -33,7 +34,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // --- POST / - send a message (optionally with a file) ---
-router.post('/', upload.single('file'), async (req, res) => {
+router.post('/', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     const { senderId, receiverId, message } = req.body;
     // If a file is uploaded, store its URL (relative to server root)
@@ -61,7 +62,7 @@ router.post('/', upload.single('file'), async (req, res) => {
 });
 
 // --- GET /:userId/:chatWithId - fetch messages between two users ---
-router.get('/:userId/:chatWithId', async (req, res) => {
+router.get('/:userId/:chatWithId', authenticateToken, async (req, res) => {
   const { userId, chatWithId } = req.params;
   try {
     const messages = await Message.find({}); // We'll filter after decrypting

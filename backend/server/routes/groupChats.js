@@ -7,6 +7,7 @@ import GroupMessage from '../models/GroupMessage.js';
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // --- POST / - Create a new group chat ---
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { name, description, createdBy, participants } = req.body;
     
@@ -75,7 +76,7 @@ router.post('/', async (req, res) => {
 });
 
 // --- GET / - Get all group chats for a user ---
-router.get('/user/:userId', async (req, res) => {
+router.get('/user/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
     const groupChats = await GroupChat.find({ isActive: true });
@@ -107,8 +108,8 @@ router.get('/user/:userId', async (req, res) => {
   }
 });
 
-// --- GET /:groupId - Get specific group chat details ---
-router.get('/:groupId', async (req, res) => {
+// --- GET /:groupId - Get a specific group chat ---
+router.get('/:groupId', authenticateToken, async (req, res) => {
   try {
     const { groupId } = req.params;
     const groupChat = await GroupChat.findById(groupId);
@@ -136,7 +137,7 @@ router.get('/:groupId', async (req, res) => {
 });
 
 // --- POST /:groupId/join - Join a group chat ---
-router.post('/:groupId/join', async (req, res) => {
+router.post('/:groupId/join', authenticateToken, async (req, res) => {
   try {
     const { groupId } = req.params;
     const { userId } = req.body;
@@ -163,7 +164,7 @@ router.post('/:groupId/join', async (req, res) => {
 });
 
 // --- POST /:groupId/leave - Leave a group chat ---
-router.post('/:groupId/leave', async (req, res) => {
+router.post('/:groupId/leave', authenticateToken, async (req, res) => {
   try {
     const { groupId } = req.params;
     const { userId } = req.body;
@@ -190,7 +191,7 @@ router.post('/:groupId/leave', async (req, res) => {
 });
 
 // --- POST /:groupId/add-admin - Add admin (only group admins can do this) ---
-router.post('/:groupId/add-admin', async (req, res) => {
+router.post('/:groupId/add-admin', authenticateToken, async (req, res) => {
   try {
     const { groupId } = req.params;
     const { userId, newAdminId } = req.body;
@@ -225,7 +226,7 @@ router.post('/:groupId/add-admin', async (req, res) => {
 });
 
 // --- POST /:groupId/remove-admin - Remove admin (only group creator can do this) ---
-router.post('/:groupId/remove-admin', async (req, res) => {
+router.post('/:groupId/remove-admin', authenticateToken, async (req, res) => {
   try {
     const { groupId } = req.params;
     const { userId, adminToRemoveId } = req.body;
@@ -257,7 +258,7 @@ router.post('/:groupId/remove-admin', async (req, res) => {
 });
 
 // --- POST /:groupId/remove-member - Remove a member (only group creator can do this) ---
-router.post('/:groupId/remove-member', async (req, res) => {
+router.post('/:groupId/remove-member', authenticateToken, async (req, res) => {
   try {
     const { groupId } = req.params;
     const { userId, memberId } = req.body;
@@ -296,7 +297,7 @@ router.post('/:groupId/remove-member', async (req, res) => {
 });
 
 // --- DELETE /:groupId - Delete group chat (only creator can do this) ---
-router.delete('/:groupId', async (req, res) => {
+router.delete('/:groupId', authenticateToken, async (req, res) => {
   try {
     const { groupId } = req.params;
     const { userId } = req.body;

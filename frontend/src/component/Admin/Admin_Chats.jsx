@@ -246,8 +246,12 @@ export default function Admin_Chats() {
     }
 
     try {
+      const token = localStorage.getItem("token");
       const res = await axios.post(`${API_BASE}/messages`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: { 
+          "Content-Type": "multipart/form-data",
+          "Authorization": `Bearer ${token}`
+        },
       });
 
       const sentMessage = res.data;
@@ -274,7 +278,11 @@ export default function Admin_Chats() {
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSendMessage();
+      if (selectedChat && selectedChat.isGroup) {
+        handleSendGroupMessage();
+      } else {
+        handleSendMessage();
+      }
     }
   };
 
@@ -318,14 +326,17 @@ export default function Admin_Chats() {
         // Only fetch if not already loaded
         if (!newMessages[chat._id] || newMessages[chat._id].length === 0) {
           try {
-            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
+            const token = localStorage.getItem("token");
+            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`, {
+              headers: { "Authorization": `Bearer ${token}` }
+            });
             newMessages[chat._id] = res.data;
                   } catch (_err) {
           newMessages[chat._id] = [];
         }
         }
         const chatMessages = newMessages[chat._id] || [];
-        const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
+        const lastMsg = chatMessages.length > 0 ? chatMessages[chat._id]?.slice(-1)[0] : null;
         if (lastMsg) {
           const prefix = lastMsg.senderId === currentUserId 
             ? "You: " 
@@ -390,7 +401,10 @@ export default function Admin_Chats() {
   useEffect(() => {
     const fetchUserGroups = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         setUserGroups(res.data);
         
         // Join all groups in socket
@@ -409,7 +423,10 @@ export default function Admin_Chats() {
     const fetchGroupMessages = async () => {
       if (!selectedChat || !selectedChat.isGroup) return;
       try {
-        const res = await axios.get(`${API_BASE}/group-messages/${selectedChat._id}?userId=${currentUserId}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/group-messages/${selectedChat._id}?userId=${currentUserId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         setGroupMessages((prev) => {
           const newMessages = { ...prev, [selectedChat._id]: res.data };
           
@@ -417,7 +434,7 @@ export default function Admin_Chats() {
           const newLastMessages = {};
           userGroups.forEach(group => {
             const groupMessages = newMessages[group._id] || [];
-            const lastMsg = groupMessages.length > 0 ? groupMessages[groupMessages.length - 1] : null;
+            const lastMsg = groupMessages.length > 0 ? groupMessages[group._id]?.slice(-1)[0] : null;
             if (lastMsg) {
               const sender = userGroups.find(u => u._id === lastMsg.senderId);
               const prefix = lastMsg.senderId === currentUserId 
@@ -445,7 +462,10 @@ export default function Admin_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/users`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/users`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
       } catch (err) {
@@ -469,11 +489,14 @@ export default function Admin_Chats() {
     }
 
     try {
+      const token = localStorage.getItem("token");
       const res = await axios.post(`${API_BASE}/group-chats`, {
         name: groupName,
         description: groupDescription,
         createdBy: currentUserId,
         participants: selectedParticipants,
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
       const newGroup = { ...res.data, isGroup: true };
@@ -508,12 +531,17 @@ export default function Admin_Chats() {
     }
 
     try {
+      const token = localStorage.getItem("token");
       await axios.post(`${API_BASE}/group-chats/${joinGroupId}/join`, {
         userId: currentUserId,
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
       // Refresh user groups
-      const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
+      const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       setUserGroups(res.data);
       setShowJoinGroup(false);
       setJoinGroupId("");
@@ -531,8 +559,11 @@ export default function Admin_Chats() {
     if (!selectedChat || !selectedChat.isGroup) return;
 
     try {
+      const token = localStorage.getItem("token");
       await axios.post(`${API_BASE}/group-chats/${selectedChat._id}/leave`, {
         userId: currentUserId,
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
       setUserGroups(prev => prev.filter(g => g._id !== selectedChat._id));
@@ -568,8 +599,12 @@ export default function Admin_Chats() {
     }
 
     try {
+      const token = localStorage.getItem("token");
       const res = await axios.post(`${API_BASE}/group-messages`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: { 
+          "Content-Type": "multipart/form-data",
+          "Authorization": `Bearer ${token}`
+        },
       });
 
       const sentMessage = res.data;
