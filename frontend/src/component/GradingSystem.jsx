@@ -268,19 +268,28 @@ export default function GradingSystem() {
     if (selectedClass !== '' && allSections.length > 0) {
       const selectedClassObj = facultyClasses[selectedClass];
       if (selectedClassObj) {
-        // Show all available sections for the selected class
-        // The teacher should be able to select from available sections for grading
-        console.log('Showing all sections for class:', selectedClassObj.className);
-        console.log('Class assigned section:', selectedClassObj.section);
-        console.log('Available sections:', allSections);
-        setSections(allSections);
+        // Filter sections to only show the section that belongs to the selected class
+        const classSection = selectedClassObj.section;
+        if (classSection) {
+          const filteredSections = allSections.filter(section => 
+            section.sectionName === classSection
+          );
+          console.log('Filtering sections for class:', selectedClassObj.className);
+          console.log('Class assigned section:', classSection);
+          console.log('Filtered sections:', filteredSections);
+          setSections(filteredSections);
+        } else {
+          // If class has no section assigned, show no sections
+          console.log('Class has no section assigned:', selectedClassObj.className);
+          setSections([]);
+        }
       } else {
-        // If no class found, show all sections
-        setSections(allSections);
+        // If no class found, show no sections
+        setSections([]);
       }
     } else {
-      // If no class selected, show all sections
-      setSections(allSections);
+      // If no class selected, show no sections
+      setSections([]);
     }
   }, [selectedClass, allSections, facultyClasses]);
 
@@ -2188,8 +2197,9 @@ export default function GradingSystem() {
           <h3 className="text-lg font-semibold mb-3">Select Class</h3>
           <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
             <p className="text-sm text-blue-800">
-              <strong>Note:</strong> If sections are not showing up, this might be due to a data mismatch between the current academic term and the sections in the database. 
-              The system will try multiple approaches to load sections, and you can use the refresh (🔄) and test (🧪) buttons to troubleshoot.
+              <strong>Note:</strong> The system will only show sections that are specifically assigned to the selected class. 
+              If no sections appear, it means the selected class doesn't have any sections assigned to it. 
+              You can use the refresh (🔄) and test (🧪) buttons to troubleshoot section loading.
             </p>
           </div>
           <div className="flex gap-4 mb-4">
@@ -2276,18 +2286,44 @@ export default function GradingSystem() {
                   🧪
                 </button>
               </div>
-              {sections.length === 0 && (
+              {sections.length === 0 && selectedClass !== '' && (
                 <p className="text-sm text-orange-600 mt-1">
-                  ⚠️ No sections loaded. Click the refresh button (🔄) or test button (🧪) to troubleshoot.
+                  ⚠️ No sections found for the selected class. This means the class doesn't have any sections assigned to it.
+                </p>
+              )}
+              {sections.length === 0 && selectedClass === '' && (
+                <p className="text-sm text-orange-600 mt-1">
+                  ⚠️ Please select a class first to see available sections.
                 </p>
               )}
               {sections.length > 0 && (
                 <p className="text-sm text-green-600 mt-1">
-                  ✅ {sections.length} section(s) loaded successfully
+                  ✅ {sections.length} section(s) available for the selected class.
                 </p>
               )}
             </div>
           </div>
+          
+          {/* Class Details Display */}
+          {selectedClass !== '' && facultyClasses[selectedClass] && (
+            <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Selected Class Details:</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-medium">Class Name:</span> {facultyClasses[selectedClass].className}
+                </div>
+                <div>
+                  <span className="font-medium">Class Code:</span> {facultyClasses[selectedClass].classCode}
+                </div>
+                <div>
+                  <span className="font-medium">Assigned Section:</span> {facultyClasses[selectedClass].section || 'None'}
+                </div>
+                <div>
+                  <span className="font-medium">Academic Year:</span> {facultyClasses[selectedClass].academicYear}
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* Debug Info */}
           <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
