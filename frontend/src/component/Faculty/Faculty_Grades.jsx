@@ -33,6 +33,7 @@ export default function Faculty_Grades() {
   const [studentGrades, setStudentGrades] = useState({});
   const [uploadingStudentGrades, setUploadingStudentGrades] = useState(false);
   const [selectedStudentFile, setSelectedStudentFile] = useState(null);
+  const [showIndividualManagement, setShowIndividualManagement] = useState(false);
   
 
   const currentFacultyID = localStorage.getItem("userID");
@@ -301,6 +302,7 @@ export default function Faculty_Grades() {
     setSelectedStudent(null);
     setSelectedStudentName('');
     setStudentGrades({});
+    setShowIndividualManagement(false);
   };
 
   const handleSectionChange = (e) => {
@@ -309,6 +311,7 @@ export default function Faculty_Grades() {
     setSelectedStudent(null);
     setSelectedStudentName('');
     setStudentGrades({});
+    setShowIndividualManagement(false);
   };
 
 
@@ -810,22 +813,24 @@ export default function Faculty_Grades() {
                           <div
                             key={student._id}
                             className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-200 last:border-b-0"
-                                                         onClick={() => {
-                               setSelectedStudent(student._id);
-                               setSelectedStudentName(student.name);
-                               // Set the student grades to the selected student's existing grades
-                               const existingGrades = grades[student._id] || {};
-                               setStudentGrades({
-                                 quarter1: existingGrades.quarter1 || '',
-                                 quarter2: existingGrades.quarter2 || '',
-                                 quarter3: existingGrades.quarter3 || '',
-                                 quarter4: existingGrades.quarter4 || '',
-                                 semesterFinal: existingGrades.semesterFinal || '',
-                                 remarks: existingGrades.remarks || ''
-                               });
-                               // Clear the search input after selection
-                               setSelectedStudent('');
-                             }}
+                                                                                       onClick={() => {
+                                setSelectedStudent(student._id);
+                                setSelectedStudentName(student.name);
+                                // Set the student grades to the selected student's existing grades
+                                const existingGrades = grades[student._id] || {};
+                                setStudentGrades({
+                                  quarter1: existingGrades.quarter1 || '',
+                                  quarter2: existingGrades.quarter2 || '',
+                                  quarter3: existingGrades.quarter3 || '',
+                                  quarter4: existingGrades.quarter4 || '',
+                                  semesterFinal: existingGrades.semesterFinal || '',
+                                  remarks: existingGrades.remarks || ''
+                                });
+                                // Clear the search input after selection
+                                setSelectedStudent('');
+                                // Show the individual management section
+                                setShowIndividualManagement(true);
+                              }}
                           >
                             <div className="font-medium">{student.name}</div>
                             <div className="text-sm text-gray-600">ID: {student.schoolID || 'N/A'}</div>
@@ -846,24 +851,39 @@ export default function Faculty_Grades() {
                 </div>
               )}
 
-                         {/* Individual Student Grade Management */}
-             {selectedStudentName && (
-               <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
-                 <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                   Individual Student Grade Management - {currentTerm?.termName || 'Current Term'}
-                   {selectedSection && selectedSection !== 'default' && (
-                     <span className="text-sm font-normal text-gray-600 ml-2">
-                       (Section: {selectedSection})
-                     </span>
-                   )}
-                 </h3>
+                                                   {/* Individual Student Grade Management */}
+              {selectedStudentName && showIndividualManagement && (
+                <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50 relative">
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Individual Student Grade Management - {currentTerm?.termName || 'Current Term'}
+                      {selectedSection && selectedSection !== 'default' && (
+                        <span className="text-sm font-normal text-gray-600 ml-2">
+                          (Section: {selectedSection})
+                        </span>
+                      )}
+                    </h3>
+                    <button
+                      onClick={() => setShowIndividualManagement(false)}
+                      className="text-gray-500 hover:text-gray-700 text-xl font-bold leading-none p-1 rounded-full hover:bg-gray-200 transition-colors"
+                      title="Close Individual Student Grade Management"
+                    >
+                      ×
+                    </button>
+                  </div>
                  
-                 {/* Student Name Display */}
-                 <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                   <p className="text-sm font-medium text-blue-800">
-                     <strong>Student Name:</strong> {selectedStudentName}
-                   </p>
-                 </div>
+                                   {/* Student Name and ID Display */}
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                    <p className="text-sm font-medium text-blue-800 mb-1">
+                      <strong>Student Name:</strong> {selectedStudentName}
+                    </p>
+                    <p className="text-xs text-blue-700">
+                      <strong>Student ID:</strong> {(() => {
+                        const student = students.find(s => s.name === selectedStudentName);
+                        return student ? (student.schoolID || 'N/A') : 'N/A';
+                      })()}
+                    </p>
+                  </div>
                  
                  {/* Student Grade Inputs */}
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
