@@ -98,6 +98,10 @@ export default function Faculty_Grades() {
         
         setClasses(filtered);
         console.log("Faculty Grades - Filtered classes:", filtered);
+        // Log class details including sections
+        filtered.forEach(cls => {
+          console.log(`Class: ${cls.className}, Section: ${cls.section}, Class Code: ${cls.classCode}`);
+        });
       } catch (err) {
         console.error("Failed to fetch classes", err);
       } finally {
@@ -286,7 +290,14 @@ export default function Faculty_Grades() {
   const handleClassChange = (e) => {
     const classIndex = parseInt(e.target.value);
     setSelectedClass(classIndex);
-    setSelectedSection(null);
+    
+    // Auto-select the class's assigned section if it exists
+    if (classIndex !== null && classes[classIndex] && classes[classIndex].section) {
+      setSelectedSection(classes[classIndex].section);
+    } else {
+      setSelectedSection(null);
+    }
+    
     setSubjects([]);
     setGrades({});
     setStudents([]);
@@ -741,7 +752,7 @@ export default function Faculty_Grades() {
             </div>
 
             {/* Section Selection */}
-            {selectedClass !== null && students.length > 0 && (
+            {selectedClass !== null && classes[selectedClass] && (
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Section:</label>
                 <select
@@ -750,12 +761,22 @@ export default function Faculty_Grades() {
                   onChange={handleSectionChange}
                 >
                   <option value="">Choose a section...</option>
-                  {Array.from(new Set(students.map(student => student.section || 'default')))
+                  {/* Show the class's assigned section */}
+                  {classes[selectedClass].section && (
+                    <option key={classes[selectedClass].section} value={classes[selectedClass].section}>
+                      {classes[selectedClass].section}
+                    </option>
+                  )}
+                  {/* Also show any additional sections from students if they exist */}
+                  {students.length > 0 && Array.from(new Set(students.map(student => student.section || 'default')))
+                    .filter(section => section !== classes[selectedClass].section && section !== 'default')
                     .map(section => (
                       <option key={section} value={section}>
-                        {section === 'default' ? 'Default Section' : section}
+                        {section}
                       </option>
                     ))}
+                  {/* Default section as fallback */}
+                  <option value="default">Default Section</option>
                 </select>
               </div>
             )}
