@@ -2368,7 +2368,7 @@ export default function GradingSystem() {
                    disabled={!selectedSection || templateLoading}
                   className="w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
-                   {templateLoading ? 'Generating...' : 'Download Template with Grades'}
+                   {templateLoading ? 'Generating...' : 'Download Grading Template'}
                 </button>
               </div>
             </div>
