@@ -959,279 +959,300 @@ export default function Faculty_Grades() {
               </h1>
             </div>
 
-            {/* First Semester Section */}
-            <div className="mb-8">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-gray-800">
-                  {currentTerm?.termName === 'Term 1' ? 'First Semester (Q1 & Q2)' : 
-                   currentTerm?.termName === 'Term 2' ? 'Second Semester (Q3 & Q4)' : 
-                   'Semester Grades'}
-                   {selectedSection && selectedSection !== 'default' && (
-                     <span className="text-sm font-normal text-gray-600 ml-2">
-                       - Section: {selectedSection}
-                     </span>
-                   )}
-                </h2>
-                <div className="flex gap-2">
+            {/* Only show tables when both class and section are selected */}
+            {selectedClass !== null && selectedSection && selectedSection !== 'default' && (
+              <>
+                {/* First Semester Section - Only show if Term 1 is active */}
+                {currentTerm?.termName === 'Term 1' && (
+                  <div className="mb-8">
+                    <div className="flex justify-between items-center mb-4">
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-800">
+                          First Semester (Q1 & Q2)
+                          {selectedSection && selectedSection !== 'default' && (
+                            <span className="text-sm font-normal text-gray-600 ml-2">
+                              - Section: {selectedSection}
+                            </span>
+                          )}
+                        </h2>
+                        {/* Subject information below the semester title */}
+                        {selectedClass !== null && classes[selectedClass] && (
+                          <div className="mt-2 text-sm text-gray-600">
+                            <p><strong>Subject:</strong> {classes[selectedClass].className}</p>
+                            <p><strong>Subject Code:</strong> {classes[selectedClass].classCode}</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={saveGrades}
+                          className={`px-4 py-2 rounded-md transition-colors ${
+                            students.length > 0 
+                              ? 'bg-orange-600 text-white hover:bg-orange-700' 
+                              : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                          }`}
+                          title="Save all grades to database"
+                          disabled={students.length === 0}
+                        >
+                          Save Grades
+                        </button>
+                        <button
+                          onClick={downloadGrades}
+                          className={`px-4 py-2 rounded-md transition-colors ${
+                            students.length > 0 
+                              ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                              : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                          }`}
+                          title="Download current grades as CSV"
+                          disabled={students.length === 0}
+                        >
+                          Download Grades
+                        </button>
+                      </div>
+                    </div>
                     
-
-                    <button
-                      onClick={saveGrades}
-                      className={`px-4 py-2 rounded-md transition-colors ${
-                        selectedClass !== null && subjects.length > 0 
-                          ? 'bg-orange-600 text-white hover:bg-orange-700' 
-                          : 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      }`}
-                      title="Save all grades to database"
-                      disabled={selectedClass === null || subjects.length === 0}
-                    >
-                      Save Grades
-                    </button>
-                    <button
-                      onClick={downloadGrades}
-                      className={`px-4 py-2 rounded-md transition-colors ${
-                        selectedClass !== null && subjects.length > 0 
-                          ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                          : 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      }`}
-                      title="Download current grades as CSV"
-                      disabled={selectedClass === null || subjects.length === 0}
-                    >
-                      Download Grades
-                    </button>
-                  </div>
-              </div>
-              
-              <div className="overflow-x-auto">
-                <table className="min-w-full border border-gray-300 text-sm">
-                  <thead>
-                    <tr>
-                      <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Subjects</th>
-                      <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50" colSpan="2">Quarter</th>
-                      <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
-                    </tr>
-                    <tr>
-                      <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
-                      {currentTerm?.termName === 'Term 1' ? (
-                        <>
-                          <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">1</th>
-                          <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">2</th>
-                        </>
-                      ) : currentTerm?.termName === 'Term 2' ? (
-                        <>
-                          <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">3</th>
-                          <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">4</th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">1</th>
-                          <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">2</th>
-                        </>
-                      )}
-                      <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedClass !== null && subjects.length > 0 ? (
-                      subjects.map((subject) => {
-                        const subjectGrades = grades[subject._id] || {};
-                        let semesterGrade = '';
-                        
-                        if (currentTerm?.termName === 'Term 1') {
-                          semesterGrade = calculateSemesterGrade(subjectGrades.quarter1, subjectGrades.quarter2);
-                        } else if (currentTerm?.termName === 'Term 2') {
-                          semesterGrade = calculateSemesterGrade(subjectGrades.quarter3, subjectGrades.quarter4);
-                        } else {
-                          semesterGrade = calculateSemesterGrade(subjectGrades.quarter1, subjectGrades.quarter2);
-                        }
-                        
-                        return (
-                          <tr key={subject._id} className="hover:bg-gray-50">
-                            <td className="border border-gray-300 p-2 h-12 font-medium">
-                              <div className="flex items-center gap-2">
-                                {subject.subjectCode} - {subject.subjectDescription}
-                              </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full border border-gray-300 text-sm">
+                        <thead>
+                          <tr>
+                            <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Students</th>
+                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50" colSpan="2">Quarter</th>
+                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
+                          </tr>
+                          <tr>
+                            <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
+                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">1</th>
+                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">2</th>
+                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {students.length > 0 ? (
+                            students.map((student) => {
+                              const studentGrades = grades[student._id] || {};
+                              const semesterGrade = calculateSemesterGrade(studentGrades.quarter1, studentGrades.quarter2);
+                              
+                              return (
+                                <tr key={student._id} className="hover:bg-gray-50">
+                                  <td className="border border-gray-300 p-2 h-12 font-medium">
+                                    <div className="flex items-center gap-2">
+                                      {student.name}
+                                    </div>
+                                  </td>
+                                  <td className="border border-gray-300 p-2 text-center">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.01"
+                                      placeholder="Grade"
+                                      className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      value={studentGrades.quarter1 || ''}
+                                      onChange={(e) => handleGradeChange(student._id, 'quarter1', e.target.value)}
+                                    />
+                                  </td>
+                                  <td className="border border-gray-300 p-2 text-center">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.01"
+                                      placeholder="Grade"
+                                      className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      value={studentGrades.quarter2 || ''}
+                                      onChange={(e) => handleGradeChange(student._id, 'quarter2', e.target.value)}
+                                    />
+                                  </td>
+                                  <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                    {semesterGrade}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          ) : (
+                            // Empty rows when no students
+                            Array.from({ length: 5 }).map((_, index) => (
+                              <tr key={index}>
+                                <td className="border border-gray-300 p-2 h-12"></td>
+                                <td className="border border-gray-300 p-2 text-center"></td>
+                                <td className="border border-gray-300 p-2 text-center"></td>
+                                <td className="border border-gray-300 p-2 text-center"></td>
+                              </tr>
+                            ))
+                          )}
+                          
+                          {/* General Average */}
+                          <tr className="bg-gray-50">
+                            <td className="border border-gray-300 p-2 font-bold text-gray-800">General Average</td>
+                            <td className="border border-gray-300 p-2 text-center font-bold">
+                              {students.length > 0 ? calculateGeneralAverage('quarter1') : ''}
                             </td>
-                            {currentTerm?.termName === 'Term 1' ? (
-                              <>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    step="0.01"
-                                    placeholder="Grade"
-                                    className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={subjectGrades.quarter1 || ''}
-                                    onChange={(e) => handleGradeChange(subject._id, 'quarter1', e.target.value)}
-                                  />
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    step="0.01"
-                                    placeholder="Grade"
-                                    className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={subjectGrades.quarter2 || ''}
-                                    onChange={(e) => handleGradeChange(subject._id, 'quarter2', e.target.value)}
-                                  />
-                                </td>
-                              </>
-                            ) : currentTerm?.termName === 'Term 2' ? (
-                              <>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    step="0.01"
-                                    placeholder="Grade"
-                                    className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={subjectGrades.quarter3 || ''}
-                                    onChange={(e) => handleGradeChange(subject._id, 'quarter3', e.target.value)}
-                                  />
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    step="0.01"
-                                    placeholder="Grade"
-                                    className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={subjectGrades.quarter4 || ''}
-                                    onChange={(e) => handleGradeChange(subject._id, 'quarter4', e.target.value)}
-                                  />
-                                </td>
-                              </>
-                            ) : (
-                              <>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    step="0.01"
-                                    placeholder="Grade"
-                                    className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={subjectGrades.quarter1 || ''}
-                                    onChange={(e) => handleGradeChange(subject._id, 'quarter1', e.target.value)}
-                                  />
-                                </td>
-                                <td className="border border-gray-300 p-2 text-center">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    step="0.01"
-                                    placeholder="Grade"
-                                    className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={subjectGrades.quarter2 || ''}
-                                    onChange={(e) => handleGradeChange(subject._id, 'quarter2', e.target.value)}
-                                  />
-                                </td>
-                              </>
-                            )}
-                            <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                              {semesterGrade}
+                            <td className="border border-gray-300 p-2 text-center font-bold">
+                              {students.length > 0 ? calculateGeneralAverage('quarter2') : ''}
+                            </td>
+                            <td className="border border-gray-300 p-2 text-center font-bold">
+                              {students.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
                             </td>
                           </tr>
-                        );
-                      })
-                    ) : (
-                      // Empty rows when no class selected or no subjects
-                      Array.from({ length: 10 }).map((_, index) => (
-                        <tr key={index}>
-                          <td className="border border-gray-300 p-2 h-12"></td>
-                          <td className="border border-gray-300 p-2 text-center"></td>
-                          <td className="border border-gray-300 p-3 text-center"></td>
-                          <td className="border border-gray-300 p-2 text-center"></td>
-                        </tr>
-                      ))
-                    )}
-                    
-                    {/* General Average */}
-                    <tr className="bg-gray-50">
-                      <td className="border border-gray-300 p-2 font-bold text-gray-800">General Average</td>
-                      {currentTerm?.termName === 'Term 1' ? (
-                        <>
-                          <td className="border border-gray-300 p-2 text-center font-bold">
-                            {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter1') : ''}
-                          </td>
-                          <td className="border border-gray-300 p-2 text-center font-bold">
-                            {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter2') : ''}
-                          </td>
-                        </>
-                      ) : currentTerm?.termName === 'Term 2' ? (
-                        <>
-                          <td className="border border-gray-300 p-2 text-center font-bold">
-                            {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter3') : ''}
-                          </td>
-                          <td className="border border-gray-300 p-2 text-center font-bold">
-                            {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter4') : ''}
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="border border-gray-300 p-2 text-center font-bold">
-                            {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter1') : ''}
-                          </td>
-                          <td className="border border-gray-300 p-2 text-center font-bold">
-                            {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('quarter2') : ''}
-                          </td>
-                        </>
-                      )}
-                      <td className="border border-gray-300 p-2 text-center font-bold">
-                        {selectedClass !== null && subjects.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
-            {/* Second Semester Section */}
-            <div className="mb-8">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Second Semester</h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full border border-gray-300 text-sm">
-                  <thead>
-                    <tr>
-                      <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Subjects</th>
-                      <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50" colSpan="2">Quarter</th>
-                      <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
-                    </tr>
-                    <tr>
-                      <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
-                      <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">3</th>
-                      <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">4</th>
-                      <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* Empty rows for dynamic content */}
-                    {Array.from({ length: 10 }).map((_, index) => (
-                      <tr key={index}>
-                        <td className="border border-gray-300 p-2 h-12"></td>
-                        <td className="border border-gray-300 p-2 text-center"></td>
-                        <td className="border border-gray-300 p-2 text-center"></td>
-                        <td className="border border-gray-300 p-2 text-center"></td>
-                      </tr>
-                    ))}
+                {/* Second Semester Section - Only show if Term 2 is active */}
+                {currentTerm?.termName === 'Term 2' && (
+                  <div className="mb-8">
+                    <div className="flex justify-between items-center mb-4">
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-800">
+                          Second Semester (Q3 & Q4)
+                          {selectedSection && selectedSection !== 'default' && (
+                            <span className="text-sm font-normal text-gray-600 ml-2">
+                              - Section: {selectedSection}
+                            </span>
+                          )}
+                        </h2>
+                        {/* Subject information below the semester title */}
+                        {selectedClass !== null && classes[selectedClass] && (
+                          <div className="mt-2 text-sm text-gray-600">
+                            <p><strong>Subject:</strong> {classes[selectedClass].className}</p>
+                            <p><strong>Subject Code:</strong> {classes[selectedClass].classCode}</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={saveGrades}
+                          className={`px-4 py-2 rounded-md transition-colors ${
+                            students.length > 0 
+                              ? 'bg-orange-600 text-white hover:bg-orange-700' 
+                              : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                          }`}
+                          title="Save all grades to database"
+                          disabled={students.length === 0}
+                        >
+                          Save Grades
+                        </button>
+                        <button
+                          onClick={downloadGrades}
+                          className={`px-4 py-2 rounded-md transition-colors ${
+                            students.length > 0 
+                              ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                              : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                          }`}
+                          title="Download current grades as CSV"
+                          disabled={students.length === 0}
+                        >
+                          Download Grades
+                        </button>
+                      </div>
+                    </div>
                     
-                    {/* General Average */}
-                    <tr className="bg-gray-50">
-                      <td className="border border-gray-300 p-2 font-bold text-gray-800">General Average</td>
-                      <td className="border border-gray-300 p-2"></td>
-                      <td className="border border-gray-300 p-2"></td>
-                      <td className="border border-gray-300 p-2 text-center font-bold"></td>
-                    </tr>
-                  </tbody>
-                </table>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full border border-gray-300 text-sm">
+                        <thead>
+                          <tr>
+                            <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Students</th>
+                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50" colSpan="2">Quarter</th>
+                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
+                          </tr>
+                          <tr>
+                            <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
+                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">3</th>
+                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">4</th>
+                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {students.length > 0 ? (
+                            students.map((student) => {
+                              const studentGrades = grades[student._id] || {};
+                              const semesterGrade = calculateSemesterGrade(studentGrades.quarter3, studentGrades.quarter4);
+                              
+                              return (
+                                <tr key={student._id} className="hover:bg-gray-50">
+                                  <td className="border border-gray-300 p-2 h-12 font-medium">
+                                    <div className="flex items-center gap-2">
+                                      {student.name}
+                                    </div>
+                                  </td>
+                                  <td className="border border-gray-300 p-2 text-center">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.01"
+                                      placeholder="Grade"
+                                      className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      value={studentGrades.quarter3 || ''}
+                                      onChange={(e) => handleGradeChange(student._id, 'quarter3', e.target.value)}
+                                    />
+                                  </td>
+                                  <td className="border border-gray-300 p-2 text-center">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.01"
+                                      placeholder="Grade"
+                                      className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      value={studentGrades.quarter4 || ''}
+                                      onChange={(e) => handleGradeChange(student._id, 'quarter4', e.target.value)}
+                                    />
+                                  </td>
+                                  <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                    {semesterGrade}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          ) : (
+                            // Empty rows when no students
+                            Array.from({ length: 5 }).map((_, index) => (
+                              <tr key={index}>
+                                <td className="border border-gray-300 p-2 h-12"></td>
+                                <td className="border border-gray-300 p-2 text-center"></td>
+                                <td className="border border-gray-300 p-2 text-center"></td>
+                                <td className="border border-gray-300 p-2 text-center"></td>
+                              </tr>
+                            ))
+                          )}
+                          
+                          {/* General Average */}
+                          <tr className="bg-gray-50">
+                            <td className="border border-gray-300 p-2 font-bold text-gray-800">General Average</td>
+                            <td className="border border-gray-300 p-2 text-center font-bold">
+                              {students.length > 0 ? calculateGeneralAverage('quarter3') : ''}
+                            </td>
+                            <td className="border border-gray-300 p-2 text-center font-bold">
+                              {students.length > 0 ? calculateGeneralAverage('quarter4') : ''}
+                            </td>
+                            <td className="border border-gray-300 p-2 text-center font-bold">
+                              {students.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Show message when no active term matches */}
+                {!currentTerm?.termName || (currentTerm?.termName !== 'Term 1' && currentTerm?.termName !== 'Term 2') && (
+                  <div className="text-center py-8 text-gray-600">
+                    <p>No active term found. Please check your academic term settings.</p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Show message when class or section not selected */}
+            {(selectedClass === null || !selectedSection || selectedSection === 'default') && (
+              <div className="text-center py-8 text-gray-600">
+                <p>Please select both a class and section to view the grading table.</p>
               </div>
-            </div>
+            )}
           </div>
         ) : (
           <GradingSystem />
