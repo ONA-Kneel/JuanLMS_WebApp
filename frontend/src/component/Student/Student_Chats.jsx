@@ -109,12 +109,17 @@ export default function Student_Chats() {
         // Update last message for this chat
         const chat = recentChats.find(c => c._id === incomingMessage.senderId);
         if (chat) {
-          const prefix = incomingMessage.senderId === currentUserId 
-            ? "You: " 
-            : `${chat.lastname}, ${chat.firstname}: `;
+          let prefix;
           const text = incomingMessage.message 
             ? incomingMessage.message 
             : (incomingMessage.fileUrl ? "File sent" : "");
+          
+          if (incomingMessage.senderId === currentUserId) {
+            prefix = "You: ";
+          } else {
+            prefix = `${chat.lastname || "Unknown"}, ${chat.firstname || "User"}: `;
+          }
+          
           setLastMessages(prev => ({
             ...prev,
             [chat._id]: { prefix, text }
@@ -143,6 +148,27 @@ export default function Student_Chats() {
         ...prev,
         [data.groupId]: [...(prev[data.groupId] || []), incomingGroupMessage],
       }));
+
+      // Update last message for this group chat
+      const group = groups.find(g => g._id === data.groupId);
+      if (group) {
+        let prefix;
+        const text = incomingGroupMessage.message 
+          ? incomingGroupMessage.message 
+          : (incomingGroupMessage.fileUrl ? "File sent" : "");
+        
+        if (incomingGroupMessage.senderId === currentUserId) {
+          prefix = "You: ";
+        } else {
+          // Use the sender info from the message data
+          prefix = `${incomingGroupMessage.senderFirstname || "Unknown"} ${incomingGroupMessage.senderLastname || "User"}: `;
+        }
+        
+        setLastMessages(prev => ({
+          ...prev,
+          [data.groupId]: { prefix, text }
+        }));
+      }
     });
 
     socket.current.on("groupCreated", (group) => {
@@ -221,12 +247,17 @@ export default function Student_Chats() {
             const chatMessages = newMessages[chat._id] || [];
             const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
             if (lastMsg) {
-              const prefix = lastMsg.senderId === currentUserId 
-                ? "You: " 
-                : `${chat.lastname}, ${chat.firstname}: `;
+              let prefix;
               const text = lastMsg.message 
                 ? lastMsg.message 
                 : (lastMsg.fileUrl ? "File sent" : "");
+              
+              if (lastMsg.senderId === currentUserId) {
+                prefix = "You: ";
+              } else {
+                prefix = `${chat.lastname || "Unknown"}, ${chat.firstname || "User"}: `;
+              }
+              
               newLastMessages[chat._id] = { prefix, text };
             }
           });
@@ -255,13 +286,39 @@ export default function Student_Chats() {
           ...prev,
           [selectedChat._id]: res.data,
         }));
+
+        // Update last message for this group chat
+        if (res.data && res.data.length > 0) {
+          const lastMsg = res.data[res.data.length - 1];
+          let prefix;
+          const text = lastMsg.message 
+            ? lastMsg.message 
+            : (lastMsg.fileUrl ? "File sent" : "");
+          
+          if (lastMsg.senderId === currentUserId) {
+            prefix = "You: ";
+          } else {
+            // Try to find sender info from users
+            const sender = users.find(u => u._id === lastMsg.senderId);
+            if (sender) {
+              prefix = `${sender.firstname || "Unknown"} ${sender.lastname || "User"}: `;
+            } else {
+              prefix = "Unknown User: ";
+            }
+          }
+          
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix, text }
+          }));
+        }
       } catch (err) {
         console.error("Error fetching group messages:", err);
       }
     };
 
     fetchGroupMessages();
-  }, [selectedChat, isGroupChat]);
+  }, [selectedChat, isGroupChat, currentUserId, users]);
 
   // Auto-scroll
   const selectedChatMessages = isGroupChat 
@@ -314,6 +371,15 @@ export default function Student_Chats() {
           [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
         }));
 
+        // Update last message for this group chat
+        const text = sentMessage.message 
+          ? sentMessage.message 
+          : (sentMessage.fileUrl ? "File sent" : "");
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix: "You: ", text }
+        }));
+
         setNewMessage("");
         setSelectedFile(null);
       } catch (err) {
@@ -350,6 +416,15 @@ export default function Student_Chats() {
         setMessages((prev) => ({
           ...prev,
           [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
+        }));
+
+        // Update last message for this individual chat
+        const text = sentMessage.message 
+          ? sentMessage.message 
+          : (sentMessage.fileUrl ? "File sent" : "");
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix: "You: ", text }
         }));
 
         setNewMessage("");
@@ -547,12 +622,17 @@ export default function Student_Chats() {
         const chatMessages = newMessages[chat._id] || [];
         const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
         if (lastMsg) {
-          const prefix = lastMsg.senderId === currentUserId 
-            ? "You: " 
-            : `${chat.lastname}, ${chat.firstname}: `;
+          let prefix;
           const text = lastMsg.message 
             ? lastMsg.message 
             : (lastMsg.fileUrl ? "File sent" : "");
+          
+          if (lastMsg.senderId === currentUserId) {
+            prefix = "You: ";
+          } else {
+            prefix = `${chat.lastname || "Unknown"}, ${chat.firstname || "User"}: `;
+          }
+          
           newLastMessages[chat._id] = { prefix, text };
         }
       }
