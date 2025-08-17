@@ -217,4 +217,62 @@ router.patch('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Get student's enrolled subjects for the current term
+router.get('/enrolled-subjects/:studentId', authenticateToken, async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { termName, schoolYear } = req.query;
+    
+    // Verify the requesting user has access to this student's data
+    if (req.user.role === 'students' && req.user.userID !== studentId) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Access denied. You can only view your own data.' 
+      });
+    }
+
+    // Build query for student assignments
+    let query = { studentId, status: 'active' };
+    if (termName) query.termName = termName;
+    if (schoolYear) query.schoolYear = schoolYear;
+
+    const assignments = await StudentAssignment.find(query);
+    
+    if (assignments.length === 0) {
+      return res.json({
+        success: true,
+        subjects: [],
+        message: 'No enrolled subjects found for this student in the specified term.'
+      });
+    }
+
+    // Transform assignments to subjects format
+    const subjects = assignments.map(assignment => ({
+      _id: assignment._id,
+      subjectCode: `${assignment.trackName}-${assignment.strandName}-${assignment.gradeLevel}`,
+      subjectDescription: `${assignment.trackName} Track - ${assignment.strandName} Strand - Grade ${assignment.gradeLevel}`,
+      trackName: assignment.trackName,
+      strandName: assignment.strandName,
+      gradeLevel: assignment.gradeLevel,
+      sectionName: assignment.sectionName,
+      termName: assignment.termName,
+      schoolYear: assignment.schoolYear
+    }));
+
+    res.json({
+      success: true,
+      subjects,
+      message: `Found ${subjects.length} enrolled subjects for the student.`
+    });
+
+  } catch (error) {
+    console.error('Error fetching student enrolled subjects:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching enrolled subjects',
+      error: error.message
+    });
+  }
+});
+
 export default router; 
