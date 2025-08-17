@@ -308,46 +308,7 @@ export default function Faculty_Grades() {
     setStudentGrades({});
   };
 
-  const handleStudentChange = (e) => {
-    const studentId = e.target.value;
-    setSelectedStudent(studentId);
-    
-    if (studentId && students.length > 0) {
-      const student = students.find(s => s._id === studentId);
-      if (student) {
-        // Initialize grades structure based on current term
-        let initialGrades = {};
-        
-        if (currentTerm?.termName === 'Term 1') {
-          initialGrades = {
-            quarter1: student.grades?.quarter1 || '',
-            quarter2: student.grades?.quarter2 || '',
-            semesterFinal: student.grades?.semesterFinal || '',
-            remarks: student.grades?.remarks || ''
-          };
-        } else if (currentTerm?.termName === 'Term 2') {
-          initialGrades = {
-            quarter3: student.grades?.quarter3 || '',
-            quarter4: student.grades?.quarter4 || '',
-            semesterFinal: student.grades?.semesterFinal || '',
-            remarks: student.grades?.remarks || ''
-          };
-        } else {
-          // Default structure
-          initialGrades = {
-            quarter1: student.grades?.quarter1 || '',
-            quarter2: student.grades?.quarter2 || '',
-            semesterFinal: student.grades?.semesterFinal || '',
-            remarks: student.grades?.remarks || ''
-          };
-        }
-        
-        setStudentGrades(initialGrades);
-      }
-    } else {
-      setStudentGrades({});
-    }
-  };
+
 
   const handleStudentGradeChange = (field, value) => {
     setStudentGrades(prevGrades => {
@@ -788,29 +749,22 @@ export default function Faculty_Grades() {
                </div>
              )}
 
-            {/* Student Selection */}
-            {selectedClass !== null && selectedSection && students.length > 0 && (
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Student:</label>
-                <select
-                  className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={selectedStudent || ""}
-                  onChange={handleStudentChange}
-                >
-                  <option value="">Choose a student...</option>
-                  {students
-                    .filter(student => {
-                      const studentSection = student.section || 'default';
-                      return studentSection === selectedSection;
-                    })
-                    .map((student) => (
-                      <option key={student._id} value={student._id}>
-                        {student.name} - {student.schoolID}
-                      </option>
-                    ))}
-                </select>
-              </div>
-            )}
+                         {/* Student Search */}
+             {selectedClass !== null && selectedSection && students.length > 0 && (
+               <div className="mb-6">
+                 <label className="block text-sm font-medium text-gray-700 mb-2">Search Student:</label>
+                 <input
+                   type="text"
+                   placeholder="Search by student name or ID..."
+                   className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   value={selectedStudent || ""}
+                   onChange={(e) => setSelectedStudent(e.target.value)}
+                 />
+                 <p className="mt-1 text-sm text-gray-500">
+                   Type student name or ID to filter the table below
+                 </p>
+               </div>
+             )}
 
             {/* Individual Student Grade Management */}
             {selectedStudent && (
@@ -1041,88 +995,101 @@ export default function Faculty_Grades() {
                     
                     <div className="overflow-x-auto">
                       <table className="min-w-full border border-gray-300 text-sm">
-                        <thead>
-                          <tr>
-                            <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Students</th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50" colSpan="2">Quarter</th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
-                          </tr>
-                          <tr>
-                            <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">1</th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">2</th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {students.length > 0 ? (
-                            students.map((student) => {
-                              const studentGrades = grades[student._id] || {};
-                              const semesterGrade = calculateSemesterGrade(studentGrades.quarter1, studentGrades.quarter2);
-                              
-                              return (
-                                <tr key={student._id} className="hover:bg-gray-50">
-                                  <td className="border border-gray-300 p-2 h-12 font-medium">
-                                    <div className="flex items-center gap-2">
-                                      {student.name}
-                                    </div>
-                                  </td>
-                                  <td className="border border-gray-300 p-2 text-center">
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      step="0.01"
-                                      placeholder="Grade"
-                                      className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                      value={studentGrades.quarter1 || ''}
-                                      onChange={(e) => handleGradeChange(student._id, 'quarter1', e.target.value)}
-                                    />
-                                  </td>
-                                  <td className="border border-gray-300 p-2 text-center">
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      step="0.01"
-                                      placeholder="Grade"
-                                      className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                      value={studentGrades.quarter2 || ''}
-                                      onChange={(e) => handleGradeChange(student._id, 'quarter2', e.target.value)}
-                                    />
-                                  </td>
-                                  <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                                    {semesterGrade}
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          ) : (
-                            // Empty rows when no students
-                            Array.from({ length: 5 }).map((_, index) => (
-                              <tr key={index}>
-                                <td className="border border-gray-300 p-2 h-12"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                              </tr>
-                            ))
-                          )}
-                          
-                          {/* General Average */}
-                          <tr className="bg-gray-50">
-                            <td className="border border-gray-300 p-2 font-bold text-gray-800">General Average</td>
-                            <td className="border border-gray-300 p-2 text-center font-bold">
-                              {students.length > 0 ? calculateGeneralAverage('quarter1') : ''}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center font-bold">
-                              {students.length > 0 ? calculateGeneralAverage('quarter2') : ''}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center font-bold">
-                              {students.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
-                            </td>
-                          </tr>
-                        </tbody>
+                                                 <thead>
+                           <tr>
+                             <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Student ID</th>
+                             <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Students</th>
+                             <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50" colSpan="2">Quarter</th>
+                             <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
+                           </tr>
+                           <tr>
+                             <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
+                             <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
+                             <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">1</th>
+                             <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">2</th>
+                             <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
+                           </tr>
+                         </thead>
+                                                 <tbody>
+                           {(() => {
+                             // Filter students based on search
+                             const filteredStudents = students.filter(student => {
+                               if (!selectedStudent) return true;
+                               const searchTerm = selectedStudent.toLowerCase();
+                               const studentName = student.name.toLowerCase();
+                               const studentID = (student.schoolID || '').toLowerCase();
+                               return studentName.includes(searchTerm) || studentID.includes(searchTerm);
+                             });
+                             
+                             return filteredStudents.length > 0 ? (
+                               filteredStudents.map((student) => {
+                                 const studentGrades = grades[student._id] || {};
+                                 const semesterGrade = calculateSemesterGrade(studentGrades.quarter1, studentGrades.quarter2);
+                                 
+                                 return (
+                                   <tr key={student._id} className="hover:bg-gray-50">
+                                     <td className="border border-gray-300 p-2 h-12 font-medium text-sm">
+                                       {student.schoolID || 'N/A'}
+                                     </td>
+                                     <td className="border border-gray-300 p-2 h-12 font-medium">
+                                       <div className="flex items-center gap-2">
+                                         {student.name}
+                                       </div>
+                                     </td>
+                                     <td className="border border-gray-300 p-2 text-center">
+                                       <input
+                                         type="number"
+                                         min="0"
+                                         max="100"
+                                         step="0.01"
+                                         placeholder="Grade"
+                                         className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                         value={studentGrades.quarter1 || ''}
+                                         onChange={(e) => handleGradeChange(student._id, 'quarter1', e.target.value)}
+                                       />
+                                     </td>
+                                     <td className="border border-gray-300 p-2 text-center">
+                                       <input
+                                         type="number"
+                                         min="0"
+                                         max="100"
+                                         step="0.01"
+                                         placeholder="Grade"
+                                         className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                         value={studentGrades.quarter2 || ''}
+                                         onChange={(e) => handleGradeChange(student._id, 'quarter2', e.target.value)}
+                                       />
+                                     </td>
+                                     <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                       {semesterGrade}
+                                     </td>
+                                   </tr>
+                                 );
+                               })
+                             ) : (
+                               // No students found with search
+                               <tr>
+                                 <td colSpan="5" className="border border-gray-300 p-4 text-center text-gray-500">
+                                   No students found matching your search criteria.
+                                 </td>
+                               </tr>
+                             );
+                           })()}
+                           
+                           {/* General Average */}
+                           <tr className="bg-gray-50">
+                             <td className="border border-gray-300 p-2 font-bold text-gray-800" colSpan="2">General Average</td>
+                             <td className="border border-gray-300 p-2 text-center font-bold">
+                               {students.length > 0 ? calculateGeneralAverage('quarter1') : ''}
+                             </td>
+                             <td className="border border-gray-300 p-2 text-center font-bold">
+                               {students.length > 0 ? calculateGeneralAverage('quarter2') : ''}
+                             </td>
+                             <td className="border border-gray-300 p-2 text-center font-bold">
+                               {students.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
+                             </td>
+                           </tr>
+                         </tbody>
                       </table>
                     </div>
                   </div>
@@ -1179,88 +1146,101 @@ export default function Faculty_Grades() {
                     
                     <div className="overflow-x-auto">
                       <table className="min-w-full border border-gray-300 text-sm">
-                        <thead>
-                          <tr>
-                            <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Students</th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50" colSpan="2">Quarter</th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
-                          </tr>
-                          <tr>
-                            <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">3</th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">4</th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {students.length > 0 ? (
-                            students.map((student) => {
-                              const studentGrades = grades[student._id] || {};
-                              const semesterGrade = calculateSemesterGrade(studentGrades.quarter3, studentGrades.quarter4);
-                              
-                              return (
-                                <tr key={student._id} className="hover:bg-gray-50">
-                                  <td className="border border-gray-300 p-2 h-12 font-medium">
-                                    <div className="flex items-center gap-2">
-                                      {student.name}
-                                    </div>
-                                  </td>
-                                  <td className="border border-gray-300 p-2 text-center">
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      step="0.01"
-                                      placeholder="Grade"
-                                      className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                      value={studentGrades.quarter3 || ''}
-                                      onChange={(e) => handleGradeChange(student._id, 'quarter3', e.target.value)}
-                                    />
-                                  </td>
-                                  <td className="border border-gray-300 p-2 text-center">
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      step="0.01"
-                                      placeholder="Grade"
-                                      className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                      value={studentGrades.quarter4 || ''}
-                                      onChange={(e) => handleGradeChange(student._id, 'quarter4', e.target.value)}
-                                    />
-                                  </td>
-                                  <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                                    {semesterGrade}
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          ) : (
-                            // Empty rows when no students
-                            Array.from({ length: 5 }).map((_, index) => (
-                              <tr key={index}>
-                                <td className="border border-gray-300 p-2 h-12"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                                <td className="border border-gray-300 p-2 text-center"></td>
-                              </tr>
-                            ))
-                          )}
-                          
-                          {/* General Average */}
-                          <tr className="bg-gray-50">
-                            <td className="border border-gray-300 p-2 font-bold text-gray-800">General Average</td>
-                            <td className="border border-gray-300 p-2 text-center font-bold">
-                              {students.length > 0 ? calculateGeneralAverage('quarter3') : ''}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center font-bold">
-                              {students.length > 0 ? calculateGeneralAverage('quarter4') : ''}
-                            </td>
-                            <td className="border border-gray-300 p-2 text-center font-bold">
-                              {students.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
-                            </td>
-                          </tr>
-                        </tbody>
+                                                 <thead>
+                           <tr>
+                             <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Student ID</th>
+                             <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Students</th>
+                             <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50" colSpan="2">Quarter</th>
+                             <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
+                           </tr>
+                           <tr>
+                             <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
+                             <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
+                             <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">3</th>
+                             <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">4</th>
+                             <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
+                           </tr>
+                         </thead>
+                                                 <tbody>
+                           {(() => {
+                             // Filter students based on search
+                             const filteredStudents = students.filter(student => {
+                               if (!selectedStudent) return true;
+                               const searchTerm = selectedStudent.toLowerCase();
+                               const studentName = student.name.toLowerCase();
+                               const studentID = (student.schoolID || '').toLowerCase();
+                               return studentName.includes(searchTerm) || studentID.includes(searchTerm);
+                             });
+                             
+                             return filteredStudents.length > 0 ? (
+                               filteredStudents.map((student) => {
+                                 const studentGrades = grades[student._id] || {};
+                                 const semesterGrade = calculateSemesterGrade(studentGrades.quarter3, studentGrades.quarter4);
+                                 
+                                 return (
+                                   <tr key={student._id} className="hover:bg-gray-50">
+                                     <td className="border border-gray-300 p-2 h-12 font-medium text-sm">
+                                       {student.schoolID || 'N/A'}
+                                     </td>
+                                     <td className="border border-gray-300 p-2 h-12 font-medium">
+                                       <div className="flex items-center gap-2">
+                                         {student.name}
+                                       </div>
+                                     </td>
+                                     <td className="border border-gray-300 p-2 text-center">
+                                       <input
+                                         type="number"
+                                         min="0"
+                                         max="100"
+                                         step="0.01"
+                                         placeholder="Grade"
+                                         className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                         value={studentGrades.quarter3 || ''}
+                                         onChange={(e) => handleGradeChange(student._id, 'quarter3', e.target.value)}
+                                       />
+                                     </td>
+                                     <td className="border border-gray-300 p-2 text-center">
+                                       <input
+                                         type="number"
+                                         min="0"
+                                         max="100"
+                                         step="0.01"
+                                         placeholder="Grade"
+                                         className="w-20 p-1 text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                         value={studentGrades.quarter4 || ''}
+                                         onChange={(e) => handleGradeChange(student._id, 'quarter4', e.target.value)}
+                                       />
+                                     </td>
+                                     <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                       {semesterGrade}
+                                     </td>
+                                   </tr>
+                                 );
+                               })
+                             ) : (
+                               // No students found with search
+                               <tr>
+                                 <td colSpan="5" className="border border-gray-300 p-4 text-center text-gray-500">
+                                   No students found matching your search criteria.
+                                 </td>
+                               </tr>
+                             );
+                           })()}
+                           
+                           {/* General Average */}
+                           <tr className="bg-gray-50">
+                             <td className="border border-gray-300 p-2 font-bold text-gray-800" colSpan="2">General Average</td>
+                             <td className="border border-gray-300 p-2 text-center font-bold">
+                               {students.length > 0 ? calculateGeneralAverage('quarter3') : ''}
+                             </td>
+                             <td className="border border-gray-300 p-2 text-center font-bold">
+                               {students.length > 0 ? calculateGeneralAverage('quarter4') : ''}
+                             </td>
+                             <td className="border border-gray-300 p-2 text-center font-bold">
+                               {students.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
+                             </td>
+                           </tr>
+                         </tbody>
                       </table>
                     </div>
                   </div>
