@@ -29,6 +29,7 @@ export default function Faculty_Grades() {
   const [grades, setGrades] = useState({});
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [selectedStudentName, setSelectedStudentName] = useState('');
   const [studentGrades, setStudentGrades] = useState({});
   const [uploadingStudentGrades, setUploadingStudentGrades] = useState(false);
   const [selectedStudentFile, setSelectedStudentFile] = useState(null);
@@ -298,6 +299,7 @@ export default function Faculty_Grades() {
     setGrades({});
     setStudents([]);
     setSelectedStudent(null);
+    setSelectedStudentName('');
     setStudentGrades({});
   };
 
@@ -305,6 +307,7 @@ export default function Faculty_Grades() {
     const section = e.target.value;
     setSelectedSection(section);
     setSelectedStudent(null);
+    setSelectedStudentName('');
     setStudentGrades({});
   };
 
@@ -373,6 +376,21 @@ export default function Faculty_Grades() {
       
       return updatedGrades;
     });
+    
+    // Also update the main grades state to sync with the table
+    if (selectedStudentName) {
+      // Find the student by name to get their ID
+      const student = students.find(s => s.name === selectedStudentName);
+      if (student) {
+        setGrades(prevGrades => ({
+          ...prevGrades,
+          [student._id]: {
+            ...prevGrades[student._id],
+            [field]: value
+          }
+        }));
+      }
+    }
   };
 
   const handleStudentFileSelect = (e) => {
@@ -380,7 +398,7 @@ export default function Faculty_Grades() {
   };
 
   const uploadStudentGrades = async () => {
-    if (!selectedStudentFile || !selectedStudent || !selectedClass) {
+    if (!selectedStudentFile || !selectedStudentName || !selectedClass) {
       alert('Please select a file, student, and class first');
       return;
     }
@@ -388,9 +406,16 @@ export default function Faculty_Grades() {
     try {
       setUploadingStudentGrades(true);
       const token = localStorage.getItem("token");
+      // Find the student by name to get their ID
+      const student = students.find(s => s.name === selectedStudentName);
+      if (!student) {
+        alert('Student not found');
+        return;
+      }
+      
       const formData = new FormData();
       formData.append('file', selectedStudentFile);
-      formData.append('studentId', selectedStudent);
+      formData.append('studentId', student._id);
       formData.append('classId', classes[selectedClass].classID);
 
       const response = await fetch(`${API_BASE}/api/traditional-grades/faculty/upload-student`, {
@@ -420,7 +445,7 @@ export default function Faculty_Grades() {
   };
 
   const saveStudentGrades = async () => {
-    if (!selectedStudent || !selectedClass) {
+    if (!selectedStudentName || !selectedClass) {
       alert('Please select a student and class first');
       return;
     }
@@ -429,8 +454,15 @@ export default function Faculty_Grades() {
       const token = localStorage.getItem("token");
       const selectedClassObj = classes[selectedClass];
       
+      // Find the student by name to get their ID
+      const student = students.find(s => s.name === selectedStudentName);
+      if (!student) {
+        alert('Student not found');
+        return;
+      }
+      
       const gradesData = {
-        studentId: selectedStudent,
+        studentId: student._id,
         classId: selectedClassObj.classID,
         academicYear: `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
         termName: currentTerm?.termName,
@@ -451,7 +483,7 @@ export default function Faculty_Grades() {
         alert('Student grades saved successfully!');
         // Update local state
         const updatedStudents = students.map(student => {
-          if (student._id === selectedStudent) {
+          if (student.name === selectedStudentName) {
             return { 
               ...student, 
               grades: {
@@ -778,19 +810,22 @@ export default function Faculty_Grades() {
                           <div
                             key={student._id}
                             className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-200 last:border-b-0"
-                            onClick={() => {
-                              setSelectedStudent(student.name);
-                              // Set the student grades to the selected student's existing grades
-                              const existingGrades = grades[student._id] || {};
-                              setStudentGrades({
-                                quarter1: existingGrades.quarter1 || '',
-                                quarter2: existingGrades.quarter2 || '',
-                                quarter3: existingGrades.quarter3 || '',
-                                quarter4: existingGrades.quarter4 || '',
-                                semesterFinal: existingGrades.semesterFinal || '',
-                                remarks: existingGrades.remarks || ''
-                              });
-                            }}
+                                                         onClick={() => {
+                               setSelectedStudent(student._id);
+                               setSelectedStudentName(student.name);
+                               // Set the student grades to the selected student's existing grades
+                               const existingGrades = grades[student._id] || {};
+                               setStudentGrades({
+                                 quarter1: existingGrades.quarter1 || '',
+                                 quarter2: existingGrades.quarter2 || '',
+                                 quarter3: existingGrades.quarter3 || '',
+                                 quarter4: existingGrades.quarter4 || '',
+                                 semesterFinal: existingGrades.semesterFinal || '',
+                                 remarks: existingGrades.remarks || ''
+                               });
+                               // Clear the search input after selection
+                               setSelectedStudent('');
+                             }}
                           >
                             <div className="font-medium">{student.name}</div>
                             <div className="text-sm text-gray-600">ID: {student.schoolID || 'N/A'}</div>
@@ -811,22 +846,22 @@ export default function Faculty_Grades() {
                 </div>
               )}
 
-            {/* Individual Student Grade Management */}
-            {selectedStudent && (
-              <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                  Individual Student Grade Management - {currentTerm?.termName || 'Current Term'}
-                  {selectedSection && selectedSection !== 'default' && (
-                    <span className="text-sm font-normal text-gray-600 ml-2">
-                      (Section: {selectedSection})
-                    </span>
-                  )}
-                </h3>
-                
-                                 {/* Student Name Display */}
+                         {/* Individual Student Grade Management */}
+             {selectedStudentName && (
+               <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                 <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                   Individual Student Grade Management - {currentTerm?.termName || 'Current Term'}
+                   {selectedSection && selectedSection !== 'default' && (
+                     <span className="text-sm font-normal text-gray-600 ml-2">
+                       (Section: {selectedSection})
+                     </span>
+                   )}
+                 </h3>
+                 
+                 {/* Student Name Display */}
                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
                    <p className="text-sm font-medium text-blue-800">
-                     <strong>Student Name:</strong> {selectedStudent}
+                     <strong>Student Name:</strong> {selectedStudentName}
                    </p>
                  </div>
                  
