@@ -8,7 +8,7 @@ import GradingSystem from '../GradingSystem';
  * Faculty Grades Component
  * 
  * Features:
- * - Traditional Grades: Class-based grade management with student selection
+ * - Grading Table: Class-based grade management with student selection
  * - Excel Grading System: Bulk grade management
  * - Individual Student Grade Management: Select specific students to manage their grades
  * - File Upload: Upload grades via CSV/Excel files for individual students
@@ -708,7 +708,7 @@ export default function Faculty_Grades() {
               className={`pb-2 px-4 ${activeTab === 'traditional' ? 'border-b-2 border-blue-900 font-bold' : ''}`}
               onClick={() => setActiveTab('traditional')}
             >
-              Traditional Grades
+              Grading Table
             </button>
             <button
               className={`pb-2 px-4 ${activeTab === 'excel' ? 'border-b-2 border-blue-900 font-bold' : ''}`}

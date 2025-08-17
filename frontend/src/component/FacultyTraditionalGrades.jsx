@@ -401,7 +401,7 @@ const FacultyTraditionalGrades = () => {
   return (
     <div className="faculty-traditional-grades">
       <div className="grades-header">
-        <h2>Traditional Grades Management</h2>
+        <h2>Grading Table Management</h2>
         <p>Manage student grades with prelims (30%), midterms (30%), and finals (40%)</p>
       </div>
 

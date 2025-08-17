@@ -2331,10 +2331,8 @@ export default function GradingSystem() {
             <p><strong>Selected Section:</strong> {selectedSection || 'None'}</p>
             <p><strong>Class Section:</strong> {selectedClass !== '' ? facultyClasses[selectedClass]?.section || 'None' : 'None'}</p>
             <p><strong>Class Code:</strong> {selectedClass !== '' ? facultyClasses[selectedClass]?.classCode : 'None'}</p>
-            <p><strong>Total Classes:</strong> {facultyClasses.length}</p>
-            <p><strong>Total Sections Available:</strong> {sections.length}</p>
-            <p><strong>All Sections:</strong> {allSections.length}</p>
-            <p><strong>Loading:</strong> {loading ? 'Yes' : 'No'}</p>
+                         <p><strong>Total Classes:</strong> {facultyClasses.length}</p>
+             <p><strong>Total Sections Available:</strong> {sections.length}</p>
             <p><strong>Academic Year:</strong> {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Loading...'}</p>
             <p><strong>Current Term:</strong> {currentTerm ? currentTerm.termName : 'Loading...'}</p>
             <p><strong>Current Term ID:</strong> {currentTerm ? currentTerm._id : 'None'}</p>
@@ -2355,12 +2353,12 @@ export default function GradingSystem() {
           </div>
         </div>
 
-        {/* Export All Grades */}
+        {/* Grading Template */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4">Export All Grades</h3>
+          <h3 className="text-lg font-semibold mb-4">Grading Template</h3>
           <div className="space-y-4">
             <p className="text-gray-600">
-              Export comprehensive grades for assignments and quizzes in the selected section as a CSV file.
+              Download Template for Grading of assignments and quizzes in the selected section as a EXCEL file.
             </p>
             
             <div className="grid grid-cols-1 md:grid-cols-1 gap-4">

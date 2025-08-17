@@ -86,7 +86,7 @@ const StudentTraditionalGrades = () => {
   return (
     <div className="student-traditional-grades">
       <div className="grades-header">
-        <h2>My Traditional Grades</h2>
+        <h2>My Grades</h2>
         <p>View your academic performance across all subjects</p>
       </div>
 
