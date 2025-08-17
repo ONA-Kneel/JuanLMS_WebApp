@@ -291,12 +291,8 @@ export default function Faculty_Grades() {
     const classIndex = parseInt(e.target.value);
     setSelectedClass(classIndex);
     
-    // Auto-select the class's assigned section if it exists
-    if (classIndex !== null && classes[classIndex] && classes[classIndex].section) {
-      setSelectedSection(classes[classIndex].section);
-    } else {
-      setSelectedSection(null);
-    }
+    // Reset section selection to null when class changes
+    setSelectedSection(null);
     
     setSubjects([]);
     setGrades({});
@@ -733,53 +729,64 @@ export default function Faculty_Grades() {
         {/* Content based on activeTab */}
         {activeTab === 'traditional' ? (
           <div className="bg-white rounded-lg shadow-lg p-6">
-                         {/* Class Selection */}
-             <div className="mb-6">
-               <label className="block text-sm font-medium text-gray-700 mb-2">Select Class:</label>
-              <select
-                className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={selectedClass !== null ? selectedClass : ""}
-                onChange={handleClassChange}
-                disabled={loading}
-              >
-                <option value="">Choose a class...</option>
-                {classes.map((cls, index) => (
-                  <option key={cls.classID} value={index}>
-                    {cls.className}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Section Selection */}
-            {selectedClass !== null && classes[selectedClass] && (
+                                      {/* Class Selection */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Section:</label>
-                <select
-                  className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={selectedSection || ""}
-                  onChange={handleSectionChange}
-                >
-                  <option value="">Choose a section...</option>
-                  {/* Show the class's assigned section */}
-                  {classes[selectedClass].section && (
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Class:</label>
+               <select
+                 className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 value={selectedClass !== null ? selectedClass : ""}
+                 onChange={handleClassChange}
+                 disabled={loading}
+               >
+                 <option value="">Choose a class...</option>
+                 {classes.map((cls, index) => (
+                   <option key={cls.classID} value={index}>
+                     {cls.className}
+                   </option>
+                 ))}
+               </select>
+               {/* Warning when no classes available */}
+               {!loading && classes.length === 0 && (
+                 <p className="mt-2 text-sm text-orange-600">
+                   ⚠️ No classes available for the current term ({currentTerm?.termName || 'Unknown'}) and academic year ({academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Unknown'}).
+                 </p>
+               )}
+             </div>
+
+                           {/* Section Selection */}
+              {selectedClass !== null && classes[selectedClass] && classes[selectedClass].section && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Section:</label>
+                  <select
+                    className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={selectedSection || ""}
+                    onChange={handleSectionChange}
+                  >
+                    <option value="">Choose a section...</option>
+                    {/* Show the class's assigned section */}
                     <option key={classes[selectedClass].section} value={classes[selectedClass].section}>
                       {classes[selectedClass].section}
                     </option>
-                  )}
-                  {/* Also show any additional sections from students if they exist */}
-                  {students.length > 0 && Array.from(new Set(students.map(student => student.section || 'default')))
-                    .filter(section => section !== classes[selectedClass].section && section !== 'default')
-                    .map(section => (
-                      <option key={section} value={section}>
-                        {section}
-                      </option>
-                    ))}
-                  {/* Default section as fallback */}
-                  <option value="default">Default Section</option>
-                </select>
-              </div>
-            )}
+                    {/* Also show any additional sections from students if they exist */}
+                    {students.length > 0 && Array.from(new Set(students.map(student => student.section || 'default')))
+                      .filter(section => section !== classes[selectedClass].section && section !== 'default')
+                      .map(section => (
+                        <option key={section} value={section}>
+                          {section}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+             
+             {/* Warning when no sections available for the selected class */}
+             {selectedClass !== null && classes[selectedClass] && !classes[selectedClass].section && (
+               <div className="mb-6">
+                 <p className="text-sm text-orange-600">
+                   ⚠️ The selected class "{classes[selectedClass].className}" does not have any sections assigned to it.
+                 </p>
+               </div>
+             )}
 
             {/* Student Selection */}
             {selectedClass !== null && selectedSection && students.length > 0 && (
@@ -1268,12 +1275,18 @@ export default function Faculty_Grades() {
               </>
             )}
 
-            {/* Show message when class or section not selected */}
-            {(selectedClass === null || !selectedSection || selectedSection === 'default') && (
-              <div className="text-center py-8 text-gray-600">
-                <p>Please select both a class and section to view the grading table.</p>
-              </div>
-            )}
+                         {/* Show message when class or section not selected */}
+             {(selectedClass === null || !selectedSection || selectedSection === 'default') && (
+               <div className="text-center py-8 text-gray-600">
+                 {selectedClass === null ? (
+                   <p>Please select a class to view available sections and the grading table.</p>
+                 ) : !selectedSection ? (
+                   <p>Please select a section to view the grading table for the selected class.</p>
+                 ) : (
+                   <p>Please select both a class and section to view the grading table.</p>
+                 )}
+               </div>
+             )}
           </div>
         ) : (
           <GradingSystem />
