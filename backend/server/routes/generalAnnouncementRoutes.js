@@ -205,6 +205,55 @@ router.get("/count", authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/general-announcements/acknowledged - Get announcements that the user has acknowledged
+router.get("/acknowledged", authenticateToken, async (req, res) => {
+  try {
+    const userRole = req.user.role?.toLowerCase();
+    const userId = req.user.id;
+    
+    if (!userRole) {
+      return res.status(400).json({ message: "User role not found" });
+    }
+
+    // Normalize role for matching (similar to login logic)
+    let normalizedRole = userRole;
+    if (userRole === 'student') normalizedRole = 'students';
+    if (userRole === 'vpe' || userRole === 'vice president') normalizedRole = 'vice president of education';
+
+    // Find announcements that the user can see and has already acknowledged
+    const announcements = await GeneralAnnouncement.find({
+      recipientRoles: { $in: [normalizedRole] },
+      // Only include announcements that the user has acknowledged
+      'announcementsViews.userId': { $in: [userId] }
+    })
+    .populate('createdBy', 'firstname lastname role')
+    .sort({ createdAt: -1 });
+
+    // Decrypt creator names
+    const transformed = announcements.map(a => {
+      const obj = a.toObject();
+      if (a.createdBy) {
+        obj.createdBy = {
+          _id: a.createdBy._id,
+          firstname: a.createdBy.getDecryptedFirstname ? a.createdBy.getDecryptedFirstname() : a.createdBy.firstname,
+          lastname: a.createdBy.getDecryptedLastname ? a.createdBy.getDecryptedLastname() : a.createdBy.lastname,
+          role: a.createdBy.role,
+        };
+      }
+      return obj;
+    });
+
+    res.json(transformed);
+
+  } catch (error) {
+    console.error("Error fetching acknowledged announcements:", error);
+    res.status(500).json({ 
+      message: "Failed to fetch acknowledged announcements",
+      error: error.message 
+    });
+  }
+});
+
 // GET /api/general-announcements/all - Get all announcements (admin/principal/VPE only)
 router.get("/all", authenticateToken, async (req, res) => {
   try {
