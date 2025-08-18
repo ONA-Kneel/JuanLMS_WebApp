@@ -7,7 +7,7 @@ const quizSchema = new mongoose.Schema({
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   createdAt: { type: Date, default: Date.now },
   dueDate: { type: Date },
-  points: { type: Number, default: 100 }, // total points for the quiz
+  points: { type: Number, min: 1, max: 100, default: 100 }, // total points for the quiz
   type: { type: String, enum: ['quiz'], default: 'quiz' },
   questions: [
     {
@@ -19,7 +19,7 @@ const quizSchema = new mongoose.Schema({
       choices: [String], // for multiple choice
       correctAnswers: [Number], // for multiple choice (indexes)
       correctAnswer: mongoose.Schema.Types.Mixed, // for true/false or identification
-      points: { type: Number, default: 1 },
+      points: { type: Number, min: 1, default: 1 },
       required: { type: Boolean, default: true },
       image: { type: String } // URL for question image
     }
@@ -59,6 +59,32 @@ const quizSchema = new mongoose.Schema({
     classID: { type: String, required: true },
     studentIDs: [{ type: String, required: true }]
   }]
+});
+
+// Ensure total points are synchronized and within 1–100 on save/update
+quizSchema.pre('validate', function(next) {
+  try {
+    const total = Array.isArray(this.questions)
+      ? this.questions.reduce((sum, q) => sum + (Number(q.points) || 0), 0)
+      : 0;
+    // Keep points in sync with sum of question points
+    this.points = total;
+    if (total < 1 || total > 100) {
+      return next(new Error('Total quiz points must be between 1 and 100.'));
+    }
+    // Guard each question's points
+    if (Array.isArray(this.questions)) {
+      for (const q of this.questions) {
+        const qp = Number(q.points) || 0;
+        if (qp < 1) {
+          return next(new Error('Each question must be at least 1 point.'));
+        }
+      }
+    }
+    return next();
+  } catch (err) {
+    return next(err);
+  }
 });
 
 export default mongoose.model("Quiz", quizSchema, "Quizzes"); 
