@@ -1370,17 +1370,8 @@ export default function Faculty_Chats() {
         {/* Members Modal */}
         {showMembersModal && selectedChat && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-96 overflow-y-auto">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Group Members</h3>
-                <button
-                  onClick={() => setShowMembersModal(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  ✕
-                </button>
-              </div>
-              
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-semibold mb-2">Group Members</h3>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs text-gray-600 truncate">
                   Group ID: <span className="font-mono">{selectedChat?._id}</span>
@@ -1402,38 +1393,35 @@ export default function Faculty_Chats() {
                   Copy ID
                 </button>
               </div>
-              <div className="space-y-2">
-                {selectedChat.participants?.map((participant) => (
-                  <div key={participant._id} className="flex items-center justify-between p-2 border rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <img
-                        src={participant.profilePic ? `${API_BASE}/uploads/${participant.profilePic}` : defaultAvatar}
-                        alt="Profile"
-                        className="w-8 h-8 rounded-full object-cover border"
-                        onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
-                      />
-                      <span className="text-sm">
-                        {participant.lastname}, {participant.firstname}
-                      </span>
-                      {participant._id === selectedChat.createdBy && (
-                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                          Creator
-                        </span>
+
+              <ul className="mb-4 max-h-60 overflow-y-auto divide-y">
+                {(selectedChat?.participants || []).map((p) => {
+                  const userId = typeof p === 'string' ? p : (p?._id || p);
+                  const user = users.find(u => u._id === userId) || (typeof p === 'object' ? p : null);
+                  const isCreator = selectedChat?.createdBy === userId;
+                  return (
+                    <li key={userId} className="flex items-center justify-between py-2">
+                      <span>{user?.lastname || ''}{user ? ', ' : ''}{user?.firstname || ''} {isCreator && <span className="text-xs text-blue-700">(Creator)</span>}</span>
+                      {selectedChat?.createdBy === currentUserId && !isCreator && (
+                        <button
+                          className="text-red-500 hover:text-red-700 text-xs px-2 py-1 border border-red-300 rounded"
+                          onClick={() => { setMemberToRemove(user || { _id: userId, firstname: '', lastname: '' }); setShowRemoveConfirm(true); }}
+                        >
+                          Remove
+                        </button>
                       )}
-                    </div>
-                    {selectedChat.createdBy === currentUserId && participant._id !== currentUserId && (
-                      <button
-                        onClick={() => {
-                          setMemberToRemove(participant);
-                          setShowRemoveConfirm(true);
-                        }}
-                        className="text-red-500 hover:text-red-700 text-sm"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowMembersModal(false)}
+                  className="flex-1 py-2 rounded-lg text-sm bg-blue-900 text-white"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
