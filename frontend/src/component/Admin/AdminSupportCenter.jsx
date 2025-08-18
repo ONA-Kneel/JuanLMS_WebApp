@@ -222,11 +222,27 @@ export default function AdminSupportCenter() {
       const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(contentDisposition);
       const filename = decodeURIComponent(match?.[1] || match?.[2] || 'attachment');
       const contentType = res.headers.get('Content-Type') || 'application/octet-stream';
+      // If the server didn't send a specific image type, try to infer from filename
+      let finalType = contentType;
+      if (finalType === 'application/octet-stream') {
+        const lower = filename.toLowerCase();
+        if (/(\.apng)$/.test(lower)) finalType = 'image/apng';
+        else if (/(\.avif)$/.test(lower)) finalType = 'image/avif';
+        else if (/(\.bmp)$/.test(lower)) finalType = 'image/bmp';
+        else if (/(\.gif)$/.test(lower)) finalType = 'image/gif';
+        else if (/(\.ico|\.cur)$/.test(lower)) finalType = 'image/x-icon';
+        else if (/(\.jpg|\.jpeg|\.jfif|\.pjpeg|\.pjp)$/.test(lower)) finalType = 'image/jpeg';
+        else if (/(\.png)$/.test(lower)) finalType = 'image/png';
+        else if (/(\.svg|\.svgz)$/.test(lower)) finalType = 'image/svg+xml';
+        else if (/(\.tif|\.tiff)$/.test(lower)) finalType = 'image/tiff';
+        else if (/(\.webp)$/.test(lower)) finalType = 'image/webp';
+        else if (/(\.heic|\.heif)$/.test(lower)) finalType = 'image/heic'; // modern iOS images; browser support varies
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       setAttachmentUrl(url);
       setAttachmentName(filename);
-      setAttachmentType(contentType);
+      setAttachmentType(finalType);
       setShowAttachment(true);
     } catch (err) {
       console.error('Attachment preview error:', err);
@@ -590,7 +606,7 @@ export default function AdminSupportCenter() {
                   <div className="p-6 text-center text-gray-600">Loading attachment...</div>
                 ) : attachmentUrl ? (
                   (() => {
-                    const isImage = (attachmentType || '').startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp|svg)$/i.test(attachmentName);
+                    const isImage = (attachmentType || '').startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp|svg|apng|avif|tiff?|ico|cur|heic|heif)$/i.test(attachmentName);
                     const isPdf = (attachmentType || '') === 'application/pdf' || /\.(pdf)$/i.test(attachmentName);
                     if (isImage) {
                       return (

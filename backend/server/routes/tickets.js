@@ -105,6 +105,8 @@ ticketsRouter.get('/file/:ticketId', authenticateToken, async (req, res) => {
     // Set headers to help browsers download or preview the file with the original name
     res.setHeader('Content-Disposition', `attachment; filename=${decryptedTicket.file}`);
     res.setHeader('Content-Type', 'application/octet-stream');
+    // Expose headers so frontend (different origin) can read filename/content-type
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type');
     res.send(fileBuffer);
   } catch (err) {
     res.status(404).json({ error: 'File not found or decryption failed' });
