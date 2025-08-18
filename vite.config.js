@@ -1,7 +1,10 @@
-export default {
-  server: {
-    proxy: {
-      '/uploads': 'https://juanlms-webapp-server.onrender.com',
-    },
-  },
-}; 
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    outDir: './live',
+    emptyOutDir: true,
+  }
+});
