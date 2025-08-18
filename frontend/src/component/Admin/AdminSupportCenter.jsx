@@ -20,6 +20,13 @@ export default function AdminSupportCenter() {
   const [activeFilter, setActiveFilter] = useState('all'); // all, new, opened, closed
   const [allTickets, setAllTickets] = useState([]); // Store all tickets for counting
   const [userDetails, setUserDetails] = useState({}); // Store user details for each ticket
+  // Attachment preview state
+  const [showAttachment, setShowAttachment] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState('');
+  const [attachmentName, setAttachmentName] = useState('attachment');
+  const [attachmentType, setAttachmentType] = useState('application/octet-stream');
+  const [attachmentLoading, setAttachmentLoading] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
 
   // Fetch user details for tickets
   const fetchUserDetails = async (tickets) => {
@@ -190,6 +197,45 @@ export default function AdminSupportCenter() {
     }
     fetchActiveTermForYear();
   }, [academicYear]);
+
+  // Clean up blob URL when modal closes
+  useEffect(() => {
+    return () => {
+      if (attachmentUrl) URL.revokeObjectURL(attachmentUrl);
+    };
+  }, [attachmentUrl]);
+
+  async function handleOpenAttachment(ticketId) {
+    try {
+      setAttachmentLoading(true);
+      setAttachmentError('');
+      // Fetch file with auth header, then create a blob URL
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/tickets/file/${ticketId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Failed to load attachment (${res.status})`);
+      }
+      const contentDisposition = res.headers.get('Content-Disposition') || '';
+      const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(contentDisposition);
+      const filename = decodeURIComponent(match?.[1] || match?.[2] || 'attachment');
+      const contentType = res.headers.get('Content-Type') || 'application/octet-stream';
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setAttachmentUrl(url);
+      setAttachmentName(filename);
+      setAttachmentType(contentType);
+      setShowAttachment(true);
+    } catch (err) {
+      console.error('Attachment preview error:', err);
+      setAttachmentError('Failed to open attachment. You can try downloading it instead.');
+      setShowAttachment(true);
+    } finally {
+      setAttachmentLoading(false);
+    }
+  }
 
   async function handleReply(ticketId) {
     setReplyLoading(true);
@@ -442,14 +488,13 @@ export default function AdminSupportCenter() {
                       <div className="mb-4">
                         <b>Attachment:</b>
                         <div className="mt-2">
-                          <a
-                            href={`${API_BASE}/api/tickets/file/${ticket._id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAttachment(ticket._id)}
                             className="inline-block bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded"
                           >
                             View / Download Attachment
-                          </a>
+                          </button>
                         </div>
                       </div>
                     )}
@@ -512,6 +557,48 @@ export default function AdminSupportCenter() {
             )}
           </div>
         </div>
+        {/* Attachment Preview Overlay */}
+        {showAttachment && (
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between p-3 border-b">
+                <div className="font-semibold text-gray-800 truncate pr-2">{attachmentName}</div>
+                <div className="flex items-center gap-2">
+                  {attachmentUrl && (
+                    <a
+                      href={attachmentUrl}
+                      download={attachmentName}
+                      className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                    >
+                      Download
+                    </a>
+                  )}
+                  <button
+                    className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300"
+                    onClick={() => {
+                      if (attachmentUrl) URL.revokeObjectURL(attachmentUrl);
+                      setAttachmentUrl('');
+                      setShowAttachment(false);
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1">
+                {attachmentLoading ? (
+                  <div className="p-6 text-center text-gray-600">Loading attachment...</div>
+                ) : attachmentUrl ? (
+                  <iframe title="Attachment Preview" src={attachmentUrl} className="w-full h-[70vh]" />
+                ) : (
+                  <div className="p-6 text-center text-red-600 text-sm">
+                    {attachmentError || 'Unable to preview this file.'}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
