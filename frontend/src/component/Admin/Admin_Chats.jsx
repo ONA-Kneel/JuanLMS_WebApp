@@ -885,6 +885,9 @@ export default function Admin_Chats() {
                         <div className="flex flex-col">
                           <h3 className="text-lg font-semibold">{selectedChat.name}</h3>
                           <p className="text-sm text-gray-600">{selectedChat.participants.length} participants</p>
+                          <p className="text-[11px] text-gray-500 mt-1">
+                            Group ID: <span className="font-mono">{selectedChat._id}</span>
+                          </p>
                         </div>
                       </>
                     ) : (
@@ -911,6 +914,13 @@ export default function Admin_Chats() {
                           className="bg-gray-200 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-300 transition-colors text-sm mr-2"
                         >
                           View Members
+                        </button>
+                        <button
+                          onClick={() => navigator.clipboard?.writeText(selectedChat._id)}
+                          title="Copy Group ID"
+                          className="bg-gray-200 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-300 transition-colors text-sm mr-2"
+                        >
+                          Copy ID
                         </button>
                         <button
                           onClick={() => setShowLeaveConfirm(true)}

@@ -942,16 +942,37 @@ export default function Student_Chats() {
                         {isGroupChat ? selectedChat.name : `${selectedChat.lastname}, ${selectedChat.firstname}`}
                       </h3>
                       {isGroupChat && (
-                        <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                          {(selectedChat?.participants?.length || 0)} members
-                          <button
-                            className="ml-1 text-gray-700 hover:text-blue-900 focus:outline-none"
-                            onClick={() => setShowMembersModal(true)}
-                            title="Show members"
-                          >
-                            <span style={{fontSize: '1.1em'}}>&#9660;</span>
-                          </button>
-                        </span>
+                        <>
+                          <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                            {(selectedChat?.participants?.length || 0)} members
+                            <button
+                              className="ml-1 text-gray-700 hover:text-blue-900 focus:outline-none"
+                              onClick={() => setShowMembersModal(true)}
+                              title="Show members"
+                            >
+                              <span style={{fontSize: '1.1em'}}>&#9660;</span>
+                            </button>
+                          </span>
+                          <span className="text-[11px] text-gray-500 mt-1">
+                            Group ID: <span className="font-mono">{selectedChat?._id}</span>
+                            <button
+                              className="ml-2 px-2 py-0.5 border border-gray-300 rounded text-gray-700 hover:bg-gray-100"
+                              onClick={() => {
+                                if (selectedChat?._id) {
+                                  navigator.clipboard?.writeText(selectedChat._id);
+                                  setValidationModal({
+                                    isOpen: true,
+                                    type: 'success',
+                                    title: 'Copied',
+                                    message: 'Group ID copied to clipboard'
+                                  });
+                                }
+                              }}
+                            >
+                              Copy
+                            </button>
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1262,7 +1283,7 @@ export default function Student_Chats() {
               <h3 className="text-lg font-semibold mb-4">Join Group</h3>
               <input
                 type="text"
-                placeholder="Enter group code"
+                placeholder="Enter Group ID"
                 className="w-full p-2 border rounded-lg mb-4"
                 value={joinGroupCode}
                 onChange={(e) => setJoinGroupCode(e.target.value)}
@@ -1349,7 +1370,28 @@ export default function Student_Chats() {
         {showMembersModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-semibold mb-4">Group Members</h3>
+              <h3 className="text-lg font-semibold mb-2">Group Members</h3>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs text-gray-600 truncate">
+                  Group ID: <span className="font-mono">{selectedChat?._id}</span>
+                </span>
+                <button
+                  className="text-xs px-2 py-1 border border-gray-300 rounded text-gray-700 hover:bg-gray-100"
+                  onClick={() => {
+                    if (selectedChat?._id) {
+                      navigator.clipboard?.writeText(selectedChat._id);
+                      setValidationModal({
+                        isOpen: true,
+                        type: 'success',
+                        title: 'Copied',
+                        message: 'Group ID copied to clipboard'
+                      });
+                    }
+                  }}
+                >
+                  Copy ID
+                </button>
+              </div>
               <ul className="mb-4 max-h-60 overflow-y-auto divide-y">
                 {(selectedChat?.participants || []).map(userId => {
                   const user = users.find(u => u._id === userId);

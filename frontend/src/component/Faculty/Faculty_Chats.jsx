@@ -39,8 +39,7 @@ export default function Faculty_Chats() {
   const [isGroupChat, setIsGroupChat] = useState(false);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
 
-  // Add state for member search
-  const [memberSearchTerm, setMemberSearchTerm] = useState("");
+  // Member search state is not used in this view
   
   // Add state for leave group confirmation
   const [showLeaveGroupModal, setShowLeaveGroupModal] = useState(false);
@@ -421,6 +420,31 @@ export default function Faculty_Chats() {
       } catch (err) {
         console.error("Error sending message:", err);
       }
+    }
+  };
+
+  // Remove a member from the current group (creator-only)
+  const handleRemoveFromGroup = async (memberId) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.post(`${API_BASE}/group-chats/${selectedChat._id}/remove-member`, {
+        userId: currentUserId,
+        memberId,
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      // Update UI state
+      setGroups(prev => prev.map(g => g._id === selectedChat._id ? {
+        ...g,
+        participants: (g.participants || []).filter(id => id !== memberId)
+      } : g));
+    } catch (err) {
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Remove Failed',
+        message: err?.response?.data?.error || 'Error removing member'
+      });
     }
   };
 
@@ -942,16 +966,37 @@ export default function Faculty_Chats() {
                         {isGroupChat ? selectedChat.name : `${selectedChat.lastname}, ${selectedChat.firstname}`}
                       </h3>
                       {isGroupChat && (
-                        <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                          {(selectedChat?.participants?.length || 0)} members
-                          <button
-                            className="ml-1 text-gray-700 hover:text-blue-900 focus:outline-none"
-                            onClick={() => setShowMembersModal(true)}
-                            title="Show members"
-                          >
-                            <span style={{fontSize: '1.1em'}}>&#9660;</span>
-                          </button>
-                        </span>
+                        <>
+                          <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                            {(selectedChat?.participants?.length || 0)} members
+                            <button
+                              className="ml-1 text-gray-700 hover:text-blue-900 focus:outline-none"
+                              onClick={() => setShowMembersModal(true)}
+                              title="Show members"
+                            >
+                              <span style={{fontSize: '1.1em'}}>&#9660;</span>
+                            </button>
+                          </span>
+                          <span className="text-[11px] text-gray-500 mt-1">
+                            Group ID: <span className="font-mono">{selectedChat?._id}</span>
+                            <button
+                              className="ml-2 px-2 py-0.5 border border-gray-300 rounded text-gray-700 hover:bg-gray-100"
+                              onClick={() => {
+                                if (selectedChat?._id) {
+                                  navigator.clipboard?.writeText(selectedChat._id);
+                                  setValidationModal({
+                                    isOpen: true,
+                                    type: 'success',
+                                    title: 'Copied',
+                                    message: 'Group ID copied to clipboard'
+                                  });
+                                }
+                              }}
+                            >
+                              Copy
+                            </button>
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1218,14 +1263,14 @@ export default function Faculty_Chats() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Group Code
+                    Group ID
                   </label>
                   <input
                     type="text"
                     value={joinGroupCode}
                     onChange={(e) => setJoinGroupCode(e.target.value)}
                     className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter group code"
+                    placeholder="Enter Group ID"
                   />
                 </div>
                 <div className="flex gap-2 justify-end">
@@ -1308,6 +1353,27 @@ export default function Faculty_Chats() {
                 </button>
               </div>
               
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs text-gray-600 truncate">
+                  Group ID: <span className="font-mono">{selectedChat?._id}</span>
+                </span>
+                <button
+                  className="text-xs px-2 py-1 border border-gray-300 rounded text-gray-700 hover:bg-gray-100"
+                  onClick={() => {
+                    if (selectedChat?._id) {
+                      navigator.clipboard?.writeText(selectedChat._id);
+                      setValidationModal({
+                        isOpen: true,
+                        type: 'success',
+                        title: 'Copied',
+                        message: 'Group ID copied to clipboard'
+                      });
+                    }
+                  }}
+                >
+                  Copy ID
+                </button>
+              </div>
               <div className="space-y-2">
                 {selectedChat.participants?.map((participant) => (
                   <div key={participant._id} className="flex items-center justify-between p-2 border rounded-lg">
