@@ -148,7 +148,7 @@ router.post('/:groupId/join', authenticateToken, async (req, res) => {
     }
 
     if (groupChat.isParticipant(userId)) {
-      return res.status(400).json({ error: "User is already a participant" });
+      return res.status(400).json({ error: "You are already in this group!" });
     }
 
     if (!groupChat.addParticipant(userId)) {
