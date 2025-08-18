@@ -459,23 +459,23 @@ export default function AdminSupportCenter() {
                       </div>
                     )}
                     <textarea
-                      placeholder="Respond to this ticket..."
-                      className="w-full min-h-[100px] border rounded p-2 mb-4"
+                      placeholder={ticket.status === 'closed' ? 'This ticket is closed. You cannot reply.' : 'Respond to this ticket...'}
+                      className={`w-full min-h-[100px] border rounded p-2 mb-4 ${ticket.status === 'closed' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                       value={reply}
                       onChange={e => {
                         setReply(e.target.value);
-                        // Clear success/error messages when user starts typing
                         if (replySuccess) setReplySuccess('');
                         if (replyError) setReplyError('');
                       }}
+                      disabled={ticket.status === 'closed'}
                     />
                     {replyError && <div className="text-red-500 mb-2">{replyError}</div>}
                     {replySuccess && <div className="text-green-500 mb-2">{replySuccess}</div>}
                     <div className="flex gap-2">
                       <button
-                        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                        className={`px-4 py-2 rounded ${ticket.status === 'closed' ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                         onClick={() => handleReply(ticket._id)}
-                        disabled={replyLoading}
+                        disabled={replyLoading || ticket.status === 'closed'}
                       >
                         {replyLoading ? 'Sending...' : 'Send Response'}
                       </button>

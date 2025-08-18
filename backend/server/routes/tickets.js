@@ -140,6 +140,15 @@ ticketsRouter.post('/:ticketId/reply', authenticateToken, async (req, res) => {
     if (!sender || !senderId || !message) {
       return res.status(400).json({ error: 'Sender, senderId, and message are required' });
     }
+
+    // Block replies to closed tickets
+    const current = await Ticket.findById(req.params.ticketId);
+    if (!current) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    if (current.status === 'closed') {
+      return res.status(403).json({ error: 'This ticket is closed and cannot receive new replies.' });
+    }
     
     const now = new Date();
     
