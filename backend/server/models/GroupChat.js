@@ -47,10 +47,14 @@ groupChatSchema.pre("save", function (next) {
     this.createdBy = isProbablyEncrypted(this.createdBy) ? this.createdBy : encrypt(this.createdBy);
   }
   if (this.isModified("participants") && Array.isArray(this.participants)) {
-    this.participants = this.participants.map(p => (isProbablyEncrypted(p) ? p : encrypt(p)));
+    const plaintext = this.participants.map(p => deepDecrypt(p));
+    const uniquePlain = Array.from(new Set(plaintext));
+    this.participants = uniquePlain.map(p => (isProbablyEncrypted(p) ? p : encrypt(p)));
   }
   if (this.isModified("admins") && Array.isArray(this.admins)) {
-    this.admins = this.admins.map(a => (isProbablyEncrypted(a) ? a : encrypt(a)));
+    const plaintext = this.admins.map(a => deepDecrypt(a));
+    const uniquePlain = Array.from(new Set(plaintext));
+    this.admins = uniquePlain.map(a => (isProbablyEncrypted(a) ? a : encrypt(a)));
   }
   next();
 });
