@@ -589,7 +589,25 @@ export default function AdminSupportCenter() {
                 {attachmentLoading ? (
                   <div className="p-6 text-center text-gray-600">Loading attachment...</div>
                 ) : attachmentUrl ? (
-                  <iframe title="Attachment Preview" src={attachmentUrl} className="w-full h-[70vh]" />
+                  (() => {
+                    const isImage = (attachmentType || '').startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp|svg)$/i.test(attachmentName);
+                    const isPdf = (attachmentType || '') === 'application/pdf' || /\.(pdf)$/i.test(attachmentName);
+                    if (isImage) {
+                      return (
+                        <div className="w-full h-[70vh] flex items-center justify-center bg-gray-50">
+                          <img src={attachmentUrl} alt={attachmentName} className="max-h-[68vh] max-w-full object-contain" />
+                        </div>
+                      );
+                    }
+                    if (isPdf) {
+                      return <iframe title="Attachment Preview" src={attachmentUrl} className="w-full h-[70vh]" />;
+                    }
+                    return (
+                      <div className="p-6 text-center text-gray-700 text-sm">
+                        Preview is not available for this file type. Use the Download button to view it locally.
+                      </div>
+                    );
+                  })()
                 ) : (
                   <div className="p-6 text-center text-red-600 text-sm">
                     {attachmentError || 'Unable to preview this file.'}
