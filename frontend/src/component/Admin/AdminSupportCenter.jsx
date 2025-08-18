@@ -236,14 +236,22 @@ export default function AdminSupportCenter() {
         else if (/(\.svg|\.svgz)$/.test(lower)) finalType = 'image/svg+xml';
         else if (/(\.tif|\.tiff)$/.test(lower)) finalType = 'image/tiff';
         else if (/(\.webp)$/.test(lower)) finalType = 'image/webp';
-        else if (/(\.heic|\.heif)$/.test(lower)) finalType = 'image/heic'; // modern iOS images; browser support varies
+        else if (/(\.heic|\.heif)$/.test(lower)) finalType = 'image/heic';
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      setAttachmentUrl(url);
-      setAttachmentName(filename);
-      setAttachmentType(finalType);
-      setShowAttachment(true);
+      // Prefer opening in a new tab so the admin stays on the Support Center
+      const newTab = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!newTab) {
+        // Pop-up blocked: fall back to in-app viewer
+        setAttachmentUrl(url);
+        setAttachmentName(filename);
+        setAttachmentType(finalType);
+        setShowAttachment(true);
+      } else {
+        // Auto-revoke after some time to free memory; download remains available in the tab
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
     } catch (err) {
       console.error('Attachment preview error:', err);
       setAttachmentError('Failed to open attachment. You can try downloading it instead.');
