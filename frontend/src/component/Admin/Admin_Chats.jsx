@@ -529,6 +529,15 @@ export default function Admin_Chats() {
       });
       return;
     }
+    if (userGroups.some(g => g._id === joinGroupId.trim())) {
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Already in Group',
+        message: 'You are already in this group!'
+      });
+      return;
+    }
 
     try {
       const token = localStorage.getItem("token");
@@ -538,13 +547,22 @@ export default function Admin_Chats() {
         headers: { "Authorization": `Bearer ${token}` }
       });
 
-      // Refresh user groups
-      const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, {
+      // Fetch joined group and merge for instant visibility
+      const groupRes = await axios.get(`${API_BASE}/group-chats/${joinGroupId}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
-      setUserGroups(res.data);
+      const joinedGroup = groupRes.data;
+      setUserGroups(prev => prev.some(g => g._id === joinedGroup._id) ? prev : [joinedGroup, ...prev]);
+      axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, { headers: { "Authorization": `Bearer ${token}` } })
+        .then(res => setUserGroups(res.data)).catch(() => {});
       setShowJoinGroup(false);
       setJoinGroupId("");
+      setValidationModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Joined Group',
+        message: `You have joined "${joinedGroup.name}"`
+      });
     } catch (err) {
       setValidationModal({
         isOpen: true,

@@ -497,6 +497,16 @@ export default function Student_Chats() {
     if (!joinGroupCode.trim()) return;
 
     try {
+      // Prevent joining if already a member of this group
+      if (groups.some(g => g._id === joinGroupCode.trim())) {
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Already in Group',
+          message: 'You are already in this group!'
+        });
+        return;
+      }
       const token = localStorage.getItem("token");
       await axios.post(`${API_BASE}/group-chats/${joinGroupCode}/join`, {
         userId: currentUserId,
@@ -504,15 +514,39 @@ export default function Student_Chats() {
         headers: { "Authorization": `Bearer ${token}` }
       });
 
-      // Refresh user groups
-      const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, {
+      // Fetch the joined group and merge into state (robust against fetch latency)
+      const groupRes = await axios.get(`${API_BASE}/group-chats/${joinGroupCode}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
-      setGroups(res.data);
+      const joinedGroup = groupRes.data;
+      setGroups(prev => {
+        const exists = prev.some(g => g._id === joinedGroup._id);
+        return exists ? prev : [joinedGroup, ...prev];
+      });
+      // Also refresh complete list in background (non-blocking)
+      axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      }).then(res => setGroups(res.data)).catch(() => {});
+
+      // Join the socket room and focus the group
+      socket.current?.emit("joinGroup", { userId: currentUserId, groupId: joinedGroup._id });
+      setSelectedChat(joinedGroup);
+      setIsGroupChat(true);
       setShowJoinGroupModal(false);
       setJoinGroupCode("");
+      setValidationModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Joined Group',
+        message: `You have joined "${joinedGroup.name}"`
+      });
     } catch (err) {
-      console.error("Error joining group:", err);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Join Failed',
+        message: err?.response?.data?.error || 'Error joining group'
+      });
     }
   };
 
