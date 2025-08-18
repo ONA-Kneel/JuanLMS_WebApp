@@ -99,9 +99,18 @@ ticketsRouter.get('/file/:ticketId', authenticateToken, async (req, res) => {
     const decryptedTicket = ticket.decryptSensitiveData();
     if (!decryptedTicket.file) return res.status(404).json({ error: 'No file attached' });
     const filePath = path.join(uploadDir, decryptedTicket.file);
-    const encrypted = fs.readFileSync(filePath, 'utf8');
-    const decryptedBase64 = decrypt(encrypted);
-    const fileBuffer = Buffer.from(decryptedBase64, 'base64');
+    // Try decrypting modern stored files; fallback to raw file if needed
+    let fileBuffer;
+    try {
+      const encrypted = fs.readFileSync(filePath, 'utf8');
+      const maybeBase64 = decrypt(encrypted);
+      const isProbablyBase64 = typeof maybeBase64 === 'string' && /^[A-Za-z0-9+/=\n\r]+$/.test(maybeBase64) && (maybeBase64.replace(/[\n\r]/g, '').length % 4 === 0);
+      if (!isProbablyBase64) throw new Error('Not base64');
+      fileBuffer = Buffer.from(maybeBase64, 'base64');
+    } catch (e) {
+      // Legacy path: read raw binary
+      fileBuffer = fs.readFileSync(filePath);
+    }
     // Set headers to help browsers download or preview the file with the original name
     res.setHeader('Content-Disposition', `attachment; filename=${decryptedTicket.file}`);
     res.setHeader('Content-Type', 'application/octet-stream');
