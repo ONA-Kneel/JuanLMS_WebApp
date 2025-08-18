@@ -78,6 +78,17 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
     const registrant = await Registrant.findById(req.params.id);
     if (!registrant) return res.status(404).json({ message: 'Registrant not found' });
     if (registrant.status !== 'pending') return res.status(400).json({ message: 'Already processed' });
+    // Validate minimal data before creating the user account
+    const isStudentId = /^\d{2}-\d{5}$/.test(registrant.schoolID);
+    const isFacultyId = /^F00/.test(registrant.schoolID);
+    const isAdminId = /^A00/.test(registrant.schoolID);
+    if (!(isStudentId || isFacultyId || isAdminId)) {
+      return res.status(400).json({ message: 'Registrant has an invalid or missing School ID. Please correct it before approval.' });
+    }
+    if (!/^\d{11}$/.test(registrant.contactNo || '')) {
+      return res.status(400).json({ message: 'Registrant has an invalid contact number. It must be exactly 11 digits.' });
+    }
+
     // Generate school email: firstname.lastname@students.sjddef.edu.ph
     const clean = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@students.sjddef.edu.ph`;
@@ -93,7 +104,12 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
       password: tempPassword,
       role: 'students',
     });
-    await user.save();
+    try {
+      await user.save();
+    } catch (saveErr) {
+      console.error('Validation error creating user from registrant:', saveErr);
+      return res.status(400).json({ message: saveErr.message || 'Failed to create user from registrant.' });
+    }
     registrant.status = 'approved';
     registrant.processedAt = new Date();
     registrant.processedBy = req.body && req.body.adminId ? req.body.adminId : null;
@@ -137,7 +153,7 @@ router.post('/:id/reject', authenticateToken, async (req, res) => {
     if (!registrant) return res.status(404).json({ message: 'Registrant not found' });
     if (registrant.status !== 'pending') return res.status(400).json({ message: 'Already processed' });
     registrant.status = 'rejected';
-    registrant.note = note || 'incomplete credentials';
+    registrant.rejectionNote = note || 'incomplete credentials';
     registrant.processedAt = new Date();
     registrant.processedBy = req.body.adminId || null;
     await registrant.save();
