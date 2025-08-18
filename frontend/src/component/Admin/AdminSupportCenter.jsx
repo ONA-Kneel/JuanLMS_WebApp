@@ -438,6 +438,21 @@ export default function AdminSupportCenter() {
                       </div>
                     </div>
                     <p className="mb-4 text-gray-700">{ticket.description}</p>
+                    {ticket.file && (
+                      <div className="mb-4">
+                        <b>Attachment:</b>
+                        <div className="mt-2">
+                          <a
+                            href={`${API_BASE}/api/tickets/file/${ticket._id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded"
+                          >
+                            View / Download Attachment
+                          </a>
+                        </div>
+                      </div>
+                    )}
                     <div className="mb-4">
                       <b>Messages:</b>
                       <ul className="mt-2 space-y-2">

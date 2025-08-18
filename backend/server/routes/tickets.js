@@ -102,7 +102,9 @@ ticketsRouter.get('/file/:ticketId', authenticateToken, async (req, res) => {
     const encrypted = fs.readFileSync(filePath, 'utf8');
     const decryptedBase64 = decrypt(encrypted);
     const fileBuffer = Buffer.from(decryptedBase64, 'base64');
-    res.setHeader('Content-Disposition', `attachment; filename=file`);
+    // Set headers to help browsers download or preview the file with the original name
+    res.setHeader('Content-Disposition', `attachment; filename=${decryptedTicket.file}`);
+    res.setHeader('Content-Type', 'application/octet-stream');
     res.send(fileBuffer);
   } catch (err) {
     res.status(404).json({ error: 'File not found or decryption failed' });
