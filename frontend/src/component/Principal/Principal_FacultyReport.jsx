@@ -5,7 +5,7 @@ import ProfileModal from "../ProfileModal";
 import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = "https://juanlms-webapp-server.onrender.com";
+const API_BASE = "http://localhost:5000";
 
 export default function Principal_FacultyReport() {
   const [academicYear, setAcademicYear] = useState(null);

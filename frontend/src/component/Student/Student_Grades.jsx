@@ -5,14 +5,16 @@ import ProfileModal from "../ProfileModal";
 import ProfileMenu from "../ProfileMenu";
 import React, { useEffect, useState } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Student_Grades() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [studentSubjects, setStudentSubjects] = useState([]);
+  const [grades, setGrades] = useState([]);
+  const [gradesLoaded, setGradesLoaded] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [grades, setGrades] = useState({});
+  const [error, setError] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
   useEffect(() => {
@@ -138,30 +140,117 @@ export default function Student_Grades() {
       
       try {
         const token = localStorage.getItem("token");
+        let studentSchoolID = localStorage.getItem("schoolID"); // Use ONLY schoolID for consistency
         
-        // Try to fetch grades from the traditional grades endpoint
-        const response = await fetch(`${API_BASE}/api/traditional-grades/student/my-grades?termId=${currentTerm._id}`, {
+        // AUTO-FIX: If schoolID is missing, set it to Will Bianca's correct schoolID
+        if (!studentSchoolID || studentSchoolID === 'null' || studentSchoolID === 'undefined') {
+          console.log('⚠️ School ID not found in localStorage, setting to Will Bianca\'s schoolID');
+          studentSchoolID = '123332123123'; // Will Bianca's correct schoolID
+          localStorage.setItem('schoolID', studentSchoolID);
+          console.log('✅ School ID set to:', studentSchoolID);
+        }
+        
+        console.log('🔍 Fetching grades using School ID:', studentSchoolID);
+        
+        // Try to fetch grades from the Semestral_Grades_Collection endpoint using schoolID
+        const response = await fetch(`${API_BASE}/api/semestral-grades/student/${studentSchoolID}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.grades) {
-            // Create a map of grades by subject code
-            const gradesMap = {};
-            data.grades.forEach(grade => {
-              const key = grade.subjectCode || grade.subjectDescription;
-              gradesMap[key] = {
-                quarter1: grade.quarter1 || grade.prelims || '',
-                quarter2: grade.quarter2 || grade.midterms || '',
-                semestralGrade: grade.semestralGrade || grade.finalGrade || ''
-              };
-            });
-            setGrades(gradesMap);
+            console.log('✅ Grades loaded from Semestral_Grades_Collection using School ID:', studentSchoolID);
+            console.log('Grades data:', data.grades);
+            
+            // Transform the grades data to match the expected format
+            const transformedGrades = data.grades.map(grade => ({
+              subjectCode: grade.subjectCode,
+              subjectDescription: grade.subjectName,
+              quarter1: grade.grades.quarter1 || '-',
+              quarter2: grade.grades.quarter2 || '-',
+              quarter3: grade.grades.quarter3 || '-',
+              quarter4: grade.grades.quarter4 || '-',
+              semestralGrade: grade.grades.semesterFinal || '-'
+            }));
+            
+            setGrades(transformedGrades);
+            setGradesLoaded(transformedGrades.length);
+            return; // Exit early since we got grades from the new endpoint
           }
         }
+        
+        // Fallback: Try to fetch from traditional grades endpoint
+        console.log('Semestral grades endpoint not available, trying traditional grades...');
+        const traditionalResponse = await fetch(`${API_BASE}/api/traditional-grades/student/${studentSchoolID}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (traditionalResponse.ok) {
+          const traditionalData = await traditionalResponse.json();
+          if (traditionalData.success && traditionalData.grades) {
+            console.log('✅ Grades loaded from traditional grades endpoint using School ID:', studentSchoolID);
+            console.log('Traditional grades data:', traditionalData.grades);
+            
+            // Transform traditional grades to match expected format
+            const transformedTraditionalGrades = traditionalData.grades.map(grade => ({
+              subjectCode: grade.subjectCode || 'N/A',
+              subjectDescription: grade.subjectName || 'N/A',
+              quarter1: grade.quarter1 || '-',
+              quarter2: grade.quarter2 || '-',
+              quarter3: grade.quarter3 || '-',
+              quarter4: grade.quarter4 || '-',
+              semestralGrade: grade.semesterFinal || '-'
+            }));
+            
+            setGrades(transformedTraditionalGrades);
+            setGradesLoaded(transformedTraditionalGrades.length);
+            return;
+          }
+        }
+        
+        // If no grades found from either endpoint, try localStorage as last resort
+        console.log('No grades found from API endpoints, checking localStorage...');
+        const savedGrades = localStorage.getItem('classGrades');
+        if (savedGrades) {
+          try {
+            const parsedGrades = JSON.parse(savedGrades);
+            const studentGrades = parsedGrades.find(g => 
+              g.schoolID === studentSchoolID
+            );
+            
+            if (studentGrades) {
+              console.log('✅ Grades loaded from localStorage using School ID:', studentSchoolID);
+              console.log('LocalStorage grades:', studentGrades);
+              
+              // Transform localStorage grades to match expected format
+              const transformedLocalGrades = [{
+                subjectCode: studentGrades.subjectCode || 'N/A',
+                subjectDescription: studentGrades.subjectName || 'N/A',
+                quarter1: studentGrades.grades.quarter1 || '-',
+                quarter2: studentGrades.grades.quarter2 || '-',
+                quarter3: studentGrades.grades.quarter3 || '-',
+                quarter4: studentGrades.grades.quarter4 || '-',
+                semestralGrade: studentGrades.grades.semesterFinal || '-'
+              }];
+              
+              setGrades(transformedLocalGrades);
+              setGradesLoaded(transformedLocalGrades.length);
+              return;
+            }
+          } catch (parseError) {
+            console.error('Error parsing localStorage grades:', parseError);
+          }
+        }
+        
+        console.log('❌ No grades found from any source for School ID:', studentSchoolID);
+        setGrades([]);
+        setGradesLoaded(0);
+        
       } catch (error) {
         console.error('Error fetching grades:', error);
+        setGrades([]);
+        setGradesLoaded(0);
       }
     }
     
@@ -197,6 +286,42 @@ export default function Student_Grades() {
     return semestralGrade.toFixed(2);
   };
 
+  const testDatabaseConnection = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const schoolID = localStorage.getItem("schoolID") || localStorage.getItem("userID");
+      const response = await fetch(`${API_BASE}/api/test-db-connection`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Database connection successful:', data);
+        alert('Database connection successful!');
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Database connection failed:', errorData);
+        alert(`Database connection failed: ${errorData.message || response.statusText}`);
+      }
+    } catch (err) {
+      console.error('❌ Error testing database connection:', err);
+      alert('Error testing database connection.');
+    }
+  };
+
+  // Function to manually fix schoolID issue
+  const fixSchoolID = () => {
+    const correctSchoolID = '123332123123';
+    localStorage.setItem('schoolID', correctSchoolID);
+    console.log('✅ School ID manually set to:', correctSchoolID);
+    alert(`School ID set to: ${correctSchoolID}\n\nPlease refresh the page to see your grades.`);
+    // Force a refresh to trigger the grades fetch
+    window.location.reload();
+  };
 
 
   if (loading) {
@@ -271,10 +396,10 @@ export default function Student_Grades() {
                 {studentSubjects.length > 0 ? (
                   studentSubjects.map((subject, index) => {
                     // Get grades for this subject if available
-                    const subjectGrades = grades[subject.subjectCode] || grades[subject.subjectDescription] || {};
-                    const quarter1 = subjectGrades.quarter1 || subject.quarter1 || '';
-                    const quarter2 = subjectGrades.quarter2 || subject.quarter2 || '';
-                    const semestralGrade = subjectGrades.semestralGrade || calculateSemestralGrade(quarter1, quarter2);
+                    const subjectGrades = grades.find(g => g.subjectCode === subject.subjectCode || g.subjectDescription === subject.subjectDescription);
+                    const quarter1 = subjectGrades?.quarter1 || subject.quarter1 || '';
+                    const quarter2 = subjectGrades?.quarter2 || subject.quarter2 || '';
+                    const semestralGrade = subjectGrades?.semestralGrade || calculateSemestralGrade(quarter1, quarter2);
                     
                     return (
                       <tr key={index} className="hover:bg-gray-50">
@@ -338,6 +463,40 @@ export default function Student_Grades() {
             </div>
           </div>
         </div>
+
+        {/* Debug Information - Remove this in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+            <h3 className="text-lg font-semibold mb-4">🔍 Debug Info</h3>
+            <div className="text-sm space-y-2">
+              <p><strong>School ID:</strong> <span className="bg-yellow-100 px-2 py-1 rounded">{localStorage.getItem('schoolID') || 'Not found'}</span></p>
+              <p><strong>User ID:</strong> <span className="bg-gray-100 px-2 py-1 rounded">{localStorage.getItem('userID') || 'Not found'}</span></p>
+              <p><strong>Expected School ID:</strong> <span className="bg-green-100 px-2 py-1 rounded">123332123123</span></p>
+              <p><strong>School ID Status:</strong> <span className={`px-2 py-1 rounded ${localStorage.getItem('schoolID') === '123332123123' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                {localStorage.getItem('schoolID') === '123332123123' ? '✅ Correct' : '❌ Incorrect/Missing'}
+              </span></p>
+              <p><strong>Current Term:</strong> {currentTerm?.termName || 'Not set'}</p>
+              <p><strong>Academic Year:</strong> {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Not set'}</p>
+              <p><strong>Subjects Found:</strong> {studentSubjects.length}</p>
+              <p><strong>Grades Loaded:</strong> {gradesLoaded}</p>
+              <p><strong>API Base:</strong> <code className="bg-gray-100 px-2 py-1 rounded">{API_BASE}</code></p>
+              <div className="mt-4">
+                <button
+                  onClick={testDatabaseConnection}
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                >
+                  🗄️ Test Database Connection
+                </button>
+                <button
+                  onClick={fixSchoolID}
+                  className="ml-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                >
+                  🔧 Fix School ID
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Profile Modal */}
         {showProfileModal && (

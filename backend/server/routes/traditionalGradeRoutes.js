@@ -472,6 +472,168 @@ router.get('/student/my-grades', authenticateToken, async (req, res) => {
   }
 });
 
+// Principal view - Get traditional grades by grade level, strand, section, and subject
+router.get('/principal-view', authenticateToken, async (req, res) => {
+  try {
+    const { gradeLevel, strand, section, subject, termName, academicYear } = req.query;
+    
+    // Only principals can access this endpoint
+    if (req.user.role !== 'principal') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Principals only.'
+      });
+    }
+
+    // Validate required parameters
+    if (!gradeLevel || !strand || !section || !subject || !termName || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters: gradeLevel, strand, section, subject, termName, academicYear'
+      });
+    }
+
+    // Build query to find grades matching the criteria
+    const query = {
+      termName: termName,
+      schoolYear: academicYear,
+      gradeLevel: gradeLevel,
+      strandName: strand,
+      sectionName: section
+    };
+
+    // Try to find grades by subject
+    const grades = await TraditionalGrade.find(query)
+      .populate('subjectId', 'subjectCode subjectDescription subjectName')
+      .populate('studentId', 'firstname lastname schoolID')
+      .sort({ 'studentId.firstname': 1, 'studentId.lastname': 1 });
+
+    if (grades.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No traditional grades found for the specified criteria',
+        grades: [],
+        students: []
+      });
+    }
+
+    // Transform grades to match expected format
+    const transformedGrades = grades.map(grade => ({
+      _id: grade._id,
+      studentName: grade.studentId ? `${grade.studentId.firstname} ${grade.studentId.lastname}` : 'N/A',
+      schoolID: grade.studentId?.schoolID || 'N/A',
+      subjectCode: grade.subjectId?.subjectCode || 'N/A',
+      subjectName: grade.subjectId?.subjectName || 'N/A',
+      prelims: grade.prelims,
+      midterms: grade.midterms,
+      final: grade.final,
+      finalGrade: grade.finalGrade,
+      remark: grade.remark,
+      sectionName: grade.sectionName,
+      trackName: grade.trackName,
+      strandName: grade.strandName,
+      gradeLevel: grade.gradeLevel,
+      schoolYear: grade.schoolYear,
+      termName: grade.termName
+    }));
+
+    // Extract unique students
+    const students = [...new Set(transformedGrades.map(grade => ({
+      _id: grade._id,
+      name: grade.studentName,
+      schoolID: grade.schoolID
+    })))];
+
+    res.json({
+      success: true,
+      message: `Found ${transformedGrades.length} traditional grade records`,
+      grades: transformedGrades,
+      students: students,
+      filters: {
+        gradeLevel,
+        strand,
+        section,
+        subject,
+        termName,
+        academicYear
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching principal view traditional grades:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch traditional grades for principal view',
+      error: error.message
+    });
+  }
+});
+
+// Get all traditional grades (for principals)
+router.get('/all', authenticateToken, async (req, res) => {
+  try {
+    const { termName, academicYear } = req.query;
+    
+    // Only principals can access this endpoint
+    if (req.user.role !== 'principal') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Principals only.'
+      });
+    }
+
+    if (!termName || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'termName and academicYear query parameters are required'
+      });
+    }
+
+    const grades = await TraditionalGrade.find({
+      termName: termName,
+      schoolYear: academicYear
+    })
+    .populate('subjectId', 'subjectCode subjectDescription subjectName')
+    .populate('studentId', 'firstname lastname schoolID')
+    .sort({ 'studentId.firstname': 1, 'studentId.lastname': 1 });
+
+    // Transform grades to match expected format
+    const transformedGrades = grades.map(grade => ({
+      _id: grade._id,
+      studentName: grade.studentId ? `${grade.studentId.firstname} ${grade.studentId.lastname}` : 'N/A',
+      studentId: grade.studentId?._id || 'N/A',
+      schoolID: grade.studentId?.schoolID || 'N/A',
+      subjectCode: grade.subjectId?.subjectCode || 'N/A',
+      subjectName: grade.subjectId?.subjectName || 'N/A',
+      prelims: grade.prelims,
+      midterms: grade.midterms,
+      final: grade.final,
+      finalGrade: grade.finalGrade,
+      remark: grade.remark,
+      sectionName: grade.sectionName,
+      trackName: grade.trackName,
+      strandName: grade.strandName,
+      gradeLevel: grade.gradeLevel,
+      schoolYear: grade.schoolYear,
+      termName: grade.termName
+    }));
+
+    res.json({
+      success: true,
+      message: `Found ${transformedGrades.length} traditional grade records`,
+      grades: transformedGrades
+    });
+
+  } catch (error) {
+    console.error('Error fetching all traditional grades:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch all traditional grades',
+      error: error.message
+    });
+  }
+});
+
 // Download CSV template for grades
 router.get('/template/:sectionName/:subjectId', authenticateToken, async (req, res) => {
   try {
