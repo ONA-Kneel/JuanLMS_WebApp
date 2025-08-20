@@ -152,7 +152,13 @@ io.on("connection", (socket) => {
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static('uploads'));
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.join(__dirname, 'uploads');
+
+app.use('/uploads', express.static(uploadsDir));
 
 // MongoDB connection
 mongoose.connect(process.env.ATLAS_URI)
@@ -239,8 +245,20 @@ app.use("/events", eventRoutes);
 app.use("/classes", classRoutes);
 app.use("/", auditTrailRoutes);
 app.use("/lessons", lessonRoutes);
-app.use('/uploads/lessons', express.static('uploads/lessons'));
-app.use('/uploads/quiz-images', express.static('uploads/quiz-images'));
+app.use('/uploads/lessons', express.static(path.join(uploadsDir, 'lessons')));
+app.use('/uploads/quiz-images', express.static(path.join(uploadsDir, 'quiz-images')));
+
+// Explicit file endpoint for lessons to handle edge cases (spaces, encodings)
+app.get('/uploads/lessons/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(uploadsDir, 'lessons', filename);
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      console.error('[LESSONS FILE SERVE ERROR]', err);
+      res.status(err.statusCode || 404).send('File not found');
+    }
+  });
+});
 app.use("/announcements", announcementRoutes);
 app.use("/assignments", assignmentRoutes);
 app.use('/api/tickets', ticketsRouter);

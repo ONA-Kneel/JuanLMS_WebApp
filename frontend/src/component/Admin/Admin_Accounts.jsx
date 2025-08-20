@@ -21,7 +21,8 @@ export default function Admin_Accounts() {
   const [archivePassword, setArchivePassword] = useState("");
   const [archivePasswordError, setArchivePasswordError] = useState("");
   const [duplicateEmailModal, setDuplicateEmailModal] = useState(false);
-  const [pendingFormData, setPendingFormData] = useState(null);
+  const [suggestedEmail, setSuggestedEmail] = useState("");
+  const [, setPendingFormData] = useState(null);
   const [userToArchive, setUserToArchive] = useState(null);
   
   const [formData, setFormData] = useState({
@@ -121,7 +122,6 @@ export default function Admin_Accounts() {
 
   useEffect(() => {
     fetchUsers(currentPage, ITEMS_PER_PAGE);
-    // eslint-disable-next-line
   }, [currentPage]);
 
   useEffect(() => {
@@ -149,18 +149,8 @@ export default function Admin_Accounts() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === "schoolID") {
-      let newValue = value;
-      if (formData.role === "faculty") {
-        newValue = newValue.replace(/[^F0-9]/gi, "").toUpperCase();
-        if (!newValue.startsWith("F00")) newValue = "F00" + newValue.replace(/^F00/, "");
-      } else if (formData.role === "admin") {
-        newValue = newValue.replace(/[^A0-9]/gi, "").toUpperCase();
-        if (!newValue.startsWith("A00")) newValue = "A00" + newValue.replace(/^A00/, "");
-      } else if (formData.role === "vice president of education" || formData.role === "principal") {
-        newValue = newValue.replace(/[^N0-9]/gi, "").toUpperCase();
-        if (!newValue.startsWith("N00")) newValue = "N00" + newValue.replace(/^N00/, "");
-      }
-      setFormData((prev) => ({ ...prev, [name]: newValue }));
+      // Allow manual entry; uppercase only. Validation enforced on submit.
+      setFormData((prev) => ({ ...prev, [name]: value.toUpperCase() }));
     } else if (name === "contactNo") {
       // Only allow numbers, max 11 digits, must start with 09
       let newValue = value.replace(/[^0-9]/g, "");
@@ -182,12 +172,13 @@ export default function Admin_Accounts() {
         .replace(/[^a-z]/g, ""); // remove non-letters
     if (firstname && lastname) {
       const emailDomain = "sjddef.edu.ph"; // Always use this domain
+      // If same name duplicates exist, the backend will propose a unique suggestion on submit
       const generatedEmail = `${clean(firstname)}.${clean(lastname)}@${emailDomain}`;
       setFormData((prev) => ({ ...prev, email: generatedEmail }));
     } else {
       setFormData((prev) => ({ ...prev, email: "" }));
     }
-  }, [formData.firstname, formData.lastname]);
+  }, [formData]);
 
   const handleSubmit = async (e, overrideEmail = null) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -202,6 +193,17 @@ export default function Admin_Accounts() {
         });
         return;
       }
+    }
+    // Validate personal email format
+    const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    if (!emailPattern.test(formData.personalemail)) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Invalid Personal Email',
+        message: 'Enter a valid personal email address.'
+      });
+      return;
     }
     // Prevent admin from creating student accounts
     if (formData.role === "students") {
@@ -344,13 +346,19 @@ export default function Admin_Accounts() {
             message: 'Error: Failed to create account'
           });
         }
-      } catch {
-        setValidationModal({
-          isOpen: true,
-          type: 'error',
-          title: 'Creation Failed',
-          message: 'Error: Failed to create account'
-        });
+      } catch (err) {
+        if (err?.response?.status === 409 && err?.response?.data?.suggestedEmail) {
+          setSuggestedEmail(err.response.data.suggestedEmail);
+          setPendingFormData(accountData);
+          setDuplicateEmailModal(true);
+        } else {
+          setValidationModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Creation Failed',
+            message: 'Error: Failed to create account'
+          });
+        }
       }
     }
   };
@@ -453,7 +461,6 @@ export default function Admin_Accounts() {
     if (!isEditMode) {
       setFormData((prev) => ({ ...prev, password: generatePassword() }));
     }
-    // eslint-disable-next-line
   }, [isEditMode]);
 
   useEffect(() => {
@@ -472,7 +479,7 @@ export default function Admin_Accounts() {
         setFormData(prev => ({ ...prev, password: generatePassword() }));
       }
     }
-  }, [formData.firstname, formData.lastname, formData.email, formData.role, formData.schoolID, formData.contactNo, formData.personalemail, isEditMode]);
+  }, [formData, isEditMode]);
 
   const handleSort = (key) => {
     setSortConfig((prev) => {
@@ -627,35 +634,17 @@ export default function Admin_Accounts() {
     return schoolId;
   }
 
-  const getRolePrefix = (role) => {
-    if (role === 'faculty') return 'F';
-    if (role === 'admin') return 'A';
-    if (role === 'principal' || role === 'vice president of education') return 'N';
-    return '';
-  };
+  // Removed auto-generation of School ID; it is now manually entered by the admin.
 
-  // Update the useEffect for School ID generation to remove dependency on isEditMode and generate as soon as role is selected.
-  useEffect(() => {
-    if (formData.role) {
-      const fetchCountAndSetID = async () => {
-        try {
-          const res = await axios.get(`${API_BASE}/users/active`);
-          if (res.status === 200) {
-            const users = res.data;
-            const roleUsers = users.filter(u => u.role === formData.role);
-            const prefix = getRolePrefix(formData.role);
-            const nextNum = (roleUsers.length + 1).toString().padStart(3, '0');
-            setFormData(prev => ({ ...prev, schoolID: `${prefix}${nextNum}` }));
-          }
-        } catch {
-          setFormData(prev => ({ ...prev, schoolID: '' }));
-        }
-      };
-      fetchCountAndSetID();
-    }
-  }, [formData.role]);
-
-  const isFormValid = formData.role !== "" && formData.firstname && formData.lastname && formData.email && formData.schoolID && formData.contactNo && formData.personalemail && formData.password;
+  const isFormValid = formData.role !== ""
+    && formData.firstname
+    && formData.lastname
+    && formData.email
+    && formData.schoolID
+    && formData.contactNo
+    && formData.personalemail
+    && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.personalemail)
+    && formData.password;
 
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
@@ -915,13 +904,13 @@ export default function Admin_Accounts() {
 
           {/* Duplicate Email Modal */}
           {duplicateEmailModal && (
-            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[9999]">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                <h3 className="text-xl font-semibold mb-4">Duplicate Email Detected</h3>
-                <p className="mb-4">
-                  The email you entered already exists.<br />
-                </p>
-                <p className="mb-4">Do you want to proceed with the suggested email?</p>
+                <h3 className="text-xl font-semibold mb-2 text-yellow-700">Duplicate Email Detected</h3>
+                <p className="mb-3">The generated school email already exists.</p>
+                <p className="mb-4">Suggested email to use:</p>
+                <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm break-all">{suggestedEmail}</div>
+                <p className="mb-4">Do you want to proceed using this suggested email?</p>
                 <div className="flex justify-end gap-2">
                   <button
                     onClick={() => setDuplicateEmailModal(false)}
@@ -932,10 +921,9 @@ export default function Admin_Accounts() {
                   <button
                     onClick={async () => {
                       setDuplicateEmailModal(false);
-                      if (pendingFormData) {
-                        await handleSubmit(null);
-                        setPendingFormData(null);
-                      }
+                      await handleSubmit(null, suggestedEmail);
+                      setPendingFormData(null);
+                      setSuggestedEmail("");
                     }}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
                   >
@@ -1076,7 +1064,7 @@ export default function Admin_Accounts() {
                     </div>
                     <div>
                       <label className="block font-semibold mb-1" htmlFor="schoolID">School ID</label>
-                      <input id="schoolID" type="text" name="schoolID" value={formData.schoolID} readOnly placeholder={formData.role === 'faculty' ? 'Faculty ID (auto-generated)' : formData.role === 'admin' ? 'Admin ID (auto-generated)' : (formData.role === 'vice president of education' || formData.role === 'principal') ? 'VP/Principal ID (auto-generated)' : 'School ID (auto-generated)'} className="border rounded p-4 text-lg w-full bg-gray-100 cursor-not-allowed" required />
+                      <input id="schoolID" type="text" name="schoolID" value={formData.schoolID} onChange={handleChange} placeholder={formData.role === 'faculty' ? 'e.g., F001' : formData.role === 'admin' ? 'e.g., A001' : (formData.role === 'vice president of education' || formData.role === 'principal') ? 'e.g., N001' : 'School ID'} className="border rounded p-4 text-lg w-full" required />
                     </div>
                   </div>
                   {/* Row 3: Contact Number, Role, Password */}
