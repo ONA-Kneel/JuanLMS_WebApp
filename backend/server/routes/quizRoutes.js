@@ -46,7 +46,21 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     console.log('[QuizRoutes] Creating quiz with data:', req.body);
     console.log('[QuizRoutes] Timing data:', req.body.timing);
-    
+    // Validate points boundaries before creating
+    const total = Array.isArray(req.body.questions)
+      ? req.body.questions.reduce((sum, q) => sum + (Number(q.points) || 0), 0)
+      : Number(req.body.points) || 0;
+    if (total < 1 || total > 100) {
+      return res.status(400).json({ error: 'Total quiz points must be between 1 and 100.' });
+    }
+    if (Array.isArray(req.body.questions)) {
+      for (const q of req.body.questions) {
+        if ((Number(q.points) || 0) < 1) {
+          return res.status(400).json({ error: 'Each question must be at least 1 point.' });
+        }
+      }
+    }
+
     const quiz = new Quiz(req.body);
     await quiz.save();
     
@@ -183,7 +197,21 @@ router.put('/:id', authenticateToken, async (req, res) => {
     console.log('[QuizRoutes] Updating quiz:', req.params.id);
     console.log('[QuizRoutes] Update data:', req.body);
     console.log('[QuizRoutes] Update timing data:', req.body.timing);
-    
+    // Validate points boundaries before updating
+    const total = Array.isArray(req.body.questions)
+      ? req.body.questions.reduce((sum, q) => sum + (Number(q.points) || 0), 0)
+      : Number(req.body.points) || 0;
+    if (total < 1 || total > 100) {
+      return res.status(400).json({ error: 'Total quiz points must be between 1 and 100.' });
+    }
+    if (Array.isArray(req.body.questions)) {
+      for (const q of req.body.questions) {
+        if ((Number(q.points) || 0) < 1) {
+          return res.status(400).json({ error: 'Each question must be at least 1 point.' });
+        }
+      }
+    }
+
     const quiz = await Quiz.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
     

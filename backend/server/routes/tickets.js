@@ -96,13 +96,66 @@ ticketsRouter.get('/file/:ticketId', authenticateToken, async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.ticketId);
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
-    const decryptedTicket = ticket.decryptSensitiveData();
-    if (!decryptedTicket.file) return res.status(404).json({ error: 'No file attached' });
-    const filePath = path.join(uploadDir, decryptedTicket.file);
-    const encrypted = fs.readFileSync(filePath, 'utf8');
-    const decryptedBase64 = decrypt(encrypted);
-    const fileBuffer = Buffer.from(decryptedBase64, 'base64');
-    res.setHeader('Content-Disposition', `attachment; filename=file`);
+
+    // Try to get filename (decrypted if possible), fallback to raw stored value
+    let filename;
+    try {
+      const dec = ticket.decryptSensitiveData();
+      filename = dec.file;
+    } catch {
+      filename = ticket.file;
+    }
+    if (!filename) return res.status(404).json({ error: 'No file attached' });
+
+    // Build candidate paths in case older records stored full/relative paths
+    const candidates = [];
+    const normalized = path.normalize(filename);
+    if (normalized.includes('uploads')) {
+      candidates.push(path.resolve(normalized));
+      candidates.push(path.resolve(process.cwd(), normalized));
+    }
+    candidates.push(path.resolve(uploadDir, normalized));
+    candidates.push(path.resolve(process.cwd(), uploadDir, normalized));
+
+    let existingPath = null;
+    for (const p of candidates) {
+      if (fs.existsSync(p)) { existingPath = p; break; }
+    }
+    if (!existingPath) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Read and attempt decrypt; if not base64, send raw
+    let fileBuffer;
+    try {
+      const encrypted = fs.readFileSync(existingPath, 'utf8');
+      const maybeBase64 = decrypt(encrypted);
+      const isProbablyBase64 = typeof maybeBase64 === 'string' && /^[A-Za-z0-9+/=\n\r]+$/.test(maybeBase64) && (maybeBase64.replace(/[\n\r]/g, '').length % 4 === 0);
+      if (!isProbablyBase64) throw new Error('Not base64');
+      fileBuffer = Buffer.from(maybeBase64, 'base64');
+    } catch {
+      fileBuffer = fs.readFileSync(existingPath);
+    }
+
+    // Infer content type by extension to allow preview in new tab
+    const lower = normalized.toLowerCase();
+    let contentType = 'application/octet-stream';
+    if (/\.pdf$/.test(lower)) contentType = 'application/pdf';
+    else if (/\.(png)$/.test(lower)) contentType = 'image/png';
+    else if (/\.(jpg|jpeg|jfif|pjpeg|pjp)$/.test(lower)) contentType = 'image/jpeg';
+    else if (/\.(gif)$/.test(lower)) contentType = 'image/gif';
+    else if (/\.(webp)$/.test(lower)) contentType = 'image/webp';
+    else if (/\.(svg|svgz)$/.test(lower)) contentType = 'image/svg+xml';
+    else if (/\.(bmp)$/.test(lower)) contentType = 'image/bmp';
+    else if (/\.(tif|tiff)$/.test(lower)) contentType = 'image/tiff';
+    else if (/\.(apng)$/.test(lower)) contentType = 'image/apng';
+    else if (/\.(avif)$/.test(lower)) contentType = 'image/avif';
+    else if (/\.(heic|heif)$/.test(lower)) contentType = 'image/heic';
+
+    // Set headers and send
+    res.setHeader('Content-Disposition', `inline; filename=${path.basename(normalized)}`);
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type');
     res.send(fileBuffer);
   } catch (err) {
     res.status(404).json({ error: 'File not found or decryption failed' });
@@ -139,6 +192,15 @@ ticketsRouter.post('/:ticketId/reply', authenticateToken, async (req, res) => {
     
     if (!sender || !senderId || !message) {
       return res.status(400).json({ error: 'Sender, senderId, and message are required' });
+    }
+
+    // Block replies to closed tickets
+    const current = await Ticket.findById(req.params.ticketId);
+    if (!current) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    if (current.status === 'closed') {
+      return res.status(403).json({ error: 'This ticket is closed and cannot receive new replies.' });
     }
     
     const now = new Date();

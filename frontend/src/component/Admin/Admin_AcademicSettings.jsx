@@ -25,6 +25,7 @@ export default function Admin_AcademicSettings() {
   const navigate = useNavigate();
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [archivedCounts, setArchivedCounts] = useState({});
 
   const [showActivateModal, setShowActivateModal] = useState(false);
   const [pendingSchoolYear, setPendingSchoolYear] = useState(null);
@@ -119,7 +120,9 @@ export default function Admin_AcademicSettings() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSchoolYears(data.filter(year => year.status !== 'archived'));
+        const activeYears = data.filter(year => year.status !== 'archived');
+        setSchoolYears(activeYears);
+        computeArchivedCountsForYears(activeYears);
       } else {
         setError("Failed to fetch school years");
       }
@@ -147,6 +150,47 @@ export default function Admin_AcademicSettings() {
     } catch (err) {
       console.error('Error fetching terms:', err);
     }
+  };
+
+  // Compute archived term counts per school year for consistent display
+  const computeArchivedCountsForYears = async (years) => {
+    try {
+      const token = localStorage.getItem('token');
+      const entries = await Promise.all(
+        years.map(async (y) => {
+          const name = `${y.schoolYearStart}-${y.schoolYearEnd}`;
+          try {
+            const res = await fetch(`${API_BASE}/api/terms/schoolyear/${name}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+              const list = await res.json();
+              const count = list.filter(t => t.status === 'archived').length;
+              return [name, count];
+            }
+          } catch {}
+          return [name, 0];
+        })
+      );
+      setArchivedCounts(Object.fromEntries(entries));
+    } catch {}
+  };
+
+  // Refresh archived count for a single school year
+  const refreshArchivedCountForYear = async (year) => {
+    if (!year) return;
+    const name = `${year.schoolYearStart}-${year.schoolYearEnd}`;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/terms/schoolyear/${name}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const list = await res.json();
+        const count = list.filter(t => t.status === 'archived').length;
+        setArchivedCounts(prev => ({ ...prev, [name]: count }));
+      }
+    } catch {}
   };
 
   const handleChange = (e) => {
@@ -341,6 +385,7 @@ export default function Admin_AcademicSettings() {
           setTerms(terms.map(t => t._id === term._id ? updatedTerm : t));
           alert(`${term.termName} has been archived`);
           fetchTerms(selectedYear);
+          refreshArchivedCountForYear(selectedYear);
         } else {
           const data = await res.json();
           setTermError(data.message || 'Failed to archive term');
@@ -374,6 +419,7 @@ export default function Admin_AcademicSettings() {
         setTerms(terms.map(t => t._id === term._id ? updatedTerm : t));
         alert(`${term.termName} has been activated`);
         fetchTerms(selectedYear);
+        refreshArchivedCountForYear(selectedYear);
       } else {
         const data = await res.json();
         setTermError(data.message || 'Failed to activate term');
@@ -704,6 +750,7 @@ export default function Admin_AcademicSettings() {
         alert(alertMessage);
         
         fetchTerms(selectedYear);
+        refreshArchivedCountForYear(selectedYear);
       } else {
         const data = await res.json();
         console.log('Status update failed:', data);
@@ -912,7 +959,7 @@ export default function Admin_AcademicSettings() {
                               <td className="p-3 border">
                                 {(() => {
                                   const schoolYearName = `${year.schoolYearStart}-${year.schoolYearEnd}`;
-                                  return terms.filter(term => term.schoolYear === schoolYearName && term.status === 'archived').length;
+                                  return archivedCounts[schoolYearName] ?? 0;
                                 })()}
                               </td>
                               <td className="p-3 border">

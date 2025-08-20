@@ -15,45 +15,69 @@ const groupChatSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Encrypt sensitive fields before saving
+// Helpers to avoid double-encryption and to safely decrypt values that may have been encrypted more than once
+function isProbablyEncrypted(value) {
+  return typeof value === 'string' && value.includes(':');
+}
+
+function deepDecrypt(value) {
+  let output = value;
+  // Attempt multiple decrypt passes (handles past double-encryption)
+  for (let i = 0; i < 3; i += 1) {
+    if (isProbablyEncrypted(output)) {
+      const nextVal = decrypt(output);
+      if (nextVal === output) break;
+      output = nextVal;
+    } else {
+      break;
+    }
+  }
+  return output;
+}
+
+// Encrypt sensitive fields before saving (only if not already encrypted)
 groupChatSchema.pre("save", function (next) {
   if (this.isModified("name") && this.name) {
-    this.name = encrypt(this.name);
+    this.name = isProbablyEncrypted(this.name) ? this.name : encrypt(this.name);
   }
   if (this.isModified("description") && this.description) {
-    this.description = encrypt(this.description);
+    this.description = isProbablyEncrypted(this.description) ? this.description : encrypt(this.description);
   }
   if (this.isModified("createdBy") && this.createdBy) {
-    this.createdBy = encrypt(this.createdBy);
+    this.createdBy = isProbablyEncrypted(this.createdBy) ? this.createdBy : encrypt(this.createdBy);
   }
-  if (this.isModified("participants")) {
-    this.participants = this.participants.map(participant => encrypt(participant));
+  if (this.isModified("participants") && Array.isArray(this.participants)) {
+    const plaintext = this.participants.map(p => deepDecrypt(p));
+    const uniquePlain = Array.from(new Set(plaintext));
+    this.participants = uniquePlain.map(p => (isProbablyEncrypted(p) ? p : encrypt(p)));
   }
-  if (this.isModified("admins")) {
-    this.admins = this.admins.map(admin => encrypt(admin));
+  if (this.isModified("admins") && Array.isArray(this.admins)) {
+    const plaintext = this.admins.map(a => deepDecrypt(a));
+    const uniquePlain = Array.from(new Set(plaintext));
+    this.admins = uniquePlain.map(a => (isProbablyEncrypted(a) ? a : encrypt(a)));
   }
   next();
 });
 
 // Decrypt methods
 groupChatSchema.methods.getDecryptedName = function () {
-  return this.name ? decrypt(this.name) : null;
+  return this.name ? deepDecrypt(this.name) : null;
 };
 
 groupChatSchema.methods.getDecryptedDescription = function () {
-  return this.description ? decrypt(this.description) : null;
+  return this.description ? deepDecrypt(this.description) : null;
 };
 
 groupChatSchema.methods.getDecryptedCreatedBy = function () {
-  return this.createdBy ? decrypt(this.createdBy) : null;
+  return this.createdBy ? deepDecrypt(this.createdBy) : null;
 };
 
 groupChatSchema.methods.getDecryptedParticipants = function () {
-  return this.participants.map(participant => decrypt(participant));
+  return this.participants.map(participant => deepDecrypt(participant));
 };
 
 groupChatSchema.methods.getDecryptedAdmins = function () {
-  return this.admins.map(admin => decrypt(admin));
+  return this.admins.map(admin => deepDecrypt(admin));
 };
 
 // Method to check if user is admin
@@ -72,8 +96,8 @@ groupChatSchema.methods.isParticipant = function (userId) {
 groupChatSchema.methods.addParticipant = function (userId) {
   const decryptedParticipants = this.getDecryptedParticipants();
   if (!decryptedParticipants.includes(userId) && decryptedParticipants.length < this.maxParticipants) {
-    decryptedParticipants.push(userId);
-    this.participants = decryptedParticipants.map(participant => encrypt(participant));
+    // Assign plain values; pre-save hook will encrypt as needed
+    this.participants = [...decryptedParticipants, userId];
     return true;
   }
   return false;
@@ -92,8 +116,9 @@ groupChatSchema.methods.removeParticipant = function (userId) {
   const updatedParticipants = decryptedParticipants.filter(p => p !== userId);
   const updatedAdmins = decryptedAdmins.filter(a => a !== userId);
   
-  this.participants = updatedParticipants.map(participant => encrypt(participant));
-  this.admins = updatedAdmins.map(admin => encrypt(admin));
+  // Assign plain values; pre-save hook will encrypt as needed
+  this.participants = updatedParticipants;
+  this.admins = updatedAdmins;
   return true;
 };
 

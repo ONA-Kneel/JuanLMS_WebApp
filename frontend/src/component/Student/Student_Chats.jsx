@@ -109,12 +109,17 @@ export default function Student_Chats() {
         // Update last message for this chat
         const chat = recentChats.find(c => c._id === incomingMessage.senderId);
         if (chat) {
-          const prefix = incomingMessage.senderId === currentUserId 
-            ? "You: " 
-            : `${chat.lastname}, ${chat.firstname}: `;
+          let prefix;
           const text = incomingMessage.message 
             ? incomingMessage.message 
             : (incomingMessage.fileUrl ? "File sent" : "");
+          
+          if (incomingMessage.senderId === currentUserId) {
+            prefix = "You: ";
+          } else {
+            prefix = `${chat.lastname || "Unknown"}, ${chat.firstname || "User"}: `;
+          }
+          
           setLastMessages(prev => ({
             ...prev,
             [chat._id]: { prefix, text }
@@ -143,6 +148,27 @@ export default function Student_Chats() {
         ...prev,
         [data.groupId]: [...(prev[data.groupId] || []), incomingGroupMessage],
       }));
+
+      // Update last message for this group chat
+      const group = groups.find(g => g._id === data.groupId);
+      if (group) {
+        let prefix;
+        const text = incomingGroupMessage.message 
+          ? incomingGroupMessage.message 
+          : (incomingGroupMessage.fileUrl ? "File sent" : "");
+        
+        if (incomingGroupMessage.senderId === currentUserId) {
+          prefix = "You: ";
+        } else {
+          // Use the sender info from the message data
+          prefix = `${incomingGroupMessage.senderFirstname || "Unknown"} ${incomingGroupMessage.senderLastname || "User"}: `;
+        }
+        
+        setLastMessages(prev => ({
+          ...prev,
+          [data.groupId]: { prefix, text }
+        }));
+      }
     });
 
     socket.current.on("groupCreated", (group) => {
@@ -167,7 +193,10 @@ export default function Student_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/users`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/users`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         // Support both array and paginated object
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
@@ -188,7 +217,10 @@ export default function Student_Chats() {
   useEffect(() => {
     const fetchGroups = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         setGroups(res.data);
       } catch (err) {
         console.error("Error fetching groups:", err);
@@ -202,7 +234,10 @@ export default function Student_Chats() {
     const fetchMessages = async () => {
       if (!selectedChat) return;
       try {
-        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         setMessages((prev) => {
           const newMessages = { ...prev, [selectedChat._id]: res.data };
           
@@ -212,12 +247,17 @@ export default function Student_Chats() {
             const chatMessages = newMessages[chat._id] || [];
             const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
             if (lastMsg) {
-              const prefix = lastMsg.senderId === currentUserId 
-                ? "You: " 
-                : `${chat.lastname}, ${chat.firstname}: `;
+              let prefix;
               const text = lastMsg.message 
                 ? lastMsg.message 
                 : (lastMsg.fileUrl ? "File sent" : "");
+              
+              if (lastMsg.senderId === currentUserId) {
+                prefix = "You: ";
+              } else {
+                prefix = `${chat.lastname || "Unknown"}, ${chat.firstname || "User"}: `;
+              }
+              
               newLastMessages[chat._id] = { prefix, text };
             }
           });
@@ -238,18 +278,47 @@ export default function Student_Chats() {
     const fetchGroupMessages = async () => {
       if (!selectedChat || !isGroupChat) return;
       try {
-        const res = await axios.get(`${API_BASE}/group-messages/${selectedChat._id}?userId=${currentUserId}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/group-messages/${selectedChat._id}?userId=${currentUserId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         setGroupMessages((prev) => ({
           ...prev,
           [selectedChat._id]: res.data,
         }));
+
+        // Update last message for this group chat
+        if (res.data && res.data.length > 0) {
+          const lastMsg = res.data[res.data.length - 1];
+          let prefix;
+          const text = lastMsg.message 
+            ? lastMsg.message 
+            : (lastMsg.fileUrl ? "File sent" : "");
+          
+          if (lastMsg.senderId === currentUserId) {
+            prefix = "You: ";
+          } else {
+            // Try to find sender info from users
+            const sender = users.find(u => u._id === lastMsg.senderId);
+            if (sender) {
+              prefix = `${sender.firstname || "Unknown"} ${sender.lastname || "User"}: `;
+            } else {
+              prefix = "Unknown User: ";
+            }
+          }
+          
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix, text }
+          }));
+        }
       } catch (err) {
         console.error("Error fetching group messages:", err);
       }
     };
 
     fetchGroupMessages();
-  }, [selectedChat, isGroupChat]);
+  }, [selectedChat, isGroupChat, currentUserId, users]);
 
   // Auto-scroll
   const selectedChatMessages = isGroupChat 
@@ -276,8 +345,12 @@ export default function Student_Chats() {
       }
 
       try {
+        const token = localStorage.getItem("token");
         const res = await axios.post(`${API_BASE}/group-messages`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: { 
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          },
         });
 
         const sentMessage = res.data;
@@ -298,6 +371,15 @@ export default function Student_Chats() {
           [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
         }));
 
+        // Update last message for this group chat
+        const text = sentMessage.message 
+          ? sentMessage.message 
+          : (sentMessage.fileUrl ? "File sent" : "");
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix: "You: ", text }
+        }));
+
         setNewMessage("");
         setSelectedFile(null);
       } catch (err) {
@@ -314,8 +396,12 @@ export default function Student_Chats() {
       }
 
       try {
+        const token = localStorage.getItem("token");
         const res = await axios.post(`${API_BASE}/messages`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: { 
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          },
         });
 
         const sentMessage = res.data;
@@ -330,6 +416,15 @@ export default function Student_Chats() {
         setMessages((prev) => ({
           ...prev,
           [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
+        }));
+
+        // Update last message for this individual chat
+        const text = sentMessage.message 
+          ? sentMessage.message 
+          : (sentMessage.fileUrl ? "File sent" : "");
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix: "You: ", text }
         }));
 
         setNewMessage("");
@@ -374,10 +469,13 @@ export default function Student_Chats() {
     if (!newGroupName.trim() || selectedGroupMembers.length === 0) return;
 
     try {
+      const token = localStorage.getItem("token");
       const res = await axios.post(`${API_BASE}/group-chats`, {
         name: newGroupName,
         createdBy: currentUserId,
         participants: [...selectedGroupMembers, currentUserId],
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
       const newGroup = { ...res.data, type: 'group' };
@@ -399,17 +497,56 @@ export default function Student_Chats() {
     if (!joinGroupCode.trim()) return;
 
     try {
+      // Prevent joining if already a member of this group
+      if (groups.some(g => g._id === joinGroupCode.trim())) {
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Already in Group',
+          message: 'You are already in this group!'
+        });
+        return;
+      }
+      const token = localStorage.getItem("token");
       await axios.post(`${API_BASE}/group-chats/${joinGroupCode}/join`, {
         userId: currentUserId,
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
-      // Refresh user groups
-      const res = await axios.get(`${API_BASE}/group-chats/user/${currentUserId}`);
-      setGroups(res.data);
+      // Fetch the joined group and merge into state (robust against fetch latency)
+      const groupRes = await axios.get(`${API_BASE}/group-chats/${joinGroupCode}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const joinedGroup = groupRes.data;
+      setGroups(prev => {
+        const exists = prev.some(g => g._id === joinedGroup._id);
+        return exists ? prev : [joinedGroup, ...prev];
+      });
+      // Also refresh complete list in background (non-blocking)
+      axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      }).then(res => setGroups(res.data)).catch(() => {});
+
+      // Join the socket room and focus the group
+      socket.current?.emit("joinGroup", { userId: currentUserId, groupId: joinedGroup._id });
+      setSelectedChat(joinedGroup);
+      setIsGroupChat(true);
       setShowJoinGroupModal(false);
       setJoinGroupCode("");
+      setValidationModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Joined Group',
+        message: `You have joined "${joinedGroup.name}"`
+      });
     } catch (err) {
-      console.error("Error joining group:", err);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Join Failed',
+        message: err?.response?.data?.error || 'Error joining group'
+      });
     }
   };
 
@@ -417,8 +554,11 @@ export default function Student_Chats() {
     if (!groupToLeave) return;
 
     try {
+      const token = localStorage.getItem("token");
       await axios.post(`${API_BASE}/group-chats/${groupToLeave._id}/leave`, {
         userId: currentUserId,
+      }, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
       // Remove group from state
@@ -504,7 +644,10 @@ export default function Student_Chats() {
         // Only fetch if not already loaded
         if (!newMessages[chat._id] || newMessages[chat._id].length === 0) {
           try {
-            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`);
+            const token = localStorage.getItem("token");
+            const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${chat._id}`, {
+              headers: { "Authorization": `Bearer ${token}` }
+            });
             newMessages[chat._id] = res.data;
           } catch {
             newMessages[chat._id] = [];
@@ -513,12 +656,17 @@ export default function Student_Chats() {
         const chatMessages = newMessages[chat._id] || [];
         const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
         if (lastMsg) {
-          const prefix = lastMsg.senderId === currentUserId 
-            ? "You: " 
-            : `${chat.lastname}, ${chat.firstname}: `;
+          let prefix;
           const text = lastMsg.message 
             ? lastMsg.message 
             : (lastMsg.fileUrl ? "File sent" : "");
+          
+          if (lastMsg.senderId === currentUserId) {
+            prefix = "You: ";
+          } else {
+            prefix = `${chat.lastname || "Unknown"}, ${chat.firstname || "User"}: `;
+          }
+          
           newLastMessages[chat._id] = { prefix, text };
         }
       }
@@ -828,16 +976,37 @@ export default function Student_Chats() {
                         {isGroupChat ? selectedChat.name : `${selectedChat.lastname}, ${selectedChat.firstname}`}
                       </h3>
                       {isGroupChat && (
-                        <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                          {(selectedChat?.participants?.length || 0)} members
-                          <button
-                            className="ml-1 text-gray-700 hover:text-blue-900 focus:outline-none"
-                            onClick={() => setShowMembersModal(true)}
-                            title="Show members"
-                          >
-                            <span style={{fontSize: '1.1em'}}>&#9660;</span>
-                          </button>
-                        </span>
+                        <>
+                          <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                            {(selectedChat?.participants?.length || 0)} members
+                            <button
+                              className="ml-1 text-gray-700 hover:text-blue-900 focus:outline-none"
+                              onClick={() => setShowMembersModal(true)}
+                              title="Show members"
+                            >
+                              <span style={{fontSize: '1.1em'}}>&#9660;</span>
+                            </button>
+                          </span>
+                          <span className="text-[11px] text-gray-500 mt-1">
+                            Group ID: <span className="font-mono">{selectedChat?._id}</span>
+                            <button
+                              className="ml-2 px-2 py-0.5 border border-gray-300 rounded text-gray-700 hover:bg-gray-100"
+                              onClick={() => {
+                                if (selectedChat?._id) {
+                                  navigator.clipboard?.writeText(selectedChat._id);
+                                  setValidationModal({
+                                    isOpen: true,
+                                    type: 'success',
+                                    title: 'Copied',
+                                    message: 'Group ID copied to clipboard'
+                                  });
+                                }
+                              }}
+                            >
+                              Copy
+                            </button>
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1148,7 +1317,7 @@ export default function Student_Chats() {
               <h3 className="text-lg font-semibold mb-4">Join Group</h3>
               <input
                 type="text"
-                placeholder="Enter group code"
+                placeholder="Enter Group ID"
                 className="w-full p-2 border rounded-lg mb-4"
                 value={joinGroupCode}
                 onChange={(e) => setJoinGroupCode(e.target.value)}
@@ -1235,7 +1404,28 @@ export default function Student_Chats() {
         {showMembersModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-semibold mb-4">Group Members</h3>
+              <h3 className="text-lg font-semibold mb-2">Group Members</h3>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs text-gray-600 truncate">
+                  Group ID: <span className="font-mono">{selectedChat?._id}</span>
+                </span>
+                <button
+                  className="text-xs px-2 py-1 border border-gray-300 rounded text-gray-700 hover:bg-gray-100"
+                  onClick={() => {
+                    if (selectedChat?._id) {
+                      navigator.clipboard?.writeText(selectedChat._id);
+                      setValidationModal({
+                        isOpen: true,
+                        type: 'success',
+                        title: 'Copied',
+                        message: 'Group ID copied to clipboard'
+                      });
+                    }
+                  }}
+                >
+                  Copy ID
+                </button>
+              </div>
               <ul className="mb-4 max-h-60 overflow-y-auto divide-y">
                 {(selectedChat?.participants || []).map(userId => {
                   const user = users.find(u => u._id === userId);

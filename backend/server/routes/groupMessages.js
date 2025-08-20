@@ -8,6 +8,7 @@ import User from '../models/User.js';
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -29,7 +30,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // --- POST / - Send a message to a group chat ---
-router.post('/', upload.single('file'), async (req, res) => {
+router.post('/', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     const { groupId, senderId, message } = req.body;
     const fileUrl = req.file ? `uploads/messages/${req.file.filename}` : null;
@@ -74,7 +75,7 @@ router.post('/', upload.single('file'), async (req, res) => {
 });
 
 // --- GET /:groupId - Get all messages from a group chat ---
-router.get('/:groupId', async (req, res) => {
+router.get('/:groupId', authenticateToken, async (req, res) => {
   try {
     const { groupId } = req.params;
     const { userId } = req.query; // To verify user is participant
@@ -158,7 +159,7 @@ router.get('/:groupId', async (req, res) => {
 });
 
 // --- DELETE /:messageId - Delete a message (only sender or group admin can do this) ---
-router.delete('/:messageId', async (req, res) => {
+router.delete('/:messageId', authenticateToken, async (req, res) => {
   try {
     const { messageId } = req.params;
     const { userId } = req.body;

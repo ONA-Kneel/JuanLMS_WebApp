@@ -25,6 +25,26 @@ export default function GradingSystem() {
   const [validationType, setValidationType] = useState('error');
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Consolidated getQuarterLabels function - used throughout the component
+  const getQuarterLabels = (semester) => {
+    const term = semester || currentTerm?.termName || '1st';
+    if (term.toLowerCase().includes('1') || term.toLowerCase().includes('1st') || term.toLowerCase().includes('first')) {
+      return {
+        firstQuarter: "first_quarter",
+        secondQuarter: "second_quarter",
+        firstQuarterDisplay: "first quarter",
+        secondQuarterDisplay: "second quarter"
+      };
+    } else {
+      return {
+        firstQuarter: "third_quarter",
+        secondQuarter: "fourth_quarter", 
+        firstQuarterDisplay: "third quarter",
+        secondQuarterDisplay: "fourth quarter"
+      };
+    }
+  };
+
   // Fetch academic year and term
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -483,6 +503,14 @@ export default function GradingSystem() {
   };
 
   // Generate Excel template with grades and feedback
+  // NEW: This function now dynamically reads:
+  // - Subject Code from selected class
+  // - Class Code from selected class  
+  // - Current Semester and School Year from current term and academic year
+  // - Subject Name from selected class name
+  // - Track from selected class
+  // - Quarter labels change based on semester (1st/2nd → FIRST/SECOND, 2nd → THIRD/FOURTH)
+  // - Student numbers are now properly extracted from student data
   const generateExcelTemplateWithGrades = (students, activities) => {
     console.log('generateExcelTemplateWithGrades called with:', { students, activities });
     
@@ -495,27 +523,49 @@ export default function GradingSystem() {
       console.log('No activities provided, creating basic template');
     }
 
+    // Get the selected class object for dynamic data
+    const selectedClassObj = facultyClasses[selectedClass];
+    if (!selectedClassObj) {
+      throw new Error('No class selected for template generation');
+    }
+
+    // Get the selected section object for track information
+    const selectedSectionObj = sections.find(section => section.sectionName === selectedSection);
+    if (!selectedSectionObj) {
+      throw new Error('No section selected for template generation');
+    }
+
+    // Extract dynamic data from selected class, section, and current academic period
+    const subjectCode = selectedClassObj.subjectCode || selectedClassObj.classCode || 'N/A';
+    const classCode = selectedClassObj.classCode || 'N/A';
+    const currentSemester = currentTerm?.termName || '1st';
+    const schoolYear = academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'N/A';
+    const subjectName = selectedClassObj.className || 'N/A';
+    const trackName = selectedSectionObj.trackName || 'N/A';
+
+    const quarterLabels = getQuarterLabels();
+
     // Create workbook using XLSX
     const wb = XLSX.utils.book_new();
 
-    // Build the EXACT layout as required by the client - "Inquiries, Investigations and Immersions" grade sheet
+    // Build the EXACT layout as required by the client - Dynamic grade sheet
     const wsData = [
       ["SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC."],                        // A1:W1 (merged)
       ["2772-2774 Roxas Boulevard, Pasay City 1300 Philippines"],               // A2:W2 (merged)
       [""],
-      ["Inquiries, Investigations and Immersions"],                             // A4:W4 (merged)
-      ["Track:", "STEM", "", "Semester:", "2nd", "", "School Year:", "2024-2025"],
-      ["Subject Code:", "Applied subject 7", "", "Grade Sheet:", "APPLIED"],
+      [subjectName],                                                             // A4:W4 (merged) - Dynamic subject name
+      ["Track:", trackName, "", "Semester:", currentSemester, "", "School Year:", schoolYear],
+      ["Subject Code:", subjectCode, "", "Class Code:", classCode],              // Dynamic subject and class codes
       [""],
 
-      // Row 8 (index 7): top band for quarters + fixed columns
-      [
-        "Student No.",
-        "STUDENT'S NAME (Alphabetical Order with Middle Initials)",
-        "THIRD QUARTER", "", "", "", "", "", "", "", "", "",     // C..L (merged band)
-        "FOURTH QUARTER", "", "", "", "", "", "", "", "",        // M..V (merged band)
-        "FINAL GRADE"                                            // W (merged down)
-      ],
+              // Row 8 (index 7): top band for quarters + fixed columns
+        [
+          "Student No.",
+          "STUDENT'S NAME (Alphabetical Order with Middle Initials)",
+          quarterLabels.firstQuarterDisplay, "", "", "", "", "", "", "", "", "",     // Dynamic first quarter label
+          quarterLabels.secondQuarterDisplay, "", "", "", "", "", "", "", "",        // Dynamic second quarter label
+          "FINAL GRADE"                                            // W (merged down)
+        ],
 
       // Row 9 (index 8): group headers inside each quarter
       [
@@ -547,17 +597,24 @@ export default function GradingSystem() {
     // Add student rows with their data
     students.forEach((student, rowIndex) => {
       console.log(`Processing student ${rowIndex + 1}:`, student);
+      console.log(`Student ${rowIndex + 1} - studentID: "${student.studentID}", id: "${student.id}", schoolID: "${student.schoolID}"`);
+      console.log(`Student ${rowIndex + 1} - student object keys:`, Object.keys(student));
+      console.log(`Student ${rowIndex + 1} - student object values:`, Object.values(student));
       
       // Create row with student info and empty grade columns
       const studentRow = [
-        rowIndex + 1, // Student No.
+        student.studentID || student.id || student.schoolID || (rowIndex + 1), // Student No. - Prioritize studentID over userID
         student.studentName || student.name || '', // Student Name
-        // Empty columns for THIRD QUARTER (C..L)
+        // Empty columns for first/3rd quarter (C..L)
         "", "", "", "", "", "", "", "", "", "", "", // 12 empty columns
-        // Empty columns for FOURTH QUARTER (M..V) 
+        // Empty columns for 2nd/4th quarter (M..V) 
         "", "", "", "", "", "", "", "", "", "", "", // 12 empty columns
         "" // FINAL GRADE (W)
       ];
+      
+      // Debug: Log what's actually being written to the Excel row
+      console.log(`Student ${rowIndex + 1} - Excel row student number: "${studentRow[0]}"`);
+      console.log(`Student ${rowIndex + 1} - Excel row student name: "${studentRow[1]}"`);
       
       wsData.push(studentRow);
     });
@@ -589,17 +646,17 @@ export default function GradingSystem() {
       { s: { r: 7, c: 0 }, e: { r: 8, c: 0 } }, // A8:A9  (Student No.)
       { s: { r: 7, c: 1 }, e: { r: 8, c: 1 } }, // B8:B9  (Name)
 
-      // Quarter bands
-      { s: { r: 7, c: 2 }, e: { r: 7, c: 11 } }, // C8:L8  THIRD QUARTER
-      { s: { r: 7, c: 12 }, e: { r: 7, c: 21 } }, // M8:V8  FOURTH QUARTER
+              // Quarter bands
+        { s: { r: 7, c: 2 }, e: { r: 7, c: 11 } }, // C8:L8  first/3rd quarter
+        { s: { r: 7, c: 12 }, e: { r: 7, c: 21 } }, // M8:V8  2nd/4th quarter
       { s: { r: 7, c: 22 }, e: { r: 8, c: 22 } }, // W8:W9  FINAL GRADE
 
       // Group headers inside each quarter (row 9)
       { s: { r: 8, c: 2 }, e: { r: 8, c: 5 } },  // C9:F9  WW 40%
       { s: { r: 8, c: 6 }, e: { r: 8, c: 9 } },  // G9:J9  PT 60%
       // K9, L9 single columns
-      { s: { r: 8, c: 12 }, e: { r: 8, c: 15 } },// M9:P9  WW 40% (Q4)
-      { s: { r: 8, c: 16 }, e: { r: 8, c: 19 } },// Q9:T9  PT 60% (Q4)
+      { s: { r: 8, c: 12 }, e: { r: 8, c: 15 } },// M9:P9  WW 40% (Q2/Q4)
+      { s: { r: 8, c: 16 }, e: { r: 8, c: 19 } },// Q9:T9  PT 60% (Q2/Q4)
       // U9, V9 single columns
     ];
 
@@ -658,6 +715,14 @@ export default function GradingSystem() {
             console.log(`Row ${index} length:`, row.length);
             console.log(`Row ${index} first cell:`, row[0]);
             console.log(`Row ${index} second cell:`, row[1]);
+            
+            // Check for quarterly grade columns specifically
+            if (row.length > 11) {
+              console.log(`Row ${index} column L (index 11) - First Quarter Quarterly Grade:`, row[11]);
+            }
+            if (row.length > 21) {
+              console.log(`Row ${index} column V (index 21) - Second Quarter Quarterly Grade:`, row[21]);
+            }
           });
           
           // Validate file format
@@ -672,45 +737,14 @@ export default function GradingSystem() {
             return;
           }
           
-          // Remove empty rows and filter out header rows
-          // Filter out the exact header rows from the download template
+          // Remove completely empty rows only
           data = data.filter(row => {
             // Skip completely empty rows
             if (row.length === 0 || !row.some(cell => cell !== '')) {
               return false;
             }
             
-            const firstCell = row[0]?.toString().toLowerCase().trim();
-            
-            // Skip header rows (more flexible matching)
-            if (firstCell.includes('san juan') ||
-                firstCell.includes('2772') ||
-                firstCell.includes('inquiries') ||
-                firstCell.includes('track:') ||
-                firstCell.includes('subject code:') ||
-                firstCell.includes('student no') ||
-                firstCell.includes('written works') ||
-                firstCell.includes('performance tasks') ||
-                firstCell.includes('raw') ||
-                firstCell.includes('hps') ||
-                firstCell.includes('ps') ||
-                firstCell.includes('ws') ||
-                firstCell.includes('third quarter') ||
-                firstCell.includes('fourth quarter') ||
-                firstCell.includes('final grade') ||
-                firstCell.includes('semester:') ||
-                firstCell.includes('school year:') ||
-                firstCell.includes('grade sheet:')) {
-              return false;
-            }
-            
-            // Skip completely empty first cell
-            if (firstCell === '') {
-              return false;
-            }
-            
-            // Accept rows with student numbers (1, 2, 3, etc.) or names
-            // This should catch the actual student data rows
+            // Accept all non-empty rows
             return true;
           });
           
@@ -718,7 +752,7 @@ export default function GradingSystem() {
           console.log('Filtered data sample:', data.slice(0, 3));
           
           if (data.length === 0) {
-            resolve({ success: false, error: 'No valid data found in file' });
+            resolve({ success: false, error: 'Excel has no content' });
             return;
           }
           
@@ -752,12 +786,29 @@ export default function GradingSystem() {
           }
           
           if (processedCount === 0) {
-            resolve({ success: false, error: 'No valid student grades found in file' });
+            resolve({ success: false, error: 'No valid student grades found. Please ensure quarterly grades contain numerical values.' });
             return;
           }
           
           console.log('Successfully processed grades:', processedGrades);
           console.log('Total processed:', processedCount);
+          
+          // Summary of quarterly grades processed
+          const quarterlyGradesSummary = processedGrades.map(student => ({
+            studentID: student.studentID,
+            studentName: student.studentName,
+            firstQuarterQuarterlyGrade: student.grades[`${currentTerm?.termName?.toLowerCase().includes('1') ? 'first_quarter' : 'third_quarter'}_quarterly_grade`],
+            secondQuarterQuarterlyGrade: student.grades[`${currentTerm?.termName?.toLowerCase().includes('1') ? 'second_quarter' : 'fourth_quarter'}_quarterly_grade`]
+          }));
+          
+          console.log('Quarterly Grades Summary:', quarterlyGradesSummary);
+          
+          // Show confirmation message to user that grades were successfully read
+          const quarterLabels = getQuarterLabels();
+          const firstQuarterLabel = quarterLabels.firstQuarter === 'first_quarter' ? 'First Quarter' : 'Third Quarter';
+          const secondQuarterLabel = quarterLabels.secondQuarter === 'second_quarter' ? 'Second Quarter' : 'Fourth Quarter';
+          
+          alert(`✅ Excel file successfully read!\n\n📊 Grades processed: ${processedCount} students\n📝 ${firstQuarterLabel}: ${processedGrades.filter(s => s.grades[`${quarterLabels.firstQuarter}_quarterly_grade`]).length} students have grades\n📝 ${secondQuarterLabel}: ${processedGrades.filter(s => s.grades[`${quarterLabels.secondQuarter}_quarterly_grade`]).length} students have grades\n\nProceeding to save grades to backend...`);
           
           setUploadProgress(75);
           setUploadStatus('Saving to backend...');
@@ -806,79 +857,33 @@ export default function GradingSystem() {
   };
 
   // Validate uploaded file format
+  // Simplified validation: only checks if file has content
   const validateUploadedFileFormat = (data) => {
     if (!data || data.length === 0) {
-      return { isValid: false, error: 'File is empty' };
+      return { isValid: false, error: 'Excel has no content' };
     }
     
     console.log('Validating file format...');
     console.log('Total rows:', data.length);
-    console.log('First row length:', data[0]?.length);
     
-    // Check if we have at least one data row (excluding headers)
-    // Filter out the exact header rows from the download template
+    // Check if we have at least one data row
     const dataRows = data.filter(row => 
       row.length > 0 && 
-      row.some(cell => cell !== '') &&
-      !row[0]?.toString().toLowerCase().includes('san juan') &&
-      !row[0]?.toString().toLowerCase().includes('2772') &&
-      !row[0]?.toString().toLowerCase().includes('inquiries') &&
-      !row[0]?.toString().toLowerCase().includes('track:') &&
-      !row[0]?.toString().toLowerCase().includes('subject code:') &&
-      !row[0]?.toString().toLowerCase().includes('student no') &&
-      !row[0]?.toString().toLowerCase().includes('written works') &&
-      !row[0]?.toString().toLowerCase().includes('performance tasks') &&
-      !row[0]?.toString().toLowerCase().includes('raw') &&
-      !row[0]?.toString().toLowerCase().includes('hps') &&
-      !row[0]?.toString().toLowerCase().includes('ps') &&
-      !row[0]?.toString().toLowerCase().includes('ws') &&
-      !row[0]?.toString().toLowerCase().includes('third quarter') &&
-      !row[0]?.toString().toLowerCase().includes('fourth quarter') &&
-      !row[0]?.toString().toLowerCase().includes('final grade')
+      row.some(cell => cell !== '')
     );
     
-    console.log('Data rows after filtering:', dataRows.length);
-    if (dataRows.length > 0) {
-      console.log('First data row:', dataRows[0]);
-      console.log('First data row length:', dataRows[0].length);
-    }
-    
     if (dataRows.length === 0) {
-      return { isValid: false, error: 'No valid data rows found. Please ensure the file contains student data.' };
+      return { isValid: false, error: 'Excel has no content' };
     }
-    
-    // Check if we have the minimum required columns (Student No, Student Name, at least some grade columns)
-    const firstDataRow = dataRows[0];
-    if (firstDataRow.length < 3) {
-      return { isValid: false, error: 'File must have at least 3 columns: Student No, Student Name, and at least one grade column' };
-    }
-    
-    // Check if first few columns contain valid data
-    const studentNo = firstDataRow[0]?.toString().trim();
-    const studentName = firstDataRow[1]?.toString().trim();
-    
-    console.log('Student No:', studentNo, 'Student Name:', studentName);
-    
-    if (!studentNo || !studentName) {
-      return { isValid: false, error: 'First two columns must contain Student No and Student Name' };
-    }
-    
-    // Check if student number is numeric (but be more flexible)
-    const studentNoNum = parseInt(studentNo);
-    if (isNaN(studentNoNum) && studentNo !== '') {
-      console.log('Student No is not numeric, but continuing...');
-    }
-    
-         // Accept files with any reasonable number of columns (your actual format has 18)
-     console.log(`File has ${firstDataRow.length} columns`);
-     if (firstDataRow.length < 3) {
-       console.log('Warning: File has very few columns, but continuing...');
-     }
     
     return { isValid: true };
   };
 
   // Process individual student row from uploaded file
+  // NEW: This function now dynamically processes grades based on current semester:
+          // - If semester is 1st → processes as first/2nd quarter grades
+        // - If semester is 2nd → processes as 3rd/4th quarter grades
+  // - Grade column names are dynamically generated based on quarter labels
   const processStudentRow = (row, classObj, sectionName) => {
     console.log('Processing row:', row);
     console.log('Row length:', row.length);
@@ -888,38 +893,61 @@ export default function GradingSystem() {
       return null; // Skip rows with insufficient data
     }
     
-    const studentNo = row[0]?.toString().trim();
+    const studentID = row[0]?.toString().trim();
     const studentName = row[1]?.toString().trim();
     
-    console.log('Student No:', studentNo, 'Student Name:', studentName);
+    console.log('Student No:', studentID, 'Student Name:', studentName);
+    console.log('Processing row data:', row);
+    console.log('Row length:', row.length);
     
     // Validate required fields
-    if (!studentNo || !studentName) {
+    if (!studentID || !studentName) {
       console.log('Missing student info, skipping');
       return null;
     }
     
-    // Extract ALL grade data from the remaining columns (2-17 for 18 total columns)
+    const quarterLabels = getQuarterLabels();
+    
+    // Extract ALL grade data from the remaining columns (2-21 for 22 total columns)
     const grades = {};
     
     // Process all remaining columns as grade data
     for (let i = 2; i < row.length; i++) {
       const columnValue = row[i]?.toString().trim() || '';
       if (columnValue !== '') {
-        // Create meaningful column names based on position
+        // Create meaningful column names based on position and dynamic quarter labels
         let columnName;
+        
+        // Map columns based on Excel structure (A=0, B=1, C=2, etc.)
         if (i >= 2 && i <= 5) {
-          columnName = `third_quarter_written_works_${['raw', 'hps', 'ps', 'ws'][i-2]}`;
+          // Columns C-F: First Quarter Written Works
+          columnName = `${quarterLabels.firstQuarter}_written_works_${['raw', 'hps', 'ps', 'ws'][i-2]}`;
         } else if (i >= 6 && i <= 9) {
-          columnName = `third_quarter_performance_tasks_${['raw', 'hps', 'ps', 'ws'][i-6]}`;
+          // Columns G-J: First Quarter Performance Tasks
+          columnName = `${quarterLabels.firstQuarter}_performance_tasks_${['raw', 'hps', 'ps', 'ws'][i-6]}`;
         } else if (i === 10) {
-          columnName = 'third_quarter_initial_grade';
+          // Column K: First Quarter Initial Grade
+          columnName = `${quarterLabels.firstQuarter}_initial_grade`;
         } else if (i === 11) {
-          columnName = 'third_quarter_quarterly_grade';
+          // Column L (index 11): First Quarter Quarterly Grade
+          columnName = `${quarterLabels.firstQuarter}_quarterly_grade`;
+          console.log(`Reading ${quarterLabels.firstQuarter} quarterly grade from column L (index ${i}):`, columnValue);
         } else if (i >= 12 && i <= 15) {
-          columnName = `fourth_quarter_written_works_${['raw', 'hps', 'ps', 'ws'][i-12]}`;
-        } else if (i >= 16 && i <= 17) {
-          columnName = `fourth_quarter_performance_tasks_${['raw', 'hps'][i-16]}`;
+          // Columns M-P: Second Quarter Written Works
+          columnName = `${quarterLabels.secondQuarter}_written_works_${['raw', 'hps', 'ps', 'ws'][i-12]}`;
+        } else if (i >= 16 && i <= 19) {
+          // Columns Q-T: Second Quarter Performance Tasks
+          columnName = `${quarterLabels.secondQuarter}_performance_tasks_${['raw', 'hps', 'ps', 'ws'][i-16]}`;
+        } else if (i === 20) {
+          // Column U: Second Quarter Initial Grade
+          columnName = `${quarterLabels.secondQuarter}_initial_grade`;
+        } else if (i === 21) {
+          // Column V (index 21): Second Quarter Quarterly Grade
+          columnName = `${quarterLabels.secondQuarter}_quarterly_grade`;
+          console.log(`Reading ${quarterLabels.secondQuarter} quarterly grade from column V (index ${i}):`, columnValue);
+        } else if (i === 22) {
+          // Column W: Final Grade
+          columnName = 'final_grade';
         } else {
           columnName = `column_${i}`;
         }
@@ -930,8 +958,48 @@ export default function GradingSystem() {
     
     console.log('Extracted grades:', grades);
     
+    // Validate that quarterly grades were read correctly
+    const firstQuarterQuarterlyGrade = grades[`${quarterLabels.firstQuarter}_quarterly_grade`];
+    const secondQuarterQuarterlyGrade = grades[`${quarterLabels.secondQuarter}_quarterly_grade`];
+    
+    console.log(`First quarter (${quarterLabels.firstQuarter}) quarterly grade:`, firstQuarterQuarterlyGrade);
+    console.log(`Second quarter (${quarterLabels.secondQuarter}) quarterly grade:`, secondQuarterQuarterlyGrade);
+    
+    // Validation 1: If quarterly has no content, don't upload
+    if (!firstQuarterQuarterlyGrade && !secondQuarterQuarterlyGrade) {
+      console.log('❌ No quarterly grades found - skipping upload');
+      return null;
+    }
+    
+    // Validation 2: If quarterly does not contain numerical value, don't upload
+    const isFirstQuarterNumeric = firstQuarterQuarterlyGrade && !isNaN(parseFloat(firstQuarterQuarterlyGrade));
+    const isSecondQuarterNumeric = secondQuarterQuarterlyGrade && !isNaN(parseFloat(secondQuarterQuarterlyGrade));
+    
+    if (firstQuarterQuarterlyGrade && !isFirstQuarterNumeric) {
+      console.log(`❌ First quarter grade "${firstQuarterQuarterlyGrade}" is not numerical - skipping upload`);
+      return null;
+    }
+    
+    if (secondQuarterQuarterlyGrade && !isSecondQuarterNumeric) {
+      console.log(`❌ Second quarter grade "${secondQuarterQuarterlyGrade}" is not numerical - skipping upload`);
+      return null;
+    }
+    
+    // Summary of quarterly grades found
+    if (firstQuarterQuarterlyGrade) {
+      console.log(`✓ Successfully read ${quarterLabels.firstQuarter} quarterly grade: ${firstQuarterQuarterlyGrade}`);
+    } else {
+      console.log(`⚠ No ${quarterLabels.firstQuarter} quarterly grade found in column L`);
+    }
+    
+    if (secondQuarterQuarterlyGrade) {
+      console.log(`✓ Successfully read ${quarterLabels.secondQuarter} quarterly grade: ${secondQuarterQuarterlyGrade}`);
+    } else {
+      console.log(`⚠ No ${quarterLabels.secondQuarter} quarterly grade found in column V`);
+    }
+    
     return {
-      studentNo,
+      studentID,
       studentName,
       grades,
       classID: classObj.classID,
@@ -960,13 +1028,22 @@ export default function GradingSystem() {
       };
       
       // Try to save to backend
+      const formData = new FormData();
+      formData.append('excelFile', excelFile);
+      formData.append('classID', classObj.classID);
+      formData.append('sectionName', sectionName);
+      formData.append('academicYear', `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`);
+      formData.append('termName', currentTerm?.termName);
+      formData.append('facultyID', localStorage.getItem("userID"));
+      formData.append('grades', JSON.stringify(gradesData));
+      formData.append('uploadTimestamp', new Date().toISOString());
+      
       const response = await fetch(`${API_BASE}/api/grades/upload`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(uploadData)
+        body: formData
       });
       
       if (response.ok) {
@@ -1030,6 +1107,13 @@ export default function GradingSystem() {
   };
 
   // Download Excel file using XLSX library
+  // NEW: This function now dynamically reads:
+  // - Subject Code from selected class
+  // - Class Code from selected class  
+  // - Current Semester and School Year from current term and academic year
+  // - Subject Name from selected class name
+  // - Track from selected class
+  // - Quarter labels change based on semester (1st/2nd → FIRST/SECOND, 2nd → THIRD/FOURTH)
   const downloadExcelFile = (workbook, filename = "Student_GradeSheet.xlsx") => {
     try {
       // Check if XLSX is available
@@ -1044,6 +1128,28 @@ export default function GradingSystem() {
         return;
       }
 
+      // Get the selected class object for dynamic data
+      const selectedClassObj = facultyClasses[selectedClass];
+      if (!selectedClassObj) {
+        throw new Error('No class selected for template generation');
+      }
+
+      // Get the selected section object for track information
+      const selectedSectionObj = sections.find(section => section.sectionName === selectedSection);
+      if (!selectedSectionObj) {
+        throw new Error('No section selected for template generation');
+      }
+
+      // Extract dynamic data from selected class, section, and current academic period
+      const subjectCode = selectedClassObj.subjectCode || selectedClassObj.classCode || 'N/A';
+      const classCode = selectedClassObj.classCode || 'N/A';
+      const currentSemester = currentTerm?.termName || '1st';
+      const schoolYear = academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'N/A';
+      const subjectName = selectedClassObj.className || 'N/A';
+      const trackName = selectedSectionObj.trackName || 'N/A';
+
+      const quarterLabels = getQuarterLabels();
+
       // Create the specific grade sheet layout as required by the client
       const wb = XLSX.utils.book_new();
       
@@ -1052,17 +1158,17 @@ export default function GradingSystem() {
         ["SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC."],                        // A1:W1 (merged)
         ["2772-2774 Roxas Boulevard, Pasay City 1300 Philippines"],               // A2:W2 (merged)
         [""],
-        ["Inquiries, Investigations and Immersions"],                             // A4:W4 (merged)
-        ["Track:", "STEM", "", "Semester:", "2nd", "", "School Year:", "2024-2025"],
-        ["Subject Code:", "Applied subject 7", "", "Grade Sheet:", "APPLIED"],
+        [subjectName],                                                             // A4:W4 (merged) - Dynamic subject name
+        ["Track:", trackName, "", "Semester:", currentSemester, "", "School Year:", schoolYear],
+        ["Subject Code:", subjectCode, "", "Class Code:", classCode],              // Dynamic subject and class codes
         [""],
 
         // Row 8 (index 7): top band for quarters + fixed columns
         [
           "Student No.",
           "STUDENT'S NAME (Alphabetical Order with Middle Initials)",
-          "THIRD QUARTER", "", "", "", "", "", "", "", "", "",     // C..L (merged band)
-          "FOURTH QUARTER", "", "", "", "", "", "", "", "",        // M..V (merged band)
+          quarterLabels.firstQuarterDisplay, "", "", "", "", "", "", "", "", "",     // Dynamic first quarter label
+          quarterLabels.secondQuarterDisplay, "", "", "", "", "", "", "", "",        // Dynamic second quarter label
           "FINAL GRADE"                                            // W (merged down)
         ],
 
@@ -1116,16 +1222,16 @@ export default function GradingSystem() {
         { s: { r: 7, c: 1 }, e: { r: 8, c: 1 } }, // B8:B9  (Name)
 
         // Quarter bands
-        { s: { r: 7, c: 2 }, e: { r: 7, c: 11 } }, // C8:L8  THIRD QUARTER
-        { s: { r: 7, c: 12 }, e: { r: 7, c: 21 } }, // M8:V8  FOURTH QUARTER
+        { s: { r: 7, c: 2 }, e: { r: 7, c: 11 } }, // C8:L8  first/3rd quarter
+        { s: { r: 7, c: 12 }, e: { r: 7, c: 21 } }, // M8:V8  2nd/4th quarter
         { s: { r: 7, c: 22 }, e: { r: 8, c: 22 } }, // W8:W9  FINAL GRADE
 
         // Group headers inside each quarter (row 9)
         { s: { r: 8, c: 2 }, e: { r: 8, c: 5 } },  // C9:F9  WW 40%
         { s: { r: 8, c: 6 }, e: { r: 8, c: 9 } },  // G9:J9  PT 60%
         // K9, L9 single columns
-        { s: { r: 8, c: 12 }, e: { r: 8, c: 15 } },// M9:P9  WW 40% (Q4)
-        { s: { r: 8, c: 16 }, e: { r: 8, c: 19 } },// Q9:T9  PT 60% (Q4)
+        { s: { r: 8, c: 12 }, e: { r: 8, c: 15 } },// M9:P9  WW 40% (Q2/Q4)
+        { s: { r: 8, c: 16 }, e: { r: 8, c: 19 } },// Q9:T9  PT 60% (Q2/Q4)
         // U9, V9 single columns
       ];
 
@@ -1764,9 +1870,10 @@ export default function GradingSystem() {
 
       // Process students data for the template
       const processedStudents = studentsData.sectionStudents.map(student => ({
-        id: student.id || student.userID || student.studentID || student._id || '',
+        studentID: student.studentID || student.id || student.userID || student._id || '', // Prioritize studentID over userID
+        id: student.studentID || student.id || student.userID || student._id || '', // Keep id for backward compatibility
         studentName: student.name || student.studentName || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
-        schoolID: student.schoolID || student.userID || student.studentID || '',
+        schoolID: student.schoolID || student.studentID || student.userID || '', // Prioritize studentID over userID
         section: selectedSection
       }));
 
@@ -1826,7 +1933,19 @@ export default function GradingSystem() {
       }
 
       console.log('Processed students:', processedStudents);
+      console.log('Sample student data structure:', processedStudents[0]);
       console.log('Activities with submissions/responses:', activities);
+
+      // Debug: Check the first student's studentID specifically
+      if (processedStudents.length > 0) {
+        console.log('First student studentID check:', {
+          studentID: processedStudents[0].studentID,
+          id: processedStudents[0].id,
+          schoolID: processedStudents[0].schoolID,
+          hasStudentID: 'studentID' in processedStudents[0],
+          studentIDType: typeof processedStudents[0].studentID
+        });
+      }
 
       // Generate Excel template with grades
       const excelContent = generateExcelTemplateWithGrades(
@@ -1834,8 +1953,11 @@ export default function GradingSystem() {
         activities
       );
 
-      // Download the Excel file
-      downloadExcelFile(excelContent, `${selectedClassObj.className}_${selectedSection}_Template_with_Grades.xlsx`);
+      // Download the Excel file with dynamic naming
+      const currentSemester = currentTerm?.termName || '1st';
+      const schoolYear = academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'N/A';
+      const filename = `${selectedClassObj.className}_${selectedSection}_${currentSemester}_${schoolYear}_Template.xlsx`;
+      downloadExcelFile(excelContent, filename);
 
       setValidationMessage(`Template with grades downloaded successfully with ${processedStudents.length} students and ${activities.length} activities!`);
       setValidationType('success');

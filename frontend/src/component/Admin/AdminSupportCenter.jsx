@@ -20,6 +20,13 @@ export default function AdminSupportCenter() {
   const [activeFilter, setActiveFilter] = useState('all'); // all, new, opened, closed
   const [allTickets, setAllTickets] = useState([]); // Store all tickets for counting
   const [userDetails, setUserDetails] = useState({}); // Store user details for each ticket
+  // Attachment preview state
+  const [showAttachment, setShowAttachment] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState('');
+  const [attachmentName, setAttachmentName] = useState('attachment');
+  const [attachmentType, setAttachmentType] = useState('application/octet-stream');
+  const [attachmentLoading, setAttachmentLoading] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
 
   // Fetch user details for tickets
   const fetchUserDetails = async (tickets) => {
@@ -190,6 +197,69 @@ export default function AdminSupportCenter() {
     }
     fetchActiveTermForYear();
   }, [academicYear]);
+
+  // Clean up blob URL when modal closes
+  useEffect(() => {
+    return () => {
+      if (attachmentUrl) URL.revokeObjectURL(attachmentUrl);
+    };
+  }, [attachmentUrl]);
+
+  async function handleOpenAttachment(ticketId) {
+    try {
+      setAttachmentLoading(true);
+      setAttachmentError('');
+      // Fetch file with auth header, then create a blob URL
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/tickets/file/${ticketId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Failed to load attachment (${res.status})`);
+      }
+      const contentDisposition = res.headers.get('Content-Disposition') || '';
+      const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(contentDisposition);
+      const filename = decodeURIComponent(match?.[1] || match?.[2] || 'attachment');
+      const contentType = res.headers.get('Content-Type') || 'application/octet-stream';
+      // If the server didn't send a specific image type, try to infer from filename
+      let finalType = contentType;
+      if (finalType === 'application/octet-stream') {
+        const lower = filename.toLowerCase();
+        if (/(\.apng)$/.test(lower)) finalType = 'image/apng';
+        else if (/(\.avif)$/.test(lower)) finalType = 'image/avif';
+        else if (/(\.bmp)$/.test(lower)) finalType = 'image/bmp';
+        else if (/(\.gif)$/.test(lower)) finalType = 'image/gif';
+        else if (/(\.ico|\.cur)$/.test(lower)) finalType = 'image/x-icon';
+        else if (/(\.jpg|\.jpeg|\.jfif|\.pjpeg|\.pjp)$/.test(lower)) finalType = 'image/jpeg';
+        else if (/(\.png)$/.test(lower)) finalType = 'image/png';
+        else if (/(\.svg|\.svgz)$/.test(lower)) finalType = 'image/svg+xml';
+        else if (/(\.tif|\.tiff)$/.test(lower)) finalType = 'image/tiff';
+        else if (/(\.webp)$/.test(lower)) finalType = 'image/webp';
+        else if (/(\.heic|\.heif)$/.test(lower)) finalType = 'image/heic';
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      // Prefer opening in a new tab so the admin stays on the Support Center
+      const newTab = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!newTab) {
+        // Pop-up blocked: fall back to in-app viewer
+        setAttachmentUrl(url);
+        setAttachmentName(filename);
+        setAttachmentType(finalType);
+        setShowAttachment(true);
+      } else {
+        // Auto-revoke after some time to free memory; download remains available in the tab
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+    } catch (err) {
+      console.error('Attachment preview error:', err);
+      setAttachmentError('Failed to open attachment. You can try downloading it instead.');
+      setShowAttachment(true);
+    } finally {
+      setAttachmentLoading(false);
+    }
+  }
 
   async function handleReply(ticketId) {
     setReplyLoading(true);
@@ -438,6 +508,20 @@ export default function AdminSupportCenter() {
                       </div>
                     </div>
                     <p className="mb-4 text-gray-700">{ticket.description}</p>
+                    {ticket.file && (
+                      <div className="mb-4">
+                        <b>Attachment:</b>
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAttachment(ticket._id)}
+                            className="inline-block bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded"
+                          >
+                            View / Download Attachment
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <div className="mb-4">
                       <b>Messages:</b>
                       <ul className="mt-2 space-y-2">
@@ -459,23 +543,23 @@ export default function AdminSupportCenter() {
                       </div>
                     )}
                     <textarea
-                      placeholder="Respond to this ticket..."
-                      className="w-full min-h-[100px] border rounded p-2 mb-4"
+                      placeholder={ticket.status === 'closed' ? 'This ticket is closed. You cannot reply.' : 'Respond to this ticket...'}
+                      className={`w-full min-h-[100px] border rounded p-2 mb-4 ${ticket.status === 'closed' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                       value={reply}
                       onChange={e => {
                         setReply(e.target.value);
-                        // Clear success/error messages when user starts typing
                         if (replySuccess) setReplySuccess('');
                         if (replyError) setReplyError('');
                       }}
+                      disabled={ticket.status === 'closed'}
                     />
                     {replyError && <div className="text-red-500 mb-2">{replyError}</div>}
                     {replySuccess && <div className="text-green-500 mb-2">{replySuccess}</div>}
                     <div className="flex gap-2">
                       <button
-                        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                        className={`px-4 py-2 rounded ${ticket.status === 'closed' ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                         onClick={() => handleReply(ticket._id)}
-                        disabled={replyLoading}
+                        disabled={replyLoading || ticket.status === 'closed'}
                       >
                         {replyLoading ? 'Sending...' : 'Send Response'}
                       </button>
@@ -497,6 +581,66 @@ export default function AdminSupportCenter() {
             )}
           </div>
         </div>
+        {/* Attachment Preview Overlay */}
+        {showAttachment && (
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between p-3 border-b">
+                <div className="font-semibold text-gray-800 truncate pr-2">{attachmentName}</div>
+                <div className="flex items-center gap-2">
+                  {attachmentUrl && (
+                    <a
+                      href={attachmentUrl}
+                      download={attachmentName}
+                      className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                    >
+                      Download
+                    </a>
+                  )}
+                  <button
+                    className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300"
+                    onClick={() => {
+                      if (attachmentUrl) URL.revokeObjectURL(attachmentUrl);
+                      setAttachmentUrl('');
+                      setShowAttachment(false);
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1">
+                {attachmentLoading ? (
+                  <div className="p-6 text-center text-gray-600">Loading attachment...</div>
+                ) : attachmentUrl ? (
+                  (() => {
+                    const isImage = (attachmentType || '').startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp|svg|apng|avif|tiff?|ico|cur|heic|heif)$/i.test(attachmentName);
+                    const isPdf = (attachmentType || '') === 'application/pdf' || /\.(pdf)$/i.test(attachmentName);
+                    if (isImage) {
+                      return (
+                        <div className="w-full h-[70vh] flex items-center justify-center bg-gray-50">
+                          <img src={attachmentUrl} alt={attachmentName} className="max-h-[68vh] max-w-full object-contain" />
+                        </div>
+                      );
+                    }
+                    if (isPdf) {
+                      return <iframe title="Attachment Preview" src={attachmentUrl} className="w-full h-[70vh]" />;
+                    }
+                    return (
+                      <div className="p-6 text-center text-gray-700 text-sm">
+                        Preview is not available for this file type. Use the Download button to view it locally.
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="p-6 text-center text-red-600 text-sm">
+                    {attachmentError || 'Unable to preview this file.'}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

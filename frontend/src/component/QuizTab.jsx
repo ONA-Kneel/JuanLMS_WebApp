@@ -356,6 +356,20 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             });
             return;
         }
+        // Enforce total quiz points boundary (1–100) before adding/updating the question
+        const currentTotalPoints = questions.reduce((sum, q) => sum + (q.points || 0), 0);
+        const existingPointsForEditedQuestion = editingIndex !== null ? (questions[editingIndex]?.points || 0) : 0;
+        const newTotalPoints = currentTotalPoints - existingPointsForEditedQuestion + form.points;
+        if (newTotalPoints > 100) {
+            const remaining = Math.max(0, 100 - (currentTotalPoints - existingPointsForEditedQuestion));
+            setValidationModal({
+                isOpen: true,
+                type: 'warning',
+                title: 'Points Limit Exceeded',
+                message: `Total quiz points cannot exceed 100. You have ${remaining} point${remaining === 1 ? '' : 's'} remaining.`
+            });
+            return;
+        }
         if (form.type === "multiple") {
             const validChoices = form.choices.filter(choice => choice.trim() !== '');
             if (validChoices.length < 2) {
@@ -690,6 +704,12 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
         );
     }
 
+    // Compute remaining points allowed for the current question input
+    const totalPointsCurrent = questions.reduce((sum, q) => sum + (q.points || 0), 0);
+    const editingPoints = editingIndex !== null ? (questions[editingIndex]?.points || 0) : 0;
+    const baseTotalExcludingCurrent = totalPointsCurrent - editingPoints;
+    const allowedMaxForQuestion = Math.max(1, 100 - baseTotalExcludingCurrent);
+
     return (
         <div className="flex flex-row min-h-screen bg-gray-50">
             {/* Main Content */}
@@ -791,9 +811,15 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                                 <input
                                     type="number"
                                     min={1}
+                                    max={allowedMaxForQuestion}
                                     className="border rounded px-3 py-2 w-20"
                                     value={form.points}
-                                    onChange={e => setForm(f => ({ ...f, points: Number(e.target.value) }))}
+                                    onChange={e => {
+                                        const raw = Number(e.target.value);
+                                        const safe = Number.isFinite(raw) ? raw : 1;
+                                        const clamped = Math.max(1, Math.min(allowedMaxForQuestion, safe));
+                                        setForm(f => ({ ...f, points: clamped }));
+                                    }}
                                 />
                             </div>
                         </div>
