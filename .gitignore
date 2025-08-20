@@ -1,2 +1,3 @@
 backend/server/config.env
 *.env
+!.env.production
