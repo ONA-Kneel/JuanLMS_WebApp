@@ -25,7 +25,8 @@ export const authenticateToken = (req, res, next) => {
 
     console.log('Verifying token...');
     // Use the same secret key that was used to sign the token during login
-    const secret = process.env.JWT_SECRET || 'your-secret-key';
+    // Note: fallback matches the one used in routes/userRoutes.js
+    const secret = process.env.JWT_SECRET || 'yourSuperSecretKey123';
     
     const decoded = jwt.verify(token, secret);
     console.log('Decoded token:', decoded);

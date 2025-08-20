@@ -1,4 +1,6 @@
 // App.js - Updated with ToastContainer
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -74,6 +76,67 @@ import QuizView from './component/QuizView';
 import QuizResponses from './component/QuizResponses';
 
 function App() {
+  const [isSessionExpired, setIsSessionExpired] = useState(false);
+  const [logoutRequested, setLogoutRequested] = useState(false);
+
+  // Decode JWT and proactively flag expiration (optional extra UX)
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      // Lazy import to avoid adding jwt-decode to all routes
+      import('jwt-decode').then(({ jwtDecode }) => {
+        const decoded = jwtDecode(token);
+        if (decoded && decoded.exp) {
+          const expiresAtMs = decoded.exp * 1000;
+          const now = Date.now();
+          if (expiresAtMs <= now) {
+            setIsSessionExpired(true);
+          } else {
+            const timeoutId = setTimeout(() => setIsSessionExpired(true), expiresAtMs - now);
+            return () => clearTimeout(timeoutId);
+          }
+        }
+      }).catch(() => {});
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Global axios interceptor: catch 401 Token expired/Invalid token
+  useEffect(() => {
+    const interceptorId = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        const status = error?.response?.status;
+        const message = (error?.response?.data?.message || '').toLowerCase();
+        if (status === 401 && (message.includes('token expired') || message.includes('invalid token') || message.includes('no valid token'))) {
+          setIsSessionExpired(true);
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => axios.interceptors.response.eject(interceptorId);
+  }, []);
+
+  const handleLogout = () => {
+    if (logoutRequested) return;
+    setLogoutRequested(true);
+    try {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      localStorage.removeItem('userID');
+      localStorage.removeItem('role');
+      localStorage.removeItem('rememberedEmail');
+      localStorage.removeItem('rememberedPassword');
+      localStorage.removeItem('shouldLogoutOnReturn');
+    } catch {
+      // ignore
+    }
+    // Hard redirect to login
+    window.location.replace('/');
+  };
+
   return (
     <Router>
       <Routes>
@@ -172,6 +235,15 @@ function App() {
         toastClassName="custom-toast"
         bodyClassName="custom-toast-body"
       />
+      {isSessionExpired && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[10000]">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+            <h3 className="text-xl font-semibold mb-2 text-red-600">Session expired</h3>
+            <p className="mb-4">Your session has ended. Please log in again to continue.</p>
+            <button onClick={handleLogout} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full">Log out</button>
+          </div>
+        </div>
+      )}
     </Router>
   );
 }

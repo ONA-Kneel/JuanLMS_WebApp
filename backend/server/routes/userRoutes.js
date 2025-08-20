@@ -20,7 +20,7 @@ import FacultyAssignment from '../models/FacultyAssignment.js';
 // import bcrypt from "bcryptjs"; // If you want to use hashing in the future
 
 const userRoutes = e.Router();
-const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here"; // 👈 use env variable in production
+const JWT_SECRET = process.env.JWT_SECRET || "yourSuperSecretKey123"; // 👈 use env variable in production
 
 // ------------------ CRUD ROUTES ------------------
 
@@ -617,6 +617,12 @@ userRoutes.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required.' });
 
+    // Validate basic email format
+    const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    if (!emailPattern.test(email.trim())) {
+      return res.status(400).json({ message: 'Enter a valid email address.' });
+    }
+
     const genericMsg = 'If your email is registered, a reset link or OTP has been sent to your personal email.';
 
     try {
@@ -626,7 +632,8 @@ userRoutes.post('/forgot-password', async (req, res) => {
         console.log('User found:', user);
         if (!user || !user.personalemail) {
             console.log('User not found or missing personalemail');
-            return res.json({ message: genericMsg });
+            // Explicitly inform user that the email is not registered
+            return res.status(404).json({ message: 'This email is not registered. Please check that it\'s correct.' });
         }
         // Decrypt personal email
         const decryptedPersonalEmail = user.getDecryptedPersonalEmail
@@ -829,7 +836,7 @@ userRoutes.post('/login', async (req, res) => {
         _id: user._id,
         profilePic: user.profilePic || null,
         userID: user.userID
-    }, process.env.JWT_SECRET || "your_secret_key_here", { expiresIn: '1d' });
+    }, process.env.JWT_SECRET || "yourSuperSecretKey123", { expiresIn: '1d' });
 
     // Add audit log for successful login
     try {

@@ -19,7 +19,7 @@ export default function ForgotPassword() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const navigate = useNavigate();
-  const [otpAttempts, setOtpAttempts] = useState(0);
+  const [, setOtpAttempts] = useState(0);
   const [otpLockout, setOtpLockout] = useState(false);
   const [otpLockoutTime, setOtpLockoutTime] = useState(0);
   const [cooldown, setCooldown] = useState(0);
@@ -65,9 +65,15 @@ export default function ForgotPassword() {
   const handleRequestOTP = async (e) => {
     e.preventDefault();
     if (otpLockout) return;
-    setLoading(true);
     setError('');
     setMessage('');
+    // Frontend email format validation
+    const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    if (!emailPattern.test(email.trim())) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    setLoading(true);
     try {
       const response = await axios.post(`${API_BASE}/forgot-password`, { email });
       setMessage(response.data.message || 'If your email is registered, a reset link or OTP has been sent.');
