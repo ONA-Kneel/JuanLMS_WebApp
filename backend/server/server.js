@@ -51,7 +51,7 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "https://sjdefilms.com",
+    origin: "*",
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -152,7 +152,7 @@ io.on("connection", (socket) => {
 
 // Middleware
 app.use(cors({
-  origin: "https://sjdefilms.com",
+  origin: "*",
   credentials: true
 }));
 app.use(express.json());
