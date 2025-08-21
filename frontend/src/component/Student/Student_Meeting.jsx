@@ -98,19 +98,20 @@ export default function Student_Meeting() {
           const data = await res.json();
           // Filter classes to only show those active for the current term
           const activeClasses = data.filter(cls => {
-            // Check if class has term information and matches current term
-            if (cls.term && cls.term !== currentTerm.termName) {
+            // MUST have term information and match current term
+            if (!cls.term || cls.term !== currentTerm.termName) {
               return false;
             }
-            // Check if class has school year and matches current academic year
-            if (cls.schoolYear && academicYear) {
-              const expectedYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-              if (cls.schoolYear !== expectedYear) {
-                return false;
-              }
+            // MUST have school year and match current academic year
+            if (!cls.schoolYear || !academicYear) {
+              return false;
             }
-            // Check if class is active/ongoing
-            if (cls.status && cls.status !== 'active') {
+            const expectedYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+            if (cls.schoolYear !== expectedYear) {
+              return false;
+            }
+            // MUST be active/ongoing
+            if (!cls.status || cls.status !== 'active') {
               return false;
             }
             return true;
@@ -185,7 +186,7 @@ export default function Student_Meeting() {
           <div className="text-center py-12">
             <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
             <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active Classes</h3>
-            <p className="text-gray-500">You are not enrolled in any active classes for the current term.</p>
+            <p className="text-gray-500">There are no active classes to set meetings in for the current academic year.</p>
             <p className="text-gray-400 text-sm mt-2">Please ask the administrator to activate a school year and enroll you in classes.</p>
           </div>
         ) : (
