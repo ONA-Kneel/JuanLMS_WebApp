@@ -51,8 +51,13 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST"]
+    origin: [
+      "http://localhost:5173",
+      "https://juan-lms.vercel.app",
+      "https://sjdefilms.com"
+    ],
+    methods: ["GET", "POST"],
+    credentials: false
   }
 });
 
@@ -63,6 +68,7 @@ let activeUsers = [];
 let userGroups = {}; // Track which groups each user is in
 
 io.on("connection", (socket) => {
+    console.log('[SOCKET] client connected', socket.id);
     console.log("User connected:", socket.id);
     
     socket.on("addUser", (userId) => {
@@ -90,6 +96,7 @@ io.on("connection", (socket) => {
 
     // Join a group chat room
     socket.on("joinGroup", ({ userId, groupId }) => {
+        console.log(`[SOCKET] User ${userId} joining group ${groupId}`);
         socket.join(groupId);
         if (!userGroups[userId]) {
             userGroups[userId] = [];
@@ -97,7 +104,9 @@ io.on("connection", (socket) => {
         if (!userGroups[userId].includes(groupId)) {
             userGroups[userId].push(groupId);
         }
-        console.log(`User ${userId} joined group ${groupId}`);
+        console.log(`[SOCKET] User ${userId} joined group ${groupId}`);
+        console.log(`[SOCKET] User ${userId} is now in groups:`, userGroups[userId]);
+        console.log(`[SOCKET] Socket ${socket.id} is now in rooms:`, Array.from(socket.rooms));
     });
 
     // Leave a group chat room
@@ -110,15 +119,30 @@ io.on("connection", (socket) => {
     });
 
     // Send message to group chat
-    socket.on("sendGroupMessage", ({ senderId, groupId, text, fileUrl, senderName }) => {
+    socket.on("sendGroupMessage", ({ senderId, groupId, text, fileUrl, senderName, senderFirstname, senderLastname, senderProfilePic }) => {
+        console.log(`[SOCKET] Group message from ${senderId} to group ${groupId}: ${text}`);
+        console.log(`[SOCKET] Broadcasting to group room: ${groupId}`);
+        console.log(`[SOCKET] Current socket rooms:`, Array.from(socket.rooms));
+        
+        // Ensure sender is in the group room before broadcasting
+        if (!socket.rooms.has(groupId)) {
+            console.log(`[SOCKET] Sender not in group room, joining now...`);
+            socket.join(groupId);
+        }
+        
         // Broadcast to all users in the group (except sender)
         socket.to(groupId).emit("getGroupMessage", {
             senderId,
             groupId,
             text,
             fileUrl,
-            senderName
+            senderName: senderName || "Unknown",
+            senderFirstname: senderFirstname || "Unknown",
+            senderLastname: senderLastname || "User",
+            senderProfilePic: senderProfilePic || null
         });
+        
+        console.log(`[SOCKET] Message broadcasted to group ${groupId}`);
     });
 
     // Handle group creation
