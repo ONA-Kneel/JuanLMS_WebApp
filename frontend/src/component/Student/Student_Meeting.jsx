@@ -83,8 +83,10 @@ export default function Student_Meeting() {
         const token = localStorage.getItem('token');
         if (!token) return;
         
-        // Only fetch classes if we have an active term
-        if (!currentTerm) {
+        // Only fetch classes if we have both an active school year AND an active term
+        if (!academicYear || !currentTerm) {
+          setClasses([]);
+          setSelectedClass(null);
           setLoading(false);
           return;
         }
@@ -156,11 +158,19 @@ export default function Student_Meeting() {
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <span className="ml-3 text-gray-600">Loading classes...</span>
           </div>
+        ) : !academicYear ? (
+          <div className="text-center py-12">
+            <Calendar className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active School Year</h3>
+            <p className="text-gray-500">There is no active school year configured.</p>
+            <p className="text-gray-400 text-sm mt-2">Please ask the administrator to activate a school year.</p>
+          </div>
         ) : !currentTerm ? (
           <div className="text-center py-12">
             <Calendar className="w-16 h-16 mx-auto text-gray-300 mb-4" />
             <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active Term</h3>
             <p className="text-gray-500">There is no active term for the current academic year.</p>
+            <p className="text-gray-400 text-sm mt-2">Please ask the administrator to activate a term.</p>
           </div>
         ) : classes.length === 0 ? (
           <div className="text-center py-12">
