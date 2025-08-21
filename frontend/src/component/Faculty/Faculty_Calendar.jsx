@@ -75,14 +75,15 @@ export default function Faculty_Calendar() {
         let events = [];
         for (const cls of myClasses) {
           const classCode = cls.classID || cls.classCode || cls._id;
-          // Assignments
+          // Assignments - only show if posted
           const resA = await fetch(`${API_BASE}/assignments?classID=${classCode}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const assignments = await resA.json();
           if (Array.isArray(assignments)) {
             assignments.forEach(a => {
-              if (a.dueDate) {
+              // Only show assignments that are posted
+              if (a.dueDate && a.posted === true) {
                 const due = new Date(a.dueDate);
                 const start = new Date(due);
                 start.setHours(0, 0, 0, 0);
@@ -99,14 +100,15 @@ export default function Faculty_Calendar() {
               }
             });
           }
-          // Quizzes
+          // Quizzes - only show if posted
           const resQ = await fetch(`${API_BASE}/api/quizzes?classID=${classCode}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const quizzes = await resQ.json();
           if (Array.isArray(quizzes)) {
             quizzes.forEach(q => {
-              if (q.dueDate) {
+              // Only show quizzes that are posted
+              if (q.dueDate && q.posted === true) {
                 const due = new Date(q.dueDate);
                 const start = new Date(due);
                 start.setHours(0, 0, 0, 0);
@@ -203,18 +205,35 @@ export default function Faculty_Calendar() {
   const handleDateClick = (arg) => {
     const clickedDate = arg.dateStr;
     setSelectedDate(clickedDate);
+    
+    // Convert clicked date to start of day for proper comparison
+    const clickedDateStart = new Date(clickedDate);
+    clickedDateStart.setHours(0, 0, 0, 0);
+    
     const eventsForDay = [
       ...adminEvents.filter(ev => {
-        const start = ev.start ? ev.start.slice(0, 10) : ev.date;
-        const end = ev.end ? ev.end.slice(0, 10) : start;
-        return clickedDate >= start && clickedDate <= end;
+        if (ev.date) {
+          // For date-only events (like holidays)
+          return ev.date === clickedDate;
+        }
+        if (ev.start && ev.end) {
+          // For events with start and end times
+          const eventStart = new Date(ev.start);
+          const eventEnd = new Date(ev.end);
+          return clickedDateStart >= eventStart && clickedDateStart <= eventEnd;
+        }
+        return false;
       }),
       ...assignmentEvents.filter(ev => {
-      const start = ev.start ? ev.start.slice(0, 10) : ev.date;
-      const end = ev.end ? ev.end.slice(0, 10) : start;
-      return clickedDate >= start && clickedDate <= end;
+        if (ev.start && ev.end) {
+          const eventStart = new Date(ev.start);
+          const eventEnd = new Date(ev.end);
+          return clickedDateStart >= eventStart && clickedDateStart <= eventEnd;
+        }
+        return false;
       })
     ];
+    
     setSelectedDayEvents(eventsForDay);
     setShowDayModal(true);
   };

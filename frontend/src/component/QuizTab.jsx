@@ -61,6 +61,13 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
     const [academicYear, setAcademicYear] = useState(null);
     const [currentTerm, setCurrentTerm] = useState(null);
 
+    // Helper function to ensure image URLs are complete
+    const ensureImageUrl = (imageUrl) => {
+        if (!imageUrl) return null;
+        if (imageUrl.startsWith('http')) return imageUrl;
+        return imageUrl.startsWith('/') ? `${API_BASE}${imageUrl}` : `${API_BASE}/${imageUrl}`;
+    };
+
     const resetForm = () => setForm({
         type: "multiple",
         question: "",
@@ -116,7 +123,10 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                     setTitle(data.title || "");
                     setDescription(data.instructions || data.description || "");
                     if (data.questions && Array.isArray(data.questions)) {
-                        setQuestions(data.questions);
+                        setQuestions(data.questions.map(q => ({
+                            ...q,
+                            image: ensureImageUrl(q.image)
+                        })));
                     }
                     if (data.dueDate) {
                         const dueDateLocal = new Date(data.dueDate);
@@ -312,6 +322,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             formData.append('image', file);
             try {
                 const token = localStorage.getItem('token');
+                
                 const res = await fetch(`${API_BASE}/api/quizzes/upload-image`, {
                     method: 'POST',
                     headers: {
@@ -323,13 +334,16 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                     throw new Error('Image upload failed');
                 }
                 const data = await res.json();
+                
                 setForm(f => ({ ...f, image: data.url }));
-            } catch (err) {
+                
+            } catch (error) {
+                console.error('[QuizTab] Image upload error:', error);
                 setValidationModal({
                     isOpen: true,
                     type: 'error',
                     title: 'Image Upload Failed',
-                    message: err.message || 'Could not upload image. Please try again.'
+                    message: 'Failed to upload image. Please try again.'
                 });
             } finally {
                 setImageUploading(false);
@@ -436,7 +450,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             required: q.required,
             identificationAnswer: q.correctAnswer || "",
             trueFalseAnswer: q.correctAnswer === false ? false : true,
-            image: q.image || null,
+            image: ensureImageUrl(q.image),
         });
     };
 
@@ -755,13 +769,28 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                                             src={q.image}
                                             alt="Question"
                                             className="max-h-40 rounded border transition-transform duration-200 group-hover:scale-105 group-hover:brightness-90 cursor-zoom-in"
+                                            onError={(e) => {
+                                                console.error('[QuizTab] Image display error for:', q.image);
+                                                console.error('[QuizTab] Error details:', e);
+                                                // Handle broken images
+                                                e.target.style.display = 'none';
+                                                const fallback = e.target.nextElementSibling;
+                                                if (fallback) fallback.style.display = 'block';
+                                            }}
+                                            onLoad={() => {
+                                                console.log('[QuizTab] Image loaded successfully:', q.image);
+                                            }}
                                         />
-                                        {/* Zoom icon overlay */}
-                                        <span className="absolute bottom-2 right-2 bg-white/80 rounded-full p-1 shadow group-hover:bg-blue-100">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l5 5m-5-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                            </svg>
-                                        </span>
+                                        <div className="hidden text-sm text-gray-500 bg-gray-100 p-2 rounded border">
+                                            Image not available
+                                        </div>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {}}
+                                        className="absolute top-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        Test
                                     </button>
                                 </div>
                             )}
@@ -830,14 +859,40 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                             {imageUploading && <span className="text-blue-600 ml-2">Uploading...</span>}
                             {form.image && (
                                 <div className="mt-2 flex items-center gap-2">
-                                    <img src={form.image} alt="Question" className="max-h-40 rounded border" />
-                                    <button
-                                        type="button"
-                                        className="text-red-600 text-sm font-semibold ml-2"
-                                        onClick={() => setForm(f => ({ ...f, image: null }))}
-                                    >
-                                        Remove Image
-                                    </button>
+                                    <img 
+                                        src={form.image} 
+                                        alt="Question" 
+                                        className="max-h-40 rounded border"
+                                        onError={(e) => {
+                                            console.error('[QuizTab] Form image display error for:', form.image);
+                                            // Handle broken images
+                                            e.target.style.display = 'none';
+                                            const fallback = e.target.nextElementSibling;
+                                            if (fallback) fallback.style.display = 'block';
+                                        }}
+                                        onLoad={() => {
+                                            console.log('[QuizTab] Form image loaded successfully:', form.image);
+                                        }}
+                                    />
+                                    <div className="hidden text-sm text-gray-500 bg-gray-100 p-2 rounded border">
+                                        Image not available
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {}}
+                                            className="text-blue-600 hover:text-blue-800 text-xs font-bold border border-blue-300 px-2 py-1 rounded"
+                                        >
+                                            Test URL
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setForm(f => ({ ...f, image: null }))}
+                                            className="text-red-600 hover:text-red-800 text-xs font-bold"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>

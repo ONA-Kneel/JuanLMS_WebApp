@@ -23,7 +23,27 @@ export default function Student_Chats() {
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
     const stored = localStorage.getItem("recentChats_student");
-    return stored ? JSON.parse(stored) : [];
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        // Filter out any corrupted entries with undefined names
+        const filtered = parsed.filter(chat => 
+          chat && chat._id && chat.firstname && chat.lastname && 
+          chat.firstname !== 'undefined' && chat.lastname !== 'undefined' &&
+          chat.firstname !== undefined && chat.lastname !== undefined
+        );
+        // Update localStorage with cleaned data
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem("recentChats_student", JSON.stringify(filtered));
+        }
+        return filtered;
+      } catch (e) {
+        console.error("Error parsing recentChats from localStorage:", e);
+        localStorage.removeItem("recentChats_student");
+        return [];
+      }
+    }
+    return [];
   });
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
@@ -54,6 +74,9 @@ export default function Student_Chats() {
   const [memberToRemove, setMemberToRemove] = useState(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
+  // Add loading state for chat list
+  const [isLoadingChats, setIsLoadingChats] = useState(true);
+
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
     type: 'error',
@@ -65,8 +88,8 @@ export default function Student_Chats() {
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
 
-  const API_URL = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
-  const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
+  const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
+  const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
 
   const storedUser = localStorage.getItem("user");
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
@@ -78,6 +101,16 @@ export default function Student_Chats() {
       navigate("/", { replace: true });
     }
   }, [currentUserId, navigate]);
+
+  const bumpChatToTop = (chatUser) => {
+    if (!chatUser || !chatUser._id) return;
+    setRecentChats((prev) => {
+      const filtered = prev.filter((c) => c._id !== chatUser._id);
+      const updated = [chatUser, ...filtered];
+      localStorage.setItem("recentChats_student", JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   // ================= SOCKET.IO SETUP =================
   useEffect(() => {
@@ -95,6 +128,7 @@ export default function Student_Chats() {
         receiverId: currentUserId,
         message: data.text,
         fileUrl: data.fileUrl || null,
+        createdAt: new Date().toISOString(),
       };
 
       setMessages((prev) => {
@@ -107,7 +141,27 @@ export default function Student_Chats() {
         };
         
         // Update last message for this chat
-        const chat = recentChats.find(c => c._id === incomingMessage.senderId);
+        let chat = recentChats.find(c => c._id === incomingMessage.senderId);
+        
+        // If chat not found in recentChats, find the user and add them
+        if (!chat) {
+          const sender = users.find(u => u._id === incomingMessage.senderId);
+          if (sender && sender.firstname && sender.lastname) {
+            chat = {
+              _id: sender._id,
+              firstname: sender.firstname,
+              lastname: sender.lastname,
+              profilePic: sender.profilePic
+            };
+            // Add to recentChats
+            setRecentChats(prev => {
+              const updated = [chat, ...prev];
+              localStorage.setItem("recentChats_student", JSON.stringify(updated));
+              return updated;
+            });
+          }
+        }
+        
         if (chat) {
           let prefix;
           const text = incomingMessage.message 
@@ -124,10 +178,32 @@ export default function Student_Chats() {
             ...prev,
             [chat._id]: { prefix, text }
           }));
+          
+          // Bump chat to top
+          bumpChatToTop(chat);
+          
+                  // Refresh recent conversations to update sidebar
+        setTimeout(() => {
+          fetchRecentConversations();
+        }, 100);
         }
         
         return newMessages;
       });
+      
+      // Also update the messages state immediately for real-time display
+      setMessages(prev => ({
+        ...prev,
+        [incomingMessage.senderId]: [
+          ...(prev[incomingMessage.senderId] || []),
+          incomingMessage,
+        ],
+      }));
+      
+      // Force a re-render by updating the messages state
+      setTimeout(() => {
+        setMessages(prev => ({ ...prev }));
+      }, 50);
     });
 
     // Group chat socket events
@@ -141,13 +217,25 @@ export default function Student_Chats() {
         senderFirstname: data.senderFirstname || "Unknown",
         senderLastname: data.senderLastname || "User",
         senderProfilePic: data.senderProfilePic || null,
-        timestamp: new Date(),
+        createdAt: new Date().toISOString(),
       };
 
-      setGroupMessages((prev) => ({
-        ...prev,
-        [data.groupId]: [...(prev[data.groupId] || []), incomingGroupMessage],
-      }));
+      setGroupMessages((prev) => {
+        const updated = {
+          ...prev,
+          [data.groupId]: [...(prev[data.groupId] || []), incomingGroupMessage],
+        };
+        
+        // If this group is currently selected, force an immediate UI update
+        if (selectedChat && selectedChat._id === data.groupId && isGroupChat) {
+          // Force a re-render by updating the selected chat messages
+          setTimeout(() => {
+            setGroupMessages(current => ({ ...current }));
+          }, 10);
+        }
+        
+        return updated;
+      });
 
       // Update last message for this group chat
       const group = groups.find(g => g._id === data.groupId);
@@ -168,6 +256,14 @@ export default function Student_Chats() {
           ...prev,
           [data.groupId]: { prefix, text }
         }));
+
+        // Bump group chat to top and refresh sidebar
+        bumpChatToTop(group);
+        
+        // Force a re-render by updating the group messages state
+        setTimeout(() => {
+          setGroupMessages(prev => ({ ...prev }));
+        }, 50);
       }
     });
 
@@ -193,10 +289,8 @@ export default function Student_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get(`${API_BASE}/users`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
+        setIsLoadingChats(true);
+        const res = await axios.get(`${API_BASE}/users`);
         // Support both array and paginated object
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
@@ -208,10 +302,143 @@ export default function Student_Chats() {
         } else {
           console.error("Error fetching users:", err);
         }
+      } finally {
+        setIsLoadingChats(false);
       }
     };
     fetchUsers();
   }, [currentUserId]);
+
+  // ================= FETCH RECENT CONVERSATIONS =================
+  const fetchRecentConversations = async () => {
+    if (!currentUserId) return;
+    
+    try {
+      const token = localStorage.getItem("token");
+      let allMessages = [];
+      
+      // First try to get all messages for the current user
+      try {
+        const res = await axios.get(`${API_BASE}/messages/user/${currentUserId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        allMessages = res.data || [];
+      } catch {
+        // Fallback: fetch messages for each user individually
+        console.log("API endpoint not available, using fallback method");
+        for (const user of users) {
+          if (user._id !== currentUserId) {
+            try {
+              const userRes = await axios.get(`${API_BASE}/messages/${currentUserId}/${user._id}`, {
+                headers: { "Authorization": `Bearer ${token}` }
+              });
+              if (userRes.data && userRes.data.length > 0) {
+                allMessages.push(...userRes.data);
+              }
+            } catch {
+              // Skip this user if there's an error
+              continue;
+            }
+          }
+        }
+      }
+      
+      if (allMessages.length > 0) {
+        // Group messages by conversation
+        const conversationMap = new Map();
+        allMessages.forEach(message => {
+          const otherUserId = message.senderId === currentUserId ? message.receiverId : message.senderId;
+          if (!conversationMap.has(otherUserId)) {
+            conversationMap.set(otherUserId, []);
+          }
+          conversationMap.get(otherUserId).push(message);
+        });
+        
+        // Create recent chats list from actual conversations
+        const newRecentChats = [];
+        for (const [otherUserId, messages] of conversationMap) {
+          if (messages.length > 0) {
+            // Find the user object
+            const otherUser = users.find(u => u._id === otherUserId);
+            if (otherUser && otherUser.firstname && otherUser.lastname && 
+                otherUser.firstname !== 'undefined' && otherUser.lastname !== 'undefined') {
+              // Sort messages by date and get the latest
+              const sortedMessages = messages.sort((a, b) => new Date(a.createdAt || a.updatedAt) - new Date(b.createdAt || b.updatedAt));
+              const lastMessage = sortedMessages[sortedMessages.length - 1];
+              
+              newRecentChats.push({
+                _id: otherUserId,
+                firstname: otherUser.firstname,
+                lastname: otherUser.lastname,
+                profilePic: otherUser.profilePic,
+                lastMessageTime: lastMessage.createdAt || lastMessage.updatedAt
+              });
+            }
+          }
+        }
+        
+        // Sort by most recent message
+        newRecentChats.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+        
+        // Update recentChats with actual conversations
+        if (newRecentChats.length > 0) {
+          setRecentChats(newRecentChats);
+          localStorage.setItem("recentChats_student", JSON.stringify(newRecentChats));
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching recent conversations:", error);
+    }
+  };
+
+  useEffect(() => {
+    // Run immediately if we have the required data
+    if (currentUserId && users.length > 0) {
+      fetchRecentConversations();
+    }
+  }, [currentUserId, users]); // Dependencies ensure it runs when data is available
+
+  // Clean up any corrupted data in recentChats
+  useEffect(() => {
+    if (recentChats.length > 0) {
+      const cleanedChats = recentChats.filter(chat => 
+        chat && chat._id && chat.firstname && chat.lastname && 
+        chat.firstname !== 'undefined' && chat.lastname !== 'undefined' &&
+        chat.firstname !== undefined && chat.lastname !== undefined
+      );
+      
+      if (cleanedChats.length !== recentChats.length) {
+        setRecentChats(cleanedChats);
+        localStorage.setItem("recentChats_student", JSON.stringify(cleanedChats));
+      }
+    }
+  }, [recentChats]);
+
+  // Force cleanup of corrupted data on component mount
+  useEffect(() => {
+    const cleanupCorruptedData = () => {
+      const stored = localStorage.getItem("recentChats_student");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          const cleaned = parsed.filter(chat => 
+            chat && chat._id && chat.firstname && chat.lastname && 
+            chat.firstname !== 'undefined' && chat.lastname !== 'undefined' &&
+            chat.firstname !== undefined && chat.lastname !== undefined
+          );
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem("recentChats_student", JSON.stringify(cleaned));
+            setRecentChats(cleaned);
+          }
+        } catch {
+          localStorage.removeItem("recentChats_student");
+          setRecentChats([]);
+        }
+      }
+    };
+    
+    cleanupCorruptedData();
+  }, []);
 
   // ================= FETCH GROUPS =================
   useEffect(() => {
@@ -222,6 +449,30 @@ export default function Student_Chats() {
           headers: { "Authorization": `Bearer ${token}` }
         });
         setGroups(res.data);
+        
+        // Fetch messages for all groups to determine which ones should appear in sidebar
+        if (res.data && res.data.length > 0) {
+          const allGroupMessages = {};
+          for (const group of res.data) {
+            try {
+              const groupRes = await axios.get(`${API_BASE}/group-messages/${group._id}?userId=${currentUserId}`, {
+                headers: { "Authorization": `Bearer ${token}` }
+              });
+              if (groupRes.data && groupRes.data.length > 0) {
+                allGroupMessages[group._id] = groupRes.data;
+              }
+            } catch {
+              // Group might not have messages yet, continue
+              continue;
+            }
+          }
+          setGroupMessages(allGroupMessages);
+          
+          // Join all groups in Socket.IO for real-time updates
+          res.data.forEach(group => {
+            socket.current?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
+          });
+        }
       } catch (err) {
         console.error("Error fetching groups:", err);
       }
@@ -380,6 +631,11 @@ export default function Student_Chats() {
           [selectedChat._id]: { prefix: "You: ", text }
         }));
 
+        // Refresh recent conversations to update sidebar
+        setTimeout(() => {
+          fetchRecentConversations();
+        }, 100);
+
         setNewMessage("");
         setSelectedFile(null);
       } catch (err) {
@@ -417,6 +673,13 @@ export default function Student_Chats() {
           ...prev,
           [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
         }));
+
+        bumpChatToTop(selectedChat);
+
+        // Refresh recent conversations to ensure all users with message history are loaded
+        setTimeout(() => {
+          fetchRecentConversations();
+        }, 100);
 
         // Update last message for this individual chat
         const text = sentMessage.message 
@@ -457,12 +720,9 @@ export default function Student_Chats() {
   const handleStartNewChat = (user) => {
     setSelectedChat(user);
     setIsGroupChat(false);
-    // Add to recentChats if not already present
-    if (!recentChats.some(c => c._id === user._id)) {
-      const updated = [user, ...recentChats];
-      setRecentChats(updated);
-      localStorage.setItem("recentChats_student", JSON.stringify(updated));
-    }
+    
+    // Don't add to recent chats until they actually send a message
+    // This ensures only users with actual conversations appear in sidebar
   };
 
   const handleCreateGroup = async () => {
@@ -721,17 +981,45 @@ export default function Student_Chats() {
   // 1. Remove activeTab and all tab logic
   // 2. Add state for dropdown menu (showGroupMenu)
   // 3. Merge recentChats and groups into a single unified list
+  // Only include groups that have messages (actual conversations)
+  const groupsWithMessages = groups.filter(group => {
+    const groupMsgs = groupMessages[group._id] || [];
+    return groupMsgs.length > 0;
+  });
+  
   const unifiedChats = [
     ...recentChats.map(chat => ({ ...chat, type: 'individual' })),
-    ...groups.map(group => ({ ...group, type: 'group' }))
+    ...groupsWithMessages.map(group => ({ ...group, type: 'group' }))
   ];
   // Sort by last message time (if available)
   unifiedChats.sort((a, b) => {
-    const aTime = a.type === 'group' ? (groupMessages[a._id]?.slice(-1)[0]?.createdAt || 0) : (messages[a._id]?.slice(-1)[0]?.createdAt || 0);
-    const bTime = b.type === 'group' ? (groupMessages[b._id]?.slice(-1)[0]?.createdAt || 0) : (messages[b._id]?.slice(-1)[0]?.createdAt || 0);
-    return new Date(bTime) - new Date(aTime);
+    let aTime = 0;
+    let bTime = 0;
+    
+    if (a.type === 'group') {
+      const aGroupMessages = groupMessages[a._id] || [];
+      aTime = aGroupMessages.length > 0 ? new Date(aGroupMessages[aGroupMessages.length - 1]?.createdAt || 0).getTime() : 0;
+    } else {
+      const chatMessages = messages[a._id] || [];
+      aTime = chatMessages.length > 0 ? new Date(chatMessages[chatMessages.length - 1]?.createdAt || 0).getTime() : 0;
+    }
+    
+    if (b.type === 'group') {
+      const bGroupMessages = groupMessages[b._id] || [];
+      bTime = bGroupMessages.length > 0 ? new Date(bGroupMessages[bGroupMessages.length - 1]?.createdAt || 0).getTime() : 0;
+    } else {
+      const chatMessages = messages[b._id] || [];
+      bTime = chatMessages.length > 0 ? new Date(chatMessages[chatMessages.length - 1]?.createdAt || 0).getTime() : 0;
+    }
+    
+    return bTime - aTime;
   });
-  // Enhanced search that includes all users and existing chats
+  // Enhanced search: include all groups you belong to (even if no messages yet)
+  const additionalGroupSearchResults = groups
+    .filter(g => !unifiedChats.some(uc => uc._id === g._id)) // Filter out already included groups
+    .filter(g => g.name?.toLowerCase().includes(searchTerm.toLowerCase()))
+    .map(g => ({ ...g, type: 'group' }));
+
   const searchResults = searchTerm.trim() === '' ? [] : [
     // First show existing chats/groups that match
     ...unifiedChats.filter(chat => {
@@ -744,6 +1032,8 @@ export default function Student_Chats() {
         return chat.name?.toLowerCase().includes(searchTerm.toLowerCase());
       }
     }),
+    // Then show your other groups (without messages) that match
+    ...additionalGroupSearchResults,
     // Then show users not in recent chats that match
     ...users
       .filter(user => user._id !== currentUserId)
@@ -816,7 +1106,12 @@ export default function Student_Chats() {
             </div>
             {/* Unified Chat List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {searchTerm.trim() === '' ? (
+              {isLoadingChats ? (
+                <div className="text-center py-10">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-900 mx-auto"></div>
+                  <p className="text-gray-500 mt-2">Loading chats...</p>
+                </div>
+              ) : searchTerm.trim() === '' ? (
                 // Show normal chat list when not searching
                 unifiedChats.length > 0 ? (
                   unifiedChats.map((chat) => (
@@ -1030,7 +1325,8 @@ export default function Student_Chats() {
                       Math.abs(new Date(msg.createdAt || msg.updatedAt) - new Date(prevMsg?.createdAt || prevMsg?.updatedAt)) > 5 * 60 * 1000;
 
                     // Date separator logic
-                    const msgDate = new Date(msg.createdAt || msg.updatedAt);
+                    const msgDateSrc = msg.createdAt || msg.updatedAt;
+                    const msgDate = msgDateSrc ? new Date(msgDateSrc) : new Date();
                     const now = new Date();
                     const isToday = msgDate.toDateString() === now.toDateString();
                     const isYesterday = (() => {
@@ -1045,7 +1341,7 @@ export default function Student_Chats() {
                     const timeLabel = msgDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
                     const currentDate = msgDate.toDateString();
-                    const prevDate = prevMsg ? new Date(prevMsg.createdAt || prevMsg.updatedAt).toDateString() : null;
+                    const prevDate = prevMsg ? new Date(prevMsg.createdAt || prevMsg.updatedAt || '').toDateString() : null;
                     const showDateSeparator = index === 0 || currentDate !== prevDate;
 
                     return (

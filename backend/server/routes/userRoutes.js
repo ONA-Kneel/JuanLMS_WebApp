@@ -292,17 +292,23 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
         return res.status(400).json({ error: "Student accounts can only be registered through the public registration form." });
     }
 
-    // Check for duplicate email (unencrypted, before saving)
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    // Check for duplicate email using emailHash to handle encrypted stored emails
+    const baseEmail = email.toLowerCase();
+    const computeHash = (val) => crypto.createHash('sha256').update(val).digest('hex');
+    const baseHash = computeHash(baseEmail);
+    const existingUser = await User.findOne({ emailHash: baseHash });
     if (existingUser) {
-        // Suggest a new email if duplicate
-        let baseEmail = email.toLowerCase();
-        let emailUsername = baseEmail.split('@')[0];
-        let emailDomain = baseEmail.split('@')[1];
+        // Suggest a new email if duplicate, ensure uniqueness by hash
+        const emailUsername = baseEmail.split('@')[0];
+        const emailDomain = baseEmail.split('@')[1];
         let counter = 1;
         let uniqueEmail = baseEmail;
-        while (await User.findOne({ email: uniqueEmail })) {
+        // Find next available email by appending an incrementing number
+        while (true) {
             uniqueEmail = `${emailUsername}${counter}@${emailDomain}`;
+            const uniqueHash = computeHash(uniqueEmail);
+            const dup = await User.findOne({ emailHash: uniqueHash });
+            if (!dup) break;
             counter++;
         }
         return res.status(409).json({

@@ -67,6 +67,14 @@ export default function ClassContent({ selected, isFaculty = false }) {
     onConfirm: null
   });
 
+  // Edit announcement modal state
+  const [editAnnouncementModal, setEditAnnouncementModal] = useState({
+    isOpen: false,
+    id: null,
+    title: '',
+    content: ''
+  });
+
   // Helper function to check if assignment is posted
   const isAssignmentPosted = (assignment) => {
     if (!assignment.postAt) return false; // If no postAt, consider it not posted
@@ -322,11 +330,28 @@ export default function ClassContent({ selected, isFaculty = false }) {
       }
     });
   };
+
   const handleEditAnnouncement = async (id, currentTitle, currentContent) => {
-    const newTitle = window.prompt('Edit title:', currentTitle);
-    if (!newTitle) return;
-    const newContent = window.prompt('Edit content:', currentContent);
-    if (!newContent) return;
+    setEditAnnouncementModal({
+      isOpen: true,
+      id,
+      title: currentTitle,
+      content: currentContent
+    });
+  };
+
+  const handleSaveEditAnnouncement = async () => {
+    const { id, title, content } = editAnnouncementModal;
+    if (!title.trim() || !content.trim()) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Please provide both title and content.'
+      });
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE}/announcements/${id}`, {
@@ -335,10 +360,11 @@ export default function ClassContent({ selected, isFaculty = false }) {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ title: newTitle, content: newContent })
+        body: JSON.stringify({ title, content })
       });
       if (res.ok) {
-        setAnnouncements(announcements.map(a => a._id === id ? { ...a, title: newTitle, content: newContent } : a));
+        setAnnouncements(announcements.map(a => a._id === id ? { ...a, title, content } : a));
+        setEditAnnouncementModal({ isOpen: false, id: null, title: '', content: '' });
         setValidationModal({
           isOpen: true,
           type: 'success',
@@ -1451,6 +1477,60 @@ export default function ClassContent({ selected, isFaculty = false }) {
           showCancel={true}
           cancelText="Cancel"
         />
+      )}
+
+      {/* Edit Announcement Modal */}
+      {editAnnouncementModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white p-8 rounded-xl shadow-xl max-w-lg w-full border-2 border-blue-200 relative">
+            <button
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl font-bold"
+              onClick={() => setEditAnnouncementModal({ isOpen: false, id: null, title: '', content: '' })}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h3 className="text-xl font-bold mb-4 text-blue-900">Edit Announcement</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Title</label>
+                <input
+                  type="text"
+                  value={editAnnouncementModal.title}
+                  onChange={(e) => setEditAnnouncementModal(prev => ({ ...prev, title: e.target.value }))}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Content</label>
+                <textarea
+                  value={editAnnouncementModal.content}
+                  onChange={(e) => setEditAnnouncementModal(prev => ({ ...prev, content: e.target.value }))}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                  rows={3}
+                  required
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setEditAnnouncementModal({ isOpen: false, id: null, title: '', content: '' })}
+                  className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEditAnnouncement}
+                  className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {showLessonModal && (
