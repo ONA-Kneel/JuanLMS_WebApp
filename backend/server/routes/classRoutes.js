@@ -28,6 +28,49 @@ const upload = multer({ storage });
 
 const router = express.Router();
 
+// Helper: normalize an incoming list of member identifiers to canonical User.userID values
+async function normalizeMemberIdentifiers(rawMembers) {
+  if (!rawMembers || !Array.isArray(rawMembers)) return [];
+  const results = [];
+  for (const candidate of rawMembers) {
+    if (!candidate) continue;
+    // If already looks like a userID (non ObjectId string), keep as is
+    if (typeof candidate === 'string' && !ObjectId.isValid(candidate)) {
+      results.push(candidate);
+      continue;
+    }
+    // If it's an ObjectId string or actual ObjectId, resolve to user.userID
+    try {
+      const idString = typeof candidate === 'string' ? candidate : String(candidate);
+      if (ObjectId.isValid(idString)) {
+        const user = await User.findById(idString);
+        if (user && user.userID) {
+          results.push(user.userID);
+        }
+      }
+    } catch {
+      // skip if lookup fails
+    }
+  }
+  // Ensure uniqueness
+  return Array.from(new Set(results));
+}
+
+// Helper: decrypt a list of users for safe client return
+function decryptUsers(users) {
+  return users.map(user => ({
+    ...user.toObject(),
+    email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+    schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
+    personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+    middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
+    firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
+    lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
+    profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+    password: undefined,
+  }));
+}
+
 // --- GET /sections - Get available sections for class creation ---
 router.get('/sections', authenticateToken, async (req, res) => {
   try {
@@ -155,13 +198,16 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
       imagePath = `/uploads/${req.file.filename}`;
     }
     
+    // Normalize members to canonical userID values (handles Mongo _id inputs)
+    const normalizedMembers = await normalizeMemberIdentifiers(membersArr);
+
     // Create new class with academic year, term, and section if available
     const classData = { 
       classID, 
       className, 
       classCode, 
       classDesc, 
-      members: membersArr, 
+      members: normalizedMembers, 
       facultyID, 
       image: imagePath 
     };
@@ -232,36 +278,59 @@ router.get('/:classID/members', async (req, res) => {
     if (!classDoc) return res.status(404).json({ error: 'Class not found' });
     // Use Mongoose User model to fetch and decrypt users
     const faculty = await User.find({ userID: classDoc.facultyID, isArchived: { $ne: true } });
-    const students = classDoc.members && classDoc.members.length > 0
-      ? await User.find({ userID: { $in: classDoc.members }, isArchived: { $ne: true } })
+    // Members may contain userID values or Mongo _id strings; support both
+    const memberList = Array.isArray(classDoc.members) ? classDoc.members : [];
+    const memberUserIDs = memberList.filter(m => typeof m === 'string' && !ObjectId.isValid(m));
+    const memberObjectIDs = memberList.filter(m => typeof m === 'string' && ObjectId.isValid(m));
+
+    const students = memberList.length > 0
+      ? await User.find({
+          isArchived: { $ne: true },
+          $or: [
+            memberUserIDs.length > 0 ? { userID: { $in: memberUserIDs } } : null,
+            memberObjectIDs.length > 0 ? { _id: { $in: memberObjectIDs } } : null,
+          ].filter(Boolean)
+        })
       : [];
-    // Decrypt fields
-    const decryptedFaculty = faculty.map(user => ({
-      ...user.toObject(),
-      email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
-      schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
-      personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
-      middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
-      firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
-      lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
-      profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
-      password: undefined,
-    }));
-    const decryptedStudents = students.map(user => ({
-      ...user.toObject(),
-      email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
-      schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
-      personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
-      middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
-      firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
-      lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
-      profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
-      password: undefined,
-    }));
+
+    const decryptedFaculty = decryptUsers(faculty);
+    const decryptedStudents = decryptUsers(students);
     res.json({ faculty: decryptedFaculty, students: decryptedStudents });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch class members' });
+  }
+});
+
+// --- PATCH /:classID/members - Replace members list for a class ---
+router.patch('/:classID/members', authenticateToken, async (req, res) => {
+  try {
+    const { classID } = req.params;
+    const { members } = req.body;
+    if (!Array.isArray(members)) {
+      return res.status(400).json({ error: 'Invalid members payload' });
+    }
+
+    const normalized = await normalizeMemberIdentifiers(members);
+
+    const updated = await Class.findOneAndUpdate(
+      { classID },
+      { members: normalized },
+      { new: true }
+    );
+
+    if (!updated) return res.status(404).json({ error: 'Class not found' });
+
+    // Return the same shape as GET /:classID/members
+    const faculty = await User.find({ userID: updated.facultyID, isArchived: { $ne: true } });
+    const students = normalized.length > 0
+      ? await User.find({ userID: { $in: normalized }, isArchived: { $ne: true } })
+      : [];
+
+    res.json({ faculty: decryptUsers(faculty), students: decryptUsers(students) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update class members' });
   }
 });
 
