@@ -167,6 +167,7 @@ export default function Student_Meeting() {
             <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
             <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active Classes</h3>
             <p className="text-gray-500">You are not enrolled in any active classes for the current term.</p>
+            <p className="text-gray-400 text-sm mt-2">Please ask the administrator to activate a school year and enroll you in classes.</p>
           </div>
         ) : (
           <>

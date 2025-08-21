@@ -275,6 +275,7 @@ const Faculty_Meeting = () => {
             <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
             <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active Classes</h3>
             <p className="text-gray-500">You have no active classes assigned for the current term.</p>
+            <p className="text-gray-400 text-sm mt-2">Please ask the administrator to activate a school year and assign classes.</p>
           </div>
         ) : (
           <>
