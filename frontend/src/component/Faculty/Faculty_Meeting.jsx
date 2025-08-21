@@ -76,7 +76,7 @@ const Faculty_Meeting = () => {
     fetchActiveTermForYear();
   }, [academicYear]);
 
-  // Fetch faculty's assigned classes only
+  // Fetch faculty's assigned classes only for the current active term
   useEffect(() => {
     async function fetchClasses() {
       try {
@@ -100,6 +100,12 @@ const Faculty_Meeting = () => {
           return;
         }
 
+        // Only fetch classes if we have an active term
+        if (!currentTerm) {
+          setLoading(false);
+          return;
+        }
+
         // Try faculty-specific endpoint first
         try {
           const res = await fetch(`${API_BASE}/classes/faculty-classes`, {
@@ -107,28 +113,43 @@ const Faculty_Meeting = () => {
             headers: { 
               "Authorization": `Bearer ${token}`,
               "Content-Type": "application/json"
-            },
-            // Remove credentials for now to avoid CORS issues with wildcard origin
-            // credentials: 'include' // Only include if backend is properly configured for CORS with credentials
+            }
           });
 
           if (res.status === 401) {
-            // Token is invalid or expired
             localStorage.removeItem("token");
-            // Optionally redirect to login page
-            // window.location.href = "/login";
             console.error("Authentication failed: Invalid or expired token");
             return;
           }
 
           if (res.ok) {
             const data = await res.json();
-            setClasses(data);
-            if (data.length > 0) {
-              setSelectedClass(data[0]);
+            // Filter classes to only show those active for the current term
+            const activeClasses = data.filter(cls => {
+              // Check if class has term information and matches current term
+              if (cls.term && cls.term !== currentTerm.termName) {
+                return false;
+              }
+              // Check if class has school year and matches current academic year
+              if (cls.schoolYear && academicYear) {
+                const expectedYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+                if (cls.schoolYear !== expectedYear) {
+                  return false;
+                }
+              }
+              // Check if class is active/ongoing
+              if (cls.status && cls.status !== 'active') {
+                return false;
+              }
+              return true;
+            });
+            
+            setClasses(activeClasses);
+            if (activeClasses.length > 0) {
+              setSelectedClass(activeClasses[0]);
             }
             setLoading(false);
-            return; // Exit if successful
+            return;
           }
         } catch (err) {
           console.error("Error fetching faculty classes:", err);
@@ -141,15 +162,31 @@ const Faculty_Meeting = () => {
             headers: { 
               "Authorization": `Bearer ${token}`,
               "Content-Type": "application/json"
-            },
-            // Remove credentials for now to avoid CORS issues with wildcard origin
-            // credentials: 'include' // Only include if backend is properly configured for CORS with credentials
+            }
           });
 
           if (fallbackRes.ok) {
             const allClasses = await fallbackRes.json();
             const facultyId = payload.userID;
-            const facultyClasses = allClasses.filter(cls => cls.facultyID === facultyId);
+            const facultyClasses = allClasses.filter(cls => {
+              // Must be assigned to this faculty
+              if (cls.facultyID !== facultyId) return false;
+              
+              // Must match current term
+              if (cls.term && cls.term !== currentTerm.termName) return false;
+              
+              // Must match current school year
+              if (cls.schoolYear && academicYear) {
+                const expectedYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+                if (cls.schoolYear !== expectedYear) return false;
+              }
+              
+              // Must be active
+              if (cls.status && cls.status !== 'active') return false;
+              
+              return true;
+            });
+            
             setClasses(facultyClasses);
             if (facultyClasses.length > 0) {
               setSelectedClass(facultyClasses[0]);
@@ -165,7 +202,7 @@ const Faculty_Meeting = () => {
       }
     }
     fetchClasses();
-  }, []);
+  }, [currentTerm, academicYear]); // Re-run when term or year changes
 
   // Meeting handlers
   const handleMeetingCreated = (newMeeting) => {
@@ -227,11 +264,17 @@ const Faculty_Meeting = () => {
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <span className="ml-3 text-gray-600">Loading classes...</span>
           </div>
+        ) : !currentTerm ? (
+          <div className="text-center py-12">
+            <Calendar className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active Term</h3>
+            <p className="text-gray-500">There is no active term for the current academic year.</p>
+          </div>
         ) : classes.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Classes Found</h3>
-            <p className="text-gray-500">You need to have classes assigned to create meetings.</p>
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active Classes</h3>
+            <p className="text-gray-500">You have no active classes assigned for the current term.</p>
           </div>
         ) : (
           <>

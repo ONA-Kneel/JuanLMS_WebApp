@@ -3,7 +3,7 @@ import Student_Navbar from './Student_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import MeetingList from '../Meeting/MeetingList';
 import VideoMeetingRoom from '../Meeting/VideoMeetingRoom';
-import { Users, Video } from 'lucide-react';
+import { Users, Video, Calendar } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -14,6 +14,8 @@ export default function Student_Meeting() {
   const [meetingRefreshTrigger, setMeetingRefreshTrigger] = useState(0);
   const [activeMeeting, setActiveMeeting] = useState(null);
   const [userInfo, setUserInfo] = useState({ name: '', email: '' });
+  const [academicYear, setAcademicYear] = useState(null);
+  const [currentTerm, setCurrentTerm] = useState(null);
 
   // Get user info from token
   useEffect(() => {
@@ -31,19 +33,89 @@ export default function Student_Meeting() {
     }
   }, []);
 
-  // Fetch student's classes
+  // Fetch academic year
+  useEffect(() => {
+    async function fetchAcademicYear() {
+      try {
+        const token = localStorage.getItem("token");
+        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (yearRes.ok) {
+          const year = await yearRes.json();
+          setAcademicYear(year);
+        }
+      } catch (err) {
+        console.error("Failed to fetch academic year", err);
+      }
+    }
+    fetchAcademicYear();
+  }, []);
+
+  // Fetch active term for year
+  useEffect(() => {
+    async function fetchActiveTermForYear() {
+      if (!academicYear) return;
+      try {
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const terms = await res.json();
+          const active = terms.find(term => term.status === 'active');
+          setCurrentTerm(active || null);
+        } else {
+          setCurrentTerm(null);
+        }
+      } catch {
+        setCurrentTerm(null);
+      }
+    }
+    fetchActiveTermForYear();
+  }, [academicYear]);
+
+  // Fetch student's classes for the current active term
   useEffect(() => {
     async function fetchClasses() {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
+        
+        // Only fetch classes if we have an active term
+        if (!currentTerm) {
+          setLoading(false);
+          return;
+        }
+
         const res = await fetch(`${API_BASE}/classes/my-classes`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
           const data = await res.json();
-          setClasses(data || []);
-          if (data && data.length > 0) setSelectedClass(data[0]);
+          // Filter classes to only show those active for the current term
+          const activeClasses = data.filter(cls => {
+            // Check if class has term information and matches current term
+            if (cls.term && cls.term !== currentTerm.termName) {
+              return false;
+            }
+            // Check if class has school year and matches current academic year
+            if (cls.schoolYear && academicYear) {
+              const expectedYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+              if (cls.schoolYear !== expectedYear) {
+                return false;
+              }
+            }
+            // Check if class is active/ongoing
+            if (cls.status && cls.status !== 'active') {
+              return false;
+            }
+            return true;
+          });
+          
+          setClasses(activeClasses || []);
+          if (activeClasses && activeClasses.length > 0) setSelectedClass(activeClasses[0]);
         }
       } catch (err) {
         console.error('Failed to fetch student classes', err);
@@ -52,7 +124,7 @@ export default function Student_Meeting() {
       }
     }
     fetchClasses();
-  }, []);
+  }, [currentTerm, academicYear]);
 
   const handleJoinMeeting = (meeting) => {
     const meetingData = {
@@ -84,11 +156,17 @@ export default function Student_Meeting() {
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <span className="ml-3 text-gray-600">Loading classes...</span>
           </div>
+        ) : !currentTerm ? (
+          <div className="text-center py-12">
+            <Calendar className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active Term</h3>
+            <p className="text-gray-500">There is no active term for the current academic year.</p>
+          </div>
         ) : classes.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Classes Found</h3>
-            <p className="text-gray-500">You are not enrolled in any classes.</p>
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active Classes</h3>
+            <p className="text-gray-500">You are not enrolled in any active classes for the current term.</p>
           </div>
         ) : (
           <>
