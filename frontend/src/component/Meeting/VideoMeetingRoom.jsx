@@ -25,6 +25,23 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
     return meetingData?.meetingId || meetingData?._id || '';
   }, [meetingData]);
 
+  // Prefer backend-provided roomUrl when available to ensure all clients join the same room
+  const getRoomName = useCallback(() => {
+    const roomUrl = meetingData?.roomUrl;
+    if (roomUrl) {
+      try {
+        const url = new URL(roomUrl);
+        const path = url.pathname || '';
+        const name = path.startsWith('/') ? path.slice(1) : path;
+        return decodeURIComponent(name);
+      } catch {
+        // Fallback to meetingId if URL parsing fails
+      }
+    }
+    const id = getMeetingId();
+    return id ? String(id) : '';
+  }, [meetingData, getMeetingId]);
+
   const handleLeaveMeeting = useCallback(() => {
     if (onLeave) onLeave();
     if (onClose) onClose();
@@ -95,7 +112,7 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
       }
 
       const options = {
-        roomName: `JuanLMS-${meetingId}`,
+        roomName: getRoomName(),
         width: '100%',
         height: '100%',
         parentNode: jitsiContainer.current,
@@ -164,6 +181,10 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
       jitsiApi.current = api;
       
       api.addEventListeners({
+        iframeReady: () => {
+          // Consider the connection ready when iframe initializes to avoid long spinners
+          setIsLoading(false);
+        },
         readyToClose: () => {
           console.log('Jitsi ready to close');
           handleLeaveMeeting();
