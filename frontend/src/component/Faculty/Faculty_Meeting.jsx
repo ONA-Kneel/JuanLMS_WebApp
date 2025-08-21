@@ -212,22 +212,15 @@ const Faculty_Meeting = () => {
   };
 
   const handleJoinMeeting = async (meeting) => {
-  console.log('[DEBUG] handleJoinMeeting received:', meeting);
-    // meeting is the original meeting object from MeetingList
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com"}/api/meetings/${meeting._id}/join`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const result = await response.json();
-    // Defensive fallback for meetingId
+    console.log('[DEBUG] Faculty handleJoinMeeting received:', meeting);
+    console.log('[DEBUG] Faculty meeting roomUrl:', meeting.roomUrl);
+    // MeetingList already called the backend and provided roomUrl
     const meetingData = {
       ...meeting,
       meetingId: String(meeting._id), // always set meetingId as string
-      roomUrl: result.roomUrl,
       title: meeting.title || 'Video Meeting',
     };
-    console.log('[DEBUG] setActiveMeeting with:', meetingData);
+    console.log('[DEBUG] Faculty setActiveMeeting with:', meetingData);
     setActiveMeeting(meetingData);
   };
 

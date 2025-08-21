@@ -41,6 +41,7 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
 
   const handleJoinMeeting = async (meeting) => {
     try {
+      console.log('[DEBUG] MeetingList handleJoinMeeting - meeting:', meeting);
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE}/api/meetings/${meeting._id}/join`, {
         method: 'POST',
@@ -49,7 +50,9 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
         }
       });
 
+      console.log('[DEBUG] MeetingList join response status:', response.status);
       const result = await response.json();
+      console.log('[DEBUG] MeetingList join response result:', result);
 
       if (response.ok) {
         // Pass both backend result and original meeting to onJoinMeeting
@@ -64,10 +67,11 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
         // Refresh meetings to update participant count
         fetchMeetings();
       } else {
+        console.error('[DEBUG] MeetingList join failed:', result);
         alert(result.message || 'Failed to join meeting');
       }
     } catch (error) {
-      console.error('Error joining meeting:', error);
+      console.error('[DEBUG] MeetingList join error:', error);
       alert('Network error. Please try again.');
     }
   };

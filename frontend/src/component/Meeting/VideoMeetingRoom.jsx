@@ -27,19 +27,28 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
 
   // Prefer backend-provided roomUrl when available to ensure all clients join the same room
   const getRoomName = useCallback(() => {
+    console.log('[DEBUG] getRoomName - meetingData:', meetingData);
+    console.log('[DEBUG] getRoomName - roomUrl:', meetingData?.roomUrl);
+    
     const roomUrl = meetingData?.roomUrl;
     if (roomUrl) {
       try {
         const url = new URL(roomUrl);
         const path = url.pathname || '';
         const name = path.startsWith('/') ? path.slice(1) : path;
-        return decodeURIComponent(name);
-      } catch {
+        const result = decodeURIComponent(name);
+        console.log('[DEBUG] getRoomName - extracted from URL:', result);
+        return result;
+      } catch (error) {
+        console.error('[DEBUG] getRoomName - URL parsing failed:', error);
         // Fallback to meetingId if URL parsing fails
       }
     }
+    
     const id = getMeetingId();
-    return id ? String(id) : '';
+    const fallbackResult = id ? String(id) : '';
+    console.log('[DEBUG] getRoomName - fallback to meetingId:', fallbackResult);
+    return fallbackResult;
   }, [meetingData, getMeetingId]);
 
   const handleLeaveMeeting = useCallback(() => {

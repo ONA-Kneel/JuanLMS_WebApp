@@ -128,13 +128,22 @@ export default function Student_Meeting() {
     fetchClasses();
   }, [currentTerm, academicYear]);
 
-  const handleJoinMeeting = (meeting) => {
-    const meetingData = {
-      ...meeting,
-      meetingId: String(meeting._id),
-      title: meeting.title || 'Video Meeting',
-    };
-    setActiveMeeting(meetingData);
+  const handleJoinMeeting = async (meeting) => {
+    try {
+      console.log('[DEBUG] Student handleJoinMeeting received:', meeting);
+      console.log('[DEBUG] Student meeting roomUrl:', meeting.roomUrl);
+      // MeetingList already called the backend and provided roomUrl
+      const meetingData = {
+        ...meeting,
+        meetingId: String(meeting._id),
+        title: meeting.title || 'Video Meeting',
+      };
+      console.log('[DEBUG] Student setActiveMeeting with:', meetingData);
+      setActiveMeeting(meetingData);
+    } catch (error) {
+      console.error('Error setting up meeting:', error);
+      alert('Error joining meeting. Please try again.');
+    }
   };
 
   const handleLeaveMeeting = () => {
