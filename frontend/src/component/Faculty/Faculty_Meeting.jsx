@@ -328,7 +328,7 @@ const Faculty_Meeting = () => {
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Meeting Schedule</h3>
                   <MeetingList
-                    classID={selectedClass._id}
+                    classId={selectedClass._id}
                     userRole="faculty"
                     onJoinMeeting={handleJoinMeeting}
                     refreshTrigger={meetingRefreshTrigger}
@@ -353,6 +353,7 @@ const Faculty_Meeting = () => {
         {activeMeeting && (
           <VideoMeetingRoom
             meetingData={activeMeeting}
+            currentUser={userInfo}
             onLeave={handleLeaveMeeting}
             isOpen={!!activeMeeting}
             isModerator={true}
