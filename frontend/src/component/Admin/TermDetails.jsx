@@ -3867,19 +3867,271 @@ export default function TermDetails() {
         }
       });
 
-      let alertMessage = `Import process complete.
-Successfully processed ${importedCount} new entries.`;
+      // NOW PERFORM THE ACTUAL IMPORT IN CORRECT ORDER
+      let tracksImported = 0;
+      let strandsImported = 0;
+      let sectionsImported = 0;
+      let subjectsImported = 0;
+      let facultyAssignmentsImported = 0;
+      let studentAssignmentsImported = 0;
+
+      console.log('Starting import process...');
+
+      // STEP 1: Import Tracks
+      if (validTracks.length > 0) {
+        console.log('Importing tracks:', validTracks);
+        for (const track of validTracks) {
+          try {
+            const res = await fetch(`${API_BASE}/api/tracks`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                trackName: track.trackName,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName
+              })
+            });
+
+            if (res.ok) {
+              tracksImported++;
+              console.log(`Track ${track.trackName} imported successfully`);
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              if (errorData.message && (errorData.message.includes('already exists') || errorData.message.includes('must be unique'))) {
+                console.log(`Track ${track.trackName} already exists, skipping...`);
+              } else {
+                console.error(`Failed to import track ${track.trackName}:`, errorData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error importing track ${track.trackName}:`, err);
+          }
+        }
+      }
+
+      // STEP 2: Import Strands
+      if (validStrands.length > 0) {
+        console.log('Importing strands:', validStrands);
+        for (const strand of validStrands) {
+          try {
+            const res = await fetch(`${API_BASE}/api/strands`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                strandName: strand.strandName,
+                trackName: strand.trackName,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName
+              })
+            });
+
+            if (res.ok) {
+              strandsImported++;
+              console.log(`Strand ${strand.strandName} imported successfully`);
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              if (errorData.message && (errorData.message.includes('already exists') || errorData.message.includes('must be unique'))) {
+                console.log(`Strand ${strand.strandName} already exists, skipping...`);
+              } else {
+                console.error(`Failed to import strand ${strand.strandName}:`, errorData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error importing strand ${strand.strandName}:`, err);
+          }
+        }
+      }
+
+      // STEP 3: Import Sections
+      if (validSections.length > 0) {
+        console.log('Importing sections:', validSections);
+        for (const section of validSections) {
+          try {
+            const res = await fetch(`${API_BASE}/api/sections`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sectionName: section.sectionName,
+                trackName: section.trackName,
+                strandName: section.strandName,
+                gradeLevel: section.gradeLevel,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName
+              })
+            });
+
+            if (res.ok) {
+              sectionsImported++;
+              console.log(`Section ${section.sectionName} imported successfully`);
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              if (errorData.message && (errorData.message.includes('already exists') || errorData.message.includes('must be unique'))) {
+                console.log(`Section ${section.sectionName} already exists, skipping...`);
+              } else {
+                console.error(`Failed to import section ${section.sectionName}:`, errorData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error importing section ${section.sectionName}:`, err);
+          }
+        }
+      }
+
+      // STEP 4: Import Subjects
+      if (validSubjects.length > 0) {
+        console.log('Importing subjects:', validSubjects);
+        for (const subject of validSubjects) {
+          try {
+            const res = await fetch(`${API_BASE}/api/subjects`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                subjectName: subject.subjectName,
+                trackName: subject.trackName,
+                strandName: subject.strandName,
+                gradeLevel: subject.gradeLevel,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName
+              })
+            });
+
+            if (res.ok) {
+              subjectsImported++;
+              console.log(`Subject ${subject.subjectName} imported successfully`);
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              if (errorData.message && (errorData.message.includes('already exists') || errorData.message.includes('must be unique'))) {
+                console.log(`Subject ${subject.subjectName} already exists, skipping...`);
+              } else {
+                console.error(`Failed to import subject ${subject.subjectName}:`, errorData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error importing subject ${subject.subjectName}:`, err);
+          }
+        }
+      }
+
+      // STEP 5: Import Faculty Assignments
+      if (validFacultyAssignments.length > 0) {
+        console.log('Importing faculty assignments:', validFacultyAssignments);
+        for (const assignment of validFacultyAssignments) {
+          try {
+            // Find faculty by name
+            const faculty = faculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === assignment.facultyName.toLowerCase());
+            if (!faculty) {
+              console.error(`Faculty ${assignment.facultyName} not found for assignment`);
+              continue;
+            }
+
+            const res = await fetch(`${API_BASE}/api/faculty-assignments`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              },
+              body: JSON.stringify({
+                facultyId: faculty._id,
+                facultyName: assignment.facultyName,
+                trackName: assignment.trackName,
+                strandName: assignment.strandName,
+                sectionName: assignment.sectionName,
+                gradeLevel: assignment.gradeLevel,
+                subjectName: assignment.subjectName,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName,
+                termId: termDetails._id
+              })
+            });
+
+            if (res.ok) {
+              facultyAssignmentsImported++;
+              console.log(`Faculty assignment for ${assignment.facultyName} imported successfully`);
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              if (errorData.message && (errorData.message.includes('already exists') || errorData.message.includes('must be unique'))) {
+                console.log(`Faculty assignment for ${assignment.facultyName} already exists, skipping...`);
+              } else {
+                console.error(`Failed to import faculty assignment for ${assignment.facultyName}:`, errorData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error importing faculty assignment for ${assignment.facultyName}:`, err);
+          }
+        }
+      }
+
+      // STEP 6: Import Student Assignments
+      if (validStudentAssignments.length > 0) {
+        console.log('Importing student assignments:', validStudentAssignments);
+        for (const assignment of validStudentAssignments) {
+          try {
+            // Find student by name
+            const student = students.find(s => `${s.firstname} ${s.lastname}`.toLowerCase() === assignment.studentName.toLowerCase());
+            if (!student) {
+              console.error(`Student ${assignment.studentName} not found for assignment`);
+              continue;
+            }
+
+            const res = await fetch(`${API_BASE}/api/student-assignments`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              },
+              body: JSON.stringify({
+                studentId: student._id,
+                studentName: assignment.studentName,
+                trackName: assignment.trackName,
+                strandName: assignment.strandName,
+                sectionName: assignment.sectionName,
+                gradeLevel: assignment.gradeLevel,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName,
+                termId: termDetails._id
+              })
+            });
+
+            if (res.ok) {
+              studentAssignmentsImported++;
+              console.log(`Student assignment for ${assignment.studentName} imported successfully`);
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              if (errorData.message && (errorData.message.includes('already exists') || errorData.message.includes('must be unique'))) {
+                console.log(`Student assignment for ${assignment.studentName} already exists, skipping...`);
+              } else {
+                console.error(`Failed to import student assignment for ${assignment.studentName}:`, errorData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error importing student assignment for ${assignment.studentName}:`, err);
+          }
+        }
+      }
+
+      // Summary of what was actually imported
+      const totalImported = tracksImported + strandsImported + sectionsImported + subjectsImported + facultyAssignmentsImported + studentAssignmentsImported;
+      
+      let alertMessage = `Import process complete!
+
+Successfully imported:
+- ${tracksImported} tracks
+- ${strandsImported} strands  
+- ${sectionsImported} sections
+- ${subjectsImported} subjects
+- ${facultyAssignmentsImported} faculty assignments
+- ${studentAssignmentsImported} student assignments
+
+Total: ${totalImported} items imported`;
+
       if (skippedCount > 0) {
-        alertMessage += `
-Skipped ${skippedCount} duplicate or invalid entries:
+        alertMessage += `\nSkipped ${skippedCount} duplicate or invalid entries:
+
+Validation issues (${skippedCount} items):
 - ${skippedMessages.join('\n- ')}`;
       }
-      alertMessage += `
 
-Actual import to database is coming soon!`;
       window.alert(alertMessage);
-
-      // TODO: Here is where the actual API calls for bulk upload would go, using the valid* arrays
 
       setImportModalOpen(false);
       setImportExcelFile(null);
