@@ -24,6 +24,8 @@ export default function QuizView() {
   const [timeWarned, setTimeWarned] = useState(false);
   const [showUnansweredModal, setShowUnansweredModal] = useState(false);
   const [unansweredNumbers, setUnansweredNumbers] = useState([]);
+  const [showViolationModal, setShowViolationModal] = useState(false);
+  const [violationMessage, setViolationMessage] = useState('');
   const violationCountRef = useRef(0);
   const [violationEvents, setViolationEvents] = useState([]); // {question: number, time: ISO string}
   const [questionTimes, setQuestionTimes] = useState([]); // seconds spent per question
@@ -228,14 +230,17 @@ export default function QuizView() {
     questionStartTimeRef.current = Date.now();
   };
 
-  // Canvas-style monitoring: focus loss/tab switch
+  // Canvas-style monitoring: focus loss/tab switch - ONLY WHEN QUIZ IS ACTIVE
   useEffect(() => {
+    // Don't monitor if quiz is already submitted
+    if (submitted || showIntro) return;
+    
     const handleBlur = () => {
       // Record violation event with question number and timestamp
       setViolationEvents(events => [...events, { question: current + 1, time: new Date().toISOString() }]);
       violationCountRef.current += 1;
-      // setViolationCount(violationCountRef.current); // This line is removed
-      alert("You have left the quiz window. Your teacher will be notified.");
+      setViolationMessage("You have left the quiz window. Your teacher will be notified.");
+      setShowViolationModal(true);
       // Optionally, send to backend immediately (for real-time logging)
       /*
       fetch('/api/quiz-violation', {
@@ -249,9 +254,13 @@ export default function QuizView() {
     return () => {
       window.removeEventListener('blur', handleBlur);
     };
-  }, [current]);
-  // Disable right-click, copy, paste
+  }, [current, submitted, showIntro]);
+  
+  // Disable right-click, copy, paste - ONLY WHEN QUIZ IS ACTIVE
   useEffect(() => {
+    // Don't restrict if quiz is already submitted
+    if (submitted || showIntro) return;
+    
     const handleContextMenu = (e) => e.preventDefault();
     const handleCopy = (e) => e.preventDefault();
     const handlePaste = (e) => e.preventDefault();
@@ -263,7 +272,7 @@ export default function QuizView() {
       document.removeEventListener('copy', handleCopy);
       document.removeEventListener('paste', handlePaste);
     };
-  }, []);
+  }, [submitted, showIntro]);
 
   const handleSubmit = async () => {
     // Record time for last question
@@ -535,6 +544,19 @@ export default function QuizView() {
             <button
               className="mt-2 bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded"
               onClick={() => setShowUnansweredModal(false)}
+            >OK</button>
+          </div>
+        </div>
+      )}
+      {/* Violation Warning Modal */}
+      {showViolationModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+          <div className="bg-white rounded-xl shadow-xl p-8 max-w-md w-full text-center border-2 border-red-500">
+            <h3 className="text-2xl font-bold mb-4 text-red-700">Quiz Violation Detected</h3>
+            <div className="text-lg mb-4">{violationMessage}</div>
+            <button
+              className="mt-2 bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded"
+              onClick={() => setShowViolationModal(false)}
             >OK</button>
           </div>
         </div>

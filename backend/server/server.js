@@ -180,9 +180,23 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const uploadsDir = path.join(__dirname, 'uploads');
 
-app.use('/uploads', express.static(uploadsDir));
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+const quizImagesDir = path.join(uploadsDir, 'quiz-images');
+
+if (!fs.existsSync(uploadsDir)) {
+  console.log('[SERVER] Creating uploads directory:', uploadsDir);
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+if (!fs.existsSync(quizImagesDir)) {
+  console.log('[SERVER] Creating quiz-images directory:', quizImagesDir);
+  fs.mkdirSync(quizImagesDir, { recursive: true });
+}
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // MongoDB connection
 mongoose.connect(process.env.ATLAS_URI)
@@ -264,7 +278,6 @@ app.use('/', userRoutes);
 app.use('/messages', messageRoutes);
 app.use('/group-chats', groupChatRoutes);
 app.use('/group-messages', groupMessageRoutes);
-app.use('/uploads', express.static('uploads'));
 app.use("/events", eventRoutes);
 app.use("/classes", classRoutes);
 app.use("/", auditTrailRoutes);
