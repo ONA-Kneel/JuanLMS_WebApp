@@ -817,7 +817,7 @@ userRoutes.post('/login', async (req, res) => {
     const user = await User.findOne({ emailHash });
     console.log('User found:', user);
     if (!user) {
-        return res.status(401).json({ success: false, message: "Invalid email or password" });
+        return res.status(401).json({ success: false, message: "Invalid email" });
     }
 
     // Check if user is archived
@@ -829,7 +829,7 @@ userRoutes.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     console.log('Password match:', isMatch);
     if (!isMatch) {
-        return res.status(401).json({ success: false, message: "Invalid email or password" });
+        return res.status(401).json({ success: false, message: "Invalid password" });
     }
 
     // JWT Token Payload (adapt as needed)

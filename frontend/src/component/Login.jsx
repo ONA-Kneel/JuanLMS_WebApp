@@ -21,6 +21,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
+  const [previousErrors, setPreviousErrors] = useState(new Set());
   const [isLocked, setIsLocked] = useState(() => {
     const lockoutEndTime = localStorage.getItem('lockoutEndTime');
     if (lockoutEndTime) {
@@ -47,6 +48,57 @@ export default function Login() {
 
   // --- EFFECT: Auto-login if credentials are stored in localStorage ---
   useEffect(() => {
+    // --- HANDLER: Auto-login using stored credentials ---
+    const handleAutoLogin = async (email, password) => {
+      try {
+        const response = await axios.post(`${API_BASE}/login`, { email, password });
+        const { token } = response.data;
+    
+        // Decode JWT to extract user info and role
+        const decoded = jwtDecode(token);
+        const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
+    
+        // Debug: Log the role to see what's being received
+        console.log('Received role:', role);
+        console.log('Role type:', typeof role);
+    
+        // If user has a profile picture, build the image URL
+        const imageUrl = getProfileImageUrl(profilePic, API_BASE, null);
+    
+              // Store user info and token in localStorage
+        localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
+        localStorage.setItem('token', token);
+        localStorage.setItem('userID', userID);
+        localStorage.setItem('role', role);
+        
+        // Clear the logout flag since auto-login means user had "Remember Me" enabled
+        localStorage.removeItem('shouldLogoutOnReturn');
+
+        // Navigate to dashboard based on user role (case-insensitive comparison)
+        const normalizedRole = role ? role.toLowerCase().trim() : '';
+        
+        if (normalizedRole === 'students' || normalizedRole === 'student') navigate('/student_dashboard');
+        else if (normalizedRole === 'faculty') navigate('/faculty_dashboard');
+        else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president') navigate('/VPE_dashboard');
+        else if (normalizedRole === 'admin') navigate('/admin_dashboard');
+        else if (normalizedRole === 'principal') navigate('/principal_dashboard');
+        else {
+          console.error('Unknown role received:', role);
+          setValidationModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Unknown Role',
+            message: `Unknown role: ${role}. Please contact administrator.`
+          });
+        }
+      } catch (error) {
+        console.error('Auto-login failed:', error);
+        // Clear stored credentials if auto-login fails
+        localStorage.removeItem('rememberedEmail');
+        localStorage.removeItem('rememberedPassword');
+      }
+    };
+
     // Check if we should logout when returning to login page
     const shouldLogout = localStorage.getItem('shouldLogoutOnReturn');
     const token = localStorage.getItem('token');
@@ -75,7 +127,7 @@ export default function Login() {
       // Auto-login with stored credentials
       handleAutoLogin(storedEmail, storedPassword);
     }
-  }, []);
+  }, [navigate, setValidationModal]);
 
   // --- EFFECT: Handle browser navigation and auto-logout ---
   useEffect(() => {
@@ -150,56 +202,6 @@ export default function Login() {
 
 
 
-  // --- HANDLER: Auto-login using stored credentials ---
-  const handleAutoLogin = async (email, password) => {
-    try {
-      const response = await axios.post(`${API_BASE}/login`, { email, password });
-      const { token } = response.data;
-  
-      // Decode JWT to extract user info and role
-      const decoded = jwtDecode(token);
-      const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
-  
-      // Debug: Log the role to see what's being received
-      console.log('Received role:', role);
-      console.log('Role type:', typeof role);
-  
-      // If user has a profile picture, build the image URL
-      const imageUrl = getProfileImageUrl(profilePic, API_BASE, null);
-  
-            // Store user info and token in localStorage
-      localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
-      localStorage.setItem('token', token);
-      localStorage.setItem('userID', userID);
-      localStorage.setItem('role', role);
-      
-      // Clear the logout flag since auto-login means user had "Remember Me" enabled
-      localStorage.removeItem('shouldLogoutOnReturn');
-
-      // Navigate to dashboard based on user role (case-insensitive comparison)
-      const normalizedRole = role ? role.toLowerCase().trim() : '';
-      
-      if (normalizedRole === 'students' || normalizedRole === 'student') navigate('/student_dashboard');
-      else if (normalizedRole === 'faculty') navigate('/faculty_dashboard');
-      else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president') navigate('/VPE_dashboard');
-      else if (normalizedRole === 'admin') navigate('/admin_dashboard');
-      else if (normalizedRole === 'principal') navigate('/principal_dashboard');
-      else {
-        console.error('Unknown role received:', role);
-        setValidationModal({
-          isOpen: true,
-          type: 'error',
-          title: 'Unknown Role',
-          message: `Unknown role: ${role}. Please contact administrator.`
-        });
-      }
-    } catch (error) {
-      console.error('Auto-login failed:', error);
-      // Clear stored credentials if auto-login fails
-      localStorage.removeItem('rememberedEmail');
-      localStorage.removeItem('rememberedPassword');
-    }
-  };
 
   // --- HANDLER: Lockout timer countdown ---
   useEffect(() => {
@@ -211,6 +213,7 @@ export default function Login() {
           if (newTime === 0) {
             setIsLocked(false);
             setFailedAttempts(0);
+            setPreviousErrors(new Set());
             localStorage.removeItem('lockoutEndTime');
             return 30;
           }
@@ -237,8 +240,9 @@ export default function Login() {
       const response = await axios.post(`${API_BASE}/login`, { email, password });
       const { token } = response.data;
   
-      // Reset failed attempts on successful login
+      // Reset failed attempts and previous errors on successful login
       setFailedAttempts(0);
+      setPreviousErrors(new Set());
   
       // Decode JWT to extract user info and role
       const decoded = jwtDecode(token);
@@ -312,19 +316,23 @@ export default function Login() {
       
       // Handle specific error cases
       let errorMessage = 'Invalid email or password.';
+      let currentErrorType = '';
+      
       if (error.response) {
         const status = error.response.status;
         const data = error.response.data;
         // Custom error handling for email/password
         if (status === 401) {
-          if (data.message && data.message.toLowerCase().includes('email')) {
+          if (data.message === 'Invalid email') {
+            currentErrorType = 'email';
             errorMessage = 'Invalid email address.';
-          } else if (data.message && data.message.toLowerCase().includes('password')) {
+          } else if (data.message === 'Invalid password') {
+            currentErrorType = 'password';
             errorMessage = 'Incorrect password.';
           } else if (data.message && data.message.toLowerCase().includes('invalid email or password')) {
             errorMessage = 'Invalid email and password.';
           } else {
-          errorMessage = data.message || 'Invalid email or password.';
+            errorMessage = data.message || 'Invalid email or password.';
           }
         } else if (status === 403) {
           errorMessage = data.message || 'Account is disabled or locked.';
@@ -341,6 +349,18 @@ export default function Login() {
         errorMessage = 'Network error. Please check your connection and try again.';
       } else {
         errorMessage = error.message || 'An unexpected error occurred.';
+      }
+      
+      // Track error types and show combined message if both email and password have been wrong
+      if (currentErrorType) {
+        const newPreviousErrors = new Set(previousErrors);
+        newPreviousErrors.add(currentErrorType);
+        setPreviousErrors(newPreviousErrors);
+        
+        // If user has had both email and password errors, show combined message
+        if (newPreviousErrors.has('email') && newPreviousErrors.has('password')) {
+          errorMessage = 'Invalid email and password.';
+        }
       }
       
       setValidationModal({

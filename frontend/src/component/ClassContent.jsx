@@ -856,7 +856,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                         minute: '2-digit'
                       })}
                     </p>
-                    <p className="text-sm text-gray-700">{item.content}</p>
+                    <p className="text-sm text-gray-700 break-words overflow-hidden">{item.content}</p>
                   </div>
                   {isFaculty && (
                     <div className="flex gap-2 ml-4">

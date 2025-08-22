@@ -312,7 +312,7 @@ export default function VPE_Dashboard() {
             <div className="text-sm text-gray-500 mb-4">
               {announcementToShow.termName} • {announcementToShow.schoolYear}
             </div>
-            <div className="mb-6 text-gray-800 whitespace-pre-wrap">
+            <div className="mb-6 text-gray-800 whitespace-pre-wrap break-words overflow-hidden">
               {announcementToShow.body}
             </div>
             

@@ -282,7 +282,7 @@ export default function Student_Dashboard() {
                 <div className="text-xs text-gray-500">
                   {announcements[0].termName} • {announcements[0].schoolYear}
                 </div>
-                <div className="text-sm text-gray-800 whitespace-pre-wrap mt-2">
+                <div className="text-sm text-gray-800 whitespace-pre-wrap break-words overflow-hidden mt-2">
                   {announcements[0].body}
                 </div>
                 {announcements[0]?.createdBy && (
