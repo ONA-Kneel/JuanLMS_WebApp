@@ -222,19 +222,138 @@ router.get('/', authenticateToken, async (req, res) => {
 //   }
 // });
 
+// --- GET /debug/users - Debug endpoint to check user data ---
+router.get('/debug/users', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔍 [Backend] Debug users endpoint called');
+    
+    // Get all users
+    const allUsers = await User.find({});
+    console.log('🔍 [Backend] Total users found:', allUsers.length);
+    
+    // Count by role
+    const roleCounts = {};
+    allUsers.forEach(user => {
+      const role = user.role || 'unknown';
+      roleCounts[role] = (roleCounts[role] || 0) + 1;
+    });
+    
+    console.log('🔍 [Backend] Users by role:', roleCounts);
+    
+    // Log first few users of each role
+    Object.keys(roleCounts).forEach(role => {
+      const usersOfRole = allUsers.filter(u => u.role === role).slice(0, 3);
+      console.log(`🔍 [Backend] Sample ${role} users:`, usersOfRole.map(u => ({
+        _id: u._id,
+        userID: u.userID,
+        schoolID: u.schoolID,
+        firstname: u.firstname,
+        lastname: u.lastname,
+        role: u.role
+      })));
+    });
+    
+    res.json({
+      success: true,
+      totalUsers: allUsers.length,
+      roleCounts,
+      sampleUsers: Object.keys(roleCounts).reduce((acc, role) => {
+        const usersOfRole = allUsers.filter(u => u.role === role).slice(0, 3);
+        acc[role] = usersOfRole.map(u => ({
+          _id: u._id,
+          userID: u.userID,
+          schoolID: u.schoolID,
+          firstname: u.firstname,
+          lastname: u.lastname,
+          role: u.role
+        }));
+        return acc;
+      }, {})
+    });
+  } catch (err) {
+    console.error('🔍 [Backend] Error in debug users endpoint:', err);
+    res.status(500).json({ error: 'Failed to fetch debug users data' });
+  }
+});
+
+// --- GET /debug/classes - Debug endpoint to check class data ---
+router.get('/debug/classes', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔍 [Backend] Debug endpoint called');
+    
+    // Get all classes
+    const allClasses = await Class.find({});
+    console.log('🔍 [Backend] Total classes found:', allClasses.length);
+    
+    // Log each class structure
+    allClasses.forEach((cls, index) => {
+      console.log(`🔍 [Backend] Class ${index + 1}:`, {
+        classID: cls.classID,
+        className: cls.className,
+        facultyID: cls.facultyID,
+        members: cls.members,
+        membersLength: cls.members ? cls.members.length : 0,
+        section: cls.section,
+        academicYear: cls.academicYear,
+        termName: cls.termName
+      });
+    });
+    
+    res.json({
+      success: true,
+      totalClasses: allClasses.length,
+      classes: allClasses.map(cls => ({
+        classID: cls.classID,
+        className: cls.className,
+        facultyID: cls.facultyID,
+        members: cls.members,
+        membersLength: cls.members ? cls.members.length : 0,
+        section: cls.section,
+        academicYear: cls.academicYear,
+        termName: cls.termName
+      }))
+    });
+  } catch (err) {
+    console.error('🔍 [Backend] Error in debug endpoint:', err);
+    res.status(500).json({ error: 'Failed to fetch debug data' });
+  }
+});
+
 // --- GET /:classID/members - Get all members (faculty and students) of a class ---
-router.get('/:classID/members', async (req, res) => {
+router.get('/:classID/members', authenticateToken, async (req, res) => {
   try {
     const { classID } = req.params;
-    const db = req.app.locals.db || database.getDb();
-    // Find the class by classID
-    const classDoc = await db.collection('Classes').findOne({ classID });
-    if (!classDoc) return res.status(404).json({ error: 'Class not found' });
+    
+    console.log('🔍 [Backend] GET /:classID/members called with classID:', classID);
+    
+    // Use Mongoose Class model instead of raw MongoDB collection
+    const classDoc = await Class.findOne({ classID });
+    console.log('🔍 [Backend] Class lookup result:', classDoc ? 'Found' : 'Not found');
+    
+    if (!classDoc) {
+      console.log('🔍 [Backend] Class not found for classID:', classID);
+      return res.status(404).json({ error: 'Class not found' });
+    }
+    
+    console.log('🔍 [Backend] Class document:', {
+      classID: classDoc.classID,
+      className: classDoc.className,
+      facultyID: classDoc.facultyID,
+      members: classDoc.members,
+      membersLength: classDoc.members ? classDoc.members.length : 0
+    });
+    
     // Use Mongoose User model to fetch and decrypt users
     const faculty = await User.find({ userID: classDoc.facultyID, isArchived: { $ne: true } });
+    console.log('🔍 [Backend] Faculty lookup result:', faculty.length, 'faculty found');
+    
     const students = classDoc.members && classDoc.members.length > 0
       ? await User.find({ userID: { $in: classDoc.members }, isArchived: { $ne: true } })
       : [];
+    
+    console.log('🔍 [Backend] Students lookup result:', students.length, 'students found');
+    console.log('🔍 [Backend] Student userIDs found:', students.map(s => s.userID));
+    
     // Decrypt fields
     const decryptedFaculty = faculty.map(user => ({
       ...user.toObject(),
@@ -247,6 +366,7 @@ router.get('/:classID/members', async (req, res) => {
       profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
       password: undefined,
     }));
+    
     const decryptedStudents = students.map(user => ({
       ...user.toObject(),
       email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
@@ -258,10 +378,80 @@ router.get('/:classID/members', async (req, res) => {
       profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
       password: undefined,
     }));
+    
+    console.log('🔍 [Backend] Sending response with:', {
+      facultyCount: decryptedFaculty.length,
+      studentsCount: decryptedStudents.length
+    });
+    
     res.json({ faculty: decryptedFaculty, students: decryptedStudents });
   } catch (err) {
-    console.error(err);
+    console.error('🔍 [Backend] Error in GET /:classID/members:', err);
     res.status(500).json({ error: 'Failed to fetch class members' });
+  }
+});
+
+// --- PATCH /:classID/members - Update class members ---
+router.patch('/:classID/members', authenticateToken, async (req, res) => {
+  try {
+    const { classID } = req.params;
+    const { members } = req.body;
+    
+    if (!Array.isArray(members)) {
+      return res.status(400).json({ error: 'Members must be an array' });
+    }
+    
+    // Update the class with new members
+    const updatedClass = await Class.findOneAndUpdate(
+      { classID },
+      { members: members },
+      { new: true }
+    );
+    
+    if (!updatedClass) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+    
+    // Fetch updated members data to return
+    const faculty = await User.find({ userID: updatedClass.facultyID, isArchived: { $ne: true } });
+    const students = updatedClass.members && updatedClass.members.length > 0
+      ? await User.find({ userID: { $in: updatedClass.members }, isArchived: { $ne: true } })
+      : [];
+    
+    // Decrypt fields
+    const decryptedFaculty = faculty.map(user => ({
+      ...user.toObject(),
+      email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+      schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
+      personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+      middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
+      firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
+      lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
+      profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+      password: undefined,
+    }));
+    
+    const decryptedStudents = students.map(user => ({
+      ...user.toObject(),
+      email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+      schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
+      personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+      middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
+      firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
+      lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
+      profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+      password: undefined,
+    }));
+    
+    res.json({ 
+      success: true, 
+      message: 'Class members updated successfully',
+      faculty: decryptedFaculty, 
+      students: decryptedStudents 
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update class members' });
   }
 });
 
