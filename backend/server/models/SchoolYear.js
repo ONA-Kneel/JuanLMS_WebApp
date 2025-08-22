@@ -45,6 +45,39 @@ schoolYearSchema.pre('save', async function(next) {
   next();
 });
 
+// Pre-remove middleware for cascading deletes
+schoolYearSchema.pre('remove', async function(next) {
+  try {
+    const schoolYearName = `${this.schoolYearStart}-${this.schoolYearEnd}`;
+    
+    // Import models here to avoid circular dependencies
+    const Term = mongoose.model('Term');
+    const Track = mongoose.model('Track');
+    const Strand = mongoose.model('Strand');
+    const Section = mongoose.model('Section');
+    const Subject = mongoose.model('Subject');
+    const StudentAssignment = mongoose.model('StudentAssignment');
+    const FacultyAssignment = mongoose.model('FacultyAssignment');
+    
+    // Delete all related entities
+    await Promise.all([
+      Term.deleteMany({ schoolYear: schoolYearName }),
+      Track.deleteMany({ schoolYear: schoolYearName }),
+      Strand.deleteMany({ schoolYear: schoolYearName }),
+      Section.deleteMany({ schoolYear: schoolYearName }),
+      Subject.deleteMany({ schoolYear: schoolYearName }),
+      StudentAssignment.deleteMany({ schoolYear: schoolYearName }),
+      FacultyAssignment.deleteMany({ schoolYear: schoolYearName })
+    ]);
+    
+    console.log(`Cascading delete completed for school year: ${schoolYearName}`);
+    next();
+  } catch (error) {
+    console.error('Error in cascading delete:', error);
+    next(error);
+  }
+});
+
 const SchoolYear = mongoose.model('SchoolYear', schoolYearSchema);
 
 export default SchoolYear; 
