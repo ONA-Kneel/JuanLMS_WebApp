@@ -124,20 +124,20 @@ const Faculty_Meeting = () => {
             const data = await res.json();
             // Filter classes to only show those active for the current term
             const activeClasses = data.filter(cls => {
-              // MUST have term information and match current term
-              if (!cls.term || cls.term !== currentTerm.termName) {
+              // MUST have termName and match current term
+              if (!cls.termName || cls.termName !== currentTerm.termName) {
                 return false;
               }
-              // MUST have school year and match current academic year
-              if (!cls.schoolYear || !academicYear) {
+              // MUST have academicYear and match current academic year
+              if (!cls.academicYear || !academicYear) {
                 return false;
               }
               const expectedYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-              if (cls.schoolYear !== expectedYear) {
+              if (cls.academicYear !== expectedYear) {
                 return false;
               }
-              // MUST be active/ongoing
-              if (!cls.status || cls.status !== 'active') {
+              // MUST be not archived
+              if (cls.isArchived === true) {
                 return false;
               }
               return true;
@@ -171,16 +171,16 @@ const Faculty_Meeting = () => {
               // Must be assigned to this faculty
               if (cls.facultyID !== facultyId) return false;
               
-              // MUST have term information and match current term
-              if (!cls.term || cls.term !== currentTerm.termName) return false;
+              // MUST have termName and match current term
+              if (!cls.termName || cls.termName !== currentTerm.termName) return false;
               
-              // MUST have school year and match current academic year
-              if (!cls.schoolYear || !academicYear) return false;
+              // MUST have academicYear and match current academic year
+              if (!cls.academicYear || !academicYear) return false;
               const expectedYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-              if (cls.schoolYear !== expectedYear) return false;
+              if (cls.academicYear !== expectedYear) return false;
               
-              // MUST be active
-              if (!cls.status || cls.status !== 'active') return false;
+              // MUST be not archived
+              if (cls.isArchived === true) return false;
               
               return true;
             });
