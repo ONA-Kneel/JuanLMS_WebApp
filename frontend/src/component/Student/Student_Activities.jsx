@@ -375,8 +375,8 @@ export default function Student_Activities() {
       // Check if student has submitted this assignment
       const hasSubmission = submissions.some(submission => {
         const matches = submission.assignment === activity._id || 
-                       submission.assignment?._id === activity._id ||
-                       submission.assignmentId === activity._id;
+        submission.assignment?._id === activity._id ||
+        submission.assignmentId === activity._id;
         if (matches) {
           console.log('Found matching assignment submission:', submission);
         }
