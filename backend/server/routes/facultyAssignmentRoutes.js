@@ -59,7 +59,7 @@ router.get('/term/:termId', authenticateToken, async (req, res) => {
 // Create a new faculty assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { facultyId, trackName, strandName, sectionName, subjectName, gradeLevel, termId } = req.body;
+    const { facultyId, facultyName, trackName, strandName, sectionName, subjectName, gradeLevel, termId } = req.body;
 
     // Get term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -67,8 +67,54 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Term not found' });
     }
 
+    let actualFacultyId = facultyId;
+    if (!actualFacultyId && facultyName) {
+      console.log('Looking for faculty by name:', facultyName);
+      let faculty = await User.findOne({
+        $or: [
+          { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, facultyName.toLowerCase()] } },
+          { firstname: { $regex: new RegExp(facultyName.split(' ')[0], 'i') }, lastname: { $regex: new RegExp(facultyName.split(' ').slice(-1)[0], 'i') } },
+          { $expr: { $regexMatch: { input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, regex: facultyName.toLowerCase() } } },
+          { firstname: { $regex: new RegExp(facultyName, 'i') } },
+          { lastname: { $regex: new RegExp(facultyName, 'i') } }
+        ],
+        role: 'faculty'
+      });
+
+      if (!faculty) {
+        console.log('Faculty not found with regex, trying more flexible search...');
+        const nameParts = facultyName.trim().split(/\s+/);
+        if (nameParts.length >= 2) {
+          faculty = await User.findOne({
+            $and: [
+              { role: 'faculty' },
+              {
+                $or: [
+                  { firstname: { $regex: new RegExp(nameParts[0], 'i') } },
+                  { firstname: { $regex: new RegExp(nameParts[nameParts.length - 1], 'i') } },
+                  { lastname: { $regex: new RegExp(nameParts[0], 'i') } },
+                  { lastname: { $regex: new RegExp(nameParts[nameParts.length - 1], 'i') } }
+                ]
+              }
+            ]
+          });
+        }
+      }
+
+      if (!faculty) {
+        console.log('All faculty search attempts failed');
+        return res.status(400).json({ message: `Faculty '${facultyName}' not found` });
+      }
+      console.log('Found faculty:', faculty.firstname, faculty.lastname);
+      actualFacultyId = faculty._id;
+    }
+
+    if (!actualFacultyId) {
+      return res.status(400).json({ message: 'facultyId or facultyName is required' });
+    }
+
     const assignment = new FacultyAssignment({
-      facultyId,
+      facultyId: actualFacultyId,
       trackName,
       strandName,
       sectionName,
@@ -91,6 +137,111 @@ router.post('/', authenticateToken, async (req, res) => {
     } else {
       res.status(400).json({ message: err.message });
     }
+  }
+});
+
+// Bulk create faculty assignments
+router.post('/bulk', authenticateToken, async (req, res) => {
+  try {
+    const assignments = req.body;
+    const createdAssignments = [];
+    const errors = [];
+
+    for (const assignmentData of assignments) {
+      const { facultyId, facultyName, trackName, strandName, sectionName, subjectName, gradeLevel, termId } = assignmentData;
+
+      try {
+        const term = await Term.findById(termId);
+        if (!term) {
+          errors.push({ assignment: assignmentData, message: 'Term not found' });
+          continue;
+        }
+
+        let actualFacultyId = facultyId;
+        if (!actualFacultyId && facultyName) {
+          console.log('Looking for faculty by name:', facultyName);
+          let faculty = await User.findOne({
+            $or: [
+              { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, facultyName.toLowerCase()] } },
+              { firstname: { $regex: new RegExp(facultyName.split(' ')[0], 'i') }, lastname: { $regex: new RegExp(facultyName.split(' ').slice(-1)[0], 'i') } },
+              { $expr: { $regexMatch: { input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, regex: facultyName.toLowerCase() } } },
+              { firstname: { $regex: new RegExp(facultyName, 'i') } },
+              { lastname: { $regex: new RegExp(facultyName, 'i') } }
+            ],
+            role: 'faculty'
+          });
+
+          if (!faculty) {
+            console.log('Faculty not found with regex, trying more flexible search...');
+            const nameParts = facultyName.trim().split(/\s+/);
+            if (nameParts.length >= 2) {
+              faculty = await User.findOne({
+                $and: [
+                  { role: 'faculty' },
+                  {
+                    $or: [
+                      { firstname: { $regex: new RegExp(nameParts[0], 'i') } },
+                      { firstname: { $regex: new RegExp(nameParts[nameParts.length - 1], 'i') } },
+                      { lastname: { $regex: new RegExp(nameParts[0], 'i') } },
+                      { lastname: { $regex: new RegExp(nameParts[nameParts.length - 1], 'i') } }
+                    ]
+                  }
+                ]
+              });
+            }
+          }
+
+          if (!faculty) {
+            console.log('All faculty search attempts failed');
+            errors.push({ assignment: assignmentData, message: `Faculty '${facultyName}' not found` });
+            continue;
+          }
+          console.log('Found faculty:', faculty.firstname, faculty.lastname);
+          actualFacultyId = faculty._id;
+        }
+
+        if (!actualFacultyId) {
+          errors.push({ assignment: assignmentData, message: 'facultyId or facultyName is required' });
+          continue;
+        }
+
+        const newAssignment = new FacultyAssignment({
+          facultyId: actualFacultyId,
+          trackName,
+          strandName,
+          sectionName,
+          subjectName,
+          gradeLevel,
+          termId,
+          schoolYear: term.schoolYear,
+          termName: term.termName
+        });
+
+        const savedAssignment = await newAssignment.save();
+        createdAssignments.push(savedAssignment);
+      } catch (err) {
+        if (err.code === 11000) {
+          errors.push({ assignment: assignmentData, message: 'This faculty assignment already exists' });
+        } else {
+          errors.push({ assignment: assignmentData, message: err.message });
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      return res.status(207).json({
+        message: 'Some assignments could not be created',
+        created: createdAssignments,
+        errors: errors
+      });
+    } else {
+      res.status(201).json({
+        message: 'All faculty assignments created successfully',
+        created: createdAssignments
+      });
+    }
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 

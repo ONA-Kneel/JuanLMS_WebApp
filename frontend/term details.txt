@@ -194,17 +194,6 @@ export default function TermDetails() {
     studentAssignments: []
   });
   const [activeImportTab, setActiveImportTab] = useState('tracks'); // Default tab for import modal
-  
-  // State for validation results modal
-  const [validationModalOpen, setValidationModalOpen] = useState(false);
-  const [validationResults, setValidationResults] = useState({
-    tracks: { valid: 0, invalid: 0, details: [] },
-    strands: { valid: 0, invalid: 0, details: [] },
-    sections: { valid: 0, invalid: 0, details: [] },
-    subjects: { valid: 0, invalid: 0, details: [] },
-    facultyAssignments: { valid: 0, invalid: 0, details: [] },
-    studentAssignments: { valid: 0, invalid: 0, details: [] }
-  });
 
   const tabs = [
     { id: 'dashboard', label: 'Term Dashboard', icon: termDashboardIcon },
@@ -284,96 +273,46 @@ export default function TermDetails() {
 
   const fetchFaculties = async () => {
     try {
-      console.log('🔍 Fetching faculties...');
       const token = localStorage.getItem('token');
-      console.log('🔑 Token:', token ? 'Present' : 'Missing');
-      
       const res = await fetch(`${API_BASE}/users/active`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      
-      console.log('📡 Faculty fetch response status:', res.status);
-      console.log('📡 Faculty fetch response ok:', res.ok);
-      
       if (res.ok) {
         const data = await res.json();
-        console.log("📊 Fetched all active users (faculties potential):", data);
-        console.log("📊 Total users fetched:", data.length);
-        
+        console.log("Fetched all active users (faculties potential):", data); // Debug log
         const facultyUsers = data.filter(user => user.role === 'faculty');
-        console.log("👨‍🏫 Filtered faculty users:", facultyUsers);
-        console.log("👨‍🏫 Faculty count:", facultyUsers.length);
-        
-        // Log each faculty user details
-        facultyUsers.forEach((faculty, index) => {
-          console.log(`👨‍🏫 Faculty ${index + 1}:`, {
-            id: faculty._id,
-            name: `${faculty.firstname} ${faculty.lastname}`,
-            role: faculty.role,
-            status: faculty.status,
-            isArchived: faculty.isArchived,
-            email: faculty.email
-          });
-        });
-        
+        console.log("Filtered faculty users:", facultyUsers); // Debug log
         setFaculties(facultyUsers);
       } else {
         const data = await res.json();
-        console.error('❌ Faculty fetch failed:', data);
         setFacultyError(data.message || 'Failed to fetch faculties');
       }
     } catch (err) {
-      console.error('💥 Error fetching faculties:', err);
       setFacultyError('Error fetching faculties');
     }
   };
 
   const fetchStudents = async () => {
     try {
-      console.log('🔍 Fetching students...');
       const token = localStorage.getItem('token');
-      console.log('🔑 Token:', token ? 'Present' : 'Missing');
-      
       const res = await fetch(`${API_BASE}/users/active`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      
-      console.log('📡 Student fetch response status:', res.status);
-      console.log('📡 Student fetch response ok:', res.ok);
-      
       if (res.ok) {
         const data = await res.json();
-        console.log("📊 Fetched all active users (students potential):", data);
-        console.log("📊 Total users fetched:", data.length);
-        
+        console.log("Fetched all active users (students potential):", data); // Debug log
         const studentUsers = data.filter(user => user.role === 'students');
-        console.log("👨‍🎓 Filtered student users:", studentUsers);
-        console.log("👨‍🎓 Student count:", studentUsers.length);
-        
-        // Log each student user details
-        studentUsers.forEach((student, index) => {
-          console.log(`👨‍🎓 Student ${index + 1}:`, {
-            id: student._id,
-            name: `${student.firstname} ${student.lastname}`,
-            role: student.role,
-            status: student.status,
-            isArchived: student.isArchived,
-            email: student.email
-          });
-        });
-        
+        console.log("Filtered student users:", studentUsers); // Debug log
         setStudents(studentUsers);
       } else {
         const data = await res.json();
-        console.error('❌ Student fetch failed:', data);
         setStudentError(data.message || 'Failed to fetch students');
       }
     } catch (err) {
-      console.error('💥 Error fetching students:', err);
       setStudentError('Error fetching students');
     }
   };
@@ -3787,30 +3726,26 @@ export default function TermDetails() {
                   parsedData.subjects = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], gradeLevel: row['Grade Level'], subjectName: row['Subject Name'] }));
                 } else if (sheetName === 'Faculty Assignments') {
                   parsedData.facultyAssignments = normalizedRows.map(row => ({
-                    facultyName: row['Faculty Name'] || row['Faculty Na'] || row['Faculty'],
-                    trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
-                    strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
-                    sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
-                    gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
-                    subjectName: row['Subject'] || row['Subject Nam'] || row['Subject Name'],
+                    facultyName: row['Faculty Name'],
+                    trackName: row['Track Name'],
+                    strandName: row['Strand Name'],
+                    sectionName: row['Section Name'],
+                    gradeLevel: row['Grade Level'],
+                    subjectName: row['Subject'], // 'Subject' is the column name in the template
                   }));
                 } else if (sheetName === 'Student Assignments') {
                   parsedData.studentAssignments = normalizedRows.map(row => ({
-                    studentName: row['Student Name'] || row['Student Nam'] || row['Student'],
-                    gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
-                    trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
-                    strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
-                    sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
+                    studentName: row['Student Name'],
+                    gradeLevel: row['Grade Level'],
+                    trackName: row['Track Name'],
+                    strandName: row['Strand Name'],
+                    sectionName: row['Section Name'],
                   }));
                 }
               }
             }
           }
 
-          console.log('Parsed Excel data:', parsedData);
-          console.log('Student assignments parsed:', parsedData.studentAssignments);
-          console.log('Faculty assignments parsed:', parsedData.facultyAssignments);
-          
           setImportPreviewData(parsedData);
           setImportExcelFile(file);
 
@@ -3848,398 +3783,103 @@ export default function TermDetails() {
     }
   };
 
-  // Prepare validation results for modal display
-  const prepareValidationResults = () => {
-    const results = {
-      tracks: { valid: 0, invalid: 0, details: [] },
-      strands: { valid: 0, invalid: 0, details: [] },
-      sections: { valid: 0, invalid: 0, details: [] },
-      subjects: { valid: 0, invalid: 0, details: [] },
-      facultyAssignments: { valid: 0, invalid: 0, details: [] },
-      studentAssignments: { valid: 0, invalid: 0, details: [] }
-    };
-
-    // Process tracks
-    importValidationStatus.tracks.forEach((status, index) => {
-      if (status.valid) {
-        results.tracks.valid++;
-        results.tracks.details.push({
-          name: importPreviewData.tracks[index]?.trackName || 'Unknown',
-          status: 'valid',
-          message: '✓ Valid'
-        });
-      } else {
-        results.tracks.invalid++;
-        results.tracks.details.push({
-          name: importPreviewData.tracks[index]?.trackName || 'Unknown',
-          status: 'invalid',
-          message: status.message || 'Invalid'
-        });
-      }
-    });
-
-    // Process strands
-    importValidationStatus.strands.forEach((status, index) => {
-      if (status.valid) {
-        results.strands.valid++;
-        results.strands.details.push({
-          name: `${importPreviewData.strands[index]?.trackName || 'Unknown'} - ${importPreviewData.strands[index]?.strandName || 'Unknown'}`,
-          status: 'valid',
-          message: '✓ Valid'
-        });
-      } else {
-        results.strands.invalid++;
-        results.strands.details.push({
-          name: `${importPreviewData.strands[index]?.trackName || 'Unknown'} - ${importPreviewData.strands[index]?.strandName || 'Unknown'}`,
-          status: 'invalid',
-          message: status.message || 'Invalid'
-        });
-      }
-    });
-
-    // Process sections
-    importValidationStatus.sections.forEach((status, index) => {
-      if (status.valid) {
-        results.sections.valid++;
-        results.sections.details.push({
-          name: `${importPreviewData.sections[index]?.trackName || 'Unknown'} - ${importPreviewData.sections[index]?.strandName || 'Unknown'} - ${importPreviewData.sections[index]?.sectionName || 'Unknown'}`,
-          status: 'valid',
-          message: '✓ Valid'
-        });
-      } else {
-        results.sections.invalid++;
-        results.sections.details.push({
-          name: `${importPreviewData.sections[index]?.trackName || 'Unknown'} - ${importPreviewData.sections[index]?.strandName || 'Unknown'} - ${importPreviewData.sections[index]?.sectionName || 'Unknown'}`,
-          status: 'invalid',
-          message: status.message || 'Invalid'
-        });
-      }
-    });
-
-    // Process subjects
-    importValidationStatus.subjects.forEach((status, index) => {
-      if (status.valid) {
-        results.subjects.valid++;
-        results.subjects.details.push({
-          name: importPreviewData.subjects[index]?.subjectName || 'Unknown',
-          status: 'valid',
-          message: '✓ Valid'
-        });
-      } else {
-        results.subjects.invalid++;
-        results.subjects.details.push({
-          name: importPreviewData.subjects[index]?.subjectName || 'Unknown',
-          status: 'invalid',
-          message: status.message || 'Invalid'
-        });
-      }
-    });
-
-    // Process faculty assignments
-    importValidationStatus.facultyAssignments.forEach((status, index) => {
-      if (status.valid) {
-        results.facultyAssignments.valid++;
-        results.facultyAssignments.details.push({
-          name: importPreviewData.facultyAssignments[index]?.facultyName || 'Unknown',
-          status: 'valid',
-          message: '✓ Valid'
-        });
-      } else {
-        results.facultyAssignments.invalid++;
-        results.facultyAssignments.details.push({
-          name: importPreviewData.facultyAssignments[index]?.facultyName || 'Unknown',
-          status: 'invalid',
-          message: status.message || 'Invalid'
-        });
-      }
-    });
-
-    // Process student assignments
-    importValidationStatus.studentAssignments.forEach((status, index) => {
-      if (status.valid) {
-        results.studentAssignments.valid++;
-        results.studentAssignments.details.push({
-          name: importPreviewData.studentAssignments[index]?.studentName || 'Unknown',
-          status: 'valid',
-          message: '✓ Valid'
-        });
-      } else {
-        results.studentAssignments.invalid++;
-        results.studentAssignments.details.push({
-          name: importPreviewData.studentAssignments[index]?.studentName || 'Unknown',
-          status: 'invalid',
-          message: status.message || 'Invalid'
-        });
-      }
-    });
-
-    setValidationResults(results);
-    setValidationModalOpen(true);
-  };
-
-  // Handle Confirm Import Upload
+  // Handle Confirm Import Upload (stub for now)
   const handleConfirmImportUpload = async () => {
-    if (!importExcelFile) return;
-
     setImportLoading(true);
     setImportError('');
-
     try {
-      // Filter out invalid data
-      const validTracks = importPreviewData.tracks.filter((_, index) => 
-        importValidationStatus.tracks[index]?.valid
-      );
-      const validStrands = importPreviewData.strands.filter((_, index) => 
-        importValidationStatus.strands[index]?.valid
-      );
-      const validSections = importPreviewData.sections.filter((_, index) => 
-        importValidationStatus.sections[index]?.valid
-      );
-      const validSubjects = importPreviewData.subjects.filter((_, index) => 
-        importValidationStatus.subjects[index]?.valid
-      );
-      const validFacultyAssignments = importPreviewData.facultyAssignments.filter((_, index) => 
-        importValidationStatus.facultyAssignments[index]?.valid
-      );
-      const validStudentAssignments = importPreviewData.studentAssignments.filter((_, index) => 
-        importValidationStatus.studentAssignments[index]?.valid
-      );
+      const { tracks, strands, sections, subjects, facultyAssignments, studentAssignments } = importPreviewData;
+      const { tracks: trackValidation, strands: strandValidation, sections: sectionValidation, subjects: subjectValidation, facultyAssignments: facultyAssignmentValidation, studentAssignments: studentAssignmentValidation } = importValidationStatus;
 
       let importedCount = 0;
       let skippedCount = 0;
       const skippedMessages = [];
 
-      console.log('Starting import with data:', {
-        validTracks,
-        validStrands,
-        validSections,
-        validSubjects,
-        validFacultyAssignments,
-        validStudentAssignments
+      // Filter tracks based on validation
+      const validTracks = tracks.filter((track, index) => {
+        if (trackValidation[index] && trackValidation[index].valid) {
+          importedCount++;
+          return true;
+        } else {
+          skippedCount++;
+          skippedMessages.push(`Track '${track.trackName}': ${trackValidation[index].message}`);
+          return false;
+        }
       });
 
-      // Import tracks
-      for (const track of validTracks) {
-        try {
-          const res = await fetch(`${API_BASE}/api/tracks`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              trackName: track.trackName,
-              schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName
-            })
-          });
-
-          if (res.ok) {
-            importedCount++;
-          } else {
-            const data = await res.json();
-            if (data.message && data.message.includes('already exists')) {
-              skippedCount++;
-              skippedMessages.push(`Track "${track.trackName}" already exists`);
-            }
-          }
-        } catch (err) {
-          console.error('Error importing track:', err);
+      // Filter strands based on validation
+      const validStrands = strands.filter((strand, index) => {
+        if (strandValidation[index] && strandValidation[index].valid) {
+          importedCount++;
+          return true;
+        } else {
+          skippedCount++;
+          skippedMessages.push(`Strand '${strand.strandName}' in '${strand.trackName}': ${strandValidation[index].message}`);
+          return false;
         }
-      }
+      });
 
-      // Import strands
-      for (const strand of validStrands) {
-        try {
-          const res = await fetch(`${API_BASE}/api/strands`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              strandName: strand.strandName,
-              trackName: strand.trackName,
-              schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName
-            })
-          });
-
-          if (res.ok) {
-            importedCount++;
-          } else {
-            const data = await res.json();
-            if (data.message && data.message.includes('already exists')) {
-              skippedCount++;
-              skippedMessages.push(`Strand "${strand.strandName}" already exists`);
-            }
-          }
-        } catch (err) {
-          console.error('Error importing strand:', err);
+      // Filter sections based on validation
+      const validSections = sections.filter((section, index) => {
+        if (sectionValidation[index] && sectionValidation[index].valid) {
+          importedCount++;
+          return true;
+        } else {
+          skippedCount++;
+          skippedMessages.push(`Section '${section.sectionName}' (Grade ${section.gradeLevel}) in '${section.trackName}'/'${section.strandName}': ${sectionValidation[index].message}`);
+          return false;
         }
-      }
+      });
 
-      // Import sections
-      for (const section of validSections) {
-        try {
-          const res = await fetch(`${API_BASE}/api/sections`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sectionName: section.sectionName,
-              trackName: section.trackName,
-              strandName: section.strandName,
-              gradeLevel: section.gradeLevel,
-              schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName
-            })
-          });
-
-          if (res.ok) {
-            importedCount++;
-          } else {
-            const data = await res.json();
-            if (data.message && data.message.includes('already exists')) {
-              skippedCount++;
-              skippedMessages.push(`Section "${section.sectionName}" already exists`);
-            }
-          }
-        } catch (err) {
-          console.error('Error importing section:', err);
+      // Filter subjects based on validation
+      const validSubjects = subjects.filter((subject, index) => {
+        if (subjectValidation[index] && subjectValidation[index].valid) {
+          importedCount++;
+          return true;
+        } else {
+          skippedCount++;
+          skippedMessages.push(`Subject '${subject.subjectName}' (Grade ${subject.gradeLevel}) in '${subject.trackName}'/'${subject.strandName}': ${subjectValidation[index].message}`);
+          return false;
         }
-      }
+      });
 
-      // Import subjects
-      for (const subject of validSubjects) {
-        try {
-          const res = await fetch(`${API_BASE}/api/subjects`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              subjectName: subject.subjectName,
-              trackName: subject.trackName,
-              strandName: subject.strandName,
-              gradeLevel: subject.gradeLevel,
-              schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName
-            })
-          });
-
-          if (res.ok) {
-            importedCount++;
-          } else {
-            const data = await res.json();
-            if (data.message && data.message.includes('already exists')) {
-              skippedCount++;
-              skippedMessages.push(`Subject "${subject.subjectName}" already exists`);
-            }
-          }
-        } catch (err) {
-          console.error('Error importing subject:', err);
+      // Filter faculty assignments based on validation
+      const validFacultyAssignments = facultyAssignments.filter((assignment, index) => {
+        if (facultyAssignmentValidation[index] && facultyAssignmentValidation[index].valid) {
+          importedCount++;
+          return true;
+        } else {
+          skippedCount++;
+          skippedMessages.push(`Faculty Assignment for '${assignment.facultyName}' - ${assignment.subjectName} in '${assignment.sectionName}'/'${assignment.gradeLevel}'/'${assignment.strandName}'/'${assignment.trackName}': ${facultyAssignmentValidation[index].message}`);
+          return false;
         }
-      }
+      });
 
-      // Import faculty assignments
-      for (const assignment of validFacultyAssignments) {
-        try {
-          // Find faculty by name
-          const faculty = faculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === assignment.facultyName.toLowerCase());
-          if (!faculty) {
-            skippedCount++;
-            skippedMessages.push(`Faculty "${assignment.facultyName}" not found`);
-            continue;
-          }
-
-          console.log(`Creating faculty assignment for ${assignment.facultyName} in ${assignment.trackName}/${assignment.strandName}/${assignment.sectionName}`);
-
-          const res = await fetch(`${API_BASE}/api/faculty-assignments`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({
-              facultyId: faculty._id,
-              facultyName: assignment.facultyName,
-              trackName: assignment.trackName,
-              strandName: assignment.strandName,
-              sectionName: assignment.sectionName,
-              gradeLevel: assignment.gradeLevel,
-              subjectName: assignment.subjectName,
-              termId: termDetails._id
-            })
-          });
-
-          if (res.ok) {
-            importedCount++;
-            console.log(`Faculty assignment for ${assignment.facultyName} imported successfully`);
-          } else {
-            const data = await res.json();
-            if (data.message && data.message.includes('already exists')) {
-              skippedCount++;
-              skippedMessages.push(`Faculty assignment for "${assignment.facultyName}" already exists`);
-            } else {
-              console.error(`Failed to import faculty assignment for ${assignment.facultyName}:`, data);
-            }
-          }
-        } catch (err) {
-          console.error('Error importing faculty assignment:', err);
+      // Filter student assignments based on validation
+      const validStudentAssignments = studentAssignments.filter((assignment, index) => {
+        if (studentAssignmentValidation[index] && studentAssignmentValidation[index].valid) {
+          importedCount++;
+          return true;
+        } else {
+          skippedCount++;
+          skippedMessages.push(`Student Assignment for '${assignment.studentName}' in '${assignment.sectionName}'/'${assignment.gradeLevel}'/'${assignment.strandName}'/'${assignment.trackName}': ${studentAssignmentValidation[index].message}`);
+          return false;
         }
-      }
-
-      // Import student assignments
-      for (const assignment of validStudentAssignments) {
-        try {
-          // Find student by name
-          const student = students.find(s => `${s.firstname} ${s.lastname}`.toLowerCase() === assignment.studentName.toLowerCase());
-          if (!student) {
-            skippedCount++;
-            skippedMessages.push(`Student "${assignment.studentName}" not found`);
-            continue;
-          }
-
-          console.log(`Creating student assignment for ${assignment.studentName} in ${assignment.trackName}/${assignment.strandName}/${assignment.sectionName}`);
-
-          const res = await fetch(`${API_BASE}/api/student-assignments`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({
-              studentId: student._id,
-              studentName: assignment.studentName,
-              trackName: assignment.trackName,
-              strandName: assignment.strandName,
-              sectionName: assignment.sectionName,
-              gradeLevel: assignment.gradeLevel,
-              termId: termDetails._id
-            })
-          });
-
-          if (res.ok) {
-            importedCount++;
-            console.log(`Student assignment for ${assignment.studentName} imported successfully`);
-          } else {
-            const data = await res.json();
-            if (data.message && data.message.includes('already exists')) {
-              skippedCount++;
-              skippedMessages.push(`Student assignment for "${assignment.studentName}" already exists`);
-            } else {
-              console.error(`Failed to import student assignment for ${assignment.studentName}:`, data);
-            }
-          }
-        } catch (err) {
-          console.error('Error importing student assignment:', err);
-        }
-      }
+      });
 
       let alertMessage = `Import process complete.
 Successfully processed ${importedCount} new entries.`;
-
       if (skippedCount > 0) {
         alertMessage += `
 Skipped ${skippedCount} duplicate or invalid entries:
-
-Validation issues (${skippedCount} items):
 - ${skippedMessages.join('\n- ')}`;
       }
+      alertMessage += `
 
+Actual import to database is coming soon!`;
       window.alert(alertMessage);
+
+      // TODO: Here is where the actual API calls for bulk upload would go, using the valid* arrays
 
       setImportModalOpen(false);
       setImportExcelFile(null);
@@ -4259,7 +3899,6 @@ Validation issues (${skippedCount} items):
         facultyAssignments: [],
         studentAssignments: []
       });
-
       // Refresh all data after successful import
       fetchTracks();
       fetchStrands();
@@ -6773,178 +6412,11 @@ Validation issues (${skippedCount} items):
                 Cancel
               </button>
               <button
-                onClick={prepareValidationResults}
-                className="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 mr-2"
-              >
-                View Validation Results
-              </button>
-              <button
                 onClick={handleConfirmImportUpload}
                 disabled={importLoading}
                 className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {importLoading ? 'Importing...' : 'Import Valid Data'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Validation Results Modal */}
-      {validationModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-2xl font-bold text-gray-900">Validation Results</h2>
-              <p className="text-gray-600 mt-2">Review the validation status of your import data</p>
-            </div>
-            
-            <div className="p-6 space-y-6">
-              {/* Tracks */}
-              <div className="border rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                  Tracks ({validationResults.tracks.valid + validationResults.tracks.invalid})
-                  <span className="ml-2 text-sm font-normal">
-                    <span className="text-green-600">✓ {validationResults.tracks.valid} Valid</span>
-                    {validationResults.tracks.invalid > 0 && (
-                      <span className="text-red-600 ml-2">✗ {validationResults.tracks.invalid} Invalid</span>
-                    )}
-                  </span>
-                </h3>
-                <div className="space-y-2">
-                  {validationResults.tracks.details.map((item, index) => (
-                    <div key={index} className={`flex justify-between items-center p-2 rounded ${
-                      item.status === 'valid' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-                    }`}>
-                      <span className="font-medium">{item.name}</span>
-                      <span className="text-sm">{item.message}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Strands */}
-              <div className="border rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                  Strands ({validationResults.strands.valid + validationResults.strands.invalid})
-                  <span className="ml-2 text-sm font-normal">
-                    <span className="text-green-600">✓ {validationResults.strands.valid} Valid</span>
-                    {validationResults.strands.invalid > 0 && (
-                      <span className="text-red-600 ml-2">✗ {validationResults.strands.invalid} Invalid</span>
-                    )}
-                  </span>
-                </h3>
-                <div className="space-y-2">
-                  {validationResults.strands.details.map((item, index) => (
-                    <div key={index} className={`flex justify-between items-center p-2 rounded ${
-                      item.status === 'valid' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-                    }`}>
-                      <span className="font-medium">{item.name}</span>
-                      <span className="text-sm">{item.message}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Sections */}
-              <div className="border rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                  Sections ({validationResults.sections.valid + validationResults.sections.invalid})
-                  <span className="ml-2 text-sm font-normal">
-                    <span className="text-green-600">✓ {validationResults.sections.valid} Valid</span>
-                    {validationResults.sections.invalid > 0 && (
-                      <span className="text-red-600 ml-2">✗ {validationResults.sections.invalid} Invalid</span>
-                    )}
-                  </span>
-                </h3>
-                <div className="space-y-2">
-                  {validationResults.sections.details.map((item, index) => (
-                    <div key={index} className={`flex justify-between items-center p-2 rounded ${
-                      item.status === 'valid' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-                    }`}>
-                      <span className="font-medium">{item.name}</span>
-                      <span className="text-sm">{item.message}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Subjects */}
-              <div className="border rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                  Subjects ({validationResults.subjects.valid + validationResults.subjects.invalid})
-                  <span className="ml-2 text-sm font-normal">
-                    <span className="text-green-600">✓ {validationResults.subjects.valid} Valid</span>
-                    {validationResults.subjects.invalid > 0 && (
-                      <span className="text-red-600 ml-2">✗ {validationResults.subjects.invalid} Invalid</span>
-                    )}
-                  </span>
-                </h3>
-                <div className="space-y-2">
-                  {validationResults.subjects.details.map((item, index) => (
-                    <div key={index} className={`flex justify-between items-center p-2 rounded ${
-                      item.status === 'valid' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-                    }`}>
-                      <span className="font-medium">{item.name}</span>
-                      <span className="text-sm">{item.message}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Faculty Assignments */}
-              <div className="border rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                  Faculty Assignments ({validationResults.facultyAssignments.valid + validationResults.facultyAssignments.invalid})
-                  <span className="ml-2 text-sm font-normal">
-                    <span className="text-green-600">✓ {validationResults.facultyAssignments.valid} Valid</span>
-                    {validationResults.facultyAssignments.invalid > 0 && (
-                      <span className="text-red-600 ml-2">✗ {validationResults.facultyAssignments.invalid} Invalid</span>
-                    )}
-                  </span>
-                </h3>
-                <div className="space-y-2">
-                  {validationResults.facultyAssignments.details.map((item, index) => (
-                    <div key={index} className={`flex justify-between items-center p-2 rounded ${
-                      item.status === 'valid' ? 'bg-green-50 text-green-800' : 'bg-red-800 text-white'
-                    }`}>
-                      <span className="font-medium">{item.name}</span>
-                      <span className="text-sm">{item.message}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Student Assignments */}
-              <div className="border rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                  Student Assignments ({validationResults.studentAssignments.valid + validationResults.studentAssignments.invalid})
-                  <span className="ml-2 text-sm font-normal">
-                    <span className="text-green-600">✓ {validationResults.studentAssignments.valid} Valid</span>
-                    {validationResults.studentAssignments.invalid > 0 && (
-                      <span className="text-red-600 ml-2">✗ {validationResults.studentAssignments.invalid} Invalid</span>
-                    )}
-                  </span>
-                </h3>
-                <div className="space-y-2">
-                  {validationResults.studentAssignments.details.map((item, index) => (
-                    <div key={index} className={`flex justify-between items-center p-2 rounded ${
-                      item.status === 'valid' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-                    }`}>
-                      <span className="font-medium">{item.name}</span>
-                      <span className="text-sm">{item.message}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-gray-200 flex justify-end">
-              <button
-                onClick={() => setValidationModalOpen(false)}
-                className="bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-              >
-                Close
               </button>
             </div>
           </div>
@@ -6972,123 +6444,72 @@ const validateImportData = async (data, existingData, termDetails) => {
 // Individual validation functions (stubs for now, will implement logic later)
 const validateTracksImport = async (tracksToValidate, existingTracks, termDetails) => {
   const results = [];
-  // Check for duplicates within the imported data AND against existing data
-  const importedTrackNames = new Set();
-  const existingTrackNames = new Set(existingTracks.map(t => t.trackName.toLowerCase()));
-  
+  const activeTracks = existingTracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
   for (const track of tracksToValidate) {
     if (!track.trackName || track.trackName.trim() === '') {
       results.push({ valid: false, message: 'Missing Track Name' });
       continue;
     }
-    
-    // Check for duplicates within the imported data
-    if (importedTrackNames.has(track.trackName.toLowerCase())) {
-      results.push({ valid: false, message: 'Duplicate track name in import' });
-      continue;
+    const exists = activeTracks.some(et => et.trackName.toLowerCase() === track.trackName.toLowerCase());
+    if (exists) {
+      results.push({ valid: false, message: 'Track already exists' });
+    } else {
+      results.push({ valid: true });
     }
-    
-    // Check if track already exists in the current term
-    if (existingTrackNames.has(track.trackName.toLowerCase())) {
-      results.push({ valid: false, message: `Track '${track.trackName}' already exists in current term` });
-      continue;
-    }
-    
-    importedTrackNames.add(track.trackName.toLowerCase());
-    results.push({ valid: true });
   }
   return results;
 };
 
 const validateStrandsImport = async (strandsToValidate, existingStrands, termDetails) => {
   const results = [];
-  // Check for duplicates within the imported data AND against existing data
-  const importedStrandCombos = new Set();
-  const existingStrandCombos = new Set(existingStrands.map(s => `${s.trackName.toLowerCase()}-${s.strandName.toLowerCase()}`));
-  
+  const activeStrands = existingStrands.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
   for (const strand of strandsToValidate) {
     if (!strand.trackName || strand.trackName.trim() === '' || !strand.strandName || strand.strandName.trim() === '') {
       results.push({ valid: false, message: 'Missing Track Name or Strand Name' });
       continue;
     }
-    
-    const combo = `${strand.trackName.toLowerCase()}-${strand.strandName.toLowerCase()}`;
-    // Check for duplicates within the imported data
-    if (importedStrandCombos.has(combo)) {
-      results.push({ valid: false, message: 'Duplicate strand in import' });
-      continue;
+    const exists = activeStrands.some(es => es.trackName.toLowerCase() === strand.trackName.toLowerCase() && es.strandName.toLowerCase() === strand.strandName.toLowerCase());
+    if (exists) {
+      results.push({ valid: false, message: 'Strand already exists' });
+    } else {
+      results.push({ valid: true });
     }
-    
-    // Check if strand already exists in the current term
-    if (existingStrandCombos.has(combo)) {
-      results.push({ valid: false, message: `Strand '${strand.strandName}' already exists in track '${strand.trackName}'` });
-      continue;
-    }
-    
-    importedStrandCombos.add(combo);
-    results.push({ valid: true });
   }
   return results;
 };
 
 const validateSectionsImport = async (sectionsToValidate, existingSections, termDetails) => {
   const results = [];
-  // Check for duplicates within the imported data AND against existing data
-  const importedSectionCombos = new Set();
-  const existingSectionCombos = new Set(existingSections.map(s => `${s.trackName.toLowerCase()}-${s.strandName.toLowerCase()}-${s.sectionName.toLowerCase()}-${s.gradeLevel.toLowerCase()}`));
-  
+  const activeSections = existingSections.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
   for (const section of sectionsToValidate) {
     if (!section.trackName || section.trackName.trim() === '' || !section.strandName || section.strandName.trim() === '' || !section.sectionName || section.sectionName.trim() === '' || !section.gradeLevel || section.gradeLevel.trim() === '') {
       results.push({ valid: false, message: 'Missing required fields' });
       continue;
     }
-    
-    const combo = `${section.trackName.toLowerCase()}-${section.strandName.toLowerCase()}-${section.sectionName.toLowerCase()}-${section.gradeLevel.toLowerCase()}`;
-    // Check for duplicates within the imported data
-    if (importedSectionCombos.has(combo)) {
-      results.push({ valid: false, message: 'Duplicate section in import' });
-      continue;
+    const exists = activeSections.some(es => es.trackName.toLowerCase() === section.trackName.toLowerCase() && es.strandName.toLowerCase() === section.strandName.toLowerCase() && es.sectionName.toLowerCase() === section.sectionName.toLowerCase() && es.gradeLevel.toLowerCase() === section.gradeLevel.toLowerCase());
+    if (exists) {
+      results.push({ valid: false, message: 'Section already exists' });
+    } else {
+      results.push({ valid: true });
     }
-    
-    // Check if section already exists in the current term
-    if (existingSectionCombos.has(combo)) {
-      results.push({ valid: false, message: `Section '${section.sectionName}' already exists in track '${section.trackName}' strand '${section.strandName}' grade '${section.gradeLevel}'` });
-      continue;
-    }
-    
-    importedSectionCombos.add(combo);
-    results.push({ valid: true });
   }
   return results;
 };
 
 const validateSubjectsImport = async (subjectsToValidate, existingSubjects, termDetails) => {
   const results = [];
-  // Check for duplicates within the imported data AND against existing data
-  const importedSubjectCombos = new Set();
-  const existingSubjectCombos = new Set(existingSubjects.map(s => `${s.trackName.toLowerCase()}-${s.strandName.toLowerCase()}-${s.gradeLevel.toLowerCase()}-${s.subjectName.toLowerCase()}`));
-  
+  const activeSubjects = existingSubjects.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
   for (const subject of subjectsToValidate) {
     if (!subject.trackName || subject.trackName.trim() === '' || !subject.strandName || subject.strandName.trim() === '' || !subject.gradeLevel || subject.gradeLevel.trim() === '' || !subject.subjectName || subject.subjectName.trim() === '') {
       results.push({ valid: false, message: 'Missing required fields' });
       continue;
     }
-    
-    const combo = `${subject.trackName.toLowerCase()}-${subject.strandName.toLowerCase()}-${subject.gradeLevel.toLowerCase()}-${subject.subjectName.toLowerCase()}`;
-    // Check for duplicates within the imported data
-    if (importedSubjectCombos.has(combo)) {
-      results.push({ valid: false, message: 'Duplicate subject in import' });
-      continue;
+    const exists = activeSubjects.some(es => es.trackName.toLowerCase() === subject.trackName.toLowerCase() && es.strandName.toLowerCase() === subject.strandName.toLowerCase() && es.gradeLevel.toLowerCase() === subject.gradeLevel.toLowerCase() && es.subjectName.toLowerCase() === subject.subjectName.toLowerCase());
+    if (exists) {
+      results.push({ valid: false, message: 'Subject already exists' });
+    } else {
+      results.push({ valid: true });
     }
-    
-    // Check if subject already exists in the current term
-    if (existingSubjectCombos.has(combo)) {
-      results.push({ valid: false, message: `Subject '${subject.subjectName}' already exists in track '${subject.trackName}' strand '${subject.strandName}' grade '${subject.gradeLevel}'` });
-      continue;
-    }
-    
-    importedSubjectCombos.add(combo);
-    results.push({ valid: true });
   }
   return results;
 };
@@ -7096,8 +6517,11 @@ const validateSubjectsImport = async (subjectsToValidate, existingSubjects, term
 const validateFacultyAssignmentsImport = async (assignmentsToValidate, existingAssignments, allFaculties, allTracks, allStrands, allSections, allSubjects, termDetails) => {
   const results = [];
   const activeAssignments = existingAssignments.filter(a => a.status === 'active' && a.schoolYear === termDetails.schoolYear && a.termName === termDetails.termName);
-  const activeFaculties = allFaculties.filter(f => !f.isArchived);
-  // Don't check for existing tracks/strands/sections/subjects since they'll be created during import
+  const activeFaculties = allFaculties.filter(f => f.status === 'active');
+  const activeTracks = allTracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
+  const activeStrands = allStrands.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
+  const activeSections = allSections.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
+  const activeSubjects = allSubjects.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
 
   for (const assignment of assignmentsToValidate) {
     if (!assignment.facultyName || !assignment.trackName || !assignment.strandName || !assignment.sectionName || !assignment.gradeLevel || !assignment.subjectName) {
@@ -7112,7 +6536,33 @@ const validateFacultyAssignmentsImport = async (assignmentsToValidate, existingA
       continue;
     }
 
-    // Don't check if track/strand/section/subject exist since they'll be created during import
+    // Check if track exists
+    const track = activeTracks.find(t => t.trackName.toLowerCase() === assignment.trackName.toLowerCase());
+    if (!track) {
+      results.push({ valid: false, message: `Track '${assignment.trackName}' not found for current term` });
+      continue;
+    }
+
+    // Check if strand exists within the track
+    const strand = activeStrands.find(s => s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase());
+    if (!strand) {
+      results.push({ valid: false, message: `Strand '${assignment.strandName}' not found in track '${assignment.trackName}'` });
+      continue;
+    }
+
+    // Check if section exists within the track, strand and grade level
+    const section = activeSections.find(s => s.sectionName.toLowerCase() === assignment.sectionName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase() && s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.gradeLevel.toLowerCase() === assignment.gradeLevel.toLowerCase());
+    if (!section) {
+      results.push({ valid: false, message: `Section '${assignment.sectionName}' not found in track/strand/grade` });
+      continue;
+    }
+
+    // Check if subject exists within the track, strand and grade level
+    const subject = activeSubjects.find(s => s.subjectName.toLowerCase() === assignment.subjectName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase() && s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.gradeLevel.toLowerCase() === assignment.gradeLevel.toLowerCase());
+    if (!subject) {
+      results.push({ valid: false, message: `Subject '${assignment.subjectName}' not found for selected track/strand/grade` });
+      continue;
+    }
 
     // Check for duplicate assignment
     const exists = activeAssignments.some(ea =>
@@ -7133,8 +6583,10 @@ const validateFacultyAssignmentsImport = async (assignmentsToValidate, existingA
 const validateStudentAssignmentsImport = async (assignmentsToValidate, existingAssignments, allStudents, allTracks, allStrands, allSections, termDetails) => {
   const results = [];
   const activeAssignments = existingAssignments.filter(a => a.status === 'active' && a.schoolYear === termDetails.schoolYear && a.termName === termDetails.termName);
-  const activeStudents = allStudents.filter(s => !s.isArchived);
-  // Don't check for existing tracks/strands/sections since they'll be created during import
+  const activeStudents = allStudents.filter(s => s.status === 'active');
+  const activeTracks = allTracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
+  const activeStrands = allStrands.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
+  const activeSections = allSections.filter(s => s.status === 'active' && s.schoolYear === termDetails.schoolYear && s.termName === termDetails.termName);
 
   for (const assignment of assignmentsToValidate) {
     if (!assignment.studentName || !assignment.trackName || !assignment.strandName || !assignment.sectionName || !assignment.gradeLevel) {
@@ -7149,7 +6601,26 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
       continue;
     }
 
-    // Don't check if track/strand/section exist since they'll be created during import
+    // Check if track exists
+    const track = activeTracks.find(t => t.trackName.toLowerCase() === assignment.trackName.toLowerCase());
+    if (!track) {
+      results.push({ valid: false, message: `Track '${assignment.trackName}' not found for current term` });
+      continue;
+    }
+
+    // Check if strand exists within the track
+    const strand = activeStrands.find(s => s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase());
+    if (!strand) {
+      results.push({ valid: false, message: `Strand '${assignment.strandName}' not found in track '${assignment.trackName}'` });
+      continue;
+    }
+
+    // Check if section exists within the track, strand and grade level
+    const section = activeSections.find(s => s.sectionName.toLowerCase() === assignment.sectionName.toLowerCase() && s.trackName.toLowerCase() === assignment.trackName.toLowerCase() && s.strandName.toLowerCase() === assignment.strandName.toLowerCase() && s.gradeLevel.toLowerCase() === assignment.gradeLevel.toLowerCase());
+    if (!section) {
+      results.push({ valid: false, message: `Section '${assignment.sectionName}' not found in track/strand/grade` });
+      continue;
+    }
 
     // Check for duplicate assignment
     const exists = activeAssignments.some(ea =>

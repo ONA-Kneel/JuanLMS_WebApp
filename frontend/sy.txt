@@ -266,16 +266,18 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ message: 'School year not found' });
     }
 
+    const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
+
     // If cascade confirmation is not provided, check dependencies first
     if (!confirmCascade) {
       const dependencies = await Promise.all([
-        Term.countDocuments({ schoolYear: `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}` }),
-        Track.countDocuments({ schoolYear: `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}` }),
-        Strand.countDocuments({ schoolYear: `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}` }),
-        Section.countDocuments({ schoolYear: `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}` }),
-        Subject.countDocuments({ schoolYear: `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}` }),
-        StudentAssignment.countDocuments({ schoolYear: `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}` }),
-        FacultyAssignment.countDocuments({ schoolYear: `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}` })
+        Term.countDocuments({ schoolYear: schoolYearName }),
+        Track.countDocuments({ schoolYear: schoolYearName }),
+        Strand.countDocuments({ schoolYear: schoolYearName }),
+        Section.countDocuments({ schoolYear: schoolYearName }),
+        Subject.countDocuments({ schoolYear: schoolYearName }),
+        StudentAssignment.countDocuments({ schoolYear: schoolYearName }),
+        FacultyAssignment.countDocuments({ schoolYear: schoolYearName })
       ]);
 
       const totalDependencies = dependencies.reduce((sum, count) => sum + count, 0);
@@ -283,65 +285,30 @@ router.delete('/:id', async (req, res) => {
       if (totalDependencies > 0) {
         return res.status(409).json({ 
           message: `Cannot delete school year: It has ${totalDependencies} connected records. Use confirmCascade=true to delete all connected data.`,
-          dependencyCount: totalDependencies,
-          schoolYear: schoolYear
+          dependencyCount: totalDependencies
         });
       }
     }
 
-    // Proceed with cascading deletion using the model's pre-remove middleware
-    console.log(`Deleting school year: ${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`);
+    // Proceed with cascading deletion
+    console.log(`Cascading deletion of school year: ${schoolYearName}`);
     
-    // Use remove() to trigger the pre-remove middleware for cascading deletes
-    await schoolYear.remove();
+    await Promise.all([
+      // Delete all related entities
+      Term.deleteMany({ schoolYear: schoolYearName }),
+      Track.deleteMany({ schoolYear: schoolYearName }),
+      Strand.deleteMany({ schoolYear: schoolYearName }),
+      Section.deleteMany({ schoolYear: schoolYearName }),
+      Subject.deleteMany({ schoolYear: schoolYearName }),
+      StudentAssignment.deleteMany({ schoolYear: schoolYearName }),
+      FacultyAssignment.deleteMany({ schoolYear: schoolYearName })
+    ]);
+
+    // Finally delete the school year
+    await SchoolYear.findByIdAndDelete(id);
     
     console.log(`Successfully deleted school year and all connected data`);
     res.json({ message: 'School year and all connected data deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting school year:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Archive a school year (keep the existing PATCH endpoint for archiving)
-router.patch('/:id/archive', async (req, res) => {
-  try {
-    const schoolYear = await SchoolYear.findById(req.params.id);
-    if (!schoolYear) {
-      return res.status(404).json({ message: 'School year not found' });
-    }
-
-    // Prevent archiving inactive school years
-    if (schoolYear.status === 'inactive') {
-      return res.status(403).json({ 
-        message: 'Cannot archive inactive school years. Only active school years can be archived.' 
-      });
-    }
-
-    schoolYear.status = 'archived';
-    const updatedSchoolYear = await schoolYear.save();
-    
-    // Archive all related entities for this school year
-    const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
-    console.log(`Archiving all entities for school year: ${schoolYearName}`);
-    
-    await Promise.all([
-      // Archive all terms for this school year
-      Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' }),
-      
-      // Archive all assignments for this school year
-      StudentAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
-      FacultyAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
-      
-      // Archive all structural entities for this school year
-      Track.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
-      Strand.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
-      Section.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
-      Subject.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } })
-    ]);
-    
-    console.log(`Successfully archived all entities for school year: ${schoolYearName}`);
-    res.json(updatedSchoolYear);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
