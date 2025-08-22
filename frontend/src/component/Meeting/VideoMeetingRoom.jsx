@@ -120,8 +120,9 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
         jitsiApi.current = null;
       }
 
+      const roomName = getRoomName();
       const options = {
-        roomName: getRoomName(),
+        roomName,
         width: '100%',
         height: '100%',
         parentNode: jitsiContainer.current,
@@ -139,6 +140,13 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
           enableNoisyMicDetection: true,
           startWithAudioMuted: false,
           startWithVideoMuted: false,
+          // Harden connectivity
+          p2p: { enabled: false },
+          preferH264: true,
+          disableThirdPartyRequests: true,
+          enableLipSync: false,
+          enableLayerSuspension: true,
+          // UI
           toolbarButtons: [
             'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
             'fodeviceselection', 'hangup', 'profile', 'info', 'chat', 'recording',
@@ -188,10 +196,18 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
       
       const api = new window.JitsiMeetExternalAPI('meet.jit.si', options);
       jitsiApi.current = api;
+
+      // Connection timeout fallback: open in new tab if embed doesn't join
+      const timeoutId = setTimeout(() => {
+        if (isLoading) {
+          console.warn('Jitsi embed connection slow; opening room in new tab');
+          const url = `https://meet.jit.si/${encodeURIComponent(roomName)}`;
+          window.open(url, '_blank');
+        }
+      }, 12000);
       
       api.addEventListeners({
         iframeReady: () => {
-          // Consider the connection ready when iframe initializes to avoid long spinners
           setIsLoading(false);
         },
         readyToClose: () => {
@@ -200,6 +216,7 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
         },
         videoConferenceJoined: () => {
           console.log('User joined the conference');
+          clearTimeout(timeoutId);
           setIsLoading(false);
           if (isModerator) {
             api.executeCommand('displayName', `${currentUser?.name} (Host)`);
@@ -207,10 +224,12 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
         },
         videoConferenceLeft: () => {
           console.log('User left the conference');
+          clearTimeout(timeoutId);
           handleLeaveMeeting();
         },
         error: (error) => {
           console.error('Jitsi error:', error);
+          clearTimeout(timeoutId);
           setError('Error in meeting: ' + (error?.message || 'Unknown error'));
           setIsLoading(false);
         },
@@ -246,7 +265,7 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
         }, 2000); // 2 second delay before retry
       }
     }
-  }, [isOpen, getMeetingId, currentUser, isModerator, handleLeaveMeeting]);
+  }, [isOpen, getMeetingId, currentUser, isModerator, handleLeaveMeeting, getRoomName]);
 
   const handleRetry = useCallback(() => {
     setError(null);
