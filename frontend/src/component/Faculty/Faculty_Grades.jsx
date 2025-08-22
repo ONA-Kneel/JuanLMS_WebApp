@@ -204,7 +204,103 @@ export default function Faculty_Grades() {
       setGrades(initialGrades);
   };
 
+  const fetchStudents = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const selectedClassObj = classes[selectedClass];
+      
+      // Try multiple endpoints to get students
+      let studentsData = [];
+      
+      try {
+        // Try class members endpoint first
+        const response = await fetch(`${API_BASE}/classes/${selectedClassObj.classID}/members`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.students) {
+            studentsData = data.students;
+          }
+        }
+      } catch {
+        console.log('Class members endpoint failed, trying alternatives');
+      }
+      
+      // If no students found, try alternative endpoints
+      if (studentsData.length === 0) {
+        try {
+          const altResponse = await fetch(`${API_BASE}/api/students/class/${selectedClassObj.classCode || selectedClassObj.classID}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (altResponse.ok) {
+            const data = await altResponse.json();
+            if (data) {
+              studentsData = data;
+            }
+          }
+        } catch {
+          console.log('Alternative endpoint also failed');
+        }
+      }
+      
+      // Transform students data to include grades structure
+      const transformedStudents = studentsData.map(student => {
+        let gradesStructure = {};
+        
+        if (currentTerm?.termName === 'Term 1') {
+          gradesStructure = {
+            quarter1: '',
+            quarter2: '',
+            semesterFinal: '',
+            remarks: ''
+          };
+        } else if (currentTerm?.termName === 'Term 2') {
+          gradesStructure = {
+            quarter3: '',
+            quarter4: '',
+            semesterFinal: '',
+            remarks: ''
+          };
+        } else {
+          // Default structure
+          gradesStructure = {
+            quarter1: '',
+            quarter2: '',
+            semesterFinal: '',
+            remarks: ''
+          };
+        }
+        
+        return {
+          _id: student._id || student.userID || student.studentID,
+          userID: student.userID || student.studentID || student._id, // Ensure userID is captured
+          name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+          schoolID: student.schoolID || student.userID || student.studentID,
+          section: student.section || student.sectionName || 'default',
+          grades: gradesStructure
+        };
+      });
+      
+      setStudents(transformedStudents);
+      
+      // Initialize grades state for all students
+      const initialGrades = {};
+      transformedStudents.forEach(student => {
+        initialGrades[student._id] = { ...student.grades };
+      });
+      setGrades(initialGrades);
 
+      // Load previously saved grades from localStorage
+      loadSavedGradesFromDatabase(selectedClassObj.classID, transformedStudents);
+      
+    } catch (error) {
+      console.error('Error fetching students:', error);
+      setStudents([]);
+    }
+  };
 
   // Load saved grades from database instead of localStorage
   const loadSavedGradesFromDatabase = async (classID, studentsList) => {
@@ -932,6 +1028,21 @@ export default function Faculty_Grades() {
       const token = localStorage.getItem("token");
       console.log('🔍 [Frontend] Testing backend endpoints...');
       
+      // Test current user endpoint
+      try {
+        const userResponse = await fetch(`${API_BASE}/classes/debug/current-user`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          console.log('🔍 [Frontend] Current user debug response:', userData);
+        } else {
+          console.log('🔍 [Frontend] Current user debug failed:', userResponse.status);
+        }
+      } catch (error) {
+        console.log('🔍 [Frontend] Current user debug error:', error);
+      }
+      
       // Test debug classes endpoint
       try {
         const classesResponse = await fetch(`${API_BASE}/classes/debug/classes`, {
@@ -987,128 +1098,6 @@ export default function Faculty_Grades() {
       
     } catch (error) {
       console.error('🔍 [Frontend] Debug function error:', error);
-    }
-  };
-
-  const fetchStudents = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const selectedClassObj = classes[selectedClass];
-      
-      console.log('🔍 fetchStudents called with:', {
-        selectedClass,
-        selectedClassObj,
-        classID: selectedClassObj?.classID,
-        className: selectedClassObj?.className
-      });
-      
-      // Try multiple endpoints to get students
-      let studentsData = [];
-      
-      try {
-        // Try class members endpoint first
-        console.log('🔍 Trying class members endpoint:', `${API_BASE}/classes/${selectedClassObj.classID}/members`);
-        const response = await fetch(`${API_BASE}/classes/${selectedClassObj.classID}/members`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        console.log('🔍 Class members endpoint response status:', response.status);
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('🔍 Class members endpoint response data:', data);
-          if (data && data.students) {
-            studentsData = data.students;
-            console.log('🔍 Found students from members endpoint:', studentsData.length);
-          } else {
-            console.log('🔍 No students field in response or empty students array');
-          }
-        } else {
-          console.log('🔍 Class members endpoint failed with status:', response.status);
-        }
-      } catch (error) {
-        console.log('🔍 Class members endpoint failed with error:', error);
-      }
-      
-      // If no students found, try alternative endpoints
-      if (studentsData.length === 0) {
-        console.log('🔍 No students found from members endpoint, trying alternatives...');
-        try {
-          const altResponse = await fetch(`${API_BASE}/api/students/class/${selectedClassObj.classCode || selectedClassObj.classID}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          
-          console.log('🔍 Alternative endpoint response status:', altResponse.status);
-          
-          if (altResponse.ok) {
-            const data = await altResponse.json();
-            console.log('🔍 Alternative endpoint response data:', data);
-            if (data) {
-              studentsData = data;
-              console.log('🔍 Found students from alternative endpoint:', studentsData.length);
-            }
-          }
-        } catch (error) {
-          console.log('🔍 Alternative endpoint also failed with error:', error);
-        }
-      }
-      
-      console.log('🔍 Final studentsData before transformation:', studentsData);
-      
-      // Transform students data to include grades structure
-      const transformedStudents = studentsData.map(student => {
-        let gradesStructure = {};
-        
-        if (currentTerm?.termName === 'Term 1') {
-          gradesStructure = {
-            quarter1: '',
-            quarter2: '',
-            semesterFinal: '',
-            remarks: ''
-          };
-        } else if (currentTerm?.termName === 'Term 2') {
-          gradesStructure = {
-            quarter3: '',
-            quarter4: '',
-            semesterFinal: '',
-            remarks: ''
-          };
-        } else {
-          // Default structure
-          gradesStructure = {
-            quarter1: '',
-            quarter2: '',
-            semesterFinal: '',
-            remarks: ''
-          };
-        }
-        
-        return {
-          _id: student._id || student.userID || student.studentID,
-          userID: student.userID || student.studentID || student._id, // Ensure userID is captured
-          name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
-          schoolID: student.schoolID || student.userID || student.studentID,
-          section: student.section || student.sectionName || 'default',
-          grades: gradesStructure
-        };
-      });
-      
-      console.log('🔍 Transformed students:', transformedStudents);
-      setStudents(transformedStudents);
-      
-      // Initialize grades state for all students
-      const initialGrades = {};
-      transformedStudents.forEach(student => {
-        initialGrades[student._id] = { ...student.grades };
-      });
-      setGrades(initialGrades);
-
-      // Load previously saved grades from localStorage
-      loadSavedGradesFromDatabase(selectedClassObj.classID, transformedStudents);
-      
-    } catch (error) {
-      console.error('🔍 Error in fetchStudents:', error);
-      setStudents([]);
     }
   };
 
@@ -1685,7 +1674,7 @@ export default function Faculty_Grades() {
              )}
 
              {/* Debug Information - Remove this in production */}
-             {import.meta.env.DEV && (
+             {process.env.NODE_ENV === 'development' && (
                <div className="mb-6 p-4 bg-gray-100 border border-gray-300 rounded-lg text-xs">
                  <h4 className="font-bold mb-2">🔍 Debug Info:</h4>
                  <div className="grid grid-cols-2 gap-2">
