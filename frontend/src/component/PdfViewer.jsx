@@ -1,12 +1,13 @@
 import { useLocation } from 'react-router-dom';
+import { getFileUrl } from '../utils/imageUtils';
 
 export default function PdfViewer() {
   const query = new URLSearchParams(useLocation().search);
   const fileUrl = query.get('file');
 
   const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
-  // If fileUrl is not absolute, prefix with API_BASE
-  const resolvedFileUrl = fileUrl && !/^https?:\/\//.test(fileUrl) ? `${API_BASE}/${fileUrl.replace(/^\/+/, "")}` : fileUrl;
+  // Use the utility function to resolve the file URL
+  const resolvedFileUrl = getFileUrl(fileUrl, API_BASE);
 
   if (!fileUrl) {
     return <div className="flex items-center justify-center h-screen text-red-600">No PDF file specified.</div>;

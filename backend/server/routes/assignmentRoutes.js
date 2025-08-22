@@ -12,17 +12,46 @@ import { createAssignmentNotification } from '../services/notificationService.js
 
 const router = express.Router();
 
-// Multer setup for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(process.cwd(), 'uploads', 'submissions'));
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
+// Storage configuration
+const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+
+
+async function initializeAssignmentStorage() {
+  if (USE_CLOUDINARY) {
+    console.log('[ASSIGNMENTS] Using Cloudinary storage');
+    try {
+      const { assignmentStorage, submissionStorage } = await import('../config/cloudinary.js');
+      return {
+        assignmentUpload: multer({ storage: assignmentStorage }),
+        submissionUpload: multer({ storage: submissionStorage })
+      };
+    } catch (error) {
+      console.error('[ASSIGNMENTS] Cloudinary setup failed, falling back to local storage:', error.message);
+    }
   }
-});
-const upload = multer({ storage });
+  
+  // Local storage fallback
+  console.log('[ASSIGNMENTS] Using local storage');
+  const uploadDir = path.join(process.cwd(), 'uploads', 'submissions');
+  const localStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, uniqueSuffix + '-' + file.originalname);
+    }
+  });
+  const localUpload = multer({ storage: localStorage });
+  return {
+    assignmentUpload: localUpload,
+    submissionUpload: localUpload
+  };
+}
+
+// Initialize upload middleware
+const uploadMiddleware = await initializeAssignmentStorage();
+const upload = uploadMiddleware.submissionUpload; // For backward compatibility
 
 // Get all assignments for a class
 router.get('/', authenticateToken, async (req, res) => {
@@ -182,7 +211,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create assignment or quiz
-router.post('/', authenticateToken, upload.single('attachmentFile'), async (req, res) => {
+router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('attachmentFile'), async (req, res) => {
   try {
     let { classIDs, classID, title, instructions, type, description, dueDate, points, fileUploadRequired, allowedFileTypes, fileInstructions, questions, assignedTo, attachmentLink, postAt } = req.body;
     const createdBy = req.user._id;
@@ -218,7 +247,8 @@ router.post('/', authenticateToken, upload.single('attachmentFile'), async (req,
     
     let attachmentFile = '';
     if (req.file) {
-      attachmentFile = `/uploads/submissions/${req.file.filename}`;
+      // Handle both Cloudinary and local storage
+      attachmentFile = req.file.secure_url || req.file.path || `/uploads/submissions/${req.file.filename}`;
     }
     
     let assignments = [];
@@ -391,7 +421,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Student submits an assignment (with file upload)
-router.post('/:id/submit', authenticateToken, upload.array('files', 5), async (req, res) => {
+router.post('/:id/submit', authenticateToken, uploadMiddleware.submissionUpload.array('files', 5), async (req, res) => {
   try {
     const student = req.user._id;
     const assignment = req.params.id;
@@ -401,7 +431,7 @@ router.post('/:id/submit', authenticateToken, upload.array('files', 5), async (r
     // Handle file uploads if any
     if (req.files && req.files.length > 0) {
       files = req.files.map(f => ({
-        url: `/uploads/submissions/${f.filename}`,
+        url: f.secure_url || f.path || `/uploads/submissions/${f.filename}`,
         name: f.originalname
       }));
     }
