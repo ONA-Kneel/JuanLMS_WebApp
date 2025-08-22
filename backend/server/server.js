@@ -150,9 +150,24 @@ io.on("connection", (socket) => {
     });
 });
 
-// Middleware
+// Middleware - Secure CORS setup
+const allowedOrigins = [
+  "https://sjdefilms.com",   // production frontend
+  "http://localhost:8081",   // React Native Metro bundler
+  "http://localhost:5000",   // local backend dev
+  "http://10.0.2.2:5000"     // Android emulator (connects to local backend)
+];
+
 app.use(cors({
-  origin: "*",
+  origin: function (origin, callback) {
+    // Allow requests with no origin (e.g. mobile APK, curl, Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error("CORS not allowed for this origin: " + origin), false);
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
