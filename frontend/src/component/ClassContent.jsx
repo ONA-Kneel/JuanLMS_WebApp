@@ -8,7 +8,9 @@ import ValidationModal from './ValidationModal';
 // import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+// Force localhost for local testing
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const DEBUG_MEMBERS = true;
 
 export default function ClassContent({ selected, isFaculty = false }) {
   // --- ROUTER PARAMS ---
@@ -35,6 +37,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
 
   // Members state (faculty and students)
   const [members, setMembers] = useState({ faculty: [], students: [] });
+  const [memberIdsRaw, setMemberIdsRaw] = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState(null);
 
@@ -50,6 +53,8 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [filterType, setFilterType] = useState("all");
   const [showLessonModal, setShowLessonModal] = useState(false);
   const [lessonLink, setLessonLink] = useState("");
+  const [classWithMembers, setClassWithMembers] = useState(null);
+  const [hasMappedMembers, setHasMappedMembers] = useState(false);
 
   // Validation modal state
   const [validationModal, setValidationModal] = useState({
@@ -73,6 +78,22 @@ export default function ClassContent({ selected, isFaculty = false }) {
     const now = new Date();
     const postAt = new Date(assignment.postAt);
     return postAt <= now;
+  };
+
+  // Build a robust list of candidate identifiers for a student record
+  // Prioritize userID since backend stores userID, not Mongo _id
+  const getCandidateIds = (student) => {
+    const ids = [];
+    if (!student) return ids;
+    // Prioritize userID (what backend stores)
+    if (student.userID) ids.push(String(student.userID));
+    if (student.schoolID) ids.push(String(student.schoolID));
+    // Fallback to Mongo IDs
+    if (student._id && typeof student._id === 'object' && student._id.$oid) ids.push(String(student._id.$oid));
+    if (student._id && typeof student._id !== 'object') ids.push(String(student._id));
+    if (student.id) ids.push(String(student.id));
+    // De-dup
+    return Array.from(new Set(ids.filter(Boolean)));
   };
 
   // Fetch lessons from backend
@@ -210,31 +231,104 @@ export default function ClassContent({ selected, isFaculty = false }) {
   }, [selected, classId]);
 
   useEffect(() => {
-  if (selected === "members" && classId) {
-    setMembersLoading(true);
-    setMembersError(null);
-    const token = localStorage.getItem('token');
-
-    // Step 1: Fetch members of the class
-    fetch(`${API_BASE}/classes/${classId}/members`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => setMembers(data && typeof data === 'object' ? data : { faculty: [], students: [] }))
-      .catch(() => setMembersError("Failed to fetch members."))
-      .finally(() => setMembersLoading(false));
-
-    // Step 2: Fetch all students only if the user is faculty
-    if (isFaculty) {
-      fetch(`${API_BASE}/users/students`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-        .then(res => res.json())
-        .then(data => setAllStudents(Array.isArray(data) ? data : []))
-        .catch(() => setMembersError("Failed to fetch students."));
+    if (selected === "members" && classId) {
+      setMembersLoading(true);
+      setMembersError(null);
+      setHasMappedMembers(false);
+      setMembers({ faculty: [], students: [] });
+      setMemberIdsRaw([]);
+      setClassWithMembers(null);
+      
+      const token = localStorage.getItem('token');
+      
+      // Single function to load everything and map members
+      const loadMembersAndStudents = async () => {
+        try {
+          // Step 1: Load student directory first
+          let allStudentsData = [];
+          if (isFaculty) {
+            try {
+              let res = await fetch(`${API_BASE}/users?page=1&limit=1000`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              if (res.ok) {
+                const payload = await res.json();
+                const list = Array.isArray(payload?.users) ? payload.users : (Array.isArray(payload) ? payload : []);
+                allStudentsData = list.filter(u => (u.role || '').toLowerCase() === 'students');
+                if (DEBUG_MEMBERS) console.log('[Members] loaded students directory:', allStudentsData.length);
+              }
+            } catch (err) {
+              if (DEBUG_MEMBERS) console.warn('[Members] failed to load directory:', err);
+            }
+          }
+          setAllStudents(allStudentsData);
+          
+          // Step 2: Try to get members from the dedicated endpoint
+          try {
+            const membersRes = await fetch(`${API_BASE}/classes/${classId}/members`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (membersRes.ok) {
+              const membersData = await membersRes.json();
+              if (DEBUG_MEMBERS) console.log('[Members] direct members endpoint response:', membersData);
+              
+              if (Array.isArray(membersData.students) && membersData.students.length > 0) {
+                // We got students directly, use them
+                setMembers({ faculty: membersData.faculty || [], students: membersData.students });
+                setMemberIdsRaw(membersData.students.map(s => String(s.userID || s.schoolID || s._id)).filter(Boolean));
+                if (DEBUG_MEMBERS) console.log('[Members] using direct students response');
+                return;
+              }
+            }
+          } catch (err) {
+            if (DEBUG_MEMBERS) console.warn('[Members] direct members endpoint failed:', err);
+          }
+          
+          // Step 3: Fallback to class list approach
+          try {
+            const classesRes = await fetch(`${API_BASE}/classes`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (classesRes.ok) {
+              const classesList = await classesRes.json();
+              if (DEBUG_MEMBERS) console.log('[Members] classes list length:', Array.isArray(classesList) ? classesList.length : 'n/a');
+              
+              const foundClass = classesList.find(c => String(c.classID || (c._id && (c._id.$oid || c._id))) === String(classId));
+              if (foundClass && Array.isArray(foundClass.members) && foundClass.members.length > 0) {
+                if (DEBUG_MEMBERS) console.log('[Members] found class with members:', foundClass.members);
+                
+                // Map the member IDs to actual student objects
+                const memberIds = foundClass.members.map(v => String(v));
+                const mappedStudents = allStudentsData.filter(s => 
+                  getCandidateIds(s).some(v => memberIds.includes(String(v)))
+                );
+                
+                if (DEBUG_MEMBERS) console.log('[Members] mapped students:', mappedStudents.length, 'from', memberIds);
+                
+                // Set the results
+                setMemberIdsRaw(memberIds);
+                setMembers({ faculty: foundClass.faculty || [], students: mappedStudents });
+                setHasMappedMembers(true);
+              } else {
+                if (DEBUG_MEMBERS) console.log('[Members] no members found in class or empty members array');
+                setMembers({ faculty: [], students: [] });
+              }
+            }
+          } catch (err) {
+            if (DEBUG_MEMBERS) console.warn('[Members] classes list approach failed:', err);
+            setMembersError("Failed to fetch class data.");
+          }
+        } catch (err) {
+          if (DEBUG_MEMBERS) console.error('[Members] overall error:', err);
+          setMembersError("Failed to load members.");
+        } finally {
+          setMembersLoading(false);
+        }
+      };
+      
+      loadMembersAndStudents();
     }
-  }
-}, [selected, classId, isFaculty]);
+  }, [selected, classId, isFaculty]);
 
   // --- HANDLERS FOR ADDING CONTENT (Faculty only) ---
 
@@ -1287,9 +1381,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
               {members.students.length > 0 ? (
                 <ul>
                   {members.students.map(s => (
-                    <li key={s._id}>
-                      {s.firstname} {s.lastname} (Student)
-                    </li>
+                                          <li key={s.userID || s._id}>
+                        {s.firstname} {s.lastname} (Student)
+                      </li>
                   ))}
                 </ul>
               ) : (
@@ -1331,7 +1425,11 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     className="text-sm text-blue-700 underline"
                     onClick={() => {
                       setEditingMembers(true);
-                      setNewStudentIDs(members.students.map(s => s.userID));
+                      const preset = (members.students && members.students.length > 0)
+                        ? members.students.flatMap(getCandidateIds).filter(Boolean)
+                        : memberIdsRaw;
+                      if (DEBUG_MEMBERS) console.log('[Members] edit members preset:', preset);
+                      setNewStudentIDs(preset || []);
                     }}
                   >
                     Edit Members
@@ -1351,11 +1449,16 @@ export default function ClassContent({ selected, isFaculty = false }) {
                       setNewStudentIDs(selectedOptions);
                     }}
                   >
-                    {allStudents.map(student => (
-                      <option key={student.userID} value={student.userID}>
-                        {student.firstname} {student.lastname}
-                      </option>
-                    ))}
+                    {allStudents.map(student => {
+                      const cand = getCandidateIds(student);
+                      const value = cand[0]; // This will now be userID first due to getCandidateIds priority
+                      const label = `${student.firstname || ''} ${student.lastname || ''}`.trim() || (student.email || value);
+                      return (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      );
+                    })}
                   </select>
 
                   <div className="flex gap-3 mt-3">
@@ -1363,17 +1466,24 @@ export default function ClassContent({ selected, isFaculty = false }) {
                       onClick={async () => {
                         const token = localStorage.getItem('token');
                         try {
+                          const idsToSend = newStudentIDs.map(String);
+                          if (DEBUG_MEMBERS) console.log('[Members] saving member IDs:', idsToSend);
                           const res = await fetch(`${API_BASE}/classes/${classId}/members`, {
                             method: 'PATCH',
                             headers: {
                               'Authorization': `Bearer ${token}`,
                               'Content-Type': 'application/json'
                             },
-                            body: JSON.stringify({ members: newStudentIDs })
+                            body: JSON.stringify({ members: idsToSend })
                           });
                           if (res.ok) {
                             const updated = await res.json();
-                            setMembers(updated);
+                            if (DEBUG_MEMBERS) console.log('[Members] save response:', updated);
+                            const ids = Array.isArray(updated?.members) ? updated.members.map(String) : idsToSend;
+                            if (DEBUG_MEMBERS) console.log('[Members] extracted member IDs from response:', ids);
+                            setMemberIdsRaw(ids);
+                            const mapped = (allStudents || []).filter(s => getCandidateIds(s).some(v => ids.includes(String(v))));
+                            setMembers({ faculty: updated.faculty || [], students: mapped });
                             setEditingMembers(false);
                             setValidationModal({
                               isOpen: true,
@@ -1414,7 +1524,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 members.students.length > 0 ? (
                   <ul>
                     {members.students.map(s => (
-                      <li key={s._id}>
+                      <li key={s.userID || s._id}>
                         {s.firstname} {s.lastname} (Student)
                       </li>
                     ))}

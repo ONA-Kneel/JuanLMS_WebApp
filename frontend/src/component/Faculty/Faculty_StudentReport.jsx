@@ -482,7 +482,7 @@ export default function Faculty_StudentReport() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold">Student Reports</h2>
+            <h2 className="text-2xl md:text-3xl font-bold">Student Activity Audit</h2>
             <p className="text-base md:text-lg">
               <span> </span>{academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
               <span> </span>{currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
@@ -499,250 +499,202 @@ export default function Faculty_StudentReport() {
           </div>
         </div>
 
-        {/* Main Content Area */}
+        {/* Main Content Area - Student Activity Audit */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          {/* Card header actions */}
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold">Create Student Report</h3>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={async () => {
-                  setShowBatch(true);
-                  await ensureAllowedStudentsLoaded();
-                }}
-                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-              >
-                Batch Upload
-              </button>
+          {/* Mocked data (frontend only) */}
+          {(() => {
+            // Sections, activities, and student statuses are mocked for now
+            const mockSections = ["12 - A", "12 - B"];
+            const mockActivities = [
+              { id: "act1", title: "Module 1: Introduction", type: "module", sectionName: "12 - A", dueDate: "2025-08-31" },
+              { id: "act2", title: "Quiz 1: Basics", type: "quiz", sectionName: "12 - A", dueDate: "2025-09-02" },
+              { id: "act3", title: "Assignment 1: Reflection", type: "assignment", sectionName: "12 - B", dueDate: "2025-08-29" },
+            ];
+            const mockStudentStatuses = [
+              { studentId: "s1", studentName: "Dela Cruz, Juan", sectionName: "12 - A", activityId: "act1", status: "not_viewed", lastViewedAt: null, submittedAt: null },
+              { studentId: "s2", studentName: "Santos, Maria", sectionName: "12 - A", activityId: "act1", status: "viewed", lastViewedAt: "2025-08-25T10:00:00Z", submittedAt: null },
+              { studentId: "s3", studentName: "Reyes, Ana", sectionName: "12 - A", activityId: "act2", status: "missed", lastViewedAt: null, submittedAt: null },
+              { studentId: "s4", studentName: "Garcia, Pedro", sectionName: "12 - B", activityId: "act3", status: "not_viewed", lastViewedAt: null, submittedAt: null },
+              { studentId: "s5", studentName: "Lopez, Carla", sectionName: "12 - B", activityId: "act3", status: "submitted", lastViewedAt: "2025-08-28T08:20:00Z", submittedAt: "2025-08-28T08:40:00Z" },
+            ];
+
+            // Local state inside IIFE via useState hooks is not allowed, so we compute with component-level state below
+            return null;
+          })()}
+
+          {/* Filters */}
+          {(() => {
+            // Component-level state for filters and derived data
+            // We keep them in closures to avoid polluting top-level with a lot of vars; values are recomputed via simple patterns
+            // Definitions
+            const sections = ["All Sections", "12 - A", "12 - B"];
+            const activities = [
+              { id: "all", title: "All Activities", sectionName: "*" },
+              { id: "act1", title: "Module 1: Introduction", sectionName: "12 - A" },
+              { id: "act2", title: "Quiz 1: Basics", sectionName: "12 - A" },
+              { id: "act3", title: "Assignment 1: Reflection", sectionName: "12 - B" },
+            ];
+            
+            // Use React state via a tiny helper component
+            function AuditUI() {
+              const [selectedSection, setSelectedSection] = useState("All Sections");
+              const [selectedActivityId, setSelectedActivityId] = useState("all");
+              const [statusFilter, setStatusFilter] = useState("not_viewed"); // default focus
+              const [studentSearch, setStudentSearch] = useState("");
+
+              const allRows = [
+                { studentId: "s1", studentName: "Dela Cruz, Juan", sectionName: "12 - A", activityId: "act1", status: "not_viewed", lastViewedAt: null, submittedAt: null },
+                { studentId: "s2", studentName: "Santos, Maria", sectionName: "12 - A", activityId: "act1", status: "viewed", lastViewedAt: "2025-08-25T10:00:00Z", submittedAt: null },
+                { studentId: "s3", studentName: "Reyes, Ana", sectionName: "12 - A", activityId: "act2", status: "missed", lastViewedAt: null, submittedAt: null },
+                { studentId: "s4", studentName: "Garcia, Pedro", sectionName: "12 - B", activityId: "act3", status: "not_viewed", lastViewedAt: null, submittedAt: null },
+                { studentId: "s5", studentName: "Lopez, Carla", sectionName: "12 - B", activityId: "act3", status: "submitted", lastViewedAt: "2025-08-28T08:20:00Z", submittedAt: "2025-08-28T08:40:00Z" },
+              ];
+              const activityById = new Map([
+                ["act1", { id: "act1", title: "Module 1: Introduction", type: "module", sectionName: "12 - A", dueDate: "2025-08-31" }],
+                ["act2", { id: "act2", title: "Quiz 1: Basics", type: "quiz", sectionName: "12 - A", dueDate: "2025-09-02" }],
+                ["act3", { id: "act3", title: "Assignment 1: Reflection", type: "assignment", sectionName: "12 - B", dueDate: "2025-08-29" }],
+              ]);
+
+              const filteredActivities = activities.filter(a => selectedSection === "All Sections" || a.sectionName === "*" || a.sectionName === selectedSection);
+
+              const filteredRows = allRows.filter(r => {
+                const inSection = selectedSection === "All Sections" || r.sectionName === selectedSection;
+                const inActivity = selectedActivityId === "all" || r.activityId === selectedActivityId;
+                const inStatus = statusFilter === "all" ? true : r.status === statusFilter;
+                const inSearch = studentSearch.trim() === "" || r.studentName.toLowerCase().includes(studentSearch.trim().toLowerCase());
+                return inSection && inActivity && inStatus && inSearch;
+              });
+
+              const notViewedCount = filteredRows.filter(r => r.status === "not_viewed").length;
+              const missedCount = filteredRows.filter(r => r.status === "missed").length;
+
+              const exportToExcel = () => {
+                const exportRows = filteredRows.map(r => {
+                  const act = activityById.get(r.activityId) || {};
+                  return {
+                    "Student Name": r.studentName,
+                    Section: r.sectionName,
+                    Activity: act.title || r.activityId,
+                    "Due Date": act.dueDate ? new Date(act.dueDate).toLocaleDateString("en-US") : "-",
+                    Status: r.status.replace("_", " "),
+                    "Last Viewed": r.lastViewedAt ? new Date(r.lastViewedAt).toLocaleString() : "-",
+                    "Submitted At": r.submittedAt ? new Date(r.submittedAt).toLocaleString() : "-",
+                  };
+                });
+                const ws = XLSX.utils.json_to_sheet(exportRows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Audit");
+                XLSX.writeFile(wb, "StudentActivityAudit.xlsx");
+              };
+
+              return (
+                <>
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+                    <h3 className="text-lg font-semibold">Activity Visibility & Submission Audit</h3>
+                    <div className="flex items-center gap-2">
+                      <button onClick={exportToExcel} type="button" className="px-4 py-2 rounded bg-[#010a51] text-white hover:bg-[#1a237e]">Export</button>
             </div>
           </div>
 
-          {showBatch && (
-            <div className="mb-6 border rounded p-4 bg-gray-50">
-              <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
+                  {/* Filters */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
                 <div>
-                  <p className="font-medium text-gray-800">Batch Upload Reports</p>
-                  <p className="text-sm text-gray-600">Download the template, fill it, then upload. Only students assigned to your sections for the active term are allowed.</p>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+                      <select value={selectedSection} onChange={e => { setSelectedSection(e.target.value); setSelectedActivityId("all"); }} className="w-full border rounded px-3 py-2">
+                        {sections.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
                 </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={downloadBatchTemplate}
-                    disabled={loadingAllowed}
-                    className="px-3 py-2 rounded bg-[#010a51] text-white hover:bg-[#1a237e] disabled:opacity-50"
-                  >
-                    {loadingAllowed ? "Preparing..." : "Download Template"}
-                  </button>
-                  <label className="cursor-pointer px-3 py-2 rounded bg-green-600 text-white hover:bg-green-700">
-                    {uploadingBatch ? "Uploading..." : "Upload Template"}
-                    <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleBatchFile} disabled={uploadingBatch} />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowBatch(false)}
-                    className="px-3 py-2 rounded border border-gray-300 text-gray-700 hover:bg-white"
-                  >
-                    Close
-                  </button>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Activity</label>
+                      <select value={selectedActivityId} onChange={e => setSelectedActivityId(e.target.value)} className="w-full border rounded px-3 py-2">
+                        {filteredActivities.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
+                      </select>
                 </div>
-              </div>
-              {uploadSummary && (
-                <div className="mt-3 text-sm text-gray-700">
-                  <p>Created: {uploadSummary.created} | Skipped: {uploadSummary.skipped}</p>
-                  {uploadSummary.errors?.length > 0 && (
-                    <details className="mt-1">
-                      <summary className="cursor-pointer">View errors ({uploadSummary.errors.length})</summary>
-                      <ul className="list-disc ml-6 mt-1">
-                        {uploadSummary.errors.map((e, idx) => (
-                          <li key={idx}>{e.studentName ? `${e.studentName}: ` : ""}{e.error}</li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
-                </div>
-              )}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                      <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full border rounded px-3 py-2">
+                        <option value="all">All</option>
+                        <option value="not_viewed">Not Viewed</option>
+                        <option value="missed">Missed</option>
+                      </select>
             </div>
-          )}
-          <form onSubmit={handleSubmit} className="space-y-6">
-                         {/* Search Student Section */}
-             <div className="search-container relative">
-               <label htmlFor="studentSearch" className="block text-sm font-medium text-gray-700 mb-2">
-                 Search Student
-               </label>
-               <div className="relative">
-                 <input
-                   type="text"
-                   id="studentSearch"
-                   value={searchTerm}
-                   onChange={handleSearchChange}
-                   placeholder="Search by name or email..."
-                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#010a51] focus:border-transparent"
-                 />
-                 {isSearching && (
-                   <div className="absolute right-3 top-2">
-                     <div className="w-5 h-5 border-2 border-[#010a51] border-t-transparent rounded-full animate-spin"></div>
-                   </div>
-                 )}
-               </div>
-              
-                             {/* Search Results Dropdown */}
-               {showDropdown && searchResults.length > 0 && (
-                 <div className="absolute z-10 w-full bg-white border border-gray-300 border-t-0 max-h-60 overflow-y-auto">
-                   {searchResults.map((student, index) => (
-                     <button
-                       key={student._id || index}
-                       type="button"
-                       onClick={() => handleStudentSelect(student)}
-                       className="w-full px-3 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none border-b border-gray-200 last:border-b-0 text-sm"
-                     >
-                       {student.lastname}, {student.firstname}
-                     </button>
-                   ))}
-                 </div>
-               )}
-            </div>
-
-                         {/* Selected Student Display */}
-             {selectedStudent && (
-               <div className="bg-[#010a51]/10 border border-[#010a51]/20 rounded-md p-4">
-                 <div className="flex items-center justify-between">
                    <div>
-                     <h3 className="font-medium text-[#010a51]">Selected Student:</h3>
-                     <p className="text-[#010a51]">{selectedStudent.lastname}, {selectedStudent.firstname}</p>
-                     <p className="text-sm text-[#010a51]/70">{selectedStudent.email}</p>
-                   </div>
-                   <button
-                     type="button"
-                     onClick={() => {
-                       setSelectedStudent(null);
-                       setSearchTerm("");
-                     }}
-                     className="text-[#010a51] hover:text-[#1a237e] text-sm"
-                   >
-                     Change Student
-                   </button>
-                 </div>
-               </div>
-             )}
-
-            {/* Rubric Section */}
-            <div className="mb-2 text-xs sm:text-sm text-gray-600">
-              <span className="mr-4">1 - very poor</span>
-              <span className="mr-4">2 - below average</span>
-              <span className="mr-4">3 - average</span>
-              <span className="mr-4">4 - good</span>
-              <span>5 - excellent</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-4">
-                <label className="w-48 text-base font-semibold text-gray-800">Behavior</label>
-                <div className="flex items-center gap-4">
-                  {[1,2,3,4,5].map(n => (
-                    <label key={`beh-${n}`} className="flex items-center gap-2 text-sm">
-                      <input className="w-5 h-5" type="radio" name="behavior" value={n} checked={behavior===n} onChange={() => setBehavior(n)} />
-                      <span>{n === 1 ? '1' : n === 2 ? '2' : n === 3 ? '3' : n === 4 ? '4' : '5'}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <label className="w-48 text-base font-semibold text-gray-800">Class Participation</label>
-                <div className="flex items-center gap-4">
-                  {[1,2,3,4,5].map(n => (
-                    <label key={`cp-${n}`} className="flex items-center gap-2 text-sm">
-                      <input className="w-5 h-5" type="radio" name="classParticipation" value={n} checked={classParticipation===n} onChange={() => setClassParticipation(n)} />
-                      <span>{n === 1 ? '1 ' : n === 2 ? '2' : n === 3 ? '3' : n === 4 ? '4' : '5'}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <label className="w-48 text-base font-semibold text-gray-800">Class Activity</label>
-                <div className="flex items-center gap-4">
-                  {[1,2,3,4,5].map(n => (
-                    <label key={`ca-${n}`} className="flex items-center gap-2 text-sm">
-                      <input className="w-5 h-5" type="radio" name="classActivity" value={n} checked={classActivity===n} onChange={() => setClassActivity(n)} />
-                      <span>{n === 1 ? '1' : n === 2 ? '2' : n === 3 ? '3' : n === 4 ? '4' : '5'}</span>
-                    </label>
-                  ))}
-                </div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Search Student</label>
+                      <input value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="e.g. Dela Cruz" className="w-full border rounded px-3 py-2" />
               </div>
             </div>
 
-            {/* Report Content Section */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label htmlFor="reportContent" className="block text-sm font-medium text-gray-700">
-                  Report Content
-                </label>
-                <span className={`text-xs ${withinCharRange ? 'text-[#010a51]' : 'text-red-600'}`}>
-                  {charsLeft} left
-                </span>
+                  {/* Summary */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                    <div className="p-4 rounded border bg-red-50 border-red-200">
+                      <div className="text-sm text-red-700">Not Viewed</div>
+                      <div className="text-2xl font-bold text-red-800">{notViewedCount}</div>
               </div>
-              <textarea
-                id="reportContent"
-                value={reportContent}
-                onChange={(e) => setReportContent(e.target.value)}
-                placeholder="Write your report here..."
-                rows={10}
-                maxLength={MAX_CHARS}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#010a51] focus:border-transparent resize-vertical ${
-                  withinCharRange && withinWordRange ? 'border-gray-300' : 'border-red-500'
-                }`}
-                required
-              />
-
+                    <div className="p-4 rounded border bg-yellow-50 border-yellow-200">
+                      <div className="text-sm text-yellow-700">Missed</div>
+                      <div className="text-2xl font-bold text-yellow-800">{missedCount}</div>
             </div>
-
-            {/* Submit Button */}
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className={`px-6 py-2 rounded-md text-white font-medium ${
-                  !canSubmit
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-[#010a51] hover:bg-[#1a237e] focus:outline-none focus:ring-2 focus:ring-[#010a51] focus:ring-offset-2'
-                }`}
-              >
-                {isSubmitting ? 'Submitting...' : 'Submit Report'}
-              </button>
-            </div>
-          </form>
-          
-          {/* Stored Reports Display */}
-          {showStoredReports && (
-            <div className="mt-6 bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-lg font-semibold mb-4">Stored Reports ({storedReports.length})</h3>
-              {storedReports.length === 0 ? (
-                <p className="text-gray-500">No reports stored yet.</p>
-              ) : (
-                <div className="space-y-4">
-                  {storedReports.map((report, index) => (
-                    <div key={report.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h4 className="font-medium text-gray-900">
-                            Report for {report.studentName}
-                          </h4>
-                          <p className="text-sm text-gray-600">
-                            Faculty: {report.facultyName} | Term: {report.termName} | Year: {report.schoolYear}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Created: {new Date(report.createdAt).toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="bg-gray-50 rounded p-3">
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.studentReport}</p>
-                      </div>
+                    <div className="p-4 rounded border bg-gray-50 border-gray-200">
+                      <div className="text-sm text-gray-700">Total (Filtered)</div>
+                      <div className="text-2xl font-bold text-gray-800">{filteredRows.length}</div>
                     </div>
-                  ))}
                 </div>
-              )}
+
+                  {/* Table */}
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-left">
+                          <th className="p-3 border-b font-semibold text-gray-700">Student Name</th>
+                          <th className="p-3 border-b font-semibold text-gray-700">Section</th>
+                          <th className="p-3 border-b font-semibold text-gray-700">Activity</th>
+                          <th className="p-3 border-b font-semibold text-gray-700">Due Date</th>
+                          <th className="p-3 border-b font-semibold text-gray-700">Status</th>
+                          <th className="p-3 border-b font-semibold text-gray-700">Last Viewed</th>
+                          <th className="p-3 border-b font-semibold text-gray-700">Submitted At</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredRows.length === 0 ? (
+                          <tr>
+                            <td className="p-4 text-center text-gray-500" colSpan={7}>No results for current filters.</td>
+                          </tr>
+                        ) : (
+                          filteredRows.map((r) => {
+                            const act = activityById.get(r.activityId) || {};
+                            return (
+                              <tr key={`${r.activityId}-${r.studentId}`} className="odd:bg-white even:bg-gray-50">
+                                <td className="p-3 border-b">{r.studentName}</td>
+                                <td className="p-3 border-b">{r.sectionName}</td>
+                                <td className="p-3 border-b">{act.title || r.activityId}</td>
+                                <td className="p-3 border-b">{act.dueDate ? new Date(act.dueDate).toLocaleDateString("en-US") : '-'}</td>
+                                <td className="p-3 border-b">
+                                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
+                                    r.status === 'not_viewed' ? 'bg-red-100 text-red-700 border border-red-200' :
+                                    r.status === 'missed' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                                    'bg-green-100 text-green-700 border border-green-200'
+                                  }`}>
+                                    {r.status.replace('_', ' ')}
+                                  </span>
+                                </td>
+                                <td className="p-3 border-b">{r.lastViewedAt ? new Date(r.lastViewedAt).toLocaleString() : '-'}</td>
+                                <td className="p-3 border-b">{r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '-'}</td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
             </div>
-          )}
+
+                  {/* Note */}
+                  <p className="mt-4 text-xs text-gray-500">Frontend-only prototype. This view will connect to real activities and student engagement data once backend endpoints are available.</p>
+                </>
+              );
+            }
+
+            return <AuditUI />;
+          })()}
         </div>
       </div>
     </div>
