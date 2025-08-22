@@ -1073,31 +1073,26 @@ export default function Faculty_Grades() {
         console.log('🔍 [Frontend] Debug users error:', error);
       }
       
-      // Test specific class members endpoint
+      // Test specific class debug if we have a selected class
       if (selectedClass !== null && classes[selectedClass]) {
         const selectedClassObj = classes[selectedClass];
-        console.log('🔍 [Frontend] Testing members endpoint for class:', selectedClassObj.classID);
-        
         try {
-          const membersResponse = await fetch(`${API_BASE}/classes/${selectedClassObj.classID}/members`, {
+          const classResponse = await fetch(`${API_BASE}/classes/debug/class/${selectedClassObj.classID}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
-          console.log('🔍 [Frontend] Members endpoint status:', membersResponse.status);
-          
-          if (membersResponse.ok) {
-            const membersData = await membersResponse.json();
-            console.log('🔍 [Frontend] Members endpoint response:', membersData);
+          if (classResponse.ok) {
+            const classData = await classResponse.json();
+            console.log('🔍 [Frontend] Debug specific class response:', classData);
           } else {
-            const errorText = await membersResponse.text();
-            console.log('🔍 [Frontend] Members endpoint error response:', errorText);
+            console.log('🔍 [Frontend] Debug specific class failed:', classResponse.status);
           }
         } catch (error) {
-          console.log('🔍 [Frontend] Members endpoint error:', error);
+          console.log('🔍 [Frontend] Debug specific class error:', error);
         }
       }
       
     } catch (error) {
-      console.error('🔍 [Frontend] Debug function error:', error);
+      console.error('🔍 [Frontend] Debug backend error:', error);
     }
   };
 

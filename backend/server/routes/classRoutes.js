@@ -383,6 +383,53 @@ router.delete('/:classID/members/faculty/:facultyID', authenticateToken, async (
   }
 });
 
+// --- PATCH /:classID/members - Update class members ---
+router.patch('/:classID/members', authenticateToken, async (req, res) => {
+  try {
+    const { classID } = req.params;
+    const { members, facultyID } = req.body;
+    
+    console.log('🔍 [Backend] PATCH /:classID/members called with:', { classID, members, facultyID });
+    
+    const updateData = {};
+    if (members !== undefined) {
+      updateData.members = members;
+    }
+    if (facultyID !== undefined) {
+      updateData.facultyID = facultyID;
+    }
+    
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+    
+    const updatedClass = await Class.findOneAndUpdate(
+      { classID },
+      updateData,
+      { new: true }
+    );
+    
+    if (!updatedClass) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+    
+    console.log('🔍 [Backend] Class updated successfully:', {
+      classID: updatedClass.classID,
+      facultyID: updatedClass.facultyID,
+      members: updatedClass.members
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Class members updated successfully',
+      class: updatedClass
+    });
+  } catch (err) {
+    console.error('🔍 [Backend] Error in PATCH /:classID/members:', err);
+    res.status(500).json({ error: 'Failed to update class members' });
+  }
+});
+
 
 // Get all classes for the logged-in user (student or faculty)
 router.get('/my-classes', authenticateToken, async (req, res) => {
@@ -468,6 +515,170 @@ router.get('/debug/current-user', authenticateToken, async (req, res) => {
   }
 });
 
+// --- GET /debug/classes - Debug endpoint to check class data ---
+router.get('/debug/classes', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔍 [Backend] Debug classes endpoint called');
+    
+    // Get all classes
+    const allClasses = await Class.find({});
+    console.log('🔍 [Backend] Total classes found:', allClasses.length);
+    
+    // Log each class structure
+    allClasses.forEach((cls, index) => {
+      console.log(`🔍 [Backend] Class ${index + 1}:`, {
+        classID: cls.classID,
+        className: cls.className,
+        facultyID: cls.facultyID,
+        members: cls.members,
+        membersLength: cls.members ? cls.members.length : 0,
+        section: cls.section,
+        academicYear: cls.academicYear,
+        termName: cls.termName
+      });
+    });
+    
+    res.json({
+      success: true,
+      totalClasses: allClasses.length,
+      classes: allClasses.map(cls => ({
+        classID: cls.classID,
+        className: cls.className,
+        facultyID: cls.facultyID,
+        members: cls.members,
+        membersLength: cls.members ? cls.members.length : 0,
+        section: cls.section,
+        academicYear: cls.academicYear,
+        termName: cls.termName
+      }))
+    });
+  } catch (err) {
+    console.error('🔍 [Backend] Error in debug classes endpoint:', err);
+    res.status(500).json({ error: 'Failed to fetch class data' });
+  }
+});
+
 // --- GET /debug/users - Debug endpoint to check user data ---
+router.get('/debug/users', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔍 [Backend] Debug users endpoint called');
+    
+    // Get all users
+    const allUsers = await User.find({});
+    console.log('🔍 [Backend] Total users found:', allUsers.length);
+    
+    // Count by role
+    const roleCounts = {};
+    allUsers.forEach(user => {
+      const role = user.role || 'unknown';
+      roleCounts[role] = (roleCounts[role] || 0) + 1;
+    });
+    
+    console.log('🔍 [Backend] Users by role:', roleCounts);
+    
+    // Log first few users of each role
+    Object.keys(roleCounts).forEach(role => {
+      const usersOfRole = allUsers.filter(u => u.role === role).slice(0, 3);
+      console.log(`🔍 [Backend] Sample ${role} users:`, usersOfRole.map(u => ({
+        _id: u._id,
+        userID: u.userID,
+        schoolID: u.schoolID,
+        firstname: u.firstname,
+        lastname: u.lastname
+      })));
+    });
+    
+    res.json({
+      success: true,
+      totalUsers: allUsers.length,
+      roleCounts,
+      sampleUsers: Object.keys(roleCounts).reduce((acc, role) => {
+        const usersOfRole = allUsers.filter(u => u.role === role).slice(0, 3);
+        acc[role] = usersOfRole.map(u => ({
+          _id: u._id,
+          userID: u.userID,
+          schoolID: u.schoolID,
+          firstname: u.firstname,
+          lastname: u.lastname
+        }));
+        return acc;
+      }, {})
+    });
+  } catch (err) {
+    console.error('🔍 [Backend] Error in debug users endpoint:', err);
+    res.status(500).json({ error: 'Failed to fetch user data' });
+  }
+});
+
+// --- GET /debug/class/:classID - Debug endpoint to check specific class ---
+router.get('/debug/class/:classID', authenticateToken, async (req, res) => {
+  try {
+    const { classID } = req.params;
+    console.log('🔍 [Backend] Debug specific class endpoint called with classID:', classID);
+    
+    // Get the specific class
+    const classDoc = await Class.findOne({ classID });
+    if (!classDoc) {
+      console.log('🔍 [Backend] Class not found for classID:', classID);
+      return res.status(404).json({ error: 'Class not found' });
+    }
+    
+    console.log('🔍 [Backend] Class found:', {
+      classID: classDoc.classID,
+      className: classDoc.className,
+      facultyID: classDoc.facultyID,
+      members: classDoc.members,
+      membersLength: classDoc.members ? classDoc.members.length : 0
+    });
+    
+    // Try to find the faculty
+    const faculty = await User.find({ userID: classDoc.facultyID, isArchived: { $ne: true } });
+    console.log('🔍 [Backend] Faculty lookup result:', faculty.length, 'faculty found');
+    console.log('🔍 [Backend] Faculty lookup query:', { userID: classDoc.facultyID });
+    
+    // Try to find faculty by other fields
+    const facultyBySchoolID = await User.find({ schoolID: classDoc.facultyID, isArchived: { $ne: true } });
+    console.log('🔍 [Backend] Faculty lookup by schoolID result:', facultyBySchoolID.length, 'faculty found');
+    
+    const facultyByEmail = await User.find({ email: classDoc.facultyID, isArchived: { $ne: true } });
+    console.log('🔍 [Backend] Faculty lookup by email result:', facultyByEmail.length, 'faculty found');
+    
+    // Get all faculty users to see what's available
+    const allFaculty = await User.find({ role: 'faculty', isArchived: { $ne: true } });
+    console.log('🔍 [Backend] All faculty users:', allFaculty.map(f => ({
+      _id: f._id,
+      userID: f.userID,
+      schoolID: f.schoolID,
+      firstname: f.firstname,
+      lastname: f.lastname
+    })));
+    
+    res.json({
+      success: true,
+      class: {
+        classID: classDoc.classID,
+        className: classDoc.className,
+        facultyID: classDoc.facultyID,
+        members: classDoc.members,
+        membersLength: classDoc.members ? classDoc.members.length : 0
+      },
+      facultyLookup: {
+        byUserID: faculty.length,
+        bySchoolID: facultyBySchoolID.length,
+        byEmail: facultyByEmail.length
+      },
+      allFaculty: allFaculty.map(f => ({
+        _id: f._id,
+        userID: f.userID,
+        schoolID: f.schoolID,
+        firstname: f.firstname,
+        lastname: f.lastname
+      }))
+    });
+  } catch (err) {
+    console.error('🔍 [Backend] Error in debug specific class endpoint:', err);
+    res.status(500).json({ error: 'Failed to fetch class data' });
+  }
+});
 
 export default router; 
