@@ -231,7 +231,21 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
   // Initialize and cleanup
   useEffect(() => {
     if (isOpen) {
+      // Prevent background scroll and interactions
+      const previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
       initializeJitsi();
+      return () => {
+        document.body.style.overflow = previousOverflow;
+        if (jitsiApi.current) {
+          try {
+            jitsiApi.current.dispose();
+          } catch {
+            void 0;
+          }
+          jitsiApi.current = null;
+        }
+      };
     }
     return () => {
       if (jitsiApi.current) {
