@@ -7,19 +7,23 @@ import multer from 'multer';
 import Lesson from '../models/Lesson.js';
 import mongoose from 'mongoose';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import database from '../connect.cjs';
 import { ObjectId } from 'mongodb';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import LessonProgress from '../models/LessonProgress.js';
 
 const router = express.Router();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const lessonsUploadDir = path.join(__dirname, '..', 'uploads', 'lessons');
 
 // --- Multer setup for file uploads ---
 // Multer is used to handle multipart/form-data (file uploads) in Express
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // All lesson files are stored in uploads/lessons/
-    cb(null, 'uploads/lessons/');
+    // Use absolute path to avoid CWD issues
+    cb(null, lessonsUploadDir);
   },
   filename: function (req, file, cb) {
     // Use a unique filename to avoid collisions
@@ -101,6 +105,18 @@ router.use((err, req, res, next) => {
     return res.status(400).json({ error: 'File too large. Max size is 100MB per file.' });
   }
   next(err);
+});
+
+// --- Direct file serving helper route (optional): /lessons/files/:filename[?download=1]
+router.get('/files/:filename', (req, res) => {
+  const { filename } = req.params;
+  const filePath = path.join(lessonsUploadDir, filename);
+  const forceDownload = String(req.query.download || '').toLowerCase() === '1';
+  if (forceDownload) {
+    res.download(filePath);
+  } else {
+    res.sendFile(filePath);
+  }
 });
 
 // --- LESSON PROGRESS ROUTES ---

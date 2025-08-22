@@ -51,6 +51,89 @@ export default function QuizResponses() {
   const [members, setMembers] = useState([]);
   const [showViolationsModal, setShowViolationsModal] = useState(false);
   const [filteredResponses, setFilteredResponses] = useState(responses); // New state for filtered responses
+  
+  // Enhanced filter states
+  const [filters, setFilters] = useState({
+    status: 'all',
+    gradeRange: { min: '', max: '' },
+    violations: { min: '', max: '' },
+    timeSpent: { min: '', max: '' },
+    searchTerm: ''
+  });
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Function to apply all filters
+  const applyFilters = () => {
+    let filtered = [...responses];
+    
+    // Search filter
+    if (filters.searchTerm.trim()) {
+      filtered = filtered.filter(resp => 
+        resp.studentId?.firstname?.toLowerCase().includes(filters.searchTerm.toLowerCase()) || 
+        resp.studentId?.lastname?.toLowerCase().includes(filters.searchTerm.toLowerCase())
+      );
+    }
+    
+    // Status filter
+    if (filters.status === 'graded') {
+      filtered = filtered.filter(resp => resp.graded);
+    } else if (filters.status === 'not-graded') {
+      filtered = filtered.filter(resp => !resp.graded);
+    }
+    
+    // Grade range filter
+    if (filters.gradeRange.min !== '' || filters.gradeRange.max !== '') {
+      filtered = filtered.filter(resp => {
+        const score = typeof resp.score === 'number' ? resp.score : 0;
+        const min = filters.gradeRange.min !== '' ? Number(filters.gradeRange.min) : 0;
+        const max = filters.gradeRange.max !== '' ? Number(filters.gradeRange.max) : stats.total;
+        return score >= min && score <= max;
+      });
+    }
+    
+    // Violations filter
+    if (filters.violations.min !== '' || filters.violations.max !== '') {
+      filtered = filtered.filter(resp => {
+        const violations = resp.violationCount || 0;
+        const min = filters.violations.min !== '' ? Number(filters.violations.min) : 0;
+        const max = filters.violations.max !== '' ? Number(filters.violations.max) : 999;
+        return violations >= min && violations <= max;
+      });
+    }
+    
+    // Time spent filter (average time per question)
+    if (filters.timeSpent.min !== '' || filters.timeSpent.max !== '') {
+      filtered = filtered.filter(resp => {
+        if (!Array.isArray(resp.questionTimes) || resp.questionTimes.length === 0) return true;
+        const avgTime = resp.questionTimes.reduce((sum, time) => sum + time, 0) / resp.questionTimes.length;
+        const min = filters.timeSpent.min !== '' ? Number(filters.timeSpent.min) : 0;
+        const max = filters.timeSpent.max !== '' ? Number(filters.timeSpent.max) : 999;
+        return avgTime >= min && avgTime <= max;
+      });
+    }
+    
+    setFilteredResponses(filtered);
+    
+    // Reset selected index if it's out of bounds or if no results
+    if (filtered.length === 0) {
+      setSelectedIdx(0);
+    } else if (selectedIdx >= filtered.length) {
+      setSelectedIdx(0);
+    }
+  };
+
+  // Function to clear all filters
+  const clearFilters = () => {
+    setFilters({
+      status: 'all',
+      gradeRange: { min: '', max: '' },
+      violations: { min: '', max: '' },
+      timeSpent: { min: '', max: '' },
+      searchTerm: ''
+    });
+    setFilteredResponses(responses);
+    setSelectedIdx(0);
+  };
 
   const handleScoreEdit = idx => {
     setEditScoreIdx(idx);
@@ -139,11 +222,12 @@ export default function QuizResponses() {
       fetch(`${API_BASE}/api/quizzes/${quizId}/responses`, { headers: { 'Authorization': `Bearer ${token}` } }).then(res => res.json())
     ]).then(async ([quizData, respData]) => {
       setQuiz(quizData);
-      setResponses(Array.isArray(respData) ? respData : []);
-      setFilteredResponses(Array.isArray(respData) ? respData : []); // Initialize filtered responses
+      let responsesArray = Array.isArray(respData) ? respData : [];
+      
+      // Fetch all students from the class to properly populate student information
       let membersData = [];
-      // Fetch only assigned students
       const assignedIDs = quizData?.assignedTo?.[0]?.studentIDs || [];
+      
       if (assignedIDs.length > 0) {
         try {
           const res = await fetch(`${API_BASE}/api/quizzes/students/by-ids`, {
@@ -157,13 +241,56 @@ export default function QuizResponses() {
           const data = await res.json();
           membersData = Array.isArray(data.students) ? data.students : [];
           console.log("Loaded assigned members:", membersData);
-        } catch {
+          
+          // Create a map of student IDs to student objects for quick lookup
+          const studentMap = {};
+          membersData.forEach(student => {
+            // Handle both _id and userID formats
+            if (student._id) studentMap[student._id] = student;
+            if (student.userID) studentMap[student.userID] = student;
+          });
+          
+          // Populate student information in responses
+          responsesArray = responsesArray.map(response => {
+            let studentId = response.studentId;
+            
+            // Handle different student ID formats
+            if (typeof studentId === 'string') {
+              // If studentId is a string, try to find the student
+              const student = studentMap[studentId];
+              if (student) {
+                return { ...response, studentId: student };
+              }
+            } else if (studentId && typeof studentId === 'object') {
+              // If studentId is already an object, check if it has the right structure
+              if (studentId._id && (studentId.firstname || studentId.lastname)) {
+                return response; // Already properly populated
+              } else if (studentId._id) {
+                // Has _id but missing name fields, try to populate
+                const student = studentMap[studentId._id];
+                if (student) {
+                  return { ...response, studentId: student };
+                }
+              }
+            }
+            
+            // If we can't find the student, log it for debugging
+            console.warn('Could not find student for response:', response);
+            return response;
+          });
+          
+        } catch (error) {
+          console.error('Error fetching students:', error);
           membersData = [];
         }
       }
+      
+      setResponses(responsesArray);
+      setFilteredResponses(responsesArray); // Initialize filtered responses
       setMembers(membersData);
       setLoading(false);
-    }).catch(() => {
+    }).catch((error) => {
+      console.error('Error loading quiz data:', error);
       setError('Failed to load quiz or responses.');
       setLoading(false);
     });
@@ -215,173 +342,283 @@ export default function QuizResponses() {
                     type="text"
                     placeholder="Search students by name..."
                     className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    onChange={(e) => {
-                      const searchTerm = e.target.value.toLowerCase();
-                      // Filter responses based on search term
-                      const filtered = responses.filter(resp => 
-                        resp.studentId?.firstname?.toLowerCase().includes(searchTerm) || 
-                        resp.studentId?.lastname?.toLowerCase().includes(searchTerm)
-                      );
-                      // Update the displayed responses
-                      setFilteredResponses(filtered);
-                      // Reset selected index if it's out of bounds
-                      if (selectedIdx >= filtered.length) {
-                        setSelectedIdx(0);
-                      }
-                    }}
+                    value={filters.searchTerm}
+                    onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
                   />
                 </div>
-                <div className="flex gap-2">
-                  <select
-                    className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    onChange={(e) => {
-                      const statusFilter = e.target.value;
-                      let filtered = [...responses];
-                      
-                      if (statusFilter === 'graded') {
-                        filtered = responses.filter(resp => resp.graded);
-                      } else if (statusFilter === 'not-graded') {
-                        filtered = responses.filter(resp => !resp.graded);
-                      }
-                      
-                      setFilteredResponses(filtered);
-                      // Reset selected index if it's out of bounds
-                      if (selectedIdx >= filtered.length) {
-                        setSelectedIdx(0);
-                      }
-                    }}
-                  >
-                    <option value="all">All Status</option>
-                    <option value="graded">Graded</option>
-                    <option value="not-graded">Not Graded</option>
-                  </select>
-                  <button
-                    onClick={() => {
-                      setFilteredResponses(responses);
-                      setSelectedIdx(0);
-                      // Reset search input
-                      const searchInput = document.querySelector('input[placeholder="Search students by name..."]');
-                      if (searchInput) searchInput.value = '';
-                      // Reset status filter
-                      const statusFilter = document.querySelector('select');
-                      if (statusFilter) statusFilter.value = 'all';
-                    }}
-                    className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm"
-                  >
-                    Clear Filters
-                  </button>
-                </div>
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
+                >
+                  {showFilters ? 'Hide Filters' : 'Show Filters'}
+                </button>
+                <button
+                  onClick={clearFilters}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm"
+                >
+                  Clear Filters
+                </button>
                 <div className="text-sm text-gray-600">
                   {filteredResponses?.length || responses.length} of {responses.length} responses
                 </div>
               </div>
+              
+              {/* Enhanced Filters Panel */}
+              {showFilters && (
+                <div className="bg-white border rounded-lg p-4 mb-4 shadow-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    {/* Status Filter */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Status</label>
+                      <select
+                        className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        value={filters.status}
+                        onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                      >
+                        <option value="all">All Status</option>
+                        <option value="graded">Graded</option>
+                        <option value="not-graded">Not Graded</option>
+                      </select>
+                    </div>
+                    
+                    {/* Grade Range Filter */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Grade Range</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          placeholder="Min"
+                          min="0"
+                          max={stats.total}
+                          className="w-1/2 border rounded px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          value={filters.gradeRange.min}
+                          onChange={(e) => setFilters(prev => ({ 
+                            ...prev, 
+                            gradeRange: { ...prev.gradeRange, min: e.target.value } 
+                          }))}
+                        />
+                        <input
+                          type="number"
+                          placeholder="Max"
+                          min="0"
+                          max={stats.total}
+                          className="w-1/2 border rounded px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          value={filters.gradeRange.max}
+                          onChange={(e) => setFilters(prev => ({ 
+                            ...prev, 
+                            gradeRange: { ...prev.gradeRange, max: e.target.value } 
+                          }))}
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Violations Filter */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Violations</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          placeholder="Min"
+                          min="0"
+                          className="w-1/2 border rounded px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          value={filters.violations.min}
+                          onChange={(e) => setFilters(prev => ({ 
+                            ...prev, 
+                            violations: { ...prev.violations, min: e.target.value } 
+                          }))}
+                        />
+                        <input
+                          type="number"
+                          placeholder="Max"
+                          min="0"
+                          className="w-1/2 border rounded px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          value={filters.violations.max}
+                          onChange={(e) => setFilters(prev => ({ 
+                            ...prev, 
+                            violations: { ...prev.violations, max: e.target.value } 
+                          }))}
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Time Spent Filter */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Avg Time/Question (sec)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          placeholder="Min"
+                          min="0"
+                          className="w-1/2 border rounded px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          value={filters.timeSpent.min}
+                          onChange={(e) => setFilters(prev => ({ 
+                            ...prev, 
+                            timeSpent: { ...prev.timeSpent, min: e.target.value } 
+                          }))}
+                        />
+                        <input
+                          type="number"
+                          placeholder="Max"
+                          min="0"
+                          className="w-1/2 border rounded px-2 py-2 text-sm focus:outline-none focus:ring-blue-200"
+                          value={filters.timeSpent.max}
+                          onChange={(e) => setFilters(prev => ({ 
+                            ...prev, 
+                            timeSpent: { ...prev.timeSpent, max: e.target.value } 
+                          }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Apply Filters Button */}
+                  <div className="flex justify-center">
+                    <button
+                      onClick={applyFilters}
+                      className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-semibold"
+                    >
+                      Apply Filters
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-4">
-                <button disabled={selectedIdx === 0} onClick={() => setSelectedIdx(i => i - 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&lt;</button>
-                <span> {selectedIdx + 1} of {filteredResponses?.length || responses.length} </span>
-                <button disabled={selectedIdx === (filteredResponses?.length || responses.length) - 1} onClick={() => setSelectedIdx(i => i + 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&gt;</button>
+            {/* Show "No results found" message when filters return no results */}
+            {filteredResponses.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-gray-500 text-lg mb-2">No results found for the selected filters</div>
+                <div className="text-gray-400 text-sm mb-4">Try adjusting your filter criteria or clear all filters</div>
+                <button
+                  onClick={clearFilters}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
+                >
+                  Clear All Filters
+                </button>
               </div>
-              <button
-                onClick={handleMarkAllAsGraded}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2"
-              >
-                <span>✓</span>
-                Mark All as Graded
-              </button>
-            </div>
-            <div className="mb-2 text-2xl font-bold text-blue-900">{filteredResponses[selectedIdx]?.studentId?.firstname} {filteredResponses[selectedIdx]?.studentId?.lastname}</div>
-            <div className="mb-2 text-lg text-gray-700">Submitted: {new Date(filteredResponses[selectedIdx]?.submittedAt).toLocaleString()}</div>
-            <div className="mb-4 flex items-center gap-4">
-              <span className="text-2xl text-gray-800 font-bold">Score: </span>
-              {editScoreIdx === selectedIdx ? (
-                <>
-                  <input
-                    type="number"
-                    min={0}
-                    max={stats.total}
-                    step="0.01"
-                    className="border-2 border-blue-400 rounded px-3 py-1 text-2xl w-24 text-center font-bold mr-2"
-                    value={editScoreValue}
-                    onChange={e => {
-                      let val = Number(e.target.value);
-                      // Handle NaN case
-                      if (isNaN(val)) val = 0;
-                      // Ensure score is within valid range
-                      if (val > stats.total) val = stats.total;
-                      if (val < 0) val = 0;
-                      setEditScoreValue(val);
-                    }}
-                    onBlur={e => {
-                      // Ensure the value is properly formatted on blur
-                      let val = Number(e.target.value);
-                      if (isNaN(val)) val = 0;
-                      if (val > stats.total) val = stats.total;
-                      if (val < 0) val = 0;
-                      setEditScoreValue(val);
-                    }}
-                  />
-                  <span className="text-2xl font-bold">/ {stats.total}</span>
-                  <div className="text-xs text-gray-600 mt-1">Note: 0 is a valid score for students who did not pass anything</div>
-                  <button className="ml-2 px-3 py-1 bg-green-600 text-white rounded font-semibold" onClick={() => handleScoreSave(selectedIdx)}>Save</button>
-                  <button className="ml-2 px-3 py-1 bg-gray-400 text-white rounded font-semibold" onClick={handleScoreCancel}>Cancel</button>
-                </>
-              ) : (
-                <>
-                  <span className="text-3xl font-extrabold text-blue-800">{typeof filteredResponses[selectedIdx]?.score === 'number' ? filteredResponses[selectedIdx]?.score : 0}</span>
-                  <span className="text-2xl font-bold">/ {stats.total}</span>
-                  <button className="ml-4 px-4 py-1 bg-blue-700 text-white rounded font-semibold hover:bg-blue-900 transition" onClick={() => handleScoreEdit(selectedIdx)}>Edit</button>
-                </>
-              )}
-              {/* Show violation count and button */}
-              <span className="ml-8 text-base text-red-600 font-semibold">Tab/Focus Violations: {filteredResponses[selectedIdx]?.violationCount || 0}</span>
-              <button
-                className="ml-4 px-4 py-1 bg-red-600 text-white rounded font-semibold hover:bg-red-800 transition"
-                onClick={() => setShowViolationsModal(true)}
-              >
-                View Violations ({filteredResponses[selectedIdx]?.violationEvents?.length || 0})
-              </button>
-            </div>
-            {filteredResponses[selectedIdx]?.feedback && <div className="mb-2 text-green-700">Feedback: {filteredResponses[selectedIdx]?.feedback}</div>}
-            {/* Answers list with time spent per question on the right */}
-            <div className="border rounded p-4 bg-gray-50 mb-4">
-              <ol className="list-decimal ml-6">
-                {quiz.questions.map((q, idx) => {
-                  const ans = filteredResponses[selectedIdx]?.answers.find(a => (a.questionId === (q._id || idx) || (a.questionId?._id === (q._id || idx))));
-                  const timeSpent = Array.isArray(filteredResponses[selectedIdx]?.questionTimes) ? filteredResponses[selectedIdx]?.questionTimes[idx] : null;
-                  return (
-                    <li key={q._id || idx} className="mb-3 flex justify-between items-start">
-                      <div>
-                        <div className="font-bold">{q.question}</div>
-                        {q.image && <img src={q.image} alt="Question" className="max-h-32 mb-2" />}
-                        <div className="ml-2">
-                          <span className="italic">Student Answer: </span>
-                          {q.type === 'multiple' && Array.isArray(ans?.answer) && (
-                            <ul className="list-disc ml-4">
-                              {ans.answer.map(i => <li key={i}>{q.choices[i]}</li>)}
-                            </ul>
+            ) : (
+              <>
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center gap-4">
+                    <button disabled={selectedIdx === 0} onClick={() => setSelectedIdx(i => i - 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&lt;</button>
+                    <span> {selectedIdx + 1} of {filteredResponses.length} </span>
+                    <button disabled={selectedIdx === filteredResponses.length - 1} onClick={() => setSelectedIdx(i => i + 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&gt;</button>
+                  </div>
+                  <button
+                    onClick={handleMarkAllAsGraded}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2"
+                  >
+                    <span>✓</span>
+                    Mark All as Graded
+                  </button>
+                </div>
+                <div className="mb-2 text-2xl font-bold text-blue-900">
+                  {filteredResponses[selectedIdx]?.studentId?.firstname && filteredResponses[selectedIdx]?.studentId?.lastname 
+                    ? `${filteredResponses[selectedIdx].studentId.firstname} ${filteredResponses[selectedIdx].studentId.lastname}`
+                    : filteredResponses[selectedIdx]?.studentId?.firstname 
+                    ? filteredResponses[selectedIdx].studentId.firstname
+                    : filteredResponses[selectedIdx]?.studentId?.lastname
+                    ? filteredResponses[selectedIdx].studentId.lastname
+                    : filteredResponses[selectedIdx]?.studentId?._id || filteredResponses[selectedIdx]?.studentId
+                    ? `Student ID: ${filteredResponses[selectedIdx].studentId._id || filteredResponses[selectedIdx].studentId}`
+                    : 'Unknown Student'
+                  }
+                </div>
+                <div className="mb-2 text-lg text-gray-700">
+                  Submitted: {filteredResponses[selectedIdx]?.submittedAt ? new Date(filteredResponses[selectedIdx].submittedAt).toLocaleString() : 'Unknown time'}
+                </div>
+                
+                <div className="mb-4 flex items-center gap-4">
+                  <span className="text-2xl text-gray-800 font-bold">Score: </span>
+                  {editScoreIdx === selectedIdx ? (
+                    <>
+                      <input
+                        type="number"
+                        min={0}
+                        max={stats.total}
+                        step="0.01"
+                        className="border-2 border-blue-400 rounded px-3 py-1 text-2xl w-24 text-center font-bold mr-2"
+                        value={editScoreValue}
+                        onChange={e => {
+                          let val = Number(e.target.value);
+                          // Handle NaN case
+                          if (isNaN(val)) val = 0;
+                          // Ensure score is within valid range
+                          if (val > stats.total) val = stats.total;
+                          if (val < 0) val = 0;
+                          setEditScoreValue(val);
+                        }}
+                        onBlur={e => {
+                          // Ensure the value is properly formatted on blur
+                          let val = Number(e.target.value);
+                          if (isNaN(val)) val = 0;
+                          if (val > stats.total) val = stats.total;
+                          if (val < 0) val = 0;
+                          setEditScoreValue(val);
+                        }}
+                      />
+                      <span className="text-2xl font-bold">/ {stats.total}</span>
+                      <div className="text-xs text-gray-600 mt-1">Note: 0 is a valid score for students who did not pass anything</div>
+                      <button className="ml-2 px-3 py-1 bg-green-600 text-white rounded font-semibold" onClick={() => handleScoreSave(selectedIdx)}>Save</button>
+                      <button className="ml-2 px-3 py-1 bg-gray-400 text-white rounded font-semibold" onClick={handleScoreCancel}>Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-3xl font-extrabold text-blue-800">{typeof filteredResponses[selectedIdx]?.score === 'number' ? filteredResponses[selectedIdx]?.score : 0}</span>
+                      <span className="text-2xl font-bold">/ {stats.total}</span>
+                      <button className="ml-4 px-4 py-1 bg-blue-700 text-white rounded font-semibold hover:bg-blue-900 transition" onClick={() => handleScoreEdit(selectedIdx)}>Edit</button>
+                    </>
+                  )}
+                  {/* Show violation count and button */}
+                  <span className="ml-8 text-base text-red-600 font-semibold">Tab/Focus Violations: {filteredResponses[selectedIdx]?.violationCount || 0}</span>
+                  <button
+                    className="ml-4 px-4 py-1 bg-red-600 text-white rounded font-semibold hover:bg-red-800 transition"
+                    onClick={() => setShowViolationsModal(true)}
+                  >
+                    View Violations ({filteredResponses[selectedIdx]?.violationEvents?.length || 0})
+                  </button>
+                </div>
+                {filteredResponses[selectedIdx]?.feedback && <div className="mb-2 text-green-700">Feedback: {filteredResponses[selectedIdx]?.feedback}</div>}
+                {/* Answers list with time spent per question on the right */}
+                <div className="border rounded p-4 bg-gray-50 mb-4">
+                  <ol className="list-decimal ml-6">
+                    {quiz.questions.map((q, idx) => {
+                      const ans = filteredResponses[selectedIdx]?.answers.find(a => (a.questionId === (q._id || idx) || (a.questionId?._id === (q._id || idx))));
+                      const timeSpent = Array.isArray(filteredResponses[selectedIdx]?.questionTimes) ? filteredResponses[selectedIdx]?.questionTimes[idx] : null;
+                      return (
+                        <li key={q._id || idx} className="mb-3 flex justify-between items-start">
+                          <div>
+                            <div className="font-bold">{q.question}</div>
+                            {q.image && <img src={q.image} alt="Question" className="max-h-32 mb-2" />}
+                            <div className="ml-2">
+                              <span className="italic">Student Answer: </span>
+                              {q.type === 'multiple' && Array.isArray(ans?.answer) && (
+                                <ul className="list-disc ml-4">
+                                  {ans.answer.map(i => <li key={i}>{q.choices[i]}</li>)}
+                                </ul>
+                              )}
+                              {q.type === 'truefalse' && (
+                                <span>{ans?.answer === true ? 'True' : ans?.answer === false ? 'False' : 'No answer'}</span>
+                              )}
+                              {q.type === 'identification' && (
+                                <span>{ans?.answer || 'No answer'}</span>
+                              )}
+                            </div>
+                          </div>
+                          {/* Time spent per question on the far right with label */}
+                          {timeSpent !== null && (
+                            <div className="ml-8 text-xs text-blue-700 whitespace-nowrap self-center text-center">
+                              <div className="font-semibold">Time Spent</div>
+                              {timeSpent} seconds
+                            </div>
                           )}
-                          {q.type === 'truefalse' && (
-                            <span>{ans?.answer === true ? 'True' : ans?.answer === false ? 'False' : 'No answer'}</span>
-                          )}
-                          {q.type === 'identification' && (
-                            <span>{ans?.answer || 'No answer'}</span>
-                          )}
-                        </div>
-                      </div>
-                      {/* Time spent per question on the far right with label */}
-                      {timeSpent !== null && (
-                        <div className="ml-8 text-xs text-blue-700 whitespace-nowrap self-center text-center">
-                          <div className="font-semibold">Time Spent</div>
-                          {timeSpent} seconds
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              </>
+            )}
           </div>
         )}
         {tab === 'toGrade' && responses.length === 0 && (

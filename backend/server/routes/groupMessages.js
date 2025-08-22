@@ -94,28 +94,29 @@ router.get('/:groupId', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "You are not a participant in this group" });
     }
 
+    // Since groupId is encrypted in the database, we need to fetch all and filter
+    // This is a limitation of the current encryption approach
     const messages = await GroupMessage.find({});
     
-    // Decrypt all fields
-    const decryptedMessages = messages.map(msg => ({
-      _id: msg._id,
-      groupId: msg.getDecryptedGroupId(),
-      senderId: msg.getDecryptedSenderId(),
-      message: msg.getDecryptedMessage(),
-      fileUrl: msg.getDecryptedFileUrl(),
-      createdAt: msg.createdAt,
-      updatedAt: msg.updatedAt,
-    }));
-
-    // Filter messages for this group
-    const groupMessages = decryptedMessages.filter(m => m.groupId === groupId);
+    // Decrypt all fields and filter by groupId
+    const decryptedMessages = messages
+      .map(msg => ({
+        _id: msg._id,
+        groupId: msg.getDecryptedGroupId(),
+        senderId: msg.getDecryptedSenderId(),
+        message: msg.getDecryptedMessage(),
+        fileUrl: msg.getDecryptedFileUrl(),
+        createdAt: msg.createdAt,
+        updatedAt: msg.updatedAt,
+      }))
+      .filter(m => m.groupId === groupId);
     
     // Sort by createdAt (oldest first)
-    groupMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    decryptedMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
     // Populate sender information for each message
     const populatedMessages = await Promise.all(
-      groupMessages.map(async (msg) => {
+      decryptedMessages.map(async (msg) => {
         try {
           const sender = await User.findById(msg.senderId);
           if (sender) {
