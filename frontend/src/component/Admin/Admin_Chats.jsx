@@ -9,6 +9,7 @@ import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
+import { getProfileImageUrl } from "../../utils/imageUtils";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -1075,7 +1076,7 @@ export default function Admin_Chats() {
                         </div>
                       ) : (
                         <img
-                          src={chat.profilePic ? `${API_BASE}/uploads/${chat.profilePic}` : defaultAvatar}
+                          src={getProfileImageUrl(chat.profilePic, API_BASE, defaultAvatar)}
                           alt="Profile"
                           className="w-8 h-8 rounded-full object-cover border"
                           onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1136,7 +1137,7 @@ export default function Admin_Chats() {
                         </div>
                       ) : (
                         <img
-                          src={item.profilePic ? `${API_BASE}/uploads/${item.profilePic}` : defaultAvatar}
+                          src={getProfileImageUrl(item.profilePic, API_BASE, defaultAvatar)}
                           alt="Profile"
                           className="w-8 h-8 rounded-full object-cover border"
                           onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1200,7 +1201,7 @@ export default function Admin_Chats() {
                     ) : (
                       <>
                         <img
-                          src={selectedChat.profilePic ? `${API_BASE}/uploads/${selectedChat.profilePic}` : defaultAvatar}
+                          src={getProfileImageUrl(selectedChat.profilePic, API_BASE, defaultAvatar)}
                           alt="Profile"
                           className="w-10 h-10 rounded-full object-cover border"
                           onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1484,7 +1485,7 @@ export default function Admin_Chats() {
                   if (!user) return null;
                   return (
                     <li key={userId} className="flex items-center gap-2 py-2">
-                      <img src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar} alt="Profile" className="w-8 h-8 rounded-full object-cover border" />
+                      <img src={getProfileImageUrl(user.profilePic, API_BASE, defaultAvatar)} alt="Profile" className="w-8 h-8 rounded-full object-cover border" />
                       <span>{user.lastname}, {user.firstname}</span>
                       {selectedChat.createdBy === user._id && (
                         <span className="text-xs text-blue-600 ml-2">(Creator)</span>

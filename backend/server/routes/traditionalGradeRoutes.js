@@ -13,21 +13,41 @@ import Term from '../models/Term.js';
 
 const router = express.Router();
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = './temp';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
-});
+// Storage configuration
+const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
 
-const upload = multer({ storage });
+
+async function initializeTraditionalGradeStorage() {
+  if (USE_CLOUDINARY) {
+    console.log('[TRADITIONAL_GRADES] Using Cloudinary storage');
+    try {
+      const { gradeFileStorage } = await import('../config/cloudinary.js');
+      return multer({ storage: gradeFileStorage });
+    } catch (error) {
+      console.error('[TRADITIONAL_GRADES] Cloudinary setup failed, falling back to local storage:', error.message);
+    }
+  }
+  
+  // Local storage fallback
+  console.log('[TRADITIONAL_GRADES] Using local storage');
+  const localStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = './temp';
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      cb(null, Date.now() + '-' + file.originalname);
+    }
+  });
+  
+  return multer({ storage: localStorage });
+}
+
+// Initialize upload middleware
+const upload = await initializeTraditionalGradeStorage();
 
 // Get faculty classes and sections for grading
 router.get('/faculty/classes-sections', authenticateToken, async (req, res) => {

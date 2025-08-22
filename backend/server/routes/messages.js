@@ -13,32 +13,48 @@ import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// --- Ensure upload directory exists ---
-// This ensures the uploads/messages directory exists before saving files
-const uploadDir = './uploads/messages';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Storage configuration
+const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+
+
+async function initializeMessageStorage() {
+  if (USE_CLOUDINARY) {
+    console.log('[MESSAGES] Using Cloudinary storage');
+    try {
+      const { messageStorage } = await import('../config/cloudinary.js');
+      return multer({ storage: messageStorage });
+    } catch (error) {
+      console.error('[MESSAGES] Cloudinary setup failed, falling back to local storage:', error.message);
+    }
+  }
+  
+  // Local storage fallback
+  console.log('[MESSAGES] Using local storage');
+  const uploadDir = './uploads/messages';
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  
+  const localStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+      cb(null, Date.now() + "-" + file.originalname);
+    }
+  });
+  return multer({ storage: localStorage });
 }
 
-// --- Multer setup for file uploads ---
-// Multer is used to handle multipart/form-data (file uploads) in Express
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    // Use a timestamp to avoid filename collisions
-    cb(null, Date.now() + "-" + file.originalname);
-  }
-});
-const upload = multer({ storage });
+// Initialize upload middleware
+const upload = await initializeMessageStorage();
 
 // --- POST / - send a message (optionally with a file) ---
 router.post('/', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     const { senderId, receiverId, message } = req.body;
-    // If a file is uploaded, store its URL (relative to server root)
-    const fileUrl = req.file ? `uploads/messages/${req.file.filename}` : null;
+    // If a file is uploaded, store its URL
+    const fileUrl = req.file ? (req.file.secure_url || req.file.path || `uploads/messages/${req.file.filename}`) : null;
 
     // Message object structure: senderId, receiverId, message (text), fileUrl (optional)
     const newMessage = new Message({ senderId, receiverId, message, fileUrl });

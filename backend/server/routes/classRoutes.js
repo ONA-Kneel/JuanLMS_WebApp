@@ -14,17 +14,37 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Multer setup for class images
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '..', 'uploads'));
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-class-' + file.originalname.replace(/\s+/g, ''));
+// Storage configuration
+const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+
+
+async function initializeClassStorage() {
+  if (USE_CLOUDINARY) {
+    console.log('[CLASSES] Using Cloudinary storage');
+    try {
+      const { classImageStorage } = await import('../config/cloudinary.js');
+      return multer({ storage: classImageStorage });
+    } catch (error) {
+      console.error('[CLASSES] Cloudinary setup failed, falling back to local storage:', error.message);
+    }
   }
-});
-const upload = multer({ storage });
+  
+  // Local storage fallback
+  console.log('[CLASSES] Using local storage');
+  const localStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, path.join(__dirname, '..', 'uploads'));
+    },
+    filename: function (req, file, cb) {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, uniqueSuffix + '-class-' + file.originalname.replace(/\s+/g, ''));
+    }
+  });
+  return multer({ storage: localStorage });
+}
+
+// Initialize upload middleware
+const upload = await initializeClassStorage();
 
 const router = express.Router();
 
@@ -152,7 +172,8 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     
     let imagePath = '';
     if (req.file) {
-      imagePath = `/uploads/${req.file.filename}`;
+      // Handle both Cloudinary and local storage
+      imagePath = req.file.secure_url || req.file.path || `/uploads/${req.file.filename}`;
     }
     
     // Create new class with academic year, term, and section if available

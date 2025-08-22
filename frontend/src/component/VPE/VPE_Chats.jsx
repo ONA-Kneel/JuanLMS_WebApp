@@ -9,6 +9,7 @@ import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
+import { getProfileImageUrl, getFileUrl } from "../../utils/imageUtils";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -1153,7 +1154,7 @@ export default function VPE_Chats() {
                         </div>
                       ) : (
                         <img
-                          src={chat.profilePic ? `${API_BASE}/uploads/${chat.profilePic}` : defaultAvatar}
+                          src={getProfileImageUrl(chat.profilePic, API_BASE, defaultAvatar)}
                           alt="Profile"
                           className="w-8 h-8 rounded-full object-cover border"
                           onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1220,7 +1221,7 @@ export default function VPE_Chats() {
                         </div>
                       ) : (
                         <img
-                          src={item.profilePic ? `${API_BASE}/uploads/${item.profilePic}` : defaultAvatar}
+                          src={getProfileImageUrl(item.profilePic, API_BASE, defaultAvatar)}
                           alt="Profile"
                           className="w-8 h-8 rounded-full object-cover border"
                           onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1272,7 +1273,7 @@ export default function VPE_Chats() {
                       </div>
                     ) : (
                       <img
-                        src={selectedChat.profilePic ? `${API_BASE}/uploads/${selectedChat.profilePic}` : defaultAvatar}
+                        src={getProfileImageUrl(selectedChat.profilePic, API_BASE, defaultAvatar)}
                         alt="Profile"
                         className="w-10 h-10 rounded-full object-cover border"
                         onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1318,7 +1319,7 @@ export default function VPE_Chats() {
                         {!isGroupChat && msg.senderId !== currentUserId && (
                           <div className="flex items-center space-x-2 mb-1">
                             <img
-                              src={selectedChat.profilePic ? `${API_BASE}/uploads/${selectedChat.profilePic}` : defaultAvatar}
+                              src={getProfileImageUrl(selectedChat.profilePic, API_BASE, defaultAvatar)}
                               alt="Profile"
                               className="w-6 h-6 rounded-full object-cover"
                               onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1331,7 +1332,7 @@ export default function VPE_Chats() {
                         {isGroupChat && msg.senderId !== currentUserId && (
                           <div className="flex items-center space-x-2 mb-1">
                             <img
-                              src={msg.senderProfilePic ? `${API_BASE}/uploads/${msg.senderProfilePic}` : defaultAvatar}
+                              src={getProfileImageUrl(msg.senderProfilePic, API_BASE, defaultAvatar)}
                               alt="Profile"
                               className="w-6 h-6 rounded-full object-cover"
                               onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1348,7 +1349,7 @@ export default function VPE_Chats() {
                             <div className="space-y-2">
                               {msg.fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                                 <img
-                                  src={`${API_BASE}/uploads/${msg.fileUrl}`}
+                                  src={getFileUrl(msg.fileUrl, API_BASE)}
                                   alt="Uploaded file"
                                   className="max-w-full h-auto rounded"
                                   onError={e => { e.target.style.display = 'none'; }}
@@ -1357,7 +1358,7 @@ export default function VPE_Chats() {
                                 <div className="flex items-center space-x-2">
                                   <img src={uploadfile} alt="File" className="w-8 h-8" />
                                   <a
-                                    href={`${API_BASE}/uploads/${msg.fileUrl}`}
+                                    href={getFileUrl(msg.fileUrl, API_BASE)}
                                     download
                                     className="text-blue-600 hover:underline"
                                   >
@@ -1592,7 +1593,7 @@ export default function VPE_Chats() {
                     <div key={participantId} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                       <div className="flex items-center space-x-2">
                         <img
-                          src={participant.profilePic ? `${API_BASE}/uploads/${participant.profilePic}` : defaultAvatar}
+                          src={getProfileImageUrl(participant.profilePic, API_BASE, defaultAvatar)}
                           alt="Profile"
                           className="w-8 h-8 rounded-full object-cover"
                           onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}

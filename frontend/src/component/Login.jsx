@@ -8,6 +8,7 @@ import logo from '../assets/logo/Logo4.svg';
 import logo6 from '../assets/logo/SJDD Logo.svg';
 import axios from 'axios';
 import { Eye, EyeOff } from 'lucide-react';
+import { getProfileImageUrl } from '../utils/imageUtils';
 import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
 import ValidationModal from './ValidationModal';
 
@@ -164,7 +165,7 @@ export default function Login() {
       console.log('Role type:', typeof role);
   
       // If user has a profile picture, build the image URL
-      const imageUrl = profilePic ? `${API_BASE}/uploads/${profilePic}` : null;
+      const imageUrl = getProfileImageUrl(profilePic, API_BASE, null);
   
             // Store user info and token in localStorage
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
@@ -243,7 +244,7 @@ export default function Login() {
       const decoded = jwtDecode(token);
       const { _id, role, name, email: userEmail, profilePic, userID } = decoded;
 
-      const imageUrl = profilePic ? `${API_BASE}/uploads/${profilePic}` : null;
+      const imageUrl = getProfileImageUrl(profilePic, API_BASE, null);
 
       // Store user info and token in localStorage
       localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, role, profilePic: imageUrl }));

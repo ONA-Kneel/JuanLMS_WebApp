@@ -11,6 +11,7 @@ import axios from "axios";
 
 import NotificationCenter from "./NotificationCenter";
 import { useNotifications } from "../hooks/useNotifications";
+import { getProfileImageUrl } from "../utils/imageUtils";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -98,10 +99,7 @@ export default function ProfileMenu() {
 
   // Helper to get the correct profile image URL
   const getProfileImg = () => {
-    if (userInfo.profilePic) {
-      return `${API_BASE}/uploads/${userInfo.profilePic}`;
-    }
-    return profileicon;
+    return getProfileImageUrl(userInfo.profilePic, API_BASE, profileicon);
   };
 
 

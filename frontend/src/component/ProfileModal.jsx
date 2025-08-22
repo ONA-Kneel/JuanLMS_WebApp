@@ -10,6 +10,7 @@ import axios from 'axios';
 import SupportModal from './Support/SupportModal';
 import profileicon from "../assets/profileicon (1).svg";
 import ValidationModal from './ValidationModal';
+import { getProfileImageUrl } from "../utils/imageUtils";
 
 Modal.setAppElement('#root');
 
@@ -519,11 +520,7 @@ export default function ProfileModal({
           <div className="justify-center items-center text-center">
             <img
               className="w-28 h-28 rounded-full bg-gray-600 object-cover"
-              src={
-                userInfo.profilePic
-                  ? `${API_BASE}/uploads/${userInfo.profilePic}`
-                  : profileicon
-              }
+              src={getProfileImageUrl(userInfo.profilePic, API_BASE, profileicon)}
               alt="Avatar"
               onError={e => { e.target.onerror = null; e.target.src = profileicon; }}
             />

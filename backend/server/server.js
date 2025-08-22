@@ -206,18 +206,38 @@ mongoose.connect(process.env.ATLAS_URI)
 mongoose.connection.on('connected', () => console.log("MongoDB connected successfully"));
 mongoose.connection.on('error', (err) => console.error("MongoDB connection error:", err));
 
-// File upload config
-const uploadDir = './uploads';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
+// Storage configuration
+const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+
+
+async function initializeServerStorage() {
+  if (USE_CLOUDINARY) {
+    console.log('[SERVER] Using Cloudinary storage');
+    try {
+      const { profileStorage } = await import('./config/cloudinary.js');
+      return multer({ storage: profileStorage });
+    } catch (error) {
+      console.error('[SERVER] Cloudinary setup failed, falling back to local storage:', error.message);
+    }
+  }
+  
+  // Local storage fallback
+  console.log('[SERVER] Using local storage');
+  const uploadDir = './uploads';
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+  }
+  
+  const localStorage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadDir),
+    filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
+  });
+  
+  return multer({ storage: localStorage });
 }
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
-});
-
-const upload = multer({ storage });
+// Initialize upload middleware
+const upload = await initializeServerStorage();
 
 // Debug middleware to log all requests
 app.use((req, res, next) => {
@@ -229,7 +249,10 @@ app.use((req, res, next) => {
 // File upload routes
 app.post('/single', upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  res.status(200).json({ image: req.file.filename });
+  
+  // Handle both Cloudinary and local storage
+  const filename = req.file.filename || path.basename(req.file.secure_url || req.file.path);
+  res.status(200).json({ image: filename });
 });
 
 app.post("/users/:id/upload-profile", upload.single("image"), async (req, res) => {
@@ -237,21 +260,33 @@ app.post("/users/:id/upload-profile", upload.single("image"), async (req, res) =
     const userId = req.params.id;
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    const filename = req.file.filename;
+    // Handle both Cloudinary and local storage
+    const profilePicUrl = req.file.secure_url || req.file.path || req.file.filename;
+    
     if (!mongoose.Types.ObjectId.isValid(userId)) return res.status(400).json({ error: "Invalid user ID" });
 
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    user.profilePic = filename;
-    await user.save();
+    // Update only the profilePic field using findByIdAndUpdate to avoid validation issues
+    const updatedUser = await User.findByIdAndUpdate(
+      userId, 
+      { profilePic: profilePicUrl },
+      { new: true, runValidators: false } // Skip validation to avoid contactNo requirement
+    );
 
     res.json({
       message: "Profile image uploaded and linked successfully",
-      imageFilename: filename,
+      imageFilename: profilePicUrl,
+      user: {
+        _id: updatedUser._id,
+        firstname: updatedUser.firstname,
+        lastname: updatedUser.lastname,
+        profilePic: updatedUser.profilePic,
+      },
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error uploading profile picture:", error);
     res.status(500).json({ error: "Failed to upload profile image" });
   }
 });

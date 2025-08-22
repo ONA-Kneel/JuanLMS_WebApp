@@ -5,6 +5,7 @@ import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
 import createEvent from "../../assets/createEvent.png";
+import { getFileUrl } from "../../utils/imageUtils";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -167,7 +168,7 @@ export default function Faculty_Classes() {
                 <div className="flex items-center justify-center bg-gray-500" style={{ height: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px' }}>
                   {cls.image ? (
                     <img
-                      src={cls.image.startsWith('/uploads/') ? `${API_BASE}${cls.image}` : cls.image}
+                      src={getFileUrl(cls.image, API_BASE)}
                       alt="Class"
                       className="object-cover w-full h-full"
                       style={{ height: '100%', width: '100%', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', borderBottomLeftRadius: 0, borderBottomRightRadius: 0, display: 'block' }}

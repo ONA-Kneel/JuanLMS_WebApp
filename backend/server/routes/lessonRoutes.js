@@ -18,27 +18,49 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const lessonsUploadDir = path.join(__dirname, '..', 'uploads', 'lessons');
 
-// --- Multer setup for file uploads ---
-// Multer is used to handle multipart/form-data (file uploads) in Express
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    // Use absolute path to avoid CWD issues
-    cb(null, lessonsUploadDir);
-  },
-  filename: function (req, file, cb) {
-    // Use a unique filename to avoid collisions
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
+// Storage configuration
+const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+
+
+async function initializeLessonStorage() {
+  if (USE_CLOUDINARY) {
+    console.log('[LESSONS] Using Cloudinary storage');
+    try {
+      const { lessonStorage } = await import('../config/cloudinary.js');
+      return multer({
+        storage: lessonStorage,
+        limits: { fileSize: 100 * 1024 * 1024 }, // 100MB per file
+        fileFilter: (req, file, cb) => {
+          cb(null, true); // Accept all file types for lesson materials
+        }
+      });
+    } catch (error) {
+      console.error('[LESSONS] Cloudinary setup failed, falling back to local storage:', error.message);
+    }
   }
-});
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB per file
-  // Accept all file types for lesson materials
-  fileFilter: (req, file, cb) => {
-    cb(null, true);
-  }
-});
+  
+  // Local storage fallback
+  console.log('[LESSONS] Using local storage');
+  const localStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, lessonsUploadDir);
+    },
+    filename: function (req, file, cb) {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, uniqueSuffix + '-' + file.originalname);
+    }
+  });
+  return multer({
+    storage: localStorage,
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB per file
+    fileFilter: (req, file, cb) => {
+      cb(null, true);
+    }
+  });
+}
+
+// Initialize upload middleware
+const upload = await initializeLessonStorage();
 
 // --- POST /lessons - upload lesson with multiple files ---
 // Accepts up to 5 files per lesson
@@ -52,7 +74,7 @@ router.post('/', authenticateToken, upload.array('files', 5), async (req, res) =
     // Map uploaded files when present
     const files = Array.isArray(req.files) && req.files.length > 0
       ? req.files.map(file => ({
-          fileUrl: `/uploads/lessons/${file.filename}`,
+          fileUrl: file.secure_url || file.path || `/uploads/lessons/${file.filename}`,
           fileName: file.originalname
         }))
       : [];
@@ -225,7 +247,7 @@ router.patch('/:lessonId/files', authenticateToken, upload.array('files', 5), as
     if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
     // Map uploaded files to file info objects
     const newFiles = req.files.map(file => ({
-      fileUrl: `/uploads/lessons/${file.filename}`,
+      fileUrl: file.secure_url || file.path || `/uploads/lessons/${file.filename}`,
       fileName: file.originalname
     }));
     lesson.files.push(...newFiles);

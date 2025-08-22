@@ -14,25 +14,44 @@ import { createQuizNotification } from '../services/notificationService.js';
 
 const router = express.Router();
 
-// Multer setup for quiz images
-const quizImageDir = path.resolve('uploads/quiz-images');
+// Storage configuration
+const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
 
-if (!fs.existsSync(quizImageDir)) {
-  fs.mkdirSync(quizImageDir, { recursive: true });
+
+async function initializeQuizStorage() {
+  if (USE_CLOUDINARY) {
+    console.log('[QUIZ] Using Cloudinary storage');
+    try {
+      const { quizImageStorage } = await import('../config/cloudinary.js');
+      return multer({ storage: quizImageStorage });
+    } catch (error) {
+      console.error('[QUIZ] Cloudinary setup failed, falling back to local storage:', error.message);
+    }
+  }
+  
+  // Local storage fallback
+  console.log('[QUIZ] Using local storage');
+  const quizImageDir = path.resolve('uploads/quiz-images');
+  if (!fs.existsSync(quizImageDir)) {
+    fs.mkdirSync(quizImageDir, { recursive: true });
+  }
+  
+  const localStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, quizImageDir);
+    },
+    filename: function (req, file, cb) {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const ext = path.extname(file.originalname);
+      const filename = uniqueSuffix + ext;
+      cb(null, filename);
+    }
+  });
+  return multer({ storage: localStorage });
 }
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, quizImageDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    const filename = uniqueSuffix + ext;
-    cb(null, filename);
-  }
-});
-const upload = multer({ storage });
+// Initialize upload middleware
+const upload = await initializeQuizStorage();
 
 // Upload quiz image
 router.post('/upload-image', upload.single('image'), (req, res) => {
@@ -40,9 +59,16 @@ router.post('/upload-image', upload.single('image'), (req, res) => {
     return res.status(400).json({ error: 'No file uploaded' });
   }
   
-  // Return full backend URL for the image
-  const backendUrl = process.env.BACKEND_URL || 'https://juanlms-webapp-server.onrender.com';
-  const imageUrl = `${backendUrl}/uploads/quiz-images/${req.file.filename}`;
+  // Return the appropriate URL based on storage type
+  let imageUrl;
+  if (req.file.secure_url) {
+    // Cloudinary URL
+    imageUrl = req.file.secure_url;
+  } else {
+    // Local storage - construct backend URL
+    const backendUrl = process.env.BACKEND_URL || 'https://juanlms-webapp-server.onrender.com';
+    imageUrl = `${backendUrl}/uploads/quiz-images/${req.file.filename}`;
+  }
   
   res.json({ url: imageUrl });
 });

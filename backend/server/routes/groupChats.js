@@ -4,29 +4,9 @@
 import express from 'express';
 import GroupChat from '../models/GroupChat.js';
 import GroupMessage from '../models/GroupMessage.js';
-import multer from "multer";
-import path from "path";
-import fs from "fs";
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
-
-// --- Ensure upload directory exists ---
-const uploadDir = './uploads/messages';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// --- Multer setup for file uploads ---
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
-  }
-});
-const upload = multer({ storage });
 
 // --- POST / - Create a new group chat ---
 router.post('/', authenticateToken, async (req, res) => {
