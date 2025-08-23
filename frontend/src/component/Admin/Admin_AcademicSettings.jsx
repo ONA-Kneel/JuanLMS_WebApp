@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 
 export default function Admin_AcademicSettings() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingYear, setEditingYear] = useState(null);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+
+
   const [schoolYears, setSchoolYears] = useState([]);
   const [showView, setShowView] = useState(false);
   const [selectedYear, setSelectedYear] = useState(null);
@@ -48,6 +48,23 @@ export default function Admin_AcademicSettings() {
   });
   const [editTermError, setEditTermError] = useState('');
 
+  // Delete warning modal states
+  const [showDeleteWarningModal, setShowDeleteWarningModal] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleteWarningMessage, setDeleteWarningMessage] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Success/Error modal states
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Confirmation modal states
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmAction, setConfirmAction] = useState(null);
+
   const [formData, setFormData] = useState({
     schoolYearStart: "",
     status: "inactive"
@@ -55,6 +72,13 @@ export default function Admin_AcademicSettings() {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchTerms, setSearchTerms] = useState({ start: '', end: '' });
+  
+  // State for validation results modal (commented out for now)
+  // const [validationModalOpen, setValidationModalOpen] = useState(false);
+  // const [validationResults, setValidationResults] = useState({
+  //   schoolYears: { valid: 0, invalid: 0, details: [] },
+  //   terms: { valid: 0, invalid: 0, details: [] }
+  // });
 
   // Fetch school years on mount
   useEffect(() => {
@@ -125,10 +149,12 @@ export default function Admin_AcademicSettings() {
         setSchoolYears(activeYears);
         computeArchivedCountsForYears(activeYears);
       } else {
-        setError("Failed to fetch school years");
+        setErrorMessage("Failed to fetch school years");
+        setShowErrorModal(true);
       }
     } catch {
-      setError("Error fetching school years");
+      setErrorMessage("Error fetching school years");
+      setShowErrorModal(true);
     }
   };
 
@@ -169,12 +195,16 @@ export default function Admin_AcademicSettings() {
               const count = list.filter(t => t.status === 'archived').length;
               return [name, count];
             }
-          } catch {}
+          } catch (error) {
+            console.error('Error fetching terms for archived count:', error);
+          }
           return [name, 0];
         })
       );
       setArchivedCounts(Object.fromEntries(entries));
-    } catch {}
+    } catch (error) {
+      console.error('Error computing archived counts:', error);
+    }
   };
 
   // Refresh archived count for a single school year
@@ -191,7 +221,9 @@ export default function Admin_AcademicSettings() {
         const count = list.filter(t => t.status === 'archived').length;
         setArchivedCounts(prev => ({ ...prev, [name]: count }));
       }
-    } catch {}
+    } catch (error) {
+      console.error('Error refreshing archived count:', error);
+    }
   };
 
   const handleChange = (e) => {
@@ -218,7 +250,8 @@ export default function Admin_AcademicSettings() {
       });
 
       if (res.ok) {
-        alert("School year created successfully");
+        setSuccessMessage("School year created successfully");
+        setShowSuccessModal(true);
         setFormData({ schoolYearStart: "", status: "inactive" });
         fetchSchoolYears();
         setShowActivateModal(false);
@@ -227,26 +260,71 @@ export default function Admin_AcademicSettings() {
         setEditingYear(null);
       } else {
         const data = await res.json();
-        setError(data.message || "Failed to create school year");
+        setErrorMessage(data.message || "Failed to create school year");
+        setShowErrorModal(true);
       }
-    } catch {
-      setError("Error creating school year");
+    } catch (error) {
+      console.error('Error creating school year:', error);
+      setErrorMessage("Error creating school year");
+      setShowErrorModal(true);
+    }
+  };
+
+  // Internal edit submission function (called after confirmation)
+  const handleEditSubmitInternal = async () => {
+    try {
+      console.log('Sending edit request:', {
+        schoolYearStart: parseInt(formData.schoolYearStart),
+        status: formData.status
+      });
+      const res = await fetch(`${API_BASE}/api/schoolyears/${editingYear._id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          schoolYearStart: parseInt(formData.schoolYearStart),
+          status: formData.status
+        })
+      });
+
+      if (res.ok) {
+        console.log('Edit successful');
+        setSuccessMessage("School year updated successfully");
+        setShowSuccessModal(true);
+        fetchSchoolYears(); // Refresh from database
+        setIsEditMode(false);
+        setEditingYear(null);
+        setFormData({ schoolYearStart: "", status: "inactive" });
+        setShowCreateModal(false); // Close the modal
+      } else {
+        const data = await res.json();
+        console.log('Edit failed:', data);
+        setErrorMessage(data.message || "Failed to update school year");
+        setShowErrorModal(true);
+      }
+    } catch (error) {
+      console.error('Error updating school year:', error);
+      setErrorMessage("Error updating school year");
+      setShowErrorModal(true);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
+    setErrorMessage("");
 
     if (!formData.schoolYearStart) {
-      setError("Please enter a school year start");
+      setErrorMessage("Please enter a school year start");
+      setShowErrorModal(true);
       return;
     }
 
     const startYear = parseInt(formData.schoolYearStart);
     if (startYear < 1900 || startYear > 2100) {
-      setError("School year must be between 1900 and 2100");
+      setErrorMessage("School year must be between 1900 and 2100");
+      setShowErrorModal(true);
       return;
     }
 
@@ -257,7 +335,8 @@ export default function Admin_AcademicSettings() {
     );
 
     if (yearExists) {
-      setError("This school year already exists");
+      setErrorMessage("This school year already exists");
+      setShowErrorModal(true);
       return;
     }
 
@@ -268,48 +347,18 @@ export default function Admin_AcademicSettings() {
         formData.status !== editingYear.status;
 
       if (!hasChanges) {
-        setError("No changes were made to the school year.");
+        setErrorMessage("No changes were made to the school year.");
+        setShowErrorModal(true);
         return;
       }
 
-      // Optional: Replace with a custom edit confirmation modal if needed
-      const confirmEdit = window.confirm("Save changes to this school year?");
-      if (!confirmEdit) return;
-
-      try {
-        console.log('Sending edit request:', {
-          schoolYearStart: startYear,
-          status: formData.status
-        });
-        const res = await fetch(`${API_BASE}/api/schoolyears/${editingYear._id}`, {
-          method: 'PATCH',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({
-            schoolYearStart: startYear,
-            status: formData.status
-          })
-        });
-
-        if (res.ok) {
-          console.log('Edit successful');
-          alert("School year updated successfully");
-          fetchSchoolYears(); // Refresh from database
-          setIsEditMode(false);
-          setEditingYear(null);
-          setFormData({ schoolYearStart: "", status: "inactive" });
-          setShowCreateModal(false); // Close the modal
-        } else {
-          const data = await res.json();
-          console.log('Edit failed:', data);
-          setError(data.message || "Failed to update school year");
-        }
-      } catch {
-        setError("Error updating school year");
-      }
-
+      // Show confirmation modal
+      setConfirmMessage("Save changes to this school year?");
+      setConfirmAction(() => {
+        // This will be executed when confirmed
+        handleEditSubmitInternal();
+      });
+      setShowConfirmModal(true);
       return;
     }
 
@@ -330,11 +379,12 @@ export default function Admin_AcademicSettings() {
   };
 
   const handleEdit = (year) => {
-    // Prevent editing inactive school years
-    if (year.status === 'inactive') {
-      alert('Cannot edit inactive school years. Only status changes are allowed.');
-      return;
-    }
+         // Prevent editing inactive school years
+     if (year.status === 'inactive') {
+       setErrorMessage('Cannot edit inactive school years. Only status changes are allowed.');
+       setShowErrorModal(true);
+       return;
+     }
     
     console.log('Edit clicked for year:', year);
     setIsEditMode(true);
@@ -364,14 +414,23 @@ export default function Admin_AcademicSettings() {
   };
 
   const handleArchiveTerm = async (term) => {
-    // Prevent archiving terms of inactive school years
-    if (selectedYear && selectedYear.status !== 'active') {
-      alert('Cannot archive terms of inactive school years. Only terms of active school years can be archived.');
-      return;
-    }
+         // Prevent archiving terms of inactive school years
+     if (selectedYear && selectedYear.status !== 'active') {
+       setErrorMessage('Cannot archive terms of inactive school years. Only terms of active school years can be archived.');
+       setShowErrorModal(true);
+       return;
+     }
     
-    if (window.confirm(`Are you sure you want to archive ${term.termName}?`)) {
-      try {
+         // Show confirmation modal
+     setConfirmMessage(`Are you sure you want to archive ${term.termName}?`);
+     setConfirmAction(() => {
+       handleArchiveTermInternal(term);
+     });
+     setShowConfirmModal(true);
+   };
+
+   const handleArchiveTermInternal = async (term) => {
+     try {
         const token = localStorage.getItem('token');
         const res = await fetch(`${API_BASE}/api/terms/${term._id}/archive`, {
           method: 'PATCH',
@@ -381,31 +440,40 @@ export default function Admin_AcademicSettings() {
           }
         });
 
-        if (res.ok) {
-          const updatedTerm = await res.json();
-          setTerms(terms.map(t => t._id === term._id ? updatedTerm : t));
-          alert(`${term.termName} has been archived`);
-          fetchTerms(selectedYear);
-          refreshArchivedCountForYear(selectedYear);
-        } else {
+                 if (res.ok) {
+           const updatedTerm = await res.json();
+           setTerms(terms.map(t => t._id === term._id ? updatedTerm : t));
+           setSuccessMessage(`${term.termName} has been archived`);
+           setShowSuccessModal(true);
+           fetchTerms(selectedYear);
+           refreshArchivedCountForYear(selectedYear);
+         } else {
           const data = await res.json();
           setTermError(data.message || 'Failed to archive term');
         }
       } catch {
         setTermError('Error archiving term');
       }
-    }
   };
 
   const handleActivateTerm = async (term) => {
-    // Prevent activating terms of inactive school years
-    if (selectedYear && selectedYear.status !== 'active') {
-      alert('Cannot activate terms of inactive school years. Please activate the school year first.');
-      return;
-    }
+         // Prevent activating terms of inactive school years
+     if (selectedYear && selectedYear.status !== 'active') {
+       setErrorMessage('Cannot activate terms of inactive school years. Please activate the school year first.');
+       setShowErrorModal(true);
+       return;
+     }
     
-    if (!window.confirm(`Are you sure you want to activate ${term.termName}?`)) return;
-    try {
+         // Show confirmation modal
+     setConfirmMessage(`Are you sure you want to activate ${term.termName}?`);
+     setConfirmAction(() => {
+       handleActivateTermInternal(term);
+     });
+     setShowConfirmModal(true);
+   };
+
+   const handleActivateTermInternal = async (term) => {
+     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE}/api/terms/${term._id}`, {
         method: 'PATCH',
@@ -415,13 +483,14 @@ export default function Admin_AcademicSettings() {
         },
         body: JSON.stringify({ status: 'active' })
       });
-      if (res.ok) {
-        const updatedTerm = await res.json();
-        setTerms(terms.map(t => t._id === term._id ? updatedTerm : t));
-        alert(`${term.termName} has been activated`);
-        fetchTerms(selectedYear);
-        refreshArchivedCountForYear(selectedYear);
-      } else {
+             if (res.ok) {
+         const updatedTerm = await res.json();
+         setTerms(terms.map(t => t._id === term._id ? updatedTerm : t));
+         setSuccessMessage(`${term.termName} has been activated`);
+         setShowSuccessModal(true);
+         fetchTerms(selectedYear);
+         refreshArchivedCountForYear(selectedYear);
+       } else {
         const data = await res.json();
         setTermError(data.message || 'Failed to activate term');
       }
@@ -501,14 +570,15 @@ export default function Admin_AcademicSettings() {
         })
       });
 
-      if (res.ok) {
-        const newTerm = await res.json();
-        setTerms([...terms, newTerm]);
-        setShowAddTermModal(false);
-        setTermFormData({ startDate: '', endDate: '' });
-        alert('Term created successfully');
-        fetchTerms(selectedYear);
-      } else {
+             if (res.ok) {
+         const newTerm = await res.json();
+         setTerms([...terms, newTerm]);
+         setShowAddTermModal(false);
+         setTermFormData({ startDate: '', endDate: '' });
+         setSuccessMessage('Term created successfully');
+         setShowSuccessModal(true);
+         fetchTerms(selectedYear);
+       } else {
         const data = await res.json();
         setTermError(data.message || 'Failed to create term');
       }
@@ -552,22 +622,26 @@ export default function Admin_AcademicSettings() {
             setPendingStatusToggle(null);
             return; // Wait for admin to choose
           }
-        } else {
-          // If deactivating, refresh terms to show archived status
-          if (selectedYear && selectedYear._id === year._id) {
-            fetchTerms(selectedYear);
-          }
-          fetchSchoolYears();
-          alert(`School year set as ${newStatus}`);
-        }
+                 } else {
+           // If deactivating, refresh terms to show archived status
+           if (selectedYear && selectedYear._id === year._id) {
+             fetchTerms(selectedYear);
+           }
+           fetchSchoolYears();
+           setSuccessMessage(`School year set as ${newStatus}`);
+           setShowSuccessModal(true);
+         }
         // If no terms or not activating, just refresh
         fetchSchoolYears();
       } else {
         const data = await res.json();
-        setError(data.message || 'Failed to update school year status');
+        setErrorMessage(data.message || 'Failed to update school year status');
+        setShowErrorModal(true);
       }
-    } catch {
-      setError('Error updating school year status');
+    } catch (error) {
+      console.error('Error updating school year status:', error);
+      setErrorMessage('Error updating school year status');
+      setShowErrorModal(true);
     }
     
     // Close modal and clear pending toggle
@@ -588,15 +662,18 @@ export default function Admin_AcademicSettings() {
         },
         body: JSON.stringify({ status: 'active' })
       });
-      setShowTermActivationPrompt(false);
-      setPromptTerms([]);
-      setPromptSchoolYear(null);
-      setSelectedPromptTerm("");
-      fetchSchoolYears();
-      alert('Term activated successfully.');
-    } catch {
-      setError('Failed to activate term.');
-    }
+             setShowTermActivationPrompt(false);
+       setPromptTerms([]);
+       setPromptSchoolYear(null);
+       setSelectedPromptTerm("");
+       fetchSchoolYears();
+       setSuccessMessage('Term activated successfully.');
+       setShowSuccessModal(true);
+     } catch (error) {
+       console.error('Error activating term:', error);
+       setErrorMessage('Failed to activate term.');
+       setShowErrorModal(true);
+     }
   };
 
   // Handler for keeping all terms inactive
@@ -606,7 +683,8 @@ export default function Admin_AcademicSettings() {
     setPromptSchoolYear(null);
     setSelectedPromptTerm("");
     fetchSchoolYears();
-    alert('School year activated. All terms remain inactive.');
+    setSuccessMessage('School year activated. All terms remain inactive.');
+    setShowSuccessModal(true);
   };
 
   // Handler for adding school year as inactive
@@ -616,9 +694,12 @@ export default function Admin_AcademicSettings() {
       await createSchoolYear(pendingSchoolYear.schoolYearStart, false); // false = not active
       setShowActivateModal(false);
       setPendingSchoolYear(null);
-      alert('School year added as inactive.');
-    } catch {
-      setError('Failed to add school year as inactive.');
+      setSuccessMessage('School year added as inactive.');
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error('Error adding school year as inactive:', error);
+      setErrorMessage('Failed to add school year as inactive.');
+      setShowErrorModal(true);
     }
   };
 
@@ -626,7 +707,8 @@ export default function Admin_AcademicSettings() {
   const handleEditTerm = (term) => {
     // Prevent editing terms of inactive school years
     if (selectedYear && selectedYear.status !== 'active') {
-      alert('Cannot edit terms of inactive school years. Only status changes are allowed.');
+      setErrorMessage('Cannot edit terms of inactive school years. Only status changes are allowed.');
+      setShowErrorModal(true);
       return;
     }
     
@@ -711,7 +793,8 @@ export default function Admin_AcademicSettings() {
         setShowEditTermModal(false);
         setEditingTerm(null);
         setEditTermFormData({ startDate: '', endDate: '' });
-        alert('Term updated successfully');
+        setSuccessMessage('Term updated successfully');
+        setShowSuccessModal(true);
         fetchTerms(selectedYear);
       } else {
         const data = await res.json();
@@ -728,10 +811,16 @@ export default function Admin_AcademicSettings() {
     const newStatus = term.status === 'active' ? 'inactive' : 'active';
     const action = newStatus === 'active' ? 'activate' : 'deactivate';
     
-    // Show confirmation modal instead of window.confirm
-    if (!window.confirm(`Are you sure you want to ${action} ${term.termName}?`)) return;
-    
-    try {
+         // Show confirmation modal
+     setConfirmMessage(`Are you sure you want to ${action} ${term.termName}?`);
+     setConfirmAction(() => {
+       handleToggleTermStatusInternal(term, newStatus, action);
+     });
+     setShowConfirmModal(true);
+   };
+
+   const handleToggleTermStatusInternal = async (term, newStatus, action) => {
+     try {
       console.log('Sending status update:', { status: newStatus });
       const res = await fetch(`${API_BASE}/api/terms/${term._id}`, {
         method: 'PATCH',
@@ -744,11 +833,12 @@ export default function Admin_AcademicSettings() {
         console.log('Status updated successfully:', updatedTerm);
         setTerms(terms.map(t => t._id === term._id ? updatedTerm : t));
         
-        // Update alert message to reflect that inactive terms are now archived
-        const alertMessage = newStatus === 'active' ? 
+        // Update success message to reflect that inactive terms are now archived
+        const successMessage = newStatus === 'active' ? 
           `${term.termName} has been activated` : 
           `${term.termName} has been archived`;
-        alert(alertMessage);
+        setSuccessMessage(successMessage);
+        setShowSuccessModal(true);
         
         fetchTerms(selectedYear);
         refreshArchivedCountForYear(selectedYear);
@@ -767,31 +857,114 @@ export default function Admin_AcademicSettings() {
   const handleDelete = async (year) => {
     // Prevent archiving inactive school years
     if (year.status === 'inactive') {
-      alert('Cannot archive inactive school years. Only active school years can be archived.');
+      setErrorMessage('Cannot archive inactive school years. Only active school years can be archived.');
+      setShowErrorModal(true);
       return;
     }
     
-    if (!window.confirm(`Are you sure you want to archive school year ${year.schoolYearStart}-${year.schoolYearEnd}? This will also archive all its terms and assignments.`)) return;
+    // Set pending delete and show warning modal
+    setPendingDelete(year);
+    setDeleteWarningMessage(`Are you sure you want to DELETE school year ${year.schoolYearStart}-${year.schoolYearEnd}? This will permanently delete ALL data including terms, tracks, strands, sections, subjects, and assignments. This action cannot be undone.`);
+    setShowDeleteWarningModal(true);
+  };
+
+  // Handle actual deletion after confirmation
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete) return;
+    
+    setIsDeleting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/schoolyears/${year._id}`, {
-        method: 'PATCH',
+      const res = await fetch(`${API_BASE}/api/schoolyears/${pendingDelete._id}?confirmCascade=true`, {
+        method: 'DELETE',
         headers: { 
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ status: 'archived' })
+        }
       });
+      
       if (res.ok) {
         fetchSchoolYears();
-        alert(`School year ${year.schoolYearStart}-${year.schoolYearEnd} archived.`);
+        setSuccessMessage(`School year ${pendingDelete.schoolYearStart}-${pendingDelete.schoolYearEnd} and all its data have been permanently deleted.`);
+        setShowSuccessModal(true);
       } else {
         const data = await res.json();
-        setError(data.message || 'Failed to archive school year');
+        setErrorMessage(data.message || 'Failed to delete school year');
+        setShowErrorModal(true);
       }
-    } catch {
-      setError('Error archiving school year');
+    } catch (error) {
+      console.error('Error deleting school year:', error);
+      setErrorMessage('Error deleting school year');
+      setShowErrorModal(true);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteWarningModal(false);
+      setPendingDelete(null);
     }
   };
+
+  // Cancel deletion
+  const handleCancelDelete = () => {
+    setShowDeleteWarningModal(false);
+    setPendingDelete(null);
+    setDeleteWarningMessage('');
+  };
+
+  // Prepare validation results for modal display (commented out for now)
+  // const prepareValidationResults = () => {
+  //   const results = {
+  //     schoolYears: { valid: 0, invalid: 0, details: [] },
+  //     terms: { valid: 0, invalid: 0, details: [] }
+  //   };
+
+  //   // Process school years
+  //   schoolYears.forEach(year => {
+  //     if (year.status === 'active') {
+  //       results.schoolYears.valid++;
+  //       results.schoolYears.details.push({
+  //         name: `${year.schoolYearStart}-${year.schoolYearEnd}`,
+  //         status: 'valid',
+  //         message: '✓ Active'
+  //       });
+  //     } else if (year.status === 'inactive') {
+  //       results.schoolYears.invalid++;
+  //       results.schoolYears.details.push({
+  //         name: `${year.schoolYearStart}-${year.schoolYearEnd}`,
+  //         status: 'invalid',
+  //         message: '✗ Inactive'
+  //       });
+  //     }
+  //   });
+
+  //   // Process terms for selected year
+  //   if (selectedYear && terms.length > 0) {
+  //       terms.forEach(term => {
+  //         if (term.status === 'active') {
+  //           results.terms.valid++;
+  //           results.terms.details.push({
+  //             name: term.termName,
+  //             status: 'valid',
+  //             message: '✓ Active'
+  //           });
+  //         } else if (term.status === 'inactive') {
+  //           results.terms.invalid++;
+  //           results.terms.details.push({
+  //             name: term.termName,
+  //             status: 'invalid',
+  //             message: '✗ Inactive'
+  //           });
+  //         } else if (term.status === 'archived') {
+  //           results.terms.invalid++;
+  //           results.terms.details.push({
+  //             name: term.termName,
+  //             status: 'invalid',
+  //             message: '✗ Archived'
+  //           });
+  //         }
+  //       });
+  //     }
+
+  //   setValidationResults(results);
+  //   setValidationModalOpen(true);
+  // };
 
   const tabs = [
     { id: 'dashboard', label: 'School Year Dashboard' },
@@ -895,12 +1068,20 @@ export default function Admin_AcademicSettings() {
                 <div className="bg-white p-4 rounded-xl shadow mb-4">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2 gap-2">
                     <h4 className="text-xl md:text-2xl font-semibold">School Years</h4>
-                    <button
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded"
-                      onClick={() => setShowCreateModal(true)}
-                    >
-                      Add New School Year
-                    </button>
+                                         <div className="flex gap-2">
+                       {/* <button
+                         className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+                         onClick={prepareValidationResults}
+                       >
+                         View Validation Results
+                       </button> */}
+                       <button
+                         className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded"
+                         onClick={() => setShowCreateModal(true)}
+                       >
+                         Add New School Year
+                       </button>
+                     </div>
                   </div>
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                     <thead>
@@ -1346,8 +1527,7 @@ export default function Admin_AcademicSettings() {
                   &times;
                 </button>
                 <h3 className="text-2xl font-bold mb-6">{isEditMode ? 'Edit School Year' : 'Add New School Year'}</h3>
-                {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
-                {success && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">{success}</div>}
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-lg font-medium text-gray-700 mb-1">
@@ -1590,6 +1770,156 @@ export default function Admin_AcademicSettings() {
                   <button
                     className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"
                     onClick={handleConfirmStatusToggle}
+                  >
+                    Confirm
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Validation Results Modal (commented out for now) */}
+          {/* 
+          {validationModalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-2xl font-bold text-gray-900">Validation Results</h2>
+                  <p className="text-gray-600 mt-2">Review the validation status of your academic settings</p>
+                </div>
+                
+                <div className="p-6 space-y-6">
+                  <div className="border rounded-lg p-4">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                      School Years
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="p-6 border-t border-gray-200 flex justify-end">
+                  <button
+                    onClick={() => setValidationModalOpen(false)}
+                    className="bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          */}
+
+          {/* Delete Warning Modal */}
+          {showDeleteWarningModal && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+                <div className="flex items-center mb-4">
+                  <svg className="w-6 h-6 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <h3 className="text-lg font-semibold text-red-600">Warning: Permanent Deletion</h3>
+                </div>
+                <p className="text-gray-700 mb-6">{deleteWarningMessage}</p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={handleCancelDelete}
+                    disabled={isDeleting}
+                    className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmDelete}
+                    disabled={isDeleting}
+                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Deleting...
+                      </>
+                    ) : (
+                      'Delete Permanently'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Success Modal */}
+          {showSuccessModal && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+                <div className="flex items-center mb-4">
+                  <svg className="w-6 h-6 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <h3 className="text-lg font-semibold text-green-600">Success</h3>
+                </div>
+                <p className="text-gray-700 mb-6">{successMessage}</p>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setShowSuccessModal(false)}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Error Modal */}
+          {showErrorModal && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+                <div className="flex items-center mb-4">
+                  <svg className="w-6 h-6 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <h3 className="text-lg font-semibold text-red-600">Error</h3>
+                </div>
+                <p className="text-gray-700 mb-6">{errorMessage}</p>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setShowErrorModal(false)}
+                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Confirmation Modal */}
+          {showConfirmModal && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+                <div className="flex items-center mb-4">
+                  <svg className="w-6 h-6 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h3 className="text-lg font-semibold text-blue-600">Confirm Action</h3>
+                </div>
+                <p className="text-gray-700 mb-6">{confirmMessage}</p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowConfirmModal(false)}
+                    className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirmAction) confirmAction();
+                      setShowConfirmModal(false);
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                   >
                     Confirm
                   </button>

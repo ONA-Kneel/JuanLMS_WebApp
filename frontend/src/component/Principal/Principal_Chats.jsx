@@ -9,6 +9,7 @@ import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
+import { getProfileImageUrl } from "../../utils/imageUtils";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -1167,7 +1168,7 @@ export default function Principal_Chats() {
                         </div>
                       ) : (
                         <img
-                          src={chat.profilePic ? `${API_BASE}/uploads/${chat.profilePic}` : defaultAvatar}
+                          src={getProfileImageUrl(chat.profilePic, API_BASE, defaultAvatar)}
                           alt="Profile"
                           className="w-8 h-8 rounded-full object-cover border"
                           onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1234,7 +1235,7 @@ export default function Principal_Chats() {
                         </div>
                       ) : (
                         <img
-                          src={item.profilePic ? `${API_BASE}/uploads/${item.profilePic}` : defaultAvatar}
+                          src={getProfileImageUrl(item.profilePic, API_BASE, defaultAvatar)}
                           alt="Profile"
                           className="w-8 h-8 rounded-full object-cover border"
                           onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1288,7 +1289,7 @@ export default function Principal_Chats() {
                       </div>
                     ) : (
                       <img
-                        src={selectedChat.profilePic ? `${API_BASE}/uploads/${selectedChat.profilePic}` : defaultAvatar}
+                        src={getProfileImageUrl(selectedChat.profilePic, API_BASE, defaultAvatar)}
                         alt="Profile"
                         className="w-10 h-10 rounded-full object-cover border"
                         onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1414,7 +1415,7 @@ export default function Principal_Chats() {
                             {showHeader ? (
                               <>
                                 <img
-                                  src={isGroupChat ? (msg.senderProfilePic ? `${API_BASE}/uploads/${msg.senderProfilePic}` : defaultAvatar) : (sender && sender.profilePic ? `${API_BASE}/uploads/${sender.profilePic}` : defaultAvatar)}
+                                  src={isGroupChat ? getProfileImageUrl(msg.senderProfilePic, API_BASE, defaultAvatar) : getProfileImageUrl(sender?.profilePic, API_BASE, defaultAvatar)}
                                   alt="Profile"
                                   className="w-10 h-10 rounded-full object-cover border"
                                   onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}

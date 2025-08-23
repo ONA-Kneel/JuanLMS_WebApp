@@ -456,30 +456,22 @@ router.delete('/:id', async (req, res) => {
       if (totalDependencies > 0) {
         return res.status(409).json({ 
           message: `Cannot delete term: It has ${totalDependencies} connected records. Use confirmCascade=true to delete all connected data.`,
-          dependencyCount: totalDependencies
+          dependencyCount: totalDependencies,
+          term: term
         });
       }
     }
 
-    // Proceed with cascading deletion
-    console.log(`Cascading deletion of term: ${term.termName} (${term.schoolYear})`);
+    // Proceed with cascading deletion using the model's pre-remove middleware
+    console.log(`Deleting term: ${term.termName} (${term.schoolYear})`);
     
-    await Promise.all([
-      // Delete all related entities
-      Track.deleteMany({ schoolYear: term.schoolYear, termName: term.termName }),
-      Strand.deleteMany({ schoolYear: term.schoolYear, termName: term.termName }),
-      Section.deleteMany({ schoolYear: term.schoolYear, termName: term.termName }),
-      Subject.deleteMany({ schoolYear: term.schoolYear, termName: term.termName }),
-      StudentAssignment.deleteMany({ termId: term._id }),
-      FacultyAssignment.deleteMany({ termId: term._id })
-    ]);
-
-    // Finally delete the term
-    await Term.findByIdAndDelete(id);
+    // Use remove() to trigger the pre-remove middleware for cascading deletes
+    await term.remove();
     
     console.log(`Successfully deleted term and all connected data`);
     res.json({ message: 'Term and all connected data deleted successfully' });
   } catch (error) {
+    console.error('Error deleting term:', error);
     res.status(500).json({ message: error.message });
   }
 });

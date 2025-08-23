@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 import Student_Navbar from "./Student_Navbar";
+import { getFileUrl } from "../../utils/imageUtils";
 
 // Force localhost for local testing
 const API_BASE = import.meta.env.DEV ? "http://localhost:5000" : (import.meta.env.VITE_API_URL || "http://localhost:5000");
@@ -211,7 +212,7 @@ export default function Student_Classes() {
                 <div className="flex items-center justify-center bg-gray-500" style={{ height: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px' }}>
                   {cls.image ? (
                     <img
-                      src={cls.image.startsWith('/uploads/') ? `${API_BASE}${cls.image}` : cls.image}
+                      src={getFileUrl(cls.image, API_BASE)}
                       alt="Class"
                       className="object-cover w-full h-full"
                       style={{ maxHeight: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}

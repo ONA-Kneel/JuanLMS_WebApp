@@ -5,11 +5,12 @@ import { FiFile, FiBook, FiMessageSquare } from "react-icons/fi";
 import QuizTab from "./ActivityTab";
 import { MoreVertical } from "lucide-react";
 import ValidationModal from './ValidationModal';
+import { getFileUrl } from "../utils/imageUtils";
 // import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
 // Force localhost for local testing
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 const DEBUG_MEMBERS = true;
 
 export default function ClassContent({ selected, isFaculty = false }) {
@@ -1064,7 +1065,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                         minute: '2-digit'
                       })}
                     </p>
-                    <p className="text-sm text-gray-700">{item.content}</p>
+                    <p className="text-sm text-gray-700 break-words overflow-hidden">{item.content}</p>
                   </div>
                   {isFaculty && (
                     <div className="flex gap-2 ml-4">
@@ -1398,7 +1399,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                       )}
                       {lesson.files && lesson.files.length > 0 ? (
                         lesson.files.map(file => {
-                          const fileUrl = file.fileUrl.startsWith('http') ? file.fileUrl : `${API_BASE}/${file.fileUrl.replace(/^\/+/,'')}`;
+                          const fileUrl = getFileUrl(file.fileUrl, API_BASE);
                           return (
                             <tr key={file.fileUrl} className="border-b hover:bg-gray-50">
                               <td className="px-6 py-2 flex items-center gap-2">

@@ -76,14 +76,13 @@ const Faculty_Meeting = () => {
     fetchActiveTermForYear();
   }, [academicYear]);
 
-  // Fetch faculty's assigned classes only
+  // Fetch faculty's assigned classes only for the current active term
   useEffect(() => {
     async function fetchClasses() {
       try {
         const token = localStorage.getItem("token");
         if (!token) {
           console.error("No authentication token found");
-          // Redirect to login or show login modal
           return;
         }
 
@@ -93,10 +92,15 @@ const Faculty_Meeting = () => {
         
         if (isTokenExpired) {
           console.error("Token has expired");
-          // Clear invalid token and redirect to login
           localStorage.removeItem("token");
-          // Optionally redirect to login page
-          // window.location.href = "/login";
+          return;
+        }
+
+        // Only fetch classes if we have both an active school year AND an active term
+        if (!academicYear || !currentTerm) {
+          setClasses([]);
+          setSelectedClass(null);
+          setLoading(false);
           return;
         }
 
@@ -107,28 +111,44 @@ const Faculty_Meeting = () => {
             headers: { 
               "Authorization": `Bearer ${token}`,
               "Content-Type": "application/json"
-            },
-            // Remove credentials for now to avoid CORS issues with wildcard origin
-            // credentials: 'include' // Only include if backend is properly configured for CORS with credentials
+            }
           });
 
           if (res.status === 401) {
-            // Token is invalid or expired
             localStorage.removeItem("token");
-            // Optionally redirect to login page
-            // window.location.href = "/login";
             console.error("Authentication failed: Invalid or expired token");
             return;
           }
 
           if (res.ok) {
             const data = await res.json();
-            setClasses(data);
-            if (data.length > 0) {
-              setSelectedClass(data[0]);
+            // Filter classes to only show those active for the current term
+            const activeClasses = data.filter(cls => {
+              // MUST have termName and match current term
+              if (!cls.termName || cls.termName !== currentTerm.termName) {
+                return false;
+              }
+              // MUST have academicYear and match current academic year
+              if (!cls.academicYear || !academicYear) {
+                return false;
+              }
+              const expectedYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+              if (cls.academicYear !== expectedYear) {
+                return false;
+              }
+              // MUST be not archived
+              if (cls.isArchived === true) {
+                return false;
+              }
+              return true;
+            });
+            
+            setClasses(activeClasses);
+            if (activeClasses.length > 0) {
+              setSelectedClass(activeClasses[0]);
             }
             setLoading(false);
-            return; // Exit if successful
+            return;
           }
         } catch (err) {
           console.error("Error fetching faculty classes:", err);
@@ -141,15 +161,30 @@ const Faculty_Meeting = () => {
             headers: { 
               "Authorization": `Bearer ${token}`,
               "Content-Type": "application/json"
-            },
-            // Remove credentials for now to avoid CORS issues with wildcard origin
-            // credentials: 'include' // Only include if backend is properly configured for CORS with credentials
+            }
           });
 
           if (fallbackRes.ok) {
             const allClasses = await fallbackRes.json();
             const facultyId = payload.userID;
-            const facultyClasses = allClasses.filter(cls => cls.facultyID === facultyId);
+            const facultyClasses = allClasses.filter(cls => {
+              // Must be assigned to this faculty
+              if (cls.facultyID !== facultyId) return false;
+              
+              // MUST have termName and match current term
+              if (!cls.termName || cls.termName !== currentTerm.termName) return false;
+              
+              // MUST have academicYear and match current academic year
+              if (!cls.academicYear || !academicYear) return false;
+              const expectedYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+              if (cls.academicYear !== expectedYear) return false;
+              
+              // MUST be not archived
+              if (cls.isArchived === true) return false;
+              
+              return true;
+            });
+            
             setClasses(facultyClasses);
             if (facultyClasses.length > 0) {
               setSelectedClass(facultyClasses[0]);
@@ -165,7 +200,7 @@ const Faculty_Meeting = () => {
       }
     }
     fetchClasses();
-  }, []);
+  }, [currentTerm, academicYear]); // Re-run when term or year changes
 
   // Meeting handlers
   const handleMeetingCreated = (newMeeting) => {
@@ -177,22 +212,15 @@ const Faculty_Meeting = () => {
   };
 
   const handleJoinMeeting = async (meeting) => {
-  console.log('[DEBUG] handleJoinMeeting received:', meeting);
-    // meeting is the original meeting object from MeetingList
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com"}/api/meetings/${meeting._id}/join`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const result = await response.json();
-    // Defensive fallback for meetingId
+    console.log('[DEBUG] Faculty handleJoinMeeting received:', meeting);
+    console.log('[DEBUG] Faculty meeting roomUrl:', meeting.roomUrl);
+    // MeetingList already called the backend and provided roomUrl
     const meetingData = {
       ...meeting,
       meetingId: String(meeting._id), // always set meetingId as string
-      roomUrl: result.roomUrl,
       title: meeting.title || 'Video Meeting',
     };
-    console.log('[DEBUG] setActiveMeeting with:', meetingData);
+    console.log('[DEBUG] Faculty setActiveMeeting with:', meetingData);
     setActiveMeeting(meetingData);
   };
 
@@ -227,11 +255,26 @@ const Faculty_Meeting = () => {
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <span className="ml-3 text-gray-600">Loading classes...</span>
           </div>
+        ) : !academicYear ? (
+          <div className="text-center py-12">
+            <Calendar className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active School Year</h3>
+            <p className="text-gray-500">There is no active school year configured.</p>
+            <p className="text-gray-400 text-sm mt-2">Please ask the administrator to activate a school year.</p>
+          </div>
+        ) : !currentTerm ? (
+          <div className="text-center py-12">
+            <Calendar className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active Term</h3>
+            <p className="text-gray-500">There is no active term for the current academic year.</p>
+            <p className="text-gray-400 text-sm mt-2">Please ask the administrator to activate a term.</p>
+          </div>
         ) : classes.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Classes Found</h3>
-            <p className="text-gray-500">You need to have classes assigned to create meetings.</p>
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active Classes</h3>
+            <p className="text-gray-500">There are no active classes to set meetings in for the current academic year.</p>
+            <p className="text-gray-400 text-sm mt-2">Please ask the administrator to activate a school year and assign classes.</p>
           </div>
         ) : (
           <>
@@ -328,7 +371,7 @@ const Faculty_Meeting = () => {
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Meeting Schedule</h3>
                   <MeetingList
-                    classID={selectedClass._id}
+                    classId={selectedClass._id}
                     userRole="faculty"
                     onJoinMeeting={handleJoinMeeting}
                     refreshTrigger={meetingRefreshTrigger}
@@ -353,6 +396,7 @@ const Faculty_Meeting = () => {
         {activeMeeting && (
           <VideoMeetingRoom
             meetingData={activeMeeting}
+            currentUser={userInfo}
             onLeave={handleLeaveMeeting}
             isOpen={!!activeMeeting}
             isModerator={true}

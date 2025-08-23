@@ -56,7 +56,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create a new student assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { studentId, trackName, strandName, sectionName, gradeLevel, termId } = req.body;
+    const { studentId, studentName, trackName, strandName, sectionName, gradeLevel, termId } = req.body;
 
     // Get term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -67,8 +67,55 @@ router.post('/', authenticateToken, async (req, res) => {
     if (!gradeLevel) {
       return res.status(400).json({ message: 'gradeLevel is required' });
     }
+
+    let actualStudentId = studentId;
+    if (!actualStudentId && studentName) {
+      console.log('Looking for student by name:', studentName);
+      let student = await User.findOne({
+        $or: [
+          { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, studentName.toLowerCase()] } },
+          { firstname: { $regex: new RegExp(studentName.split(' ')[0], 'i') }, lastname: { $regex: new RegExp(studentName.split(' ').slice(-1)[0], 'i') } },
+          { $expr: { $regexMatch: { input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, regex: studentName.toLowerCase() } } },
+          { firstname: { $regex: new RegExp(studentName, 'i') } },
+          { lastname: { $regex: new RegExp(studentName, 'i') } }
+        ],
+        role: 'students'
+      });
+
+      if (!student) {
+        console.log('Student not found with regex, trying more flexible search...');
+        const nameParts = studentName.trim().split(/\s+/);
+        if (nameParts.length >= 2) {
+          student = await User.findOne({
+            $and: [
+              { role: 'students' },
+              {
+                $or: [
+                  { firstname: { $regex: new RegExp(nameParts[0], 'i') } },
+                  { firstname: { $regex: new RegExp(nameParts[nameParts.length - 1], 'i') } },
+                  { lastname: { $regex: new RegExp(nameParts[0], 'i') } },
+                  { lastname: { $regex: new RegExp(nameParts[nameParts.length - 1], 'i') } }
+                ]
+              }
+            ]
+          });
+        }
+      }
+
+      if (!student) {
+        console.log('All student search attempts failed');
+        return res.status(400).json({ message: `Student '${studentName}' not found` });
+      }
+      console.log('Found student:', student.firstname, student.lastname);
+      actualStudentId = student._id;
+    }
+
+    if (!actualStudentId) {
+      return res.status(400).json({ message: 'studentId or studentName is required' });
+    }
+
     const assignment = new StudentAssignment({
-      studentId,
+      studentId: actualStudentId,
       trackName,
       strandName,
       sectionName,
@@ -96,7 +143,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
   const errors = [];
 
   for (const assignmentData of assignments) {
-    const { studentId, trackName, strandName, sectionName, gradeLevel, termId } = assignmentData;
+    const { studentId, studentName, trackName, strandName, sectionName, gradeLevel, termId } = assignmentData;
 
     try {
       const term = await Term.findById(termId);
@@ -109,8 +156,57 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         errors.push({ assignment: assignmentData, message: 'gradeLevel is required' });
         continue;
       }
+
+      let actualStudentId = studentId;
+      if (!actualStudentId && studentName) {
+        console.log('Looking for student by name:', studentName);
+        let student = await User.findOne({
+          $or: [
+            { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, studentName.toLowerCase()] } },
+            { firstname: { $regex: new RegExp(studentName.split(' ')[0], 'i') }, lastname: { $regex: new RegExp(studentName.split(' ').slice(-1)[0], 'i') } },
+            { $expr: { $regexMatch: { input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, regex: studentName.toLowerCase() } } },
+            { firstname: { $regex: new RegExp(studentName, 'i') } },
+            { lastname: { $regex: new RegExp(studentName, 'i') } }
+          ],
+          role: 'students'
+        });
+
+        if (!student) {
+          console.log('Student not found with regex, trying more flexible search...');
+          const nameParts = studentName.trim().split(/\s+/);
+          if (nameParts.length >= 2) {
+            student = await User.findOne({
+              $and: [
+                { role: 'students' },
+                {
+                  $or: [
+                    { firstname: { $regex: new RegExp(nameParts[0], 'i') } },
+                    { firstname: { $regex: new RegExp(nameParts[nameParts.length - 1], 'i') } },
+                    { lastname: { $regex: new RegExp(nameParts[0], 'i') } },
+                    { lastname: { $regex: new RegExp(nameParts[nameParts.length - 1], 'i') } }
+                  ]
+                }
+              ]
+            });
+          }
+        }
+
+        if (!student) {
+          console.log('All student search attempts failed');
+          errors.push({ assignment: assignmentData, message: `Student '${studentName}' not found` });
+          continue;
+        }
+        console.log('Found student:', student.firstname, student.lastname);
+        actualStudentId = student._id;
+      }
+
+      if (!actualStudentId) {
+        errors.push({ assignment: assignmentData, message: 'studentId or studentName is required' });
+        continue;
+      }
+
       const newAssignment = new StudentAssignment({
-        studentId,
+        studentId: actualStudentId,
         trackName,
         strandName,
         sectionName,
@@ -250,7 +346,7 @@ router.get('/enrolled-subjects/:studentId', authenticateToken, async (req, res) 
     const subjects = assignments.map(assignment => ({
       _id: assignment._id,
       subjectCode: `${assignment.trackName}-${assignment.strandName}-${assignment.gradeLevel}`,
-      subjectDescription: `${assignment.trackName} Track - ${assignment.strandName} Strand - Grade ${assignment.gradeLevel}`,
+      subjectDescription: `${assignment.trackName} Track - ${assignment.strandName} Strand - Grade ${assignment.gradeLevel}`, 
       trackName: assignment.trackName,
       strandName: assignment.strandName,
       gradeLevel: assignment.gradeLevel,
@@ -267,10 +363,10 @@ router.get('/enrolled-subjects/:studentId', authenticateToken, async (req, res) 
 
   } catch (error) {
     console.error('Error fetching student enrolled subjects:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching enrolled subjects',
-      error: error.message
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching enrolled subjects', 
+      error: error.message 
     });
   }
 });

@@ -18,8 +18,10 @@
   left: 0;
   right: 0;
   bottom: 0;
+  width: 100vw;
+  height: 100vh;
   background-color: var(--bg-darker);
-  z-index: 1000;
+  z-index: 9999;
   color: var(--text-light);
   display: flex;
   flex-direction: column;
@@ -98,6 +100,15 @@
   width: 100% !important;
   border-radius: var(--border-radius);
   overflow: hidden;
+}
+
+/* Ensure any injected iframe fills container */
+.jitsi-container iframe {
+  border: none;
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* Loading overlay */

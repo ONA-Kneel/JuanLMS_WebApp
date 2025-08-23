@@ -12,28 +12,47 @@ import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// --- Ensure upload directory exists ---
-const uploadDir = './uploads/messages';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Storage configuration
+const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+
+
+async function initializeGroupMessageStorage() {
+  if (USE_CLOUDINARY) {
+    console.log('[GROUP_MESSAGES] Using Cloudinary storage');
+    try {
+      const { messageStorage } = await import('../config/cloudinary.js');
+      return multer({ storage: messageStorage });
+    } catch (error) {
+      console.error('[GROUP_MESSAGES] Cloudinary setup failed, falling back to local storage:', error.message);
+    }
+  }
+  
+  // Local storage fallback
+  console.log('[GROUP_MESSAGES] Using local storage');
+  const uploadDir = './uploads/messages';
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  
+  const localStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+      cb(null, Date.now() + "-" + file.originalname);
+    }
+  });
+  return multer({ storage: localStorage });
 }
 
-// --- Multer setup for file uploads ---
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
-  }
-});
-const upload = multer({ storage });
+// Initialize upload middleware
+const upload = await initializeGroupMessageStorage();
 
 // --- POST / - Send a message to a group chat ---
 router.post('/', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     const { groupId, senderId, message } = req.body;
-    const fileUrl = req.file ? `uploads/messages/${req.file.filename}` : null;
+    const fileUrl = req.file ? (req.file.secure_url || req.file.path || `uploads/messages/${req.file.filename}`) : null;
 
     if (!groupId || !senderId) {
       return res.status(400).json({ error: "Missing required fields" });

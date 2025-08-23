@@ -41,6 +41,7 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
 
   const handleJoinMeeting = async (meeting) => {
     try {
+      console.log('[DEBUG] MeetingList handleJoinMeeting - meeting:', meeting);
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE}/api/meetings/${meeting._id}/join`, {
         method: 'POST',
@@ -49,7 +50,9 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
         }
       });
 
+      console.log('[DEBUG] MeetingList join response status:', response.status);
       const result = await response.json();
+      console.log('[DEBUG] MeetingList join response result:', result);
 
       if (response.ok) {
         // Pass both backend result and original meeting to onJoinMeeting
@@ -64,10 +67,11 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
         // Refresh meetings to update participant count
         fetchMeetings();
       } else {
+        console.error('[DEBUG] MeetingList join failed:', result);
         alert(result.message || 'Failed to join meeting');
       }
     } catch (error) {
-      console.error('Error joining meeting:', error);
+      console.error('[DEBUG] MeetingList join error:', error);
       alert('Network error. Please try again.');
     }
   };
@@ -290,15 +294,13 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
                     </div>
                     
                     <div className="flex items-center gap-2 ml-4">
-                      {meeting.canJoin && (
-                        <button
-                          onClick={() => handleJoinMeeting(meeting)}
-                          className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
-                        >
-                          <Play className="w-4 h-4" />
-                          Join
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleJoinMeeting(meeting)}
+                        className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
+                      >
+                        <Play className="w-4 h-4" />
+                        Join
+                      </button>
                       
                       {userRole === 'faculty' && (
                         <button
