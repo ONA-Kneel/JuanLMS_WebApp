@@ -4,7 +4,8 @@ import { useNavigate } from "react-router-dom";
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+// Force localhost for local testing
+const API_BASE = import.meta.env.DEV ? "http://localhost:5000" : (import.meta.env.VITE_API_URL || "http://localhost:5000");
 
 export default function Student_Activities() {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ export default function Student_Activities() {
   const [filter, setFilter] = useState("All");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const filterRef = useRef();
+  const [debugMode, setDebugMode] = useState(false);
 
   const tabs = [
     { id: "upcoming", label: "Upcoming" },
@@ -79,8 +81,11 @@ export default function Student_Activities() {
     fetchActiveTermForYear();
   }, [academicYear]);
 
+  // Fetch activities using the same robust logic as Student_Dashboard
   useEffect(() => {
     const fetchActivities = async () => {
+      if (!academicYear || !currentTerm) return;
+      
       setLoading(true);
       setError(null);
       try {
@@ -91,7 +96,7 @@ export default function Student_Activities() {
         console.log('Fetching activities for student:', userId);
         console.log('User ObjectId:', userObjectId);
         
-        // First, fetch student's enrolled classes
+        // First, fetch student's enrolled classes using the same endpoint as Student_Dashboard
         console.log('Fetching student classes from:', `${API_BASE}/classes/my-classes`);
         const classesRes = await fetch(`${API_BASE}/classes/my-classes`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -105,11 +110,43 @@ export default function Student_Activities() {
         const classes = await classesRes.json();
         console.log('Student classes received:', classes);
         
+        // Apply the same filtering logic as Student_Dashboard
+        const activeClasses = classes.filter(cls => {
+          // Filter out archived classes
+          if (cls.isArchived === true) {
+            console.log(`Filtering out archived class: ${cls.className || cls.classCode}`);
+            return false;
+          }
+          
+          // For local testing, be more lenient with academic year and term filtering
+          if (import.meta.env.DEV) {
+            console.log(`DEV MODE: Including class ${cls.className || cls.classCode} (academicYear: ${cls.academicYear}, termName: ${cls.termName})`);
+            return true;
+          }
+          
+          // Filter by academic year (tolerate missing academicYear)
+          if (cls.academicYear && cls.academicYear !== `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`) {
+            console.log(`Filtering out class with wrong year: ${cls.className || cls.classCode} (${cls.academicYear})`);
+            return false;
+          }
+          
+          // Filter by term (tolerate missing termName)
+          if (cls.termName && cls.termName !== currentTerm.termName) {
+            console.log(`Filtering out class with wrong term: ${cls.className || cls.classCode} (${cls.termName})`);
+            return false;
+          }
+          
+          console.log(`Including class: ${cls.className || cls.classCode}`);
+          return true;
+        });
+        
+        console.log('Active classes for activities:', activeClasses);
+        
         let allAssignments = [];
         let allQuizzes = [];
         
-        // Fetch assignments and quizzes for each class
-        for (const cls of classes) {
+        // Fetch assignments and quizzes for each active class
+        for (const cls of activeClasses) {
           const classCode = cls.classID || cls.classCode || cls._id;
           console.log('Fetching activities for class:', classCode, cls.className);
           
@@ -124,10 +161,25 @@ export default function Student_Activities() {
               console.log(`Assignments for class ${classCode}:`, assignments);
               
               if (Array.isArray(assignments)) {
-                // Filter assignments assigned to this student
+                // Filter assignments assigned to this student - handle both ObjectId and userID
                 const studentAssignments = assignments.filter(assignment => {
                   const entry = assignment.assignedTo?.find?.(e => e.classID === classCode);
-                  return entry && Array.isArray(entry.studentIDs) && entry.studentIDs.includes(userId);
+                  if (!entry || !Array.isArray(entry.studentIDs)) return false;
+                  
+                  // Check if student is in the assignedTo list using multiple ID formats
+                  const studentInList = entry.studentIDs.some(studentId => {
+                    const studentIdStr = String(studentId);
+                    const userIdStr = String(userId);
+                    const userObjectIdStr = String(userObjectId);
+                    
+                    return studentIdStr === userIdStr || 
+                           studentIdStr === userObjectIdStr ||
+                           studentId === userId ||
+                           studentId === userObjectId;
+                  });
+                  
+                  console.log(`Assignment ${assignment.title}: studentIDs=${entry.studentIDs}, userId=${userId}, userObjectId=${userObjectId}, included=${studentInList}`);
+                  return studentInList;
                 });
                 
                 // Add class info to assignments
@@ -154,10 +206,25 @@ export default function Student_Activities() {
               console.log(`Quizzes for class ${classCode}:`, quizzes);
               
               if (Array.isArray(quizzes)) {
-                // Filter quizzes assigned to this student
+                // Filter quizzes assigned to this student - handle both ObjectId and userID
                 const studentQuizzes = quizzes.filter(quiz => {
                   const entry = quiz.assignedTo?.find?.(e => e.classID === classCode);
-                  return entry && Array.isArray(entry.studentIDs) && entry.studentIDs.includes(userId);
+                  if (!entry || !Array.isArray(entry.studentIDs)) return false;
+                  
+                  // Check if student is in the assignedTo list using multiple ID formats
+                  const studentInList = entry.studentIDs.some(studentId => {
+                    const studentIdStr = String(studentId);
+                    const userIdStr = String(userId);
+                    const userObjectIdStr = String(userObjectId);
+                    
+                    return studentIdStr === userIdStr || 
+                           studentIdStr === userObjectIdStr ||
+                           studentId === userId ||
+                           studentId === userObjectId;
+                  });
+                  
+                  console.log(`Quiz ${quiz.title}: studentIDs=${entry.studentIDs}, userId=${userId}, userObjectId=${userObjectId}, included=${studentInList}`);
+                  return studentInList;
                 });
                 
                 // Add class info to quizzes
@@ -180,6 +247,7 @@ export default function Student_Activities() {
         
         console.log('Final processed assignments:', allAssignments);
         console.log('Final processed quizzes:', allQuizzes);
+        console.log('Student ID being used for filtering:', { userId, userObjectId });
         
         // Fetch submissions for assignments
         let allSubmissions = [];
@@ -192,212 +260,131 @@ export default function Student_Activities() {
             if (submissionRes.ok) {
               const submissionData = await submissionRes.json();
               if (Array.isArray(submissionData)) {
-                // Find submissions by this student
-                const studentSubmissions = submissionData.filter(sub => 
-                  sub.student && (sub.student._id === userId || sub.student === userId || sub.student.userID === userId)
-                );
+                // Find submissions by this student - handle both ObjectId and userID
+                const studentSubmissions = submissionData.filter(sub => {
+                  const studentId = sub.student?._id || sub.student || sub.student?.userID;
+                  if (!studentId) return false;
+                  
+                  const studentIdStr = String(studentId);
+                  const userIdStr = String(userId);
+                  const userObjectIdStr = String(userObjectId);
+                  
+                  return studentIdStr === userIdStr || 
+                         studentIdStr === userObjectIdStr ||
+                         studentId === userId ||
+                         studentId === userObjectId;
+                });
                 allSubmissions.push(...studentSubmissions);
               }
             }
-          } catch (submissionError) {
-            console.error(`Error fetching submissions for assignment ${assignment._id}:`, submissionError);
+          } catch (err) {
+            console.warn(`Failed to fetch submissions for assignment ${assignment._id}:`, err);
           }
         }
         
         // Fetch quiz responses
         let allQuizResponses = [];
-        console.log('Fetching quiz responses for', allQuizzes.length, 'quizzes');
-        
         for (const quiz of allQuizzes) {
           try {
-            console.log(`Fetching responses for quiz: ${quiz.title} (ID: ${quiz._id})`);
             const responseRes = await fetch(`${API_BASE}/api/quizzes/${quiz._id}/responses`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             
-            console.log(`Quiz response fetch status for ${quiz._id}:`, responseRes.status);
-            
             if (responseRes.ok) {
               const responseData = await responseRes.json();
-              console.log(`Raw response data for quiz ${quiz._id}:`, responseData);
-              
               if (Array.isArray(responseData)) {
-                console.log(`Found ${responseData.length} total responses for quiz ${quiz._id}`);
-                
-                // Find responses by this student
+                // Find responses by this student - handle both ObjectId and userID
                 const studentResponses = responseData.filter(resp => {
-                  console.log('Checking response:', resp);
-                  console.log('Response studentId field:', resp.studentId);
-                  console.log('Current userId:', userId);
-                  console.log('Current userObjectId:', userObjectId);
+                  const studentId = resp.student?._id || resp.student || resp.student?.userID;
+                  if (!studentId) return false;
                   
-                  // Check both student and studentId fields for compatibility
-                  const studentField = resp.student || resp.studentId;
-                  const matches = studentField && (
-                    studentField._id === userId ||           // Match with student ID (S441)
-                    studentField._id === userObjectId ||     // Match with MongoDB ObjectId
-                    studentField === userId ||               // Direct match with student ID
-                    studentField === userObjectId ||         // Direct match with ObjectId
-                    studentField.userID === userId ||        // Match userID field
-                    studentField.studentID === userId        // Match studentID field
-                  );
+                  const studentIdStr = String(studentId);
+                  const userIdStr = String(userId);
+                  const userObjectIdStr = String(userObjectId);
                   
-                  console.log('Response matches current student:', matches);
-                  return matches;
+                  return studentIdStr === userIdStr || 
+                         studentIdStr === userObjectIdStr ||
+                         studentId === userId ||
+                         studentId === userObjectId;
                 });
-                
-                console.log(`Found ${studentResponses.length} responses for current student in quiz ${quiz._id}`);
                 allQuizResponses.push(...studentResponses);
-              } else {
-                console.log(`Response data for quiz ${quiz._id} is not an array:`, responseData);
               }
-            } else {
-              console.error(`Failed to fetch responses for quiz ${quiz._id}:`, responseRes.status, responseRes.statusText);
             }
-          } catch (responseError) {
-            console.error(`Error fetching responses for quiz ${quiz._id}:`, responseError);
+          } catch (err) {
+            console.warn(`Failed to fetch responses for quiz ${quiz._id}:`, err);
           }
         }
-        
-        console.log('Final submissions:', allSubmissions);
-        console.log('Final quiz responses:', allQuizResponses);
         
         setAssignments(allAssignments);
         setQuizzes(allQuizzes);
         setSubmissions(allSubmissions);
         setQuizResponses(allQuizResponses);
         
-      } catch (error) {
-        console.error('Error fetching activities:', error);
-        setError('Failed to fetch activities.');
+        console.log('Final data summary:', {
+          assignments: allAssignments.length,
+          quizzes: allQuizzes.length,
+          submissions: allSubmissions.length,
+          quizResponses: allQuizResponses.length
+        });
+        
+      } catch (err) {
+        console.error('Failed to fetch activities:', err);
+        setError(err.message);
       } finally {
         setLoading(false);
       }
     };
-    fetchActivities();
-  }, []);
-
-  useEffect(() => {
-    async function fetchAcademicYear() {
-      try {
-        const token = localStorage.getItem("token");
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (yearRes.ok) {
-          const year = await yearRes.json();
-          setAcademicYear(year);
-        }
-      } catch (err) {
-        console.error("Failed to fetch academic year", err);
-      }
+    
+    // Only fetch activities when we have both academic year and term
+    if (academicYear && currentTerm) {
+      fetchActivities();
     }
-    fetchAcademicYear();
-  }, []);
+  }, [academicYear, currentTerm]);
 
-  useEffect(() => {
-    async function fetchActiveTermForYear() {
-      if (!academicYear) return;
-      try {
-        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const terms = await res.json();
-          const active = terms.find(term => term.status === 'active');
-          setCurrentTerm(active || null);
-        } else {
-          setCurrentTerm(null);
-        }
-      } catch {
-        setCurrentTerm(null);
-      }
-    }
-    fetchActiveTermForYear();
-  }, [academicYear]);
-
-  // Handle outside click for filter dropdown
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (filterRef.current && !filterRef.current.contains(event.target)) {
-        setShowFilterDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  // Get combined activities
-  const getAllActivities = () => {
-    return [...assignments, ...quizzes];
-  };
-
-  // Filter activities by due date status
+  // Get activities by status (same logic as before)
   const getActivitiesByStatus = (status) => {
     const now = new Date();
-    const allActivities = getAllActivities();
-    
-    return allActivities.filter(activity => {
-      const dueDate = new Date(activity.dueDate);
-      
-      if (status === 'upcoming') {
-        // Show activities that are not yet due and not completed
-        // Also include activities with no due date unless they're completed
-        const isCompleted = isActivityCompleted(activity);
-        const hasNoDueDate = !activity.dueDate || activity.dueDate === null || activity.dueDate === undefined;
-        
-        if (hasNoDueDate) {
-          // Activities with no due date appear in upcoming unless completed
-          return !isCompleted;
-        } else {
-          // Activities with due dates appear in upcoming if not yet due and not completed
-          return dueDate >= now && !isCompleted;
-        }
-      } else if (status === 'past-due') {
-        // Show activities that are past due and not completed
-        const isCompleted = isActivityCompleted(activity);
-        return dueDate < now && !isCompleted;
-      } else if (status === 'completed') {
-        // Show activities that have been submitted/completed
-        return isActivityCompleted(activity);
-      }
-      return true;
-    });
+    const allActivities = [
+      ...assignments.map(item => ({ ...item, type: 'assignment' })),
+      ...quizzes.map(item => ({ ...item, type: 'quiz' }))
+    ];
+
+    switch (status) {
+      case 'upcoming':
+        return allActivities.filter(activity => {
+          if (!activity.dueDate) return true; // No due date = upcoming
+          const dueDate = new Date(activity.dueDate);
+          return dueDate > now && !hasStudentCompleted(activity);
+        });
+      case 'past-due':
+        return allActivities.filter(activity => {
+          if (!activity.dueDate) return false; // No due date = not past due
+          const dueDate = new Date(activity.dueDate);
+          return dueDate < now && !hasStudentCompleted(activity);
+        });
+      case 'completed':
+        return allActivities.filter(activity => hasStudentCompleted(activity));
+      default:
+        return allActivities;
+    }
   };
 
-  // Check if an activity has been completed (submitted) by the student
-  const isActivityCompleted = (activity) => {
-    console.log(`Checking completion for ${activity.type}: ${activity.title} (ID: ${activity._id})`);
-    
+  // Check if student has completed an activity (same logic as before)
+  const hasStudentCompleted = (activity) => {
     if (activity.type === 'assignment') {
-      // Check if student has submitted this assignment
-      const hasSubmission = submissions.some(submission => {
-        const matches = submission.assignment === activity._id || 
-                       submission.assignment?._id === activity._id ||
-                       submission.assignmentId === activity._id;
-        if (matches) {
-          console.log('Found matching assignment submission:', submission);
-        }
-        return matches;
+      return submissions.some(sub => {
+        const assignmentId = sub.assignment?._id || sub.assignment;
+        const activityId = activity._id;
+        
+        return String(assignmentId) === String(activityId);
       });
-      console.log(`Assignment ${activity.title} completed:`, hasSubmission);
-      return hasSubmission;
     } else if (activity.type === 'quiz') {
-      // Check if student has responded to this quiz
-      const hasResponse = quizResponses.some(response => {
-        const matches = response.quiz === activity._id || 
-                       response.quiz?._id === activity._id ||
-                       response.quizId === activity._id;
-        if (matches) {
-          console.log('Found matching quiz response:', response);
-        }
-        return matches;
+      return quizResponses.some(resp => {
+        const quizId = resp.quiz?._id || resp.quiz || resp.quizId;
+        const activityId = activity._id;
+        
+        return String(quizId) === String(activityId);
       });
-      console.log(`Quiz ${activity.title} completed:`, hasResponse);
-      console.log('Available quiz responses:', quizResponses);
-      return hasResponse;
     }
     return false;
   };
@@ -410,7 +397,7 @@ export default function Student_Activities() {
     return activities;
   };
 
-  // Group activities by due date (for Upcoming tab)
+  // Group activities by due date (for Upcoming tab) - same logic as faculty
   const groupActivitiesByDueDate = (activities) => {
     // Separate activities with and without due dates
     const activitiesWithDueDate = activities.filter(activity => activity.dueDate);
@@ -450,7 +437,7 @@ export default function Student_Activities() {
     return { groupedByDate, sortedDateKeys };
   };
 
-  // Group activities by submission date (for Completed tab)
+  // Group activities by submission date (for Completed tab) - same logic as faculty
   const groupActivitiesBySubmissionDate = (activities) => {
     // Add submission date to each activity
     const activitiesWithSubmissionDate = activities.map(activity => {
@@ -548,8 +535,31 @@ export default function Student_Activities() {
                 })}
               </p>
             </div>
-            <ProfileMenu/>
+            <div className="flex items-center gap-4">
+              {/* Debug toggle for development */}
+              {import.meta.env.DEV && (
+                <button
+                  onClick={() => setDebugMode(!debugMode)}
+                  className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
+                >
+                  {debugMode ? "Hide Debug" : "Show Debug"}
+                </button>
+              )}
+              <ProfileMenu/>
+            </div>
           </div>
+
+          {/* Debug info */}
+          {debugMode && (
+            <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
+              <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
+              <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
+              <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
+              <p className="text-sm text-yellow-700">Assignments: {assignments.length}</p>
+              <p className="text-sm text-yellow-700">Quizzes: {quizzes.length}</p>
+              <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
+            </div>
+          )}
 
           {/* Tabs */}
           <ul className="flex flex-wrap border-b border-gray-700 text-xl sm:text-2xl font-medium text-gray-400">
@@ -613,19 +623,32 @@ export default function Student_Activities() {
             </div>
 
             {loading ? (
-              <p>Loading activities...</p>
+              <div className="text-center py-8">
+                <p className="text-gray-600">Loading activities...</p>
+              </div>
             ) : error ? (
-              <p className="text-red-600">{error}</p>
+              <div className="text-center py-8">
+                <p className="text-red-600">{error}</p>
+              </div>
             ) : (
               (() => {
                 const statusActivities = getActivitiesByStatus(activeTab);
                 const filteredActivities = getFilteredActivities(statusActivities);
                 
                 if (filteredActivities.length === 0) {
-                  return <p className="mt-4">No activities found.</p>;
+                  return (
+                    <div className="text-center py-8">
+                      <p className="text-gray-600">No activities found.</p>
+                      {debugMode && (
+                        <p className="text-sm text-gray-500 mt-2">
+                          Status: {activeTab} | Filter: {filter} | Total Activities: {assignments.length + quizzes.length}
+                        </p>
+                      )}
+                    </div>
+                  );
                 }
                 
-                // Use different grouping based on the active tab
+                // Use different grouping based on the active tab - same logic as faculty
                 const { groupedByDate, sortedDateKeys } = activeTab === 'completed' 
                   ? groupActivitiesBySubmissionDate(filteredActivities)
                   : groupActivitiesByDueDate(filteredActivities);
@@ -651,7 +674,7 @@ export default function Student_Activities() {
                       </h4>
                     </div>
                     
-                    {/* Activities for this date */}
+                    {/* Activities for this date - same display format as faculty */}
                     {groupedByDate[dateKey].map((activity) => (
                       <div
                         key={`${activity.type}-${activity._id}-${activity.classInfo?.classCode || 'unknown'}`}

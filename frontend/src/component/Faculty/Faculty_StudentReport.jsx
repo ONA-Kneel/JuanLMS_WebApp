@@ -3,8 +3,8 @@ import * as XLSX from "xlsx";
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-// Use localhost for development - local server is running on port 5000
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+// API base: prefer local in dev when not explicitly configured
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://juanlms-webapp-server.onrender.com');
 
 export default function Faculty_StudentReport() {
   const [academicYear, setAcademicYear] = useState(null);
@@ -36,6 +36,12 @@ export default function Faculty_StudentReport() {
   const [uploadSummary, setUploadSummary] = useState(null);
   
   const searchTimeoutRef = useRef(null);
+
+  // Dynamic audit data
+  const [facultyClasses, setFacultyClasses] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [auditRows, setAuditRows] = useState([]);
+  const [classStudentRoster, setClassStudentRoster] = useState({});
 
   // Report limits
   const MIN_CHARS = 1;
@@ -89,6 +95,221 @@ export default function Faculty_StudentReport() {
     }
     fetchActiveTermForYear();
   }, [academicYear]);
+
+  // Load faculty classes for current term
+  useEffect(() => {
+    async function fetchFacultyClasses() {
+      if (!academicYear || !currentTerm) return;
+      try {
+        const token = localStorage.getItem('token');
+        const userId = localStorage.getItem('userID');
+        const res = await fetch(`${API_BASE}/classes`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!res.ok) { setFacultyClasses([]); return; }
+        const data = await res.json();
+        const yearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const filtered = (Array.isArray(data) ? data : []).filter(cls => {
+          if (cls.facultyID !== userId) return false;
+          if (cls.isArchived === true) return false;
+          // Include if class matches current year/term OR if either field is missing (fallback for older/local data)
+          const matchesExact = cls.academicYear === yearName && cls.termName === currentTerm.termName;
+          const missingMeta = !cls.academicYear || !cls.termName;
+          return matchesExact || missingMeta;
+        });
+        setFacultyClasses(filtered);
+      } catch {
+        setFacultyClasses([]);
+      }
+    }
+    fetchFacultyClasses();
+  }, [academicYear, currentTerm]);
+
+  // Load activities for those classes
+  useEffect(() => {
+    async function loadActivities() {
+      if (!facultyClasses.length) { setActivities([]); return; }
+      try {
+        const token = localStorage.getItem('token');
+        const results = await Promise.all(facultyClasses.map(async (cls) => {
+          const [aRes, qRes] = await Promise.all([
+            fetch(`${API_BASE}/assignments?classID=${cls.classID}`, { headers: { 'Authorization': `Bearer ${token}` } }),
+            fetch(`${API_BASE}/api/quizzes?classID=${cls.classID}`, { headers: { 'Authorization': `Bearer ${token}` } })
+          ]);
+          const assignments = aRes.ok ? await aRes.json() : [];
+          const quizzes = qRes.ok ? await qRes.json() : [];
+          
+          console.log(`[DEBUG] Raw assignments for class ${cls.classID}:`, assignments);
+          console.log(`[DEBUG] Raw quizzes for class ${cls.classID}:`, quizzes);
+          
+          const withClass = [];
+          (Array.isArray(assignments) ? assignments : []).forEach(a => withClass.push({ ...a, classID: cls.classID, classSection: cls.section || cls.classCode, _kind: 'assignment' }));
+          (Array.isArray(quizzes) ? quizzes : []).forEach(q => withClass.push({ ...q, classID: cls.classID, classSection: cls.section || cls.classCode, _kind: 'quiz' }));
+          return withClass;
+        }));
+        setActivities(results.flat());
+      } catch {
+        setActivities([]);
+      }
+    }
+    loadActivities();
+  }, [facultyClasses]);
+
+  // Load class rosters from backend members endpoint
+  useEffect(() => {
+    async function loadRosters() {
+      if (!facultyClasses.length) { setClassStudentRoster({}); return; }
+      const token = localStorage.getItem('token');
+      const pairs = await Promise.all(facultyClasses.map(async (cls) => {
+        try {
+          const res = await fetch(`${API_BASE}/classes/${cls.classID}/members`, { headers: { 'Authorization': `Bearer ${token}` } });
+          if (!res.ok) return [cls.classID, []];
+          const data = await res.json();
+          return [cls.classID, Array.isArray(data.students) ? data.students : []];
+        } catch {
+          return [cls.classID, []];
+        }
+      }));
+      const map = {};
+      for (const [cid, students] of pairs) map[cid] = students;
+      setClassStudentRoster(map);
+    }
+    loadRosters();
+  }, [facultyClasses]);
+
+  // Build dynamic audit rows
+  useEffect(() => {
+    async function buildRows() {
+      if (!activities.length) { setAuditRows([]); return; }
+      const token = localStorage.getItem('token');
+      const byAct = new Map();
+      await Promise.all(activities.map(async act => {
+        if (act._kind !== 'assignment') { byAct.set(act._id, []); return; }
+        try {
+          const r = await fetch(`${API_BASE}/assignments/${act._id}/submissions`, { headers: { 'Authorization': `Bearer ${token}` } });
+          const subs = r.ok ? await r.json() : [];
+          byAct.set(act._id, Array.isArray(subs) ? subs : []);
+        } catch {
+          byAct.set(act._id, []);
+        }
+      }));
+
+      // Get detailed assignment information including views
+      const detailedAssignments = new Map();
+      await Promise.all(activities.filter(act => act._kind === 'assignment').map(async act => {
+        try {
+          const r = await fetch(`${API_BASE}/assignments/${act._id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+          if (r.ok) {
+            const detailed = await r.json();
+            detailedAssignments.set(act._id, detailed);
+            console.log(`[DEBUG] Detailed assignment ${act._id}:`, detailed);
+          }
+        } catch (err) {
+          console.error(`[DEBUG] Failed to get detailed assignment ${act._id}:`, err);
+        }
+      }));
+
+      const now = new Date();
+      const rows = [];
+      let totalStudents = 0;
+      let viewedStudents = 0;
+      let reportedStudents = 0;
+
+      for (const act of activities) {
+        // Prefer precise class roster from backend; fallback to allowedStudents by section
+        const roster = (classStudentRoster[act.classID] && classStudentRoster[act.classID].length)
+          ? classStudentRoster[act.classID]
+          : (allowedStudents.filter(s => s.sectionName === act.classSection));
+        
+        totalStudents += roster.length;
+        const due = act.dueDate ? new Date(act.dueDate) : null;
+        const subs = byAct.get(act._id) || [];
+        const submittedIds = new Set(subs.map(s => String(s.studentId || s.studentID || s.userID || s.student?._id)));
+        
+        // Use detailed assignment info for views if available, otherwise fall back to activity data
+        const detailedAct = detailedAssignments.get(act._id);
+        const views = detailedAct ? (Array.isArray(detailedAct.views) ? detailedAct.views : []) : (Array.isArray(act.views) ? act.views : []);
+        const viewIds = new Set(views.map(v => String(v?.studentId || v?.studentID || v?.userID || v?._id || v)));
+
+        console.log(`[AUDIT] Activity: ${act.title} (${act._id})`);
+        console.log(`[AUDIT] Views array:`, views);
+        console.log(`[AUDIT] View IDs:`, Array.from(viewIds));
+        console.log(`[AUDIT] Roster size: ${roster.length}`);
+
+        for (const stu of roster) {
+          const canonicalId = String(stu.userID || stu.schoolID || (stu._id && stu._id.$oid) || stu._id || stu.studentId || stu.id);
+          const submitted = submittedIds.has(canonicalId);
+          
+          // More robust view checking - try multiple ID formats
+          let hasViewed = false;
+          const studentIdVariants = [
+            canonicalId,
+            stu.userID,
+            stu.schoolID,
+            stu._id,
+            stu.studentId,
+            stu.id
+          ].filter(Boolean).map(id => String(id));
+          
+          for (const viewId of viewIds) {
+            if (studentIdVariants.includes(viewId)) {
+              hasViewed = true;
+              break;
+            }
+          }
+
+          console.log(`[AUDIT] Student: ${stu.displayName || `${stu.lastname}, ${stu.firstname}`}`);
+          console.log(`[AUDIT] Student canonical ID: ${canonicalId}`);
+          console.log(`[AUDIT] Student raw data:`, stu);
+          console.log(`[AUDIT] Student ID variants:`, studentIdVariants);
+          console.log(`[AUDIT] Has submitted: ${submitted}`);
+          console.log(`[AUDIT] Has viewed: ${hasViewed}`);
+          console.log(`[AUDIT] View IDs contains student ID: ${viewIds.has(canonicalId)}`);
+          console.log(`[AUDIT] All view IDs:`, Array.from(viewIds));
+          console.log(`[AUDIT] Direct comparison check:`, Array.from(viewIds).map(vid => `${vid} === ${canonicalId} = ${vid === canonicalId}`));
+
+          // Skip students who have already viewed the assignment
+          // The purpose is to show who hasn't viewed it and who missed it
+          if (hasViewed) {
+            viewedStudents++;
+            console.log(`[AUDIT] Skipping ${stu.displayName || `${stu.lastname}, ${stu.firstname}`} - already viewed`);
+            continue;
+          }
+
+          // Missed: past due and not submitted (and not viewed)
+          if (!submitted && due && due < now) {
+            rows.push({
+              studentId: canonicalId,
+              studentName: stu.displayName || `${stu.lastname}, ${stu.firstname}`,
+              sectionName: stu.sectionName || act.classSection,
+              activityId: act._id,
+              activityTitle: act.title,
+              dueDate: act.dueDate || null,
+              status: 'missed'
+            });
+            reportedStudents++;
+          }
+
+          // Not viewed: rostered student who hasn't viewed (and hasn't submitted)
+          // Only add if not already added as "missed" for this activity
+          if (!submitted && (!due || due >= now)) {
+            rows.push({
+              studentId: canonicalId,
+              studentName: stu.displayName || `${stu.lastname}, ${stu.firstname}`,
+              sectionName: stu.sectionName || act.classSection,
+              activityId: act._id,
+              activityTitle: act.title,
+              dueDate: act.dueDate || null,
+              status: 'not_viewed'
+            });
+            reportedStudents++;
+          }
+        }
+      }
+
+      console.log(`[AUDIT] Summary: Total students: ${totalStudents}, Already viewed: ${viewedStudents}, Reported: ${reportedStudents}`);
+      setAuditRows(rows);
+    }
+    buildRows();
+  }, [activities, allowedStudents, classStudentRoster]);
 
   // Fetch allowed students for batch template (students in faculty's sections for the active term)
   const fetchAllowedStudents = async () => {
@@ -156,6 +377,14 @@ export default function Faculty_StudentReport() {
       await fetchAllowedStudents();
     }
   };
+
+  // Preload allowed students when the active term becomes available so
+  // section-based fallbacks work even if class members endpoint returns empty
+  useEffect(() => {
+    if (currentTerm) {
+      fetchAllowedStudents().catch(() => {});
+    }
+  }, [currentTerm]);
 
   // Download Excel template with two sheets
   const downloadBatchTemplate = async () => {
@@ -499,65 +728,28 @@ export default function Faculty_StudentReport() {
           </div>
         </div>
 
-        {/* Main Content Area - Student Activity Audit */}
+        {/* Main Content Area - Student Activity Audit (dynamic) */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          {/* Mocked data (frontend only) */}
-          {(() => {
-            // Sections, activities, and student statuses are mocked for now
-            const mockSections = ["12 - A", "12 - B"];
-            const mockActivities = [
-              { id: "act1", title: "Module 1: Introduction", type: "module", sectionName: "12 - A", dueDate: "2025-08-31" },
-              { id: "act2", title: "Quiz 1: Basics", type: "quiz", sectionName: "12 - A", dueDate: "2025-09-02" },
-              { id: "act3", title: "Assignment 1: Reflection", type: "assignment", sectionName: "12 - B", dueDate: "2025-08-29" },
-            ];
-            const mockStudentStatuses = [
-              { studentId: "s1", studentName: "Dela Cruz, Juan", sectionName: "12 - A", activityId: "act1", status: "not_viewed", lastViewedAt: null, submittedAt: null },
-              { studentId: "s2", studentName: "Santos, Maria", sectionName: "12 - A", activityId: "act1", status: "viewed", lastViewedAt: "2025-08-25T10:00:00Z", submittedAt: null },
-              { studentId: "s3", studentName: "Reyes, Ana", sectionName: "12 - A", activityId: "act2", status: "missed", lastViewedAt: null, submittedAt: null },
-              { studentId: "s4", studentName: "Garcia, Pedro", sectionName: "12 - B", activityId: "act3", status: "not_viewed", lastViewedAt: null, submittedAt: null },
-              { studentId: "s5", studentName: "Lopez, Carla", sectionName: "12 - B", activityId: "act3", status: "submitted", lastViewedAt: "2025-08-28T08:20:00Z", submittedAt: "2025-08-28T08:40:00Z" },
-            ];
-
-            // Local state inside IIFE via useState hooks is not allowed, so we compute with component-level state below
-            return null;
-          })()}
-
           {/* Filters */}
           {(() => {
             // Component-level state for filters and derived data
             // We keep them in closures to avoid polluting top-level with a lot of vars; values are recomputed via simple patterns
             // Definitions
-            const sections = ["All Sections", "12 - A", "12 - B"];
-            const activities = [
-              { id: "all", title: "All Activities", sectionName: "*" },
-              { id: "act1", title: "Module 1: Introduction", sectionName: "12 - A" },
-              { id: "act2", title: "Quiz 1: Basics", sectionName: "12 - A" },
-              { id: "act3", title: "Assignment 1: Reflection", sectionName: "12 - B" },
-            ];
+            const sections = ["All Sections", ...Array.from(new Set((facultyClasses || []).map(c => c.section || c.classCode).filter(Boolean)))];
+            const activitiesOpts = [{ id: 'all', title: 'All Activities', sectionName: '*' }, ...activities.map(a => ({ id: a._id, title: a.title, sectionName: a.classSection }))];
             
             // Use React state via a tiny helper component
             function AuditUI() {
               const [selectedSection, setSelectedSection] = useState("All Sections");
               const [selectedActivityId, setSelectedActivityId] = useState("all");
-              const [statusFilter, setStatusFilter] = useState("not_viewed"); // default focus
+              const [statusFilter, setStatusFilter] = useState("all"); // default to show all
               const [studentSearch, setStudentSearch] = useState("");
 
-              const allRows = [
-                { studentId: "s1", studentName: "Dela Cruz, Juan", sectionName: "12 - A", activityId: "act1", status: "not_viewed", lastViewedAt: null, submittedAt: null },
-                { studentId: "s2", studentName: "Santos, Maria", sectionName: "12 - A", activityId: "act1", status: "viewed", lastViewedAt: "2025-08-25T10:00:00Z", submittedAt: null },
-                { studentId: "s3", studentName: "Reyes, Ana", sectionName: "12 - A", activityId: "act2", status: "missed", lastViewedAt: null, submittedAt: null },
-                { studentId: "s4", studentName: "Garcia, Pedro", sectionName: "12 - B", activityId: "act3", status: "not_viewed", lastViewedAt: null, submittedAt: null },
-                { studentId: "s5", studentName: "Lopez, Carla", sectionName: "12 - B", activityId: "act3", status: "submitted", lastViewedAt: "2025-08-28T08:20:00Z", submittedAt: "2025-08-28T08:40:00Z" },
-              ];
-              const activityById = new Map([
-                ["act1", { id: "act1", title: "Module 1: Introduction", type: "module", sectionName: "12 - A", dueDate: "2025-08-31" }],
-                ["act2", { id: "act2", title: "Quiz 1: Basics", type: "quiz", sectionName: "12 - A", dueDate: "2025-09-02" }],
-                ["act3", { id: "act3", title: "Assignment 1: Reflection", type: "assignment", sectionName: "12 - B", dueDate: "2025-08-29" }],
-              ]);
+              const activityById = new Map(activities.map(a => [a._id, { id: a._id, title: a.title, sectionName: a.classSection, dueDate: a.dueDate } ]));
 
-              const filteredActivities = activities.filter(a => selectedSection === "All Sections" || a.sectionName === "*" || a.sectionName === selectedSection);
+              const filteredActivities = activitiesOpts.filter(a => selectedSection === "All Sections" || a.sectionName === "*" || a.sectionName === selectedSection);
 
-              const filteredRows = allRows.filter(r => {
+              const filteredRows = auditRows.filter(r => {
                 const inSection = selectedSection === "All Sections" || r.sectionName === selectedSection;
                 const inActivity = selectedActivityId === "all" || r.activityId === selectedActivityId;
                 const inStatus = statusFilter === "all" ? true : r.status === statusFilter;
@@ -581,19 +773,52 @@ export default function Faculty_StudentReport() {
                     "Submitted At": r.submittedAt ? new Date(r.submittedAt).toLocaleString() : "-",
                   };
                 });
-                const ws = XLSX.utils.json_to_sheet(exportRows);
+
+                // Calculate summary counts
+                const notViewedCount = filteredRows.filter(r => r.status === "not_viewed").length;
+                const missedCount = filteredRows.filter(r => r.status === "missed").length;
+                
+                // Calculate already viewed count
+                let viewedStudents = 0;
+                for (const act of activities) {
+                  const roster = (classStudentRoster[act.classID] && classStudentRoster[act.classID].length)
+                    ? classStudentRoster[act.classID]
+                    : (allowedStudents.filter(s => s.sectionName === act.classSection));
+                  
+                  const views = Array.isArray(act.views) ? act.views : [];
+                  const viewIds = new Set(views.map(v => String(v?.studentId || v?.studentID || v?.userID || v?._id || v)));
+                  
+                  for (const stu of roster) {
+                    const canonicalId = String(stu.userID || stu.schoolID || (stu._id && stu._id.$oid) || stu._id || stu.studentId || stu.id);
+                    if (viewIds.has(canonicalId)) {
+                      viewedStudents++;
+                    }
+                  }
+                }
+
                 const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Audit");
+                
+                // Sheet 1: Summary
+                const summaryData = [
+                  { Category: "Not Viewed", Count: notViewedCount, Description: "Students who haven't opened the assignment" },
+                  { Category: "Missed", Count: missedCount, Description: "Students who haven't submitted and assignment is past due" },
+                  { Category: "Already Viewed", Count: viewedStudents, Description: "Students who have opened the assignment (excluded from reports)" },
+                  { Category: "Total Reported", Count: filteredRows.length, Description: "Total students in the audit report" }
+                ];
+                const ws1 = XLSX.utils.json_to_sheet(summaryData);
+                XLSX.utils.book_append_sheet(wb, ws1, "Summary");
+
+                // Sheet 2: Audit Details
+                const ws2 = XLSX.utils.json_to_sheet(exportRows);
+                XLSX.utils.book_append_sheet(wb, ws2, "Audit Details");
+                
                 XLSX.writeFile(wb, "StudentActivityAudit.xlsx");
               };
 
               return (
                 <>
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
                     <h3 className="text-lg font-semibold">Activity Visibility & Submission Audit</h3>
-                    <div className="flex items-center gap-2">
-                      <button onClick={exportToExcel} type="button" className="px-4 py-2 rounded bg-[#010a51] text-white hover:bg-[#1a237e]">Export</button>
-            </div>
           </div>
 
                   {/* Filters */}
@@ -603,42 +828,26 @@ export default function Faculty_StudentReport() {
                       <select value={selectedSection} onChange={e => { setSelectedSection(e.target.value); setSelectedActivityId("all"); }} className="w-full border rounded px-3 py-2">
                         {sections.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
-                </div>
+                 </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Activity</label>
                       <select value={selectedActivityId} onChange={e => setSelectedActivityId(e.target.value)} className="w-full border rounded px-3 py-2">
                         {filteredActivities.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
                       </select>
-                </div>
-                    <div>
+            </div>
+                   <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                       <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full border rounded px-3 py-2">
                         <option value="all">All</option>
                         <option value="not_viewed">Not Viewed</option>
                         <option value="missed">Missed</option>
                       </select>
-            </div>
-                   <div>
+                   </div>
+            <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Search Student</label>
                       <input value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="e.g. Dela Cruz" className="w-full border rounded px-3 py-2" />
               </div>
             </div>
-
-                  {/* Summary */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                    <div className="p-4 rounded border bg-red-50 border-red-200">
-                      <div className="text-sm text-red-700">Not Viewed</div>
-                      <div className="text-2xl font-bold text-red-800">{notViewedCount}</div>
-              </div>
-                    <div className="p-4 rounded border bg-yellow-50 border-yellow-200">
-                      <div className="text-sm text-yellow-700">Missed</div>
-                      <div className="text-2xl font-bold text-yellow-800">{missedCount}</div>
-            </div>
-                    <div className="p-4 rounded border bg-gray-50 border-gray-200">
-                      <div className="text-sm text-gray-700">Total (Filtered)</div>
-                      <div className="text-2xl font-bold text-gray-800">{filteredRows.length}</div>
-                    </div>
-                </div>
 
                   {/* Table */}
                   <div className="overflow-x-auto">
@@ -650,14 +859,13 @@ export default function Faculty_StudentReport() {
                           <th className="p-3 border-b font-semibold text-gray-700">Activity</th>
                           <th className="p-3 border-b font-semibold text-gray-700">Due Date</th>
                           <th className="p-3 border-b font-semibold text-gray-700">Status</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Last Viewed</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Submitted At</th>
+                          
                         </tr>
                       </thead>
                       <tbody>
                         {filteredRows.length === 0 ? (
                           <tr>
-                            <td className="p-4 text-center text-gray-500" colSpan={7}>No results for current filters.</td>
+                            <td className="p-4 text-center text-gray-500" colSpan={5}>No results for current filters.</td>
                           </tr>
                         ) : (
                           filteredRows.map((r) => {
@@ -670,15 +878,12 @@ export default function Faculty_StudentReport() {
                                 <td className="p-3 border-b">{act.dueDate ? new Date(act.dueDate).toLocaleDateString("en-US") : '-'}</td>
                                 <td className="p-3 border-b">
                                   <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
-                                    r.status === 'not_viewed' ? 'bg-red-100 text-red-700 border border-red-200' :
-                                    r.status === 'missed' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
-                                    'bg-green-100 text-green-700 border border-green-200'
+                                    r.status === 'not_viewed' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                                    'bg-red-100 text-red-700 border border-red-200'
                                   }`}>
                                     {r.status.replace('_', ' ')}
                                   </span>
                                 </td>
-                                <td className="p-3 border-b">{r.lastViewedAt ? new Date(r.lastViewedAt).toLocaleString() : '-'}</td>
-                                <td className="p-3 border-b">{r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '-'}</td>
                               </tr>
                             );
                           })
@@ -686,9 +891,6 @@ export default function Faculty_StudentReport() {
                       </tbody>
                     </table>
             </div>
-
-                  {/* Note */}
-                  <p className="mt-4 text-xs text-gray-500">Frontend-only prototype. This view will connect to real activities and student engagement data once backend endpoints are available.</p>
                 </>
               );
             }

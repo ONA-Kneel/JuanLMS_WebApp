@@ -108,15 +108,18 @@ userSchema.methods.getDecryptedProfilePic = function () {
 
 
 userSchema.methods.getDecryptedFirstname = function () {
-  return decrypt(this.firstname);
+  // firstname is not encrypted, return as-is
+  return this.firstname;
 };
 
 userSchema.methods.getDecryptedLastname = function () {
-  return decrypt(this.lastname);
+  // lastname is not encrypted, return as-is
+  return this.lastname;
 };
 
 userSchema.methods.getDecryptedMiddlename = function () {
-  return decrypt(this.middlename);
+  // middlename is not encrypted, return as-is
+  return this.middlename;
 };
 
 export default mongoose.model("User", userSchema);

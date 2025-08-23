@@ -5,7 +5,7 @@ import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import Student_Navbar from './Student/Student_Navbar';
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function AssignmentDetailPage() {
   const { assignmentId } = useParams();
@@ -37,16 +37,28 @@ export default function AssignmentDetailPage() {
   const [deletingFile, setDeletingFile] = useState(null);
   const [submissionContext, setSubmissionContext] = useState('');
   const [filteredSubmissions, setFilteredSubmissions] = useState(submissions); // New state for filtered submissions
+  const [viewTracked, setViewTracked] = useState(false); // Track if view has been recorded
 
   // --- Track when a student views an assignment ---
   useEffect(() => {
-    if (localStorage.getItem('role') === 'students' && assignmentId) {
+    if (localStorage.getItem('role') === 'students' && assignmentId && !viewTracked) {
       const token = localStorage.getItem('token');
       fetch(`${API_BASE}/assignments/${assignmentId}/view`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(() => {
+        setViewTracked(true); // Mark as tracked to prevent duplicate calls
+      })
+      .catch(err => {
+        console.error('Failed to track view:', err);
       });
     }
+  }, [assignmentId, viewTracked]);
+
+  // Reset view tracking when assignmentId changes
+  useEffect(() => {
+    setViewTracked(false);
   }, [assignmentId]);
 
   useEffect(() => {

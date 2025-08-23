@@ -55,6 +55,8 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [lessonLink, setLessonLink] = useState("");
   const [classWithMembers, setClassWithMembers] = useState(null);
   const [hasMappedMembers, setHasMappedMembers] = useState(false);
+  const [classSection, setClassSection] = useState(null); // Store the class section
+  const [studentsInSameSection, setStudentsInSameSection] = useState([]); // Store students in the same section
 
   // Validation modal state
   const [validationModal, setValidationModal] = useState({
@@ -82,7 +84,8 @@ export default function ClassContent({ selected, isFaculty = false }) {
 
   // Helper function to check if assignment is posted
   const isAssignmentPosted = (assignment) => {
-    if (!assignment.postAt) return false; // If no postAt, consider it not posted
+    // If no postAt, treat as posted immediately (legacy data)
+    if (!assignment.postAt) return true;
     const now = new Date();
     const postAt = new Date(assignment.postAt);
     return postAt <= now;
@@ -102,6 +105,33 @@ export default function ClassContent({ selected, isFaculty = false }) {
     if (student.id) ids.push(String(student.id));
     // De-dup
     return Array.from(new Set(ids.filter(Boolean)));
+  };
+
+  // Filter students by section to only show students from the same section as the class
+  const getStudentsInSameSection = async (students, section) => {
+    if (!section) return students; // If no section, return all students
+    
+    const token = localStorage.getItem('token');
+    const filteredStudents = [];
+    
+    for (const student of students) {
+      try {
+        // Check if student is assigned to the specified section
+        const res = await fetch(`${API_BASE}/api/student-assignments?studentId=${student._id}&sectionName=${section}&status=active`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const assignments = await res.json();
+          if (assignments.length > 0) {
+            filteredStudents.push(student);
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to check section assignment for student ${student._id}:`, err);
+      }
+    }
+    
+    return filteredStudents;
   };
 
   // Fetch lessons from backend
@@ -171,6 +201,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
   // Fetch assignments and quizzes from backend
   useEffect(() => {
     if (selected === "classwork" && classId) {
+      if (DEBUG_MEMBERS) {
+        console.log(`[ClassContent] Fetching assignments/quizzes for classId: "${classId}" (type: ${typeof classId})`);
+      }
+      
       setAssignmentsLoading(true);
       setAssignmentError(null);
       const token = localStorage.getItem('token');
@@ -185,21 +219,67 @@ export default function ClassContent({ selected, isFaculty = false }) {
         }).then(res => res.ok ? res.json() : [])
       ])
       .then(([assignmentsData, quizzesData]) => {
+        if (DEBUG_MEMBERS) {
+          console.log(`[ClassContent] Raw assignments data:`, assignmentsData);
+          console.log(`[ClassContent] Raw quizzes data:`, quizzesData);
+        }
+        
         const merged = [
           ...(Array.isArray(assignmentsData) ? assignmentsData : []),
           ...(Array.isArray(quizzesData) ? quizzesData : [])
         ];
         // Filter for this class (should be redundant, but safe)
-        const filtered = merged.filter(a =>
-          a.classID === classId ||
-          (Array.isArray(a.assignedTo) && a.assignedTo.some(at => String(at.classID) === String(classId)))
-        );
+        const filtered = merged.filter(a => {
+          const matchesClassId = a.classID === classId;
+          const matchesAssignedTo = Array.isArray(a.assignedTo) && a.assignedTo.some(at => String(at.classID) === String(classId));
+          
+          if (DEBUG_MEMBERS) {
+            console.log(`[ClassContent] Assignment ${a.title} (${a._id}):`, {
+              classID: a.classID,
+              classId: classId,
+              assignedTo: a.assignedTo,
+              matchesClassId,
+              matchesAssignedTo,
+              willInclude: matchesClassId || matchesAssignedTo
+            });
+          }
+          
+          return matchesClassId || matchesAssignedTo;
+        });
+        
+        // For local testing, if no assignments match the strict criteria, include all assignments
+        let finalFiltered = filtered;
+        if (import.meta.env.DEV && filtered.length === 0 && merged.length > 0) {
+          if (DEBUG_MEMBERS) {
+            console.log(`[ClassContent] DEV MODE: No assignments matched strict criteria, including all ${merged.length} assignments for debugging`);
+          }
+          finalFiltered = merged;
+        }
+        
         // Only show posted assignments/quizzes to students
-        const filteredForRole = localStorage.getItem('role') === 'faculty' ? filtered : filtered.filter(isAssignmentPosted);
+        const userRole = localStorage.getItem('role');
+        const isStudent = userRole === 'students' || userRole === 'student';
+        
+        if (DEBUG_MEMBERS) {
+          console.log(`[ClassContent] User role from localStorage: "${userRole}"`);
+          console.log(`[ClassContent] Is student: ${isStudent}`);
+        }
+        
+        const filteredForRole = isStudent ? finalFiltered.filter(isAssignmentPosted) : finalFiltered;
+        
+        if (DEBUG_MEMBERS) {
+          console.log(`[ClassContent] Role: ${localStorage.getItem('role')}`);
+          console.log(`[ClassContent] Merged assignments/quizzes:`, merged.length);
+          console.log(`[ClassContent] After class filtering:`, filtered.length);
+          console.log(`[ClassContent] After dev mode adjustment:`, finalFiltered.length);
+          console.log(`[ClassContent] After role filtering:`, filteredForRole.length);
+          console.log(`[ClassContent] Final assignments for class ${classId}:`, filteredForRole);
+        }
+
           console.log("Filtered assignments/quizzes for class", classId, filteredForRole);
 
           // If user is a student, fetch their submissions to filter out completed assignments
-        if (localStorage.getItem('role') === 'students') {
+        if (isStudent) {
           Promise.all(filteredForRole.map(assignment =>
               fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -239,16 +319,16 @@ export default function ClassContent({ selected, isFaculty = false }) {
   }, [selected, classId]);
 
   useEffect(() => {
-    if (selected === "members" && classId) {
-      setMembersLoading(true);
-      setMembersError(null);
+  if (selected === "members" && classId) {
+    setMembersLoading(true);
+    setMembersError(null);
       setHasMappedMembers(false);
       setMembers({ faculty: [], students: [] });
       setMemberIdsRaw([]);
       setClassWithMembers(null);
       
-      const token = localStorage.getItem('token');
-      
+    const token = localStorage.getItem('token');
+
       // Single function to load everything and map members
       const loadMembersAndStudents = async () => {
         try {
@@ -257,7 +337,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
           if (isFaculty) {
             try {
               let res = await fetch(`${API_BASE}/users?page=1&limit=1000`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+      headers: { 'Authorization': `Bearer ${token}` }
               });
               if (res.ok) {
                 const payload = await res.json();
@@ -274,20 +354,29 @@ export default function ClassContent({ selected, isFaculty = false }) {
           // Step 2: Try to get members from the dedicated endpoint
           try {
             const membersRes = await fetch(`${API_BASE}/classes/${classId}/members`, {
-              headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (membersRes.ok) {
-              const membersData = await membersRes.json();
-              if (DEBUG_MEMBERS) console.log('[Members] direct members endpoint response:', membersData);
-              
-              if (Array.isArray(membersData.students) && membersData.students.length > 0) {
-                // We got students directly, use them
-                setMembers({ faculty: membersData.faculty || [], students: membersData.students });
-                setMemberIdsRaw(membersData.students.map(s => String(s.userID || s.schoolID || s._id)).filter(Boolean));
-                if (DEBUG_MEMBERS) console.log('[Members] using direct students response');
-                return;
-              }
-            }
+                         if (membersRes.ok) {
+               const membersData = await membersRes.json();
+               if (DEBUG_MEMBERS) console.log('[Members] direct members endpoint response:', membersData);
+               if (DEBUG_MEMBERS) console.log('[Members] faculty array length:', membersData.faculty?.length || 0);
+               if (DEBUG_MEMBERS) console.log('[Members] students array length:', membersData.students?.length || 0);
+               
+               // Use the direct response if we get populated students array, but also store faculty data
+               if (Array.isArray(membersData.students) && membersData.students.length > 0) {
+                 if (DEBUG_MEMBERS) console.log('[Members] using direct students response - faculty:', membersData.faculty, 'students:', membersData.students);
+                 setMembers({ faculty: membersData.faculty || [], students: membersData.students });
+                 setMemberIdsRaw(membersData.students.map(s => String(s.userID || s.schoolID || s._id)).filter(Boolean));
+                 if (DEBUG_MEMBERS) console.log('[Members] set members - faculty count:', (membersData.faculty || []).length, 'students count:', membersData.students.length);
+                 return;
+               }
+               
+               // If we got faculty but no students, store faculty and continue to fallback for students
+               if (Array.isArray(membersData.faculty) && membersData.faculty.length > 0) {
+                 if (DEBUG_MEMBERS) console.log('[Members] got faculty data, storing for later merge with student fallback');
+                 setMembers(prev => ({ ...prev, faculty: membersData.faculty }));
+               }
+             }
           } catch (err) {
             if (DEBUG_MEMBERS) console.warn('[Members] direct members endpoint failed:', err);
           }
@@ -302,24 +391,35 @@ export default function ClassContent({ selected, isFaculty = false }) {
               if (DEBUG_MEMBERS) console.log('[Members] classes list length:', Array.isArray(classesList) ? classesList.length : 'n/a');
               
               const foundClass = classesList.find(c => String(c.classID || (c._id && (c._id.$oid || c._id))) === String(classId));
-              if (foundClass && Array.isArray(foundClass.members) && foundClass.members.length > 0) {
-                if (DEBUG_MEMBERS) console.log('[Members] found class with members:', foundClass.members);
+              if (foundClass) {
+                // Store the class section for filtering students
+                if (foundClass.section) {
+                  setClassSection(foundClass.section);
+                  if (DEBUG_MEMBERS) console.log('[Members] class section found:', foundClass.section);
+                }
                 
-                // Map the member IDs to actual student objects
-                const memberIds = foundClass.members.map(v => String(v));
-                const mappedStudents = allStudentsData.filter(s => 
-                  getCandidateIds(s).some(v => memberIds.includes(String(v)))
-                );
-                
-                if (DEBUG_MEMBERS) console.log('[Members] mapped students:', mappedStudents.length, 'from', memberIds);
-                
-                // Set the results
-                setMemberIdsRaw(memberIds);
-                setMembers({ faculty: foundClass.faculty || [], students: mappedStudents });
-                setHasMappedMembers(true);
-              } else {
-                if (DEBUG_MEMBERS) console.log('[Members] no members found in class or empty members array');
-                setMembers({ faculty: [], students: [] });
+                if (Array.isArray(foundClass.members) && foundClass.members.length > 0) {
+                  if (DEBUG_MEMBERS) console.log('[Members] found class with members:', foundClass.members);
+                  
+                  // Map the member IDs to actual student objects
+                  const memberIds = foundClass.members.map(v => String(v));
+                  const mappedStudents = allStudentsData.filter(s => 
+                    getCandidateIds(s).some(v => memberIds.includes(String(v)))
+                  );
+                  
+                  if (DEBUG_MEMBERS) console.log('[Members] mapped students:', mappedStudents.length, 'from', memberIds);
+                  
+                  // Set the results, preserving any faculty data we already have
+                  setMemberIdsRaw(memberIds);
+                  setMembers(prev => ({ 
+                    faculty: prev.faculty.length > 0 ? prev.faculty : (foundClass.faculty || []), 
+                    students: mappedStudents 
+                  }));
+                  setHasMappedMembers(true);
+                } else {
+                  if (DEBUG_MEMBERS) console.log('[Members] no members found in class or empty members array');
+                  setMembers({ faculty: [], students: [] });
+                }
               }
             }
           } catch (err) {
@@ -335,8 +435,23 @@ export default function ClassContent({ selected, isFaculty = false }) {
       };
       
       loadMembersAndStudents();
+  }
+}, [selected, classId, isFaculty]);
+
+  // Filter students by section when class section or allStudents changes
+  useEffect(() => {
+    if (classSection && allStudents.length > 0 && isFaculty) {
+      const filterStudentsBySection = async () => {
+        if (DEBUG_MEMBERS) console.log('[Members] filtering students by section:', classSection);
+        const filtered = await getStudentsInSameSection(allStudents, classSection);
+        setStudentsInSameSection(filtered);
+        if (DEBUG_MEMBERS) console.log('[Members] students in same section:', filtered.length);
+      };
+      filterStudentsBySection();
+    } else {
+      setStudentsInSameSection([]);
     }
-  }, [selected, classId, isFaculty]);
+  }, [classSection, allStudents, isFaculty]);
 
   // --- HANDLERS FOR ADDING CONTENT (Faculty only) ---
 
@@ -1382,44 +1497,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
       )}
 
       {/* --- MEMBERS TAB --- */}
-      {/* {selected === "members" && (
-        <div>
-          <h2 className="text-2xl font-bold mb-4">Members</h2>
-          {membersLoading ? (
-            <p className="text-blue-700">Loading members...</p>
-          ) : membersError ? (
-            <p className="text-red-600">{membersError}</p>
-          ) : (
-            <>
-              <h3 className="font-semibold text-blue-900 mt-2 mb-1">Faculty</h3>
-              {members.faculty.length > 0 ? (
-                <ul>
-                  {members.faculty.map(f => (
-                    <li key={f._id}>
-                      {f.firstname} {f.lastname} (Faculty)
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-700">No faculty found.</p>
-              )}
-              <h3 className="font-semibold text-blue-900 mt-4 mb-1">Students</h3>
-              {members.students.length > 0 ? (
-                <ul>
-                  {members.students.map(s => (
-                                          <li key={s.userID || s._id}>
-                        {s.firstname} {s.lastname} (Student)
-                      </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-700">No students found.</p>
-              )}
-            </>
-          )}
-        </div>
-      )} */}
-
       {selected === "members" && (
         <div>
           <h2 className="text-2xl font-bold mb-4">Members</h2>
@@ -1451,11 +1528,13 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     className="text-sm text-blue-700 underline"
                     onClick={() => {
                       setEditingMembers(true);
-                      const preset = (members.students && members.students.length > 0)
-                        ? members.students.flatMap(getCandidateIds).filter(Boolean)
-                        : memberIdsRaw;
-                      if (DEBUG_MEMBERS) console.log('[Members] edit members preset:', preset);
-                      setNewStudentIDs(preset || []);
+                      // Use current members instead of memberIdsRaw to avoid ID mismatch
+                      const currentMemberIds = members.students.map(s => {
+                        const cand = getCandidateIds(s);
+                        return cand[0]; // Get the primary ID (userID)
+                      }).filter(Boolean);
+                      if (DEBUG_MEMBERS) console.log('[Members] edit members current IDs:', currentMemberIds);
+                      setNewStudentIDs(currentMemberIds);
                     }}
                   >
                     Edit Members
@@ -1466,25 +1545,40 @@ export default function ClassContent({ selected, isFaculty = false }) {
               {editingMembers ? (
                 <div className="mt-2">
                   <label className="font-medium text-blue-800">Select Students</label>
+                  {classSection && (
+                    <div className="text-sm text-gray-600 mb-2">
+                      Only showing students from section: <span className="font-semibold">{classSection}</span>
+                    </div>
+                  )}
                   <select
                     multiple
                     className="w-full border rounded px-2 py-2 mt-1"
                     value={newStudentIDs}
                     onChange={(e) => {
                       const selectedOptions = Array.from(e.target.selectedOptions).map(opt => opt.value);
+                      if (DEBUG_MEMBERS) console.log('[Members] dropdown selection changed:', selectedOptions);
                       setNewStudentIDs(selectedOptions);
                     }}
                   >
-                    {allStudents.map(student => {
+                                      {studentsInSameSection.length > 0 ? (
+                    studentsInSameSection.map(student => {
                       const cand = getCandidateIds(student);
                       const value = cand[0]; // This will now be userID first due to getCandidateIds priority
+                      if (DEBUG_MEMBERS && student.firstname === 'Juan') {
+                        console.log('[Members] student Juan candidate IDs:', cand, 'selected value:', value);
+                      }
                       const label = `${student.firstname || ''} ${student.lastname || ''}`.trim() || (student.email || value);
                       return (
                         <option key={value} value={value}>
                           {label}
-                        </option>
+                      </option>
                       );
-                    })}
+                    })
+                  ) : classSection ? (
+                    <option disabled>No students found in section {classSection}</option>
+                  ) : (
+                    <option disabled>Loading students...</option>
+                  )}
                   </select>
 
                   <div className="flex gap-3 mt-3">
@@ -1492,6 +1586,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                       onClick={async () => {
                         const token = localStorage.getItem('token');
                         try {
+                          if (DEBUG_MEMBERS) console.log('[Members] newStudentIDs state before save:', newStudentIDs);
                           const idsToSend = newStudentIDs.map(String);
                           if (DEBUG_MEMBERS) console.log('[Members] saving member IDs:', idsToSend);
                           const res = await fetch(`${API_BASE}/classes/${classId}/members`, {
@@ -1518,11 +1613,13 @@ export default function ClassContent({ selected, isFaculty = false }) {
                               message: 'Class members updated successfully!'
                             });
                           } else {
+                            const errorData = await res.json().catch(() => ({}));
+                            console.error('[Members] Update failed:', res.status, errorData);
                             setValidationModal({
                               isOpen: true,
                               type: 'error',
                               title: 'Update Failed',
-                              message: 'Failed to update members. Please try again.'
+                              message: `Failed to update members: ${errorData.error || `HTTP ${res.status}`}`
                             });
                           }
                         } catch {

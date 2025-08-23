@@ -13,7 +13,7 @@ import ValidationModal from './ValidationModal';
 
 Modal.setAppElement('#root');
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // ===================== ChangePasswordModal =====================
 function ChangePasswordModal({ userId, onClose }) {
@@ -325,11 +325,45 @@ export default function ProfileModal({
 
   // --- Role Descriptions ---
   const roleDescriptions = {
+    // Handle both singular and plural forms
     student: "Student | (To implement soon)",
+    students: "Student | (To implement soon)",
     faculty: "Faculty | (To implement soon)",
     principal: "Dean | (To implement soon)",
     admin: "Administrator | (To implement soon)",
+    "vice president of education": "Vice President of Education | (To implement soon)",
     parent: "Parent | Guardian",
+  };
+
+  // Helper function to get role description with fallbacks
+  const getRoleDescription = (role) => {
+    console.log('ProfileModal: getRoleDescription called with role:', role);
+    
+    if (!role) {
+      console.log('ProfileModal: No role provided, returning default');
+      return "User | (To implement soon)";
+    }
+    
+    // Try exact match first
+    if (roleDescriptions[role]) {
+      console.log('ProfileModal: Exact match found:', roleDescriptions[role]);
+      return roleDescriptions[role];
+    }
+    
+    // Try case-insensitive match
+    const lowerRole = role.toLowerCase();
+    for (const [key, value] of Object.entries(roleDescriptions)) {
+      if (key.toLowerCase() === lowerRole) {
+        console.log('ProfileModal: Case-insensitive match found:', value);
+        return value;
+      }
+    }
+    
+    // Fallback: capitalize the role and add default text
+    const capitalizedRole = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+    const fallbackDescription = `${capitalizedRole} | (To implement soon)`;
+    console.log('ProfileModal: Using fallback description:', fallbackDescription);
+    return fallbackDescription;
   };
 
   // Fetch user info from backend
@@ -597,7 +631,7 @@ export default function ProfileModal({
           {/* Dynamic Info */}
           <div className="mb-5 text-center lg:text-left">
             <h2 className="text-3xl font-bold">{userInfo.firstname || 'First'} {userInfo.lastname || 'Last'}</h2>
-            <p className="text-sm text-gray-600">{roleDescriptions[userType] || "User"}</p>
+            <p className="text-sm text-gray-600">{getRoleDescription(userType)}</p>
             <div className="flex items-center gap-2 text-green-600 text-sm mt-1">
               <span className="w-2 h-2 rounded-full bg-green-500" />
               Available

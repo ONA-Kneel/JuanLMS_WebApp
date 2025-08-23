@@ -7,7 +7,7 @@ import Login from "../Login";
 import ProfileMenu from "../ProfileMenu";
 import { Link } from 'react-router-dom';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Student_Dashboard() {
   const [classes, setClasses] = useState([]);
@@ -15,6 +15,7 @@ export default function Student_Dashboard() {
   const [classProgress, setClassProgress] = useState({}); // { classID: percent }
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [debugMode, setDebugMode] = useState(false); // Temporary debug mode
 
   // Announcement modal state
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
@@ -74,28 +75,79 @@ export default function Student_Dashboard() {
     async function fetchClasses() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`${API_BASE}/classes`, {
+        
+        console.log("Student Dashboard - Current userID from localStorage:", currentUserID);
+        console.log("Student Dashboard - Current user from localStorage:", localStorage.getItem("user"));
+        
+        // Try to get userID from different sources
+        let studentId = currentUserID;
+        if (!studentId) {
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          studentId = user._id || user.userID;
+          console.log("Student Dashboard - Using userID from user object:", studentId);
+        }
+        
+        if (!studentId) {
+          console.error("Student Dashboard - No student ID found!");
+          setLoading(false);
+          return;
+        }
+        
+        // Get only this student's classes from backend
+        const res = await fetch(`${API_BASE}/classes/my-classes`, {
           headers: {
             "Authorization": `Bearer ${token}`,
           },
         });
         const data = await res.json();
         
-        // Filter classes: only show classes from current term where student is a member
-        const filtered = data.filter(cls => 
-          cls.members.includes(currentUserID) &&
-          cls.isArchived !== true &&
-          cls.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
-          cls.termName === currentTerm?.termName
-        );
+        console.log("Student Dashboard - My classes from backend:", data);
+        console.log("Student Dashboard - Current userID:", currentUserID);
+        console.log("Student Dashboard - Current user from localStorage:", localStorage.getItem("user"));
         
+        // Filter like faculty: active year/term (allow missing) and not archived
+        const requiredYear = `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`;
+        let filtered = Array.isArray(data) ? data.filter(cls => {
+          console.log(`[FILTER] Checking class: ${cls.className} (${cls.classID})`);
+          console.log(`[FILTER] Class data:`, {
+            isArchived: cls.isArchived,
+            academicYear: cls.academicYear,
+            schoolYear: cls.schoolYear,
+            schoolyear: cls.schoolyear,
+            termName: cls.termName,
+            term: cls.term,
+            termname: cls.termname,
+            members: cls.members
+          });
+          
+          if (cls.isArchived === true) {
+            console.log(`[FILTER] Skipping ${cls.className} - archived`);
+            return false;
+          }
+          const classYear = cls.academicYear || cls.schoolYear || cls.schoolyear;
+          const classTerm = cls.termName || cls.term || cls.termname;
+          const yearOk = !requiredYear || !classYear || classYear === requiredYear;
+          const termOk = !currentTerm?.termName || !classTerm || classTerm === currentTerm.termName;
+          
+          console.log(`[FILTER] Year check: ${classYear} === ${requiredYear} = ${yearOk}`);
+          console.log(`[FILTER] Term check: ${classTerm} === ${currentTerm?.termName} = ${termOk}`);
+          
+          const result = yearOk && termOk;
+          console.log(`[FILTER] ${cls.className} included: ${result}`);
+          return result;
+        }) : [];
+        
+        console.log("Student Dashboard - Filtered classes (my-classes):", filtered);
         setClasses(filtered);
 
         // --- Fetch progress for each class ---
         const progressMap = {};
         for (const cls of filtered) {
+          const classId = cls.classID; // lessons and members use classID, not _id
+          console.log("Student Dashboard - Fetching lessons for class:", classId);
+          
           // Fetch lessons for this class
-          const lessonRes = await fetch(`${API_BASE}/lessons?classID=${cls.classID}`, {
+          const lessonRes = await fetch(`${API_BASE}/lessons?classID=${classId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const lessons = await lessonRes.json();
@@ -124,7 +176,7 @@ export default function Student_Dashboard() {
           if (totalPages > 0) {
             percent = Math.round((totalRead / totalPages) * 100);
           }
-          progressMap[cls.classID] = percent;
+          progressMap[classId] = percent;
         }
         setClassProgress(progressMap);
       } catch (err) {
@@ -138,7 +190,7 @@ export default function Student_Dashboard() {
     if (academicYear && currentTerm) {
       fetchClasses();
     }
-  }, [currentUserID, academicYear, currentTerm]);
+  }, [currentUserID, academicYear, currentTerm, debugMode]);
 
   // Fetch active general announcements for students and show the latest in a modal
   useEffect(() => {
@@ -211,16 +263,39 @@ export default function Student_Dashboard() {
               })}
             </p>
           </div>
+          <div className="flex items-center gap-4">
+            {/* Debug mode toggle */}
+            <button
+              onClick={() => setDebugMode(!debugMode)}
+              className={`px-3 py-2 text-sm rounded ${
+                debugMode 
+                  ? 'bg-red-600 text-white hover:bg-red-700' 
+                  : 'bg-gray-600 text-white hover:bg-gray-700'
+              }`}
+            >
+              {debugMode ? 'Debug ON' : 'Debug OFF'}
+            </button>
           <ProfileMenu />
+          </div>
         </div>
 
         {/* Recent Classes Section */}
-        <h3 className="text-lg md:text-4xl font-bold mb-3">Recent Classes</h3>
+        <h3 className="text-lg md:text-4xl font-bold mb-3">
+          Recent Classes
+          {debugMode && <span className="text-sm text-red-600 ml-2">(Debug Mode - Showing All Classes)</span>}
+        </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {loading ? (
             <p>Loading...</p>
           ) : classes.length === 0 ? (
-            <p>No classes found.</p>
+            <div className="col-span-full text-center">
+              <p className="text-gray-500 mb-2">No classes found.</p>
+              {debugMode && (
+                <p className="text-sm text-gray-400">
+                  Debug: Check console for detailed filtering information
+                </p>
+              )}
+            </div>
           ) : (
             classes.map(cls => (
               <div
@@ -245,8 +320,8 @@ export default function Student_Dashboard() {
                 {/* Info section */}
                 <div className="flex items-center justify-between bg-[#00418b] px-6 py-4" style={{ borderRadius: 0, borderBottomLeftRadius: '28px', borderBottomRightRadius: '28px', marginTop: 0 }}>
                   <div>
-                    <div className="text-lg font-bold text-white">{cls.className || 'Subject Name'}</div>
-                    <div className="text-white text-base">{cls.section || cls.classCode || 'Section Name'}</div>
+                    <div className="text-lg font-bold text-white">{cls.subjectName || cls.className || 'Subject Name'}</div>
+                    <div className="text-white text-base">{cls.sectionName || cls.section || cls.classCode || 'Section Name'}</div>
                   </div>
                   <img src={arrowRight} alt="Arrow" className="w-6 h-6" />
                 </div>

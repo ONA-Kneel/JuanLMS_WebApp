@@ -251,6 +251,13 @@ export default function FacultyCreateClass() {
       return;
     }
 
+    // Don't search if no section is selected
+    if (!selectedSection) {
+      setError("Please select a section first");
+      setStudents([]);
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE}/users/search?q=${query}`, {
@@ -274,14 +281,29 @@ export default function FacultyCreateClass() {
         setStudents([]);
         return;
       }
+      
+      // Filter students by role and section assignment
       const filteredStudents = data
         .filter(student => student.role === 'students')
         .filter(student => !selectedStudents.some(sel => sel._id === student._id));
 
-      if (filteredStudents.length === 0) {
-        setError("No student found");
+      // Now filter by section assignment - only show students assigned to the selected section
+      const sectionFilteredStudents = [];
+      for (const student of filteredStudents) {
+        try {
+          const isAssigned = await isStudentAssignedToSection(student._id);
+          if (isAssigned) {
+            sectionFilteredStudents.push(student);
+          }
+        } catch (err) {
+          console.warn(`Failed to check section assignment for student ${student._id}:`, err);
+        }
+      }
+
+      if (sectionFilteredStudents.length === 0) {
+        setError("No students found in the selected section");
       } else {
-        setStudents(filteredStudents);
+        setStudents(sectionFilteredStudents);
         setError("");
       }
     } catch {
@@ -343,10 +365,19 @@ export default function FacultyCreateClass() {
       console.log('[CreateClass] Creating class with section:', selectedSection, '-> classCode:', autoClassCode);
     }
     
-    // Send userID to backend (backend expects userID, not Mongo _id)
-    const members = selectedStudents.map(s => s.userID || s.schoolID || s._id).filter(Boolean);
+    // Send ObjectId to backend (backend expects ObjectId, not schoolID)
+    const members = selectedStudents.map(s => s._id).filter(Boolean);
     const facultyID = localStorage.getItem("userID"); // get the faculty's userID
     const token = localStorage.getItem("token"); // or whatever you use for auth
+    
+    // Debug: Log the faculty ID being sent
+    console.log('[CreateClass] Faculty ID being sent:', facultyID);
+    console.log('[CreateClass] Faculty ID type:', typeof facultyID);
+    
+    // Faculty is handled separately via facultyID field - don't add to members array
+    // The members array should only contain students
+    console.log('[CreateClass] Faculty ID (separate field):', facultyID);
+    console.log('[CreateClass] Student members only:', members);
 
     // Use dropdown values for className and classCode
     if (!selectedSubject || !selectedSection || !classDesc.trim() || members.length === 0) {
@@ -366,12 +397,14 @@ export default function FacultyCreateClass() {
     formData.append('classDesc', classDesc.trim());
     formData.append('members', JSON.stringify(members));
     formData.append('facultyID', facultyID);
+    formData.append('section', selectedSection); // Add the section field
     if (classImage) {
       formData.append('image', classImage);
     }
 
     try {
       console.log('[CreateClass] submitting class create with members:', members);
+      console.log('[CreateClass] submitting class create with section:', selectedSection);
       const res = await fetch(`${API_BASE}/classes`, {
         method: "POST",
         headers: {
@@ -457,6 +490,13 @@ export default function FacultyCreateClass() {
     setBatchMessage('');
     const file = e.target.files[0];
     if (!file) {
+      setBatchLoading(false);
+      return;
+    }
+
+    // Check if section is selected
+    if (!selectedSection) {
+      setBatchMessage('Please select a section first before uploading students');
       setBatchLoading(false);
       return;
     }
@@ -660,13 +700,19 @@ export default function FacultyCreateClass() {
 
             {/* Manual Student Name Input - styled */}
             <label className="block text-gray-700 text-sm font-semibold mb-1 mt-2">Student Name</label>
-            <input
-              type="text"
-              placeholder="Search Student..."
-              className="w-full px-3 py-2 rounded border border-gray-300 bg-gray-50 text-base focus:outline-none focus:ring-2 focus:ring-[#00418b] mb-4"
-              value={studentName}
-              onChange={handleSearch}
-            />
+            {!selectedSection ? (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-sm">
+                ⚠️ Please select a section first to search for students
+              </div>
+            ) : (
+              <input
+                type="text"
+                placeholder="Search Student..."
+                className="w-full px-3 py-2 rounded border border-gray-300 bg-gray-50 text-base focus:outline-none focus:ring-2 focus:ring-[#00418b] mb-4"
+                value={studentName}
+                onChange={handleSearch}
+              />
+            )}
 
               <div className="mt-4 w-1/2">
                 {error && <p className="text-red-500">{error}</p>}

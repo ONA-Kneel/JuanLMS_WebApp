@@ -41,33 +41,6 @@ export default function Registration() {
     } else if (name === 'firstName' || name === 'middleName' || name === 'lastName') {
       // Only allow letters, spaces, apostrophes, hyphens
       newValue = value.replace(/[^A-Za-z\s'-]/g, '');
-    } else if (name === 'schoolID') {
-      // Only allow numbers and hyphen, format: YY-00000
-      // Remove any characters that aren't numbers or hyphen
-      newValue = value.replace(/[^0-9-]/g, '');
-      
-      // Ensure only one hyphen
-      const hyphenCount = (newValue.match(/-/g) || []).length;
-      if (hyphenCount > 1) {
-        newValue = newValue.replace(/-/g, (match, index) => 
-          index === newValue.indexOf('-') ? '-' : ''
-        );
-      }
-      
-      // Limit total length to 8 characters (YY-00000)
-      if (newValue.length > 8) {
-        newValue = newValue.slice(0, 8);
-      }
-      
-      // Ensure hyphen is in the correct position (after 2 digits)
-      if (newValue.length >= 3 && !newValue.includes('-')) {
-        newValue = newValue.slice(0, 2) + '-' + newValue.slice(2);
-      }
-      
-      // If user types more than 2 digits before hyphen, move hyphen to correct position
-      if (newValue.length > 2 && !newValue.includes('-')) {
-        newValue = newValue.slice(0, 2) + '-' + newValue.slice(2);
-      }
     }
     setForm({ ...form, [name]: newValue });
   };
@@ -79,42 +52,6 @@ export default function Registration() {
   function isValidSchoolId(schoolID) {
     return /^\d{2}-\d{5}$/.test(schoolID); // Student Number YY-00000
   }
-
-  // Check for duplicate personal email, contact number, and school ID
-  const checkForDuplicates = async (personalEmail, contactNo, schoolID) => {
-    try {
-      // Use the same endpoint as Admin_Accounts to get all active users
-      const res = await fetch(`${API_BASE}/users?page=1&limit=1000`);
-      if (res.ok) {
-        const data = await res.json();
-        const users = data.users || [];
-        
-        // Check for duplicate personal email (case-insensitive)
-        const duplicateEmail = users.find(user => 
-          user.personalemail && 
-          user.personalemail.toLowerCase() === personalEmail.toLowerCase()
-        );
-        
-        // Check for duplicate contact number
-        const duplicateContact = users.find(user => 
-          user.contactNo && 
-          user.contactNo === contactNo
-        );
-        
-        // Check for duplicate school ID
-        const duplicateSchoolID = users.find(user => 
-          user.schoolID && 
-          user.schoolID === schoolID
-        );
-        
-        return { duplicateEmail, duplicateContact, duplicateSchoolID };
-      }
-      return { duplicateEmail: null, duplicateContact: null, duplicateSchoolID: null };
-    } catch (err) {
-      console.error("Error checking for duplicates:", err);
-      return { duplicateEmail: null, duplicateContact: null, duplicateSchoolID: null };
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -175,46 +112,6 @@ export default function Registration() {
         type: 'warning',
         title: 'Invalid Email',
         message: 'Please enter a valid email address (e.g., username@gmail.com).'
-      });
-      setLoading(false);
-      return;
-    }
-    
-    // Check for duplicates before proceeding with registration
-    const { duplicateEmail, duplicateContact, duplicateSchoolID } = await checkForDuplicates(
-      form.personalEmail, 
-      form.contactNo, 
-      form.schoolID
-    );
-    
-    if (duplicateEmail) {
-      setValidationModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Email Already Exists',
-        message: `The personal email "${form.personalEmail}" is already registered in the system. Please use a different email address.`
-      });
-      setLoading(false);
-      return;
-    }
-    
-    if (duplicateContact) {
-      setValidationModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Contact Number Already Exists',
-        message: `The contact number "${form.contactNo}" is already registered in the system. Please use a different contact number.`
-      });
-      setLoading(false);
-      return;
-    }
-    
-    if (duplicateSchoolID) {
-      setValidationModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Student Number Already Exists',
-        message: `The student number "${form.schoolID}" is already registered in the system. Please use a different student number.`
       });
       setLoading(false);
       return;
@@ -355,7 +252,6 @@ export default function Registration() {
               type="text"
               name="schoolID"
               required
-              maxLength={8}
               className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900"
               value={form.schoolID}
               onChange={handleChange}

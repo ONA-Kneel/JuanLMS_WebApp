@@ -166,6 +166,25 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
       image: imagePath 
     };
     
+    console.log('[CREATE-CLASS] Creating class with data:', {
+      classID,
+      className,
+      classCode,
+      members: membersArr,
+      facultyID,
+      section
+    });
+    
+    // Convert facultyID to ObjectId if it's not already
+    if (facultyID && typeof facultyID === 'string' && !facultyID.match(/^[0-9a-fA-F]{24}$/)) {
+      // It's not an ObjectId, try to find the faculty by userID
+      const faculty = await User.findOne({ userID: facultyID });
+      if (faculty) {
+        classData.facultyID = faculty._id;
+        console.log('[CREATE-CLASS] Converted facultyID from userID to ObjectId:', facultyID, '->', faculty._id);
+      }
+    }
+    
     if (academicYear && currentTerm) {
       classData.academicYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
       classData.termName = currentTerm.termName;
@@ -177,6 +196,12 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     
     const newClass = new Class(classData);
     await newClass.save();
+    
+    console.log('[CREATE-CLASS] Class created successfully:', {
+      classID: newClass.classID,
+      members: newClass.members,
+      facultyID: newClass.facultyID
+    });
     
     // Create audit log for class creation
     const db = database.getDb();
@@ -230,11 +255,33 @@ router.get('/:classID/members', async (req, res) => {
     // Find the class by classID
     const classDoc = await db.collection('Classes').findOne({ classID });
     if (!classDoc) return res.status(404).json({ error: 'Class not found' });
+    
+    console.log(`[GET-MEMBERS] Class ${classID} members:`, classDoc.members);
+    
     // Use Mongoose User model to fetch and decrypt users
-    const faculty = await User.find({ userID: classDoc.facultyID, isArchived: { $ne: true } });
-    const students = classDoc.members && classDoc.members.length > 0
-      ? await User.find({ userID: { $in: classDoc.members }, isArchived: { $ne: true } })
-      : [];
+    const faculty = await User.find({ 
+      $or: [
+        { _id: classDoc.facultyID }, // ObjectId
+        { userID: classDoc.facultyID } // userID fallback
+      ],
+      isArchived: { $ne: true } 
+    });
+    
+    // Handle both ObjectId and userID in members array
+    let students = [];
+    if (classDoc.members && classDoc.members.length > 0) {
+      // Try to find students by ObjectId first, then fallback to userID
+      students = await User.find({ 
+        $or: [
+          { _id: { $in: classDoc.members } }, // ObjectId
+          { userID: { $in: classDoc.members } } // userID fallback
+        ],
+        isArchived: { $ne: true } 
+      });
+      
+      console.log(`[GET-MEMBERS] Found ${students.length} students for class ${classID}`);
+    }
+    
     // Decrypt fields
     const decryptedFaculty = faculty.map(user => ({
       ...user.toObject(),
@@ -277,7 +324,7 @@ router.post('/:classID/members/students', authenticateToken, async (req, res) =>
 
     const updatedClass = await Class.findOneAndUpdate(
       { classID },
-      { $addToSet: { members: student.userID } }, // prevent duplicates
+      { $addToSet: { members: student._id } }, // Use ObjectId instead of userID
       { new: true }
     );
 
@@ -294,9 +341,21 @@ router.delete('/:classID/members/students/:studentID', authenticateToken, async 
   try {
     const { classID, studentID } = req.params;
 
+    // Try to find the student to get their ObjectId
+    const student = await User.findOne({ 
+      $or: [
+        { _id: studentID },
+        { userID: studentID }
+      ]
+    });
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
     const updatedClass = await Class.findOneAndUpdate(
       { classID },
-      { $pull: { members: studentID } },
+      { $pull: { members: student._id } }, // Use ObjectId
       { new: true }
     );
 
@@ -321,7 +380,7 @@ router.post('/:classID/members/faculty', authenticateToken, async (req, res) => 
 
     const updatedClass = await Class.findOneAndUpdate(
       { classID },
-      { facultyID: faculty.userID },
+      { facultyID: faculty._id }, // Use ObjectId instead of userID
       { new: true }
     );
 
@@ -338,8 +397,20 @@ router.delete('/:classID/members/faculty/:facultyID', authenticateToken, async (
   try {
     const { classID, facultyID } = req.params;
 
+    // Try to find the faculty to get their ObjectId
+    const faculty = await User.findOne({ 
+      $or: [
+        { _id: facultyID },
+        { userID: facultyID }
+      ]
+    });
+
+    if (!faculty) {
+      return res.status(404).json({ error: 'Faculty not found' });
+    }
+
     const updatedClass = await Class.findOneAndUpdate(
-      { classID, facultyID },
+      { classID, facultyID: faculty._id }, // Use ObjectId
       { $unset: { facultyID: "" } },
       { new: true }
     );
@@ -353,22 +424,90 @@ router.delete('/:classID/members/faculty/:facultyID', authenticateToken, async (
   }
 });
 
+// Bulk update class members (PATCH)
+router.patch('/:classID/members', authenticateToken, async (req, res) => {
+  try {
+    const { classID } = req.params;
+    const { members } = req.body;
+
+    if (!Array.isArray(members)) {
+      return res.status(400).json({ error: 'Members must be an array' });
+    }
+
+    console.log(`[PATCH-MEMBERS] Updating class ${classID} with members:`, members);
+
+    const updatedClass = await Class.findOneAndUpdate(
+      { classID },
+      { members: members },
+      { new: true }
+    );
+
+    if (!updatedClass) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+
+    console.log(`[PATCH-MEMBERS] Successfully updated class ${classID} with ${members.length} members`);
+
+    // Return the updated class with members
+    res.json(updatedClass);
+  } catch (err) {
+    console.error('[PATCH-MEMBERS] Error:', err);
+    res.status(500).json({ error: 'Failed to update class members' });
+  }
+});
+
 
 // Get all classes for the logged-in user (student or faculty)
 router.get('/my-classes', authenticateToken, async (req, res) => {
   try {
     const userID = req.user.userID;
+    console.log(`[MY-CLASSES] User ID: ${userID}, Role: ${req.user.role}`);
+    
     let classes = [];
     if (req.user.role === 'faculty') {
       // Faculty: classes where facultyID matches
-      classes = await Class.find({ facultyID: userID });
+      const facultyObjectId = req.user._id;
+      console.log(`[MY-CLASSES] Faculty ObjectId: ${facultyObjectId}`);
+      
+      // Find classes where facultyID matches ObjectId or userID
+      classes = await Class.find({ 
+        $or: [
+          { facultyID: facultyObjectId }, // ObjectId
+          { facultyID: userID } // userID fallback
+        ]
+      });
+      console.log(`[MY-CLASSES] Found ${classes.length} classes as faculty`);
     } else if (req.user.role === 'students') {
-      // Student: classes where members includes userID
-      classes = await Class.find({ members: userID });
+      // Student: classes where members includes the student's ObjectId
+      const studentObjectId = req.user._id;
+      console.log(`[MY-CLASSES] Student ObjectId: ${studentObjectId}`);
+      
+      // Find classes where the student's ObjectId is in the members array
+      classes = await Class.find({ members: studentObjectId });
+      
+      console.log(`[MY-CLASSES] Found ${classes.length} classes as student`);
+      console.log(`[MY-CLASSES] Classes found:`, classes.map(c => ({ 
+        classID: c.classID, 
+        className: c.className, 
+        members: c.members,
+        facultyID: c.facultyID 
+      })));
+      
     } else {
       // Other roles: return both sets (union, no duplicates)
-      const asFaculty = await Class.find({ facultyID: userID });
-      const asMember = await Class.find({ members: userID });
+      const userObjectId = req.user._id;
+      const asFaculty = await Class.find({ 
+        $or: [
+          { facultyID: userObjectId }, // ObjectId
+          { facultyID: userID } // userID fallback
+        ]
+      });
+      const asMember = await Class.find({ 
+        $or: [
+          { members: userObjectId }, // ObjectId
+          { members: userID } // userID fallback
+        ]
+      });
       const all = [...asFaculty, ...asMember];
       // Remove duplicates by classID
       const seen = new Set();
@@ -380,6 +519,7 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
     }
     res.json(classes);
   } catch (err) {
+    console.error('[MY-CLASSES] Error:', err);
     res.status(500).json({ error: 'Failed to fetch classes.' });
   }
 });

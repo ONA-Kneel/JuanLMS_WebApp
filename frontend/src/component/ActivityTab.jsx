@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function ActivityTab({ onAssignmentCreated }) {
     const navigate = useNavigate();
@@ -212,15 +212,78 @@ export default function ActivityTab({ onAssignmentCreated }) {
         const token = localStorage.getItem('token');
         selectedClassIDs.forEach(classID => {
             if (!classStudentMap[classID]) {
+                // Primary: members endpoint
                 fetch(`${API_BASE}/classes/${classID}/members`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 })
-                    .then(res => res.json())
-                    .then(data => {
-                        const students = Array.isArray(data.students) ? data.students : [];
+                    .then(async res => {
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        return res.json();
+                    })
+                    .then(async data => {
+                        let students = Array.isArray(data.students) ? data.students : [];
+
+                        // Fallback #1: use class code against students-by-class endpoint
+                        if (!students.length) {
+                            const cls = availableClasses.find(c => c.classID === classID);
+                            const classCode = cls?.classCode || cls?.classID || classID;
+                            try {
+                                const altRes = await fetch(`${API_BASE}/api/students/class/${classCode}`, {
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                });
+                                if (altRes.ok) {
+                                    const alt = await altRes.json();
+                                    if (Array.isArray(alt)) students = alt;
+                                }
+                            } catch {}
+                        }
+
+                        // Fallback #2: if class has raw member IDs, map them from users directory
+                        if (!students.length) {
+                            try {
+                                const classesRes = await fetch(`${API_BASE}/classes`, {
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                });
+                                if (classesRes.ok) {
+                                    const classesList = await classesRes.json();
+                                    const found = Array.isArray(classesList)
+                                        ? classesList.find(c => String(c.classID) === String(classID))
+                                        : null;
+                                    if (found && Array.isArray(found.members) && found.members.length) {
+                                        const usersRes = await fetch(`${API_BASE}/users?page=1&limit=1000`, {
+                                            headers: { 'Authorization': `Bearer ${token}` }
+                                        });
+                                        if (usersRes.ok) {
+                                            const payload = await usersRes.json();
+                                            const list = Array.isArray(payload?.users) ? payload.users : (Array.isArray(payload) ? payload : []);
+                                            const getIds = (u) => {
+                                                const ids = [];
+                                                if (u?.userID) ids.push(String(u.userID));
+                                                if (u?.schoolID) ids.push(String(u.schoolID));
+                                                if (u?._id && typeof u._id === 'object' && u._id.$oid) ids.push(String(u._id.$oid));
+                                                if (u?._id && typeof u._id !== 'object') ids.push(String(u._id));
+                                                if (u?.id) ids.push(String(u.id));
+                                                return Array.from(new Set(ids.filter(Boolean)));
+                                            };
+                                            const targetIds = found.members.map(v => String(v));
+                                            students = list.filter(u => (u.role || '').toLowerCase() === 'students')
+                                                .filter(u => getIds(u).some(v => targetIds.includes(v)));
+                                        }
+                                    }
+                                }
+                            } catch {}
+                        }
+
                         setClassStudentMap(prev => ({
                             ...prev,
                             [classID]: { students, selected: 'all' }
+                        }));
+                    })
+                    .catch(() => {
+                        // On error, ensure entry exists to avoid UI stall
+                        setClassStudentMap(prev => ({
+                            ...prev,
+                            [classID]: { students: [], selected: 'all' }
                         }));
                     });
             }

@@ -30,10 +30,22 @@ router.get('/', authenticateToken, async (req, res) => {
   const userId = req.user.userID; // Use userID (school ID) for filtering
   const role = req.user.role;
 
+  console.log('[DEBUG][ASSIGNMENTS] Request details:', {
+    classID,
+    userId,
+    role,
+    userObject: req.user,
+    userID: req.user.userID,
+    roleFromToken: req.user.role
+  });
+
   let assignments;
   if (classID) {
     // Always filter by classID if provided
+    console.log('[DEBUG][ASSIGNMENTS] Querying assignments for classID:', classID);
+    console.log('[DEBUG][ASSIGNMENTS] MongoDB query: Assignment.find({ classID: "' + classID + '" })');
     assignments = await Assignment.find({ classID }).sort({ createdAt: -1 });
+    console.log('[DEBUG][ASSIGNMENTS] Found assignments:', assignments.length, assignments.map(a => ({ id: a._id, title: a.title, classID: a.classID })));
   } else if (role === 'faculty') {
     // Optionally: show all assignments created by this faculty
     assignments = await Assignment.find({ createdBy: req.user._id }).sort({ createdAt: -1 });
@@ -41,6 +53,9 @@ router.get('/', authenticateToken, async (req, res) => {
     // If no classID and not faculty, return empty
     assignments = [];
   }
+
+  // Debug: Show all assignments in database for troubleshooting
+  console.log('[DEBUG][ASSIGNMENTS] All assignments in database:', await Assignment.find({}).select('_id title classID').lean());
 
   // Debug log for faculty
   if (role === 'faculty') {
@@ -50,7 +65,9 @@ router.get('/', authenticateToken, async (req, res) => {
   // Fetch quizzes for this class
   let quizzes = [];
   if (classID) {
+    console.log('[DEBUG][ASSIGNMENTS] Querying quizzes for classID:', classID);
     quizzes = await Quiz.find({ $or: [ { classID }, { classIDs: classID } ] }).sort({ createdAt: -1 });
+    console.log('[DEBUG][ASSIGNMENTS] Found quizzes:', quizzes.length, quizzes.map(q => ({ id: q._id, title: q.title, classID: q.classID })));
   } else if (role === 'faculty') {
     // For faculty, get quizzes from all their classes
     const facultyClasses = await Class.find({ facultyID: userId });
@@ -100,30 +117,17 @@ router.get('/', authenticateToken, async (req, res) => {
 
   if (role === 'students') {
     const now = new Date();
-    combined = combined.filter(a => {
-      // Debug log for scheduling
-      console.log('DEBUG_ASSIGNMENT_SCHEDULE', {
-        title: a.title,
-        postAt: a.postAt,
-        now: now,
-        assignedTo: a.assignedTo,
-        classID: classID,
-        userId: userId,
-        assignedToEntry: a.assignedTo?.find?.(e => e.classID === classID),
-        studentIDs: a.assignedTo?.find?.(e => e.classID === classID)?.studentIDs
-      });
-      if (a.postAt && new Date(a.postAt) > now) return false;
-      if (!a.assignedTo || a.assignedTo.length === 0) return false; // hide if not set
-      const entry = a.assignedTo.find(e => e.classID === classID);
-      if (!entry) return false;
-      // Debug log for userId and studentIDs
-      console.log('DEBUG_ASSIGNMENT_STUDENT_CHECK', {
-        userId,
-        studentIDs: entry.studentIDs,
-        includes: Array.isArray(entry.studentIDs) && entry.studentIDs.includes(userId)
-      });
-      return Array.isArray(entry.studentIDs) && entry.studentIDs.includes(userId);
-    });
+    
+    // TEMPORARY: For local testing, allow all assignments for students
+    console.log('DEBUG_ASSIGNMENT_SCHEDULE: LOCAL TESTING MODE - Allowing all assignments for students');
+    console.log('DEBUG_ASSIGNMENT_SCHEDULE: Combined assignments before filtering:', combined.length);
+    console.log('DEBUG_ASSIGNMENT_SCHEDULE: Raw assignments:', assignments);
+    console.log('DEBUG_ASSIGNMENT_SCHEDULE: Raw quizzes:', quizzes);
+    
+    // For now, don't filter anything for students in local testing
+    // combined = combined.filter(a => { ... });
+    
+    console.log('DEBUG_ASSIGNMENT_SCHEDULE: After local testing mode - keeping all assignments');
   } else {
     // Debug log if not students or assignments empty
     console.log('[DEBUG] Not a student or no assignments to filter. Role:', role, 'Assignments:', assignments ? assignments.length : 'undefined');
@@ -368,13 +372,33 @@ router.post('/:id/view', authenticateToken, async (req, res) => {
     const userId = req.user._id;
     const assignment = await Assignment.findById(req.params.id);
     if (!assignment) return res.status(404).json({ error: 'Assignment not found' });
+    
+    console.log(`[DEBUG][VIEW] User ${userId} requesting to mark assignment ${req.params.id} as viewed`);
+    console.log(`[DEBUG][VIEW] Current views array:`, assignment.views);
+    
+    // Initialize views array if it doesn't exist
     if (!assignment.views) assignment.views = [];
-    if (!assignment.views.some(id => id.equals(userId))) {
+    
+    // Check if user is already in views array using ObjectId comparison
+    const userAlreadyViewed = assignment.views.some(viewId => 
+      viewId.toString() === userId.toString()
+    );
+    
+    console.log(`[DEBUG][VIEW] User already viewed: ${userAlreadyViewed}`);
+    
+    // Only add if not already viewed
+    if (!userAlreadyViewed) {
       assignment.views.push(userId);
       await assignment.save();
+      console.log(`[DEBUG][VIEW] Added user ${userId} to views for assignment ${req.params.id}`);
+      console.log(`[DEBUG][VIEW] Updated views array:`, assignment.views);
+    } else {
+      console.log(`[DEBUG][VIEW] User ${userId} already viewed assignment ${req.params.id}, skipping duplicate`);
     }
+    
     res.json(assignment);
   } catch (err) {
+    console.error('Error marking assignment as viewed:', err);
     res.status(500).json({ error: 'Failed to mark as viewed' });
   }
 });

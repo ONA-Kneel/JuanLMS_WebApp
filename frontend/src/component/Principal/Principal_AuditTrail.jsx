@@ -3,8 +3,7 @@ import Principal_Navbar from "./Principal_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
-
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Principal_AuditTrail() {
   const [auditLogs, setAuditLogs] = useState([]);

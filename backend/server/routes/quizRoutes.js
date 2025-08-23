@@ -99,9 +99,13 @@ router.get('/', authenticateToken, async (req, res) => {
     const userId = req.user.userID;
     const role = req.user.role;
     
+    console.log('[QuizRoutes] GET / - Role:', role, 'UserID:', userId, 'ClassID:', classID);
+    console.log('[QuizRoutes] Full user object:', req.user);
+    
     let quizzes;
     if (classID) {
       quizzes = await Quiz.find({ 'assignedTo.classID': classID });
+      console.log('[QuizRoutes] Found quizzes for classID:', classID, 'Count:', quizzes.length);
     } else if (role === 'faculty') {
       // For faculty, get quizzes from all their classes
       const facultyClasses = await Class.find({ facultyID: userId });
@@ -112,8 +116,15 @@ router.get('/', authenticateToken, async (req, res) => {
           { 'assignedTo.classID': { $in: classIDs } } 
         ] 
       });
+      console.log('[QuizRoutes] Found quizzes for faculty classes:', classIDs, 'Count:', quizzes.length);
     } else {
-      quizzes = [];
+      // For students, get all quizzes for local testing
+      if (role === 'students') {
+        console.log('[QuizRoutes] LOCAL TESTING MODE - Getting all quizzes for students');
+        quizzes = await Quiz.find({});
+      } else {
+        quizzes = [];
+      }
     }
     
     // Get class information for all unique classIDs

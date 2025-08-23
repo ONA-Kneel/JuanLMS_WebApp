@@ -92,6 +92,33 @@ export default function ProfileMenu() {
     }
   };
 
+  // Helper to get the correct user role with fallbacks
+  const getUserRole = () => {
+    // First try to get role from userInfo (backend data)
+    if (userInfo.role) {
+      console.log('ProfileMenu: Role from userInfo:', userInfo.role);
+      return userInfo.role;
+    }
+    
+    // Fallback to localStorage user data
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (user.role) {
+      console.log('ProfileMenu: Role from localStorage user:', user.role);
+      return user.role;
+    }
+    
+    // Final fallback to localStorage role
+    const role = localStorage.getItem('role');
+    if (role) {
+      console.log('ProfileMenu: Role from localStorage role:', role);
+      return role;
+    }
+    
+    // Default fallback
+    console.log('ProfileMenu: No role found, using default: user');
+    return 'user';
+  };
+
   useEffect(() => {
     fetchUserInfo();
   }, []);
@@ -147,7 +174,7 @@ export default function ProfileMenu() {
               openCropModal={() => setModalIsOpen(true)}
               closeCropModal={() => setModalIsOpen(false)}
               onCrop={() => fetchUserInfo()}
-              userType={userInfo.role}
+              userType={getUserRole()}
             />
           )}
         </div>
