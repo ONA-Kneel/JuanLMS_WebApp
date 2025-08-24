@@ -26,17 +26,57 @@ router.post('/register', async (req, res) => {
     if (!/^\d{11}$/.test(contactNo)) {
       return res.status(400).json({ message: 'Contact number must be exactly 11 digits and contain only numbers.' });
     }
-    // Check for duplicate personalEmail
-    const existing = await Registrant.findOne({ personalEmail });
-    if (existing) {
-      return res.status(409).json({ message: 'A registration with this email already exists.' });
+    
+    // Check for existing registrant with same email
+    const existingRegistrant = await Registrant.findOne({ personalEmail });
+    
+    if (existingRegistrant) {
+      // If registrant exists and was rejected, allow re-registration by updating the existing record
+      if (existingRegistrant.status === 'rejected') {
+        // Update the existing rejected registrant with new information
+        existingRegistrant.firstName = firstName;
+        existingRegistrant.middleName = middleName;
+        existingRegistrant.lastName = lastName;
+        existingRegistrant.contactNo = contactNo;
+        existingRegistrant.schoolID = schoolID;
+        existingRegistrant.status = 'pending'; // Reset to pending for admin review
+        existingRegistrant.registrationDate = new Date(); // Update registration date
+        existingRegistrant.rejectionNote = ''; // Clear previous rejection note
+        existingRegistrant.processedAt = null; // Clear processing info
+        existingRegistrant.processedBy = null; // Clear who processed it
+        
+        // Keep rejection history for admin reference
+        // rejectionHistory array is preserved
+        
+        await existingRegistrant.save();
+        
+        return res.status(200).json({ 
+          message: 'Re-registration successful. Your application has been updated and is pending review.',
+          isReRegistration: true
+        });
+      } else if (existingRegistrant.status === 'pending') {
+        return res.status(409).json({ message: 'A registration with this email is already pending review.' });
+      } else if (existingRegistrant.status === 'approved') {
+        return res.status(409).json({ message: 'A registration with this email has already been approved.' });
+      }
     }
-    // Check for duplicate schoolID in Registrant or User
-    const existingSchoolIdRegistrant = await Registrant.findOne({ schoolID });
+    
+    // Check for duplicate schoolID in User model (approved accounts)
     const existingSchoolIdUser = await User.findOne({ schoolID });
-    if (existingSchoolIdRegistrant || existingSchoolIdUser) {
-      return res.status(409).json({ message: 'A registration or account with this School ID already exists.' });
+    if (existingSchoolIdUser) {
+      return res.status(409).json({ message: 'An account with this School ID already exists.' });
     }
+    
+    // Check for duplicate schoolID in other pending registrants
+    const existingSchoolIdRegistrant = await Registrant.findOne({ 
+      schoolID, 
+      status: { $in: ['pending', 'approved'] } 
+    });
+    if (existingSchoolIdRegistrant) {
+      return res.status(409).json({ message: 'A registration with this School ID is already in progress or approved.' });
+    }
+    
+    // Create new registrant
     const registrant = new Registrant({
       firstName,
       middleName,
@@ -152,10 +192,25 @@ router.post('/:id/reject', authenticateToken, async (req, res) => {
     const registrant = await Registrant.findById(req.params.id);
     if (!registrant) return res.status(404).json({ message: 'Registrant not found' });
     if (registrant.status !== 'pending') return res.status(400).json({ message: 'Already processed' });
+    
+    // Add to rejection history
+    const rejectionEntry = {
+      date: new Date(),
+      note: note || 'Application requirements not met',
+      processedBy: req.body.adminId || null
+    };
+    
+    // Initialize rejectionHistory array if it doesn't exist
+    if (!registrant.rejectionHistory) {
+      registrant.rejectionHistory = [];
+    }
+    
+    registrant.rejectionHistory.push(rejectionEntry);
     registrant.status = 'rejected';
     registrant.rejectionNote = note || 'Application requirements not met';
     registrant.processedAt = new Date();
     registrant.processedBy = req.body.adminId || null;
+    
     await registrant.save();
     
     // Send rejection email via Brevo (only if email is configured)

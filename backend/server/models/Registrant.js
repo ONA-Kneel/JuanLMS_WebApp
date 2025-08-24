@@ -21,6 +21,11 @@ const registrantSchema = new mongoose.Schema({
   processedBy:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   processedAt:    { type: Date },
   rejectionNote:  { type: String },
+  rejectionHistory: [{
+    date: { type: Date, default: Date.now },
+    note: { type: String, required: true },
+    processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  }]
 });
 
 export default mongoose.model("Registrant", registrantSchema, "Registrants"); 

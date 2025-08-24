@@ -279,7 +279,7 @@ export default function Admin_Registrants() {
       <Admin_Navbar />
       <div className="flex-1 p-4 sm:p-6 md:p-10 md:ml-64 font-poppinsr">
         {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Registrants</h2>
             <p className="text-base md:text-lg">
@@ -290,14 +290,61 @@ export default function Admin_Registrants() {
           </div>
           <ProfileMenu />
         </div>
+        
         {/* Filters and Actions */}
-                 <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-           <div className="flex gap-2 items-center">
-             <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border rounded px-2 py-1" />
-             <button className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 transition" onClick={handleExport}>Export</button>
-             <button className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500 transition" onClick={fetchRegistrants}>Refresh</button>
-           </div>
-         </div>
+        <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
+          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+            <div className="flex flex-col sm:flex-row gap-3 flex-1">
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="border rounded px-3 py-2"
+              />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="border rounded px-3 py-2"
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExport}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+              >
+                Export
+              </button>
+              <button 
+                className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500 transition" 
+                onClick={fetchRegistrants}
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+          
+          {/* Re-registration Info */}
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <div className="text-sm text-blue-800">
+                <p className="font-medium mb-1">Re-registration Process</p>
+                <p className="text-blue-700">
+                  Applicants who were previously rejected can re-register using the same email. 
+                  Re-registrations are marked with "Re-registration" and "Updated" indicators. 
+                  Check the "Rejection History" column to review previous rejection reasons.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
         {error && <div className="text-red-600 mb-2">{error}</div>}
         {loading ? (
           <div className="text-center py-8">Loading...</div>
@@ -314,6 +361,7 @@ export default function Admin_Registrants() {
                   <th className="p-3 border-b font-semibold text-gray-700">Contact No.</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Date</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Status</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Rejection History</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Actions</th>
                 </tr>
                 <tr className="bg-white text-left">
@@ -341,7 +389,7 @@ export default function Admin_Registrants() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center p-4 text-gray-500">No registrants found.</td></tr>
+                  <tr><td colSpan={10} className="text-center p-4 text-gray-500">No registrants found.</td></tr>
                 ) : (
                   filtered.map((r, idx) => (
                     <tr key={r._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
@@ -349,10 +397,48 @@ export default function Admin_Registrants() {
                       <td className="p-3 border-b align-middle">{r.firstName}</td>
                       <td className="p-3 border-b align-middle">{r.middleName}</td>
                       <td className="p-3 border-b align-middle">{r.lastName}</td>
-                      <td className="p-3 border-b align-middle">{maskEmail(r.personalEmail)}</td>
+                      <td className="p-3 border-b align-middle">
+                        <div className="flex flex-col">
+                          <span>{maskEmail(r.personalEmail)}</span>
+                          {r.processedAt && r.status === 'pending' && (
+                            <span className="text-xs text-blue-600 font-medium">Re-registration</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="p-3 border-b align-middle">{r.contactNo}</td>
-                      <td className="p-3 border-b align-middle">{r.registrationDate ? r.registrationDate.slice(0, 10) : ''}</td>
-                      <td className={`p-3 border-b align-middle font-semibold ${statusColors[r.status]}`}>{r.status}</td>
+                      <td className="p-3 border-b align-middle">
+                        <div className="flex flex-col">
+                          <span>{r.registrationDate ? r.registrationDate.slice(0, 10) : ''}</span>
+                          {r.processedAt && r.status === 'pending' && (
+                            <span className="text-xs text-gray-500">
+                              Previously: {new Date(r.processedAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={`p-3 border-b align-middle font-semibold ${statusColors[r.status]}`}>
+                        <div className="flex flex-col">
+                          <span>{r.status}</span>
+                          {r.processedAt && r.status === 'pending' && (
+                            <span className="text-xs text-blue-600">Updated</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3 border-b align-middle">
+                        <div className="flex flex-col">
+                          {r.rejectionHistory && r.rejectionHistory.length > 0 ? (
+                            r.rejectionHistory.map((history, hIdx) => (
+                              <div key={hIdx} className="text-xs text-gray-600 mb-1">
+                                <span className="font-medium">{new Date(history.date).toLocaleDateString()}:</span>
+                                <br />
+                                <span className="text-gray-500">{history.note}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-gray-500 text-xs">No rejection history</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="p-3 border-b align-middle">
                         <div className="inline-flex space-x-2">
                       {r.status === 'pending' && (
