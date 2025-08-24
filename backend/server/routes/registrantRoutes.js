@@ -171,7 +171,7 @@ router.post('/:id/reject', authenticateToken, async (req, res) => {
           sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
           subject: 'Admission Decision',
           textContent:
-`Dear ${applicantName},\n\nThank you for your interest in joining our academic institution. After careful consideration of your application, we regret to inform you that we are unable to offer you admission at this time.\n\n${registrant.note}\n\nIf you would like clarification regarding this decision or would like to discuss alternative pathways, we encourage you to contact the Registrar's Office at your convenience.\n\nWe appreciate the effort you put into your application and wish you success in your academic journey.\n\nSincerely,\nAdmissions Office`
+`Dear ${applicantName},\n\nThank you for your interest in joining our academic institution. After careful consideration of your application, we regret to inform you that we are unable to offer you admission at this time.\n\nReason: ${registrant.rejectionNote}\n\nIf you would like clarification regarding this decision or would like to discuss alternative pathways, we encourage you to contact the Registrar's Office at your convenience.\n\nWe appreciate the effort you put into your application and wish you success in your academic journey.\n\nSincerely,\nAdmissions Office`
         };
         await apiInstance.sendTransacEmail(sendSmtpEmail);
         console.log('Rejection email sent to', registrant.personalEmail);
@@ -189,13 +189,25 @@ router.post('/:id/reject', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/registrants/export?date=YYYY-MM-DD
+// GET /api/registrants/export?date=YYYY-MM-DD&status=pending
 router.get('/export', authenticateToken, async (req, res) => {
   try {
     const { date, status } = req.query;
     let filter = {};
-    if (date) filter.registrationDate = date;
+    
+    // Handle date filter - convert to proper date range if needed
+    if (date) {
+      const startDate = new Date(date);
+      const endDate = new Date(date);
+      endDate.setDate(endDate.getDate() + 1);
+      filter.registrationDate = {
+        $gte: startDate,
+        $lt: endDate
+      };
+    }
+    
     if (status && status !== 'all') filter.status = status;
+    
     const registrants = await Registrant.find(filter).sort({ registrationDate: -1 });
     const count = registrants.length;
     const now = new Date();
@@ -208,33 +220,70 @@ router.get('/export', authenticateToken, async (req, res) => {
 
     // Header rows
     worksheet.addRow([
-      `No of registrant: ${count}`,
-      `Registrants as of (${dateStr}) (${timeStr})`, '', '', '', ''
+      `Registrants Report`,
+      `Generated on: ${dateStr} at ${timeStr}`,
+      `Total Records: ${count}`,
+      '', '', '', '', ''
     ]);
+    
+    // Add filter info
+    let filterInfo = 'Filters: ';
+    if (date) filterInfo += `Date: ${date} `;
+    if (status && status !== 'all') filterInfo += `Status: ${status}`;
+    if (filterInfo === 'Filters: ') filterInfo += 'All records';
+    worksheet.addRow([filterInfo, '', '', '', '', '', '', '']);
+    worksheet.addRow(['', '', '', '', '', '', '', '']); // Empty row
+
+    // Column headers
     worksheet.addRow([
-      'First Name', 'Middle Name', 'Last Name', 'Personal email', 'Contact number'
+      'School ID',
+      'First Name', 
+      'Middle Name', 
+      'Last Name', 
+      'Personal Email', 
+      'Contact Number',
+      'Registration Date',
+      'Status',
+      'Rejection Note'
     ]);
 
     // Data rows
     registrants.forEach((r) => {
       worksheet.addRow([
+        r.schoolID || '',
         r.firstName || '',
         r.middleName || '',
         r.lastName || '',
         r.personalEmail || '',
-        r.contactNo || ''
+        r.contactNo || '',
+        r.registrationDate ? new Date(r.registrationDate).toLocaleDateString() : '',
+        r.status || '',
+        r.rejectionNote || ''
       ]);
     });
 
-    // Style header
-    worksheet.getRow(1).font = { bold: true, size: 13 };
+    // Style headers
+    worksheet.getRow(1).font = { bold: true, size: 14 };
     worksheet.getRow(2).font = { bold: true, size: 12 };
-    worksheet.columns.forEach(col => { col.width = 22; });
-    worksheet.getRow(2).alignment = { horizontal: 'center' };
+    worksheet.getRow(3).font = { bold: true, size: 12 };
+    worksheet.getRow(6).font = { bold: true, size: 12 };
+    
+    // Set column widths
+    worksheet.columns.forEach((col, index) => {
+      if (index === 0) col.width = 15; // School ID
+      else if (index === 4) col.width = 30; // Email
+      else if (index === 5) col.width = 15; // Contact
+      else if (index === 6) col.width = 15; // Date
+      else if (index === 8) col.width = 25; // Rejection Note
+      else col.width = 18;
+    });
+    
+    // Center align headers
+    worksheet.getRow(6).alignment = { horizontal: 'center' };
 
     // Set response headers
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=Registrants of ${dateStr}.xlsx`);
+    res.setHeader('Content-Disposition', `attachment; filename=Registrants_${dateStr}_${timeStr.replace(/:/g, '-')}.xlsx`);
 
     // Write to response
     await workbook.xlsx.write(res);
