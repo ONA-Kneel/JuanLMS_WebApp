@@ -30,7 +30,6 @@ function formatSchoolId(schoolId) {
 export default function Admin_Registrants() {
   const [registrants, setRegistrants] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectionNote, setRejectionNote] = useState('Application requirements not met');
@@ -47,7 +46,6 @@ export default function Admin_Registrants() {
     try {
       const params = {};
       if (selectedDate) params.date = selectedDate;
-      if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
       const token = localStorage.getItem("token");
       const res = await axios.get(`${API_BASE}/api/registrants`, { params, headers: { Authorization: `Bearer ${token}` } });
       setRegistrants(res.data);
@@ -125,7 +123,7 @@ export default function Admin_Registrants() {
 
   useEffect(() => {
     fetchRegistrants();
-  }, [selectedDate, statusFilter]);
+  }, [selectedDate]);
 
   // Approve registrant
   const handleApprove = async (id) => {
@@ -228,7 +226,6 @@ export default function Admin_Registrants() {
 
       const params = [];
       if (selectedDate) params.push(`date=${encodeURIComponent(selectedDate)}`);
-      if (statusFilter && statusFilter !== 'all') params.push(`status=${encodeURIComponent(statusFilter)}`);
       const query = params.length ? `?${params.join('&')}` : '';
       
       const response = await fetch(`${API_BASE}/api/registrants/export${query}`, {
@@ -301,16 +298,6 @@ export default function Admin_Registrants() {
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="border rounded px-3 py-2"
               />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="border rounded px-3 py-2"
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-              </select>
             </div>
             <div className="flex gap-2">
               <button
@@ -375,8 +362,12 @@ export default function Admin_Registrants() {
                   <th className="p-2 border-b">
                     <select 
                       className="w-full border rounded px-2 py-1 text-sm"
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
+                      value="all" // Default to all status
+                      onChange={(e) => {
+                        // This onChange is no longer directly tied to a state variable,
+                        // so it doesn't need to update a state.
+                        // The filtering is handled by the backend.
+                      }}
                     >
                       <option value="all">All Status</option>
                       <option value="pending">Pending</option>
