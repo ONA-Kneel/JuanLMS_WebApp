@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
+import ExportModal from './ExportModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -39,6 +40,8 @@ export default function Admin_Registrants() {
   const [actionLoading, setActionLoading] = useState(null); // id of row being processed
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   // Fetch registrants from backend
   const fetchRegistrants = async () => {
@@ -216,9 +219,17 @@ export default function Admin_Registrants() {
     }
   };
 
-  // Export registrants
-  const handleExport = async () => {
+  // Show export modal
+  const handleExportClick = () => {
+    setShowExportModal(true);
+  };
+
+  // Export registrants with specific status
+  const handleExport = async (exportStatus) => {
+    setExportLoading(true);
     setError('');
+    setShowExportModal(false);
+    
     try {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -228,7 +239,7 @@ export default function Admin_Registrants() {
 
       const params = [];
       if (selectedDate) params.push(`date=${encodeURIComponent(selectedDate)}`);
-      if (statusFilter !== 'all') params.push(`status=${encodeURIComponent(statusFilter)}`);
+      if (exportStatus !== 'all') params.push(`status=${encodeURIComponent(exportStatus)}`);
       const query = params.length ? `?${params.join('&')}` : '';
       
       const response = await fetch(`${API_BASE}/api/registrants/export${query}`, {
@@ -268,11 +279,10 @@ export default function Admin_Registrants() {
     } catch (err) {
       console.error('Export error:', err);
       setError('Failed to export registrants. Please try again.');
+    } finally {
+      setExportLoading(false);
     }
   };
-
-  // Filtered registrants (already filtered by backend)
-  const filtered = registrants;
 
   // Filter registrants based on status
   const getFilteredRegistrants = () => {
@@ -320,7 +330,7 @@ export default function Admin_Registrants() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={handleExport}
+                onClick={handleExportClick}
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
               >
                 Export
@@ -530,6 +540,14 @@ export default function Admin_Registrants() {
             </div>
           </div>
         )}
+        
+        {/* Export Modal */}
+        <ExportModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          onExport={handleExport}
+          loading={exportLoading}
+        />
       </div>
     </div>
   );
