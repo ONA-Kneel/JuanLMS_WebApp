@@ -30,6 +30,7 @@ function formatSchoolId(schoolId) {
 export default function Admin_Registrants() {
   const [registrants, setRegistrants] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectionNote, setRejectionNote] = useState('Application requirements not met');
@@ -46,6 +47,7 @@ export default function Admin_Registrants() {
     try {
       const params = {};
       if (selectedDate) params.date = selectedDate;
+      if (statusFilter !== 'all') params.status = statusFilter;
       const token = localStorage.getItem("token");
       const res = await axios.get(`${API_BASE}/api/registrants`, { params, headers: { Authorization: `Bearer ${token}` } });
       setRegistrants(res.data);
@@ -123,7 +125,7 @@ export default function Admin_Registrants() {
 
   useEffect(() => {
     fetchRegistrants();
-  }, [selectedDate]);
+  }, [selectedDate, statusFilter]);
 
   // Approve registrant
   const handleApprove = async (id) => {
@@ -226,6 +228,7 @@ export default function Admin_Registrants() {
 
       const params = [];
       if (selectedDate) params.push(`date=${encodeURIComponent(selectedDate)}`);
+      if (statusFilter !== 'all') params.push(`status=${encodeURIComponent(statusFilter)}`);
       const query = params.length ? `?${params.join('&')}` : '';
       
       const response = await fetch(`${API_BASE}/api/registrants/export${query}`, {
@@ -271,6 +274,22 @@ export default function Admin_Registrants() {
   // Filtered registrants (already filtered by backend)
   const filtered = registrants;
 
+  // Filter registrants based on status
+  const getFilteredRegistrants = () => {
+    if (statusFilter === 'all') {
+      return registrants;
+    }
+    return registrants.filter(registrant => registrant.status === statusFilter);
+  };
+
+  const filteredRegistrants = getFilteredRegistrants();
+
+  // Reset filters
+  const resetFilters = () => {
+    setSelectedDate('');
+    setStatusFilter('all');
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 font-poppinsr">
       <Admin_Navbar />
@@ -312,6 +331,12 @@ export default function Admin_Registrants() {
               >
                 Refresh
               </button>
+              <button 
+                className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400 transition" 
+                onClick={resetFilters}
+              >
+                Reset Filters
+              </button>
             </div>
           </div>
           
@@ -333,6 +358,22 @@ export default function Admin_Registrants() {
           </div>
         </div>
         {error && <div className="text-red-600 mb-2">{error}</div>}
+        
+        {/* Results Count */}
+        <div className="mb-4 text-sm text-gray-600">
+          Showing {filteredRegistrants.length} of {registrants.length} registrants
+          {statusFilter !== 'all' && (
+            <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded ml-2 text-xs">
+              Status: {statusFilter}
+            </span>
+          )}
+          {selectedDate && (
+            <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded ml-2 text-xs">
+              Date: {selectedDate}
+            </span>
+          )}
+        </div>
+        
         {loading ? (
           <div className="text-center py-8">Loading...</div>
         ) : (
@@ -362,12 +403,8 @@ export default function Admin_Registrants() {
                   <th className="p-2 border-b">
                     <select 
                       className="w-full border rounded px-2 py-1 text-sm"
-                      value="all" // Default to all status
-                      onChange={(e) => {
-                        // This onChange is no longer directly tied to a state variable,
-                        // so it doesn't need to update a state.
-                        // The filtering is handled by the backend.
-                      }}
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
                     >
                       <option value="all">All Status</option>
                       <option value="pending">Pending</option>
@@ -379,10 +416,10 @@ export default function Admin_Registrants() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {filteredRegistrants.length === 0 ? (
                   <tr><td colSpan={10} className="text-center p-4 text-gray-500">No registrants found.</td></tr>
                 ) : (
-                  filtered.map((r, idx) => (
+                  filteredRegistrants.map((r, idx) => (
                     <tr key={r._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
                       <td className="p-3 border-b align-middle">{formatSchoolId(r.schoolID)}</td>
                       <td className="p-3 border-b align-middle">{r.firstName}</td>
