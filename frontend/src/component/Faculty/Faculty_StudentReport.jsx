@@ -4,7 +4,7 @@ import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
 // API base: prefer local in dev when not explicitly configured
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://juanlms-webapp-server.onrender.com');
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'https://juanlms-webapp-server.onrender.com' : 'https://juanlms-webapp-server.onrender.com');
 
 export default function Faculty_StudentReport() {
   const [academicYear, setAcademicYear] = useState(null);
