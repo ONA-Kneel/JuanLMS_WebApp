@@ -153,7 +153,7 @@ router.post('/:id/reject', authenticateToken, async (req, res) => {
     if (!registrant) return res.status(404).json({ message: 'Registrant not found' });
     if (registrant.status !== 'pending') return res.status(400).json({ message: 'Already processed' });
     registrant.status = 'rejected';
-    registrant.rejectionNote = note || 'incomplete credentials';
+    registrant.rejectionNote = note || 'Application requirements not met';
     registrant.processedAt = new Date();
     registrant.processedBy = req.body.adminId || null;
     await registrant.save();
@@ -171,7 +171,7 @@ router.post('/:id/reject', authenticateToken, async (req, res) => {
           sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
           subject: 'Admission Decision',
           textContent:
-`Dear ${applicantName},\n\nThank you for your interest in joining our academic institution. After careful consideration of your application, we regret to inform you that we are unable to offer you admission at this time.\n\nReason: ${registrant.rejectionNote}\n\nIf you would like clarification regarding this decision or would like to discuss alternative pathways, we encourage you to contact the Registrar's Office at your convenience.\n\nWe appreciate the effort you put into your application and wish you success in your academic journey.\n\nSincerely,\nAdmissions Office`
+`Dear ${applicantName},\n\nThank you for your interest in joining our academic institution. After careful consideration of your application, we regret to inform you that we are unable to offer you admission at this time.\n\n${registrant.rejectionNote ? `Reason: ${registrant.rejectionNote}\n\n` : ''}If you would like clarification regarding this decision or would like to discuss alternative pathways, we encourage you to contact the Registrar's Office at your convenience.\n\nWe appreciate the effort you put into your application and wish you success in your academic journey.\n\nSincerely,\nAdmissions Office`
         };
         await apiInstance.sendTransacEmail(sendSmtpEmail);
         console.log('Rejection email sent to', registrant.personalEmail);

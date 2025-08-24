@@ -33,7 +33,7 @@ export default function Admin_Registrants() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
-  const [rejectionNote, setRejectionNote] = useState('incomplete credentials');
+  const [rejectionNote, setRejectionNote] = useState('Application requirements not met');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(null); // id of row being processed
@@ -171,7 +171,7 @@ export default function Admin_Registrants() {
   // Reject registrant
   const handleReject = (id) => {
     setRejectingId(id);
-    setRejectionNote('incomplete credentials');
+    setRejectionNote('Application requirements not met');
     setShowRejectModal(true);
   };
   const confirmReject = async () => {
