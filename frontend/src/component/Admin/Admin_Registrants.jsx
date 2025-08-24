@@ -291,19 +291,13 @@ export default function Admin_Registrants() {
           <ProfileMenu />
         </div>
         {/* Filters and Actions */}
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-          <div className="flex gap-2 items-center">
-            <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border rounded px-2 py-1" />
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="border rounded px-2 py-1">
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-            </select>
-            <button className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 transition" onClick={handleExport}>Export</button>
-            <button className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500 transition" onClick={fetchRegistrants}>Refresh</button>
-          </div>
-        </div>
+                 <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+           <div className="flex gap-2 items-center">
+             <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border rounded px-2 py-1" />
+             <button className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 transition" onClick={handleExport}>Export</button>
+             <button className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500 transition" onClick={fetchRegistrants}>Refresh</button>
+           </div>
+         </div>
         {error && <div className="text-red-600 mb-2">{error}</div>}
         {loading ? (
           <div className="text-center py-8">Loading...</div>
