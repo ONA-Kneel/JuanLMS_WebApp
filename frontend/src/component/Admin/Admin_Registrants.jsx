@@ -330,7 +330,18 @@ export default function Admin_Registrants() {
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Personal Email" /></th>
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Contact No." /></th>
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Date" /></th>
-                  <th className="p-2 border-b"><select className="w-full border rounded px-2 py-1 text-sm"><option>All Status</option><option>Pending</option><option>Approved</option><option>Rejected</option></select></th>
+                  <th className="p-2 border-b">
+                    <select 
+                      className="w-full border rounded px-2 py-1 text-sm"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                      <option value="all">All Status</option>
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </th>
                   <th className="p-2 border-b"></th>
                 </tr>
               </thead>
