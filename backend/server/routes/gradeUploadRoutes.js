@@ -85,9 +85,6 @@ const upload = await initializeGradeUploadStorage();
 // General grade upload endpoint
 router.post('/upload', authenticateToken, upload.single('excelFile'), async (req, res) => {
   try {
-    console.log('Grade upload request received:', req.body);
-    console.log('File:', req.file);
-
     if (!req.file) {
       return res.status(400).json({
         success: false,
