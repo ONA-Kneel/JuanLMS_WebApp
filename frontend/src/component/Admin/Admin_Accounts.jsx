@@ -22,8 +22,8 @@ export default function Admin_Accounts() {
   const [archivePasswordError, setArchivePasswordError] = useState("");
   const [duplicateEmailModal, setDuplicateEmailModal] = useState(false);
   const [suggestedEmail, setSuggestedEmail] = useState("");
-  const [, setPendingFormData] = useState(null);
   const [userToArchive, setUserToArchive] = useState(null);
+  const [showCancellationMessage, setShowCancellationMessage] = useState(false);
   
   const [formData, setFormData] = useState({
     firstname: "",
@@ -349,7 +349,6 @@ export default function Admin_Accounts() {
       } catch (err) {
         if (err?.response?.status === 409 && err?.response?.data?.suggestedEmail) {
           setSuggestedEmail(err.response.data.suggestedEmail);
-          setPendingFormData(accountData);
           setDuplicateEmailModal(true);
         } else {
           setValidationModal({
@@ -445,6 +444,30 @@ export default function Admin_Accounts() {
   const cancelSave = () => {
     setShowSaveConfirm(false);
   };
+
+  // Handle duplicate email modal cancellation
+  const handleDuplicateEmailCancel = () => {
+    setDuplicateEmailModal(false);
+    setSuggestedEmail("");
+    // Reset form to prevent any pending account creation
+    setFormData({
+      firstname: '',
+      middlename: '',
+      lastname: '',
+      email: '',
+      personalemail: '',
+      schoolID: '',
+      password: generatePassword(),
+      role: 'faculty',
+      userID: '',
+      contactNo: '',
+    });
+    // Show cancellation message
+    setShowCancellationMessage(true);
+    setTimeout(() => setShowCancellationMessage(false), 3000);
+  };
+
+
 
   // Generate a random password
   const generatePassword = () => {
@@ -902,18 +925,33 @@ export default function Admin_Accounts() {
             </div>
           )}
 
-          {/* Duplicate Email Modal */}
+          {/* Cancellation Message */}
+          {showCancellationMessage && (
+            <div className="fixed top-4 right-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded z-[9999] shadow-lg">
+              <div className="flex items-center">
+                <span className="mr-2">⚠️</span>
+                <span>Account creation process cancelled. Form has been reset.</span>
+              </div>
+            </div>
+          )}
+
+          {/* Duplicate Email Modal - Shows when backend detects duplicate email during account creation */}
           {duplicateEmailModal && (
             <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[9999]">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
                 <h3 className="text-xl font-semibold mb-2 text-yellow-700">Duplicate Email Detected</h3>
-                <p className="mb-3">The generated school email already exists.</p>
+                <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded">
+                  <p className="text-red-700 text-sm font-medium">⚠️ IMPORTANT: The generated school email already exists.</p>
+                </div>
                 <p className="mb-4">Suggested email to use:</p>
                 <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm break-all">{suggestedEmail}</div>
-                <p className="mb-4">Do you want to proceed using this suggested email?</p>
+                <p className="mb-4 text-sm text-gray-600">Do you want to proceed using this suggested email?</p>
+                <div className="mb-4 p-2 bg-red-50 border border-red-200 rounded">
+                  <p className="text-red-700 text-xs font-medium">⚠️ WARNING: Clicking Cancel will completely terminate the account creation process and reset the form.</p>
+                </div>
                 <div className="flex justify-end gap-2">
                   <button
-                    onClick={() => setDuplicateEmailModal(false)}
+                    onClick={handleDuplicateEmailCancel}
                     className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
                   >
                     Cancel
@@ -922,12 +960,11 @@ export default function Admin_Accounts() {
                     onClick={async () => {
                       setDuplicateEmailModal(false);
                       await handleSubmit(null, suggestedEmail);
-                      setPendingFormData(null);
                       setSuggestedEmail("");
                     }}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
                   >
-                    Proceed
+                    Proceed with Suggested Email
                   </button>
                 </div>
               </div>
