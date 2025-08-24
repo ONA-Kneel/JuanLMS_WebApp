@@ -117,26 +117,20 @@ router.get('/assignments/:facultyId', authenticateToken, async (req, res) => {
 router.get('/my-assignments', authenticateToken, async (req, res) => {
   try {
     const facultyId = req.user.id;
-    console.log('Fetching assignments for faculty:', facultyId);
 
     // First, let's check if the faculty exists
     const faculty = await User.findById(facultyId);
     if (!faculty) {
-      console.log('Faculty not found:', facultyId);
       return res.status(404).json({
         success: false,
         message: 'Faculty not found'
       });
     }
 
-    console.log('Faculty found:', faculty.firstname, faculty.lastname);
-
     const assignments = await FacultyAssignment.find({ 
       facultyId: facultyId,
       status: 'active'
     }).sort({ createdAt: -1 });
-
-    console.log('Found assignments:', assignments.length, assignments);
 
     res.json({
       success: true,
@@ -180,13 +174,11 @@ router.get('/section/:sectionId/students', authenticateToken, async (req, res) =
   }
 });
 
-// Debug endpoint to see all students in a section
-router.get('/debug/students/:sectionName', authenticateToken, async (req, res) => {
+// Get students in a section
+router.get('/students/:sectionName', authenticateToken, async (req, res) => {
   try {
     const { sectionName } = req.params;
     const { trackName, strandName, gradeLevel, schoolYear, termName } = req.query;
-
-    console.log('Debug request for section:', { sectionName, trackName, strandName, gradeLevel, schoolYear, termName });
 
     // Get all students in the section
     const studentAssignments = await StudentAssignment.find({
@@ -198,35 +190,19 @@ router.get('/debug/students/:sectionName', authenticateToken, async (req, res) =
       termName
     }).populate('studentId', 'firstname lastname email');
 
-    // Get all students in the database
-    const allStudents = await User.find({ role: 'student' }).select('firstname lastname email');
-
     res.json({
       success: true,
-      sectionStudents: studentAssignments.map(sa => ({
+      students: studentAssignments.map(sa => ({
         id: sa.studentId._id,
         name: `${sa.studentId.firstname} ${sa.studentId.lastname}`,
         email: sa.studentId.email
-      })),
-      allStudents: allStudents.map(s => ({
-        id: s._id,
-        name: `${s.firstname} ${s.lastname}`,
-        email: s.email
-      })),
-      sectionInfo: {
-        sectionName,
-        trackName,
-        strandName,
-        gradeLevel,
-        schoolYear,
-        termName
-      }
+      }))
     });
   } catch (error) {
-    console.error('Error in debug endpoint:', error);
+    console.error('Error fetching section students:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching debug information',
+      message: 'Error fetching students',
       error: error.message
     });
   }
@@ -273,8 +249,6 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
     const { facultyAssignmentId } = req.params;
     const facultyId = req.user.id;
 
-    console.log('Upload request received:', { facultyAssignmentId, facultyId, body: req.body });
-
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -291,8 +265,6 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
       termName
     } = req.body;
 
-    console.log('Processing options:', { sectionName, trackName, strandName, gradeLevel, schoolYear, termName });
-
     // Validate required fields
     if (!sectionName || !trackName || !strandName || !gradeLevel || !schoolYear || !termName) {
       return res.status(400).json({
@@ -304,7 +276,6 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
 
     // Read file buffer
     const fileBuffer = fs.readFileSync(req.file.path);
-    console.log('File read successfully, size:', fileBuffer.length);
 
     // Process Excel file
     const processingOptions = {
@@ -316,9 +287,7 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
       termName
     };
 
-    console.log('Processing Excel file with options:', processingOptions);
     const result = await processGradingExcel(fileBuffer, processingOptions);
-    console.log('Processing result:', result);
 
     if (!result.success) {
       // Clean up uploaded file
@@ -360,22 +329,20 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
       status: 'processed'
     });
 
-    console.log('Saving grading data:', gradingData);
     await gradingData.save();
-    console.log('Grading data saved successfully');
 
     // Update submissions with grades
     for (const grade of result.grades) {
       await Submission.findOneAndUpdate(
         {
-          assignment: facultyAssignmentId, // Changed from assignmentId to assignment
-          student: grade.studentId // Changed from studentId to student
+          assignment: facultyAssignmentId,
+          student: grade.studentId
         },
         {
           $set: {
             grade: grade.grade,
             feedback: grade.feedback,
-            status: 'graded', // Set status to graded
+            status: 'graded',
             submittedAt: new Date()
           }
         },

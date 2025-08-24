@@ -17,6 +17,67 @@ import GradingSystem from '../GradingSystem';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
+// Modal Component
+const Modal = ({ isOpen, onClose, title, children, type = 'info' }) => {
+  if (!isOpen) return null;
+
+  const getModalStyles = () => {
+    switch (type) {
+      case 'success':
+        return 'border-green-500 bg-green-50';
+      case 'error':
+        return 'border-red-500 bg-red-50';
+      case 'warning':
+        return 'border-yellow-500 bg-yellow-50';
+      default:
+        return 'border-blue-500 bg-blue-50';
+    }
+  };
+
+  const getIcon = () => {
+    switch (type) {
+      case 'success':
+        return '✅';
+      case 'error':
+        return '❌';
+      case 'warning':
+        return '⚠️';
+      default:
+        return 'ℹ️';
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className={`bg-white rounded-lg shadow-xl max-w-md w-full mx-4 border-2 ${getModalStyles()}`}>
+        <div className="flex items-center justify-between p-4 border-b">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{getIcon()}</span>
+            <h3 className="text-lg font-semibold">{title}</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none p-1 rounded-full hover:bg-gray-200 transition-colors"
+          >
+            ×
+          </button>
+        </div>
+        <div className="p-4">
+          {children}
+        </div>
+        <div className="flex justify-end gap-2 p-4 border-t">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function Faculty_Grades() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
@@ -35,8 +96,35 @@ export default function Faculty_Grades() {
   const [selectedStudentFile, setSelectedStudentFile] = useState(null);
   const [showIndividualManagement, setShowIndividualManagement] = useState(false);
   
+  // Modal states
+  const [modal, setModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
 
   const currentFacultyID = localStorage.getItem("userID");
+
+  // Helper function to show modal
+  const showModal = (title, message, type = 'info') => {
+    setModal({
+      isOpen: true,
+      title,
+      message,
+      type
+    });
+  };
+
+  // Helper function to close modal
+  const closeModal = () => {
+    setModal({
+      isOpen: false,
+      title: '',
+      message: '',
+      type: 'info'
+    });
+  };
 
   // Helper function to validate grade values (0-100 range)
   const isValidGrade = (grade) => {
@@ -106,11 +194,6 @@ export default function Faculty_Grades() {
         );
         
         setClasses(filtered);
-        console.log("Faculty Grades - Filtered classes:", filtered);
-        // Log class details including sections
-        filtered.forEach(cls => {
-          console.log(`Class: ${cls.className}, Section: ${cls.section}, Class Code: ${cls.classCode}`);
-        });
       } catch (err) {
         console.error("Failed to fetch classes", err);
       } finally {
@@ -145,7 +228,6 @@ export default function Faculty_Grades() {
       
       // Use a working endpoint or create default subjects directly
       // The /subjects endpoint doesn't exist, so we'll create defaults
-      console.log('Creating default subjects for class:', selectedClassObj.className);
       createDefaultSubjects();
       
     } catch (error) {
@@ -312,8 +394,6 @@ export default function Faculty_Grades() {
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.grades) {
-          console.log('Loaded grades from database:', data.grades);
-          
           // Update grades state with database data
           setGrades(prevGrades => {
             const updatedGrades = { ...prevGrades };
@@ -330,19 +410,15 @@ export default function Faculty_Grades() {
                   ...studentGradeRecord.grades,
                   isLocked: studentGradeRecord.isLocked || false
                 };
-                
-                console.log(`Loaded grades for student ${student.name} (School ID: ${student.schoolID}):`, updatedGrades[student._id]);
               }
             });
             
             return updatedGrades;
           });
-          
-          console.log('✅ Loaded saved grades from database using School ID matching');
         }
-      } else {
-        console.log('No grades found in database for this class/term');
-      }
+              } else {
+          // No grades found in database for this class/term
+        }
       
     } catch (error) {
       console.error('Error loading saved grades from database:', error);
@@ -384,7 +460,11 @@ export default function Faculty_Grades() {
       // Check if grade is within valid range (0-100)
       if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
         // Show error message and don't update the grade
-        alert(`❌ Invalid grade! Grades must be between 0 and 100.\n\nYou entered: ${value}\n\nPlease enter a valid grade.`);
+        showModal(
+          'Invalid Grade',
+          `Grades must be between 0 and 100.\n\nYou entered: ${value}\n\nPlease enter a valid grade.`,
+          'error'
+        );
         return; // Exit early, don't update the grade
       }
       
@@ -501,7 +581,7 @@ export default function Faculty_Grades() {
 
   const uploadStudentGrades = async () => {
     if (!selectedStudentFile || !selectedStudentName || !selectedClass) {
-      alert('Please select a file, student, and class first');
+      showModal('Missing Information', 'Please select a file, student, and class first', 'warning');
       return;
     }
 
@@ -511,7 +591,7 @@ export default function Faculty_Grades() {
       // Find the student by name to get their ID
       const student = students.find(s => s.name === selectedStudentName);
       if (!student) {
-        alert('Student not found');
+        showModal('Student Not Found', 'The selected student could not be found', 'error');
         return;
       }
       
@@ -530,7 +610,7 @@ export default function Faculty_Grades() {
           console.log('File content:', content);
           
           // For now, just show success message
-          alert('Student grades uploaded successfully! (Simulated - saved to localStorage)');
+          showModal('Upload Successful', 'Student grades uploaded successfully! (Simulated - saved to localStorage)', 'success');
           
           // Clear the file input
           setSelectedStudentFile(null);
@@ -540,7 +620,7 @@ export default function Faculty_Grades() {
           fetchStudents();
         } catch (error) {
           console.error('Error processing file:', error);
-          alert('Failed to process file. Please try again.');
+          showModal('Processing Error', 'Failed to process file. Please try again.', 'error');
         }
       };
       
@@ -548,41 +628,33 @@ export default function Faculty_Grades() {
       
     } catch (error) {
       console.error('Error uploading student grades:', error);
-      alert('Failed to upload grades. Please try again.');
+      showModal('Upload Error', 'Failed to upload grades. Please try again.', 'error');
     } finally {
       setUploadingStudentGrades(false);
     }
   };
 
   const saveStudentGrades = async () => {
-    // Debug logging to understand the current state
-    console.log('saveStudentGrades called with:', {
-      selectedStudentName,
-      selectedClass,
-      selectedSection,
-      showIndividualManagement,
-      students: students.length,
-      studentGrades
-    });
+
 
     // Better validation logic
     if (!selectedStudentName || selectedStudentName.trim() === '') {
-      alert('Please select a student first');
+      showModal('Missing Student', 'Please select a student first', 'warning');
       return;
     }
 
     if (selectedClass === null || selectedClass === undefined || selectedClass === '') {
-      alert('Please select a class first');
+      showModal('Missing Class', 'Please select a class first', 'warning');
       return;
     }
 
     if (!selectedSection || selectedSection.trim() === '') {
-      alert('Please select a section first');
+      showModal('Missing Section', 'Please select a section first', 'warning');
       return;
     }
 
     if (!showIndividualManagement) {
-      alert('Please open the Individual Student Grade Management section first');
+      showModal('Section Not Open', 'Please open the Individual Student Grade Management section first', 'warning');
       return;
     }
 
@@ -592,7 +664,7 @@ export default function Faculty_Grades() {
     );
 
     if (!hasValidGrades) {
-      alert('Please enter at least one quarter grade before saving');
+      showModal('No Grades Entered', 'Please enter at least one quarter grade before saving', 'warning');
       return;
     }
 
@@ -610,7 +682,11 @@ export default function Faculty_Grades() {
     });
     
     if (invalidGrades.length > 0) {
-      alert(`❌ Invalid grades detected! All grades must be between 0 and 100.\n\nInvalid grades:\n${invalidGrades.join('\n')}\n\nPlease correct these grades before saving.`);
+      showModal(
+        'Invalid Grades Detected',
+        `All grades must be between 0 and 100.\n\nInvalid grades:\n${invalidGrades.join('\n')}\n\nPlease correct these grades before saving.`,
+        'error'
+      );
       return;
     }
 
@@ -618,14 +694,14 @@ export default function Faculty_Grades() {
       const selectedClassObj = classes[selectedClass];
       
       if (!selectedClassObj) {
-        alert('Selected class not found. Please try selecting the class again.');
+        showModal('Class Not Found', 'Selected class not found. Please try selecting the class again.', 'error');
         return;
       }
       
       // Find the student by name to get their ID
       const student = students.find(s => s.name === selectedStudentName);
       if (!student) {
-        alert('Student not found. Please try selecting the student again.');
+        showModal('Student Not Found', 'Student not found. Please try selecting the student again.', 'error');
         return;
       }
       
@@ -657,8 +733,6 @@ export default function Faculty_Grades() {
         lastUpdated: new Date().toISOString()
       };
 
-      console.log('Saving grades data to database:', gradesData);
-
       // Save to database using the Semestral_Grades_Collection
       const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE}/api/semestral-grades/save`, {
@@ -672,10 +746,13 @@ export default function Faculty_Grades() {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Grades saved to database successfully:', result);
         
         // Show success message with confirmation that grades cannot be edited
-        alert(`✅ Student grades saved successfully!\n\n📝 ${selectedStudentName}'s grades have been saved to the database and are now visible in the Report on Learning Progress and Achievement table.\n\n⚠️ These grades cannot be edited anymore and are now visible to students.\n\n💾 Grades are securely stored in the Semestral_Grades_Collection using School ID: ${studentSchoolID}.`);
+        showModal(
+          'Grades Saved Successfully',
+          `${selectedStudentName}'s grades have been saved to the database and are now visible in the Report on Learning Progress and Achievement table.\n\n⚠️ These grades cannot be edited anymore and are now visible to students.\n\n💾 Grades are securely stored in the Semestral_Grades_Collection using School ID: ${studentSchoolID}.`,
+          'success'
+        );
         
         // Update local state to reflect the saved grades
         setGrades(prevGrades => ({
@@ -692,8 +769,6 @@ export default function Faculty_Grades() {
         setSelectedStudentName('');
         setStudentGrades({});
 
-        console.log('✅ Student grades saved successfully to database');
-
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to save grades to database');
@@ -701,7 +776,11 @@ export default function Faculty_Grades() {
 
     } catch (error) {
       console.error('Error saving student grades:', error);
-      alert(`❌ Failed to save grades: ${error.message || 'Unknown error'}\n\nPlease check your connection and try again.`);
+      showModal(
+        'Save Failed',
+        `Failed to save grades: ${error.message || 'Unknown error'}\n\nPlease check your connection and try again.`,
+        'error'
+      );
     }
   };
 
@@ -913,7 +992,11 @@ export default function Faculty_Grades() {
       });
       
       if (invalidGrades.length > 0) {
-        alert(`❌ Invalid grades detected! All grades must be between 0 and 100.\n\nInvalid grades:\n${invalidGrades.join('\n')}\n\nPlease correct these grades before posting.`);
+        showModal(
+          'Invalid Grades Detected',
+          `All grades must be between 0 and 100.\n\nInvalid grades:\n${invalidGrades.join('\n')}\n\nPlease correct these grades before posting.`,
+          'error'
+        );
         return;
       }
       
@@ -971,8 +1054,6 @@ export default function Faculty_Grades() {
         lastUpdated: new Date().toISOString()
       };
 
-      console.log('Saving all grades data to database:', gradesData);
-
       // Save to database using the Semestral_Grades_Collection
       const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE}/api/semestral-grades/save-bulk`, {
@@ -986,10 +1067,13 @@ export default function Faculty_Grades() {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('All grades saved to database successfully:', result);
         
         // Show success message that grades are posted to student end
-        alert(`✅ ALL GRADES POSTED SUCCESSFULLY!\n\n📊 Grades have been saved to the database (Semestral_Grades_Collection) and posted to the Report on Learning Progress and Achievement table.\n\n👥 These grades are now visible to all students and cannot be edited anymore.\n\n🔒 All grades are now locked and read-only.\n\n🎯 Students can now view their grades in their student dashboard using their School ID.\n\n💾 Data is securely stored with proper encryption.`);
+        showModal(
+          'All Grades Posted Successfully',
+          `Grades have been saved to the database (Semestral_Grades_Collection) and posted to the Report on Learning Progress and Achievement table.\n\n👥 These grades are now visible to all students and cannot be edited anymore.\n\n🔒 All grades are now locked and read-only.\n\n🎯 Students can now view their grades in their student dashboard using their School ID.\n\n💾 Data is securely stored with proper encryption.`,
+          'success'
+        );
         
         // Mark all grades as locked/read-only
         setGrades(prevGrades => {
@@ -1003,8 +1087,6 @@ export default function Faculty_Grades() {
           return updatedGrades;
         });
 
-        console.log('✅ All grades saved successfully to database');
-
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to save grades to database');
@@ -1012,7 +1094,11 @@ export default function Faculty_Grades() {
 
     } catch (error) {
       console.error('Error saving grades:', error);
-      alert(`❌ Failed to save grades: ${error.message || 'Unknown error'}\n\nPlease check your connection and try again.`);
+      showModal(
+        'Save Failed',
+        `Failed to save grades: ${error.message || 'Unknown error'}\n\nPlease check your connection and try again.`,
+        'error'
+      );
     }
   };
 
@@ -1024,7 +1110,15 @@ export default function Faculty_Grades() {
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Faculty_Navbar />
       
-      
+      {/* Modal */}
+      <Modal
+        isOpen={modal.isOpen}
+        onClose={closeModal}
+        title={modal.title}
+        type={modal.type}
+      >
+        <div className="whitespace-pre-line">{modal.message}</div>
+      </Modal>
 
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
         {/* Header */}
@@ -1156,13 +1250,6 @@ export default function Faculty_Grades() {
                             key={student._id}
                             className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-200 last:border-b-0"
                             onClick={() => {
-                              console.log('Student selected:', {
-                                studentId: student._id,
-                                studentName: student.name,
-                                currentSelectedStudent: selectedStudent,
-                                currentSelectedStudentName: selectedStudentName
-                              });
-                              
                               setSelectedStudentName(student.name);
                               // Set the student grades to the selected student's existing grades
                               const existingGrades = grades[student._id] || {};
@@ -1178,19 +1265,6 @@ export default function Faculty_Grades() {
                               setSelectedStudent('');
                               // Show the individual management section
                               setShowIndividualManagement(true);
-                              
-                              console.log('After selection:', {
-                                selectedStudentName: student.name,
-                                showIndividualManagement: true,
-                                studentGrades: {
-                                  quarter1: existingGrades.quarter1 || '',
-                                  quarter2: existingGrades.quarter2 || '',
-                                  quarter3: existingGrades.quarter3 || '',
-                                  quarter4: existingGrades.quarter4 || '',
-                                  semesterFinal: existingGrades.semesterFinal || '',
-                                  remarks: existingGrades.remarks || ''
-                                }
-                              });
                             }}
                           >
                             <div className="font-medium">{student.name}</div>
@@ -1583,72 +1657,7 @@ export default function Faculty_Grades() {
                </div>
              )}
 
-             {/* Debug Information - Remove this in production */}
-             {process.env.NODE_ENV === 'development' && (
-               <div className="mb-6 p-4 bg-gray-100 border border-gray-300 rounded-lg text-xs">
-                 <h4 className="font-bold mb-2">🔍 Debug Info:</h4>
-                 <div className="grid grid-cols-2 gap-2">
-                   <div>
-                     <strong>selectedClass:</strong> {selectedClass !== null ? selectedClass : 'null'} 
-                     {selectedClass !== null && classes[selectedClass] && ` (${classes[selectedClass].className})`}
-                   </div>
-                   <div>
-                     <strong>selectedSection:</strong> {selectedSection || 'null'}
-                   </div>
-                   <div>
-                     <strong>selectedStudentName:</strong> {selectedStudentName || 'null'}
-                   </div>
-                   <div>
-                     <strong>showIndividualManagement:</strong> {showIndividualManagement ? 'true' : 'false'}
-                   </div>
-                   <div>
-                     <strong>students.length:</strong> {students.length}
-                   </div>
-                   <div>
-                     <strong>studentGrades:</strong> {Object.keys(studentGrades).length > 0 ? 
-                       Object.entries(studentGrades).map(([key, value]) => `${key}:${value}`).join(', ') : 
-                       'empty'
-                     }
-                   </div>
-                   <div className="col-span-2 mt-4">
-                     <button
-                       onClick={() => {
-                         // Test database connection for semestral grades
-                         const token = localStorage.getItem("token");
-                         const selectedClassObj = classes[selectedClass];
-                         
-                         if (!token || !selectedClassObj || !academicYear || !currentTerm) {
-                           alert('Missing required data for database test');
-                           return;
-                         }
-                         
-                         // Test the semestral grades endpoint
-                         fetch(`${API_BASE}/api/semestral-grades/class/${selectedClassObj.classID}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
-                           headers: { Authorization: `Bearer ${token}` }
-                         })
-                         .then(response => {
-                           if (response.ok) {
-                             return response.json();
-                           } else {
-                             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                           }
-                         })
-                         .then(data => {
-                           alert(`Database Connection Test:\n\n✅ SUCCESS!\n\nResponse: ${JSON.stringify(data, null, 2)}`);
-                         })
-                         .catch(error => {
-                           alert(`Database Connection Test:\n\n❌ FAILED!\n\nError: ${error.message}\n\nThis means the backend API endpoint for Semestral_Grades_Collection is not yet implemented.`);
-                         });
-                       }}
-                       className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                       title="Test database connection for semestral grades"
-                     >
-                       🗄️ Test Database Connection
-                     </button>
-                   </div>
-                 </div>
-               </div>
-             )}
+
 
             {/* Only show tables when both class and section are selected */}
             {selectedClass !== null && selectedSection && selectedSection !== 'default' && (

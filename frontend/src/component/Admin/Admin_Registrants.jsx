@@ -220,14 +220,35 @@ export default function Admin_Registrants() {
   const handleExport = async () => {
     setError('');
     try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setError('Authentication required. Please log in again.');
+        return;
+      }
+
       const params = [];
       if (selectedDate) params.push(`date=${encodeURIComponent(selectedDate)}`);
       if (statusFilter && statusFilter !== 'all') params.push(`status=${encodeURIComponent(statusFilter)}`);
       const query = params.length ? `?${params.join('&')}` : '';
+      
       const response = await fetch(`${API_BASE}/api/registrants/export${query}`, {
         method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
-      if (!response.ok) throw new Error('Failed to export registrants.');
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError('Your session has expired. Please log in again.');
+        } else if (response.status === 403) {
+          setError('You do not have permission to export registrants.');
+        } else {
+          throw new Error(`Failed to export registrants (${response.status}).`);
+        }
+        return;
+      }
+      
       const blob = await response.blob();
       // Get filename from Content-Disposition header
       let filename = 'registrants_export.xlsx';
@@ -245,7 +266,8 @@ export default function Admin_Registrants() {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError('Failed to export registrants.');
+      console.error('Export error:', err);
+      setError('Failed to export registrants. Please try again.');
     }
   };
 
