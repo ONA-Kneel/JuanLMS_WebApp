@@ -142,6 +142,26 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
           currentTerm = terms.find(term => term.status === 'active');
         }
       }
+
+      // Fallback: if currentTerm is still null, try the direct active term endpoint
+      if (!currentTerm) {
+        const directActiveTermRes = await fetch(`${req.protocol}://${req.get('host')}/api/terms/active`, {
+          headers: { "Authorization": `Bearer ${req.headers.authorization?.split(' ')[1]}` }
+        });
+        if (directActiveTermRes.ok) {
+          const directActiveTerm = await directActiveTermRes.json();
+          if (directActiveTerm) {
+            currentTerm = directActiveTerm;
+            // If academic year was not fetched, derive from term
+            if (!academicYear && directActiveTerm.schoolYear) {
+              const [start, end] = String(directActiveTerm.schoolYear).split('-').map(Number);
+              if (!Number.isNaN(start) && !Number.isNaN(end)) {
+                academicYear = { schoolYearStart: start, schoolYearEnd: end };
+              }
+            }
+          }
+        }
+      }
     } catch (err) {
       console.log('Could not fetch academic year/term, creating class without them');
     }
