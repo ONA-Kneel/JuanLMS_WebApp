@@ -475,7 +475,7 @@ export default function Principal_FacultyReport() {
             </button>
           </div>
 
-          {/* Faculty Activities Table */}
+           {/* Faculty Activities Table */}
           <div className="mt-8">
             {!selectedTerm || !selectedSchoolYear ? (
               <div className="text-center py-12 bg-gray-50 rounded-lg">

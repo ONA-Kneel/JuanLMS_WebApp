@@ -3,8 +3,8 @@ import * as XLSX from "xlsx";
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-// API base: prefer local in dev when not explicitly configured
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://juanlms-webapp-server.onrender.com');
+// Use localhost for development - local server is running on port 5000
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Faculty_StudentReport() {
   const [academicYear, setAcademicYear] = useState(null);
@@ -36,12 +36,6 @@ export default function Faculty_StudentReport() {
   const [uploadSummary, setUploadSummary] = useState(null);
   
   const searchTimeoutRef = useRef(null);
-
-  // Dynamic audit data
-  const [facultyClasses, setFacultyClasses] = useState([]);
-  const [activities, setActivities] = useState([]);
-  const [auditRows, setAuditRows] = useState([]);
-  const [classStudentRoster, setClassStudentRoster] = useState({});
 
   // Report limits
   const MIN_CHARS = 1;
@@ -95,221 +89,6 @@ export default function Faculty_StudentReport() {
     }
     fetchActiveTermForYear();
   }, [academicYear]);
-
-  // Load faculty classes for current term
-  useEffect(() => {
-    async function fetchFacultyClasses() {
-      if (!academicYear || !currentTerm) return;
-      try {
-        const token = localStorage.getItem('token');
-        const userId = localStorage.getItem('userID');
-        const res = await fetch(`${API_BASE}/classes`, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (!res.ok) { setFacultyClasses([]); return; }
-        const data = await res.json();
-        const yearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-        const filtered = (Array.isArray(data) ? data : []).filter(cls => {
-          if (cls.facultyID !== userId) return false;
-          if (cls.isArchived === true) return false;
-          // Include if class matches current year/term OR if either field is missing (fallback for older/local data)
-          const matchesExact = cls.academicYear === yearName && cls.termName === currentTerm.termName;
-          const missingMeta = !cls.academicYear || !cls.termName;
-          return matchesExact || missingMeta;
-        });
-        setFacultyClasses(filtered);
-      } catch {
-        setFacultyClasses([]);
-      }
-    }
-    fetchFacultyClasses();
-  }, [academicYear, currentTerm]);
-
-  // Load activities for those classes
-  useEffect(() => {
-    async function loadActivities() {
-      if (!facultyClasses.length) { setActivities([]); return; }
-      try {
-        const token = localStorage.getItem('token');
-        const results = await Promise.all(facultyClasses.map(async (cls) => {
-          const [aRes, qRes] = await Promise.all([
-            fetch(`${API_BASE}/assignments?classID=${cls.classID}`, { headers: { 'Authorization': `Bearer ${token}` } }),
-            fetch(`${API_BASE}/api/quizzes?classID=${cls.classID}`, { headers: { 'Authorization': `Bearer ${token}` } })
-          ]);
-          const assignments = aRes.ok ? await aRes.json() : [];
-          const quizzes = qRes.ok ? await qRes.json() : [];
-          
-          console.log(`[DEBUG] Raw assignments for class ${cls.classID}:`, assignments);
-          console.log(`[DEBUG] Raw quizzes for class ${cls.classID}:`, quizzes);
-          
-          const withClass = [];
-          (Array.isArray(assignments) ? assignments : []).forEach(a => withClass.push({ ...a, classID: cls.classID, classSection: cls.section || cls.classCode, _kind: 'assignment' }));
-          (Array.isArray(quizzes) ? quizzes : []).forEach(q => withClass.push({ ...q, classID: cls.classID, classSection: cls.section || cls.classCode, _kind: 'quiz' }));
-          return withClass;
-        }));
-        setActivities(results.flat());
-      } catch {
-        setActivities([]);
-      }
-    }
-    loadActivities();
-  }, [facultyClasses]);
-
-  // Load class rosters from backend members endpoint
-  useEffect(() => {
-    async function loadRosters() {
-      if (!facultyClasses.length) { setClassStudentRoster({}); return; }
-      const token = localStorage.getItem('token');
-      const pairs = await Promise.all(facultyClasses.map(async (cls) => {
-        try {
-          const res = await fetch(`${API_BASE}/classes/${cls.classID}/members`, { headers: { 'Authorization': `Bearer ${token}` } });
-          if (!res.ok) return [cls.classID, []];
-          const data = await res.json();
-          return [cls.classID, Array.isArray(data.students) ? data.students : []];
-        } catch {
-          return [cls.classID, []];
-        }
-      }));
-      const map = {};
-      for (const [cid, students] of pairs) map[cid] = students;
-      setClassStudentRoster(map);
-    }
-    loadRosters();
-  }, [facultyClasses]);
-
-  // Build dynamic audit rows
-  useEffect(() => {
-    async function buildRows() {
-      if (!activities.length) { setAuditRows([]); return; }
-      const token = localStorage.getItem('token');
-      const byAct = new Map();
-      await Promise.all(activities.map(async act => {
-        if (act._kind !== 'assignment') { byAct.set(act._id, []); return; }
-        try {
-          const r = await fetch(`${API_BASE}/assignments/${act._id}/submissions`, { headers: { 'Authorization': `Bearer ${token}` } });
-          const subs = r.ok ? await r.json() : [];
-          byAct.set(act._id, Array.isArray(subs) ? subs : []);
-        } catch {
-          byAct.set(act._id, []);
-        }
-      }));
-
-      // Get detailed assignment information including views
-      const detailedAssignments = new Map();
-      await Promise.all(activities.filter(act => act._kind === 'assignment').map(async act => {
-        try {
-          const r = await fetch(`${API_BASE}/assignments/${act._id}`, { headers: { 'Authorization': `Bearer ${token}` } });
-          if (r.ok) {
-            const detailed = await r.json();
-            detailedAssignments.set(act._id, detailed);
-            console.log(`[DEBUG] Detailed assignment ${act._id}:`, detailed);
-          }
-        } catch (err) {
-          console.error(`[DEBUG] Failed to get detailed assignment ${act._id}:`, err);
-        }
-      }));
-
-      const now = new Date();
-      const rows = [];
-      let totalStudents = 0;
-      let viewedStudents = 0;
-      let reportedStudents = 0;
-
-      for (const act of activities) {
-        // Prefer precise class roster from backend; fallback to allowedStudents by section
-        const roster = (classStudentRoster[act.classID] && classStudentRoster[act.classID].length)
-          ? classStudentRoster[act.classID]
-          : (allowedStudents.filter(s => s.sectionName === act.classSection));
-        
-        totalStudents += roster.length;
-        const due = act.dueDate ? new Date(act.dueDate) : null;
-        const subs = byAct.get(act._id) || [];
-        const submittedIds = new Set(subs.map(s => String(s.studentId || s.studentID || s.userID || s.student?._id)));
-        
-        // Use detailed assignment info for views if available, otherwise fall back to activity data
-        const detailedAct = detailedAssignments.get(act._id);
-        const views = detailedAct ? (Array.isArray(detailedAct.views) ? detailedAct.views : []) : (Array.isArray(act.views) ? act.views : []);
-        const viewIds = new Set(views.map(v => String(v?.studentId || v?.studentID || v?.userID || v?._id || v)));
-
-        console.log(`[AUDIT] Activity: ${act.title} (${act._id})`);
-        console.log(`[AUDIT] Views array:`, views);
-        console.log(`[AUDIT] View IDs:`, Array.from(viewIds));
-        console.log(`[AUDIT] Roster size: ${roster.length}`);
-
-        for (const stu of roster) {
-          const canonicalId = String(stu.userID || stu.schoolID || (stu._id && stu._id.$oid) || stu._id || stu.studentId || stu.id);
-          const submitted = submittedIds.has(canonicalId);
-          
-          // More robust view checking - try multiple ID formats
-          let hasViewed = false;
-          const studentIdVariants = [
-            canonicalId,
-            stu.userID,
-            stu.schoolID,
-            stu._id,
-            stu.studentId,
-            stu.id
-          ].filter(Boolean).map(id => String(id));
-          
-          for (const viewId of viewIds) {
-            if (studentIdVariants.includes(viewId)) {
-              hasViewed = true;
-              break;
-            }
-          }
-
-          console.log(`[AUDIT] Student: ${stu.displayName || `${stu.lastname}, ${stu.firstname}`}`);
-          console.log(`[AUDIT] Student canonical ID: ${canonicalId}`);
-          console.log(`[AUDIT] Student raw data:`, stu);
-          console.log(`[AUDIT] Student ID variants:`, studentIdVariants);
-          console.log(`[AUDIT] Has submitted: ${submitted}`);
-          console.log(`[AUDIT] Has viewed: ${hasViewed}`);
-          console.log(`[AUDIT] View IDs contains student ID: ${viewIds.has(canonicalId)}`);
-          console.log(`[AUDIT] All view IDs:`, Array.from(viewIds));
-          console.log(`[AUDIT] Direct comparison check:`, Array.from(viewIds).map(vid => `${vid} === ${canonicalId} = ${vid === canonicalId}`));
-
-          // Skip students who have already viewed the assignment
-          // The purpose is to show who hasn't viewed it and who missed it
-          if (hasViewed) {
-            viewedStudents++;
-            console.log(`[AUDIT] Skipping ${stu.displayName || `${stu.lastname}, ${stu.firstname}`} - already viewed`);
-            continue;
-          }
-
-          // Missed: past due and not submitted (and not viewed)
-          if (!submitted && due && due < now) {
-            rows.push({
-              studentId: canonicalId,
-              studentName: stu.displayName || `${stu.lastname}, ${stu.firstname}`,
-              sectionName: stu.sectionName || act.classSection,
-              activityId: act._id,
-              activityTitle: act.title,
-              dueDate: act.dueDate || null,
-              status: 'missed'
-            });
-            reportedStudents++;
-          }
-
-          // Not viewed: rostered student who hasn't viewed (and hasn't submitted)
-          // Only add if not already added as "missed" for this activity
-          if (!submitted && (!due || due >= now)) {
-            rows.push({
-              studentId: canonicalId,
-              studentName: stu.displayName || `${stu.lastname}, ${stu.firstname}`,
-              sectionName: stu.sectionName || act.classSection,
-              activityId: act._id,
-              activityTitle: act.title,
-              dueDate: act.dueDate || null,
-              status: 'not_viewed'
-            });
-            reportedStudents++;
-          }
-        }
-      }
-
-      console.log(`[AUDIT] Summary: Total students: ${totalStudents}, Already viewed: ${viewedStudents}, Reported: ${reportedStudents}`);
-      setAuditRows(rows);
-    }
-    buildRows();
-  }, [activities, allowedStudents, classStudentRoster]);
 
   // Fetch allowed students for batch template (students in faculty's sections for the active term)
   const fetchAllowedStudents = async () => {
@@ -377,14 +156,6 @@ export default function Faculty_StudentReport() {
       await fetchAllowedStudents();
     }
   };
-
-  // Preload allowed students when the active term becomes available so
-  // section-based fallbacks work even if class members endpoint returns empty
-  useEffect(() => {
-    if (currentTerm) {
-      fetchAllowedStudents().catch(() => {});
-    }
-  }, [currentTerm]);
 
   // Download Excel template with two sheets
   const downloadBatchTemplate = async () => {
@@ -711,7 +482,7 @@ export default function Faculty_StudentReport() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold">Student Activity Audit</h2>
+            <h2 className="text-2xl md:text-3xl font-bold">Student Reports</h2>
             <p className="text-base md:text-lg">
               <span> </span>{academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
               <span> </span>{currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
@@ -728,175 +499,250 @@ export default function Faculty_StudentReport() {
           </div>
         </div>
 
-        {/* Main Content Area - Student Activity Audit (dynamic) */}
+        {/* Main Content Area */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          {/* Filters */}
-          {(() => {
-            // Component-level state for filters and derived data
-            // We keep them in closures to avoid polluting top-level with a lot of vars; values are recomputed via simple patterns
-            // Definitions
-            const sections = ["All Sections", ...Array.from(new Set((facultyClasses || []).map(c => c.section || c.classCode).filter(Boolean)))];
-            const activitiesOpts = [{ id: 'all', title: 'All Activities', sectionName: '*' }, ...activities.map(a => ({ id: a._id, title: a.title, sectionName: a.classSection }))];
-            
-            // Use React state via a tiny helper component
-            function AuditUI() {
-              const [selectedSection, setSelectedSection] = useState("All Sections");
-              const [selectedActivityId, setSelectedActivityId] = useState("all");
-              const [statusFilter, setStatusFilter] = useState("all"); // default to show all
-              const [studentSearch, setStudentSearch] = useState("");
-
-              const activityById = new Map(activities.map(a => [a._id, { id: a._id, title: a.title, sectionName: a.classSection, dueDate: a.dueDate } ]));
-
-              const filteredActivities = activitiesOpts.filter(a => selectedSection === "All Sections" || a.sectionName === "*" || a.sectionName === selectedSection);
-
-              const filteredRows = auditRows.filter(r => {
-                const inSection = selectedSection === "All Sections" || r.sectionName === selectedSection;
-                const inActivity = selectedActivityId === "all" || r.activityId === selectedActivityId;
-                const inStatus = statusFilter === "all" ? true : r.status === statusFilter;
-                const inSearch = studentSearch.trim() === "" || r.studentName.toLowerCase().includes(studentSearch.trim().toLowerCase());
-                return inSection && inActivity && inStatus && inSearch;
-              });
-
-              const notViewedCount = filteredRows.filter(r => r.status === "not_viewed").length;
-              const missedCount = filteredRows.filter(r => r.status === "missed").length;
-
-              const exportToExcel = () => {
-                const exportRows = filteredRows.map(r => {
-                  const act = activityById.get(r.activityId) || {};
-                  return {
-                    "Student Name": r.studentName,
-                    Section: r.sectionName,
-                    Activity: act.title || r.activityId,
-                    "Due Date": act.dueDate ? new Date(act.dueDate).toLocaleDateString("en-US") : "-",
-                    Status: r.status.replace("_", " "),
-                    "Last Viewed": r.lastViewedAt ? new Date(r.lastViewedAt).toLocaleString() : "-",
-                    "Submitted At": r.submittedAt ? new Date(r.submittedAt).toLocaleString() : "-",
-                  };
-                });
-
-                // Calculate summary counts
-                const notViewedCount = filteredRows.filter(r => r.status === "not_viewed").length;
-                const missedCount = filteredRows.filter(r => r.status === "missed").length;
-                
-                // Calculate already viewed count
-                let viewedStudents = 0;
-                for (const act of activities) {
-                  const roster = (classStudentRoster[act.classID] && classStudentRoster[act.classID].length)
-                    ? classStudentRoster[act.classID]
-                    : (allowedStudents.filter(s => s.sectionName === act.classSection));
-                  
-                  const views = Array.isArray(act.views) ? act.views : [];
-                  const viewIds = new Set(views.map(v => String(v?.studentId || v?.studentID || v?.userID || v?._id || v)));
-                  
-                  for (const stu of roster) {
-                    const canonicalId = String(stu.userID || stu.schoolID || (stu._id && stu._id.$oid) || stu._id || stu.studentId || stu.id);
-                    if (viewIds.has(canonicalId)) {
-                      viewedStudents++;
-                    }
-                  }
-                }
-
-                const wb = XLSX.utils.book_new();
-                
-                // Sheet 1: Summary
-                const summaryData = [
-                  { Category: "Not Viewed", Count: notViewedCount, Description: "Students who haven't opened the assignment" },
-                  { Category: "Missed", Count: missedCount, Description: "Students who haven't submitted and assignment is past due" },
-                  { Category: "Already Viewed", Count: viewedStudents, Description: "Students who have opened the assignment (excluded from reports)" },
-                  { Category: "Total Reported", Count: filteredRows.length, Description: "Total students in the audit report" }
-                ];
-                const ws1 = XLSX.utils.json_to_sheet(summaryData);
-                XLSX.utils.book_append_sheet(wb, ws1, "Summary");
-
-                // Sheet 2: Audit Details
-                const ws2 = XLSX.utils.json_to_sheet(exportRows);
-                XLSX.utils.book_append_sheet(wb, ws2, "Audit Details");
-                
-                XLSX.writeFile(wb, "StudentActivityAudit.xlsx");
-              };
-
-              return (
-                <>
-                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
-                    <h3 className="text-lg font-semibold">Activity Visibility & Submission Audit</h3>
+          {/* Card header actions */}
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold">Create Student Report</h3>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowBatch(true);
+                  await ensureAllowedStudentsLoaded();
+                }}
+                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Batch Upload
+              </button>
+            </div>
           </div>
 
-                  {/* Filters */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+          {showBatch && (
+            <div className="mb-6 border rounded p-4 bg-gray-50">
+              <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
                 <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
-                      <select value={selectedSection} onChange={e => { setSelectedSection(e.target.value); setSelectedActivityId("all"); }} className="w-full border rounded px-3 py-2">
-                        {sections.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                 </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Activity</label>
-                      <select value={selectedActivityId} onChange={e => setSelectedActivityId(e.target.value)} className="w-full border rounded px-3 py-2">
-                        {filteredActivities.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
-                      </select>
+                  <p className="font-medium text-gray-800">Batch Upload Reports</p>
+                  <p className="text-sm text-gray-600">Download the template, fill it, then upload. Only students assigned to your sections for the active term are allowed.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={downloadBatchTemplate}
+                    disabled={loadingAllowed}
+                    className="px-3 py-2 rounded bg-[#010a51] text-white hover:bg-[#1a237e] disabled:opacity-50"
+                  >
+                    {loadingAllowed ? "Preparing..." : "Download Template"}
+                  </button>
+                  <label className="cursor-pointer px-3 py-2 rounded bg-green-600 text-white hover:bg-green-700">
+                    {uploadingBatch ? "Uploading..." : "Upload Template"}
+                    <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleBatchFile} disabled={uploadingBatch} />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowBatch(false)}
+                    className="px-3 py-2 rounded border border-gray-300 text-gray-700 hover:bg-white"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              {uploadSummary && (
+                <div className="mt-3 text-sm text-gray-700">
+                  <p>Created: {uploadSummary.created} | Skipped: {uploadSummary.skipped}</p>
+                  {uploadSummary.errors?.length > 0 && (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer">View errors ({uploadSummary.errors.length})</summary>
+                      <ul className="list-disc ml-6 mt-1">
+                        {uploadSummary.errors.map((e, idx) => (
+                          <li key={idx}>{e.studentName ? `${e.studentName}: ` : ""}{e.error}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )}
             </div>
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                      <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full border rounded px-3 py-2">
-                        <option value="all">All</option>
-                        <option value="not_viewed">Not Viewed</option>
-                        <option value="missed">Missed</option>
-                      </select>
+          )}
+          <form onSubmit={handleSubmit} className="space-y-6">
+                         {/* Search Student Section */}
+             <div className="search-container relative">
+               <label htmlFor="studentSearch" className="block text-sm font-medium text-gray-700 mb-2">
+                 Search Student
+               </label>
+               <div className="relative">
+                 <input
+                   type="text"
+                   id="studentSearch"
+                   value={searchTerm}
+                   onChange={handleSearchChange}
+                   placeholder="Search by name or email..."
+                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#010a51] focus:border-transparent"
+                 />
+                 {isSearching && (
+                   <div className="absolute right-3 top-2">
+                     <div className="w-5 h-5 border-2 border-[#010a51] border-t-transparent rounded-full animate-spin"></div>
                    </div>
-            <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Search Student</label>
-                      <input value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="e.g. Dela Cruz" className="w-full border rounded px-3 py-2" />
+                 )}
+               </div>
+              
+                             {/* Search Results Dropdown */}
+               {showDropdown && searchResults.length > 0 && (
+                 <div className="absolute z-10 w-full bg-white border border-gray-300 border-t-0 max-h-60 overflow-y-auto">
+                   {searchResults.map((student, index) => (
+                     <button
+                       key={student._id || index}
+                       type="button"
+                       onClick={() => handleStudentSelect(student)}
+                       className="w-full px-3 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none border-b border-gray-200 last:border-b-0 text-sm"
+                     >
+                       {student.lastname}, {student.firstname}
+                     </button>
+                   ))}
+                 </div>
+               )}
+            </div>
+
+                         {/* Selected Student Display */}
+             {selectedStudent && (
+               <div className="bg-[#010a51]/10 border border-[#010a51]/20 rounded-md p-4">
+                 <div className="flex items-center justify-between">
+                   <div>
+                     <h3 className="font-medium text-[#010a51]">Selected Student:</h3>
+                     <p className="text-[#010a51]">{selectedStudent.lastname}, {selectedStudent.firstname}</p>
+                     <p className="text-sm text-[#010a51]/70">{selectedStudent.email}</p>
+                   </div>
+                   <button
+                     type="button"
+                     onClick={() => {
+                       setSelectedStudent(null);
+                       setSearchTerm("");
+                     }}
+                     className="text-[#010a51] hover:text-[#1a237e] text-sm"
+                   >
+                     Change Student
+                   </button>
+                 </div>
+               </div>
+             )}
+
+            {/* Rubric Section */}
+            <div className="mb-2 text-xs sm:text-sm text-gray-600">
+              <span className="mr-4">1 - very poor</span>
+              <span className="mr-4">2 - below average</span>
+              <span className="mr-4">3 - average</span>
+              <span className="mr-4">4 - good</span>
+              <span>5 - excellent</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center gap-4">
+                <label className="w-48 text-base font-semibold text-gray-800">Behavior</label>
+                <div className="flex items-center gap-4">
+                  {[1,2,3,4,5].map(n => (
+                    <label key={`beh-${n}`} className="flex items-center gap-2 text-sm">
+                      <input className="w-5 h-5" type="radio" name="behavior" value={n} checked={behavior===n} onChange={() => setBehavior(n)} />
+                      <span>{n === 1 ? '1' : n === 2 ? '2' : n === 3 ? '3' : n === 4 ? '4' : '5'}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="w-48 text-base font-semibold text-gray-800">Class Participation</label>
+                <div className="flex items-center gap-4">
+                  {[1,2,3,4,5].map(n => (
+                    <label key={`cp-${n}`} className="flex items-center gap-2 text-sm">
+                      <input className="w-5 h-5" type="radio" name="classParticipation" value={n} checked={classParticipation===n} onChange={() => setClassParticipation(n)} />
+                      <span>{n === 1 ? '1 ' : n === 2 ? '2' : n === 3 ? '3' : n === 4 ? '4' : '5'}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="w-48 text-base font-semibold text-gray-800">Class Activity</label>
+                <div className="flex items-center gap-4">
+                  {[1,2,3,4,5].map(n => (
+                    <label key={`ca-${n}`} className="flex items-center gap-2 text-sm">
+                      <input className="w-5 h-5" type="radio" name="classActivity" value={n} checked={classActivity===n} onChange={() => setClassActivity(n)} />
+                      <span>{n === 1 ? '1' : n === 2 ? '2' : n === 3 ? '3' : n === 4 ? '4' : '5'}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
 
-                  {/* Table */}
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
-                      <thead>
-                        <tr className="bg-gray-50 text-left">
-                          <th className="p-3 border-b font-semibold text-gray-700">Student Name</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Section</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Activity</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Due Date</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Status</th>
-                          
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredRows.length === 0 ? (
-                          <tr>
-                            <td className="p-4 text-center text-gray-500" colSpan={5}>No results for current filters.</td>
-                          </tr>
-                        ) : (
-                          filteredRows.map((r) => {
-                            const act = activityById.get(r.activityId) || {};
-                            return (
-                              <tr key={`${r.activityId}-${r.studentId}`} className="odd:bg-white even:bg-gray-50">
-                                <td className="p-3 border-b">{r.studentName}</td>
-                                <td className="p-3 border-b">{r.sectionName}</td>
-                                <td className="p-3 border-b">{act.title || r.activityId}</td>
-                                <td className="p-3 border-b">{act.dueDate ? new Date(act.dueDate).toLocaleDateString("en-US") : '-'}</td>
-                                <td className="p-3 border-b">
-                                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
-                                    r.status === 'not_viewed' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
-                                    'bg-red-100 text-red-700 border border-red-200'
-                                  }`}>
-                                    {r.status.replace('_', ' ')}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-            </div>
-                </>
-              );
-            }
+            {/* Report Content Section */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="reportContent" className="block text-sm font-medium text-gray-700">
+                  Report Content
+                </label>
+                <span className={`text-xs ${withinCharRange ? 'text-[#010a51]' : 'text-red-600'}`}>
+                  {charsLeft} left
+                </span>
+              </div>
+              <textarea
+                id="reportContent"
+                value={reportContent}
+                onChange={(e) => setReportContent(e.target.value)}
+                placeholder="Write your report here..."
+                rows={10}
+                maxLength={MAX_CHARS}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#010a51] focus:border-transparent resize-vertical ${
+                  withinCharRange && withinWordRange ? 'border-gray-300' : 'border-red-500'
+                }`}
+                required
+              />
 
-            return <AuditUI />;
-          })()}
+            </div>
+
+            {/* Submit Button */}
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={!canSubmit}
+                className={`px-6 py-2 rounded-md text-white font-medium ${
+                  !canSubmit
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-[#010a51] hover:bg-[#1a237e] focus:outline-none focus:ring-2 focus:ring-[#010a51] focus:ring-offset-2'
+                }`}
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Report'}
+              </button>
+            </div>
+          </form>
+          
+          {/* Stored Reports Display */}
+          {showStoredReports && (
+            <div className="mt-6 bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-semibold mb-4">Stored Reports ({storedReports.length})</h3>
+              {storedReports.length === 0 ? (
+                <p className="text-gray-500">No reports stored yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {storedReports.map((report, index) => (
+                    <div key={report.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h4 className="font-medium text-gray-900">
+                            Report for {report.studentName}
+                          </h4>
+                          <p className="text-sm text-gray-600">
+                            Faculty: {report.facultyName} | Term: {report.termName} | Year: {report.schoolYear}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Created: {new Date(report.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded p-3">
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.studentReport}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
