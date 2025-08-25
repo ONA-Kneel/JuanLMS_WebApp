@@ -4,7 +4,7 @@ import VPE_Navbar from "./VPE_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
 // Switch to localhost for local testing
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://juanlms-webapp-server.onrender.com";
 
 export default function VPE_FacultyReport() {
   const [academicYear, setAcademicYear] = useState(null);
