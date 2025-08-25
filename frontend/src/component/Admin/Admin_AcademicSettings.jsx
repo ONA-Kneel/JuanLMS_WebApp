@@ -855,14 +855,7 @@ export default function Admin_AcademicSettings() {
 
   // Archive (delete) a school year
   const handleDelete = async (year) => {
-    // Prevent archiving inactive school years
-    if (year.status === 'inactive') {
-      setErrorMessage('Cannot archive inactive school years. Only active school years can be archived.');
-      setShowErrorModal(true);
-      return;
-    }
-    
-    // Set pending delete and show warning modal
+    // Allow deletion for both active and inactive school years, but always warn about permanence
     setPendingDelete(year);
     setDeleteWarningMessage(`Are you sure you want to DELETE school year ${year.schoolYearStart}-${year.schoolYearEnd}? This will permanently delete ALL data including terms, tracks, strands, sections, subjects, and assignments. This action cannot be undone.`);
     setShowDeleteWarningModal(true);
@@ -1182,12 +1175,12 @@ export default function Admin_AcademicSettings() {
                                         </svg>
                                       </button>
                                       <button
-                                        disabled
-                                        className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
-                                        title="Cannot archive inactive school year"
+                                        onClick={() => handleDelete(year)}
+                                        className="p-1 rounded hover:bg-red-100 group relative"
+                                        title="Delete"
                                       >
-                                        {/* Heroicons Trash (gray) */}
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
+                                        {/* Heroicons Trash (red) */}
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
                                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                         </svg>
                                       </button>
