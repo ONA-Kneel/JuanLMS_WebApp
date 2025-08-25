@@ -66,7 +66,7 @@ router.post('/upload-image', upload.single('image'), (req, res) => {
     imageUrl = req.file.secure_url;
   } else {
     // Local storage - construct backend URL
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+    const backendUrl = process.env.BACKEND_URL || 'https://juanlms-webapp-server.onrender.com';
     imageUrl = `${backendUrl}/uploads/quiz-images/${req.file.filename}`;
   }
   

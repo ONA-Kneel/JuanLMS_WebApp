@@ -5,7 +5,7 @@ import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
 // Force localhost for local testing
-const API_BASE = import.meta.env.DEV ? "http://localhost:5000" : (import.meta.env.VITE_API_URL || "http://localhost:5000");
+const API_BASE = import.meta.env.DEV ? "https://juanlms-webapp-server.onrender.com" : (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com");
 
 export default function Student_Activities() {
   const navigate = useNavigate();
