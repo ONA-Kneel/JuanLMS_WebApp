@@ -37,7 +37,7 @@ export default function Registration() {
   };
 
   function isValidName(name) {
-    return /^[A-Za-z\s'-]+$/.test(name);
+    return /^[\p{L}\s'-]+$/u.test(name);
   }
   function isValidContactNo(contactNo) {
     return /^09\d{9}$/.test(contactNo);
@@ -50,8 +50,8 @@ export default function Registration() {
       // Only allow numbers, max 11 digits
       newValue = value.replace(/[^0-9]/g, '').slice(0, 11);
     } else if (name === 'firstName' || name === 'middleName' || name === 'lastName') {
-      // Only allow letters, spaces, apostrophes, hyphens
-      newValue = value.replace(/[^A-Za-z\s'-]/g, '');
+      // Allow international letters (including ñ, é, ü, etc.), spaces, apostrophes, hyphens
+      newValue = value.replace(/[^\p{L}\s'-]/gu, '');
     }
     setForm({ ...form, [name]: newValue });
   };
@@ -74,7 +74,7 @@ export default function Registration() {
         isOpen: true,
         type: 'warning',
         title: 'Invalid Name',
-        message: 'Names must only contain letters, spaces, apostrophes, or hyphens.'
+        message: 'Names must only contain letters (including international characters like ñ, é, ü), spaces, apostrophes, or hyphens.'
       });
       setLoading(false);
       return;

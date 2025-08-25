@@ -169,7 +169,7 @@ export default function Admin_Accounts() {
         .toLowerCase()
         .trim()
         .replace(/\s+/g, "") // remove spaces
-        .replace(/[^a-z]/g, ""); // remove non-letters
+        .replace(/[^\p{L}]/gu, ""); // remove non-letters (including international characters)
     if (firstname && lastname) {
       const emailDomain = "sjddef.edu.ph"; // Always use this domain
       // If same name duplicates exist, the backend will propose a unique suggestion on submit

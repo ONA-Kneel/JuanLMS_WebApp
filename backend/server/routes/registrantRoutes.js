@@ -133,7 +133,7 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
     }
 
     // Helper function to clean names for email generation
-    const clean = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const clean = (str) => (str || '').toLowerCase().replace(/[^\p{L}0-9]/gu, '');
     
     // Determine role based on schoolID format
     let role = 'students'; // default
