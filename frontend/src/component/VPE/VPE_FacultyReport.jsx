@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import VPE_Navbar from "./VPE_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function VPE_FacultyReport() {
   const [academicYear, setAcademicYear] = useState(null);
