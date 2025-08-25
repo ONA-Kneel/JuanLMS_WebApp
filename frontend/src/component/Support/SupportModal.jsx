@@ -3,6 +3,8 @@ import { Headphones, Search, FileText, Clock, CheckCircle, XCircle, Copy, ArrowL
 import axios from 'axios';
 import { getUserTickets } from '../../services/ticketService';
 
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+
 export default function SupportModal({ onClose }) {
   const [view, setView] = useState('main'); // main | new | submitted | myTickets
   // Generate ticket number function
@@ -36,6 +38,14 @@ export default function SupportModal({ onClose }) {
   const [activeFilter, setActiveFilter] = useState('all'); // all, new, opened, closed
   const [user, setUser] = useState(null);
 
+  // Attachment preview state
+  const [showAttachment, setShowAttachment] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [attachmentName, setAttachmentName] = useState("attachment");
+  const [attachmentType, setAttachmentType] = useState("application/octet-stream");
+  const [attachmentLoading, setAttachmentLoading] = useState(false);
+  const [attachmentError, setAttachmentError] = useState("");
+
   // Get user role on component mount
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user') || '{}');
@@ -67,6 +77,18 @@ export default function SupportModal({ onClose }) {
     setSortOrder('newest');
     setActiveFilter('all');
     onClose();
+  };
+
+  // Navigate back within the support center modal
+  const handleBack = () => {
+    if (view === 'main') {
+      handleClose();
+    } else {
+      setView('main');
+      setSelectedUserTicket(null);
+      setShowAllTickets(false);
+      setSearchTerm('');
+    }
   };
 
   // Fetch user tickets
@@ -276,6 +298,53 @@ export default function SupportModal({ onClose }) {
     }
   };
 
+  // Helper to fetch ticket attachment as Blob
+  async function fetchAttachmentBlob(ticketId) {
+    const raw = localStorage.getItem("token") || "";
+    const token = raw.startsWith('"') ? JSON.parse(raw) : raw;
+    if (!token) throw new Error("Missing auth token");
+
+    const url = `${API_BASE}/api/tickets/file/${ticketId}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const cd = res.headers.get("Content-Disposition") || "";
+    let name = "attachment";
+    const star = cd.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+    const quoted = cd.match(/filename\s*=\s*"([^"]+)"/i);
+    const bare = cd.match(/filename\s*=\s*([^;]+)/i);
+    if (star) name = decodeURIComponent(star[1]);
+    else if (quoted) name = quoted[1];
+    else if (bare) name = bare[1].trim();
+
+    const type = res.headers.get("Content-Type") || "application/octet-stream";
+    const blob = await res.blob();
+    return { blob, name, type };
+  }
+
+  async function handleOpenAttachment(ticketId) {
+    try {
+      setAttachmentLoading(true);
+      setAttachmentError("");
+      const { blob, name, type } = await fetchAttachmentBlob(ticketId);
+      const url = URL.createObjectURL(blob);
+      setAttachmentName(name);
+      setAttachmentType(type);
+      const popup = window.open(url, "_blank", "noopener,noreferrer");
+      if (!popup) {
+        setAttachmentUrl(url);
+        setShowAttachment(true);
+      } else {
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+    } catch {
+      setAttachmentError("Failed to open attachment. Please try downloading it instead.");
+      setShowAttachment(true);
+    } finally {
+      setAttachmentLoading(false);
+    }
+  }
+
   // Get role-specific welcome message
   const getRoleWelcomeMessage = () => {
     switch (userRole) {
@@ -297,12 +366,12 @@ export default function SupportModal({ onClose }) {
       <div
         className="animate-support-modal w-[90vw] max-w-6xl h-[90vh] p-8 rounded-2xl shadow-2xl relative overflow-hidden"
         style={{
-          background: 'linear-gradient(90deg, #ede7f6 0%, #9575cd 100%)',
+          background: 'linear-gradient(135deg, #ffffff 0%, #e6f0ff 25%, #cfe0ff 60%, #1e40af 100%)',
           boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)'
         }}
       >
         <button
-          onClick={handleClose}
+          onClick={handleBack}
           className="absolute top-4 left-4 text-gray-500 text-2xl font-bold hover:text-gray-700 z-10"
         >
           &lt;
@@ -318,7 +387,7 @@ export default function SupportModal({ onClose }) {
               </div>
               <div className="ml-4">
                 <div className="bg-white bg-opacity-30 rounded-full p-3">
-                  <Headphones size={60} className="text-[#9575cd]" />
+                  <Headphones size={60} className="text-[#1e40af]" />
                 </div>
               </div>
             </div>
@@ -347,7 +416,7 @@ export default function SupportModal({ onClose }) {
                 <h2 className="text-2xl font-bold text-gray-900">{getRoleWelcomeMessage()}<br /><span className="text-lg font-semibold">My Tickets</span></h2>
                 <div className="text-lg mt-2">
                   {!showAllTickets ? (
-                    <span>View all your tickets</span>
+                    null
                   ) : (
                     <span>All your tickets</span>
                   )}
@@ -355,7 +424,7 @@ export default function SupportModal({ onClose }) {
               </div>
               <div className="ml-4">
                 <div className="bg-white bg-opacity-30 rounded-full p-3">
-                  <Headphones size={48} className="text-[#9575cd]" />
+                  <Headphones size={48} className="text-[#1e40af]" />
                 </div>
               </div>
             </div>
@@ -373,7 +442,7 @@ export default function SupportModal({ onClose }) {
                   onClick={() => setActiveFilter(filter.key)}
                   className={`px-3 py-2 rounded-lg font-medium transition-colors text-sm ${
                     activeFilter === filter.key
-                      ? 'bg-[#9575cd] text-white'
+                      ? 'bg-[#1e40af] text-white'
                       : 'bg-white bg-opacity-30 text-gray-700 hover:bg-opacity-50'
                   }`}
                 >
@@ -388,7 +457,7 @@ export default function SupportModal({ onClose }) {
               <input
                 type="text"
                 placeholder="Search tickets by title or number..."
-                className="w-full pl-10 pr-4 py-3 rounded-full bg-white bg-opacity-30 text-gray-900 placeholder-gray-500 border border-white focus:outline-none focus:border-[#9575cd]"
+                className="w-full pl-10 pr-4 py-3 rounded-full bg-white bg-opacity-30 text-gray-900 placeholder-gray-500 border border-white focus:outline-none focus:border-[#1e40af]"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -410,7 +479,7 @@ export default function SupportModal({ onClose }) {
                 </div>
                 <button
                   onClick={() => setShowAllTickets(false)}
-                  className="text-sm text-[#9575cd] hover:text-[#7e57c2] underline"
+                  className="text-sm text-[#1e40af] hover:text-[#0f2a6b] underline"
                 >
                   Show Summary
                 </button>
@@ -433,8 +502,8 @@ export default function SupportModal({ onClose }) {
                     const statusInfo = getStatusInfo(mostRecentTicket.status);
                     return (
                       <div
-                        className={`p-4 rounded-lg cursor-pointer border border-transparent hover:border-[#9575cd] hover:bg-white hover:bg-opacity-20 transition-all ${
-                          selectedUserTicket === mostRecentTicket._id ? 'bg-white bg-opacity-30 border-[#9575cd]' : 'bg-white bg-opacity-10'
+                        className={`p-4 rounded-lg cursor-pointer border border-transparent hover:border-[#1e40af] hover:bg-white hover:bg-opacity-20 transition-all ${
+                          selectedUserTicket === mostRecentTicket._id ? 'bg-white bg-opacity-30 border-[#1e40af]' : 'bg-white bg-opacity-10'
                         }`}
                         onClick={() => setSelectedUserTicket(selectedUserTicket === mostRecentTicket._id ? null : mostRecentTicket._id)}
                       >
@@ -454,8 +523,39 @@ export default function SupportModal({ onClose }) {
                         {selectedUserTicket === mostRecentTicket._id && (
                           <div className="mt-3 pt-3 border-t border-white border-opacity-20">
                             <p className="text-sm text-gray-700 mb-3">{mostRecentTicket.description}</p>
+                            {mostRecentTicket.file && (
+                              <div className="mb-3">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAttachment(mostRecentTicket._id)}
+                                  className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                                >
+                                  {attachmentLoading ? 'Loading…' : 'View / Download Attachment'}
+                                </button>
+                              </div>
+                            )}
+                            {/* Conversation Thread */}
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                              {(mostRecentTicket.messages && mostRecentTicket.messages.length > 0) ? (
+                                mostRecentTicket.messages.map((msg, idx) => (
+                                  <div key={idx} className="bg-white bg-opacity-60 rounded-md p-2">
+                                    <div className="text-xs text-gray-600 font-semibold">
+                                      {msg.sender}
+                                    </div>
+                                    <div className="text-sm text-gray-800 whitespace-pre-wrap">
+                                      {msg.message}
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 mt-1">
+                                      {new Date(msg.timestamp).toLocaleString()}
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-xs text-gray-500">No messages yet</div>
+                              )}
+                            </div>
                             {mostRecentTicket.messages && mostRecentTicket.messages.length > 1 && (
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-gray-500 mt-2">
                                 {mostRecentTicket.messages.length - 1} response{mostRecentTicket.messages.length > 2 ? 's' : ''} from support
                               </div>
                             )}
@@ -476,50 +576,87 @@ export default function SupportModal({ onClose }) {
               ) : (
                 // Show all tickets
                 <div className="space-y-3">
-                  {sortedTickets.map(ticket => {
-                    const statusInfo = getStatusInfo(ticket.status);
-                    return (
-                      <div
-                        key={ticket._id}
-                        className={`p-4 rounded-lg cursor-pointer border border-transparent hover:border-[#9575cd] hover:bg-white hover:bg-opacity-20 transition-all ${
-                          selectedUserTicket === ticket._id ? 'bg-white bg-opacity-30 border-[#9575cd]' : 'bg-white bg-opacity-10'
-                        }`}
-                        onClick={() => setSelectedUserTicket(selectedUserTicket === ticket._id ? null : ticket._id)}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-semibold text-gray-900 text-sm line-clamp-1">{ticket.subject}</h3>
-                          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bgColor} ${statusInfo.color}`}>
-                            {statusInfo.icon}
-                            <span className="capitalize">{ticket.status}</span>
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-600 mb-2">#{ticket.number}</div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(ticket.createdAt).toLocaleDateString()}
-                        </div>
-                        
-                        {/* Expanded ticket details */}
-                        {selectedUserTicket === ticket._id && (
-                          <div className="mt-3 pt-3 border-t border-white border-opacity-20">
-                            <p className="text-sm text-gray-700 mb-3">{ticket.description}</p>
-                            {ticket.messages && ticket.messages.length > 1 && (
-                              <div className="text-xs text-gray-500">
-                                {ticket.messages.length - 1} response{ticket.messages.length > 2 ? 's' : ''} from support
+                  {sortedTickets.length === 0 ? (
+                    <div className="text-center text-red-500 py-6">Ticket is not found</div>
+                  ) : (
+                    <>
+                      {sortedTickets.map(ticket => {
+                        const statusInfo = getStatusInfo(ticket.status);
+                        return (
+                          <div
+                            key={ticket._id}
+                            className={`p-4 rounded-lg cursor-pointer border border-transparent hover:border-[#1e40af] hover:bg-white hover:bg-opacity-20 transition-all ${
+                              selectedUserTicket === ticket._id ? 'bg-white bg-opacity-30 border-[#1e40af]' : 'bg-white bg-opacity-10'
+                            }`}
+                            onClick={() => setSelectedUserTicket(selectedUserTicket === ticket._id ? null : ticket._id)}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-semibold text-gray-900 text-sm line-clamp-1">{ticket.subject}</h3>
+                              <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bgColor} ${statusInfo.color}`}>
+                                {statusInfo.icon}
+                                <span className="capitalize">{ticket.status}</span>
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-600 mb-2">#{ticket.number}</div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(ticket.createdAt).toLocaleDateString()}
+                            </div>
+                            
+                            {/* Expanded ticket details */}
+                            {selectedUserTicket === ticket._id && (
+                              <div className="mt-3 pt-3 border-t border-white border-opacity-20">
+                                <p className="text-sm text-gray-700 mb-3">{ticket.description}</p>
+                                {ticket.file && (
+                                  <div className="mb-3">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenAttachment(ticket._id)}
+                                      className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                                    >
+                                      {attachmentLoading ? 'Loading…' : 'View / Download Attachment'}
+                                    </button>
+                                  </div>
+                                )}
+                                {/* Conversation Thread */}
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                  {(ticket.messages && ticket.messages.length > 0) ? (
+                                    ticket.messages.map((msg, idx) => (
+                                      <div key={idx} className="bg-white bg-opacity-60 rounded-md p-2">
+                                        <div className="text-xs text-gray-600 font-semibold">
+                                          {msg.sender}
+                                        </div>
+                                        <div className="text-sm text-gray-800 whitespace-pre-wrap">
+                                          {msg.message}
+                                        </div>
+                                        <div className="text-[10px] text-gray-500 mt-1">
+                                          {new Date(msg.timestamp).toLocaleString()}
+                                        </div>
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="text-xs text-gray-500">No messages yet</div>
+                                  )}
+                                </div>
+                                {ticket.messages && ticket.messages.length > 1 && (
+                                  <div className="text-xs text-gray-500 mt-2">
+                                    {ticket.messages.length - 1} response{ticket.messages.length > 2 ? 's' : ''} from support
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  
-                  {/* Back to Summary Button */}
-                  <button
-                    onClick={() => setShowAllTickets(false)}
-                    className="w-full py-2 px-4 bg-white bg-opacity-20 text-gray-700 rounded-lg hover:bg-opacity-30 transition-colors text-sm font-medium"
-                  >
-                    Back to Summary
-                  </button>
+                        );
+                      })}
+                      
+                      {/* Back to Summary Button */}
+                      <button
+                        onClick={() => setShowAllTickets(false)}
+                        className="w-full py-2 px-4 bg-white bg-opacity-20 text-gray-700 rounded-lg hover:bg-opacity-30 transition-colors text-sm font-medium"
+                      >
+                        Back to Summary
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -536,7 +673,7 @@ export default function SupportModal({ onClose }) {
               </div>
               <div className="ml-4">
                 <div className="bg-white bg-opacity-30 rounded-full p-3">
-                  <Plus size={48} className="text-[#9575cd]" />
+                  <Plus size={48} className="text-[#1e40af]" />
                 </div>
               </div>
             </div>
@@ -555,7 +692,7 @@ export default function SupportModal({ onClose }) {
                     type="button"
                     id="copy-ticket-number"
                     onClick={copyTicketNumber}
-                    className="px-3 py-2 bg-[#9575cd] text-white rounded-lg hover:bg-[#7e57c2] transition-colors"
+                    className="px-3 py-2 bg-[#1e40af] text-white rounded-lg hover:bg-[#0f2a6b] transition-colors"
                   >
                     Copy
                   </button>
@@ -568,7 +705,7 @@ export default function SupportModal({ onClose }) {
                   type="text"
                   value={newTicket.subject}
                   onChange={(e) => setNewTicket({ ...newTicket, subject: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9575cd] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                   placeholder="Brief description of your issue"
                   required
                 />
@@ -579,7 +716,7 @@ export default function SupportModal({ onClose }) {
                 <textarea
                   value={newTicket.content}
                   onChange={(e) => setNewTicket({ ...newTicket, content: e.target.value })}
-                  className="w-full h-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9575cd] focus:border-transparent resize-none"
+                  className="w-full h-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1e40af] focus:border-transparent resize-none"
                   placeholder="Please provide detailed information about your issue..."
                   required
                 />
@@ -590,7 +727,7 @@ export default function SupportModal({ onClose }) {
                 <input
                   type="file"
                   onChange={(e) => setNewTicket({ ...newTicket, file: e.target.files[0] })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9575cd] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                   accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                 />
                 <p className="text-xs text-gray-500 mt-1">Supported formats: PDF, DOC, DOCX, JPG, JPEG, PNG</p>
@@ -609,7 +746,7 @@ export default function SupportModal({ onClose }) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex-1 py-3 px-4 bg-[#9575cd] text-white rounded-lg hover:bg-[#7e57c2] transition-colors disabled:opacity-50"
+                  className="flex-1 py-3 px-4 bg-[#1e40af] text-white rounded-lg hover:bg-[#0f2a6b] transition-colors disabled:opacity-50"
                 >
                   {loading ? 'Submitting...' : 'Submit Ticket'}
                 </button>
@@ -629,19 +766,80 @@ export default function SupportModal({ onClose }) {
               <p className="text-gray-600 mb-4">Your support request has been submitted. We'll get back to you soon.</p>
               <div className="bg-gray-50 rounded-lg p-4 mb-6">
                 <p className="text-sm text-gray-600 mb-2">Ticket Number:</p>
-                <p className="text-lg font-mono font-semibold text-[#9575cd]">{newTicket.number}</p>
+                <p className="text-lg font-mono font-semibold text-[#1e40af]">{newTicket.number}</p>
                 <p className="text-xs text-gray-500 mt-2">Please save this number for future reference</p>
               </div>
             </div>
             <button
               onClick={handleClose}
-              className="px-6 py-3 bg-[#9575cd] text-white rounded-lg hover:bg-[#7e57c2] transition-colors"
+              className="px-6 py-3 bg-[#1e40af] text-white rounded-lg hover:bg-[#0f2a6b] transition-colors"
             >
               Close
             </button>
           </div>
         )}
       </div>
+
+      {/* Attachment Preview Overlay (fallback if popup blocked) */}
+      {showAttachment && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between p-3 border-b">
+              <div className="font-semibold text-gray-800 truncate pr-2">{attachmentName}</div>
+              <div className="flex items-center gap-2">
+                {attachmentUrl && (
+                  <a
+                    href={attachmentUrl}
+                    download={attachmentName}
+                    className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    Download
+                  </a>
+                )}
+                <button
+                  className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300"
+                  onClick={() => {
+                    if (attachmentUrl) URL.revokeObjectURL(attachmentUrl);
+                    setAttachmentUrl("");
+                    setShowAttachment(false);
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="flex-1">
+              {attachmentLoading ? (
+                <div className="p-6 text-center text-gray-600">Loading attachment...</div>
+              ) : attachmentUrl ? (
+                (() => {
+                  const isImage = (attachmentType || "").startsWith("image/");
+                  const isPdf = (attachmentType || "") === "application/pdf";
+                  if (isImage) {
+                    return (
+                      <div className="w-full h-[70vh] flex items-center justify-center bg-gray-50">
+                        <img src={attachmentUrl} alt={attachmentName} className="max-h-[68vh] max-w-full object-contain" />
+                      </div>
+                    );
+                  }
+                  if (isPdf) {
+                    return (
+                      <iframe title="Attachment Preview" src={attachmentUrl} className="w-full h-[70vh]" />
+                    );
+                  }
+                  return (
+                    <div className="p-6 text-center text-gray-700 text-sm">
+                      Preview is not available for this file type. Use the Download button to view it locally.
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="p-6 text-center text-red-600 text-sm">{attachmentError || "Unable to preview this file."}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

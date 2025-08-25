@@ -22,6 +22,7 @@ export default function AdminSupportCenter() {
   const [allTickets, setAllTickets] = useState([]);
   const [userDetails, setUserDetails] = useState({});
   const [search, setSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState("newest"); // newest | oldest
 
   // Attachment preview state
   const [showAttachment, setShowAttachment] = useState(false);
@@ -135,22 +136,29 @@ export default function AdminSupportCenter() {
 
   /* ------------------------------ Derived list (search) ------------------------------ */
   const filteredTickets = useMemo(() => {
-    if (!search.trim()) return tickets;
-    const q = search.trim().toLowerCase();
-
-    return tickets.filter((t) => {
-      const number = (t.number || "").toLowerCase();
-      const subject = (t.subject || "").toLowerCase();
-      const id = (t._id || "").toLowerCase();
-      const requester = (userDetails[t._id]?.name || "").toLowerCase();
-      return (
-        number.includes(q) ||
-        subject.includes(q) ||
-        id.includes(q) ||
-        requester.includes(q)
-      );
+    let base = tickets;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      base = tickets.filter((t) => {
+        const number = (t.number || "").toLowerCase();
+        const subject = (t.subject || "").toLowerCase();
+        const id = (t._id || "").toLowerCase();
+        const requester = (userDetails[t._id]?.name || "").toLowerCase();
+        return (
+          number.includes(q) ||
+          subject.includes(q) ||
+          id.includes(q) ||
+          requester.includes(q)
+        );
+      });
+    }
+    const sorted = [...base].sort((a, b) => {
+      const da = new Date(a.createdAt).getTime();
+      const db = new Date(b.createdAt).getTime();
+      return sortOrder === 'newest' ? db - da : da - db;
     });
-  }, [search, tickets, userDetails]);
+    return sorted;
+  }, [search, tickets, userDetails, sortOrder]);
 
   /* ------------------------------- Attachments ------------------------------- */
   async function fetchAttachmentBlob(ticketId) {
@@ -376,14 +384,22 @@ export default function AdminSupportCenter() {
           </div>
 
           {/* Search bar */}
-          <div className="lg:w-96">
+          <div className="lg:w-96 flex gap-2 items-center">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by ticket no., subject, _id, or name…"
+              placeholder="Search: ticket no. or name…"
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#9575cd] focus:border-[#9575cd] bg-white"
             />
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md bg-white text-sm"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+            </select>
           </div>
         </div>
 
