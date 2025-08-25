@@ -22,7 +22,6 @@ export default function Admin_Accounts() {
   const [archivePasswordError, setArchivePasswordError] = useState("");
   const [duplicateEmailModal, setDuplicateEmailModal] = useState(false);
   const [suggestedEmail, setSuggestedEmail] = useState("");
-  const [duplicateEmailType, setDuplicateEmailType] = useState(""); // "schoolEmail" or "personalEmail"
   const [userToArchive, setUserToArchive] = useState(null);
   const [showCancellationMessage, setShowCancellationMessage] = useState(false);
   
@@ -348,22 +347,9 @@ export default function Admin_Accounts() {
           });
         }
       } catch (err) {
-        if (err?.response?.status === 409) {
-          if (err?.response?.data?.duplicateType === "schoolEmail" && err?.response?.data?.suggestedEmail) {
-            setSuggestedEmail(err.response.data.suggestedEmail);
-            setDuplicateEmailType("schoolEmail");
-            setDuplicateEmailModal(true);
-          } else if (err?.response?.data?.duplicateType === "personalEmail") {
-            setDuplicateEmailType("personalEmail");
-            setDuplicateEmailModal(true);
-          } else {
-            setValidationModal({
-              isOpen: true,
-              type: 'error',
-              title: 'Creation Failed',
-              message: 'Error: Failed to create account'
-            });
-          }
+        if (err?.response?.status === 409 && err?.response?.data?.suggestedEmail) {
+          setSuggestedEmail(err.response.data.suggestedEmail);
+          setDuplicateEmailModal(true);
         } else {
           setValidationModal({
             isOpen: true,
@@ -463,7 +449,6 @@ export default function Admin_Accounts() {
   const handleDuplicateEmailCancel = () => {
     setDuplicateEmailModal(false);
     setSuggestedEmail("");
-    setDuplicateEmailType("");
     // Reset form to prevent any pending account creation
     setFormData({
       firstname: '',
@@ -954,32 +939,16 @@ export default function Admin_Accounts() {
           {duplicateEmailModal && (
             <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[9999]">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                <h3 className="text-xl font-semibold mb-2 text-yellow-700">
-                  {duplicateEmailType === "personalEmail" ? "Duplicate Personal Email Detected" : "Duplicate School Email Detected"}
-                </h3>
-                
-                {duplicateEmailType === "personalEmail" ? (
-                  <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded">
-                    <p className="text-red-700 text-sm font-medium">⚠️ IMPORTANT: A user with this personal email already exists in the system.</p>
-                  </div>
-                ) : (
-                  <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded">
-                    <p className="text-red-700 text-sm font-medium">⚠️ IMPORTANT: The generated school email already exists.</p>
-                  </div>
-                )}
-
-                {duplicateEmailType === "schoolEmail" && (
-                  <>
-                    <p className="mb-4">Suggested email to use:</p>
-                    <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm break-all">{suggestedEmail}</div>
-                    <p className="mb-4 text-sm text-gray-600">Do you want to proceed using this suggested email?</p>
-                  </>
-                )}
-
+                <h3 className="text-xl font-semibold mb-2 text-yellow-700">Duplicate Email Detected</h3>
+                <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded">
+                  <p className="text-red-700 text-sm font-medium">⚠️ IMPORTANT: The generated school email already exists.</p>
+                </div>
+                <p className="mb-4">Suggested email to use:</p>
+                <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm break-all">{suggestedEmail}</div>
+                <p className="mb-4 text-sm text-gray-600">Do you want to proceed using this suggested email?</p>
                 <div className="mb-4 p-2 bg-red-50 border border-red-200 rounded">
                   <p className="text-red-700 text-xs font-medium">⚠️ WARNING: Clicking Cancel will completely terminate the account creation process and reset the form.</p>
                 </div>
-                
                 <div className="flex justify-end gap-2">
                   <button
                     onClick={handleDuplicateEmailCancel}
@@ -987,20 +956,16 @@ export default function Admin_Accounts() {
                   >
                     Cancel
                   </button>
-                  
-                  {duplicateEmailType === "schoolEmail" && (
-                    <button
-                      onClick={async () => {
-                        setDuplicateEmailModal(false);
-                        setDuplicateEmailType("");
-                        await handleSubmit(null, suggestedEmail);
-                        setSuggestedEmail("");
-                      }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-                    >
-                      Proceed with Suggested Email
-                    </button>
-                  )}
+                  <button
+                    onClick={async () => {
+                      setDuplicateEmailModal(false);
+                      await handleSubmit(null, suggestedEmail);
+                      setSuggestedEmail("");
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                  >
+                    Proceed with Suggested Email
+                  </button>
                 </div>
               </div>
             </div>

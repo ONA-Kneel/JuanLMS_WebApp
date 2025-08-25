@@ -292,7 +292,7 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
         return res.status(400).json({ error: "Student accounts can only be registered through the public registration form." });
     }
 
-    // Check for duplicate school email using emailHash to handle encrypted stored emails
+    // Check for duplicate email using emailHash to handle encrypted stored emails
     const baseEmail = email.toLowerCase();
     const computeHash = (val) => crypto.createHash('sha256').update(val).digest('hex');
     const baseHash = computeHash(baseEmail);
@@ -312,21 +312,8 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
             counter++;
         }
         return res.status(409).json({
-            error: "Duplicate school email found.",
-            suggestedEmail: uniqueEmail,
-            duplicateType: "schoolEmail"
-        });
-    }
-
-    // Check for duplicate personal email using personalemailHash
-    const basePersonalEmail = personalemail.toLowerCase();
-    const personalEmailHash = computeHash(basePersonalEmail);
-    const existingPersonalEmailUser = await User.findOne({ personalemailHash });
-    if (existingPersonalEmailUser) {
-        return res.status(409).json({
-            error: "Duplicate personal email found.",
-            duplicateType: "personalEmail",
-            message: "A user with this personal email already exists in the system."
+            error: "Duplicate email found.",
+            suggestedEmail: uniqueEmail
         });
     }
 
