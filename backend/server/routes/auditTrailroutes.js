@@ -25,15 +25,15 @@ router.use((req, res, next) => {
 router.get('/audit-logs', authenticateToken, async (req, res) => {
   try {
     // Check authentication and role
-    // Only admin and principal can access audit logs for security reasons
+    // Only admin, principal, and VPE can access audit logs for security reasons
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
     }
     if (!req.user.role) {
       return res.status(403).json({ message: 'User role not found' });
     }
-    if (req.user.role !== 'admin' && req.user.role !== 'principal') {
-      return res.status(403).json({ message: 'Access denied. Admin/Principal only.' });
+    if (req.user.role !== 'admin' && req.user.role !== 'principal' && req.user.role !== 'vice president of education') {
+      return res.status(403).json({ message: 'Access denied. Admin/Principal/VPE only.' });
     }
 
     // Pagination parameters
@@ -56,8 +56,8 @@ router.get('/audit-logs', authenticateToken, async (req, res) => {
     // Build filter object
     const filter = {};
     
-    // For principals, only show student and faculty login/logout logs
-    if (req.user.role === 'principal') {
+    // For principals and VPE, only show student and faculty login/logout logs
+    if (req.user.role === 'principal' || req.user.role === 'vice president of education') {
       filter['userRole'] = { $in: ['student', 'students', 'faculty'] };
       filter['action'] = { $in: ['Login', 'Logout'] };
     }
@@ -161,18 +161,18 @@ router.post('/audit-log', authenticateToken, async (req, res) => {
   }
 });
 
-// --- GET /audit-logs/last-logins - Get latest login for every user (admin/principal only) ---
+// --- GET /audit-logs/last-logins - Get latest login for every user (admin/principal/VPE only) ---
 router.get('/audit-logs/last-logins', authenticateToken, async (req, res) => {
   try {
-    // Only admin and principal can access
+    // Only admin, principal, and VPE can access
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
     }
     if (!req.user.role) {
       return res.status(403).json({ message: 'User role not found' });
     }
-    if (req.user.role !== 'admin' && req.user.role !== 'principal') {
-      return res.status(403).json({ message: 'Access denied. Admin/Principal only.' });
+    if (req.user.role !== 'admin' && req.user.role !== 'principal' && req.user.role !== 'vice president of education') {
+      return res.status(403).json({ message: 'Access denied. Admin/Principal/VPE only.' });
     }
 
     let db;
@@ -183,9 +183,15 @@ router.get('/audit-logs/last-logins', authenticateToken, async (req, res) => {
       db = database.getDb();
     }
 
+    // Build filter for principals and VPE (only show student and faculty login logs)
+    let matchFilter = { action: 'Login' };
+    if (req.user.role === 'principal' || req.user.role === 'vice president of education') {
+      matchFilter['userRole'] = { $in: ['student', 'students', 'faculty'] };
+    }
+
     // Aggregate latest login per user
     const lastLogins = await db.collection('AuditLogs').aggregate([
-      { $match: { action: 'Login' } },
+      { $match: matchFilter },
       { $sort: { timestamp: -1 } },
       {
         $group: {
@@ -237,8 +243,8 @@ router.get('/audit-logs/export', authenticateToken, async (req, res) => {
     // Build filter object
     const filter = {};
     
-    // For principals, only show student and faculty login/logout logs
-    if (req.user.role === 'principal') {
+    // For principals and VPE, only show student and faculty login/logout logs
+    if (req.user.role === 'principal' || req.user.role === 'vice president of education') {
       filter['userRole'] = { $in: ['student', 'students', 'faculty'] };
       filter['action'] = { $in: ['Login', 'Logout'] };
     }
