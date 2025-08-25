@@ -101,13 +101,7 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
           displayName: currentUser?.name || 'Participant',
           email: currentUser?.email || ''
         },
-        // Set moderator role for faculty
-        moderator: isModerator,
-                  // Ensure proper role assignment
-          prejoinPageEnabled: false,
-          // Disable authentication prompts for moderators
-          authenticationEnabled: false,
-          jwt: meetingData?.jwt || undefined,
+        jwt: meetingData?.jwt || undefined,
         configOverwrite: {
           disableDeepLinking: true,
           disableInviteFunctions: true,
@@ -116,21 +110,8 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
           enableClosePage: false,
           enableNoAudioDetection: true,
           enableNoisyMicDetection: true,
-          // Moderator settings
-          startAudioOnly: false,
           startWithAudioMuted: false,
           startWithVideoMuted: false,
-          // Set moderator role
-          hosts: {
-            domain: JITSI_DOMAIN,
-            muc: `conference.${JITSI_DOMAIN}`,
-            focus: `focus.${JITSI_DOMAIN}`
-          },
-          // Moderator permissions
-          enableModeratorIndicator: true,
-          disableModeratorIndicator: false,
-          // Ensure moderator can manage participants
-          enableLobbyChat: true,
           // Harden connectivity
           p2p: { enabled: false },
           preferH264: true,
@@ -158,9 +139,6 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
           SHOW_CHROME_EXTENSION_BANNER: false,
           SHOW_JITSI_WATERMARK: false,
           SHOW_POWERED_BY: false,
-          // Moderator role configuration
-          AUTHENTICATION_ENABLE: false,
-          GUEST_DIALOUT: false,
           TOOLBAR_BUTTONS: [
             'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
             'fodeviceselection', 'hangup', 'profile', 'info', 'chat', 'recording',
@@ -198,10 +176,6 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
       api.addEventListeners({
         iframeReady: () => {
           // Meeting iframe is ready
-          if (isModerator) {
-            // Set moderator role immediately when iframe is ready
-            api.executeCommand('setUserRole', 'moderator');
-          }
         },
         readyToClose: () => {
           handleLeaveMeeting();
@@ -209,10 +183,7 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
         videoConferenceJoined: () => {
           clearTimeout(timeoutId);
           if (isModerator) {
-            // Set moderator role and display name
             api.executeCommand('displayName', `${currentUser?.name} (Host)`);
-            // Ensure moderator permissions are active
-            api.executeCommand('setUserRole', 'moderator');
           }
         },
         videoConferenceLeft: () => {
