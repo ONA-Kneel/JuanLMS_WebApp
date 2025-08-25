@@ -101,15 +101,13 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
           displayName: currentUser?.name || 'Participant',
           email: currentUser?.email || ''
         },
-                // Set moderator role for faculty
+        // Set moderator role for faculty
         moderator: isModerator,
-                // Ensure proper role assignment
-        prejoinPageEnabled: false,
-        // Disable authentication prompts for moderators
-        authenticationEnabled: false,
-        // Force moderator role assignment
-        userRole: isModerator ? 'moderator' : 'participant',
-        jwt: meetingData?.jwt || undefined,
+                  // Ensure proper role assignment
+          prejoinPageEnabled: false,
+          // Disable authentication prompts for moderators
+          authenticationEnabled: false,
+          jwt: meetingData?.jwt || undefined,
         configOverwrite: {
           disableDeepLinking: true,
           disableInviteFunctions: true,
@@ -122,9 +120,6 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
           startAudioOnly: false,
           startWithAudioMuted: false,
           startWithVideoMuted: false,
-          // Authentication bypass
-          authenticationEnabled: false,
-          guestDialOutEnabled: false,
           // Set moderator role
           hosts: {
             domain: JITSI_DOMAIN,
@@ -136,11 +131,6 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
           disableModeratorIndicator: false,
           // Ensure moderator can manage participants
           enableLobbyChat: true,
-          // Bypass authentication waiting
-          enableAuth: false,
-          enableGuestDialOut: false,
-          // Bypass lobby system
-          enableLobby: false,
           // Harden connectivity
           p2p: { enabled: false },
           preferH264: true,
@@ -171,9 +161,6 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
           // Moderator role configuration
           AUTHENTICATION_ENABLE: false,
           GUEST_DIALOUT: false,
-          // Additional authentication bypass
-          ENABLE_AUTH: false,
-          ENABLE_GUEST_DIALOUT: false,
           TOOLBAR_BUTTONS: [
             'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
             'fodeviceselection', 'hangup', 'profile', 'info', 'chat', 'recording',
@@ -214,10 +201,6 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
           if (isModerator) {
             // Set moderator role immediately when iframe is ready
             api.executeCommand('setUserRole', 'moderator');
-            // Force bypass authentication
-            setTimeout(() => {
-              api.executeCommand('setUserRole', 'moderator');
-            }, 1000);
           }
         },
         readyToClose: () => {
