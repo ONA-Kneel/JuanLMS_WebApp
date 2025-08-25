@@ -289,11 +289,11 @@ router.delete('/:id', async (req, res) => {
       }
     }
 
-    // Proceed with cascading deletion using the model's pre-remove middleware
+    // Proceed with cascading deletion using the model's pre-delete middleware
     console.log(`Deleting school year: ${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`);
     
-    // Use remove() to trigger the pre-remove middleware for cascading deletes
-    await schoolYear.remove();
+    // Use deleteOne() on the document to trigger pre('deleteOne', {document:true}) middleware
+    await schoolYear.deleteOne();
     
     console.log(`Successfully deleted school year and all connected data`);
     res.json({ message: 'School year and all connected data deleted successfully' });

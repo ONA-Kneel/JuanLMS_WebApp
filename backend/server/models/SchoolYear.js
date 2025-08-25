@@ -45,8 +45,8 @@ schoolYearSchema.pre('save', async function(next) {
   next();
 });
 
-// Pre-remove middleware for cascading deletes
-schoolYearSchema.pre('remove', async function(next) {
+// Pre-delete middleware for cascading deletes (Mongoose v7: use deleteOne with document:true)
+schoolYearSchema.pre('deleteOne', { document: true, query: false }, async function(next) {
   try {
     const schoolYearName = `${this.schoolYearStart}-${this.schoolYearEnd}`;
     
