@@ -450,4 +450,41 @@ function seededShuffle(array, seed) {
   return arr;
 }
 
+// Mark quiz as viewed by a student
+router.post('/:id/view', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+    
+    console.log(`[DEBUG][VIEW] User ${userId} requesting to mark quiz ${req.params.id} as viewed`);
+    console.log(`[DEBUG][VIEW] Current views array:`, quiz.views);
+    
+    // Initialize views array if it doesn't exist
+    if (!quiz.views) quiz.views = [];
+    
+    // Check if user is already in views array using ObjectId comparison
+    const userAlreadyViewed = quiz.views.some(viewId => 
+      viewId.toString() === userId.toString()
+    );
+    
+    console.log(`[DEBUG][VIEW] User already viewed: ${userAlreadyViewed}`);
+    
+    // Only add if not already viewed
+    if (!userAlreadyViewed) {
+      quiz.views.push(userId);
+      await quiz.save();
+      console.log(`[DEBUG][VIEW] Added user ${userId} to views for quiz ${req.params.id}`);
+      console.log(`[DEBUG][VIEW] Updated views array:`, quiz.views);
+    } else {
+      console.log(`[DEBUG][VIEW] User ${userId} already viewed quiz ${req.params.id}, skipping duplicate`);
+    }
+    
+    res.json(quiz);
+  } catch (err) {
+    console.error('Error marking quiz as viewed:', err);
+    res.status(500).json({ error: 'Failed to mark as viewed' });
+  }
+});
+
 export default router;

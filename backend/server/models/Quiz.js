@@ -58,7 +58,9 @@ const quizSchema = new mongoose.Schema({
   assignedTo: [{
     classID: { type: String, required: true },
     studentIDs: [{ type: String, required: true }]
-  }]
+  }],
+  // Track which students have viewed this quiz
+  views: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 });
 
 // Ensure total points are synchronized and within 1–100 on save/update
@@ -85,6 +87,21 @@ quizSchema.pre('validate', function(next) {
   } catch (err) {
     return next(err);
   }
+});
+
+// Pre-save hook to ensure no duplicate views
+quizSchema.pre('save', function(next) {
+  if (this.views && this.views.length > 0) {
+    // Remove duplicates by converting to strings, deduplicating, and converting back to ObjectIds
+    const uniqueViews = [...new Set(this.views.map(view => view.toString()))]
+      .map(viewId => new mongoose.Types.ObjectId(viewId));
+    
+    if (uniqueViews.length !== this.views.length) {
+      console.log(`[DEBUG][MODEL] Removed ${this.views.length - uniqueViews.length} duplicate views from quiz ${this._id}`);
+      this.views = uniqueViews;
+    }
+  }
+  next();
 });
 
 export default mongoose.model("Quiz", quizSchema, "Quizzes"); 

@@ -8,6 +8,8 @@ import path from 'path';
 import User from '../models/User.js';
 import Quiz from '../models/Quiz.js';
 import Class from '../models/Class.js';
+import FacultyAssignment from '../models/FacultyAssignment.js';
+import StudentAssignment from '../models/StudentAssignment.js';
 import { createAssignmentNotification } from '../services/notificationService.js';
 
 const router = express.Router();
@@ -638,6 +640,215 @@ router.patch('/:id/submission/file', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error deleting file from submission:', err);
     res.status(500).json({ error: 'Failed to delete file from submission.' });
+  }
+});
+
+// Get student activity audit for faculty, VPE, and Principal (who missed or haven't viewed activities)
+router.get('/audit/student-activity', authenticateToken, async (req, res) => {
+  try {
+    console.log('[DEBUG] User role:', req.user.role);
+    console.log('[DEBUG] User ID:', req.user._id);
+    console.log('[DEBUG] Query params:', req.query);
+    
+    // Only faculty, VPE, and Principal can access this endpoint
+    if (!['faculty', 'vice president of education', 'principal'].includes(req.user.role)) {
+      console.log('[DEBUG] Access denied for role:', req.user.role);
+      return res.status(403).json({ error: 'Access denied. Faculty, VPE, and Principal only.' });
+    }
+
+    const { termId, sectionName } = req.query;
+    const isAdmin = ['vice president of education', 'principal'].includes(req.user.role);
+    const facultyId = req.user.role === 'faculty' ? req.user._id : null;
+
+    // Get faculty's assigned sections for the term (only for faculty users)
+    let facultySections = [];
+    if (termId && !isAdmin) {
+      const facultyAssignments = await FacultyAssignment.find({
+        facultyId,
+        termId,
+        status: 'active'
+      });
+      facultySections = facultyAssignments.map(fa => fa.sectionName);
+    }
+
+    // Get all assignments and quizzes (all faculty for VPE/Principal, specific faculty for faculty users)
+    let assignments = [], quizzes = [];
+    try {
+      if (isAdmin) {
+        // VPE and Principal can see all assignments and quizzes
+        console.log('[DEBUG] Fetching all assignments and quizzes for admin user');
+        assignments = await Assignment.find({}).populate('views', 'firstname lastname userID').populate('createdBy', 'firstname lastname');
+        quizzes = await Quiz.find({}).populate('views', 'firstname lastname userID').populate('createdBy', 'firstname lastname');
+        console.log('[DEBUG] Found assignments:', assignments.length);
+        console.log('[DEBUG] Found quizzes:', quizzes.length);
+      } else {
+        // Faculty users only see their own assignments and quizzes
+        console.log('[DEBUG] Fetching assignments and quizzes for faculty user:', facultyId);
+        assignments = await Assignment.find({ createdBy: facultyId }).populate('views', 'firstname lastname userID');
+        quizzes = await Quiz.find({ createdBy: facultyId }).populate('views', 'firstname lastname userID');
+        console.log('[DEBUG] Found assignments:', assignments.length);
+        console.log('[DEBUG] Found quizzes:', quizzes.length);
+      }
+    } catch (err) {
+      console.error('[DEBUG] Error fetching assignments/quizzes:', err);
+      assignments = [];
+      quizzes = [];
+    }
+
+    // Get all students (all students for VPE/Principal, filtered by faculty sections for faculty users)
+    let studentQuery = {};
+    if (termId) studentQuery.termId = termId;
+    if (sectionName) studentQuery.sectionName = sectionName;
+    
+    if (!isAdmin && facultySections.length > 0) {
+      // Faculty users only see students in their assigned sections
+      studentQuery.sectionName = { $in: facultySections };
+    }
+    
+    // For VPE/Principal, if no termId is provided, don't filter by term
+    if (isAdmin && !termId) {
+      console.log('[DEBUG] Admin user with no termId - fetching all students');
+    }
+
+    let studentAssignments = [];
+    try {
+      studentAssignments = await StudentAssignment.find(studentQuery).populate('studentId', 'firstname lastname userID schoolID');
+      console.log('[DEBUG] Found student assignments:', studentAssignments.length);
+      console.log('[DEBUG] Student query:', studentQuery);
+    } catch (err) {
+      console.error('[DEBUG] Error fetching student assignments:', err);
+      studentAssignments = [];
+    }
+
+    // If no student assignments found, return empty array
+    if (!studentAssignments || studentAssignments.length === 0) {
+      console.log('[DEBUG] No student assignments found, returning empty audit data');
+      return res.json({ auditData: [] });
+    }
+
+    // Build activity audit data using a Map to prevent duplicates
+    const auditMap = new Map();
+    
+    // Create a set of unique student-activity combinations to avoid duplicates
+    const processedCombinations = new Set();
+    
+    // Process assignments
+    for (const assignment of assignments) {
+      const assignedStudents = assignment.assignedTo?.find(a => a.classID === assignment.classID)?.studentIDs || [];
+      const viewedStudentIds = assignment.views?.map(v => v._id.toString()) || [];
+      
+      for (const studentAssignment of studentAssignments) {
+        // Skip if studentId is not populated
+        if (!studentAssignment.studentId) {
+          console.log('[DEBUG] Skipping student assignment with no studentId:', studentAssignment._id);
+          continue;
+        }
+        
+        const studentId = studentAssignment.studentId._id.toString();
+        const studentUserID = studentAssignment.studentId.userID;
+        
+        // Check if student is assigned to this activity
+        const isAssigned = assignedStudents.some(id => 
+          id.toString() === studentId || id.toString() === studentUserID
+        );
+        
+        if (isAssigned) {
+          // Create unique key to prevent duplicates
+          const uniqueKey = `${studentId}-${assignment._id}`;
+          
+          // Skip if we've already processed this combination
+          if (processedCombinations.has(uniqueKey)) {
+            continue;
+          }
+          processedCombinations.add(uniqueKey);
+          
+          const hasViewed = viewedStudentIds.includes(studentId);
+          const now = new Date();
+          const dueDate = assignment.dueDate;
+          const isMissed = dueDate && now > dueDate && !hasViewed;
+          
+          auditMap.set(uniqueKey, {
+            studentId: studentId,
+            studentName: `${studentAssignment.studentId.lastname}, ${studentAssignment.studentId.firstname}`,
+            sectionName: studentAssignment.sectionName,
+            activityId: assignment._id,
+            activityTitle: assignment.title,
+            activityType: 'assignment',
+            classID: assignment.classID,
+            dueDate: assignment.dueDate,
+            status: hasViewed ? 'viewed' : (isMissed ? 'missed' : 'not_viewed'),
+            lastViewedAt: hasViewed ? new Date() : null,
+            submittedAt: null,
+            assignedTo: assignedStudents,
+            facultyName: isAdmin ? `${assignment.createdBy?.lastname || 'Unknown'}, ${assignment.createdBy?.firstname || 'Unknown'}` : undefined
+          });
+        }
+      }
+    }
+
+    // Process quizzes
+    for (const quiz of quizzes) {
+      const assignedStudents = quiz.assignedTo?.find(a => a.classID === quiz.classID)?.studentIDs || [];
+      const viewedStudentIds = quiz.views?.map(v => v._id.toString()) || [];
+      
+      for (const studentAssignment of studentAssignments) {
+        // Skip if studentId is not populated
+        if (!studentAssignment.studentId) {
+          console.log('[DEBUG] Skipping student assignment with no studentId:', studentAssignment._id);
+          continue;
+        }
+        
+        const studentId = studentAssignment.studentId._id.toString();
+        const studentUserID = studentAssignment.studentId.userID;
+        
+        // Check if student is assigned to this activity
+        const isAssigned = assignedStudents.some(id => 
+          id.toString() === studentId || id.toString() === studentUserID
+        );
+        
+        if (isAssigned) {
+          // Create unique key to prevent duplicates
+          const uniqueKey = `${studentId}-${quiz._id}`;
+          
+          // Skip if we've already processed this combination
+          if (processedCombinations.has(uniqueKey)) {
+            continue;
+          }
+          processedCombinations.add(uniqueKey);
+          
+          const hasViewed = viewedStudentIds.includes(studentId);
+          const now = new Date();
+          const dueDate = quiz.dueDate;
+          const isMissed = dueDate && now > dueDate && !hasViewed;
+          
+          auditMap.set(uniqueKey, {
+            studentId: studentId,
+            studentName: `${studentAssignment.studentId.lastname}, ${studentAssignment.studentId.firstname}`,
+            sectionName: studentAssignment.sectionName,
+            activityId: quiz._id,
+            activityTitle: quiz.title,
+            activityType: 'quiz',
+            classID: quiz.classID,
+            dueDate: quiz.dueDate,
+            status: hasViewed ? 'viewed' : (isMissed ? 'missed' : 'not_viewed'),
+            lastViewedAt: hasViewed ? new Date() : null,
+            submittedAt: null,
+            assignedTo: assignedStudents,
+            facultyName: isAdmin ? `${quiz.createdBy?.lastname || 'Unknown'}, ${quiz.createdBy?.firstname || 'Unknown'}` : undefined
+          });
+        }
+      }
+    }
+
+    // Convert Map values to array
+    const auditData = Array.from(auditMap.values());
+    console.log('[DEBUG] Final audit data count:', auditData.length);
+    console.log('[DEBUG] Sample audit data:', auditData.slice(0, 2));
+
+    res.json({ auditData });
+  } catch (err) {
+    console.error('Error fetching student activity audit:', err);
+    res.status(500).json({ error: 'Failed to fetch student activity audit.' });
   }
 });
 

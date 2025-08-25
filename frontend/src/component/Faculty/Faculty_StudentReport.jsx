@@ -4,7 +4,7 @@ import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
 // Use localhost for development - local server is running on port 5000
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Faculty_StudentReport() {
   const [academicYear, setAcademicYear] = useState(null);
@@ -48,6 +48,11 @@ export default function Faculty_StudentReport() {
   const withinCharRange = charCount >= MIN_CHARS && charCount <= MAX_CHARS;
   const withinWordRange = wordCount >= MIN_WORDS && wordCount <= MAX_WORDS;
   const canSubmit = !!selectedStudent && !isSubmitting && withinCharRange && withinWordRange;
+
+  // Student activity audit states
+  const [auditData, setAuditData] = useState([]);
+  const [loadingAudit, setLoadingAudit] = useState(false);
+  const [auditError, setAuditError] = useState(null);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -461,6 +466,52 @@ export default function Faculty_StudentReport() {
     fetchStoredReports();
   }, []);
 
+  // Fetch student activity audit data
+  const fetchAuditData = async () => {
+    if (!currentTerm) return;
+    
+    try {
+      setLoadingAudit(true);
+      setAuditError(null);
+      
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/assignments/audit/student-activity?termId=${currentTerm._id}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Raw audit data:", data);
+        
+        // Ensure we have an array and remove any potential duplicates
+        const rawData = data.auditData || [];
+        const uniqueData = rawData.filter((item, index, self) => 
+          index === self.findIndex(t => 
+            t.studentId === item.studentId && t.activityId === item.activityId
+          )
+        );
+        
+        console.log("Filtered unique data:", uniqueData);
+        setAuditData(uniqueData);
+      } else {
+        const errorData = await response.json();
+        setAuditError(errorData.error || 'Failed to fetch audit data');
+      }
+    } catch (err) {
+      console.error("Failed to fetch audit data:", err);
+      setAuditError('Network error while fetching audit data');
+    } finally {
+      setLoadingAudit(false);
+    }
+  };
+
+  // Load audit data when term changes
+  useEffect(() => {
+    if (currentTerm) {
+      fetchAuditData();
+    }
+  }, [currentTerm]);
+
   // Clear search when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -501,144 +552,134 @@ export default function Faculty_StudentReport() {
 
         {/* Main Content Area - Student Activity Audit */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          {/* Mocked data (frontend only) */}
+          {/* Student Activity Audit UI */}
           {(() => {
-            // Sections, activities, and student statuses are mocked for now
-            const mockSections = ["12 - A", "12 - B"];
-            const mockActivities = [
-              { id: "act1", title: "Module 1: Introduction", type: "module", sectionName: "12 - A", dueDate: "2025-08-31" },
-              { id: "act2", title: "Quiz 1: Basics", type: "quiz", sectionName: "12 - A", dueDate: "2025-09-02" },
-              { id: "act3", title: "Assignment 1: Reflection", type: "assignment", sectionName: "12 - B", dueDate: "2025-08-29" },
-            ];
-            const mockStudentStatuses = [
-              { studentId: "s1", studentName: "Dela Cruz, Juan", sectionName: "12 - A", activityId: "act1", status: "not_viewed", lastViewedAt: null, submittedAt: null },
-              { studentId: "s2", studentName: "Santos, Maria", sectionName: "12 - A", activityId: "act1", status: "viewed", lastViewedAt: "2025-08-25T10:00:00Z", submittedAt: null },
-              { studentId: "s3", studentName: "Reyes, Ana", sectionName: "12 - A", activityId: "act2", status: "missed", lastViewedAt: null, submittedAt: null },
-              { studentId: "s4", studentName: "Garcia, Pedro", sectionName: "12 - B", activityId: "act3", status: "not_viewed", lastViewedAt: null, submittedAt: null },
-              { studentId: "s5", studentName: "Lopez, Carla", sectionName: "12 - B", activityId: "act3", status: "submitted", lastViewedAt: "2025-08-28T08:20:00Z", submittedAt: "2025-08-28T08:40:00Z" },
-            ];
-
-            // Local state inside IIFE via useState hooks is not allowed, so we compute with component-level state below
-            return null;
-          })()}
-
-          {/* Filters */}
-          {(() => {
-            // Component-level state for filters and derived data
-            // We keep them in closures to avoid polluting top-level with a lot of vars; values are recomputed via simple patterns
-            // Definitions
-            const sections = ["All Sections", "12 - A", "12 - B"];
-            const activities = [
-              { id: "all", title: "All Activities", sectionName: "*" },
-              { id: "act1", title: "Module 1: Introduction", sectionName: "12 - A" },
-              { id: "act2", title: "Quiz 1: Basics", sectionName: "12 - A" },
-              { id: "act3", title: "Assignment 1: Reflection", sectionName: "12 - B" },
-            ];
-            
-            // Use React state via a tiny helper component
             function AuditUI() {
               const [selectedSection, setSelectedSection] = useState("All Sections");
               const [selectedActivityId, setSelectedActivityId] = useState("all");
               const [statusFilter, setStatusFilter] = useState("not_viewed"); // default focus
               const [studentSearch, setStudentSearch] = useState("");
 
-              const allRows = [
-                { studentId: "s1", studentName: "Dela Cruz, Juan", sectionName: "12 - A", activityId: "act1", status: "not_viewed", lastViewedAt: null, submittedAt: null },
-                { studentId: "s2", studentName: "Santos, Maria", sectionName: "12 - A", activityId: "act1", status: "viewed", lastViewedAt: "2025-08-25T10:00:00Z", submittedAt: null },
-                { studentId: "s3", studentName: "Reyes, Ana", sectionName: "12 - A", activityId: "act2", status: "missed", lastViewedAt: null, submittedAt: null },
-                { studentId: "s4", studentName: "Garcia, Pedro", sectionName: "12 - B", activityId: "act3", status: "not_viewed", lastViewedAt: null, submittedAt: null },
-                { studentId: "s5", studentName: "Lopez, Carla", sectionName: "12 - B", activityId: "act3", status: "submitted", lastViewedAt: "2025-08-28T08:20:00Z", submittedAt: "2025-08-28T08:40:00Z" },
+              // Get unique sections and activities from audit data
+              const sections = ["All Sections", ...new Set(auditData.map(item => item.sectionName))];
+              const activities = [
+                { id: "all", title: "All Activities", sectionName: "*" },
+                ...auditData.map(item => ({
+                  id: item.activityId,
+                  title: item.activityTitle,
+                  sectionName: item.sectionName
+                }))
               ];
-              const activityById = new Map([
-                ["act1", { id: "act1", title: "Module 1: Introduction", type: "module", sectionName: "12 - A", dueDate: "2025-08-31" }],
-                ["act2", { id: "act2", title: "Quiz 1: Basics", type: "quiz", sectionName: "12 - A", dueDate: "2025-09-02" }],
-                ["act3", { id: "act3", title: "Assignment 1: Reflection", type: "assignment", sectionName: "12 - B", dueDate: "2025-08-29" }],
-              ]);
 
-              const filteredActivities = activities.filter(a => selectedSection === "All Sections" || a.sectionName === "*" || a.sectionName === selectedSection);
-
-              const filteredRows = allRows.filter(r => {
-                const inSection = selectedSection === "All Sections" || r.sectionName === selectedSection;
-                const inActivity = selectedActivityId === "all" || r.activityId === selectedActivityId;
-                const inStatus = statusFilter === "all" ? true : r.status === statusFilter;
-                const inSearch = studentSearch.trim() === "" || r.studentName.toLowerCase().includes(studentSearch.trim().toLowerCase());
+              // Filter audit data based on selections
+              const filteredRows = auditData.filter(item => {
+                const inSection = selectedSection === "All Sections" || item.sectionName === selectedSection;
+                const inActivity = selectedActivityId === "all" || item.activityId === selectedActivityId;
+                const inStatus = statusFilter === "all" ? true : item.status === statusFilter;
+                const inSearch = studentSearch.trim() === "" || item.studentName.toLowerCase().includes(studentSearch.trim().toLowerCase());
                 return inSection && inActivity && inStatus && inSearch;
               });
 
-              const notViewedCount = filteredRows.filter(r => r.status === "not_viewed").length;
-              const missedCount = filteredRows.filter(r => r.status === "missed").length;
+              const notViewedCount = filteredRows.filter(item => item.status === "not_viewed").length;
+              const missedCount = filteredRows.filter(item => item.status === "missed").length;
 
               const exportToExcel = () => {
-                const exportRows = filteredRows.map(r => {
-                  const act = activityById.get(r.activityId) || {};
-                  return {
-                    "Student Name": r.studentName,
-                    Section: r.sectionName,
-                    Activity: act.title || r.activityId,
-                    "Due Date": act.dueDate ? new Date(act.dueDate).toLocaleDateString("en-US") : "-",
-                    Status: r.status.replace("_", " "),
-                    "Last Viewed": r.lastViewedAt ? new Date(r.lastViewedAt).toLocaleString() : "-",
-                    "Submitted At": r.submittedAt ? new Date(r.submittedAt).toLocaleString() : "-",
-                  };
-                });
+                const exportRows = filteredRows.map(item => ({
+                  "Student Name": item.studentName,
+                  Section: item.sectionName,
+                  Activity: item.activityTitle,
+                  "Activity Type": item.activityType,
+                  "Due Date": item.dueDate ? new Date(item.dueDate).toLocaleDateString("en-US") : "-",
+                  Status: item.status.replace("_", " "),
+                  "Last Viewed": item.lastViewedAt ? new Date(item.lastViewedAt).toLocaleString() : "-",
+                  "Submitted At": item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "-",
+                }));
                 const ws = XLSX.utils.json_to_sheet(exportRows);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Audit");
                 XLSX.writeFile(wb, "StudentActivityAudit.xlsx");
               };
 
+              if (loadingAudit) {
+                return (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#010a51] mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading student activity data...</p>
+                  </div>
+                );
+              }
+
+              if (auditError) {
+                return (
+                  <div className="text-center py-8">
+                    <div className="text-red-600 mb-4">Error: {auditError}</div>
+                    <button 
+                      onClick={fetchAuditData}
+                      className="px-4 py-2 bg-[#010a51] text-white rounded hover:bg-[#1a237e]"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                );
+              }
+
+              if (auditData.length === 0) {
+                return (
+                  <div className="text-center py-8">
+                    <p className="text-gray-600">No student activity data found for the current term.</p>
+                    <p className="text-sm text-gray-500 mt-2">Make sure you have created assignments/quizzes and assigned them to students.</p>
+                  </div>
+                );
+              }
+
               return (
                 <>
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
                     <h3 className="text-lg font-semibold">Activity Visibility & Submission Audit</h3>
                     <div className="flex items-center gap-2">
+                      <button 
+                        onClick={fetchAuditData} 
+                        disabled={loadingAudit}
+                        type="button" 
+                        className="px-4 py-2 rounded bg-gray-600 text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loadingAudit ? 'Refreshing...' : 'Refresh'}
+                      </button>
                       <button onClick={exportToExcel} type="button" className="px-4 py-2 rounded bg-[#010a51] text-white hover:bg-[#1a237e]">Export</button>
-            </div>
-          </div>
+                    </div>
+                  </div>
 
                   {/* Filters */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
-                <div>
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
                       <select value={selectedSection} onChange={e => { setSelectedSection(e.target.value); setSelectedActivityId("all"); }} className="w-full border rounded px-3 py-2">
                         {sections.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
-                </div>
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Activity</label>
                       <select value={selectedActivityId} onChange={e => setSelectedActivityId(e.target.value)} className="w-full border rounded px-3 py-2">
-                        {filteredActivities.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
+                        {activities.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
                       </select>
-                </div>
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                       <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full border rounded px-3 py-2">
                         <option value="all">All</option>
                         <option value="not_viewed">Not Viewed</option>
                         <option value="missed">Missed</option>
+                        <option value="viewed">Viewed</option>
                       </select>
-            </div>
-                   <div>
+                    </div>
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Search Student</label>
                       <input value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="e.g. Dela Cruz" className="w-full border rounded px-3 py-2" />
-              </div>
-            </div>
-
-                  {/* Summary */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                    <div className="p-4 rounded border bg-red-50 border-red-200">
-                      <div className="text-sm text-red-700">Not Viewed</div>
-                      <div className="text-2xl font-bold text-red-800">{notViewedCount}</div>
-              </div>
-                    <div className="p-4 rounded border bg-yellow-50 border-yellow-200">
-                      <div className="text-sm text-yellow-700">Missed</div>
-                      <div className="text-2xl font-bold text-yellow-800">{missedCount}</div>
-            </div>
-                    <div className="p-4 rounded border bg-gray-50 border-gray-200">
-                      <div className="text-sm text-gray-700">Total (Filtered)</div>
-                      <div className="text-2xl font-bold text-gray-800">{filteredRows.length}</div>
                     </div>
-                </div>
+                  </div>
+
+
+              
 
                   {/* Table */}
                   <div className="overflow-x-auto">
@@ -648,10 +689,10 @@ export default function Faculty_StudentReport() {
                           <th className="p-3 border-b font-semibold text-gray-700">Student Name</th>
                           <th className="p-3 border-b font-semibold text-gray-700">Section</th>
                           <th className="p-3 border-b font-semibold text-gray-700">Activity</th>
+                          <th className="p-3 border-b font-semibold text-gray-700">Type</th>
                           <th className="p-3 border-b font-semibold text-gray-700">Due Date</th>
                           <th className="p-3 border-b font-semibold text-gray-700">Status</th>
                           <th className="p-3 border-b font-semibold text-gray-700">Last Viewed</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Submitted At</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -660,35 +701,44 @@ export default function Faculty_StudentReport() {
                             <td className="p-4 text-center text-gray-500" colSpan={7}>No results for current filters.</td>
                           </tr>
                         ) : (
-                          filteredRows.map((r) => {
-                            const act = activityById.get(r.activityId) || {};
-                            return (
-                              <tr key={`${r.activityId}-${r.studentId}`} className="odd:bg-white even:bg-gray-50">
-                                <td className="p-3 border-b">{r.studentName}</td>
-                                <td className="p-3 border-b">{r.sectionName}</td>
-                                <td className="p-3 border-b">{act.title || r.activityId}</td>
-                                <td className="p-3 border-b">{act.dueDate ? new Date(act.dueDate).toLocaleDateString("en-US") : '-'}</td>
-                                <td className="p-3 border-b">
-                                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
-                                    r.status === 'not_viewed' ? 'bg-red-100 text-red-700 border border-red-200' :
-                                    r.status === 'missed' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
-                                    'bg-green-100 text-green-700 border border-green-200'
-                                  }`}>
-                                    {r.status.replace('_', ' ')}
-                                  </span>
-                                </td>
-                                <td className="p-3 border-b">{r.lastViewedAt ? new Date(r.lastViewedAt).toLocaleString() : '-'}</td>
-                                <td className="p-3 border-b">{r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '-'}</td>
-                              </tr>
-                            );
-                          })
+                          filteredRows.map((item) => (
+                            <tr key={`${item.activityId}-${item.studentId}`} className="odd:bg-white even:bg-gray-50">
+                              <td className="p-3 border-b">{item.studentName}</td>
+                              <td className="p-3 border-b">{item.sectionName}</td>
+                              <td className="p-3 border-b">{item.activityTitle}</td>
+                              <td className="p-3 border-b">
+                                <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
+                                  item.activityType === 'assignment' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                                  'bg-purple-100 text-purple-700 border border-purple-200'
+                                }`}>
+                                  {item.activityType}
+                                </span>
+                              </td>
+                              <td className="p-3 border-b">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("en-US") : '-'}</td>
+                              <td className="p-3 border-b">
+                                <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
+                                  item.status === 'not_viewed' ? 'bg-red-100 text-red-700 border border-red-200' :
+                                  item.status === 'missed' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                                  'bg-green-100 text-green-700 border border-green-200'
+                                }`}>
+                                  {item.status.replace('_', ' ')}
+                                </span>
+                              </td>
+                              <td className="p-3 border-b">{item.lastViewedAt ? new Date(item.lastViewedAt).toLocaleString() : '-'}</td>
+                            </tr>
+                          ))
                         )}
                       </tbody>
                     </table>
-            </div>
+                  </div>
 
                   {/* Note */}
-                  <p className="mt-4 text-xs text-gray-500">Frontend-only prototype. This view will connect to real activities and student engagement data once backend endpoints are available.</p>
+                  <p className="mt-4 text-xs text-gray-500">
+                    This view shows real-time data from your assignments and quizzes. 
+                    Students are marked as "not viewed" if they haven't accessed the activity yet, 
+                    and "missed" if the due date has passed without them viewing it.
+                  </p>
+                  
                 </>
               );
             }
