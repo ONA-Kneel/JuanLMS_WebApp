@@ -28,6 +28,7 @@ export default function FacultyCreateClass() {
   const [currentTerm, setCurrentTerm] = useState(null);
   const [classImage, setClassImage] = useState(null);
   const [classDesc, setClassDesc] = useState("");
+  const [existingClasses, setExistingClasses] = useState([]);
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
     type: 'error',
@@ -35,36 +36,37 @@ export default function FacultyCreateClass() {
     message: ''
   });
 
-  // Fetch faculty assignments on mount
+  // Fetch faculty assignments and existing classes on mount
   useEffect(() => {
-    async function fetchAssignments() {
+    async function fetchData() {
       try {
         const token = localStorage.getItem('token');
         let facultyID = localStorage.getItem('userID');
         
-        // If userID is not in localStorage, try to get it from JWT token
-        if (!facultyID && token) {
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            facultyID = payload._id;
-          } catch (e) {
-            console.error('Failed to parse JWT token');
-          }
-        }
+                 // If userID is not in localStorage, try to get it from JWT token
+         if (!facultyID && token) {
+           try {
+             const payload = JSON.parse(atob(token.split('.')[1]));
+             facultyID = payload._id;
+           } catch {
+             console.error('Failed to parse JWT token');
+           }
+         }
         
         if (!facultyID) {
           console.error('No faculty ID available');
           setFacultyAssignments([]);
+          setExistingClasses([]);
           return;
         }
         
-        // Get all faculty assignments and filter by current user
-        const res = await fetch(`${API_BASE}/api/faculty-assignments`, {
+        // Fetch faculty assignments
+        const assignmentsRes = await fetch(`${API_BASE}/api/faculty-assignments`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
-        if (res.ok) {
-          const data = await res.json();
+        if (assignmentsRes.ok) {
+          const data = await assignmentsRes.json();
           // Filter assignments for the current faculty user
           const userAssignments = data.filter(assignment => 
             assignment.facultyId === facultyID || assignment.facultyId === userMongoId
@@ -74,12 +76,26 @@ export default function FacultyCreateClass() {
           console.error('Failed to fetch faculty assignments');
           setFacultyAssignments([]);
         }
+        
+        // Fetch existing classes for this faculty
+        const classesRes = await fetch(`${API_BASE}/api/classes/faculty-classes`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (classesRes.ok) {
+          const classesData = await classesRes.json();
+          setExistingClasses(classesData);
+        } else {
+          console.error('Failed to fetch existing classes');
+          setExistingClasses([]);
+        }
       } catch (error) {
-        console.error('Error fetching faculty assignments:', error);
+        console.error('Error fetching data:', error);
         setFacultyAssignments([]);
+        setExistingClasses([]);
       }
     }
-    fetchAssignments();
+    fetchData();
   }, []);
 
   // Debug: Log token and user info
@@ -148,13 +164,28 @@ export default function FacultyCreateClass() {
     
     const uniqueSubjects = [...new Set(filtered.map(a => a.subjectName))];
     console.log('Available subjects:', uniqueSubjects);
-    setSubjects(uniqueSubjects);
+    
+    // Filter out subjects that already have classes for this faculty
+    const availableSubjects = uniqueSubjects.filter(subject => {
+      // Check if faculty already has a class for this subject in the current term/year
+      const hasExistingClass = existingClasses.some(existingClass => {
+        // Match by subject name and current academic year/term
+        return existingClass.className === subject && 
+               existingClass.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
+               existingClass.termName === currentTerm?.termName;
+      });
+      
+      return !hasExistingClass;
+    });
+    
+    console.log('Available subjects (excluding existing classes):', availableSubjects);
+    setSubjects(availableSubjects);
     
     // Reset subject if current selection is not available
-    if (!uniqueSubjects.includes(selectedSubject)) {
+    if (!availableSubjects.includes(selectedSubject)) {
       setSelectedSubject("");
     }
-  }, [filteredAssignments, selectedGradeLevel, selectedSubject]);
+  }, [filteredAssignments, selectedGradeLevel, selectedSubject, existingClasses, academicYear, currentTerm]);
 
   // When subject changes, update sections
   useEffect(() => {
@@ -608,31 +639,37 @@ export default function FacultyCreateClass() {
               }
             </select>
 
-            <label className="text-xl font-bold">Class Name (Subject)</label>
-            <select
-              className="w-full px-3 py-2 border rounded"
-              value={selectedSubject}
-              onChange={e => setSelectedSubject(e.target.value)}
-              disabled={!selectedGradeLevel}
-            >
-              <option value="">Select Subject</option>
-              {subjects.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+                         <label className="text-xl font-bold">Class Name (Subject)</label>
+             {subjects.length === 0 && selectedGradeLevel ? (
+               <div className="w-full px-3 py-2 border rounded bg-yellow-50 text-yellow-800 text-sm">
+                 You have already created classes for all available subjects in this grade level for the current term.
+               </div>
+             ) : (
+               <select
+                 className="w-full px-3 py-2 border rounded"
+                 value={selectedSubject}
+                 onChange={e => setSelectedSubject(e.target.value)}
+                 disabled={!selectedGradeLevel}
+               >
+                 <option value="">Select Subject</option>
+                 {subjects.map(s => (
+                   <option key={s} value={s}>{s}</option>
+                 ))}
+               </select>
+             )}
 
-            <label className="text-xl font-bold">Section</label>
-            <select
-              className="w-full px-3 py-2 border rounded"
-              value={selectedSection}
-              onChange={e => setSelectedSection(e.target.value)}
-              disabled={!selectedSubject}
-            >
-              <option value="">Select Section</option>
-              {sections.map(sec => (
-                <option key={sec} value={sec}>{sec}</option>
-              ))}
-            </select>
+                         <label className="text-xl font-bold">Section</label>
+             <select
+               className="w-full px-3 py-2 border rounded"
+               value={selectedSection}
+               onChange={e => setSelectedSection(e.target.value)}
+               disabled={!selectedSubject || subjects.length === 0}
+             >
+               <option value="">Select Section</option>
+               {sections.map(sec => (
+                 <option key={sec} value={sec}>{sec}</option>
+               ))}
+             </select>
             
             {selectedSubject && selectedSection && academicYear && (
               <div className="bg-blue-50 p-3 rounded border">
@@ -650,22 +687,23 @@ export default function FacultyCreateClass() {
           </div>
         </div>
 
-        {/* Debug Information - Remove this in production */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-6 ml-5 p-4 bg-gray-100 rounded border">
-            <h4 className="font-bold mb-2">Debug Info:</h4>
-            <div className="text-sm space-y-1">
-              <p><strong>Faculty Assignments:</strong> {facultyAssignments.length}</p>
-              <p><strong>Filtered Assignments:</strong> {filteredAssignments.length}</p>
-              <p><strong>Available Grade Levels:</strong> {filteredAssignments.map(a => a.gradeLevel).filter((v, i, a) => a.indexOf(v) === i).join(', ')}</p>
-              <p><strong>Available Subjects:</strong> {subjects.join(', ')}</p>
-              <p><strong>Available Sections:</strong> {sections.join(', ')}</p>
-              <p><strong>Selected Grade Level:</strong> {selectedGradeLevel}</p>
-              <p><strong>Selected Subject:</strong> {selectedSubject}</p>
-              <p><strong>Selected Section:</strong> {selectedSection}</p>
-            </div>
-          </div>
-        )}
+                 {/* Debug Information - Remove this in production */}
+         {import.meta.env.DEV && (
+           <div className="mt-6 ml-5 p-4 bg-gray-100 rounded border">
+             <h4 className="font-bold mb-2">Debug Info:</h4>
+             <div className="text-sm space-y-1">
+               <p><strong>Faculty Assignments:</strong> {facultyAssignments.length}</p>
+               <p><strong>Filtered Assignments:</strong> {filteredAssignments.length}</p>
+               <p><strong>Existing Classes:</strong> {existingClasses.length}</p>
+               <p><strong>Available Grade Levels:</strong> {filteredAssignments.map(a => a.gradeLevel).filter((v, i, a) => a.indexOf(v) === i).join(', ')}</p>
+               <p><strong>Available Subjects:</strong> {subjects.join(', ')}</p>
+               <p><strong>Available Sections:</strong> {sections.join(', ')}</p>
+               <p><strong>Selected Grade Level:</strong> {selectedGradeLevel}</p>
+               <p><strong>Selected Subject:</strong> {selectedSubject}</p>
+               <p><strong>Selected Section:</strong> {selectedSection}</p>
+             </div>
+           </div>
+         )}
 
         <h3 className="text-4xl font-bold mt-10 mb-7">Members</h3>
           {/* Batch Upload Input - restyled to match Bulk Assign Students UI */}
@@ -795,7 +833,7 @@ export default function FacultyCreateClass() {
         type={validationModal.type}
         title={validationModal.title}
         message={validationModal.message}
-        onConfirm={validationModal.type === 'success' ? () => navigate('/faculty/classes') : undefined}
+        onConfirm={validationModal.type === 'success' ? () => navigate('/faculty_classes') : undefined}
         confirmText={validationModal.type === 'success' ? 'Go to Classes' : 'OK'}
       />
 

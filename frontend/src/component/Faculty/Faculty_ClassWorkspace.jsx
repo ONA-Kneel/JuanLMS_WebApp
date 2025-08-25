@@ -22,13 +22,13 @@ export default function Faculty_ClassWorkspace() {
         async function fetchClass() {
             try {
                 const token = localStorage.getItem("token");
-                const res = await fetch(`${API_BASE}/classes`, {
+                const res = await fetch(`${API_BASE}/classes/faculty-classes`, {
                     headers: {
                         "Authorization": `Bearer ${token}`,
                     },
                 });
                 const data = await res.json();
-                console.log('[ClassWorkspace] /classes length:', Array.isArray(data) ? data.length : 'n/a');
+                console.log('[ClassWorkspace] /classes/faculty-classes length:', Array.isArray(data) ? data.length : 'n/a');
                 // Find the class by classID
                 const found = data.find(cls => cls.classID === classId);
                 console.log('[ClassWorkspace] class found by classID:', !!found, found);

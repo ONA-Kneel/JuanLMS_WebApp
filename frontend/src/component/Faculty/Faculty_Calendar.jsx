@@ -65,13 +65,12 @@ export default function Faculty_Calendar() {
       try {
         const token = localStorage.getItem('token');
         // Fetch all classes the faculty teaches
-        const resClasses = await fetch(`${API_BASE}/classes`, {
+        const resClasses = await fetch(`${API_BASE}/classes/faculty-classes`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const classes = await resClasses.json();
-        // Filter classes where the logged-in user is the faculty (use school ID)
-        const userSchoolId = JSON.parse(atob(token.split('.')[1])).userID;
-        const myClasses = classes.filter(cls => cls.facultyID === userSchoolId);
+        // Faculty filtering already done by backend
+        const myClasses = classes;
         let events = [];
         for (const cls of myClasses) {
           const classCode = cls.classID || cls.classCode || cls._id;

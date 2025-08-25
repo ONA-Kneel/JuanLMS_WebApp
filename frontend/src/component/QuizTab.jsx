@@ -231,16 +231,15 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                 const token = localStorage.getItem('token');
                 const userId = localStorage.getItem('userID');
                 
-                const res = await fetch(`${API_BASE}/classes`, {
+                const res = await fetch(`${API_BASE}/classes/faculty-classes`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
                 if (res.ok) {
                     const data = await res.json();
                     
-                    // Filter classes: only show active classes for current faculty in current term
+                    // Filter classes: only show active classes for current term (faculty filtering already done by backend)
                     const filteredClasses = data.filter(cls => 
-                        cls.facultyID === userId && 
                         cls.isArchived !== true &&
                         cls.academicYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` &&
                         cls.termName === currentTerm.termName

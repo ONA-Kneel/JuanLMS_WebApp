@@ -82,13 +82,12 @@ export default function Faculty_Activities() {
       try {
         const token = localStorage.getItem("token");
         const userId = localStorage.getItem("userID");
-        const res = await fetch(`${API_BASE}/classes`, {
+        const res = await fetch(`${API_BASE}/classes/faculty-classes`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
           const data = await res.json();
           const filtered = data.filter((cls) =>
-            cls.facultyID === userId &&
             cls.isArchived !== true &&
             cls.academicYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` &&
             cls.termName === currentTerm.termName
