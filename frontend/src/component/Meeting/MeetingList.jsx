@@ -3,7 +3,7 @@ import { Video, Calendar, Clock, Users, Play, Trash2, Edit, AlertCircle } from '
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
-const MeetingList = ({ classId, userRole, refreshTrigger }) => {
+const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -55,10 +55,14 @@ const MeetingList = ({ classId, userRole, refreshTrigger }) => {
       console.log('[DEBUG] MeetingList join response result:', result);
 
       if (response.ok) {
-        // Always open Jitsi in a new tab to avoid security issues
-        const jitsiUrl = result.roomUrl;
-        console.log('[DEBUG] MeetingList opening Jitsi in new tab:', jitsiUrl);
-        window.open(jitsiUrl, '_blank');
+        // Pass both backend result and original meeting to onJoinMeeting
+        if (onJoinMeeting) {
+          const mergedMeeting = { ...meeting, roomUrl: result.roomUrl };
+          console.log('[DEBUG] MeetingList onJoinMeeting mergedMeeting:', mergedMeeting);
+          onJoinMeeting(mergedMeeting);
+        } else {
+          window.open(result.roomUrl, '_blank');
+        }
         
         // Refresh meetings to update participant count
         fetchMeetings();
