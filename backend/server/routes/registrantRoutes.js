@@ -118,38 +118,63 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
     const registrant = await Registrant.findById(req.params.id);
     if (!registrant) return res.status(404).json({ message: 'Registrant not found' });
     if (registrant.status !== 'pending') return res.status(400).json({ message: 'Already processed' });
+    
     // Validate minimal data before creating the user account
     const isStudentId = /^\d{2}-\d{5}$/.test(registrant.schoolID);
-    const isFacultyId = /^F00/.test(registrant.schoolID);
-    const isAdminId = /^A00/.test(registrant.schoolID);
-    if (!(isStudentId || isFacultyId || isAdminId)) {
+    const isFacultyId = /^F\d{3}$/.test(registrant.schoolID);
+    const isAdminId = /^A\d{3}$/.test(registrant.schoolID);
+    const isVPEPrincipalId = /^N\d{3}$/.test(registrant.schoolID);
+    
+    if (!(isStudentId || isFacultyId || isAdminId || isVPEPrincipalId)) {
       return res.status(400).json({ message: 'Registrant has an invalid or missing School ID. Please correct it before approval.' });
     }
     if (!/^\d{11}$/.test(registrant.contactNo || '')) {
       return res.status(400).json({ message: 'Registrant has an invalid contact number. It must be exactly 11 digits.' });
     }
 
-    // Generate school email: firstname.lastname@students.sjddef.edu.ph
+    // Helper function to clean names for email generation
     const clean = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@students.sjddef.edu.ph`;
+    
+    // Determine role based on schoolID format
+    let role = 'students'; // default
+    let schoolEmail = '';
+    
+    if (isStudentId) {
+      role = 'students';
+      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@students.sjddef.edu.ph`;
+    } else if (isFacultyId) {
+      role = 'faculty';
+      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjddef.edu.ph`;
+    } else if (isAdminId) {
+      role = 'admin';
+      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@admin.sjddef.edu.ph`;
+    } else if (isVPEPrincipalId) {
+      // Check if it's VPE or Principal based on the specific ID pattern
+      // You may need to adjust this logic based on your specific numbering scheme
+      role = 'vice president of education'; // or 'principal' based on your needs
+      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@VPE.sjddef.edu.ph`;
+    }
+
     const tempPassword = 'changeme123';
     const user = new User({
       firstname: registrant.firstName,
       middlename: registrant.middleName,
       lastname: registrant.lastName,
       personalemail: registrant.personalEmail,
-      email: schoolEmail, // use generated school email
+      email: schoolEmail,
       contactNo: registrant.contactNo,
       schoolID: registrant.schoolID,
       password: tempPassword,
-      role: 'students',
+      role: role, // Use the determined role instead of hardcoded 'students'
     });
+    
     try {
       await user.save();
     } catch (saveErr) {
       console.error('Validation error creating user from registrant:', saveErr);
       return res.status(400).json({ message: saveErr.message || 'Failed to create user from registrant.' });
     }
+    
     registrant.status = 'approved';
     registrant.processedAt = new Date();
     registrant.processedBy = req.body && req.body.adminId ? req.body.adminId : null;
@@ -163,7 +188,7 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
           toName: `${registrant.firstName} ${registrant.lastName}`,
           subject: 'Admission Offer - Welcome to San Juan De Dios Educational Foundation Inc',
           textContent:
-`Dear ${registrant.firstName} ${registrant.lastName},\n\nCongratulations! We are pleased to inform you that you have been accepted into our academic institution for the upcoming academic year. Your application demonstrated outstanding qualifications and potential, and we are excited to welcome you into our community.\n\nAs part of your enrollment, your official school credentials have been generated:\n\n- School Email: ${schoolEmail}\n- Temporary Password: ${tempPassword}\n\nPlease use these credentials to log in to the student portal and complete your onboarding tasks.\n\nWe look forward to seeing the great things you will accomplish here.\n\nWarm regards,\nAdmissions Office`
+`Dear ${registrant.firstName} ${registrant.lastName},\n\nCongratulations! We are pleased to inform you that you have been accepted into our academic institution for the upcoming academic year. Your application demonstrated outstanding qualifications and potential, and we are excited to welcome you into our community.\n\nAs part of your enrollment, your official school credentials have been generated:\n\n- School Email: ${schoolEmail}\n- Temporary Password: ${tempPassword}\n- Role: ${role}\n\nPlease use these credentials to log in to the ${role === 'students' ? 'student' : 'faculty'} portal and complete your onboarding tasks.\n\nWe look forward to seeing the great things you will accomplish here.\n\nWarm regards,\nAdmissions Office`
         });
         console.log('Acceptance email sent to', registrant.personalEmail);
       } catch (emailErr) {

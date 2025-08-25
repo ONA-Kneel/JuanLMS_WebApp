@@ -11,6 +11,7 @@ export default function Faculty_Dashboard() {
   const [loading, setLoading] = useState(true);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [debugMode, setDebugMode] = useState(false);
 
   // Announcements (Principal/VPE only, dismissible)
   const [announcements, setAnnouncements] = useState([]);
@@ -110,14 +111,14 @@ export default function Faculty_Dashboard() {
     async function fetchClasses() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`${API_BASE}/classes`, {
+        const res = await fetch(`${API_BASE}/classes/my-classes`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
 
+        // Filter classes: only show active classes for current faculty in current term
         const filtered = data.filter(
           (cls) =>
-            cls.facultyID === currentFacultyID &&
             cls.isArchived !== true &&
             cls.academicYear ===
               `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
@@ -158,8 +159,33 @@ export default function Faculty_Dashboard() {
               })}
             </p>
           </div>
-          <ProfileMenu />
+          <div className="flex items-center gap-4">
+            {/* Debug mode toggle */}
+            <button
+              onClick={() => setDebugMode(!debugMode)}
+              className={`px-3 py-2 text-sm rounded ${
+                debugMode 
+                  ? 'bg-red-600 text-white hover:bg-red-700' 
+                  : 'bg-gray-600 text-white hover:bg-gray-700'
+              }`}
+            >
+              {debugMode ? 'Debug ON' : 'Debug OFF'}
+            </button>
+            <ProfileMenu />
+          </div>
         </div>
+
+        {/* Debug info */}
+        {debugMode && (
+          <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
+            <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
+            <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
+            <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
+            <p className="text-sm text-yellow-700">Classes Found: {classes.length}</p>
+            <p className="text-sm text-yellow-700">Current Faculty ID: {currentFacultyID}</p>
+            <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
+          </div>
+        )}
 
         {/* Announcements (no KPI cards here) */}
         {announcements.length > 0 && (
