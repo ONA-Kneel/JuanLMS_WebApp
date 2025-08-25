@@ -1,13 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
+  FaSpinner, 
+  FaVideo, 
+  FaTimes, 
   FaRedo, 
-  FaExclamationTriangle
+  FaExclamationTriangle, 
+  FaUserShield,
+  FaUserFriends,
+  FaExpand,
+  FaCompress,
+  FaCog
 } from 'react-icons/fa';
 import './VideoMeetingRoom.css';
 
 const JITSI_DOMAIN = import.meta.env.VITE_JITSI_DOMAIN || 'meet.jit.si';
 
 const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerator = false, onLeave }) => {
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const jitsiContainer = useRef(null);
   const jitsiApi = useRef(null);
@@ -69,10 +78,12 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
     const meetingId = getMeetingId();
     if (!meetingId) {
       setError('Invalid meeting ID');
+      setIsLoading(false);
       return;
     }
 
     try {
+      setIsLoading(true);
       setError(null);
 
       await loadJitsiScript();
@@ -169,19 +180,22 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
 
       // Connection timeout fallback: open in new tab if embed doesn't join
       const timeoutId = setTimeout(() => {
-        const url = `https://${JITSI_DOMAIN}/${encodeURIComponent(roomName)}`;
-        window.open(url, '_blank');
+        if (isLoading) {
+          const url = `https://${JITSI_DOMAIN}/${encodeURIComponent(roomName)}`;
+          window.open(url, '_blank');
+        }
       }, 12000);
 
       api.addEventListeners({
         iframeReady: () => {
-          // Meeting iframe is ready
+          setIsLoading(false);
         },
         readyToClose: () => {
           handleLeaveMeeting();
         },
         videoConferenceJoined: () => {
           clearTimeout(timeoutId);
+          setIsLoading(false);
           if (isModerator) {
             api.executeCommand('displayName', `${currentUser?.name} (Host)`);
           }
@@ -193,10 +207,12 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
         error: (evt) => {
           clearTimeout(timeoutId);
           setError(evt?.message || 'Unknown meeting error');
+          setIsLoading(false);
         }
       });
     } catch (e) {
       setError(e?.message || 'Failed to initialize meeting');
+      setIsLoading(false);
       // Auto-retry after a delay if we haven't exceeded max attempts
       if (scriptLoadAttempts.current < MAX_SCRIPT_LOAD_ATTEMPTS) {
         setTimeout(() => {
@@ -204,7 +220,7 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
         }, 2000);
       }
     }
-  }, [isOpen, getMeetingId, currentUser, isModerator, handleLeaveMeeting, getRoomName, loadJitsiScript, meetingData?.jwt]);
+  }, [isOpen, getMeetingId, currentUser, isModerator, handleLeaveMeeting, getRoomName, loadJitsiScript, isLoading, meetingData?.jwt]);
 
   const handleRetry = useCallback(() => {
     setError(null);
@@ -218,20 +234,9 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
       // Prevent background scroll and interactions
       const previousOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
-      
-      // Add escape key handler
-      const handleEscape = (e) => {
-        if (e.key === 'Escape') {
-          handleLeaveMeeting();
-        }
-      };
-      
-      document.addEventListener('keydown', handleEscape);
       initializeJitsi();
-      
       return () => {
         document.body.style.overflow = previousOverflow;
-        document.removeEventListener('keydown', handleEscape);
         if (jitsiApi.current) {
           try {
             jitsiApi.current.dispose();
@@ -252,24 +257,38 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
         jitsiApi.current = null;
       }
     };
-  }, [isOpen, initializeJitsi, meetingData, handleLeaveMeeting]);
+  }, [isOpen, initializeJitsi, meetingData]);
 
   if (!isOpen) return null;
 
   return (
     <div className="video-meeting-room">
-      {/* Minimal leave button */}
-      <button 
-        className="minimal-leave-button" 
-        onClick={handleLeaveMeeting}
-        aria-label="Leave meeting"
-        title="Leave meeting (Esc)"
-      >
-        ✕
-      </button>
+      <header className="video-meeting-header">
+        <h3>
+          <FaVideo />
+          <span>{meetingData?.title || 'JuanLMS Video Meeting'}</span>
+        </h3>
+        <button 
+          className="close-button" 
+          onClick={handleLeaveMeeting}
+          aria-label="Leave meeting"
+        >
+          <FaTimes />
+        </button>
+      </header>
       
       <main className="meeting-content">
         <div ref={jitsiContainer} className="jitsi-container" />
+        
+        {isLoading && (
+          <div className="loading-overlay">
+            <div className="loading-content">
+              <FaSpinner className="spinner" />
+              <p>Connecting to meeting room...</p>
+              <small>This may take a moment</small>
+            </div>
+          </div>
+        )}
         
         {error && (
           <div className="error-overlay">
@@ -290,13 +309,33 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
                   onClick={handleLeaveMeeting}
                   aria-label="Leave meeting"
                 >
-                  <FaRedo /> Leave
+                  <FaTimes /> Leave
                 </button>
               </div>
             </div>
           </div>
         )}
       </main>
+      
+      <footer className="status-bar">
+        <div className="status-info">
+          {isModerator ? (
+            <span className="moderator-status">
+              <FaUserShield className="status-icon" />
+              <span>Moderator</span>
+            </span>
+          ) : (
+            <span className="participant-status">
+              <FaUserFriends className="status-icon" />
+              <span>Participant</span>
+            </span>
+          )}
+        </div>
+        <div className="connection-status">
+          <span className="connection-indicator"></span>
+          <span>Connected</span>
+        </div>
+      </footer>
     </div>
   );
 };
