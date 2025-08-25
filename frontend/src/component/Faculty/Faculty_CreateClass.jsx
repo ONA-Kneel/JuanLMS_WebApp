@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
 import archiveIcon from "../../assets/archive.png";
@@ -9,6 +10,7 @@ import ValidationModal from "../ValidationModal";
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function FacultyCreateClass() {
+  const navigate = useNavigate();
   const [studentName, setStudentName] = useState("");
   const [students, setStudents] = useState([]);
   const [error, setError] = useState("");
@@ -793,6 +795,8 @@ export default function FacultyCreateClass() {
         type={validationModal.type}
         title={validationModal.title}
         message={validationModal.message}
+        onConfirm={validationModal.type === 'success' ? () => navigate('/faculty/classes') : undefined}
+        confirmText={validationModal.type === 'success' ? 'Go to Classes' : 'OK'}
       />
 
       </div>

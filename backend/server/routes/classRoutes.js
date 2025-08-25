@@ -123,16 +123,36 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     let currentTerm = null;
     
     try {
-      // Fetch active academic year
-      const yearRes = await fetch(`${req.protocol}://${req.get('host')}/api/schoolyears/active`, {
+      // First, try to get the active term directly (most reliable)
+      const directActiveTermRes = await fetch(`${req.protocol}://${req.get('host')}/api/terms/active`, {
         headers: { "Authorization": `Bearer ${req.headers.authorization?.split(' ')[1]}` }
       });
-      if (yearRes.ok) {
-        academicYear = await yearRes.json();
+      if (directActiveTermRes.ok) {
+        const directActiveTerm = await directActiveTermRes.json();
+        if (directActiveTerm) {
+          currentTerm = directActiveTerm;
+          // Derive academic year from term's schoolYear field
+          if (directActiveTerm.schoolYear) {
+            const [start, end] = String(directActiveTerm.schoolYear).split('-').map(Number);
+            if (!Number.isNaN(start) && !Number.isNaN(end)) {
+              academicYear = { schoolYearStart: start, schoolYearEnd: end };
+            }
+          }
+        }
       }
       
-      // Fetch active term for the year
-      if (academicYear) {
+      // If we still don't have academic year, try to fetch it directly
+      if (!academicYear) {
+        const yearRes = await fetch(`${req.protocol}://${req.get('host')}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${req.headers.authorization?.split(' ')[1]}` }
+        });
+        if (yearRes.ok) {
+          academicYear = await yearRes.json();
+        }
+      }
+      
+      // If we have academic year but no term, try to find term for that year
+      if (academicYear && !currentTerm) {
         const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
         const termRes = await fetch(`${req.protocol}://${req.get('host')}/api/terms/schoolyear/${schoolYearName}`, {
           headers: { "Authorization": `Bearer ${req.headers.authorization?.split(' ')[1]}` }
@@ -142,28 +162,48 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
           currentTerm = terms.find(term => term.status === 'active');
         }
       }
-
-      // Fallback: if currentTerm is still null, try the direct active term endpoint
-      if (!currentTerm) {
-        const directActiveTermRes = await fetch(`${req.protocol}://${req.get('host')}/api/terms/active`, {
-          headers: { "Authorization": `Bearer ${req.headers.authorization?.split(' ')[1]}` }
-        });
-        if (directActiveTermRes.ok) {
-          const directActiveTerm = await directActiveTermRes.json();
-          if (directActiveTerm) {
-            currentTerm = directActiveTerm;
-            // If academic year was not fetched, derive from term
-            if (!academicYear && directActiveTerm.schoolYear) {
-              const [start, end] = String(directActiveTerm.schoolYear).split('-').map(Number);
-              if (!Number.isNaN(start) && !Number.isNaN(end)) {
-                academicYear = { schoolYearStart: start, schoolYearEnd: end };
-              }
-            }
+      
+      console.log('[CREATE-CLASS] Fetched academic year and term:', {
+        academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : null,
+        currentTerm: currentTerm ? currentTerm.termName : null
+      });
+      
+      // Final fallback: if we still don't have academic year or term, use current date logic
+      if (!academicYear || !currentTerm) {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1; // January is 0
+        
+        // Academic year typically runs from June to May
+        let academicYearStart = currentYear;
+        if (currentMonth >= 6) { // June or later
+          academicYearStart = currentYear;
+        } else { // January to May
+          academicYearStart = currentYear - 1;
+        }
+        
+        if (!academicYear) {
+          academicYear = { schoolYearStart: academicYearStart, schoolYearEnd: academicYearStart + 1 };
+          console.log('[CREATE-CLASS] Using fallback academic year from current date:', `${academicYearStart}-${academicYearStart + 1}`);
+        }
+        
+        if (!currentTerm) {
+          // Determine term based on month
+          let termName = 'Term 1';
+          if (currentMonth >= 6 && currentMonth <= 10) { // June to October
+            termName = 'Term 1';
+          } else if (currentMonth >= 11 || currentMonth <= 3) { // November to March
+            termName = 'Term 2';
+          } else { // April to May
+            termName = 'Term 3';
           }
+          
+          currentTerm = { termName: termName };
+          console.log('[CREATE-CLASS] Using fallback term from current date:', termName);
         }
       }
     } catch (err) {
-      console.log('Could not fetch academic year/term, creating class without them');
+      console.log('Could not fetch academic year/term, creating class without them:', err.message);
     }
 
     // Validate that section matches an actual section from academic settings
@@ -254,14 +294,25 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
       }
     }
     
+    // Always set academic year and term (either from fetched data or fallback)
     if (academicYear && currentTerm) {
       classData.academicYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
       classData.termName = currentTerm.termName;
+      console.log('[CREATE-CLASS] Set academic year and term:', {
+        academicYear: classData.academicYear,
+        termName: classData.termName
+      });
+    } else {
+      console.log('[CREATE-CLASS] ERROR: Still missing academic year or term after all fallbacks');
+      // This should never happen with our fallback logic, but just in case
+      return res.status(500).json({ error: 'Failed to determine academic year and term for class creation' });
     }
     
     if (section) {
       classData.section = section;
     }
+    
+    console.log('[CREATE-CLASS] Final classData before save:', classData);
     
     const newClass = new Class(classData);
     await newClass.save();
