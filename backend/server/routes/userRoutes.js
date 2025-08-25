@@ -8,6 +8,7 @@ import { ObjectId } from "mongodb";
 import jwt from "jsonwebtoken";
 import nodemailer from 'nodemailer';
 import SibApiV3Sdk from 'sib-api-v3-sdk';
+import { sendEmail } from '../utils/emailUtil.js';
 import User from "../models/User.js";
 import { encrypt, decrypt } from "../utils/encryption.js";
 import bcrypt from "bcrypt";
@@ -362,30 +363,21 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
 
         // Send welcome email via Brevo (Sendinblue)
         try {
-            let defaultClient = SibApiV3Sdk.ApiClient.instance;
-            let apiKey = defaultClient.authentications['api-key'];
-            apiKey.apiKey = process.env.BREVO_API_KEY;
-
-            let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-
-            let sendSmtpEmail = {
-                to: [{ email: personalemail, name: firstname || '' }],
-                sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
-                subject: 'Welcome to JuanLMS!',
-                textContent:
-                  `Hello ${firstname || ''},\n\n` +
-                  `Your JuanLMS account has been created.\n` +
-                  `School Email: ${email}\n` +
-                  `Password: ${password}\n\n` +
-                  `Please log in and change your password after your first login.\n\n` +
-                  `Thank you,\nJuanLMS Team`
-            };
-
-            console.log("About to send welcome email");
-            await apiInstance.sendTransacEmail(sendSmtpEmail);
-            console.log("Welcome email sent");
+            await sendEmail({
+            toEmail: email,
+            toName: `${firstname} ${lastname}`,
+            subject: 'Welcome to JuanLMS!',
+            textContent:
+                `Hello ${firstname || ''},\n\n` +
+                `Your JuanLMS account has been created.\n` +
+                `School Email: ${email}\n` +
+                `Password: ${password}\n\n` +
+                `Please log in and change your password after your first login.\n\n` +
+                `Thank you,\nJuanLMS Team`
+            });
+        console.log("Welcome email sent");
         } catch (emailErr) {
-            console.error('Error sending welcome email via Brevo:', emailErr);
+        console.error('Error sending welcome email via Brevo:', emailErr);
         }
         res.status(201).json({ success: true, user });
     } catch (err) {
@@ -568,18 +560,26 @@ userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
     let apiKey = defaultClient.authentications['api-key'];
     apiKey.apiKey = process.env.BREVO_API_KEY;
     let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-    let sendSmtpEmail = {
-        to: [{ email: decryptedPersonalEmail, name: user.firstname || '' }],
-        sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
-        subject: 'Your JuanLMS Password Change OTP',
-        textContent: `Hello ${user.firstname || ''},\n\nYour OTP for password change is: ${otp}\n\nIf you did not request this, please ignore this email.\n\nThank you,\nJuanLMS Team`
-    };
     try {
-        await apiInstance.sendTransacEmail(sendSmtpEmail);
-    } catch (emailErr) {
+        const decryptedPersonalEmail = decrypt(user.personalEmail);
+      
+        if (!decryptedPersonalEmail) {
+          console.error("Decryption failed or user has no personal email");
+          return res.status(400).json({ message: "No valid personal email found." });
+        }
+      
+        await sendEmail({
+          toEmail: decryptedPersonalEmail,
+          toName: `${user.firstname} ${user.lastname}`,
+          subject: 'Your JuanLMS Password Change OTP',
+          textContent: `Hello ${user.firstname || ''},\n\nYour OTP for password change is: ${otp}\n\nIf you did not request this, please ignore this email.\n\nThank you,\nJuanLMS Team`
+        });
+      
+        return res.json({ message: 'OTP sent to your personal email.' });
+      } catch (emailErr) {
         console.error('Error sending OTP email via Brevo:', emailErr);
-    }
-    return res.json({ message: 'OTP sent to your personal email.' });
+        return res.status(500).json({ message: 'Failed to send OTP email.' });
+      }
 });
 
 // Change password route (requires current password, after OTP is validated)
@@ -667,12 +667,12 @@ userRoutes.post('/forgot-password', async (req, res) => {
         let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
         // Use a plain object for sendSmtpEmail
-        let sendSmtpEmail = {
-            to: [{ email: decryptedPersonalEmail, name: user.firstname || '' }],
-            sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
+        await sendEmail({
+            toEmail: decryptedPersonalEmail,
+            toName: `${user.firstname} ${user.lastname}`,
             subject: 'Your JuanLMS Password Reset OTP',
             textContent: `Hello ${user.firstname || ''},\n\nYour OTP for password reset is: ${otp}\n\nIf you did not request this, please ignore this email.\n\nThank you,\nJuanLMS Team`
-        };
+          });
 
         console.log('About to call Brevo sendTransacEmail...');
 
@@ -704,12 +704,12 @@ userRoutes.get('/test-email', async (req, res) => {
         let apiKey = defaultClient.authentications['api-key'];
         apiKey.apiKey = process.env.BREVO_API_KEY;
         let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-        let sendSmtpEmail = {
-            to: [{ email: 'nicolettecborre@gmail.com', name: 'JuanLMS Test' }],
-            sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
+        await sendEmail({
+            toEmail: process.env.EMAIL_REPLYTO || process.env.EMAIL_SENDER_ADDRESS,
+            toName: 'JuanLMS Test',
             subject: 'JuanLMS Test Email (Brevo)',
             textContent: 'This is a test email from JuanLMS backend using Brevo (Sendinblue).'
-        };
+          });
         const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
         console.log('Brevo test email sent, result:', result);
         return res.json({ message: 'Test email sent successfully via Brevo.' });
