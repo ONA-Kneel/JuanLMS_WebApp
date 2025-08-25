@@ -25,6 +25,11 @@ export default function GradingSystem() {
   const [validationType, setValidationType] = useState('error');
   const [successMessage, setSuccessMessage] = useState('');
   const [debugMode, setDebugMode] = useState(false);
+  const [showConfirmUpload, setShowConfirmUpload] = useState(false);
+  const [confirmUploadMessage, setConfirmUploadMessage] = useState('');
+  const [pendingValidatedFile, setPendingValidatedFile] = useState(null);
+  const [pendingValidatedSummary, setPendingValidatedSummary] = useState(null);
+  const [exportLoading, setExportLoading] = useState(false);
 
   // Consolidated getQuarterLabels function - used throughout the component
   const getQuarterLabels = (semester) => {
@@ -348,6 +353,258 @@ export default function GradingSystem() {
     }
   };
 
+  const expectedHeaderRow8 = (q1, q2) => [
+    "Student No.",
+    "STUDENT'S NAME (Alphabetical Order with Middle Initials)",
+    q1, "", "", "", "", "", "", "", "", "",
+    q2, "", "", "", "", "", "", "", "",
+    "FINAL GRADE"
+  ];
+  const expectedHeaderRow9 = [
+    "", "",
+    "WRITTEN WORKS 40%", "", "", "",
+    "PERFORMANCE TASKS 60%", "", "", "",
+    "INITIAL GRADE",
+    "QUARTERLY GRADE",
+    "WRITTEN WORKS 40%", "", "", "",
+    "PERFORMANCE TASKS 60%", "", "", "",
+    "INITIAL GRADE",
+    "QUARTERLY GRADE",
+    ""
+  ];
+  const expectedHeaderRow10 = [
+    "", "",
+    "RAW", "HPS", "PS", "WS",
+    "RAW", "HPS", "PS", "WS",
+    "", "",
+    "RAW", "HPS", "PS", "WS",
+    "RAW", "HPS", "PS", "WS",
+    "", "",
+    ""
+  ];
+
+  const arraysEqual = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+  const normalizeStudentsForSection = async (selectedClassObj, selectedSectionId) => {
+    const token = localStorage.getItem('token');
+    let students = [];
+    try {
+      const classId = selectedClassObj.classID || selectedClassObj._id || selectedClassObj.classCode;
+      const compRes = await fetch(`${API_BASE}/api/grading/class/${classId}/section/${selectedSectionId}/comprehensive`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (compRes.ok) {
+        const compData = await compRes.json();
+        if (compData?.success && compData?.data?.students?.length) {
+          students = compData.data.students;
+        }
+      }
+    } catch {}
+    try {
+      if (students.length === 0) {
+        const directRes = await fetch(`${API_BASE}/api/students/section/${selectedSectionId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (directRes.ok) {
+          const directData = await directRes.json();
+          if (Array.isArray(directData) && directData.length) {
+            students = directData;
+          }
+        }
+      }
+    } catch {}
+    try {
+      if (students.length === 0 && selectedClassObj.classID) {
+        const membersRes = await fetch(`${API_BASE}/classes/${selectedClassObj.classID}/members`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (membersRes.ok) {
+          const membersData = await membersRes.json();
+          if (membersData?.students?.length) {
+            students = membersData.students;
+          }
+        }
+      }
+    } catch {}
+
+    const normalized = students.map((s, idx) => ({
+      id: s.studentID || s.schoolID || s.userID || s.id || s._id || `S${idx + 1}`,
+      name: s.name || s.studentName || `${s.firstname || ''} ${s.lastname || ''}`.trim()
+    }));
+    const idSet = new Set(normalized.map(s => String(s.id).trim()));
+    const idToName = new Map(normalized.map(s => [String(s.id).trim(), s.name]));
+    return { normalized, idSet, idToName };
+  };
+
+  const hasAccents = (str) => /[^\u0000-\u007f]/.test(str || '');
+
+  const validateExcelFile = async (file, selectedClassObj, selectedSectionId) => {
+    // Read workbook
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+      return { ok: false, errors: ["File is empty: no sheets found."] };
+    }
+    const sheetName = workbook.SheetNames[0];
+    const ws = workbook.Sheets[sheetName];
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    if (!aoa || aoa.length === 0) {
+      return { ok: false, errors: ["File is empty: no content rows found."] };
+    }
+
+    // Expect header rows at indices 7,8,9 (0-based)
+    const qLabels = getQuarterLabels();
+    const reqRow8 = expectedHeaderRow8(qLabels.firstQuarterDisplay, qLabels.secondQuarterDisplay);
+    const row8 = aoa[7] || [];
+    const row9 = aoa[8] || [];
+    const row10 = aoa[9] || [];
+
+    const errors = [];
+    const warnings = [];
+
+    // Missing column / header mismatch
+    if (!arraysEqual(row9.slice(0, expectedHeaderRow9.length), expectedHeaderRow9)) {
+      errors.push('Header row mismatch: expected row 9 group headers.');
+    }
+    if (!arraysEqual(row10.slice(0, expectedHeaderRow10.length), expectedHeaderRow10)) {
+      errors.push('Header row mismatch: expected row 10 sub-headers.');
+    }
+    // Loosely check row8 titles at A,B,C and M
+    if (!row8 || row8[0] !== 'Student No.' || (row8[1] || '').toString().toUpperCase().indexOf("STUDENT'S NAME") !== 0 || row8[2] === undefined || row8[12] === undefined) {
+      errors.push('Header row mismatch: expected row 8 titles.');
+    }
+
+    // Extra columns handling beyond W (23 columns)
+    const maxCols = 23;
+    const headerWidths = [row8.length, row9.length, row10.length];
+    if (headerWidths.some(w => w > maxCols)) {
+      warnings.push('This file contains extra columns beyond W; they will be ignored.');
+    }
+
+    // Fetch section students for validation
+    const { idSet, idToName } = await normalizeStudentsForSection(selectedClassObj, selectedSectionId);
+
+    // Validate data rows starting row 11 (index 10)
+    const seenIds = new Set();
+    const accentedNames = new Set();
+    const validRowIndices = [];
+
+    for (let r = 10; r < aoa.length; r++) {
+      const row = aoa[r];
+      if (!row || row.length === 0 || row.every(c => String(c).trim() === '')) continue; // skip entirely empty row
+
+      // Accept rows longer than maxCols but ignore extra cells
+      const cells = row.slice(0, maxCols);
+      const studentId = String(cells[0] || '').trim();
+      const studentName = String(cells[1] || '').trim();
+
+      if (!studentId && !studentName) continue; // skip blank
+
+      // Duplicate student id
+      if (studentId) {
+        if (seenIds.has(studentId)) {
+          errors.push(`Duplicate student ID at row ${r + 1}: ${studentId}`);
+          continue;
+        }
+        seenIds.add(studentId);
+      }
+
+      // Unknown student id (different section or not found)
+      if (studentId && !idSet.has(studentId)) {
+        errors.push(`Student not found at row ${r + 1}: ${studentId}. Row skipped.`);
+        continue;
+      }
+
+      // Optional: name mismatch can indicate different section; flag and skip
+      const expectedName = studentId ? (idToName.get(studentId) || '') : '';
+      if (studentId && expectedName && studentName && expectedName.trim().toLowerCase() !== studentName.trim().toLowerCase()) {
+        errors.push(`Name mismatch for student ${studentId} at row ${r + 1}. Expected "${expectedName}", got "${studentName}". Row skipped.`);
+        continue;
+      }
+
+      // Accents detection
+      if (studentName && hasAccents(studentName)) {
+        accentedNames.add(`${studentName} (${studentId})`);
+      }
+
+      // Numeric validations for K (10), L (11), U (20), V (21)
+      const gradeCols = [
+        { idx: 10, label: 'Initial Grade (K)' },
+        { idx: 11, label: 'Quarterly Grade (L)' },
+        { idx: 20, label: 'Initial Grade (U)' },
+        { idx: 21, label: 'Quarterly Grade (V)' },
+      ];
+      for (const g of gradeCols) {
+        const val = cells[g.idx];
+        if (val === '' || val === null || typeof val === 'undefined') continue; // allow empty
+        const num = parseFloat(val);
+        if (Number.isNaN(num)) {
+          errors.push(`Non-numeric grade at row ${r + 1}, ${g.label}: "${val}"`);
+          continue;
+        }
+        if (num < 0 || num > 100) {
+          errors.push(`Out-of-range grade at row ${r + 1}, ${g.label}: ${num} (must be 0-100)`);
+          continue;
+        }
+      }
+
+      validRowIndices.push(r);
+    }
+
+    // Finalize
+    const summary = {
+      totalRows: aoa.length,
+      validRows: validRowIndices.length,
+      errors,
+      warnings,
+      accentedNames: Array.from(accentedNames)
+    };
+
+    if (errors.length > 0) {
+      return { ok: false, ...summary };
+    }
+
+    return { ok: true, ...summary };
+  };
+
+  const proceedUploadAfterConfirm = async () => {
+    try {
+      setShowConfirmUpload(false);
+      if (!pendingValidatedFile) return;
+      setUploadLoading(true);
+      setUploadStatus('Uploading...');
+      const formData = new FormData();
+      formData.append('file', pendingValidatedFile);
+      formData.append('classId', facultyClasses[selectedClass]._id);
+      formData.append('sectionId', selectedSection);
+
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/upload-grades`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (response.ok) {
+        setSuccessMessage('Grades uploaded successfully.');
+        setUploadProgress(100);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        setValidationMessage('Upload failed: ' + (err.message || response.statusText));
+        setValidationType('error');
+        setShowValidationModal(true);
+      }
+    } catch (e) {
+      setValidationMessage('Upload failed: ' + e.message);
+      setValidationType('error');
+      setShowValidationModal(true);
+    } finally {
+      setUploadLoading(false);
+      setPendingValidatedFile(null);
+      setPendingValidatedSummary(null);
+      setUploadStatus('');
+    }
+  };
+
   const handleUpload = async () => {
     if (!excelFile) {
       setValidationMessage('Please select a file first.');
@@ -356,46 +613,122 @@ export default function GradingSystem() {
       return;
     }
 
-    setUploadLoading(true);
-    setUploadProgress(0);
-    setUploadStatus('Starting upload...');
+    if (!selectedSection || selectedClass === '') {
+      setValidationMessage('Please select both class and section before uploading.');
+      setValidationType('error');
+      setShowValidationModal(true);
+      return;
+    }
 
     try {
-      const formData = new FormData();
-      formData.append('file', excelFile);
-      formData.append('classId', facultyClasses[selectedClass]._id);
-      formData.append('sectionId', selectedSection);
+      setUploadLoading(true);
+      setUploadProgress(10);
+      setUploadStatus('Validating file...');
 
-      const token = localStorage.getItem("token");
-      const response = await fetch(`${API_BASE}/api/upload-grades`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
+      const selectedClassObj = facultyClasses[selectedClass];
+      const result = await validateExcelFile(excelFile, selectedClassObj, selectedSection);
 
-      if (response.ok) {
-        const result = await response.json();
-        setUploadStatus('Upload successful!');
-        setSuccessMessage('Grades uploaded successfully.');
-        setExcelFile(null);
-        setUploadProgress(100);
-      } else {
-        const error = await response.json();
-        setUploadStatus('Upload failed: ' + (error.message || 'Unknown error'));
-        setValidationMessage('Upload failed: ' + (error.message || 'Unknown error'));
+      if (!result.ok) {
+        const msg = [
+          'Validation failed:',
+          ...result.errors.map(e => `- ${e}`)
+        ].join('\n');
+        setValidationMessage(msg);
         setValidationType('error');
         setShowValidationModal(true);
+        setUploadLoading(false);
+        setUploadProgress(0);
+        setUploadStatus('');
+        return;
       }
+
+      // Show warnings/accents confirmation before proceeding
+      const notes = [];
+      if (result.warnings?.length) notes.push(...result.warnings);
+      if (result.accentedNames?.length) {
+        notes.push(`These students contain accents in their names:\n- ${result.accentedNames.join('\n- ')}`);
+      }
+      if (notes.length > 0) {
+        setConfirmUploadMessage(`Proceed with upload?\n\n${notes.join('\n\n')}`);
+        setPendingValidatedFile(excelFile);
+        setPendingValidatedSummary(result);
+        setShowConfirmUpload(true);
+        setUploadLoading(false);
+        setUploadProgress(0);
+        setUploadStatus('');
+        return;
+      }
+
+      // No warnings: upload directly
+      setPendingValidatedFile(excelFile);
+      await proceedUploadAfterConfirm();
     } catch (error) {
-      console.error('Upload error:', error);
-      setUploadStatus('Upload failed: ' + error.message);
-      setValidationMessage('Upload failed: ' + error.message);
+      setValidationMessage('Validation error: ' + error.message);
       setValidationType('error');
       setShowValidationModal(true);
     } finally {
-      setUploadLoading(false);
+      // proceedUploadAfterConfirm handles loading cleanup
+    }
+  };
+
+  const exportGradesToStudents = async () => {
+    if (selectedClass === '' || !selectedSection) {
+      setValidationMessage('Please select both a class and section first.');
+      setValidationType('error');
+      setShowValidationModal(true);
+      return;
+    }
+    try {
+      setExportLoading(true);
+      const classObj = facultyClasses[selectedClass];
+      const token = localStorage.getItem('token');
+      const payload = {
+        classId: classObj._id || classObj.classID || classObj.classCode,
+        sectionId: selectedSection,
+      };
+      const res = await fetch(`${API_BASE}/api/grades/export-to-students`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          setSuccessMessage(data.message || 'Grades exported to students successfully.');
+        } else {
+          const blob = await res.blob();
+          const sectionName = sections.find(s => s._id === selectedSection)?.sectionName || 'Section';
+          const filename = `${classObj.className}_${sectionName}_Grades_Export.xlsx`;
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          setSuccessMessage('Grades exported and file downloaded.');
+        }
+      } else if (res.status === 404) {
+        setValidationMessage('Export endpoint not found. Please contact your administrator.');
+        setValidationType('error');
+        setShowValidationModal(true);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setValidationMessage(`Export failed: ${err.message || res.statusText}`);
+        setValidationType('error');
+        setShowValidationModal(true);
+      }
+    } catch (e) {
+      setValidationMessage(`Export error: ${e.message}`);
+      setValidationType('error');
+      setShowValidationModal(true);
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -825,6 +1158,13 @@ export default function GradingSystem() {
               >
                 {templateLoading ? 'Generating...' : 'Download Template'}
               </button>
+              <button
+                onClick={exportGradesToStudents}
+                disabled={exportLoading || selectedClass === '' || !selectedSection}
+                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors disabled:opacity-50"
+              >
+                {exportLoading ? 'Exporting...' : 'Export to Students'}
+              </button>
             </div>
             {uploadProgress > 0 && uploadProgress < 100 && (
               <div className="mt-4">
@@ -857,6 +1197,43 @@ export default function GradingSystem() {
         message={validationMessage}
         type={validationType}
       />
+
+      {/* Confirm Upload Modal */}
+      {showConfirmUpload && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="relative p-8 border w-full max-w-md max-h-full">
+            <div className="relative bg-white rounded-lg shadow dark:bg-gray-700">
+              <button
+                type="button"
+                className="absolute top-3 right-2.5 text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ml-auto inline-flex justify-center items-center dark:hover:bg-gray-600 dark:hover:text-white"
+                onClick={() => setShowConfirmUpload(false)}
+              >
+                <svg className="w-3 h-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 14">
+                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"/>
+                </svg>
+                <span className="sr-only">Close modal</span>
+              </button>
+              <div className="p-6 text-center">
+                <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+                  {confirmUploadMessage}
+                </h3>
+                <button
+                  onClick={async () => { await proceedUploadAfterConfirm(); }}
+                  className="text-white bg-green-600 hover:bg-green-800 focus:ring-4 focus:outline-none focus:ring-green-300 dark:focus:ring-green-800 font-medium rounded-lg text-sm inline-flex items-center px-5 py-2.5 text-center mr-2"
+                >
+                  Start Upload
+                </button>
+                <button
+                  onClick={() => setShowConfirmUpload(false)}
+                  className="text-gray-500 bg-white hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 rounded-lg border border-gray-200 text-sm font-medium px-5 py-2.5 hover:text-gray-900 focus:z-10 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500 dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-600"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
