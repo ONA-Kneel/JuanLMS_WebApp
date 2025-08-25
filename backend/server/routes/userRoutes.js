@@ -931,6 +931,139 @@ function getRoleFromEmail(email) {
     return 'unknown';
 }
 
+// Get user role from schoolID format
+function getRoleFromSchoolID(schoolID) {
+    if (!schoolID) return 'unknown';
+    if (/^\d{2}-\d{5}$/.test(schoolID)) return 'students';
+    if (/^F\d{3}$/.test(schoolID)) return 'faculty';
+    if (/^A\d{3}$/.test(schoolID)) return 'admin';
+    if (/^N\d{3}$/.test(schoolID)) return 'vice president of education'; // or 'principal' based on specific needs
+    return 'unknown';
+}
+
+// Utility endpoint to fix user roles based on schoolID (admin only)
+userRoutes.post('/fix-roles', authenticateToken, async (req, res) => {
+    try {
+        // Only admin can access this endpoint
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Access denied. Admin only.' 
+            });
+        }
+
+        const users = await User.find({});
+        let updatedCount = 0;
+        let errors = [];
+
+        for (const user of users) {
+            try {
+                const decryptedSchoolID = user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID;
+                const correctRole = getRoleFromSchoolID(decryptedSchoolID);
+                
+                if (correctRole !== 'unknown' && correctRole !== user.role) {
+                    console.log(`[FIX-ROLES] User ${user.email}: ${user.role} -> ${correctRole} (SchoolID: ${decryptedSchoolID})`);
+                    user.role = correctRole;
+                    await user.save();
+                    updatedCount++;
+                }
+            } catch (err) {
+                errors.push(`Failed to update user ${user.email}: ${err.message}`);
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Role fix completed. Updated ${updatedCount} users.`,
+            updatedCount,
+            errors: errors.length > 0 ? errors : undefined
+        });
+
+    } catch (err) {
+        console.error('Error fixing user roles:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fix user roles',
+            error: err.message
+        });
+    }
+});
+
+// Utility endpoint to find and identify duplicate users (admin only)
+userRoutes.get('/find-duplicates', authenticateToken, async (req, res) => {
+  try {
+    // Only admin can access this endpoint
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Access denied. Admin only.' 
+      });
+    }
+
+    // Find users with same names but potentially different roles
+    const users = await User.find({});
+    const duplicates = [];
+    const seen = new Map();
+
+    for (const user of users) {
+      try {
+        const firstName = user.firstname || '';
+        const lastName = user.lastname || '';
+        const fullName = `${firstName} ${lastName}`.trim().toLowerCase();
+        const schoolID = user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID;
+        const role = user.role;
+        const email = user.getDecryptedEmail ? user.getDecryptedEmail() : user.email;
+        
+        if (seen.has(fullName)) {
+          const existing = seen.get(fullName);
+          duplicates.push({
+            name: fullName,
+            user1: {
+              _id: existing._id,
+              userID: existing.userID,
+              schoolID: existing.schoolID,
+              role: existing.role,
+              email: existing.email
+            },
+            user2: {
+              _id: user._id,
+              userID: user.userID,
+              schoolID: schoolID,
+              role: role,
+              email: email
+            }
+          });
+        } else {
+          seen.set(fullName, {
+            _id: user._id,
+            userID: user.userID,
+            schoolID: schoolID,
+            role: role,
+            email: email
+          });
+        }
+      } catch (err) {
+        console.error(`Error processing user ${user._id}:`, err);
+      }
+    }
+
+    res.json({
+      success: true,
+      duplicates: duplicates,
+      totalUsers: users.length,
+      duplicateCount: duplicates.length
+    });
+
+  } catch (err) {
+    console.error('Error finding duplicate users:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to find duplicate users',
+      error: err.message
+    });
+  }
+});
+
 // Convert string to Proper Case
 function toProperCase(str) {
     return str

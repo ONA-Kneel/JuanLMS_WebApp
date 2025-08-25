@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
+import ExportModal from './ExportModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -33,12 +34,14 @@ export default function Admin_Registrants() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
-  const [rejectionNote, setRejectionNote] = useState('incomplete credentials');
+  const [rejectionNote, setRejectionNote] = useState('Application requirements not met');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(null); // id of row being processed
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   // Fetch registrants from backend
   const fetchRegistrants = async () => {
@@ -47,7 +50,7 @@ export default function Admin_Registrants() {
     try {
       const params = {};
       if (selectedDate) params.date = selectedDate;
-      if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
+      if (statusFilter !== 'all') params.status = statusFilter;
       const token = localStorage.getItem("token");
       const res = await axios.get(`${API_BASE}/api/registrants`, { params, headers: { Authorization: `Bearer ${token}` } });
       setRegistrants(res.data);
@@ -171,7 +174,7 @@ export default function Admin_Registrants() {
   // Reject registrant
   const handleReject = (id) => {
     setRejectingId(id);
-    setRejectionNote('incomplete credentials');
+    setRejectionNote('Application requirements not met');
     setShowRejectModal(true);
   };
   const confirmReject = async () => {
@@ -216,18 +219,47 @@ export default function Admin_Registrants() {
     }
   };
 
-  // Export registrants
-  const handleExport = async () => {
+  // Show export modal
+  const handleExportClick = () => {
+    setShowExportModal(true);
+  };
+
+  // Export registrants with specific status
+  const handleExport = async (exportStatus) => {
+    setExportLoading(true);
     setError('');
+    setShowExportModal(false);
+    
     try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setError('Authentication required. Please log in again.');
+        return;
+      }
+
       const params = [];
       if (selectedDate) params.push(`date=${encodeURIComponent(selectedDate)}`);
-      if (statusFilter && statusFilter !== 'all') params.push(`status=${encodeURIComponent(statusFilter)}`);
+      if (exportStatus !== 'all') params.push(`status=${encodeURIComponent(exportStatus)}`);
       const query = params.length ? `?${params.join('&')}` : '';
+      
       const response = await fetch(`${API_BASE}/api/registrants/export${query}`, {
         method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
-      if (!response.ok) throw new Error('Failed to export registrants.');
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError('Your session has expired. Please log in again.');
+        } else if (response.status === 403) {
+          setError('You do not have permission to export registrants.');
+        } else {
+          throw new Error(`Failed to export registrants (${response.status}).`);
+        }
+        return;
+      }
+      
       const blob = await response.blob();
       // Get filename from Content-Disposition header
       let filename = 'registrants_export.xlsx';
@@ -245,19 +277,35 @@ export default function Admin_Registrants() {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError('Failed to export registrants.');
+      console.error('Export error:', err);
+      setError('Failed to export registrants. Please try again.');
+    } finally {
+      setExportLoading(false);
     }
   };
 
-  // Filtered registrants (already filtered by backend)
-  const filtered = registrants;
+  // Filter registrants based on status
+  const getFilteredRegistrants = () => {
+    if (statusFilter === 'all') {
+      return registrants;
+    }
+    return registrants.filter(registrant => registrant.status === statusFilter);
+  };
+
+  const filteredRegistrants = getFilteredRegistrants();
+
+  // Reset filters
+  const resetFilters = () => {
+    setSelectedDate('');
+    setStatusFilter('all');
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 font-poppinsr">
       <Admin_Navbar />
       <div className="flex-1 p-4 sm:p-6 md:p-10 md:ml-64 font-poppinsr">
         {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Registrants</h2>
             <p className="text-base md:text-lg">
@@ -268,21 +316,74 @@ export default function Admin_Registrants() {
           </div>
           <ProfileMenu />
         </div>
+        
         {/* Filters and Actions */}
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-          <div className="flex gap-2 items-center">
-            <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border rounded px-2 py-1" />
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="border rounded px-2 py-1">
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-            </select>
-            <button className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 transition" onClick={handleExport}>Export</button>
-            <button className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500 transition" onClick={fetchRegistrants}>Refresh</button>
+        <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
+          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+            <div className="flex flex-col sm:flex-row gap-3 flex-1">
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="border rounded px-3 py-2"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExportClick}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+              >
+                Export
+              </button>
+              <button 
+                className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500 transition" 
+                onClick={fetchRegistrants}
+              >
+                Refresh
+              </button>
+              <button 
+                className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400 transition" 
+                onClick={resetFilters}
+              >
+                Reset Filters
+              </button>
+            </div>
+          </div>
+          
+          {/* Re-registration Info */}
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <div className="text-sm text-blue-800">
+                <p className="font-medium mb-1">Re-registration Process</p>
+                <p className="text-blue-700">
+                  Applicants who were previously rejected can re-register using the same email. 
+                  Re-registrations are marked with "Re-registration" and "Updated" indicators. 
+                  Check the "Rejection History" column to review previous rejection reasons.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
         {error && <div className="text-red-600 mb-2">{error}</div>}
+        
+        {/* Results Count */}
+        <div className="mb-4 text-sm text-gray-600">
+          Showing {filteredRegistrants.length} of {registrants.length} registrants
+          {statusFilter !== 'all' && (
+            <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded ml-2 text-xs">
+              Status: {statusFilter}
+            </span>
+          )}
+          {selectedDate && (
+            <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded ml-2 text-xs">
+              Date: {selectedDate}
+            </span>
+          )}
+        </div>
+        
         {loading ? (
           <div className="text-center py-8">Loading...</div>
         ) : (
@@ -298,6 +399,7 @@ export default function Admin_Registrants() {
                   <th className="p-3 border-b font-semibold text-gray-700">Contact No.</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Date</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Status</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Rejection History</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Actions</th>
                 </tr>
                 <tr className="bg-white text-left">
@@ -308,24 +410,73 @@ export default function Admin_Registrants() {
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Personal Email" /></th>
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Contact No." /></th>
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Date" /></th>
-                  <th className="p-2 border-b"><select className="w-full border rounded px-2 py-1 text-sm"><option>All Status</option><option>Pending</option><option>Approved</option><option>Rejected</option></select></th>
+                  <th className="p-2 border-b">
+                    <select 
+                      className="w-full border rounded px-2 py-1 text-sm"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                      <option value="all">All Status</option>
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </th>
                   <th className="p-2 border-b"></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center p-4 text-gray-500">No registrants found.</td></tr>
+                {filteredRegistrants.length === 0 ? (
+                  <tr><td colSpan={10} className="text-center p-4 text-gray-500">No registrants found.</td></tr>
                 ) : (
-                  filtered.map((r, idx) => (
+                  filteredRegistrants.map((r, idx) => (
                     <tr key={r._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
                       <td className="p-3 border-b align-middle">{formatSchoolId(r.schoolID)}</td>
                       <td className="p-3 border-b align-middle">{r.firstName}</td>
                       <td className="p-3 border-b align-middle">{r.middleName}</td>
                       <td className="p-3 border-b align-middle">{r.lastName}</td>
-                      <td className="p-3 border-b align-middle">{maskEmail(r.personalEmail)}</td>
+                      <td className="p-3 border-b align-middle">
+                        <div className="flex flex-col">
+                          <span>{maskEmail(r.personalEmail)}</span>
+                          {r.processedAt && r.status === 'pending' && (
+                            <span className="text-xs text-blue-600 font-medium">Re-registration</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="p-3 border-b align-middle">{r.contactNo}</td>
-                      <td className="p-3 border-b align-middle">{r.registrationDate ? r.registrationDate.slice(0, 10) : ''}</td>
-                      <td className={`p-3 border-b align-middle font-semibold ${statusColors[r.status]}`}>{r.status}</td>
+                      <td className="p-3 border-b align-middle">
+                        <div className="flex flex-col">
+                          <span>{r.registrationDate ? r.registrationDate.slice(0, 10) : ''}</span>
+                          {r.processedAt && r.status === 'pending' && (
+                            <span className="text-xs text-gray-500">
+                              Previously: {new Date(r.processedAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={`p-3 border-b align-middle font-semibold ${statusColors[r.status]}`}>
+                        <div className="flex flex-col">
+                          <span>{r.status}</span>
+                          {r.processedAt && r.status === 'pending' && (
+                            <span className="text-xs text-blue-600">Updated</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3 border-b align-middle">
+                        <div className="flex flex-col">
+                          {r.rejectionHistory && r.rejectionHistory.length > 0 ? (
+                            r.rejectionHistory.map((history, hIdx) => (
+                              <div key={hIdx} className="text-xs text-gray-600 mb-1">
+                                <span className="font-medium">{new Date(history.date).toLocaleDateString()}:</span>
+                                <br />
+                                <span className="text-gray-500">{history.note}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-gray-500 text-xs">No rejection history</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="p-3 border-b align-middle">
                         <div className="inline-flex space-x-2">
                       {r.status === 'pending' && (
@@ -389,6 +540,14 @@ export default function Admin_Registrants() {
             </div>
           </div>
         )}
+        
+        {/* Export Modal */}
+        <ExportModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          onExport={handleExport}
+          loading={exportLoading}
+        />
       </div>
     </div>
   );

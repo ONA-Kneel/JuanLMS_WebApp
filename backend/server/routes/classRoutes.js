@@ -482,29 +482,39 @@ router.patch('/:classID/members', authenticateToken, async (req, res) => {
 router.get('/my-classes', authenticateToken, async (req, res) => {
   try {
     const userID = req.user.userID;
-    console.log(`[MY-CLASSES] User ID: ${userID}, Role: ${req.user.role}`);
+    const userRole = req.user.role;
+    const userObjectId = req.user._id;
+    
+    console.log(`[MY-CLASSES] User ID: ${userID}, Role: ${userRole}, ObjectId: ${userObjectId}`);
+    console.log(`[MY-CLASSES] Full user object:`, req.user);
     
     let classes = [];
-    if (req.user.role === 'faculty') {
+    if (userRole === 'faculty') {
       // Faculty: classes where facultyID matches
-      const facultyObjectId = req.user._id;
-      console.log(`[MY-CLASSES] Faculty ObjectId: ${facultyObjectId}`);
+      console.log(`[MY-CLASSES] Processing as faculty user`);
       
       // Find classes where facultyID matches ObjectId or userID
       classes = await Class.find({ 
         $or: [
-          { facultyID: facultyObjectId }, // ObjectId
+          { facultyID: userObjectId }, // ObjectId
           { facultyID: userID } // userID fallback
         ]
       });
       console.log(`[MY-CLASSES] Found ${classes.length} classes as faculty`);
-    } else if (req.user.role === 'students') {
+      console.log(`[MY-CLASSES] Classes found:`, classes.map(c => ({ 
+        classID: c.classID, 
+        className: c.className, 
+        facultyID: c.facultyID,
+        academicYear: c.academicYear,
+        termName: c.termName
+      })));
+      
+    } else if (userRole === 'students') {
       // Student: classes where members includes the student's ObjectId
-      const studentObjectId = req.user._id;
-      console.log(`[MY-CLASSES] Student ObjectId: ${studentObjectId}`);
+      console.log(`[MY-CLASSES] Processing as student user`);
       
       // Find classes where the student's ObjectId is in the members array
-      classes = await Class.find({ members: studentObjectId });
+      classes = await Class.find({ members: userObjectId });
       
       console.log(`[MY-CLASSES] Found ${classes.length} classes as student`);
       console.log(`[MY-CLASSES] Classes found:`, classes.map(c => ({ 
@@ -516,7 +526,8 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
       
     } else {
       // Other roles: return both sets (union, no duplicates)
-      const userObjectId = req.user._id;
+      console.log(`[MY-CLASSES] Processing as ${userRole} user - checking both faculty and member roles`);
+      
       const asFaculty = await Class.find({ 
         $or: [
           { facultyID: userObjectId }, // ObjectId
@@ -537,6 +548,8 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
         seen.add(cls.classID);
         return true;
       });
+      
+      console.log(`[MY-CLASSES] Found ${asFaculty.length} classes as faculty, ${asMember.length} as member, ${classes.length} total after deduplication`);
     }
     res.json(classes);
   } catch (err) {
@@ -561,6 +574,137 @@ router.get('/faculty-classes', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error fetching faculty classes:', err);
     res.status(500).json({ error: 'Failed to fetch faculty classes.' });
+  }
+});
+
+// Utility endpoint to analyze class members and identify conflicts (admin only)
+router.get('/:classID/analyze-members', authenticateToken, async (req, res) => {
+  try {
+    const { classID } = req.params;
+    
+    // Only admin can access this endpoint
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        error: 'Access denied. Admin only.' 
+      });
+    }
+    
+    const classDoc = await Class.findOne({ classID });
+    if (!classDoc) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+    
+    console.log(`[ANALYZE-MEMBERS] Analyzing class ${classID}:`, {
+      className: classDoc.className,
+      facultyID: classDoc.facultyID,
+      members: classDoc.members
+    });
+    
+    // Get faculty details
+    let faculty = null;
+    if (classDoc.facultyID) {
+      faculty = await User.findOne({ 
+        $or: [
+          { _id: classDoc.facultyID },
+          { userID: classDoc.facultyID }
+        ]
+      });
+    }
+    
+    // Get student details
+    let students = [];
+    if (classDoc.members && classDoc.members.length > 0) {
+      students = await User.find({ 
+        $or: [
+          { _id: { $in: classDoc.members } },
+          { userID: { $in: classDoc.members } }
+        ]
+      });
+    }
+    
+    // Check for conflicts
+    const conflicts = [];
+    if (faculty && students.length > 0) {
+      for (const student of students) {
+        if (faculty._id.toString() === student._id.toString() || 
+            faculty.userID === student.userID) {
+          conflicts.push({
+            type: 'DUPLICATE_USER',
+            message: `User ${faculty.firstname} ${faculty.lastname} appears as both faculty and student`,
+            faculty: {
+              _id: faculty._id,
+              userID: faculty.userID,
+              role: faculty.role,
+              schoolID: faculty.getDecryptedSchoolID ? faculty.getDecryptedSchoolID() : faculty.schoolID
+            },
+            student: {
+              _id: student._id,
+              userID: student.userID,
+              role: student.role,
+              schoolID: student.getDecryptedSchoolID ? student.getDecryptedSchoolID() : student.schoolID
+            }
+          });
+        }
+      }
+    }
+    
+    // Check for role inconsistencies
+    if (faculty && faculty.role !== 'faculty') {
+      conflicts.push({
+        type: 'WRONG_FACULTY_ROLE',
+        message: `Faculty user has wrong role: ${faculty.role}`,
+        user: {
+          _id: faculty._id,
+          userID: faculty.userID,
+          role: faculty.role,
+          schoolID: faculty.getDecryptedSchoolID ? faculty.getDecryptedSchoolID() : faculty.schoolID
+        }
+      });
+    }
+    
+    for (const student of students) {
+      if (student.role !== 'students') {
+        conflicts.push({
+          type: 'WRONG_STUDENT_ROLE',
+          message: `Student user has wrong role: ${student.role}`,
+          user: {
+            _id: student._id,
+            userID: student.userID,
+            role: student.role,
+            schoolID: student.getDecryptedSchoolID ? student.getDecryptedSchoolID() : student.schoolID
+          }
+        });
+      }
+    }
+    
+    res.json({
+      classID: classID,
+      className: classDoc.className,
+      faculty: faculty ? {
+        _id: faculty._id,
+        userID: faculty.userID,
+        firstname: faculty.firstname,
+        lastname: faculty.lastname,
+        role: faculty.role,
+        schoolID: faculty.getDecryptedSchoolID ? faculty.getDecryptedSchoolID() : faculty.schoolID,
+        email: faculty.getDecryptedEmail ? faculty.getDecryptedEmail() : faculty.email
+      } : null,
+      students: students.map(student => ({
+        _id: student._id,
+        userID: student.userID,
+        firstname: student.firstname,
+        lastname: student.lastname,
+        role: student.role,
+        schoolID: student.getDecryptedSchoolID ? student.getDecryptedSchoolID() : student.schoolID,
+        email: student.getDecryptedEmail ? student.getDecryptedEmail() : student.email
+      })),
+      conflicts: conflicts,
+      hasConflicts: conflicts.length > 0
+    });
+    
+  } catch (err) {
+    console.error('[ANALYZE-MEMBERS] Error:', err);
+    res.status(500).json({ error: 'Failed to analyze class members.' });
   }
 });
 

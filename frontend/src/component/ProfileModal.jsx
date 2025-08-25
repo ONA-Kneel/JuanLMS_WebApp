@@ -14,7 +14,7 @@ import { getProfileImageUrl } from "../utils/imageUtils";
 
 Modal.setAppElement('#root');
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 // ===================== ChangePasswordModal =====================
 function ChangePasswordModal({ userId, onClose }) {
@@ -313,7 +313,7 @@ export default function ProfileModal({
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [imageSrc, setImageSrc] = useState(null);
-  const [activeTab, setActiveTab] = useState("badges");
+  const [activeTab, setActiveTab] = useState("settings");
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [userInfo, setUserInfo] = useState({});
@@ -651,29 +651,9 @@ export default function ProfileModal({
           </div>
         </div>
 
-        {/* ===================== Tab Navigation ===================== */}
-        <div className="flex gap-6 text-lg font-semibold border-b border-gray-300 pb-2 mb-4">
-          <button
-            className={`hover:text-blue-800 ${activeTab === "badges" ? "text-blue-800 underline" : ""}`}
-            onClick={() => setActiveTab("badges")}
-          >
-            My Badges
-          </button>
-          <button
-            className={`hover:text-blue-800 ${activeTab === "settings" ? "text-blue-800 underline" : ""}`}
-            onClick={() => setActiveTab("settings")}
-          >
-            Settings
-          </button>
-        </div>
-
-        {/* ===================== Tab Content ===================== */}
-        {activeTab === "badges" && (
-          <div className="bg-gray-200 rounded-2xl h-40 w-60">
-            {/* Badges content here */}
-          </div>
-        )}
-        {activeTab === "settings" && (
+        {/* ===================== Settings Content ===================== */}
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold mb-4">Settings</h3>
           <div>
             {/* Other settings here */}
             <button
@@ -695,7 +675,7 @@ export default function ProfileModal({
               </>
             )}
           </div>
-        )}
+        </div>
 
         {/* ===================== Change Password Modal ===================== */}
         {showChangePassword && (
