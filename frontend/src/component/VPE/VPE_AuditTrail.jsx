@@ -101,14 +101,28 @@ export default function VPE_AuditTrail() {
         }
       });
 
-      if (response.data) {
-        setAuditLogs(response.data.logs || []);
-        setTotalPages(Math.ceil((response.data.total || 0) / logsPerPage));
+      if (response.data && response.data.logs) {
+        setAuditLogs(response.data.logs);
+        setTotalPages(response.data.pagination.totalPages || 1);
         setError(null);
+      } else {
+        setError('Invalid data format received from server');
       }
     } catch (err) {
-      console.error('Failed to fetch audit logs:', err);
-      setError('Failed to fetch audit logs');
+      console.error('Error fetching audit logs:', err);
+      if (err.response?.status === 401) {
+        navigate('/login');
+      } else if (err.response?.status === 500) {
+        setError('Server error. Please try again later.');
+      } else {
+        let errMsg = err.response?.data?.message || 'Failed to fetch audit logs';
+        if (typeof errMsg === 'string' && errMsg.includes('Admin/Director only')) {
+          errMsg = errMsg.replace('Admin/Director only', 'Admin/Principal/VPE only');
+        }
+        setError(errMsg);
+      }
+      setAuditLogs([]);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
