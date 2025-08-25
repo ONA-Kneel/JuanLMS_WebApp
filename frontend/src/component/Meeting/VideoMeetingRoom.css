@@ -384,3 +384,89 @@
 .status-change {
   animation: fadeIn 0.3s ease-out;
 }
+
+/* Redirect overlay styles */
+.redirect-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  padding: 1.5rem;
+}
+
+.redirect-content {
+  background: rgba(17, 24, 39, 0.95);
+  padding: 2.5rem;
+  border-radius: var(--border-radius);
+  text-align: center;
+  max-width: 450px;
+  width: 100%;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transform: translateY(0);
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.redirect-content .video-icon {
+  font-size: 3.5rem;
+  color: var(--primary-color);
+  margin-bottom: 1.5rem;
+  opacity: 0.9;
+}
+
+.redirect-content h3 {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-light);
+}
+
+.redirect-content p {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.spinner-container {
+  margin: 1.5rem 0;
+}
+
+.spinner-container .spinner {
+  font-size: 2.5rem;
+  animation: spin 1s linear infinite;
+  color: var(--primary-color);
+  opacity: 0.9;
+}
+
+.redirect-note {
+  background: rgba(79, 70, 229, 0.1);
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  margin: 1.5rem 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.redirect-note .inline {
+  display: inline;
+}
+
+.redirect-content .close-button {
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  min-width: 120px;
+}
