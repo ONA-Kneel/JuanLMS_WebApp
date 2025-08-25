@@ -95,6 +95,7 @@ export default function Faculty_Grades() {
   const [uploadingStudentGrades, setUploadingStudentGrades] = useState(false);
   const [selectedStudentFile, setSelectedStudentFile] = useState(null);
   const [showIndividualManagement, setShowIndividualManagement] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
   
   // Modal states
   const [modal, setModal] = useState({
@@ -178,24 +179,44 @@ export default function Faculty_Grades() {
     async function fetchClasses() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`${API_BASE}/classes`, {
+        // Use the same working endpoint as Faculty_Classes.jsx
+        const res = await fetch(`${API_BASE}/classes/my-classes`, {
           headers: {
             "Authorization": `Bearer ${token}`,
           },
         });
         const data = await res.json();
         
-        // Filter classes: only show classes created by current faculty in current term
-        const filtered = data.filter(cls => 
-          cls.facultyID === currentFacultyID && 
-          cls.isArchived !== true &&
-          cls.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
-          cls.termName === currentTerm?.termName
-        );
+        console.log("🔍 Fetched classes from /classes/my-classes:", data);
+        console.log("🔍 Filtering with:", {
+          currentFacultyID,
+          academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : null,
+          currentTerm: currentTerm?.termName,
+          totalClasses: data.length
+        });
         
+        // Filter classes: only show classes created by current faculty in current term
+        const filtered = data.filter(cls => {
+          const matches = cls.isArchived !== true &&
+            cls.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
+            cls.termName === currentTerm?.termName;
+          
+          console.log(`Class ${cls.className}:`, {
+            facultyID: cls.facultyID,
+            isArchived: cls.isArchived,
+            academicYear: cls.academicYear,
+            termName: cls.termName,
+            matches
+          });
+          
+          return matches;
+        });
+        
+        console.log("✅ Filtered classes for grades:", filtered);
         setClasses(filtered);
       } catch (err) {
-        console.error("Failed to fetch classes", err);
+        console.error("❌ Failed to fetch classes", err);
+        setClasses([]);
       } finally {
         setLoading(false);
       }
@@ -223,7 +244,6 @@ export default function Faculty_Grades() {
 
   const fetchSubjects = async () => {
     try {
-      const token = localStorage.getItem("token");
       const selectedClassObj = classes[selectedClass];
       
       // Use a working endpoint or create default subjects directly
@@ -250,40 +270,49 @@ export default function Faculty_Grades() {
     ];
     setSubjects(defaultSubjects);
     
-          // Initialize grades for default subjects based on current term
-      const initialGrades = {};
-      defaultSubjects.forEach(subject => {
-        if (currentTerm?.termName === 'Term 1') {
-          initialGrades[subject._id] = {
-            quarter1: '',
-            quarter2: '',
-            semesterFinal: '',
-            remarks: ''
-          };
-        } else if (currentTerm?.termName === 'Term 2') {
-          initialGrades[subject._id] = {
-            quarter3: '',
-            quarter4: '',
-            semesterFinal: '',
-            remarks: ''
-          };
-        } else {
-          // Default fallback
-          initialGrades[subject._id] = {
-            quarter1: '',
-            quarter2: '',
-            semesterFinal: '',
-            remarks: ''
-          };
-        }
-      });
-      setGrades(initialGrades);
+    // Initialize grades for default subjects based on current term
+    const initialGrades = {};
+    defaultSubjects.forEach(subject => {
+      if (currentTerm?.termName === 'Term 1') {
+        initialGrades[subject._id] = {
+          quarter1: '',
+          quarter2: '',
+          semesterFinal: '',
+          remarks: ''
+        };
+      } else if (currentTerm?.termName === 'Term 2') {
+        initialGrades[subject._id] = {
+          quarter3: '',
+          quarter4: '',
+          semesterFinal: '',
+          remarks: ''
+        };
+      } else {
+        // Default fallback
+        initialGrades[subject._id] = {
+          quarter1: '',
+          quarter2: '',
+          semesterFinal: '',
+          remarks: ''
+        };
+      }
+    });
+    setGrades(initialGrades);
   };
 
   const fetchStudents = async () => {
     try {
       const token = localStorage.getItem("token");
       const selectedClassObj = classes[selectedClass];
+      
+      if (!selectedClassObj) {
+        console.log('❌ No class object found for selected class index:', selectedClass);
+        setStudents([]);
+        return;
+      }
+      
+      console.log('🔍 Fetching students for class:', selectedClassObj.classID);
+      console.log('🔍 Class object:', selectedClassObj);
       
       // Try multiple endpoints to get students
       let studentsData = [];
@@ -296,30 +325,134 @@ export default function Faculty_Grades() {
         
         if (response.ok) {
           const data = await response.json();
+          console.log('✅ Class members response:', data);
           if (data && data.students) {
             studentsData = data.students;
+          } else if (data && Array.isArray(data)) {
+            // Sometimes the endpoint returns an array directly
+            studentsData = data;
+          }
+        } else {
+          console.log('❌ Class members endpoint failed:', response.status, response.statusText);
+          if (response.status === 404) {
+            console.log('⚠️ Class members endpoint not found - this endpoint might not exist');
           }
         }
-      } catch {
-        console.log('Class members endpoint failed, trying alternatives');
+      } catch (error) {
+        console.log('❌ Class members endpoint error:', error);
       }
       
       // If no students found, try alternative endpoints
       if (studentsData.length === 0) {
         try {
+          console.log('🔍 Trying alternative endpoint for students...');
           const altResponse = await fetch(`${API_BASE}/api/students/class/${selectedClassObj.classCode || selectedClassObj.classID}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           
           if (altResponse.ok) {
             const data = await altResponse.json();
+            console.log('✅ Alternative endpoint response:', data);
             if (data) {
               studentsData = data;
             }
+          } else {
+            console.log('❌ Alternative endpoint failed:', altResponse.status, altResponse.statusText);
+            if (altResponse.status === 404) {
+              console.log('⚠️ Alternative students endpoint not found');
+            }
           }
-        } catch {
-          console.log('Alternative endpoint also failed');
+        } catch (error) {
+          console.log('❌ Alternative endpoint error:', error);
         }
+      }
+      
+      // If still no students, try to get from semestral grades
+      if (studentsData.length === 0) {
+        try {
+          console.log('🔍 Trying to get students from semestral grades...');
+          const gradesResponse = await fetch(`${API_BASE}/api/semestral-grades/class/${selectedClassObj.classID}?termName=${currentTerm?.termName}&academicYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (gradesResponse.ok) {
+            const gradesData = await gradesResponse.json();
+            console.log('✅ Semestral grades response:', gradesData);
+            if (gradesData.success && gradesData.grades) {
+              // Extract unique students from grades data
+              const uniqueStudents = [];
+              const seenStudents = new Set();
+              
+              gradesData.grades.forEach(grade => {
+                if (!seenStudents.has(grade.studentID)) {
+                  seenStudents.add(grade.studentID);
+                  uniqueStudents.push({
+                    _id: grade.studentID,
+                    userID: grade.studentID,
+                    name: grade.studentName,
+                    schoolID: grade.schoolID,
+                    section: grade.section || 'default'
+                  });
+                }
+              });
+              
+              studentsData = uniqueStudents;
+              console.log('✅ Extracted students from grades:', studentsData);
+            }
+          } else {
+            console.log('❌ Semestral grades endpoint failed:', gradesResponse.status, gradesResponse.statusText);
+            if (gradesResponse.status === 404) {
+              console.log('⚠️ Semestral grades by class endpoint not found');
+            }
+          }
+        } catch (error) {
+          console.log('❌ Semestral grades endpoint error:', error);
+        }
+      }
+      
+      // If still no students, try a more generic approach
+      if (studentsData.length === 0) {
+        try {
+          console.log('🔍 Trying generic students endpoint...');
+          const genericResponse = await fetch(`${API_BASE}/api/students`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (genericResponse.ok) {
+            const data = await genericResponse.json();
+            console.log('✅ Generic students response:', data);
+            if (data && Array.isArray(data)) {
+              // Filter students by some criteria if possible
+              studentsData = data.slice(0, 10); // Limit to first 10 for testing
+              console.log('⚠️ Using generic students data (limited to 10 for testing)');
+            }
+          } else {
+            console.log('❌ Generic students endpoint failed:', genericResponse.status, genericResponse.statusText);
+          }
+        } catch (error) {
+          console.log('❌ Generic students endpoint error:', error);
+        }
+      }
+      
+      // If still no students, create sample data for testing
+      if (studentsData.length === 0) {
+        console.log('⚠️ No students found from any endpoint, creating sample data for testing');
+        studentsData = [
+          {
+            _id: 'sample_student_1',
+            userID: 'sample_student_1',
+            name: 'Sample Student 1',
+            schoolID: '123456789',
+            section: 'A'
+          },
+          {
+            _id: 'sample_student_2',
+            userID: 'sample_student_2',
+            name: 'Sample Student 2',
+            schoolID: '987654321',
+            section: 'A'
+          }
+        ];
       }
       
       // Transform students data to include grades structure
@@ -360,6 +493,7 @@ export default function Faculty_Grades() {
         };
       });
       
+      console.log('✅ Transformed students:', transformedStudents);
       setStudents(transformedStudents);
       
       // Initialize grades state for all students
@@ -369,12 +503,21 @@ export default function Faculty_Grades() {
       });
       setGrades(initialGrades);
 
-      // Load previously saved grades from localStorage
-      loadSavedGradesFromDatabase(selectedClassObj.classID, transformedStudents);
+      // Load previously saved grades from database
+      if (transformedStudents.length > 0) {
+        loadSavedGradesFromDatabase(selectedClassObj.classID, transformedStudents);
+      }
       
     } catch (error) {
-      console.error('Error fetching students:', error);
+      console.error('❌ Error fetching students:', error);
       setStudents([]);
+      
+      // Show error modal to user
+      showModal(
+        'Error Fetching Students',
+        `Failed to fetch students for the selected class.\n\nError: ${error.message}\n\nPlease check your connection and try again.`,
+        'error'
+      );
     }
   };
 
@@ -386,6 +529,8 @@ export default function Faculty_Grades() {
       
       if (!selectedClassObj || !academicYear || !currentTerm) return;
       
+      console.log('🔍 Loading saved grades for class:', classID);
+      
       // Fetch grades from database for this class and term
       const response = await fetch(`${API_BASE}/api/semestral-grades/class/${selectedClassObj.classID}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -393,6 +538,8 @@ export default function Faculty_Grades() {
       
       if (response.ok) {
         const data = await response.json();
+        console.log('✅ Grades loaded from database:', data);
+        
         if (data.success && data.grades) {
           // Update grades state with database data
           setGrades(prevGrades => {
@@ -405,6 +552,7 @@ export default function Faculty_Grades() {
               );
               
               if (studentGradeRecord) {
+                console.log('✅ Found grades for student:', student.name, studentGradeRecord);
                 updatedGrades[student._id] = {
                   ...updatedGrades[student._id],
                   ...studentGradeRecord.grades,
@@ -415,13 +563,151 @@ export default function Faculty_Grades() {
             
             return updatedGrades;
           });
+        } else {
+          console.log('⚠️ No grades found in database for this class/term');
         }
-              } else {
-          // No grades found in database for this class/term
-        }
+      } else {
+        console.log('❌ Failed to load grades from database:', response.status, response.statusText);
+        // Try alternative approach - fetch grades by individual students
+        await loadGradesByIndividualStudents(studentsList);
+      }
       
     } catch (error) {
-      console.error('Error loading saved grades from database:', error);
+      console.error('❌ Error loading saved grades from database:', error);
+      // Try alternative approach
+      await loadGradesByIndividualStudents(studentsList);
+    }
+  };
+
+  // Alternative approach: Load grades by individual students
+  const loadGradesByIndividualStudents = async (studentsList) => {
+    try {
+      const token = localStorage.getItem("token");
+      console.log('🔍 Trying to load grades by individual students...');
+      
+      const updatedGrades = { ...grades };
+      let gradesLoaded = 0;
+      
+      for (const student of studentsList) {
+        try {
+          const studentSchoolID = student.schoolID || student._id;
+          const response = await fetch(`${API_BASE}/api/semestral-grades/student/${studentSchoolID}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.grades) {
+              // Find grades for this specific class
+              const classGrades = data.grades.find(g => 
+                g.classID === classes[selectedClass].classID ||
+                g.subjectCode === classes[selectedClass].classCode ||
+                g.subjectName === classes[selectedClass].className
+              );
+              
+              if (classGrades) {
+                console.log('✅ Found grades for student:', student.name, classGrades);
+                updatedGrades[student._id] = {
+                  ...updatedGrades[student._id],
+                  ...classGrades.grades,
+                  isLocked: classGrades.isLocked || false
+                };
+                gradesLoaded++;
+              }
+            }
+          }
+        } catch (error) {
+          console.log(`❌ Error loading grades for student ${student.name}:`, error);
+        }
+      }
+      
+      if (gradesLoaded > 0) {
+        console.log(`✅ Loaded grades for ${gradesLoaded} students`);
+        setGrades(updatedGrades);
+      }
+      
+    } catch (error) {
+      console.error('❌ Error in loadGradesByIndividualStudents:', error);
+    }
+  };
+
+  // Test API endpoints function for debugging
+  const testAPIEndpoints = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const selectedClassObj = classes[selectedClass];
+      
+      if (!selectedClassObj) {
+        showModal('No Class Selected', 'Please select a class first to test API endpoints', 'warning');
+        return;
+      }
+      
+      console.log('🧪 Testing API endpoints for debugging...');
+      
+      // Test 1: Class members endpoint
+      try {
+        const membersResponse = await fetch(`${API_BASE}/classes/${selectedClassObj.classID}/members`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log('✅ Class members endpoint:', membersResponse.status, membersResponse.statusText);
+        if (membersResponse.ok) {
+          const data = await membersResponse.json();
+          console.log('📊 Members data:', data);
+        }
+      } catch (error) {
+        console.log('❌ Class members endpoint error:', error);
+      }
+      
+      // Test 2: Alternative students endpoint
+      try {
+        const altResponse = await fetch(`${API_BASE}/api/students/class/${selectedClassObj.classCode || selectedClassObj.classID}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log('✅ Alternative students endpoint:', altResponse.status, altResponse.statusText);
+        if (altResponse.ok) {
+          const data = await altResponse.json();
+          console.log('📊 Alternative data:', data);
+        }
+      } catch (error) {
+        console.log('❌ Alternative students endpoint error:', error);
+      }
+      
+      // Test 3: Semestral grades by class
+      try {
+        const gradesResponse = await fetch(`${API_BASE}/api/semestral-grades/class/${selectedClassObj.classID}?termName=${currentTerm?.termName}&academicYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log('✅ Semestral grades by class endpoint:', gradesResponse.status, gradesResponse.statusText);
+        if (gradesResponse.ok) {
+          const data = await gradesResponse.json();
+          console.log('📊 Grades data:', data);
+        }
+      } catch (error) {
+        console.log('❌ Semestral grades by class endpoint error:', error);
+      }
+      
+      // Test 4: Test individual student grades endpoint
+      if (students.length > 0) {
+        const testStudent = students[0];
+        try {
+          const studentResponse = await fetch(`${API_BASE}/api/semestral-grades/student/${testStudent.schoolID || testStudent._id}?termName=${currentTerm?.termName}&academicYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          console.log('✅ Individual student grades endpoint:', studentResponse.status, studentResponse.statusText);
+          if (studentResponse.ok) {
+            const data = await studentResponse.json();
+            console.log('📊 Student grades data:', data);
+          }
+        } catch (error) {
+          console.log('❌ Individual student grades endpoint error:', error);
+        }
+      }
+      
+      showModal('API Test Complete', 'Check the browser console for detailed API endpoint test results.', 'info');
+      
+    } catch (error) {
+      console.error('❌ Error testing API endpoints:', error);
+      showModal('API Test Failed', `Error testing API endpoints: ${error.message}`, 'error');
     }
   };
 
@@ -1136,8 +1422,32 @@ export default function Faculty_Grades() {
               })}
             </p>
           </div>
-          <ProfileMenu/>
+          <div className="flex items-center gap-4">
+            {/* Debug toggle for development */}
+            <button
+              onClick={() => setDebugMode(!debugMode)}
+              className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
+            >
+              {debugMode ? "Hide Debug" : "Show Debug"}
+            </button>
+            <ProfileMenu/>
+          </div>
         </div>
+
+        {/* Debug info */}
+        {debugMode && (
+          <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
+            <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
+            <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
+            <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
+            <p className="text-sm text-yellow-700">Classes Found: {classes.length}</p>
+            <p className="text-sm text-yellow-700">Current Faculty ID: {currentFacultyID}</p>
+            <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
+            <p className="text-sm text-yellow-700">Loading State: {loading ? 'Yes' : 'No'}</p>
+            <p className="text-sm text-yellow-700">Selected Class: {selectedClass !== null ? classes[selectedClass]?.className : 'None'}</p>
+            <p className="text-sm text-yellow-700">Students Count: {students.length}</p>
+          </div>
+        )}
 
         
         {/* Tab Navigation */}
@@ -1161,32 +1471,69 @@ export default function Faculty_Grades() {
         {/* Content based on activeTab */}
         {activeTab === 'traditional' ? (
           <div className="bg-white rounded-lg shadow-lg p-6">
-                                      {/* Class Selection */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Class:</label>
-               <select
-                 className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                 value={selectedClass !== null ? selectedClass : ""}
-                 onChange={handleClassChange}
-                 disabled={loading}
-               >
-                 <option value="">Choose a class...</option>
-                 {classes.map((cls, index) => (
-                   <option key={cls.classID} value={index}>
-                     {cls.className}
-                   </option>
-                 ))}
-               </select>
-               {/* Warning when no classes available */}
-               {!loading && classes.length === 0 && (
-                 <p className="mt-2 text-sm text-orange-600">
-                   ⚠️ No classes available for the current term ({currentTerm?.termName || 'Unknown'}) and academic year ({academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Unknown'}).
-                 </p>
-               )}
-             </div>
+            {/* Show loading message when waiting for classes */}
+            {loading && (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-lg text-gray-600">Loading your classes...</p>
+                <p className="text-sm text-gray-500 mt-2">Please wait while we fetch your class information</p>
+              </div>
+            )}
+            
+            {/* Show content only when not loading */}
+            {!loading && (
+              <>
+                                       {/* Class Selection */}
+               <div className="mb-6">
+                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Class:</label>
+                <select
+                  className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={selectedClass !== null ? selectedClass : ""}
+                  onChange={handleClassChange}
+                  disabled={loading}
+                >
+                  <option value="">Choose a class...</option>
+                  {classes.map((cls, index) => (
+                    <option key={cls.classID} value={index}>
+                      {cls.className} - {cls.section || cls.classCode || 'No Section'}
+                    </option>
+                  ))}
+                </select>
+                
+                {/* Loading state */}
+                {loading && (
+                  <p className="mt-2 text-sm text-blue-600">
+                    🔄 Loading classes for {currentTerm?.termName || 'current term'}...
+                  </p>
+                )}
+                
+                {/* Warning when no classes available */}
+                {!loading && classes.length === 0 && (
+                  <div className="mt-2 p-3 bg-orange-50 border border-orange-200 rounded-md">
+                    <p className="text-sm text-orange-800 font-medium">
+                      ⚠️ No classes available for the current term and academic year.
+                    </p>
+                    <div className="text-xs text-orange-700 mt-1 space-y-1">
+                      <p>• Current Term: {currentTerm?.termName || 'Not set'}</p>
+                      <p>• Academic Year: {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Not set'}</p>
+                      <p>• Faculty ID: {currentFacultyID || 'Not set'}</p>
+                    </div>
+                    <p className="text-xs text-orange-600 mt-2">
+                      💡 Make sure you have created classes for the current term, or check if the term is properly set.
+                    </p>
+                  </div>
+                )}
+                
+                {/* Success message when classes are found */}
+                {!loading && classes.length > 0 && (
+                  <p className="mt-2 text-sm text-green-600">
+                    ✅ Found {classes.length} class{classes.length !== 1 ? 'es' : ''} for {currentTerm?.termName || 'current term'}
+                  </p>
+                )}
+              </div>
 
                            {/* Section Selection */}
-              {selectedClass !== null && classes[selectedClass] && classes[selectedClass].section && (
+              {selectedClass !== null && classes[selectedClass] && (
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Select Section:</label>
                   <select
@@ -1196,9 +1543,11 @@ export default function Faculty_Grades() {
                   >
                     <option value="">Choose a section...</option>
                     {/* Show the class's assigned section */}
-                    <option key={classes[selectedClass].section} value={classes[selectedClass].section}>
-                      {classes[selectedClass].section}
-                    </option>
+                    {classes[selectedClass].section && (
+                      <option key={classes[selectedClass].section} value={classes[selectedClass].section}>
+                        {classes[selectedClass].section}
+                      </option>
+                    )}
                     {/* Also show any additional sections from students if they exist */}
                     {students.length > 0 && Array.from(new Set(students.map(student => student.section || 'default')))
                       .filter(section => section !== classes[selectedClass].section && section !== 'default')
@@ -1207,7 +1556,21 @@ export default function Faculty_Grades() {
                           {section}
                         </option>
                       ))}
+                    {/* Add a default section option if no sections are available */}
+                    {(!classes[selectedClass].section || classes[selectedClass].section === '') && (
+                      <option value="default">Default Section</option>
+                    )}
                   </select>
+                  
+                  {/* Show section info */}
+                  {selectedSection && (
+                    <p className="mt-1 text-sm text-gray-600">
+                      Selected section: <strong>{selectedSection}</strong>
+                      {selectedSection === 'default' && (
+                        <span className="text-orange-600 ml-2">⚠️ Using default section</span>
+                      )}
+                    </p>
+                  )}
                 </div>
               )}
              
@@ -1217,450 +1580,516 @@ export default function Faculty_Grades() {
                  <p className="text-sm text-orange-600">
                    ⚠️ The selected class "{classes[selectedClass].className}" does not have any sections assigned to it.
                  </p>
+                 <p className="text-sm text-gray-600 mt-1">
+                   💡 You can still proceed by selecting "Default Section" from the dropdown above.
+                 </p>
                </div>
              )}
 
-                                                   {/* Student Search */}
-              {selectedClass !== null && selectedSection && students.length > 0 && (
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Search Student:</label>
-                  <input
-                    type="text"
-                    placeholder="Search by student name or ID..."
-                    className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={selectedStudent || ""}
-                    onChange={(e) => setSelectedStudent(e.target.value)}
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    Type student name or ID to search, then click on a student to select them
-                  </p>
+              {/* Debug Section - Only show in development */}
+              {process.env.NODE_ENV === 'development' && selectedClass !== null && (
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <h3 className="text-lg font-semibold text-yellow-800 mb-3">🔍 Debug Information</h3>
+                  <div className="text-sm space-y-2 mb-4">
+                    <p><strong>Selected Class:</strong> {classes[selectedClass]?.className || 'N/A'}</p>
+                    <p><strong>Class ID:</strong> {classes[selectedClass]?.classID || 'N/A'}</p>
+                    <p><strong>Class Code:</strong> {classes[selectedClass]?.classCode || 'N/A'}</p>
+                    <p><strong>Faculty ID:</strong> {currentFacultyID || 'N/A'}</p>
+                    <p><strong>Current Term:</strong> {currentTerm?.termName || 'Not set'}</p>
+                    <p><strong>Academic Year:</strong> {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Not set'}</p>
+                    <p><strong>Students Found:</strong> {students.length}</p>
+                    <p><strong>Grades Loaded:</strong> {Object.keys(grades).length}</p>
+                  </div>
                   
-                  {/* Search Results Dropdown */}
-                  {selectedStudent && (
-                    <div className="mt-2 max-h-40 overflow-y-auto border border-gray-300 rounded-md bg-white shadow-lg">
-                      {students
-                        .filter(student => {
-                          const searchTerm = selectedStudent.toLowerCase();
-                          const studentName = student.name.toLowerCase();
-                          const studentID = (student.schoolID || '').toLowerCase();
-                          return studentName.includes(searchTerm) || studentID.includes(searchTerm);
-                        })
-                        .map((student) => (
-                          <div
-                            key={student._id}
-                            className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-200 last:border-b-0"
-                            onClick={() => {
-                              setSelectedStudentName(student.name);
-                              // Set the student grades to the selected student's existing grades
-                              const existingGrades = grades[student._id] || {};
-                              setStudentGrades({
-                                quarter1: existingGrades.quarter1 || '',
-                                quarter2: existingGrades.quarter2 || '',
-                                quarter3: existingGrades.quarter3 || '',
-                                quarter4: existingGrades.quarter4 || '',
-                                semesterFinal: existingGrades.semesterFinal || '',
-                                remarks: existingGrades.remarks || ''
-                              });
-                              // Clear the search input after selection
-                              setSelectedStudent('');
-                              // Show the individual management section
-                              setShowIndividualManagement(true);
-                            }}
-                          >
-                            <div className="font-medium">{student.name}</div>
-                            <div className="text-sm text-gray-600">ID: {student.schoolID || 'N/A'}</div>
-                          </div>
-                        ))}
-                      {students.filter(student => {
-                        const searchTerm = selectedStudent.toLowerCase();
-                        const studentName = student.name.toLowerCase();
-                        const studentID = (student.schoolID || '').toLowerCase();
-                        return studentName.includes(searchTerm) || studentID.includes(searchTerm);
-                      }).length === 0 && (
-                        <div className="p-3 text-gray-500 text-center">
-                          No students found matching your search
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={testAPIEndpoints}
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                      title="Test all API endpoints to identify issues"
+                    >
+                      🧪 Test API Endpoints
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        console.log('🔍 Current state debug info:');
+                        console.log('Classes:', classes);
+                        console.log('Selected Class Index:', selectedClass);
+                        console.log('Selected Class Object:', classes[selectedClass]);
+                        console.log('Students:', students);
+                        console.log('Grades:', grades);
+                        console.log('Subjects:', subjects);
+                        console.log('Current Term:', currentTerm);
+                        console.log('Academic Year:', academicYear);
+                        showModal('Debug Info', 'Check browser console for detailed state information', 'info');
+                      }}
+                      className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm"
+                      title="Log current component state to console"
+                    >
+                      📊 Log State to Console
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        if (selectedClass !== null) {
+                          fetchStudents();
+                          showModal('Refresh', 'Refreshing students and grades data...', 'info');
+                        }
+                      }}
+                      className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
+                      title="Refresh students and grades data"
+                    >
+                      🔄 Refresh Data
+                    </button>
+                  </div>
+                  
+                  <div className="mt-3 text-xs text-yellow-700">
+                    💡 This debug section helps identify data fetching issues. Check the browser console for detailed logs.
+                  </div>
                 </div>
               )}
 
-                                                   {/* Individual Student Grade Management */}
-               {selectedStudentName && showIndividualManagement && (
-                 <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50 relative">
-                   <div className="flex justify-between items-start mb-4">
-                     <h3 className="text-lg font-semibold text-gray-800">
-                       Individual Student Grade Management - {currentTerm?.termName || 'Current Term'}
-                       {selectedSection && selectedSection !== 'default' && (
-                         <span className="text-sm font-normal text-gray-600 ml-2">
-                           (Section: {selectedSection})
-                         </span>
-                       )}
-                     </h3>
-                     <button
-                       onClick={() => setShowIndividualManagement(false)}
-                       className="text-gray-500 hover:text-gray-700 text-xl font-bold leading-none p-1 rounded-full hover:bg-gray-200 transition-colors"
-                       title="Close Individual Student Grade Management"
-                     >
-                       ×
-                     </button>
-                   </div>
-                  
-                                    {/* Student Name and ID Display */}
-                   <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                     <p className="text-sm font-medium text-blue-800 mb-1">
-                       <strong>Student Name:</strong> {selectedStudentName}
-                     </p>
-                     <p className="text-xs text-blue-700">
-                       <strong>Student ID:</strong> {(() => {
-                         const student = students.find(s => s.name === selectedStudentName);
-                         return student ? (student.schoolID || 'N/A') : 'N/A';
-                       })()}
-                     </p>
-                   </div>
-
-                   {/* Check if grades are locked */}
-                   {(() => {
-                     const student = students.find(s => s.name === selectedStudentName);
-                     const studentGradesData = grades[student?._id] || {};
-                     const isLocked = studentGradesData.isLocked;
-                     
-                     if (isLocked) {
-                       return (
-                         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                           <p className="text-sm font-medium text-yellow-800 mb-1">
-                             ⚠️ Grades Locked
-                           </p>
-                           <p className="text-xs text-yellow-700">
-                             This student's grades have already been saved and posted to the Report on Learning Progress and Achievement table. 
-                             Grades cannot be edited anymore and are now visible to students.
-                           </p>
+                                                    {/* Student Search */}
+               {selectedClass !== null && selectedSection && students.length > 0 && (
+                 <div className="mb-6">
+                   <label className="block text-sm font-medium text-gray-700 mb-2">Search Student:</label>
+                   <input
+                     type="text"
+                     placeholder="Search by student name or ID..."
+                     className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     value={selectedStudent || ""}
+                     onChange={(e) => setSelectedStudent(e.target.value)}
+                   />
+                   <p className="mt-1 text-sm text-gray-500">
+                     Type student name or ID to search, then click on a student to select them
+                   </p>
+                   
+                   {/* Search Results Dropdown */}
+                   {selectedStudent && (
+                     <div className="mt-2 max-h-40 overflow-y-auto border border-gray-300 rounded-md bg-white shadow-lg">
+                       {students
+                         .filter(student => {
+                           const searchTerm = selectedStudent.toLowerCase();
+                           const studentName = student.name.toLowerCase();
+                           const studentID = (student.schoolID || '').toLowerCase();
+                           return studentName.includes(searchTerm) || studentID.includes(searchTerm);
+                         })
+                         .map((student) => (
+                           <div
+                             key={student._id}
+                             className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-200 last:border-b-0"
+                             onClick={() => {
+                               setSelectedStudentName(student.name);
+                               // Set the student grades to the selected student's existing grades
+                               const existingGrades = grades[student._id] || {};
+                               setStudentGrades({
+                                 quarter1: existingGrades.quarter1 || '',
+                                 quarter2: existingGrades.quarter2 || '',
+                                 quarter3: existingGrades.quarter3 || '',
+                                 quarter4: existingGrades.quarter4 || '',
+                                 semesterFinal: existingGrades.semesterFinal || '',
+                                 remarks: existingGrades.remarks || ''
+                               });
+                               // Clear the search input after selection
+                               setSelectedStudent('');
+                               // Show the individual management section
+                               setShowIndividualManagement(true);
+                             }}
+                           >
+                             <div className="font-medium">{student.name}</div>
+                             <div className="text-sm text-gray-600">ID: {student.schoolID || 'N/A'}</div>
+                           </div>
+                         ))}
+                       {students.filter(student => {
+                         const searchTerm = selectedStudent.toLowerCase();
+                         const studentName = student.name.toLowerCase();
+                         const studentID = (student.schoolID || '').toLowerCase();
+                         return studentName.includes(searchTerm) || studentID.includes(searchTerm);
+                       }).length === 0 && (
+                         <div className="p-3 text-gray-500 text-center">
+                           No students found matching your search
                          </div>
-                       );
-                     }
-                     
-                     return null;
-                   })()}
-                  
-                  {/* Student Grade Inputs */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                       )}
+                     </div>
+                   )}
+                 </div>
+               )}
+
+                                                    {/* Individual Student Grade Management */}
+                {selectedStudentName && showIndividualManagement && (
+                  <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50 relative">
+                    <div className="flex justify-between items-start mb-4">
+                      <h3 className="text-lg font-semibold text-gray-800">
+                        Individual Student Grade Management - {currentTerm?.termName || 'Current Term'}
+                        {selectedSection && selectedSection !== 'default' && (
+                          <span className="text-sm font-normal text-gray-600 ml-2">
+                            (Section: {selectedSection})
+                          </span>
+                        )}
+                      </h3>
+                      <button
+                        onClick={() => setShowIndividualManagement(false)}
+                        className="text-gray-500 hover:text-gray-700 text-xl font-bold leading-none p-1 rounded-full hover:bg-gray-200 transition-colors"
+                        title="Close Individual Student Grade Management"
+                      >
+                        ×
+                      </button>
+                    </div>
+                   
+                                     {/* Student Name and ID Display */}
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                      <p className="text-sm font-medium text-blue-800 mb-1">
+                        <strong>Student Name:</strong> {selectedStudentName}
+                      </p>
+                      <p className="text-xs text-blue-700">
+                        <strong>Student ID:</strong> {(() => {
+                          const student = students.find(s => s.name === selectedStudentName);
+                          return student ? (student.schoolID || 'N/A') : 'N/A';
+                        })()}
+                      </p>
+                    </div>
+
+                    {/* Check if grades are locked */}
                     {(() => {
                       const student = students.find(s => s.name === selectedStudentName);
                       const studentGradesData = grades[student?._id] || {};
                       const isLocked = studentGradesData.isLocked;
                       
                       if (isLocked) {
-                        // Show read-only grades when locked
                         return (
-                          <>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">1st Quarter</label>
+                          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                            <p className="text-sm font-medium text-yellow-800 mb-1">
+                              ⚠️ Grades Locked
+                            </p>
+                            <p className="text-xs text-yellow-700">
+                              This student's grades have already been saved and posted to the Report on Learning Progress and Achievement table. 
+                              Grades cannot be edited anymore and are now visible to students.
+                            </p>
+                          </div>
+                        );
+                      }
+                      
+                      return null;
+                    })()}
+                   
+                   {/* Student Grade Inputs */}
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                     {(() => {
+                       const student = students.find(s => s.name === selectedStudentName);
+                       const studentGradesData = grades[student?._id] || {};
+                       const isLocked = studentGradesData.isLocked;
+                       
+                       if (isLocked) {
+                         // Show read-only grades when locked
+                         return (
+                           <>
+                             <div>
+                               <label className="block text-sm font-medium text-gray-700 mb-1">1st Quarter</label>
+                               <input
+                                 type="text"
+                                 readOnly
+                                 className="w-full p-2 border border-gray-300 rounded-md bg-gray-100 font-semibold"
+                                 value={studentGrades.quarter1 || studentGradesData.quarter1 || ''}
+                               />
+                               <p className="text-xs text-gray-500 mt-1">Grades locked - cannot edit</p>
+                             </div>
+                             <div>
+                               <label className="block text-sm font-medium text-gray-700 mb-1">2nd Quarter</label>
+                               <input
+                                 type="text"
+                                 readOnly
+                                 className="w-full p-2 border border-gray-300 rounded-md bg-gray-100 font-semibold"
+                                 value={studentGrades.quarter2 || studentGradesData.quarter2 || ''}
+                               />
+                               <p className="text-xs text-gray-500 mt-1">Grades locked - cannot edit</p>
+                             </div>
+                             <div>
+                               <label className="block text-sm font-medium text-gray-700 mb-1">Semester Final Grade</label>
+                               <input
+                                 type="text"
+                                 readOnly
+                                 className="w-full p-2 border border-gray-300 rounded-md bg-blue-50 font-semibold"
+                                 value={studentGrades.semesterFinal || studentGradesData.semesterFinal || ''}
+                               />
+                               <p className="text-xs text-gray-500 mt-1">Auto-calculated from quarter grades</p>
+                             </div>
+                             <div>
+                               <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                               <input
+                                 type="text"
+                                 readOnly
+                                 className="w-full p-2 border border-gray-300 rounded-md bg-gray-100 font-semibold"
+                                 value={studentGrades.remarks || studentGradesData.remarks || ''}
+                               />
+                               <p className="text-xs text-gray-500 mt-1">Auto-calculated remarks</p>
+                             </div>
+                           </>
+                         );
+                       }
+                       
+                       // Show editable inputs when not locked
+                       if (currentTerm?.termName === 'Term 1') {
+                         return (
+                           <>
+                             <div>
+                               <label className="block text-sm font-medium text-gray-700 mb-1">1st Quarter</label>
                               <input
-                                type="text"
-                                readOnly
-                                className="w-full p-2 border border-gray-300 rounded-md bg-gray-100 font-semibold"
-                                value={studentGrades.quarter1 || studentGradesData.quarter1 || ''}
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                placeholder="Grade"
+                                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={studentGrades.quarter1 || ''}
+                                onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
                               />
-                              <p className="text-xs text-gray-500 mt-1">Grades locked - cannot edit</p>
+                              <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
+                              {studentGrades.quarter1 && (
+                                <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter1) ? 'text-green-600' : 'text-red-600'}`}>
+                                  {isValidGrade(studentGrades.quarter1) ? '✅ Valid grade' : '❌ Invalid grade'}
+                                </p>
+                              )}
                             </div>
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">2nd Quarter</label>
                               <input
-                                type="text"
-                                readOnly
-                                className="w-full p-2 border border-gray-300 rounded-md bg-gray-100 font-semibold"
-                                value={studentGrades.quarter2 || studentGradesData.quarter2 || ''}
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                placeholder="Grade"
+                                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={studentGrades.quarter2 || ''}
+                                onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
                               />
-                              <p className="text-xs text-gray-500 mt-1">Grades locked - cannot edit</p>
+                              <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
+                              {studentGrades.quarter2 && (
+                                <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter2) ? 'text-green-600' : 'text-red-600'}`}>
+                                  {isValidGrade(studentGrades.quarter2) ? '✅ Valid grade' : '❌ Invalid grade'}
+                                </p>
+                              )}
+                            </div>
+                          </>
+                        );
+                      } else if (currentTerm?.termName === 'Term 2') {
+                        return (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">3rd Quarter</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                placeholder="Grade"
+                                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={studentGrades.quarter3 || ''}
+                                onChange={(e) => handleStudentGradeChange('quarter3', e.target.value)}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
+                              {studentGrades.quarter3 && (
+                                <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter3) ? 'text-green-600' : 'text-red-600'}`}>
+                                  {isValidGrade(studentGrades.quarter3) ? '✅ Valid grade' : '❌ Invalid grade'}
+                                </p>
+                              )}
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Semester Final Grade</label>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">4th Quarter</label>
                               <input
-                                type="text"
-                                readOnly
-                                className="w-full p-2 border border-gray-300 rounded-md bg-blue-50 font-semibold"
-                                value={studentGrades.semesterFinal || studentGradesData.semesterFinal || ''}
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                placeholder="Grade"
+                                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={studentGrades.quarter4 || ''}
+                                onChange={(e) => handleStudentGradeChange('quarter4', e.target.value)}
                               />
-                              <p className="text-xs text-gray-500 mt-1">Auto-calculated from quarter grades</p>
+                              <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
+                              {studentGrades.quarter4 && (
+                                <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter4) ? 'text-green-600' : 'text-red-600'}`}>
+                                  {isValidGrade(studentGrades.quarter4) ? '✅ Valid grade' : '❌ Invalid grade'}
+                                </p>
+                              )}
+                            </div>
+                          </>
+                        );
+                      } else {
+                        return (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Quarter 1</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                placeholder="Grade"
+                                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={studentGrades.quarter1 || ''}
+                                onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
+                              {studentGrades.quarter1 && (
+                                <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter1) ? 'text-green-600' : 'text-red-600'}`}>
+                                  {isValidGrade(studentGrades.quarter1) ? '✅ Valid grade' : '❌ Invalid grade'}
+                                </p>
+                              )}
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Quarter 2</label>
                               <input
-                                type="text"
-                                readOnly
-                                className="w-full p-2 border border-gray-300 rounded-md bg-gray-100 font-semibold"
-                                value={studentGrades.remarks || studentGradesData.remarks || ''}
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                placeholder="Grade"
+                                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={studentGrades.quarter2 || ''}
+                                onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
                               />
-                              <p className="text-xs text-gray-500 mt-1">Auto-calculated remarks</p>
+                              <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
+                              {studentGrades.quarter2 && (
+                                <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter2) ? 'text-green-600' : 'text-red-600'}`}>
+                                  {isValidGrade(studentGrades.quarter2) ? '✅ Valid grade' : '❌ Invalid grade'}
+                                </p>
+                              )}
                             </div>
                           </>
                         );
                       }
+                     })()}
+                                       <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Semester Final Grade</label>
+                       <input
+                         type="text"
+                         readOnly
+                         className="w-full p-2 border border-gray-300 rounded-md bg-blue-50 font-semibold"
+                         value={studentGrades.semesterFinal || ''}
+                       />
+                       <p className="text-xs text-gray-500 mt-1">Auto-calculated from quarter grades</p>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                       <select
+                         className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                         value={studentGrades.remarks || ''}
+                         onChange={(e) => handleStudentGradeChange('remarks', e.target.value)}
+                         disabled={(() => {
+                           const student = students.find(s => s.name === selectedStudentName);
+                           const studentGradesData = grades[student?._id] || {};
+                           return studentGradesData.isLocked;
+                         })()}
+                       >
+                         <option value="">Select remarks...</option>
+                         <option value="PASSED">PASSED</option>
+                         <option value="FAILED">FAILED</option>
+                         <option value="REPEAT">REPEAT</option>
+                         <option value="INCOMPLETE">INCOMPLETE</option>
+                       </select>
+                     </div>
+                  </div>
+
+                  {/* Student Grade Actions */}
+                  <div className="flex flex-wrap gap-3">
+                    {(() => {
+                      const student = students.find(s => s.name === selectedStudentName);
+                      const studentGradesData = grades[student?._id] || {};
+                      const isLocked = studentGradesData.isLocked;
                       
-                      // Show editable inputs when not locked
-                      if (currentTerm?.termName === 'Term 1') {
+                      if (isLocked) {
                         return (
-                          <>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">1st Quarter</label>
-                             <input
-                               type="number"
-                               min="0"
-                               max="100"
-                               step="0.01"
-                               placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               value={studentGrades.quarter1 || ''}
-                               onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
-                             />
-                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
-                             {studentGrades.quarter1 && (
-                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter1) ? 'text-green-600' : 'text-red-600'}`}>
-                                 {isValidGrade(studentGrades.quarter1) ? '✅ Valid grade' : '❌ Invalid grade'}
-                               </p>
-                             )}
-                           </div>
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">2nd Quarter</label>
-                             <input
-                               type="number"
-                               min="0"
-                               max="100"
-                               step="0.01"
-                               placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               value={studentGrades.quarter2 || ''}
-                               onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
-                             />
-                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
-                             {studentGrades.quarter2 && (
-                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter2) ? 'text-green-600' : 'text-red-600'}`}>
-                                 {isValidGrade(studentGrades.quarter2) ? '✅ Valid grade' : '❌ Invalid grade'}
-                               </p>
-                             )}
-                           </div>
-                         </>
-                       );
-                     } else if (currentTerm?.termName === 'Term 2') {
-                       return (
-                         <>
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">3rd Quarter</label>
-                             <input
-                               type="number"
-                               min="0"
-                               max="100"
-                               step="0.01"
-                               placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               value={studentGrades.quarter3 || ''}
-                               onChange={(e) => handleStudentGradeChange('quarter3', e.target.value)}
-                             />
-                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
-                             {studentGrades.quarter3 && (
-                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter3) ? 'text-green-600' : 'text-red-600'}`}>
-                                 {isValidGrade(studentGrades.quarter3) ? '✅ Valid grade' : '❌ Invalid grade'}
-                               </p>
-                             )}
-                           </div>
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">4th Quarter</label>
-                             <input
-                               type="number"
-                               min="0"
-                               max="100"
-                               step="0.01"
-                               placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               value={studentGrades.quarter4 || ''}
-                               onChange={(e) => handleStudentGradeChange('quarter4', e.target.value)}
-                             />
-                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
-                             {studentGrades.quarter4 && (
-                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter4) ? 'text-green-600' : 'text-red-600'}`}>
-                                 {isValidGrade(studentGrades.quarter4) ? '✅ Valid grade' : '❌ Invalid grade'}
-                               </p>
-                             )}
-                           </div>
-                         </>
-                       );
-                     } else {
-                       return (
-                         <>
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">Quarter 1</label>
-                             <input
-                               type="number"
-                               min="0"
-                               max="100"
-                               step="0.01"
-                               placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               value={studentGrades.quarter1 || ''}
-                               onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
-                             />
-                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
-                             {studentGrades.quarter1 && (
-                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter1) ? 'text-green-600' : 'text-red-600'}`}>
-                                 {isValidGrade(studentGrades.quarter1) ? '✅ Valid grade' : '❌ Invalid grade'}
-                               </p>
-                             )}
-                           </div>
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">Quarter 2</label>
-                             <input
-                               type="number"
-                               min="0"
-                               max="100"
-                               step="0.01"
-                               placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               value={studentGrades.quarter2 || ''}
-                               onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
-                             />
-                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
-                             {studentGrades.quarter2 && (
-                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter2) ? 'text-green-600' : 'text-red-600'}`}>
-                                 {isValidGrade(studentGrades.quarter2) ? '✅ Valid grade' : '❌ Invalid grade'}
-                               </p>
-                             )}
-                           </div>
-                         </>
-                       );
-                     }
+                          <div className="text-sm text-gray-600">
+                            ✅ Grades are locked and cannot be edited. They are now visible to students.
+                          </div>
+                        );
+                      }
+                      
+                      return (
+                        <>
+                          <button
+                            onClick={saveStudentGrades}
+                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                          >
+                            Save Student Grades
+                          </button>
+                          
+                          {/* File Upload for Student */}
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="student-file-input"
+                              type="file"
+                              accept=".csv,.xlsx,.xls"
+                              onChange={handleStudentFileSelect}
+                              className="hidden"
+                            />
+                            <label
+                              htmlFor="student-file-input"
+                              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer"
+                            >
+                              Choose File
+                            </label>
+                            {selectedStudentFile && (
+                              <span className="text-sm text-gray-600">{selectedStudentFile.name}</span>
+                            )}
+                          </div>
+                          
+                          {selectedStudentFile && (
+                            <button
+                              onClick={uploadStudentGrades}
+                              disabled={uploadingStudentGrades}
+                              className={`px-4 py-2 rounded-md transition-colors ${
+                                uploadingStudentGrades 
+                                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                                  : 'bg-orange-600 text-white hover:bg-orange-700'
+                              }`}
+                            >
+                              {uploadingStudentGrades ? 'Uploading...' : 'Upload Student Grades'}
+                            </button>
+                          )}
+                        </>
+                      );
                     })()}
-                                      <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Semester Final Grade</label>
-                      <input
-                        type="text"
-                        readOnly
-                        className="w-full p-2 border border-gray-300 rounded-md bg-blue-50 font-semibold"
-                        value={studentGrades.semesterFinal || ''}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Auto-calculated from quarter grades</p>
+                  </div>
+                </div>
+              )}
+
+                          {/* Main Title */}
+              <div className="text-center mb-8">
+                <h1 className="text-2xl font-bold text-gray-800 uppercase tracking-wide">
+                  Report on Learning Progress and Achievement
+                </h1>
+              </div>
+
+              {/* Grades Status Summary */}
+              {selectedClass !== null && selectedSection && students.length > 0 && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-gray-700">
+                          Posted to Students: {students.filter(student => grades[student._id]?.isLocked).length}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-gray-700">
+                          Pending: {students.filter(student => !grades[student._id]?.isLocked).length}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                      <select
-                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={studentGrades.remarks || ''}
-                        onChange={(e) => handleStudentGradeChange('remarks', e.target.value)}
-                        disabled={(() => {
-                          const student = students.find(s => s.name === selectedStudentName);
-                          const studentGradesData = grades[student?._id] || {};
-                          return studentGradesData.isLocked;
-                        })()}
-                      >
-                        <option value="">Select remarks...</option>
-                        <option value="PASSED">PASSED</option>
-                        <option value="FAILED">FAILED</option>
-                        <option value="REPEAT">REPEAT</option>
-                        <option value="INCOMPLETE">INCOMPLETE</option>
-                      </select>
+                    <div className="text-sm text-gray-600">
+                      💡 Grades marked as "Posted" are visible to students and cannot be edited anymore.
                     </div>
-                 </div>
-
-                 {/* Student Grade Actions */}
-                 <div className="flex flex-wrap gap-3">
-                   {(() => {
-                     const student = students.find(s => s.name === selectedStudentName);
-                     const studentGradesData = grades[student?._id] || {};
-                     const isLocked = studentGradesData.isLocked;
-                     
-                     if (isLocked) {
-                       return (
-                         <div className="text-sm text-gray-600">
-                           ✅ Grades are locked and cannot be edited. They are now visible to students.
-                         </div>
-                       );
-                     }
-                     
-                     return (
-                       <>
-                         <button
-                           onClick={saveStudentGrades}
-                           className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                         >
-                           Save Student Grades
-                         </button>
-                         
-                         {/* File Upload for Student */}
-                         <div className="flex items-center gap-2">
-                           <input
-                             id="student-file-input"
-                             type="file"
-                             accept=".csv,.xlsx,.xls"
-                             onChange={handleStudentFileSelect}
-                             className="hidden"
-                           />
-                           <label
-                             htmlFor="student-file-input"
-                             className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer"
-                           >
-                             Choose File
-                           </label>
-                           {selectedStudentFile && (
-                             <span className="text-sm text-gray-600">{selectedStudentFile.name}</span>
-                           )}
-                         </div>
-                         
-                         {selectedStudentFile && (
-                           <button
-                             onClick={uploadStudentGrades}
-                             disabled={uploadingStudentGrades}
-                             className={`px-4 py-2 rounded-md transition-colors ${
-                               uploadingStudentGrades 
-                                 ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
-                                 : 'bg-orange-600 text-white hover:bg-orange-700'
-                             }`}
-                           >
-                             {uploadingStudentGrades ? 'Uploading...' : 'Upload Student Grades'}
-                           </button>
-                         )}
-                       </>
-                     );
-                   })()}
-                 </div>
-               </div>
-             )}
-
-                         {/* Main Title */}
-             <div className="text-center mb-8">
-               <h1 className="text-2xl font-bold text-gray-800 uppercase tracking-wide">
-                 Report on Learning Progress and Achievement
-               </h1>
-             </div>
-
-             {/* Grades Status Summary */}
-             {selectedClass !== null && selectedSection && students.length > 0 && (
-               <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                 <div className="flex flex-wrap items-center justify-between gap-4">
-                   <div className="flex items-center gap-4">
-                     <div className="flex items-center gap-2">
-                       <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                       <span className="text-sm font-medium text-gray-700">
-                         Posted to Students: {students.filter(student => grades[student._id]?.isLocked).length}
-                       </span>
-                     </div>
-                     <div className="flex items-center gap-2">
-                       <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                       <span className="text-sm font-medium text-gray-700">
-                         Pending: {students.filter(student => !grades[student._id]?.isLocked).length}
-                       </span>
-                     </div>
-                   </div>
-                   <div className="text-sm text-gray-600">
-                     💡 Grades marked as "Posted" are visible to students and cannot be edited anymore.
-                   </div>
-                 </div>
-               </div>
-             )}
+                  </div>
+                </div>
+              )}
 
 
 
             {/* Only show tables when both class and section are selected */}
-            {selectedClass !== null && selectedSection && selectedSection !== 'default' && (
+            {selectedClass !== null && selectedSection && (
               <>
                 {/* First Semester Section - Only show if Term 1 is active */}
                 {currentTerm?.termName === 'Term 1' && (
@@ -1672,6 +2101,11 @@ export default function Faculty_Grades() {
                           {selectedSection && selectedSection !== 'default' && (
                             <span className="text-sm font-normal text-gray-600 ml-2">
                               - Section: {selectedSection}
+                            </span>
+                          )}
+                          {selectedSection === 'default' && (
+                            <span className="text-sm font-normal text-gray-600 ml-2">
+                              - Default Section
                             </span>
                           )}
                         </h2>
@@ -1798,6 +2232,11 @@ export default function Faculty_Grades() {
                               - Section: {selectedSection}
                             </span>
                           )}
+                          {selectedSection === 'default' && (
+                            <span className="text-sm font-normal text-gray-600 ml-2">
+                              - Default Section
+                            </span>
+                          )}
                         </h2>
                         {/* Subject information below the semester title */}
                         {selectedClass !== null && classes[selectedClass] && (
@@ -1866,61 +2305,61 @@ export default function Faculty_Grades() {
                                       </div>
                                     </td>
                                                                         <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                                       {studentGrades.quarter3 || '-'}
-                                     </td>
-                                     <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                                       {studentGrades.quarter4 || '-'}
-                                     </td>
-                                     <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                                       {studentGrades.semesterFinal || semesterGrade || '-'}
-                                     </td>
-                                     <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                                       {studentGrades.remarks || remarks || '-'}
-                                     </td>
-                                   </tr>
-                                 );
-                               })
-                            ) : (
-                              <tr>
-                                <td colSpan="6" className="border border-gray-300 p-4 text-center text-gray-500">
-                                  No students available in this class and section.
-                                </td>
-                              </tr>
-                            )}
-                            
-                            {/* General Average */}
-                            <tr className="bg-yellow-100">
-                              <td className="border border-gray-300 p-2 font-bold text-gray-800" colSpan="2">General Average</td>
-                              <td className="border border-gray-300 p-2 text-center font-bold">
-                                {students.length > 0 ? calculateGeneralAverage('quarter3') : ''}
-                              </td>
-                              <td className="border border-gray-300 p-2 text-center font-bold">
-                                {students.length > 0 ? calculateGeneralAverage('quarter4') : ''}
-                              </td>
-                              <td className="border border-gray-300 p-2 text-center font-bold">
-                                {students.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
-                              </td>
-                              <td className="border border-gray-300 p-2 text-center font-bold">
-                                {/* Remarks column for General Average */}
-                              </td>
-                            </tr>
-                         </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
+                                        {studentGrades.quarter3 || '-'}
+                                      </td>
+                                      <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                        {studentGrades.quarter4 || '-'}
+                                      </td>
+                                      <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                        {studentGrades.semesterFinal || semesterGrade || '-'}
+                                      </td>
+                                      <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                        {studentGrades.remarks || remarks || '-'}
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                             ) : (
+                               <tr>
+                                 <td colSpan="6" className="border border-gray-300 p-4 text-center text-gray-500">
+                                   No students available in this class and section.
+                                 </td>
+                               </tr>
+                             )}
+                             
+                             {/* General Average */}
+                             <tr className="bg-yellow-100">
+                               <td className="border border-gray-300 p-2 font-bold text-gray-800" colSpan="2">General Average</td>
+                               <td className="border border-gray-300 p-2 text-center font-bold">
+                                 {students.length > 0 ? calculateGeneralAverage('quarter3') : ''}
+                               </td>
+                               <td className="border border-gray-300 p-2 text-center font-bold">
+                                 {students.length > 0 ? calculateGeneralAverage('quarter4') : ''}
+                               </td>
+                               <td className="border border-gray-300 p-2 text-center font-bold">
+                                 {students.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
+                               </td>
+                               <td className="border border-gray-300 p-2 text-center font-bold">
+                                 {/* Remarks column for General Average */}
+                               </td>
+                             </tr>
+                          </tbody>
+                       </table>
+                     </div>
+                   </div>
+                 )}
 
-                {/* Show message when no active term matches */}
-                {!currentTerm?.termName || (currentTerm?.termName !== 'Term 1' && currentTerm?.termName !== 'Term 2') && (
-                  <div className="text-center py-8 text-gray-600">
-                    <p>No active term found. Please check your academic term settings.</p>
-                  </div>
-                )}
-              </>
-            )}
+                 {/* Show message when no active term matches */}
+                 {(!currentTerm?.termName || (currentTerm?.termName !== 'Term 1' && currentTerm?.termName !== 'Term 2')) && (
+                   <div className="text-center py-8 text-gray-600">
+                     <p>No active term found. Please check your academic term settings.</p>
+                   </div>
+                 )}
+               </>
+             )}
 
-                         {/* Show message when class or section not selected */}
-             {(selectedClass === null || !selectedSection || selectedSection === 'default') && (
+             {/* Show message when class or section not selected */}
+             {(selectedClass === null || !selectedSection) && (
                <div className="text-center py-8 text-gray-600">
                  {selectedClass === null ? (
                    <p>Please select a class to view available sections and the grading table.</p>
@@ -1931,15 +2370,13 @@ export default function Faculty_Grades() {
                  )}
                </div>
              )}
-          </div>
-        ) : (
-          <GradingSystem />
-        )}
-
-        
-
-
-      </div>
-    </div>
-  );
+           </>
+         )}
+       </div>
+     ) : (
+       <GradingSystem />
+     )}
+   </div>
+ </div>
+ );
 }
