@@ -590,10 +590,25 @@ router.delete('/:id/submission', authenticateToken, async (req, res) => {
   try {
     const student = req.user._id;
     const assignment = req.params.id;
-    const submission = await Submission.findOneAndDelete({ assignment, student });
-    if (!submission) return res.status(404).json({ error: 'Submission not found.' });
+    
+    // Find the submission first to check if it's graded
+    const submission = await Submission.findOne({ assignment, student });
+    if (!submission) {
+      return res.status(404).json({ error: 'Submission not found.' });
+    }
+    
+    // Check if the submission has been graded
+    if (submission.status === 'graded' || submission.grade !== undefined || submission.grade !== null) {
+      return res.status(403).json({ 
+        error: 'Cannot undo submission. This submission has already been graded and cannot be modified.' 
+      });
+    }
+    
+    // If not graded, proceed with deletion
+    await Submission.findOneAndDelete({ assignment, student });
     res.json({ success: true });
   } catch (err) {
+    console.error('Error undoing submission:', err);
     res.status(500).json({ error: 'Failed to undo submission.' });
   }
 });
@@ -605,13 +620,23 @@ router.patch('/:id/submission/file', authenticateToken, async (req, res) => {
     const assignment = req.params.id;
     const { fileUrl } = req.body;
     if (!fileUrl) return res.status(400).json({ error: 'fileUrl is required.' });
+    
     const submission = await Submission.findOne({ assignment, student });
     if (!submission) return res.status(404).json({ error: 'Submission not found.' });
+    
+    // Check if the submission has been graded
+    if (submission.status === 'graded' || submission.grade !== undefined || submission.grade !== null) {
+      return res.status(403).json({ 
+        error: 'Cannot modify submission. This submission has already been graded and cannot be modified.' 
+      });
+    }
+    
     // Remove the file from the files array
     submission.files = (submission.files || []).filter(f => f.url !== fileUrl);
     await submission.save();
     res.json(submission);
   } catch (err) {
+    console.error('Error deleting file from submission:', err);
     res.status(500).json({ error: 'Failed to delete file from submission.' });
   }
 });

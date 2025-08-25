@@ -264,7 +264,14 @@ export default function AssignmentDetailPage() {
           // Don't clear context - keep it visible for resubmission
         });
     } else {
-      // Optionally handle error
+      // Handle error response
+      const errorData = await res.json();
+      if (res.status === 403) {
+        // Submission is graded, show appropriate message
+        setError('Cannot undo submission. This submission has already been graded and cannot be modified.');
+      } else {
+        setError(errorData.error || 'Failed to undo submission.');
+      }
     }
   };
 
@@ -775,12 +782,19 @@ export default function AssignmentDetailPage() {
                         </div>
                       )}
                       
-                      <button
-                        className="mt-3 bg-red-600 text-white px-4 py-2 rounded"
-                        onClick={handleUndoSubmission}
-                      >
-                        Undo Submission
-                      </button>
+                      {/* Only show undo button if submission hasn't been graded */}
+                      {(!studentSubmission.grade && studentSubmission.grade !== 0) && studentSubmission.status !== 'graded' ? (
+                        <button
+                          className="mt-3 bg-red-600 text-white px-4 py-2 rounded"
+                          onClick={handleUndoSubmission}
+                        >
+                          Undo Submission
+                        </button>
+                      ) : (
+                        <div className="mt-3 p-2 bg-gray-100 text-gray-600 text-sm rounded">
+                          Submission cannot be undone - already graded
+                        </div>
+                      )}
                     </div>
                   )}
                   {/* Always show the submission form for resubmission or first submission */}
@@ -968,13 +982,20 @@ export default function AssignmentDetailPage() {
                     )}
                     {/* Show Undo or Submit button depending on submission state */}
                     {studentSubmission ? (
-                      <button
-                        className="mt-3 bg-red-600 text-white px-4 py-2 rounded"
-                        onClick={handleUndoSubmission}
-                        type="button"
-                      >
-                        Undo Submission
-                      </button>
+                      // Only show undo button if submission hasn't been graded
+                      (!studentSubmission.grade && studentSubmission.grade !== 0) && studentSubmission.status !== 'graded' ? (
+                        <button
+                          className="mt-3 bg-red-600 text-white px-4 py-2 rounded"
+                          onClick={handleUndoSubmission}
+                          type="button"
+                        >
+                          Undo Submission
+                        </button>
+                      ) : (
+                        <div className="mt-3 p-2 bg-gray-100 text-gray-600 text-sm rounded">
+                          Submission cannot be undone - already graded
+                        </div>
+                      )
                     ) : (
                       <button
                         type="submit"
