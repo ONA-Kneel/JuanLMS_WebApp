@@ -123,23 +123,31 @@ export default function Faculty_Activities() {
     async function fetchActivitiesAndQuizzes() {
       try {
         const token = localStorage.getItem("token");
-        const [activityRes, quizRes] = await Promise.all([
-          fetch(`${API_BASE}/assignments`, {
+        
+        // Fetch assignments globally
+        const activityRes = await fetch(`${API_BASE}/assignments`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        
+        // Fetch quizzes per class (like ClassContent.jsx does)
+        const allQuizzes = [];
+        for (const facultyClass of facultyClasses) {
+          const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${facultyClass.classID}`, {
             headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_BASE}/api/quizzes`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
-
-        if (activityRes.ok && quizRes.ok) {
-          const [activityData, quizData] = await Promise.all([
-            activityRes.json(),
-            quizRes.json(),
-          ]);
+          });
+          if (quizRes.ok) {
+            const quizData = await quizRes.json();
+            allQuizzes.push(...(Array.isArray(quizData) ? quizData : []));
+          }
+        }
+        
+        if (activityRes.ok) {
+          const activityData = await activityRes.json();
+          
           // Only keep items that belong to the faculty's active classes for this year/term
           const filteredActivities = filterByActiveClassesInTerm(activityData);
-          const filteredQuizzes = filterByActiveClassesInTerm(quizData);
+          const filteredQuizzes = allQuizzes; // No filtering needed since we fetched per class
+          
           setActivities(filteredActivities);
           setQuizzes(filteredQuizzes);
           
@@ -152,15 +160,16 @@ export default function Faculty_Activities() {
         console.error("Failed to fetch activities or quizzes", err);
       }
     }
+    
     // Run only after faculty classes are resolved for the term
     if (facultyClasses.length > 0) {
       fetchActivitiesAndQuizzes();
     } else {
-              // If there are no active classes, ensure lists are empty
-        setActivities([]);
-        setQuizzes([]);
-        setReadyToGradeItems([]);
-        setGradedItems([]);
+      // If there are no active classes, ensure lists are empty
+      setActivities([]);
+      setQuizzes([]);
+      setReadyToGradeItems([]);
+      setGradedItems([]);
     }
   }, [facultyClasses]);
 
