@@ -366,9 +366,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
                // Use the direct response if we get populated students array, but also store faculty data
                if (Array.isArray(membersData.students) && membersData.students.length > 0) {
                  if (DEBUG_MEMBERS) console.log('[Members] using direct students response - faculty:', membersData.faculty, 'students:', membersData.students);
-                 setMembers({ faculty: membersData.faculty || [], students: membersData.students });
-                 setMemberIdsRaw(membersData.students.map(s => String(s.userID || s.schoolID || s._id)).filter(Boolean));
-                 if (DEBUG_MEMBERS) console.log('[Members] set members - faculty count:', (membersData.faculty || []).length, 'students count:', membersData.students.length);
+                 const studentsOnly = (membersData.students || []).filter(s => (s.role || '').toLowerCase() === 'students');
+                 setMembers({ faculty: membersData.faculty || [], students: studentsOnly });
+                 setMemberIdsRaw(studentsOnly.map(s => String(s.userID || s.schoolID || s._id)).filter(Boolean));
+                 if (DEBUG_MEMBERS) console.log('[Members] set members - faculty count:', (membersData.faculty || []).length, 'students count:', studentsOnly.length);
                  return;
                }
                

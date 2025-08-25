@@ -16,6 +16,7 @@ export default function Student_Meeting() {
   const [userInfo, setUserInfo] = useState({ name: '', email: '' });
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [studentCounts, setStudentCounts] = useState({});
 
   // Get user info from token
   useEffect(() => {
@@ -129,6 +130,38 @@ export default function Student_Meeting() {
     fetchClasses();
   }, [currentTerm, academicYear]);
 
+  // Compute student counts per class via members endpoint
+  useEffect(() => {
+    const loadCounts = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const pairs = await Promise.all((classes || []).map(async (cls) => {
+          try {
+            if (!cls?.classID) return [cls?.classID || '', 0];
+            const res = await fetch(`${API_BASE}/classes/${cls.classID}/members`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              const count = Array.isArray(data?.students) ? data.students.filter(s => (s.role || '').toLowerCase() === 'students').length : 0;
+              return [cls.classID, count];
+            }
+          } catch (e) {
+            console.error('[Student_Meeting] members count fetch error:', e);
+          }
+          return [cls?.classID || '', 0];
+        }));
+        const map = {};
+        for (const [id, c] of pairs) { if (id) map[id] = c; }
+        setStudentCounts(map);
+      } catch (e) {
+        console.error('[Student_Meeting] counts aggregation error:', e);
+      }
+    };
+    if (classes && classes.length > 0) loadCounts();
+  }, [classes]);
+
   const handleJoinMeeting = async (meeting) => {
     try {
       console.log('[DEBUG] Student handleJoinMeeting received:', meeting);
@@ -225,7 +258,7 @@ export default function Student_Meeting() {
                         <h4 className="font-semibold">{classItem.className || classItem.name}</h4>
                         <p className="text-sm text-gray-500">{classItem.classCode || classItem._id}</p>
                         <p className="text-xs text-gray-400 mt-1">
-                          {(classItem.members?.length || 0)} students
+                          {studentCounts[classItem.classID] ?? 0} students
                         </p>
                       </div>
                     </div>

@@ -18,6 +18,7 @@ const Faculty_Meeting = () => {
   const [activeMeeting, setActiveMeeting] = useState(null);
   const [userInfo, setUserInfo] = useState({ name: '', email: '' });
   const [loading, setLoading] = useState(true);
+  const [studentCounts, setStudentCounts] = useState({});
 
   // Get user info from token
   useEffect(() => {
@@ -104,7 +105,38 @@ const Faculty_Meeting = () => {
           return;
         }
 
-        // Try faculty-specific endpoint first
+        // Primary: use my-classes (same flow as students)
+        try {
+          const resMy = await fetch(`${API_BASE}/classes/my-classes`, {
+            method: 'GET',
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            }
+          });
+          if (resMy.ok) {
+            const data = await resMy.json();
+            const activeClasses = data.filter(cls => {
+              if (!cls.termName || cls.termName !== currentTerm.termName) return false;
+              if (!cls.academicYear || !academicYear) return false;
+              const expectedYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+              if (cls.academicYear !== expectedYear) return false;
+              if (cls.isArchived === true) return false;
+              return true;
+            });
+            console.log('[Faculty_Meeting] my-classes active count:', activeClasses.length);
+            if (activeClasses.length > 0) {
+              setClasses(activeClasses);
+              setSelectedClass(activeClasses[0]);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error('[Faculty_Meeting] Error fetching my-classes:', err);
+        }
+
+        // Secondary: faculty-specific endpoint
         try {
           const res = await fetch(`${API_BASE}/classes/faculty-classes`, {
             method: 'GET',
@@ -122,41 +154,29 @@ const Faculty_Meeting = () => {
 
           if (res.ok) {
             const data = await res.json();
-            // Filter classes to only show those active for the current term
             const activeClasses = data.filter(cls => {
-              // MUST have termName and match current term
-              if (!cls.termName || cls.termName !== currentTerm.termName) {
-                return false;
-              }
-              // MUST have academicYear and match current academic year
-              if (!cls.academicYear || !academicYear) {
-                return false;
-              }
+              if (!cls.termName || cls.termName !== currentTerm.termName) return false;
+              if (!cls.academicYear || !academicYear) return false;
               const expectedYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-              if (cls.academicYear !== expectedYear) {
-                return false;
-              }
-              // MUST be not archived
-              if (cls.isArchived === true) {
-                return false;
-              }
+              if (cls.academicYear !== expectedYear) return false;
+              if (cls.isArchived === true) return false;
               return true;
             });
-            
-            setClasses(activeClasses);
+            console.log('[Faculty_Meeting] faculty-classes active count:', activeClasses.length);
             if (activeClasses.length > 0) {
+              setClasses(activeClasses);
               setSelectedClass(activeClasses[0]);
+              setLoading(false);
+              return;
             }
-            setLoading(false);
-            return;
           }
         } catch (err) {
           console.error("Error fetching faculty classes:", err);
         }
 
-        // Fallback: try the general classes endpoint and filter client-side
+        // Fallback: use my-classes (server filters by logged-in user)
         try {
-          const fallbackRes = await fetch(`${API_BASE}/classes`, {
+          const fallbackRes = await fetch(`${API_BASE}/classes/my-classes`, {
             method: 'GET',
             headers: { 
               "Authorization": `Bearer ${token}`,
@@ -166,11 +186,7 @@ const Faculty_Meeting = () => {
 
           if (fallbackRes.ok) {
             const allClasses = await fallbackRes.json();
-            const facultyId = payload.userID;
             const facultyClasses = allClasses.filter(cls => {
-              // Must be assigned to this faculty
-              if (cls.facultyID !== facultyId) return false;
-              
               // MUST have termName and match current term
               if (!cls.termName || cls.termName !== currentTerm.termName) return false;
               
@@ -202,6 +218,38 @@ const Faculty_Meeting = () => {
     fetchClasses();
   }, [currentTerm, academicYear]); // Re-run when term or year changes
 
+  // Compute student counts per class via members endpoint
+  useEffect(() => {
+    const loadCounts = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const pairs = await Promise.all((classes || []).map(async (cls) => {
+          try {
+            if (!cls?.classID) return [cls?.classID || '', 0];
+            const res = await fetch(`${API_BASE}/classes/${cls.classID}/members`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              const count = Array.isArray(data?.students) ? data.students.filter(s => (s.role || '').toLowerCase() === 'students').length : 0;
+              return [cls.classID, count];
+            }
+          } catch (e) {
+            console.error('[Faculty_Meeting] members count fetch error:', e);
+          }
+          return [cls?.classID || '', 0];
+        }));
+        const map = {};
+        for (const [id, c] of pairs) { if (id) map[id] = c; }
+        setStudentCounts(map);
+      } catch (e) {
+        console.error('[Faculty_Meeting] counts aggregation error:', e);
+      }
+    };
+    if (classes && classes.length > 0) loadCounts();
+  }, [classes]);
+
   // Meeting handlers
   const handleMeetingCreated = (newMeeting) => {
     setMeetingRefreshTrigger(prev => prev + 1);
@@ -212,16 +260,21 @@ const Faculty_Meeting = () => {
   };
 
   const handleJoinMeeting = async (meeting) => {
-    console.log('[DEBUG] Faculty handleJoinMeeting received:', meeting);
-    console.log('[DEBUG] Faculty meeting roomUrl:', meeting.roomUrl);
-    // MeetingList already called the backend and provided roomUrl
-    const meetingData = {
-      ...meeting,
-      meetingId: String(meeting._id), // always set meetingId as string
-      title: meeting.title || 'Video Meeting',
-    };
-    console.log('[DEBUG] Faculty setActiveMeeting with:', meetingData);
-    setActiveMeeting(meetingData);
+    try {
+      console.log('[DEBUG] Faculty handleJoinMeeting received:', meeting);
+      console.log('[DEBUG] Faculty meeting roomUrl:', meeting.roomUrl);
+      // MeetingList already called the backend and provided roomUrl
+      const meetingData = {
+        ...meeting,
+        meetingId: String(meeting._id),
+        title: meeting.title || 'Video Meeting',
+      };
+      console.log('[DEBUG] Faculty setActiveMeeting with:', meetingData);
+      setActiveMeeting(meetingData);
+    } catch (error) {
+      console.error('Error setting up meeting:', error);
+      alert('Error joining meeting. Please try again.');
+    }
   };
 
   const handleLeaveMeeting = () => {
@@ -302,7 +355,7 @@ const Faculty_Meeting = () => {
                         <h4 className="font-semibold">{classItem.className}</h4>
                         <p className="text-sm text-gray-500">{classItem.classCode}</p>
                         <p className="text-xs text-gray-400 mt-1">
-                          {classItem.members?.length || 0} students
+                          {studentCounts[classItem.classID] ?? 0} students
                         </p>
                       </div>
                     </div>
@@ -323,7 +376,7 @@ const Faculty_Meeting = () => {
                         Meetings for {selectedClass.className}
                       </h2>
                       <p className="text-gray-600 mt-1">
-                        Class ID: {selectedClass._id} • {selectedClass.members?.length || 0} Students
+                        Class ID: {selectedClass._id} • {studentCounts[selectedClass.classID] ?? 0} Students
                       </p>
                     </div>
                     <button
@@ -351,7 +404,7 @@ const Faculty_Meeting = () => {
                         <Users className="w-8 h-8 text-green-600" />
                         <div>
                           <p className="text-sm text-green-600 font-medium">Class Members</p>
-                          <p className="text-xs text-green-500">{selectedClass.members?.length || 0} students can join</p>
+                          <p className="text-xs text-green-500">{studentCounts[selectedClass.classID] ?? 0} students can join</p>
                         </div>
                       </div>
                     </div>

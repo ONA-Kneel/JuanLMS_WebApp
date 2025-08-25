@@ -327,10 +327,10 @@ export default function Faculty_Grades() {
           const data = await response.json();
           console.log('✅ Class members response:', data);
           if (data && data.students) {
-            studentsData = data.students;
+            studentsData = (data.students || []).filter(s => (s.role || '').toLowerCase() === 'students');
           } else if (data && Array.isArray(data)) {
             // Sometimes the endpoint returns an array directly
-            studentsData = data;
+            studentsData = (data || []).filter(s => (s.role || '').toLowerCase() === 'students');
           }
         } else {
           console.log('❌ Class members endpoint failed:', response.status, response.statusText);

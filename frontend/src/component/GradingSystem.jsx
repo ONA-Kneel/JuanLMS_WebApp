@@ -427,7 +427,9 @@ export default function GradingSystem() {
       }
     } catch {}
 
-    const normalized = students.map((s, idx) => ({
+    // Frontend guard: keep only users with role === 'students'
+    const studentsOnly = (students || []).filter(s => (s.role || '').toLowerCase() === 'students');
+    const normalized = studentsOnly.map((s, idx) => ({
       id: s.studentID || s.schoolID || s.userID || s.id || s._id || `S${idx + 1}`,
       name: s.name || s.studentName || `${s.firstname || ''} ${s.lastname || ''}`.trim()
     }));
@@ -798,8 +800,10 @@ export default function GradingSystem() {
         }
       } catch {}
 
+      // Frontend guard: only keep true students
+      const studentsOnly = (students || []).filter(s => (s.role || '').toLowerCase() === 'students');
       // Normalize students to have school ID and name
-      const normalizedStudents = students.map((s, idx) => ({
+      const normalizedStudents = studentsOnly.map((s, idx) => ({
         id:
           s.studentID || s.schoolID || s.userID || s.id || s._id || `S${idx + 1}`,
         name:

@@ -205,6 +205,34 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
         console.log('[CREATE-CLASS] Converted facultyID from userID to ObjectId:', facultyID, '->', faculty._id);
       }
     }
+
+    // Validate and normalize members to include only student identifiers and to exclude faculty
+    try {
+      const memberIds = Array.isArray(classData.members) ? classData.members.map(v => String(v)) : [];
+      const facultyIdentifier = classData.facultyID ? String(classData.facultyID) : String(facultyID || '');
+      const uniqueIds = Array.from(new Set(memberIds.filter(Boolean).filter(v => v !== facultyIdentifier)));
+      if (uniqueIds.length > 0) {
+        const validStudents = await User.find({
+          role: 'students',
+          $or: [
+            { _id: { $in: uniqueIds } },
+            { userID: { $in: uniqueIds } }
+          ]
+        }).select('_id userID');
+        const allowed = validStudents.map(u => String(u._id));
+        classData.members = allowed;
+        console.log('[CREATE-CLASS] Filtered/normalized members (students only):', classData.members.length);
+      } else {
+        classData.members = [];
+      }
+    } catch (normErr) {
+      console.warn('[CREATE-CLASS] Failed to fully normalize members, proceeding with provided list. Error:', normErr.message);
+      // At minimum, ensure faculty is not inside members
+      if (Array.isArray(classData.members)) {
+        const facultyIdentifier = classData.facultyID ? String(classData.facultyID) : String(facultyID || '');
+        classData.members = classData.members.filter(v => String(v) !== facultyIdentifier);
+      }
+    }
     
     if (academicYear && currentTerm) {
       classData.academicYear = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
@@ -291,11 +319,19 @@ router.get('/:classID/members', async (req, res) => {
     // Handle both ObjectId and userID in members array
     let students = [];
     if (classDoc.members && classDoc.members.length > 0) {
-      // Try to find students by ObjectId first, then fallback to userID
+      // Ensure the faculty identifier is not part of the member IDs we look up
+      const rawMembers = (classDoc.members || []).map(v => String(v));
+      const facultyIdentifier = classDoc.facultyID ? String(classDoc.facultyID) : null;
+      const memberIdsExcludingFaculty = facultyIdentifier
+        ? rawMembers.filter(v => v !== facultyIdentifier)
+        : rawMembers;
+
+      // Try to find students by ObjectId first, then fallback to userID, and enforce role filter
       students = await User.find({ 
+        role: 'students',
         $or: [
-          { _id: { $in: classDoc.members } }, // ObjectId
-          { userID: { $in: classDoc.members } } // userID fallback
+          { _id: { $in: memberIdsExcludingFaculty } }, // ObjectId
+          { userID: { $in: memberIdsExcludingFaculty } } // userID fallback
         ],
         isArchived: { $ne: true } 
       });
@@ -457,9 +493,32 @@ router.patch('/:classID/members', authenticateToken, async (req, res) => {
 
     console.log(`[PATCH-MEMBERS] Updating class ${classID} with members:`, members);
 
+    // Load class to know facultyID for exclusion
+    const existing = await Class.findOne({ classID });
+    if (!existing) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+
+    // Normalize incoming members: unique, exclude faculty, and keep only students
+    const incomingIds = members.map(v => String(v)).filter(Boolean);
+    const facultyIdentifier = existing.facultyID ? String(existing.facultyID) : null;
+    const uniqueIds = Array.from(new Set(incomingIds)).filter(v => v !== facultyIdentifier);
+
+    let normalizedIds = [];
+    if (uniqueIds.length > 0) {
+      const validStudents = await User.find({
+        role: 'students',
+        $or: [
+          { _id: { $in: uniqueIds } },
+          { userID: { $in: uniqueIds } }
+        ]
+      }).select('_id userID');
+      normalizedIds = validStudents.map(u => String(u._id));
+    }
+
     const updatedClass = await Class.findOneAndUpdate(
       { classID },
-      { members: members },
+      { members: normalizedIds },
       { new: true }
     );
 
@@ -562,14 +621,20 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
 router.get('/faculty-classes', authenticateToken, async (req, res) => {
   try {
     const userID = req.user.userID;
+    const userObjectId = req.user._id;
     
     // Only allow faculty to access this endpoint
     if (req.user.role !== 'faculty') {
       return res.status(403).json({ error: 'Access denied. Faculty only.' });
     }
     
-    // Get classes where the logged-in faculty is assigned
-    const classes = await Class.find({ facultyID: userID });
+    // Get classes where the logged-in faculty is assigned (support both ObjectId and legacy userID string)
+    const classes = await Class.find({
+      $or: [
+        { facultyID: userObjectId },
+        { facultyID: userID }
+      ]
+    });
     res.json(classes);
   } catch (err) {
     console.error('Error fetching faculty classes:', err);
