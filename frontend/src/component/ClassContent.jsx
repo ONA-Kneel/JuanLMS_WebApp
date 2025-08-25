@@ -58,6 +58,11 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [hasMappedMembers, setHasMappedMembers] = useState(false);
   const [classSection, setClassSection] = useState(null); // Store the class section
   const [studentsInSameSection, setStudentsInSameSection] = useState([]); // Store students in the same section
+  const [allActiveStudents, setAllActiveStudents] = useState([]); // Store all active students for editing
+  const [showDifferentSectionStudents, setShowDifferentSectionStudents] = useState(true); // Toggle to show/hide students from different sections
+  const [studentSearchTerm, setStudentSearchTerm] = useState(''); // Search term for filtering students
+  const [enrolledStudentIds, setEnrolledStudentIds] = useState([]); // Track which students are enrolled in this class
+  const [showNonEnrolledStudents, setShowNonEnrolledStudents] = useState(false); // Toggle to show/hide non-enrolled students
 
   // Validation modal state
   const [validationModal, setValidationModal] = useState({
@@ -133,6 +138,62 @@ export default function ClassContent({ selected, isFaculty = false }) {
     }
     
     return filteredStudents;
+  };
+
+  // Get all active students for editing (regardless of section)
+  const getAllActiveStudents = (students) => {
+    // Filter for active students only
+    return students.filter(student => {
+      // Check if student has active status or no status (assume active)
+      const status = student.status || student.accountStatus;
+      return !status || status.toLowerCase() === 'active' || status.toLowerCase() === 'enrolled';
+    });
+  };
+
+  // Check if student is enrolled in the specific class
+  const isStudentEnrolledInClass = async (studentId) => {
+    if (!classId) return false;
+    
+    const token = localStorage.getItem('token');
+    try {
+      // Check if student is already a member of this class
+      const res = await fetch(`${API_BASE}/classes/${classId}/members`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        const classData = await res.json();
+        const memberIds = Array.isArray(classData.members) ? classData.members.map(String) : [];
+        
+        // Check if student ID exists in the class members
+        return memberIds.includes(String(studentId));
+      }
+    } catch (err) {
+      console.warn(`Failed to check class enrollment for student ${studentId}:`, err);
+    }
+    
+    return false;
+  };
+
+  // Fetch enrolled student IDs for this class
+  const fetchEnrolledStudentIds = async () => {
+    if (!classId) return;
+    
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/classes/${classId}/members`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        const classData = await res.json();
+        const memberIds = Array.isArray(classData.members) ? classData.members.map(String) : [];
+        setEnrolledStudentIds(memberIds);
+        if (DEBUG_MEMBERS) console.log('[Members] enrolled student IDs:', memberIds);
+      }
+    } catch (err) {
+      console.warn(`Failed to fetch enrolled student IDs:`, err);
+    }
   };
 
   // Fetch lessons from backend
@@ -437,21 +498,35 @@ export default function ClassContent({ selected, isFaculty = false }) {
       };
       
       loadMembersAndStudents();
+      
+      // Also fetch enrolled student IDs for validation
+      fetchEnrolledStudentIds();
   }
 }, [selected, classId, isFaculty]);
 
   // Filter students by section when class section or allStudents changes
   useEffect(() => {
-    if (classSection && allStudents.length > 0 && isFaculty) {
-      const filterStudentsBySection = async () => {
-        if (DEBUG_MEMBERS) console.log('[Members] filtering students by section:', classSection);
-        const filtered = await getStudentsInSameSection(allStudents, classSection);
-        setStudentsInSameSection(filtered);
-        if (DEBUG_MEMBERS) console.log('[Members] students in same section:', filtered.length);
-      };
-      filterStudentsBySection();
+    if (allStudents.length > 0 && isFaculty) {
+      // Always set all active students for editing
+      const activeStudents = getAllActiveStudents(allStudents);
+      setAllActiveStudents(activeStudents);
+      if (DEBUG_MEMBERS) console.log('[Members] all active students:', activeStudents.length);
+      
+      // If we have a section, also filter by section
+      if (classSection) {
+        const filterStudentsBySection = async () => {
+          if (DEBUG_MEMBERS) console.log('[Members] filtering students by section:', classSection);
+          const filtered = await getStudentsInSameSection(allStudents, classSection);
+          setStudentsInSameSection(filtered);
+          if (DEBUG_MEMBERS) console.log('[Members] students in same section:', filtered.length);
+        };
+        filterStudentsBySection();
+      } else {
+        setStudentsInSameSection([]);
+      }
     } else {
       setStudentsInSameSection([]);
+      setAllActiveStudents([]);
     }
   }, [classSection, allStudents, isFaculty]);
 
@@ -1545,45 +1620,249 @@ export default function ClassContent({ selected, isFaculty = false }) {
               </h3>
 
               {editingMembers ? (
-                <div className="mt-2">
-                  <label className="font-medium text-blue-800">Select Students</label>
-                  {classSection && (
-                    <div className="text-sm text-gray-600 mb-2">
-                      Only showing students from section: <span className="font-semibold">{classSection}</span>
-                    </div>
-                  )}
-                  <select
-                    multiple
-                    className="w-full border rounded px-2 py-2 mt-1"
-                    value={newStudentIDs}
-                    onChange={(e) => {
-                      const selectedOptions = Array.from(e.target.selectedOptions).map(opt => opt.value);
-                      if (DEBUG_MEMBERS) console.log('[Members] dropdown selection changed:', selectedOptions);
-                      setNewStudentIDs(selectedOptions);
-                    }}
-                  >
-                                      {studentsInSameSection.length > 0 ? (
-                    studentsInSameSection.map(student => {
-                      const cand = getCandidateIds(student);
-                      const value = cand[0]; // This will now be userID first due to getCandidateIds priority
-                      if (DEBUG_MEMBERS && student.firstname === 'Juan') {
-                        console.log('[Members] student Juan candidate IDs:', cand, 'selected value:', value);
-                      }
-                      const label = `${student.firstname || ''} ${student.lastname || ''}`.trim() || (student.email || value);
-                      return (
-                        <option key={value} value={value}>
-                          {label}
-                      </option>
-                      );
-                    })
-                  ) : classSection ? (
-                    <option disabled>No students found in section {classSection}</option>
-                  ) : (
-                    <option disabled>Loading students...</option>
-                  )}
-                  </select>
+                <div className="mt-4 space-y-4">
+                  {/* Current Class Members */}
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <h4 className="font-semibold text-blue-900 mb-3">Current Class Members</h4>
+                    {members.students.length > 0 ? (
+                      <div className="space-y-2">
+                        {members.students.map(student => (
+                          <div key={student._id || student.userID} className="flex items-center justify-between bg-white p-3 rounded border">
+                            <div className="flex items-center gap-3">
+                              <span className="text-blue-700">👤</span>
+                              <div>
+                                <div className="font-medium">{student.firstname} {student.lastname}</div>
+                                <div className="text-sm text-gray-600">{student.email || student.schoolID}</div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                const studentId = getCandidateIds(student)[0];
+                                setNewStudentIDs(prev => prev.filter(id => id !== studentId));
+                              }}
+                              className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm font-medium"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-600">No students currently in this class.</p>
+                    )}
+                  </div>
 
-                  <div className="flex gap-3 mt-3">
+                  {/* Add New Students */}
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                    <h4 className="font-semibold text-green-900 mb-3">Add New Students</h4>
+                    {classSection && (
+                      <div className="text-sm text-gray-600 mb-3 p-2 bg-white rounded border">
+                        <strong>Section Info:</strong> Class is in section <span className="font-semibold text-green-700">{classSection}</span>
+                        <br />
+                        <span className="text-xs text-gray-500">
+                          ✅ Students from the same section are highlighted in green<br/>
+                          ➕ Students from other sections are shown in blue<br/>
+                          Use the toggle below to filter students by section
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Enrollment Info */}
+                    <div className="text-sm text-gray-600 mb-3 p-2 bg-yellow-50 rounded border border-yellow-200">
+                      <strong>⚠️ Enrollment Requirement:</strong> Only students enrolled in this class can be added as members.
+                      <br />
+                      <span className="text-xs text-gray-600">
+                        • Enrolled students have active "Add" buttons<br/>
+                        • Non-enrolled students show "Not Enrolled" and cannot be added<br/>
+                        • Use the toggle below to show/hide non-enrolled students
+                      </span>
+                    </div>
+                    
+                    {/* Toggle for showing students from different sections */}
+                    {classSection && (
+                      <div className="mb-3 flex items-center gap-2">
+                        <label className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={showDifferentSectionStudents}
+                            onChange={(e) => setShowDifferentSectionStudents(e.target.checked)}
+                            className="rounded"
+                          />
+                          Show students from different sections
+                        </label>
+                      </div>
+                    )}
+                    
+                    {/* Toggle for showing non-enrolled students */}
+                    <div className="mb-3 flex items-center gap-2">
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={showNonEnrolledStudents}
+                          onChange={(e) => setShowNonEnrolledStudents(e.target.checked)}
+                          className="rounded"
+                        />
+                        Show non-enrolled students
+                      </label>
+                    </div>
+                    
+                    {/* Summary counts */}
+                    <div className="mb-3 text-sm text-gray-600">
+                      <div className="flex gap-4">
+                        <span>📊 <strong>Available:</strong> {allActiveStudents.filter(s => !newStudentIDs.includes(getCandidateIds(s)[0])).length} students</span>
+                        {classSection && (
+                          <>
+                            <span className="text-green-600">✅ <strong>Same Section:</strong> {studentsInSameSection.filter(s => !newStudentIDs.includes(getCandidateIds(s)[0])).length} students</span>
+                            <span className="text-blue-600">➕ <strong>Other Sections:</strong> {allActiveStudents.filter(s => {
+                              const studentId = getCandidateIds(s)[0];
+                              return !newStudentIDs.includes(studentId) && !studentsInSameSection.some(ss => getCandidateIds(ss)[0] === studentId);
+                            }).length} students</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="mt-2 text-xs text-gray-500">
+                        <span className="text-green-600">✓ <strong>Enrolled:</strong> {allActiveStudents.filter(s => {
+                          const studentId = getCandidateIds(s)[0];
+                          return !newStudentIDs.includes(studentId) && enrolledStudentIds.includes(String(studentId));
+                        }).length} students</span>
+                        <span className="text-red-600 ml-4">⚠️ <strong>Not Enrolled:</strong> {allActiveStudents.filter(s => {
+                          const studentId = getCandidateIds(s)[0];
+                          return !newStudentIDs.includes(studentId) && !enrolledStudentIds.includes(String(studentId));
+                        }).length} students</span>
+                      </div>
+                    </div>
+                    
+                    {/* Search input */}
+                    <div className="mb-3">
+                      <input
+                        type="text"
+                        placeholder="Search students by name or email..."
+                        value={studentSearchTerm}
+                        onChange={(e) => setStudentSearchTerm(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    
+                    {allActiveStudents.length > 0 ? (
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {(() => {
+                          const filteredStudents = allActiveStudents
+                            .filter(student => {
+                              // Filter out students already in the class
+                              const studentId = getCandidateIds(student)[0];
+                              if (newStudentIDs.includes(studentId)) return false;
+                              
+                              // If toggle is off, only show students from same section
+                              if (!showDifferentSectionStudents && classSection) {
+                                const isInSameSection = studentsInSameSection.some(s => getCandidateIds(s)[0] === studentId);
+                                return isInSameSection;
+                              }
+                              
+                              // If toggle is off, only show enrolled students
+                              if (!showNonEnrolledStudents) {
+                                return enrolledStudentIds.includes(String(studentId));
+                              }
+                              
+                              // Apply search filter
+                              if (studentSearchTerm.trim()) {
+                                const searchLower = studentSearchTerm.toLowerCase();
+                                const name = `${student.firstname || ''} ${student.lastname || ''}`.toLowerCase();
+                                const email = (student.email || '').toLowerCase();
+                                const schoolId = (student.schoolID || '').toLowerCase();
+                                
+                                return name.includes(searchLower) || 
+                                       email.includes(searchLower) || 
+                                       schoolId.includes(searchLower);
+                              }
+                              
+                              return true;
+                            });
+                          
+                          if (filteredStudents.length === 0) {
+                            return (
+                              <div className="text-center py-8 text-gray-500">
+                                <div className="text-4xl mb-2">🔍</div>
+                                <p className="font-medium">No students found</p>
+                                <p className="text-sm">Try adjusting your search terms or filters</p>
+                              </div>
+                            );
+                          }
+                          
+                          return filteredStudents.map(student => {
+                            const studentId = getCandidateIds(student)[0];
+                            const label = `${student.firstname || ''} ${student.lastname || ''}`.trim() || (student.email || studentId);
+                            const isInSameSection = classSection && studentsInSameSection.some(s => getCandidateIds(s)[0] === studentId);
+                            const isEnrolled = enrolledStudentIds.includes(String(studentId));
+                            
+                            return (
+                              <div key={studentId} className={`flex items-center justify-between p-3 rounded border ${
+                                isInSameSection ? 'bg-green-100 border-green-300' : 'bg-white border-gray-200'
+                              } ${!isEnrolled ? 'opacity-60' : ''}`}>
+                                <div className="flex items-center gap-3">
+                                  <span className={isInSameSection ? 'text-green-700' : 'text-gray-600'}>
+                                    {isInSameSection ? '✅' : '➕'}
+                                  </span>
+                                  <div>
+                                    <div className="font-medium">{label}</div>
+                                    <div className="text-sm text-gray-600">{student.email || student.schoolID}</div>
+                                    {isInSameSection && (
+                                      <div className="text-xs text-green-600 font-medium">✓ Same section</div>
+                                    )}
+                                    {!isEnrolled && (
+                                      <div className="text-xs text-red-600 font-medium">⚠️ Not enrolled in class</div>
+                                    )}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={async () => {
+                                    const studentId = getCandidateIds(student)[0];
+                                    
+                                    // Check if student is enrolled in this class
+                                    const isEnrolled = await isStudentEnrolledInClass(studentId);
+                                    
+                                    if (!isEnrolled) {
+                                      setValidationModal({
+                                        isOpen: true,
+                                        type: 'error',
+                                        title: 'Enrollment Required',
+                                        message: 'This student is not enrolled in this class. Students must be enrolled before they can be added to the class.'
+                                      });
+                                      return;
+                                    }
+                                    
+                                    // If enrolled, add to the list
+                                    setNewStudentIDs(prev => [...prev, studentId]);
+                                  }}
+                                  disabled={!isEnrolled}
+                                  className={`px-3 py-1 rounded text-sm font-medium ${
+                                    isEnrolled 
+                                      ? (isInSameSection 
+                                          ? 'bg-green-500 hover:bg-green-600 text-white' 
+                                          : 'bg-blue-500 hover:bg-blue-600 text-white')
+                                      : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                                  }`}
+                                  title={!isEnrolled ? 'Student must be enrolled in this class first' : ''}
+                                >
+                                  {isEnrolled 
+                                    ? (isInSameSection ? 'Add' : 'Add (Different Section)')
+                                    : 'Not Enrolled'
+                                  }
+                                </button>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4">
+                        <p className="text-gray-600">No active students found.</p>
+                        <p className="text-sm text-gray-500">Please check if there are any students in the system.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-3 justify-end pt-4 border-t">
                     <button
                       onClick={async () => {
                         const token = localStorage.getItem('token');
@@ -1608,6 +1887,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
                             const mapped = (allStudents || []).filter(s => getCandidateIds(s).some(v => ids.includes(String(v))));
                             setMembers({ faculty: updated.faculty || [], students: mapped });
                             setEditingMembers(false);
+                            setStudentSearchTerm('');
+                            setShowDifferentSectionStudents(true);
+                            setShowNonEnrolledStudents(false);
                             setValidationModal({
                               isOpen: true,
                               type: 'success',
@@ -1633,13 +1915,18 @@ export default function ClassContent({ selected, isFaculty = false }) {
                           });
                         }
                       }}
-                      className="bg-green-600 text-white px-3 py-1 rounded"
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-medium"
                     >
-                      Save
+                      Save Changes
                     </button>
                     <button
-                      onClick={() => setEditingMembers(false)}
-                      className="bg-gray-400 text-white px-3 py-1 rounded"
+                      onClick={() => {
+                        setEditingMembers(false);
+                        setStudentSearchTerm('');
+                        setShowDifferentSectionStudents(true);
+                        setShowNonEnrolledStudents(false);
+                      }}
+                      className="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded font-medium"
                     >
                       Cancel
                     </button>
@@ -1647,13 +1934,17 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 </div>
               ) : (
                 members.students.length > 0 ? (
-                  <ul>
+                  <div className="space-y-2">
                     {members.students.map(s => (
-                      <li key={s.userID || s._id}>
-                        {s.firstname} {s.lastname} (Student)
-                      </li>
+                      <div key={s.userID || s._id} className="flex items-center gap-3 bg-gray-50 p-3 rounded border">
+                        <span className="text-blue-700">👤</span>
+                        <div>
+                          <div className="font-medium">{s.firstname} {s.lastname}</div>
+                          <div className="text-sm text-gray-600">{s.email || s.schoolID}</div>
+                        </div>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 ) : (
                   <p className="text-gray-700">No students found.</p>
                 )
