@@ -440,6 +440,79 @@ export default function GradingSystem() {
 
   const hasAccents = (str) => /[^\u0000-\u007f]/.test(str || '');
 
+  // New function to validate required columns
+  const validateRequiredColumns = (row8, row9, row10) => {
+    console.log('🔍 Validating required columns...');
+    console.log('Row 8:', row8);
+    console.log('Row 9:', row9);
+    console.log('Row 10:', row10);
+    
+    const errors = [];
+
+    const norm = (v) => (v == null ? '' : String(v))
+      .replace(/[’‘‛‚`´]/g, "'")
+      .trim()
+      .replace(/\s+/g, ' ')
+      .toUpperCase();
+    const cellContains = (cell, target) => norm(cell).includes(norm(target));
+    const rowHas = (row, target) => (row || []).some(c => cellContains(c, target));
+    const rowHasAny = (row, targets) => targets.some(t => rowHas(row, t));
+
+    // Check Row 8 (Student No., Student Name, etc.)
+    if (!row8 || row8.length === 0) {
+      errors.push('Row 8 is missing or empty. This row should contain column titles.');
+      return errors;
+    }
+
+    // Accept common variants for Student No. and Student Name and ignore exact positions
+    const studentNoAliases = ['STUDENT NO.', 'STUDENT NO', 'STUDENT NUMBER'];
+    const studentNameAliases = ["STUDENT'S NAME", 'STUDENT NAME'];
+
+    if (!rowHasAny(row8, studentNoAliases)) {
+      errors.push('Missing required header in Row 8: Student No.');
+    }
+    if (!rowHasAny(row8, studentNameAliases)) {
+      errors.push("Missing required header in Row 8: STUDENT'S NAME");
+    }
+
+    // Check if Row 9 exists and has content
+    if (!row9 || row9.length === 0) {
+      errors.push('Row 9 is missing or empty. This row should contain group headers.');
+      return errors;
+    }
+
+    // Check if Row 10 exists and has content
+    if (!row10 || row10.length === 0) {
+      errors.push('Row 10 is missing or empty. This row should contain sub-headers.');
+      return errors;
+    }
+
+    // Required group headers (allow anywhere in the row; tolerate merged cells)
+    const requiredRow9Labels = ['WRITTEN WORKS 40%', 'PERFORMANCE TASKS 60%', 'INITIAL GRADE', 'QUARTERLY GRADE'];
+    requiredRow9Labels.forEach(label => {
+      if (!rowHas(row9, label)) {
+        errors.push(`Missing required header in Row 9: ${label}`);
+      }
+    });
+
+    // Required sub-headers (RAW/HPS/PS/WS should appear at least once per row)
+    const requiredRow10Labels = ['RAW', 'HPS', 'PS', 'WS'];
+    requiredRow10Labels.forEach(label => {
+      if (!rowHas(row10, label)) {
+        errors.push(`Missing required sub-header in Row 10: ${label}`);
+      }
+    });
+
+    console.log('🔍 Column validation complete. Errors found:', errors.length);
+    if (errors.length > 0) {
+      console.log('❌ Column validation errors:', errors);
+    } else {
+      console.log('✅ All required columns are present');
+    }
+
+    return errors;
+  };
+
   const validateExcelFile = async (file, selectedClassObj, selectedSectionId) => {
     // Read workbook
     const data = await file.arrayBuffer();
@@ -464,17 +537,70 @@ export default function GradingSystem() {
     const errors = [];
     const warnings = [];
 
-    // Missing column / header mismatch
-    if (!arraysEqual(row9.slice(0, expectedHeaderRow9.length), expectedHeaderRow9)) {
-      errors.push('Header row mismatch: expected row 9 group headers.');
+    // Detect metadata in header (first 12 rows) to verify section/class
+    const extractMeta = (rows) => {
+      const norm = (v) => (v == null ? '' : String(v)).trim();
+      const up = (v) => norm(v).toUpperCase();
+      const meta = { subjectCode: '', classCode: '', sectionName: '' };
+      const scanRows = rows.slice(0, Math.min(rows.length, 12));
+      for (const row of scanRows) {
+        if (!Array.isArray(row)) continue;
+        for (let c = 0; c < row.length; c++) {
+          const cell = up(row[c]);
+          if (cell.includes('CLASS CODE')) {
+            // Prefer next cell, else same cell suffix after ':'
+            meta.classCode = norm(row[c + 1] ?? '').trim() || norm(String(row[c]).split(':')[1] || '');
+          }
+          if (cell.includes('SUBJECT CODE')) {
+            meta.subjectCode = norm(row[c + 1] ?? '').trim() || norm(String(row[c]).split(':')[1] || '');
+          }
+          if (cell.includes('SECTION')) {
+            // If template ever includes Section: <name>
+            meta.sectionName = norm(row[c + 1] ?? '').trim() || norm(String(row[c]).split(':')[1] || '');
+          }
+        }
+      }
+      return meta;
+    };
+
+    const sheetMeta = extractMeta(aoa);
+    const selectedSectionObj = sections.find(s => s._id === selectedSectionId) || {};
+    const selectedSectionName = selectedSectionObj.sectionName || '';
+    const selectedClassCode = selectedClassObj?.classCode || selectedClassObj?.classID || '';
+
+    // If the sheet declares a class code or section name and it doesn't match, block upload
+    if (sheetMeta.classCode && selectedClassCode && String(sheetMeta.classCode).trim().toUpperCase() !== String(selectedClassCode).trim().toUpperCase()) {
+      errors.push(`This file appears to be for a different section/class. Found Class Code: "${sheetMeta.classCode}" (expected: "${selectedClassCode}")`);
     }
-    if (!arraysEqual(row10.slice(0, expectedHeaderRow10.length), expectedHeaderRow10)) {
-      errors.push('Header row mismatch: expected row 10 sub-headers.');
+    if (sheetMeta.sectionName && selectedSectionName && String(sheetMeta.sectionName).trim().toUpperCase() !== String(selectedSectionName).trim().toUpperCase()) {
+      errors.push(`This file appears to be for a different section. Found Section: "${sheetMeta.sectionName}" (expected: "${selectedSectionName}")`);
     }
-    // Loosely check row8 titles at A,B,C and M
-    if (!row8 || row8[0] !== 'Student No.' || (row8[1] || '').toString().toUpperCase().indexOf("STUDENT'S NAME") !== 0 || row8[2] === undefined || row8[12] === undefined) {
-      errors.push('Header row mismatch: expected row 8 titles.');
+
+    // NEW: Validate required columns first (relaxed, position-insensitive)
+    const columnErrors = validateRequiredColumns(row8, row9, row10);
+    if (columnErrors.length > 0) {
+      errors.push(...columnErrors);
+      return {
+        ok: false,
+        totalRows: aoa.length,
+        validRows: 0,
+        errors: errors,
+        warnings: warnings,
+        accentedNames: []
+      };
     }
+
+    // Remove strict header equality checks to avoid false positives with merged cells/formatting
+    // Kept as informational warnings if needed in future
+    // if (!arraysEqual(row9.slice(0, expectedHeaderRow9.length), expectedHeaderRow9)) {
+    //   warnings.push('Header row format differs from the canonical template (Row 9).');
+    // }
+    // if (!arraysEqual(row10.slice(0, expectedHeaderRow10.length), expectedHeaderRow10)) {
+    //   warnings.push('Header row format differs from the canonical template (Row 10).');
+    // }
+    // if (!row8 || row8[0] !== 'Student No.' || (row8[1] || '').toString().toUpperCase().indexOf("STUDENT'S NAME") !== 0) {
+    //   warnings.push('Header row format differs from the canonical template (Row 8).');
+    // }
 
     // Extra columns handling beyond W (23 columns)
     const maxCols = 23;
@@ -490,6 +616,8 @@ export default function GradingSystem() {
     const seenIds = new Set();
     const accentedNames = new Set();
     const validRowIndices = [];
+    const duplicateIds = new Set();
+    const unknownIds = new Set();
 
     for (let r = 10; r < aoa.length; r++) {
       const row = aoa[r];
@@ -505,7 +633,8 @@ export default function GradingSystem() {
       // Duplicate student id
       if (studentId) {
         if (seenIds.has(studentId)) {
-          errors.push(`Duplicate student ID at row ${r + 1}: ${studentId}`);
+          errors.push(`Row ${r + 1}: Column A (Student No.) has duplicate ID: ${studentId}`);
+          duplicateIds.add(studentId);
           continue;
         }
         seenIds.add(studentId);
@@ -513,7 +642,8 @@ export default function GradingSystem() {
 
       // Unknown student id (different section or not found)
       if (studentId && !idSet.has(studentId)) {
-        errors.push(`Student not found at row ${r + 1}: ${studentId}. Row skipped.`);
+        errors.push(`Row ${r + 1}: Column A (Student No.) has unknown ID: ${studentId}`);
+        unknownIds.add(studentId);
         continue;
       }
 
@@ -538,14 +668,17 @@ export default function GradingSystem() {
       ];
       for (const g of gradeCols) {
         const val = cells[g.idx];
-        if (val === '' || val === null || typeof val === 'undefined') continue; // allow empty
+        if (val === '' || val === null || typeof val === 'undefined') {
+          errors.push(`Row ${r + 1}: ${g.label} should only be from 0-100. Found: blank`);
+          continue;
+        }
         const num = parseFloat(val);
         if (Number.isNaN(num)) {
-          errors.push(`Non-numeric grade at row ${r + 1}, ${g.label}: "${val}"`);
+          errors.push(`Row ${r + 1}: ${g.label} should only be from 0-100. Found: "${val}"`);
           continue;
         }
         if (num < 0 || num > 100) {
-          errors.push(`Out-of-range grade at row ${r + 1}, ${g.label}: ${num} (must be 0-100)`);
+          errors.push(`Row ${r + 1}: ${g.label} should only be from 0-100. Found: ${num}`);
           continue;
         }
       }
@@ -554,6 +687,14 @@ export default function GradingSystem() {
     }
 
     // Finalize
+    if (duplicateIds.size > 0) {
+      const list = Array.from(duplicateIds).join(', ');
+      errors.unshift(`Column A (Student No.) contains duplicate IDs: ${list}`);
+    }
+    if (unknownIds.size > 0) {
+      const list = Array.from(unknownIds).join(', ');
+      errors.unshift(`Column A (Student No.) contains unknown IDs (not found in database): ${list}`);
+    }
     const summary = {
       totalRows: aoa.length,
       validRows: validRowIndices.length,
@@ -591,7 +732,23 @@ export default function GradingSystem() {
         setUploadProgress(100);
       } else {
         const err = await response.json().catch(() => ({}));
-        setValidationMessage('Upload failed: ' + (err.message || response.statusText));
+        
+        // Enhanced error message handling for column validation
+        let errorMessage = 'Upload failed: ';
+        if (err.errorType === 'column_structure') {
+          errorMessage += 'The Excel file has incorrect column structure. ';
+          if (err.errors && err.errors.length > 0) {
+            errorMessage += 'Please fix the following issues:\n\n';
+            errorMessage += err.errors.slice(0, 5).map(e => `• ${e}`).join('\n');
+            if (err.errors.length > 5) {
+              errorMessage += `\n\n... and ${err.errors.length - 5} more errors.`;
+            }
+          }
+        } else {
+          errorMessage += (err.message || response.statusText);
+        }
+        
+        setValidationMessage(errorMessage);
         setValidationType('error');
         setShowValidationModal(true);
       }

@@ -30,6 +30,17 @@ export async function processGradingExcel(fileBuffer, options) {
       };
     }
 
+    // NEW: Enhanced column validation
+    const columnValidationResult = validateExcelColumns(data);
+    if (!columnValidationResult.isValid) {
+      return {
+        success: false,
+        errors: columnValidationResult.errors,
+        warnings: columnValidationResult.warnings || [],
+        grades: []
+      };
+    }
+
     // Handle different header formats
     const header = data[0] || [];
     let headerMapping = {};
@@ -235,6 +246,113 @@ export async function processGradingExcel(fileBuffer, options) {
   } catch (error) {
     console.error('Error in processGradingExcel:', error);
     throw new Error(`Error processing Excel file: ${error.message}`);
+  }
+}
+
+/**
+ * NEW: Enhanced column validation function
+ * @param {Array} data - Excel data as array of arrays
+ * @returns {Object} Validation result with specific column error messages
+ */
+function validateExcelColumns(data) {
+  try {
+    console.log('🔍 [BACKEND] Starting column validation...');
+    console.log('🔍 [BACKEND] Data rows:', data.length);
+    
+    if (!data || data.length < 3) {
+      console.log('❌ [BACKEND] Insufficient data rows');
+      return {
+        isValid: false,
+        errors: ['Excel file must have at least 3 rows (headers + data)'],
+        warnings: []
+      };
+    }
+
+    const errors = [];
+    const warnings = [];
+
+    const norm = (v) => (v == null ? '' : String(v))
+      .replace(/[’‘‛‚`´]/g, "'")
+      .trim()
+      .replace(/\s+/g, ' ')
+      .toUpperCase();
+    const cellContains = (cell, target) => norm(cell).includes(norm(target));
+    const rowHas = (row, target) => (row || []).some(c => cellContains(c, target));
+    const rowHasAny = (row, targets) => targets.some(t => rowHas(row, t));
+
+    // Expected JuanLMS structure rows (using 1-based labeling in messages)
+    const row8 = data[7] || [];
+    const row9 = data[8] || [];
+    const row10 = data[9] || [];
+
+    console.log('🔍 [BACKEND] Row 8 (index 7):', row8);
+    console.log('🔍 [BACKEND] Row 9 (index 8):', row9);
+    console.log('🔍 [BACKEND] Row 10 (index 9):', row10);
+
+    // Validate Row 8 - Column titles
+    if (row8.length === 0) {
+      errors.push('Row 8 is missing or empty. This row should contain column titles.');
+    } else {
+      const studentNoAliases = ['STUDENT NO.', 'STUDENT NO', 'STUDENT NUMBER'];
+      const studentNameAliases = ["STUDENT'S NAME", 'STUDENT NAME'];
+      if (!rowHasAny(row8, studentNoAliases)) {
+        errors.push('Missing required header in Row 8: Student No.');
+      }
+      if (!rowHasAny(row8, studentNameAliases)) {
+        errors.push("Missing required header in Row 8: STUDENT'S NAME");
+      }
+    }
+
+    // Validate Row 9 - Group headers (allow anywhere; tolerate merged cells)
+    if (row9.length === 0) {
+      errors.push('Row 9 is missing or empty. This row should contain group headers.');
+    } else {
+      const requiredRow9Labels = ['WRITTEN WORKS 40%', 'PERFORMANCE TASKS 60%', 'INITIAL GRADE', 'QUARTERLY GRADE'];
+      requiredRow9Labels.forEach(label => {
+        if (!rowHas(row9, label)) {
+          errors.push(`Missing required header in Row 9: ${label}`);
+        }
+      });
+    }
+
+    // Validate Row 10 - Sub-headers (appear at least once)
+    if (row10.length === 0) {
+      errors.push('Row 10 is missing or empty. This row should contain sub-headers.');
+    } else {
+      const requiredRow10Labels = ['RAW', 'HPS', 'PS', 'WS'];
+      requiredRow10Labels.forEach(label => {
+        if (!rowHas(row10, label)) {
+          errors.push(`Missing required sub-header in Row 10: ${label}`);
+        }
+      });
+    }
+
+    // Column count soft checks -> warnings only
+    const colCount = (row8 || []).length;
+    if (colCount > 25) {
+      warnings.push(`File contains ${colCount} columns. Extra columns beyond column Y may be ignored.`);
+    }
+
+    console.log('🔍 [BACKEND] Column validation complete. Errors found:', errors.length);
+    if (errors.length > 0) {
+      console.log('❌ [BACKEND] Column validation errors:', errors);
+    } else {
+      console.log('✅ [BACKEND] All required columns are present');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings
+    };
+
+  } catch (error) {
+    console.error('❌ [BACKEND] Error in column validation:', error);
+    return {
+      isValid: false,
+      errors: [`Error validating columns: ${error.message}`],
+      warnings: []
+    };
   }
 }
 
