@@ -63,7 +63,6 @@ import Admin_Registrants from './component/Admin/Admin_Registrants';
 
 // VPE Access
 import VPE_Dashboard from './component/VPE/VPE_Dashboard';
-import VPE_Grades from './component/VPE/VPE_Grades';
 import VPE_Chats from './component/VPE/VPE_Chats';
 import VPE_Calendar from './component/VPE/VPE_Calendar';
 import VPE_AuditTrail from './component/VPE/VPE_AuditTrail';
@@ -197,7 +196,6 @@ function App() {
         {/* VPE */}
         <Route path="/VPE_dashboard" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Dashboard/></ProtectedRoute>}/>
         <Route path="/VPE_chats" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Chats /></ProtectedRoute>}/>
-        <Route path="/VPE_grades" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Grades /></ProtectedRoute>}/>
         <Route path="/VPE_calendar" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_Calendar /></ProtectedRoute>}/>
         <Route path="/VPE_audit_trail" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_AuditTrail/></ProtectedRoute>}/>
         <Route path="/VPE_faculty_report" element={<ProtectedRoute allowedRoles={['vice president of education']}><VPE_FacultyReport/></ProtectedRoute>}/>

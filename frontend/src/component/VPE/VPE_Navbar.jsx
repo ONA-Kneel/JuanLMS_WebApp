@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from "react-router-dom";
 import dashboardIcon from "../../assets/dashboard.png";
 import chatsIcon from "../../assets/chats.png";
 import progressIcon from "../../assets/progress.png";
-import gradesIcon from "../../assets/grades.png";
 import calendarIcon from "../../assets/calendar.png";
 import facultyReportIcon from "../../assets/facultyreport.png";
 import postAnnouncementIcon from "../../assets/announcement.png";
@@ -20,7 +19,6 @@ const VPE_Navbar = () => {
         { path: "/vpe_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
         { path: "/vpe_calendar", icon: calendarIcon, label: "CALENDAR" },
         { path: "/vpe_faculty_report", icon: facultyReportIcon, label: "FACULTY REPORT" },
-        { path: "/vpe_grades", icon: gradesIcon, label: "GRADES" },
         { path: "/vpe_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
         { path: "/vpe_chats", icon: chatsIcon, label: "CHATS" },
         { path: "/vpe_post_announcement", icon: postAnnouncementIcon, label: "ANNOUNCEMENT" },

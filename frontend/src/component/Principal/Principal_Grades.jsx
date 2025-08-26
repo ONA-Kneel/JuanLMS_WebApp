@@ -253,7 +253,7 @@ export default function Principal_Grades() {
     fetchSubjects();
   }, [selectedSection, selectedStrand, selectedGradeLevel, currentTerm, academicYear]);
 
-  // Fetch grades when subject is selected
+  // Fetch grades when subject is selected - using improved logic from Student_Grades.jsx
   useEffect(() => {
     if (!selectedSubject || !selectedSection || !selectedStrand || !selectedGradeLevel) {
       setGrades([]);
@@ -266,25 +266,20 @@ export default function Principal_Grades() {
         setLoadingGrades(true);
         const token = localStorage.getItem("token");
         
-        // Debug: Check what's in the token
-        if (token) {
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            console.log('🔍 JWT Token Payload:', payload);
-            console.log('🔍 User Role:', payload.role);
-            console.log('🔍 User ID:', payload._id);
-          } catch (e) {
-            console.log('🔍 Could not decode JWT token:', e);
-          }
-        }
+        console.log('🔍 Fetching grades for:', {
+          gradeLevel: selectedGradeLevel,
+          strand: selectedStrand,
+          section: selectedSection,
+          subject: selectedSubject,
+          term: currentTerm?.termName,
+          year: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'N/A'
+        });
         
-        // Use the same approach as GradingSystem.jsx - fetch students first, then their grades
-        let grades = [];
+        let allStudents = [];
+        let allGrades = [];
         
+        // Step 1: Get ALL students in the selected section using the comprehensive endpoint
         try {
-          console.log('🔍 Using GradingSystem.jsx approach to fetch grades...');
-          
-          // Step 1: Try to get students from the comprehensive endpoint (same as GradingSystem.jsx)
           const comprehensiveResponse = await fetch(
             `${API_BASE}/api/grading/class/all/section/${selectedSection}/comprehensive?` +
             `trackName=${selectedStrand}&` +
@@ -299,135 +294,153 @@ export default function Principal_Grades() {
           
           if (comprehensiveResponse.ok) {
             const comprehensiveData = await comprehensiveResponse.json();
-            console.log('🔍 Comprehensive endpoint response:', comprehensiveData);
+            console.log('✅ Comprehensive endpoint response:', comprehensiveData);
             
             if (comprehensiveData.success && comprehensiveData.data && comprehensiveData.data.students) {
-              const students = comprehensiveData.data.students;
-              console.log(`🔍 Found ${students.length} students from comprehensive endpoint`);
-              
-              // Step 2: For each student, fetch their grades using the student endpoint (same as GradingSystem.jsx)
-              for (const student of students.slice(0, 20)) { // Limit to first 20 for performance
-                try {
-                  const studentID = student.userID || student.studentID || student._id || student.id;
-                  if (studentID) {
-                    const gradeResponse = await fetch(`${API_BASE}/api/semestral-grades/student/${studentID}`, {
-                      headers: { "Authorization": `Bearer ${token}` }
-                    });
-                    
-                    if (gradeResponse.ok) {
-                      const gradeData = await gradeResponse.json();
-                      if (gradeData.success && gradeData.grades) {
-                        // Filter grades by our criteria (same filtering logic as GradingSystem.jsx)
-                        const filteredGrades = gradeData.grades.filter(grade => {
-                          const subjectMatch = grade.subjectName?.toLowerCase().includes(selectedSubject.toLowerCase()) ||
-                                             grade.subjectCode?.toLowerCase().includes(selectedSubject.toLowerCase());
-                          const sectionMatch = !grade.section || grade.section === selectedSection;
-                          const termMatch = grade.termName === currentTerm?.termName;
-                          const yearMatch = grade.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`;
-                          
-                          return subjectMatch && sectionMatch && termMatch && yearMatch;
-                        });
-                        
-                        if (filteredGrades.length > 0) {
-                          // Transform the data to match our expected format
-                          const transformedGrades = filteredGrades.map(grade => ({
-                            _id: student._id || studentID,
-                            studentName: student.name || student.studentName || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
-                            schoolID: studentID,
-                            grades: {
-                              quarter1: grade.quarter1 || grade.first_quarter || '-',
-                              quarter2: grade.quarter2 || grade.second_quarter || '-',
-                              quarter3: grade.quarter3 || grade.third_quarter || '-',
-                              quarter4: grade.quarter4 || grade.fourth_quarter || '-',
-                              semesterFinal: grade.semesterFinal || grade.final_grade || '-',
-                              remarks: grade.remarks || grade.remark || '-'
-                            },
-                            subjectName: grade.subjectName,
-                            subjectCode: grade.subjectCode,
-                            section: grade.section || selectedSection
-                          }));
-                          
-                          grades.push(...transformedGrades);
-                        }
-                      }
-                    }
-                  }
-                } catch (error) {
-                  console.log(`🔍 Error fetching grades for student ${student.name}:`, error);
-                }
-              }
+              allStudents = comprehensiveData.data.students;
+              console.log(`✅ Found ${allStudents.length} students in section ${selectedSection}`);
             }
-          } else {
-            console.log('🔍 Comprehensive endpoint failed, trying alternative approach...');
           }
-        } catch (error) {
-          console.log('🔍 Comprehensive approach failed:', error);
+        } catch {
+          console.log('⚠️ Comprehensive endpoint failed, trying alternative...');
         }
         
-        // If no grades found, try the sections approach (same as GradingSystem.jsx fallback)
-        if (grades.length === 0) {
+        // Step 2: If no students found, try to get from sections endpoint
+        if (allStudents.length === 0) {
           try {
-            console.log('🔍 Trying sections approach as fallback...');
             const sectionsResponse = await fetch(`${API_BASE}/api/sections?schoolYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}&termName=${currentTerm?.termName}`, {
               headers: { "Authorization": `Bearer ${token}` }
             });
             
             if (sectionsResponse.ok) {
               const sections = await sectionsResponse.json();
-              console.log('🔍 Sections found:', sections);
+              const matchingSection = sections.find(section => 
+                section.sectionName === selectedSection && 
+                section.strandName === selectedStrand &&
+                section.gradeLevel === selectedGradeLevel
+              );
               
-              // Look for grades in the sections data
-              if (sections && sections.length > 0) {
-                const matchingSection = sections.find(section => 
-                  section.sectionName === selectedSection && 
-                  section.strandName === selectedStrand &&
-                  section.gradeLevel === selectedGradeLevel
-                );
-                
-                if (matchingSection && matchingSection.grades) {
-                  console.log('🔍 Found grades in section data:', matchingSection.grades);
-                  grades = matchingSection.grades;
-                }
+              if (matchingSection && matchingSection.students) {
+                allStudents = matchingSection.students;
+                console.log(`✅ Found ${allStudents.length} students from sections endpoint`);
               }
             }
           } catch (error) {
-            console.log('🔍 Sections approach failed:', error);
+            console.log('⚠️ Sections endpoint failed:', error);
           }
         }
-
-        console.log('🔍 Final grades found:', grades);
         
-        if (grades.length > 0) {
-          // Filter grades on the frontend based on our selection criteria
-          const filteredGrades = grades.filter(grade => {
-            // Filter by subject name or code (case-insensitive)
-            const subjectMatch = grade.subjectName?.toLowerCase().includes(selectedSubject.toLowerCase()) ||
-                               grade.subjectCode?.toLowerCase().includes(selectedSubject.toLowerCase());
-            
-            // Filter by section (use section field from database)
-            const sectionMatch = !grade.section || grade.section === selectedSection;
-            
-            return subjectMatch && sectionMatch;
-          });
+        // Step 3: For each student, fetch their grades for the selected subject
+        if (allStudents.length > 0) {
+          console.log(`🔍 Fetching grades for ${allStudents.length} students...`);
           
-          setGrades(filteredGrades);
-          
-          // Extract unique students from filtered grades
-          const uniqueStudents = [...new Set(filteredGrades.map(grade => ({
-            _id: grade._id,
-            name: grade.studentName,
-            schoolID: grade.schoolID
-          })))];
-          
-          setStudents(uniqueStudents);
-        } else {
-          // If no grades found, set empty arrays
-          setGrades([]);
-          setStudents([]);
+          for (const student of allStudents) {
+            try {
+              const studentID = student.userID || student.studentID || student._id || student.id;
+              if (!studentID) continue;
+              
+              // Try semestral grades first (same as Student_Grades.jsx)
+              const semestralResponse = await fetch(
+                `${API_BASE}/api/semestral-grades/student/${studentID}?termName=${currentTerm?.termName}&academicYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
+                {
+                  headers: { "Authorization": `Bearer ${token}` }
+                }
+              );
+              
+              if (semestralResponse.ok) {
+                const semestralData = await semestralResponse.json();
+                if (semestralData.success && semestralData.grades) {
+                  // Filter grades for the selected subject
+                  const subjectGrades = semestralData.grades.filter(grade => {
+                    const subjectMatch = grade.subjectName?.toLowerCase().includes(selectedSubject.toLowerCase()) ||
+                                       grade.subjectCode?.toLowerCase().includes(selectedSubject.toLowerCase());
+                    const sectionMatch = !grade.section || grade.section === selectedSection;
+                    const termMatch = grade.termName === currentTerm?.termName;
+                    const yearMatch = grade.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`;
+                    
+                    return subjectMatch && sectionMatch && termMatch && yearMatch;
+                  });
+                  
+                  if (subjectGrades.length > 0) {
+                    // Transform to match expected format (same as Student_Grades.jsx)
+                    const transformedGrades = subjectGrades.map(grade => ({
+                      _id: student._id || studentID,
+                      studentName: student.name || student.studentName || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+                      schoolID: studentID,
+                      grades: {
+                        quarter1: grade.grades?.quarter1 || grade.quarter1 || '-',
+                        quarter2: grade.grades?.quarter2 || grade.quarter2 || '-',
+                        quarter3: grade.grades?.quarter3 || grade.quarter3 || '-',
+                        quarter4: grade.grades?.quarter4 || grade.quarter4 || '-',
+                        semesterFinal: grade.grades?.semesterFinal || grade.semesterFinal || '-',
+                        remarks: grade.grades?.remarks || grade.remarks || '-'
+                      },
+                      subjectName: grade.subjectName,
+                      subjectCode: grade.subjectCode,
+                      section: grade.section || selectedSection
+                    }));
+                    
+                    allGrades.push(...transformedGrades);
+                    continue; // Skip traditional grades if we found semestral grades
+                  }
+                }
+              }
+              
+              // Fallback: Try traditional grades (same as Student_Grades.jsx)
+              const traditionalResponse = await fetch(`${API_BASE}/api/traditional-grades/student/${studentID}`, {
+                headers: { "Authorization": `Bearer ${token}` }
+              });
+              
+              if (traditionalResponse.ok) {
+                const traditionalData = await traditionalResponse.json();
+                if (traditionalData.success && traditionalData.grades) {
+                  // Filter grades for the selected subject
+                  const subjectGrades = traditionalData.grades.filter(grade => {
+                    const subjectMatch = grade.subjectName?.toLowerCase().includes(selectedSubject.toLowerCase()) ||
+                                       grade.subjectCode?.toLowerCase().includes(selectedSubject.toLowerCase());
+                    const sectionMatch = !grade.section || grade.section === selectedSection;
+                    
+                    return subjectMatch && sectionMatch;
+                  });
+                  
+                  if (subjectGrades.length > 0) {
+                    // Transform traditional grades to match expected format
+                    const transformedGrades = subjectGrades.map(grade => ({
+                      _id: student._id || studentID,
+                      studentName: student.name || student.studentName || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+                      schoolID: studentID,
+                      grades: {
+                        quarter1: grade.quarter1 || '-',
+                        quarter2: grade.quarter2 || '-',
+                        quarter3: grade.quarter3 || '-',
+                        quarter4: grade.quarter4 || '-',
+                        semesterFinal: grade.semesterFinal || '-',
+                        remarks: grade.remarks || '-'
+                      },
+                      subjectName: grade.subjectName,
+                      subjectCode: grade.subjectCode,
+                      section: grade.section || selectedSection
+                    }));
+                    
+                    allGrades.push(...transformedGrades);
+                  }
+                }
+              }
+              
+                         } catch (error) {
+               console.log(`⚠️ Error fetching grades for student ${student.name || 'Unknown'}:`, error);
+             }
+          }
         }
-
+        
+        console.log(`✅ Final result: ${allGrades.length} grades found for ${allStudents.length} students`);
+        
+        // Set the grades and students
+        setGrades(allGrades);
+        setStudents(allStudents);
+        
       } catch (error) {
-        console.error('Error fetching grades:', error);
+        console.error('❌ Error fetching grades:', error);
         setGrades([]);
         setStudents([]);
       } finally {
@@ -467,32 +480,33 @@ export default function Principal_Grades() {
     setSelectedSubject(subject);
   };
 
-  // Helper function to get grade display based on term
-  const getGradeDisplay = (studentGrades) => {
+  // Helper function to get semester name based on term (from Student_Grades.jsx)
+  const getSemesterName = (termName) => {
+    if (termName === 'Term 1') return '1st Semester';
+    if (termName === 'Term 2') return '2nd Semester';
+    return termName;
+  };
+
+  // Helper function to get quarter labels based on current term (from Student_Grades.jsx)
+  const getQuarterLabels = () => {
     if (currentTerm?.termName === 'Term 1') {
-      return {
-        quarter1: studentGrades.quarter1 || '-',
-        quarter2: studentGrades.quarter2 || '-',
-        semesterFinal: studentGrades.semesterFinal || '-',
-        remarks: studentGrades.remarks || '-'
-      };
+      return { q1: '1st Quarter', q2: '2nd Quarter' };
     } else if (currentTerm?.termName === 'Term 2') {
-      return {
-        quarter3: studentGrades.quarter3 || '-',
-        quarter4: studentGrades.quarter4 || '-',
-        semesterFinal: studentGrades.semesterFinal || '-',
-        remarks: studentGrades.remarks || '-'
-      };
+      return { q1: '3rd Quarter', q2: '4th Quarter' };
     } else {
-      // Fallback to traditional grades
-      return {
-        prelims: studentGrades.prelims || '-',
-        midterms: studentGrades.midterms || '-',
-        final: studentGrades.final || '-',
-        finalGrade: studentGrades.finalGrade || '-',
-        remark: studentGrades.remark || '-'
-      };
+      return { q1: '1st Quarter', q2: '2nd Quarter' };
     }
+  };
+
+  // Helper function to calculate semestral grade (from Student_Grades.jsx)
+  const calculateSemestralGrade = (quarter1, quarter2) => {
+    if (!quarter1 || !quarter2) return '';
+    
+    const q1 = parseFloat(quarter1) || 0;
+    const q2 = parseFloat(quarter2) || 0;
+    
+    const semestralGrade = (q1 + q2) / 2;
+    return semestralGrade.toFixed(2);
   };
 
   return (
@@ -599,13 +613,13 @@ export default function Principal_Grades() {
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="p-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold">
-                {academicYear?.schoolYearStart}-{academicYear?.schoolYearEnd} {currentTerm?.termName === 'Term 1' ? '1st Semester' : currentTerm?.termName === 'Term 2' ? '2nd Semester' : currentTerm?.termName}
+                {academicYear?.schoolYearStart}-{academicYear?.schoolYearEnd} {currentTerm ? getSemesterName(currentTerm.termName) : ''}
               </h3>
               <p className="text-sm text-gray-600 mt-1">
                 {selectedGradeLevel} - {selectedStrand} - {selectedSection} - {selectedSubject}
               </p>
               <p className="text-sm text-gray-500 mt-1">
-                Showing {grades.length} student grade(s) for {selectedSubject}
+                Showing {students.length} student(s) in section, {grades.length} with grades posted
               </p>
             </div>
 
@@ -613,29 +627,60 @@ export default function Principal_Grades() {
               <div className="p-8 text-center">
                 <p className="text-gray-600">Loading grades...</p>
               </div>
-            ) : grades.length > 0 ? (
+            ) : students.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th className="p-3 text-left font-medium text-gray-700">Student Name</th>
                       <th className="p-3 text-left font-medium text-gray-700">Student ID</th>
-                      <th className="p-3 text-center font-medium text-gray-700">1st Quarter</th>
-                      <th className="p-3 text-center font-medium text-gray-700">2nd Quarter</th>
+                      <th className="p-3 text-center font-medium text-gray-700">{getQuarterLabels().q1}</th>
+                      <th className="p-3 text-center font-medium text-gray-700">{getQuarterLabels().q2}</th>
                       <th className="p-3 text-center font-medium text-gray-700">Semestral Grade</th>
                       <th className="p-3 text-center font-medium text-gray-700">Remarks</th>
+                      <th className="p-3 text-center font-medium text-gray-700">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {grades.map((grade, index) => {
+                    {students.map((student, index) => {
+                      // Find grades for this student
+                      const studentGrades = grades.find(grade => 
+                        grade._id === student._id || 
+                        grade.schoolID === (student.userID || student.studentID || student._id || student.id)
+                      );
+                      
+                      const studentName = student.name || student.studentName || `${student.firstname || ''} ${student.lastname || ''}`.trim();
+                      const studentID = student.userID || student.studentID || student._id || student.id;
+                      
                       return (
-                        <tr key={grade._id || index} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="p-3 font-medium">{grade.studentName || 'N/A'}</td>
-                          <td className="p-3 text-gray-600">{grade.schoolID || 'N/A'}</td>
-                          <td className="p-3 text-center">{grade.grades?.quarter1 || '-'}</td>
-                          <td className="p-3 text-center">{grade.grades?.quarter2 || '-'}</td>
-                          <td className="p-3 text-center font-semibold">{grade.grades?.semesterFinal || '-'}</td>
-                          <td className="p-3 text-center">{grade.grades?.remarks || '-'}</td>
+                        <tr key={student._id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="p-3 font-medium">{studentName || 'N/A'}</td>
+                          <td className="p-3 text-gray-600">{studentID || 'N/A'}</td>
+                          <td className="p-3 text-center">
+                            {studentGrades?.grades?.quarter1 || '-'}
+                          </td>
+                          <td className="p-3 text-center">
+                            {studentGrades?.grades?.quarter2 || '-'}
+                          </td>
+                          <td className="p-3 text-center font-semibold">
+                            {studentGrades?.grades?.semesterFinal || 
+                             (studentGrades?.grades?.quarter1 && studentGrades?.grades?.quarter2 ? 
+                              calculateSemestralGrade(studentGrades.grades.quarter1, studentGrades.grades.quarter2) : '-')}
+                          </td>
+                          <td className="p-3 text-center">
+                            {studentGrades?.grades?.remarks || '-'}
+                          </td>
+                          <td className="p-3 text-center">
+                            {studentGrades ? (
+                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                Grades Posted
+                              </span>
+                            ) : (
+                              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                                No Grades
+                              </span>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
@@ -644,8 +689,8 @@ export default function Principal_Grades() {
               </div>
             ) : (
               <div className="p-8 text-center text-gray-500">
-                <p>No grades found for the selected criteria.</p>
-                <p className="text-sm mt-2">Please ensure all parameters are selected and grades have been posted.</p>
+                <p>No students found in the selected section.</p>
+                <p className="text-sm mt-2">Please ensure all parameters are selected correctly.</p>
               </div>
             )}
           </div>
@@ -659,19 +704,22 @@ export default function Principal_Grades() {
               1. Select a <strong>Grade Level</strong> (e.g., Grade 11)<br/>
               2. Choose a <strong>Strand</strong> (e.g., ABM, STEM, HUMSS)<br/>
               3. Pick a <strong>Section</strong> (e.g., ABM111, STEM112)<br/>
-              4. Select a <strong>Subject</strong> to view student grades
+              4. Select a <strong>Subject</strong> to view ALL student grades in that section
             </p>
             <p className="text-sm text-blue-600 mt-2">
               💡 <strong>Data Source:</strong> Now reading from actual database collections (Sections, Subjects, SemestralGrades)
             </p>
             <p className="text-sm text-blue-600 mt-1">
-              🔄 <strong>Data Fetching:</strong> Using the same approach as GradingSystem.jsx to avoid role restrictions
+              🔄 <strong>Data Fetching:</strong> Using improved logic from Student_Grades.jsx for better data retrieval
+            </p>
+            <p className="text-sm text-blue-600 mt-1">
+              📊 <strong>Student Display:</strong> Shows ALL students in the section, with status indicators for grades posted
             </p>
           </div>
         )}
 
         {/* Debug Information - Remove this in production */}
-        {process.env.NODE_ENV === 'development' && (
+        {import.meta.env.MODE === 'development' && (
           <div className="bg-white rounded-lg shadow-md p-6 mt-6">
             <h3 className="text-lg font-semibold mb-4">🔍 Debug Info</h3>
             <div className="text-sm space-y-2">

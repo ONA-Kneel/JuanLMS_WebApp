@@ -163,6 +163,7 @@ export default function SupportModal({ onClose }) {
       case 'closed':
         return {
           icon: <CheckCircle size={16} />,
+          bgColor: 'bg-green-100',
           color: 'text-green-800',
           label: 'Closed'
         };
@@ -577,7 +578,7 @@ export default function SupportModal({ onClose }) {
                 // Show all tickets
                 <div className="space-y-3">
                   {sortedTickets.length === 0 ? (
-                    <div className="text-center text-red-500 py-6">Ticket is not found</div>
+                    <div className="text-center text-red-500 py-6">Ticket not found</div>
                   ) : (
                     <>
                       {sortedTickets.map(ticket => {
