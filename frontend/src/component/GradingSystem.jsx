@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-export default function GradingSystem() {
+export default function GradingSystem({ onStageTemporaryGrades }) {
   const [facultyClasses, setFacultyClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
@@ -422,14 +422,38 @@ export default function GradingSystem() {
           const membersData = await membersRes.json();
           if (membersData?.students?.length) {
             students = membersData.students;
+          } else if (Array.isArray(membersData)) {
+            students = membersData;
+          }
+        }
+      }
+    } catch {}
+    try {
+      if (students.length === 0 && selectedClassObj.classID && academicYear && currentTerm) {
+        const classId = selectedClassObj.classID;
+        const sgRes = await fetch(`${API_BASE}/api/semestral-grades/class/${classId}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (sgRes.ok) {
+          const sgData = await sgRes.json();
+          if (sgData?.success && Array.isArray(sgData.grades)) {
+            const unique = [];
+            const seen = new Set();
+            sgData.grades.forEach(g => {
+              const sid = g.schoolID || g.studentID || g._id;
+              if (sid && !seen.has(sid)) {
+                seen.add(sid);
+                unique.push({ schoolID: sid, name: g.studentName });
+              }
+            });
+            students = unique;
           }
         }
       }
     } catch {}
 
-    // Frontend guard: keep only users with role === 'students'
-    const studentsOnly = (students || []).filter(s => (s.role || '').toLowerCase() === 'students');
-    const normalized = studentsOnly.map((s, idx) => ({
+    const candidates = (students || []).filter(s => (s.studentID || s.schoolID || s.userID || s.id || s._id));
+    const normalized = candidates.map((s, idx) => ({
       id: s.studentID || s.schoolID || s.userID || s.id || s._id || `S${idx + 1}`,
       name: s.name || s.studentName || `${s.firstname || ''} ${s.lastname || ''}`.trim()
     }));
@@ -710,48 +734,84 @@ export default function GradingSystem() {
     return { ok: true, ...summary };
   };
 
+  // Parse a validated Excel file into preview grade records for staging on the Grades screen
+  const parseExcelForPreview = async (file, selectedClassObj) => {
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) return [];
+    const sheetName = workbook.SheetNames[0];
+    const ws = workbook.Sheets[sheetName];
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+    const termName = currentTerm?.termName || 'Term 1';
+    const records = [];
+    const maxCols = 23;
+    for (let r = 10; r < aoa.length; r++) {
+      const row = aoa[r];
+      if (!row || row.length === 0 || row.every(c => String(c).trim() === '')) continue;
+      const cells = row.slice(0, maxCols);
+      const studentId = String(cells[0] || '').trim();
+      const studentName = String(cells[1] || '').trim();
+      if (!studentId) continue;
+      // Quarterly Grade columns per our template: L (index 11) and V (index 21)
+      const qA = parseFloat(cells[11]);
+      const qB = parseFloat(cells[21]);
+      const isNum = (n) => typeof n === 'number' && !Number.isNaN(n);
+
+      let gradePayload = { quarter1: '', quarter2: '', quarter3: '', quarter4: '' };
+      if (termName === 'Term 1') {
+        gradePayload.quarter1 = isNum(qA) ? qA.toFixed(2) : '';
+        gradePayload.quarter2 = isNum(qB) ? qB.toFixed(2) : '';
+      } else {
+        gradePayload.quarter3 = isNum(qA) ? qA.toFixed(2) : '';
+        gradePayload.quarter4 = isNum(qB) ? qB.toFixed(2) : '';
+      }
+
+      const a = isNum(qA) ? qA : null;
+      const b = isNum(qB) ? qB : null;
+      const sem = a != null && b != null ? ((a + b) / 2).toFixed(2) : '';
+      const semNum = parseFloat(sem);
+      let remarks = '';
+      if (sem) {
+        if (semNum >= 85) remarks = 'PASSED';
+        else if (semNum >= 80) remarks = 'INCOMPLETE';
+        else if (semNum >= 75) remarks = 'REPEAT';
+        else remarks = 'FAILED';
+      }
+
+      records.push({
+        schoolID: studentId,
+        studentName,
+        grades: {
+          ...gradePayload,
+          semesterFinal: sem,
+          remarks
+        },
+        subjectCode: selectedClassObj?.classCode || selectedClassObj?.className,
+        subjectName: selectedClassObj?.className,
+      });
+    }
+    return records;
+  };
+
   const proceedUploadAfterConfirm = async () => {
     try {
       setShowConfirmUpload(false);
       if (!pendingValidatedFile) return;
       setUploadLoading(true);
-      setUploadStatus('Uploading...');
-      const formData = new FormData();
-      formData.append('file', pendingValidatedFile);
-      formData.append('classId', facultyClasses[selectedClass]._id);
-      formData.append('sectionId', selectedSection);
-
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/api/upload-grades`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-      if (response.ok) {
-        setSuccessMessage('Grades uploaded successfully.');
-        setUploadProgress(100);
-      } else {
-        const err = await response.json().catch(() => ({}));
-        
-        // Enhanced error message handling for column validation
-        let errorMessage = 'Upload failed: ';
-        if (err.errorType === 'column_structure') {
-          errorMessage += 'The Excel file has incorrect column structure. ';
-          if (err.errors && err.errors.length > 0) {
-            errorMessage += 'Please fix the following issues:\n\n';
-            errorMessage += err.errors.slice(0, 5).map(e => `• ${e}`).join('\n');
-            if (err.errors.length > 5) {
-              errorMessage += `\n\n... and ${err.errors.length - 5} more errors.`;
-            }
-          }
-        } else {
-          errorMessage += (err.message || response.statusText);
-        }
-        
-        setValidationMessage(errorMessage);
-        setValidationType('error');
-        setShowValidationModal(true);
+      setUploadStatus('Staging...');
+      const selectedClassObj = facultyClasses[selectedClass];
+      const previewRecords = await parseExcelForPreview(pendingValidatedFile, selectedClassObj);
+      if (typeof onStageTemporaryGrades === 'function') {
+        onStageTemporaryGrades(previewRecords, {
+          classObj: selectedClassObj,
+          sectionId: selectedSection,
+          termName: currentTerm?.termName,
+          academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''
+        });
       }
+      setSuccessMessage(`Staged ${previewRecords.length} student grade(s) to the Report table. Review and click Post Grades to finalize.`);
+      setUploadProgress(100);
     } catch (e) {
       setValidationMessage('Upload failed: ' + e.message);
       setValidationType('error');
@@ -781,11 +841,16 @@ export default function GradingSystem() {
 
     try {
       setUploadLoading(true);
-      setUploadProgress(10);
+      setUploadProgress(5);
+      setUploadStatus('Preparing...');
+      await new Promise(r => setTimeout(r, 150));
+      setUploadProgress(15);
       setUploadStatus('Validating file...');
 
       const selectedClassObj = facultyClasses[selectedClass];
       const result = await validateExcelFile(excelFile, selectedClassObj, selectedSection);
+      setUploadProgress(40);
+      setUploadStatus('Validation complete');
 
       if (!result.ok) {
         const msg = [
@@ -813,14 +878,31 @@ export default function GradingSystem() {
         setPendingValidatedSummary(result);
         setShowConfirmUpload(true);
         setUploadLoading(false);
-        setUploadProgress(0);
-        setUploadStatus('');
+        setUploadProgress(50);
+        setUploadStatus('Awaiting confirmation...');
         return;
       }
 
-      // No warnings: upload directly
-      setPendingValidatedFile(excelFile);
-      await proceedUploadAfterConfirm();
+      // No warnings: stage records to the Grades screen as temporary (not posted)
+      setUploadStatus('Parsing file...');
+      const previewRecords = await parseExcelForPreview(excelFile, selectedClassObj);
+      setUploadProgress(70);
+      if (typeof onStageTemporaryGrades === 'function') {
+        onStageTemporaryGrades(previewRecords, {
+          classObj: selectedClassObj,
+          sectionId: selectedSection,
+          termName: currentTerm?.termName,
+          academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''
+        });
+      }
+      setUploadStatus('Finalizing...');
+      setUploadProgress(95);
+      await new Promise(r => setTimeout(r, 200));
+      setUploadProgress(100);
+      await new Promise(r => setTimeout(r, 200));
+      setSuccessMessage(`Staged ${previewRecords.length} student grade(s) to the Report table. Review and click Post Grades to finalize.`);
+      setUploadStatus('Completed');
+      setUploadLoading(false);
     } catch (error) {
       setValidationMessage('Validation error: ' + error.message);
       setValidationType('error');
@@ -1361,7 +1443,7 @@ export default function GradingSystem() {
 
       {/* Confirm Upload Modal */}
       {showConfirmUpload && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
           <div className="relative p-8 border w-full max-w-md max-h-full">
             <div className="relative bg-white rounded-lg shadow dark:bg-gray-700">
               <button

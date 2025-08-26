@@ -344,8 +344,9 @@ router.get('/student/:schoolID', authenticateToken, async (req, res) => {
     
     // Students can only view their own grades
     if (req.user.role === 'student') {
-      const studentSchoolID = req.user.schoolID || req.user.userID;
-      if (studentSchoolID !== schoolID) {
+      const studentSchoolID = req.user.schoolID;
+      const studentUserID = req.user.userID;
+      if (studentSchoolID !== schoolID && studentUserID !== schoolID) {
         return res.status(403).json({
           success: false,
           message: 'Access denied. You can only view your own grades.'
@@ -353,7 +354,13 @@ router.get('/student/:schoolID', authenticateToken, async (req, res) => {
       }
     }
 
-    const grades = await SemestralGrade.find({ schoolID })
+    // Support lookup by either schoolID or userId stored as studentId in records
+    const grades = await SemestralGrade.find({
+      $or: [
+        { schoolID: schoolID },
+        { studentId: schoolID }
+      ]
+    })
       .sort({ academicYear: -1, termName: 1, subjectName: 1 });
 
     if (grades.length === 0) {

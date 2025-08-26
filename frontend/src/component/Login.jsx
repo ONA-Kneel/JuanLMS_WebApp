@@ -51,12 +51,17 @@ export default function Login() {
     // --- HANDLER: Auto-login using stored credentials ---
     const handleAutoLogin = async (email, password) => {
       try {
-        const response = await axios.post(`${API_BASE}/login`, { email, password });
+        const response = await axios.post(
+          `${API_BASE}/login`,
+          { email, password },
+          { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+        );
         const { token } = response.data;
     
         // Decode JWT to extract user info and role
         const decoded = jwtDecode(token);
         const { _id, role, name, email: userEmail, phone, profilePic, userID } = decoded;
+        const normalizedName = name ? name.normalize('NFC') : '';
     
         // Debug: Log the role to see what's being received
         console.log('Received role:', role);
@@ -66,7 +71,7 @@ export default function Login() {
         const imageUrl = getProfileImageUrl(profilePic, API_BASE, null);
     
               // Store user info and token in localStorage
-        localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, phone, role, profilePic: imageUrl }));
+        localStorage.setItem('user', JSON.stringify({ _id, name: normalizedName, email: userEmail, phone, role, profilePic: imageUrl }));
         localStorage.setItem('token', token);
         localStorage.setItem('userID', userID);
         localStorage.setItem('role', role);
@@ -237,7 +242,11 @@ export default function Login() {
     const password = e.target.elements[1].value;
   
     try {
-      const response = await axios.post(`${API_BASE}/login`, { email, password });
+      const response = await axios.post(
+        `${API_BASE}/login`,
+        { email, password },
+        { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+      );
       const { token } = response.data;
   
       // Reset failed attempts and previous errors on successful login
@@ -247,11 +256,12 @@ export default function Login() {
       // Decode JWT to extract user info and role
       const decoded = jwtDecode(token);
       const { _id, role, name, email: userEmail, profilePic, userID } = decoded;
+      const normalizedName = name ? name.normalize('NFC') : '';
 
       const imageUrl = getProfileImageUrl(profilePic, API_BASE, null);
 
       // Store user info and token in localStorage
-      localStorage.setItem('user', JSON.stringify({ _id, name, email: userEmail, role, profilePic: imageUrl }));
+      localStorage.setItem('user', JSON.stringify({ _id, name: normalizedName, email: userEmail, role, profilePic: imageUrl }));
       localStorage.setItem('token', token);
       localStorage.setItem('userID', userID);
       localStorage.setItem('role', role);
@@ -382,13 +392,16 @@ export default function Login() {
         <div className="w-full md:w-1/2 p-8 md:p-12">
           <h2 className="text-3xl mb-8 font-poppinsb text-gray-900">Login</h2>
 
-          <form onSubmit={handleLogin} className="space-y-4 mt-8">
+          <form onSubmit={handleLogin} acceptCharset="UTF-8" className="space-y-4 mt-8">
             <div>
               <label className="block text-base font-poppinsr mb-2">Email</label>
               <input
-                type="email"
+                type="text"
                 required
                 disabled={isLocked}
+                inputMode="email"
+                autoComplete="email"
+                spellCheck="false"
                 className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900"
                 placeholder="School E-mail"
               />
