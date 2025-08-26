@@ -272,13 +272,25 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
       const facultyIdentifier = classData.facultyID ? String(classData.facultyID) : String(facultyID || '');
       const uniqueIds = Array.from(new Set(memberIds.filter(Boolean).filter(v => v !== facultyIdentifier)));
       if (uniqueIds.length > 0) {
+        // Separate ObjectIds from custom IDs to avoid casting errors
+        const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+        const objectIds = uniqueIds.filter(id => objectIdPattern.test(id));
+        const customIds = uniqueIds.filter(id => !objectIdPattern.test(id));
+        
+        console.log('[CREATE-CLASS] ObjectIds:', objectIds);
+        console.log('[CREATE-CLASS] Custom IDs:', customIds);
+        
         const validStudents = await User.find({
           role: 'students',
           $or: [
-            { _id: { $in: uniqueIds } },
-            { userID: { $in: uniqueIds } }
+            // Only include ObjectId query if we have valid ObjectIds
+            ...(objectIds.length > 0 ? [{ _id: { $in: objectIds } }] : []),
+            // Include custom ID queries
+            ...(customIds.length > 0 ? [{ userID: { $in: customIds } }] : []),
+            ...(customIds.length > 0 ? [{ schoolID: { $in: customIds } }] : [])
           ]
-        }).select('_id userID');
+        }).select('_id userID schoolID');
+        
         const allowed = validStudents.map(u => String(u._id));
         classData.members = allowed;
         console.log('[CREATE-CLASS] Filtered/normalized members (students only):', classData.members.length);
@@ -398,11 +410,22 @@ router.get('/:classID/members', async (req, res) => {
         : rawMembers;
 
       // Try to find students by ObjectId first, then fallback to userID, and enforce role filter
+      // Separate ObjectIds from custom IDs to avoid casting errors
+      const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+      const objectIds = memberIdsExcludingFaculty.filter(id => objectIdPattern.test(id));
+      const customIds = memberIdsExcludingFaculty.filter(id => !objectIdPattern.test(id));
+      
+      console.log(`[GET-MEMBERS] ObjectIds:`, objectIds);
+      console.log(`[GET-MEMBERS] Custom IDs:`, customIds);
+      
       students = await User.find({ 
         role: 'students',
         $or: [
-          { _id: { $in: memberIdsExcludingFaculty } }, // ObjectId
-          { userID: { $in: memberIdsExcludingFaculty } } // userID fallback
+          // Only include ObjectId query if we have valid ObjectIds
+          ...(objectIds.length > 0 ? [{ _id: { $in: objectIds } }] : []),
+          // Include custom ID queries
+          ...(customIds.length > 0 ? [{ userID: { $in: customIds } }] : []),
+          ...(customIds.length > 0 ? [{ schoolID: { $in: customIds } }] : [])
         ],
         isArchived: { $ne: true } 
       });
@@ -577,14 +600,42 @@ router.patch('/:classID/members', authenticateToken, async (req, res) => {
 
     let normalizedIds = [];
     if (uniqueIds.length > 0) {
+      // Separate ObjectIds from custom IDs to avoid casting errors
+      const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+      const objectIds = uniqueIds.filter(id => objectIdPattern.test(id));
+      const customIds = uniqueIds.filter(id => !objectIdPattern.test(id));
+      
+      console.log(`[PATCH-MEMBERS] ObjectIds:`, objectIds);
+      console.log(`[PATCH-MEMBERS] Custom IDs:`, customIds);
+      
       const validStudents = await User.find({
         role: 'students',
         $or: [
-          { _id: { $in: uniqueIds } },
-          { userID: { $in: uniqueIds } }
+          // Only include ObjectId query if we have valid ObjectIds
+          ...(objectIds.length > 0 ? [{ _id: { $in: objectIds } }] : []),
+          // Include custom ID queries
+          ...(customIds.length > 0 ? [{ userID: { $in: customIds } }] : []),
+          ...(customIds.length > 0 ? [{ schoolID: { $in: customIds } }] : [])
         ]
-      }).select('_id userID');
+      }).select('_id userID schoolID');
+      
+      console.log(`[PATCH-MEMBERS] Found ${validStudents.length} valid students`);
+      
+      // Create a mapping from MongoDB _id to the original ID that was sent
+      const idMapping = {};
+      validStudents.forEach(u => {
+        // Find the original ID that was sent for this student
+        const originalId = uniqueIds.find(id => {
+          const stringId = String(id);
+          return stringId === String(u._id) || stringId === String(u.userID) || stringId === String(u.schoolID);
+        });
+        if (originalId) {
+          idMapping[String(u._id)] = String(originalId);
+        }
+      });
+      
       normalizedIds = validStudents.map(u => String(u._id));
+      console.log(`[PATCH-MEMBERS] ID mapping:`, idMapping);
     }
 
     const updatedClass = await Class.findOneAndUpdate(
@@ -599,8 +650,13 @@ router.patch('/:classID/members', authenticateToken, async (req, res) => {
 
     console.log(`[PATCH-MEMBERS] Successfully updated class ${classID} with ${members.length} members`);
 
-    // Return the updated class with members
-    res.json(updatedClass);
+    // Return the updated class with members, but also include the original IDs that were sent
+    const responseData = {
+      ...updatedClass.toObject(),
+      originalMemberIds: uniqueIds // Include the original IDs that were sent
+    };
+    
+    res.json(responseData);
   } catch (err) {
     console.error('[PATCH-MEMBERS] Error:', err);
     res.status(500).json({ error: 'Failed to update class members' });
@@ -750,10 +806,21 @@ router.get('/:classID/analyze-members', authenticateToken, async (req, res) => {
     // Get student details
     let students = [];
     if (classDoc.members && classDoc.members.length > 0) {
+      // Separate ObjectIds from custom IDs to avoid casting errors
+      const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+      const objectIds = classDoc.members.filter(id => objectIdPattern.test(String(id)));
+      const customIds = classDoc.members.filter(id => !objectIdPattern.test(String(id)));
+      
+      console.log(`[ANALYZE-MEMBERS] ObjectIds:`, objectIds);
+      console.log(`[ANALYZE-MEMBERS] Custom IDs:`, customIds);
+      
       students = await User.find({ 
         $or: [
-          { _id: { $in: classDoc.members } },
-          { userID: { $in: classDoc.members } }
+          // Only include ObjectId query if we have valid ObjectIds
+          ...(objectIds.length > 0 ? [{ _id: { $in: objectIds } }] : []),
+          // Include custom ID queries
+          ...(customIds.length > 0 ? [{ userID: { $in: customIds } }] : []),
+          ...(customIds.length > 0 ? [{ schoolID: { $in: customIds } }] : [])
         ]
       });
     }
