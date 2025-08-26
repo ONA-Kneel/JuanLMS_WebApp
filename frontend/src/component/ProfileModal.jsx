@@ -438,6 +438,29 @@ export default function ProfileModal({
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    
+    // Client-side validation
+    if (!file.type.startsWith('image/')) {
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Invalid File Type',
+        message: 'Please select a valid image file (JPG, JPEG, PNG).'
+      });
+      return;
+    }
+    
+    // Check file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'File Too Large',
+        message: 'Please select an image smaller than 5MB.'
+      });
+      return;
+    }
+    
     const reader = new FileReader();
     reader.addEventListener('load', () => {
       setImageSrc(reader.result);
@@ -587,16 +610,20 @@ export default function ProfileModal({
             <h2 className="text-center">Please upload a Picture.</h2>
             {/* Cropper Content */}
             {!imageSrc ? (
-              <div className="flex justify-center mt-4">
+              <div className="flex flex-col items-center mt-4">
                 <label className="inline-flex my-4 items-center px-4 py-2 bg-blue-900 text-white rounded cursor-pointer hover:bg-blue-950">
                   Upload Image
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/jpg,image/png"
                     onChange={handleFileChange}
                     className="hidden"
                   />
                 </label>
+                <p className="text-sm text-gray-600 text-center max-w-xs">
+                  Supported formats: JPG, JPEG, PNG<br/>
+                  Maximum size: 5MB
+                </p>
               </div>
             ) : (
               <>

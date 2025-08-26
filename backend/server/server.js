@@ -176,7 +176,18 @@ async function initializeServerStorage() {
     console.log('[SERVER] Using Cloudinary storage');
     try {
       const { profileStorage } = await import('./config/cloudinary.js');
-      return multer({ storage: profileStorage });
+      return multer({ 
+        storage: profileStorage,
+        limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+        fileFilter: (req, file, cb) => {
+          // Check if file is an image
+          if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+          } else {
+            cb(new Error('Only image files are allowed for profile pictures. Please upload a valid image format (JPG, JPEG, PNG).'), false);
+          }
+        }
+      });
     } catch (error) {
       console.error('[SERVER] Cloudinary setup failed, falling back to local storage:', error.message);
     }
@@ -194,7 +205,18 @@ async function initializeServerStorage() {
     filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
   });
   
-  return multer({ storage: localStorage });
+  return multer({ 
+    storage: localStorage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+      // Check if file is an image
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed for profile pictures. Please upload a valid image format (JPG, JPEG, PNG).'), false);
+      }
+    }
+  });
 }
 
 // Initialize upload middleware
@@ -311,6 +333,23 @@ app.use('/api/general-announcements', generalAnnouncementRoutes);
 app.use('/api/grades', gradeUploadRoutes);
 app.use('/api/principal', principalRoutes);
 app.use('/api/ai-analytics', aiAnalyticsRoutes);
+
+// Error handling middleware for multer fileFilter errors
+app.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large. Please upload a smaller image.' });
+    }
+    return res.status(400).json({ error: error.message });
+  }
+  
+  // Handle fileFilter errors
+  if (error.message && error.message.includes('Only image files are allowed')) {
+    return res.status(400).json({ error: error.message });
+  }
+  
+  next(error);
+});
 
 // Start server with socket.io
 server.listen(PORT, () => {

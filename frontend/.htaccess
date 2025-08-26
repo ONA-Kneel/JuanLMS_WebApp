@@ -2,12 +2,8 @@
     RewriteEngine On
     RewriteBase /
     
-<<<<<<< HEAD
     # Handle client-side routing for all new routes
     # This ensures all React Router routes work properly
-=======
-    # Handle client-side routing
->>>>>>> cd571486 (.htaccess)
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^(.*)$ /index.html [L]
