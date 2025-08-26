@@ -5,6 +5,7 @@ import ProfileMenu from "../ProfileMenu";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
+
 export default function Admin_AcademicSettings() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingYear, setEditingYear] = useState(null);

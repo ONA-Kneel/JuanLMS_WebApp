@@ -244,18 +244,41 @@ router.get('/', authenticateToken, async (req, res) => {
 // });
 
 // --- GET /:classID/members - Get all members (faculty and students) of a class ---
-router.get('/:classID/members', async (req, res) => {
+router.get('/:classID/members', authenticateToken, async (req, res) => {
   try {
     const { classID } = req.params;
-    const db = req.app.locals.db || database.getDb();
-    // Find the class by classID
-    const classDoc = await db.collection('Classes').findOne({ classID });
-    if (!classDoc) return res.status(404).json({ error: 'Class not found' });
+    
+    console.log('🔍 [Backend] GET /:classID/members called with classID:', classID);
+    
+    // Use Mongoose Class model instead of raw MongoDB collection
+    const classDoc = await Class.findOne({ classID });
+    console.log('🔍 [Backend] Class lookup result:', classDoc ? 'Found' : 'Not found');
+    
+    if (!classDoc) {
+      console.log('🔍 [Backend] Class not found for classID:', classID);
+      return res.status(404).json({ error: 'Class not found' });
+    }
+    
+    console.log('🔍 [Backend] Class document:', {
+      classID: classDoc.classID,
+      className: classDoc.className,
+      facultyID: classDoc.facultyID,
+      members: classDoc.members,
+      membersLength: classDoc.members ? classDoc.members.length : 0
+    });
+    
     // Use Mongoose User model to fetch and decrypt users
     const faculty = await User.find({ userID: classDoc.facultyID, isArchived: { $ne: true } });
+    console.log('🔍 [Backend] Faculty lookup result:', faculty.length, 'faculty found');
+    console.log('🔍 [Backend] Faculty lookup query:', { userID: classDoc.facultyID });
+    
     const students = classDoc.members && classDoc.members.length > 0
       ? await User.find({ userID: { $in: classDoc.members }, isArchived: { $ne: true } })
       : [];
+    
+    console.log('🔍 [Backend] Students lookup result:', students.length, 'students found');
+    console.log('🔍 [Backend] Student userIDs found:', students.map(s => s.userID));
+    
     // Decrypt fields
     const decryptedFaculty = faculty.map(user => ({
       ...user.toObject(),
@@ -268,6 +291,7 @@ router.get('/:classID/members', async (req, res) => {
       profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
       password: undefined,
     }));
+    
     const decryptedStudents = students.map(user => ({
       ...user.toObject(),
       email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
@@ -279,9 +303,15 @@ router.get('/:classID/members', async (req, res) => {
       profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
       password: undefined,
     }));
+    
+    console.log('🔍 [Backend] Sending response with:', {
+      facultyCount: decryptedFaculty.length,
+      studentsCount: decryptedStudents.length
+    });
+    
     res.json({ faculty: decryptedFaculty, students: decryptedStudents });
   } catch (err) {
-    console.error(err);
+    console.error('🔍 [Backend] Error in GET /:classID/members:', err);
     res.status(500).json({ error: 'Failed to fetch class members' });
   }
 });
@@ -423,5 +453,42 @@ router.get('/faculty-classes', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch faculty classes.' });
   }
 });
+
+// --- GET /debug/current-user - Debug endpoint to check current user data ---
+router.get('/debug/current-user', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔍 [Backend] Debug current user endpoint called');
+    console.log('🔍 [Backend] req.user:', req.user);
+    
+    // Get the current user's full data
+    const currentUser = await User.findById(req.user._id);
+    console.log('🔍 [Backend] Current user from database:', {
+      _id: currentUser?._id,
+      userID: currentUser?.userID,
+      schoolID: currentUser?.schoolID,
+      firstname: currentUser?.firstname,
+      lastname: currentUser?.lastname,
+      role: currentUser?.role
+    });
+    
+    res.json({
+      success: true,
+      reqUser: req.user,
+      dbUser: currentUser ? {
+        _id: currentUser._id,
+        userID: currentUser.userID,
+        schoolID: currentUser.schoolID,
+        firstname: currentUser.firstname,
+        lastname: currentUser.lastname,
+        role: currentUser.role
+      } : null
+    });
+  } catch (err) {
+    console.error('🔍 [Backend] Error in debug current user endpoint:', err);
+    res.status(500).json({ error: 'Failed to fetch current user data' });
+  }
+});
+
+// --- GET /debug/users - Debug endpoint to check user data ---
 
 export default router; 

@@ -13,6 +13,8 @@ import {
 } from 'react-icons/fa';
 import './VideoMeetingRoom.css';
 
+const JITSI_DOMAIN = import.meta.env.VITE_JITSI_DOMAIN || 'meet.jit.si';
+
 const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerator = false, onLeave }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -25,6 +27,24 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
     return meetingData?.meetingId || meetingData?._id || '';
   }, [meetingData]);
 
+  // Prefer backend-provided roomUrl when available to ensure all clients join the same room
+  const getRoomName = useCallback(() => {
+    try {
+      const roomUrl = meetingData?.roomUrl;
+      if (roomUrl) {
+        const url = new URL(roomUrl);
+        const path = url.pathname || '';
+        const name = path.startsWith('/') ? path.slice(1) : path;
+        return decodeURIComponent(name);
+      }
+    } catch {
+      // Fallback to meetingId if URL parsing fails
+      void 0;
+    }
+    const id = getMeetingId();
+    return id ? String(id) : '';
+  }, [meetingData, getMeetingId]);
+
   const handleLeaveMeeting = useCallback(() => {
     if (onLeave) onLeave();
     if (onClose) onClose();
@@ -33,40 +53,28 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
   const loadJitsiScript = useCallback(() => {
     return new Promise((resolve, reject) => {
       if (window.JitsiMeetExternalAPI) {
-        console.log('Jitsi script already loaded');
         return resolve(true);
       }
 
       scriptLoadAttempts.current += 1;
-      
       if (scriptLoadAttempts.current > MAX_SCRIPT_LOAD_ATTEMPTS) {
         return reject(new Error('Max script load attempts reached'));
       }
 
-      console.log(`Loading Jitsi script (attempt ${scriptLoadAttempts.current})`);
-      
       const script = document.createElement('script');
       script.src = 'https://meet.jit.si/external_api.js';
       script.async = true;
-      script.onload = () => {
-        console.log('Jitsi script loaded successfully');
-        resolve(true);
-      };
-      script.onerror = (error) => {
-        console.error('Error loading Jitsi script:', error);
-        reject(new Error('Failed to load Jitsi script'));
-      };
-      
+      script.onload = () => resolve(true);
+      script.onerror = () => reject(new Error('Failed to load Jitsi script'));
       // Add a random query parameter to bypass caching
       script.src += `?v=${Date.now()}`;
-      
       document.head.appendChild(script);
     });
   }, []);
 
   const initializeJitsi = useCallback(async () => {
     if (!isOpen || !jitsiContainer.current) return;
-    
+
     const meetingId = getMeetingId();
     if (!meetingId) {
       setError('Invalid meeting ID');
@@ -77,9 +85,9 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
     try {
       setIsLoading(true);
       setError(null);
-      
+
       await loadJitsiScript();
-      
+
       if (!jitsiContainer.current) {
         throw new Error('Jitsi container not found');
       }
@@ -88,14 +96,15 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
       if (jitsiApi.current) {
         try {
           jitsiApi.current.dispose();
-        } catch (e) {
-          console.warn('Error disposing previous Jitsi instance:', e);
+        } catch {
+          void 0;
         }
         jitsiApi.current = null;
       }
 
+      const roomName = getRoomName();
       const options = {
-        roomName: `JuanLMS-${meetingId}`,
+        roomName,
         width: '100%',
         height: '100%',
         parentNode: jitsiContainer.current,
@@ -103,6 +112,7 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
           displayName: currentUser?.name || 'Participant',
           email: currentUser?.email || ''
         },
+        jwt: meetingData?.jwt || undefined,
         configOverwrite: {
           disableDeepLinking: true,
           disableInviteFunctions: true,
@@ -113,6 +123,13 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
           enableNoisyMicDetection: true,
           startWithAudioMuted: false,
           startWithVideoMuted: false,
+          // Harden connectivity
+          p2p: { enabled: false },
+          preferH264: true,
+          disableThirdPartyRequests: true,
+          enableLipSync: false,
+          enableLayerSuspension: true,
+          // UI
           toolbarButtons: [
             'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
             'fodeviceselection', 'hangup', 'profile', 'info', 'chat', 'recording',
@@ -158,71 +175,89 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
         }
       };
 
-      console.log('Initializing Jitsi with options:', options);
-      
-      const api = new window.JitsiMeetExternalAPI('meet.jit.si', options);
+      const api = new window.JitsiMeetExternalAPI(JITSI_DOMAIN, options);
       jitsiApi.current = api;
-      
+
+      // Connection timeout fallback: open in new tab if embed doesn't join
+      const timeoutId = setTimeout(() => {
+        if (isLoading) {
+          const url = `https://${JITSI_DOMAIN}/${encodeURIComponent(roomName)}`;
+          window.open(url, '_blank');
+        }
+      }, 12000);
+
       api.addEventListeners({
+        iframeReady: () => {
+          setIsLoading(false);
+        },
         readyToClose: () => {
-          console.log('Jitsi ready to close');
           handleLeaveMeeting();
         },
         videoConferenceJoined: () => {
-          console.log('User joined the conference');
+          clearTimeout(timeoutId);
           setIsLoading(false);
           if (isModerator) {
             api.executeCommand('displayName', `${currentUser?.name} (Host)`);
           }
         },
         videoConferenceLeft: () => {
-          console.log('User left the conference');
+          clearTimeout(timeoutId);
           handleLeaveMeeting();
         },
-        error: (error) => {
-          console.error('Jitsi error:', error);
-          setError('Error in meeting: ' + (error?.message || 'Unknown error'));
+        error: (evt) => {
+          clearTimeout(timeoutId);
+          setError(evt?.message || 'Unknown meeting error');
           setIsLoading(false);
-        },
-        participantRoleChanged: (event) => {
-          console.log('Participant role changed:', event);
-        },
-        endpointTextMessageReceived: (event) => {
-          console.log('Message received:', event);
-        },
-        deviceListChanged: (event) => {
-          console.log('Device list changed:', event);
-        },
-        devicesChanged: (event) => {
-          console.log('Devices changed:', event);
-        },
-        deviceListAvailable: (event) => {
-          console.log('Device list available:', event);
         }
       });
-      
-      console.log('Jitsi API initialized successfully');
-      
-    } catch (error) {
-      console.error('Error initializing Jitsi:', error);
-      setError('Failed to initialize meeting. ' + (error.message || 'Please try again.'));
+    } catch (e) {
+      setError(e?.message || 'Failed to initialize meeting');
       setIsLoading(false);
-      
       // Auto-retry after a delay if we haven't exceeded max attempts
       if (scriptLoadAttempts.current < MAX_SCRIPT_LOAD_ATTEMPTS) {
-        console.log(`Retrying Jitsi initialization (attempt ${scriptLoadAttempts.current + 1}/${MAX_SCRIPT_LOAD_ATTEMPTS})`);
         setTimeout(() => {
           initializeJitsi();
-        }, 2000); // 2 second delay before retry
+        }, 2000);
       }
     }
-  }, [isOpen, getMeetingId, currentUser, isModerator, handleLeaveMeeting]);
+  }, [isOpen, getMeetingId, currentUser, isModerator, handleLeaveMeeting, getRoomName, loadJitsiScript, isLoading, meetingData?.jwt]);
 
   const handleRetry = useCallback(() => {
     setError(null);
     scriptLoadAttempts.current = 0;
     initializeJitsi();
   }, [initializeJitsi]);
+
+  // Initialize and cleanup
+  useEffect(() => {
+    if (isOpen) {
+      // Prevent background scroll and interactions
+      const previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      initializeJitsi();
+      return () => {
+        document.body.style.overflow = previousOverflow;
+        if (jitsiApi.current) {
+          try {
+            jitsiApi.current.dispose();
+          } catch {
+            void 0;
+          }
+          jitsiApi.current = null;
+        }
+      };
+    }
+    return () => {
+      if (jitsiApi.current) {
+        try {
+          jitsiApi.current.dispose();
+        } catch {
+          void 0;
+        }
+        jitsiApi.current = null;
+      }
+    };
+  }, [isOpen, initializeJitsi, meetingData]);
 
   if (!isOpen) return null;
 
@@ -260,11 +295,11 @@ const VideoMeetingRoom = ({ isOpen, onClose, meetingData, currentUser, isModerat
             <div className="error-content">
               <FaExclamationTriangle className="error-icon" />
               <h4>Connection Error</h4>
-              <p>{error.message || 'We couldn\'t connect to the meeting. Please check your internet connection and try again.'}</p>
+              <p>{typeof error === 'string' ? error : (error?.message || 'We couldn\'t connect to the meeting. Please check your internet connection and try again.')}</p>
               <div className="button-group">
                 <button 
                   className="retry-button" 
-                  onClick={initializeJitsi}
+                  onClick={handleRetry}
                   aria-label="Retry connection"
                 >
                   <FaRedo /> Retry

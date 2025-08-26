@@ -21,6 +21,7 @@ import Student_Chats from './component/Student/Student_Chats';
 import Student_Progress from './component/Student/Student_Progress';
 import Student_Grades from './component/Student/Student_Grades';
 import Student_Calendar from './component/Student/Student_Calendar';
+import Student_Meeting from './component/Student/Student_Meeting';
 import Student_ClassWorkspace from './component/Student/Student_ClassWorkspace';
 
 // Faculty Access
@@ -152,6 +153,7 @@ function App() {
         <Route path="/student_progress" element={<ProtectedRoute allowedRoles={['students']}><Student_Progress /></ProtectedRoute>}/>
         <Route path="/student_grades" element={<ProtectedRoute allowedRoles={['students']}><Student_Grades /></ProtectedRoute>}/>
         <Route path="/student_calendar" element={<ProtectedRoute allowedRoles={['students']}><Student_Calendar /></ProtectedRoute>}/>
+        <Route path="/student_meeting" element={<ProtectedRoute allowedRoles={['students']}><Student_Meeting /></ProtectedRoute>} />
         <Route path="/student_class/:classId" element={<ProtectedRoute allowedRoles={['students']}><Student_ClassWorkspace /></ProtectedRoute>} />
 
         

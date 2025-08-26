@@ -51,24 +51,19 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: [
-      "http://localhost:5173",
-      "https://juan-lms.vercel.app",
-      "https://sjdefilms.com"
-    ],
+    origin: "*",
     methods: ["GET", "POST"],
-    credentials: false
+    credentials: true
   }
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 // Socket.io connection handling
 let activeUsers = [];
 let userGroups = {}; // Track which groups each user is in
 
 io.on("connection", (socket) => {
-    console.log('[SOCKET] client connected', socket.id);
     console.log("User connected:", socket.id);
     
     socket.on("addUser", (userId) => {
@@ -96,7 +91,6 @@ io.on("connection", (socket) => {
 
     // Join a group chat room
     socket.on("joinGroup", ({ userId, groupId }) => {
-        console.log(`[SOCKET] User ${userId} joining group ${groupId}`);
         socket.join(groupId);
         if (!userGroups[userId]) {
             userGroups[userId] = [];
@@ -104,9 +98,7 @@ io.on("connection", (socket) => {
         if (!userGroups[userId].includes(groupId)) {
             userGroups[userId].push(groupId);
         }
-        console.log(`[SOCKET] User ${userId} joined group ${groupId}`);
-        console.log(`[SOCKET] User ${userId} is now in groups:`, userGroups[userId]);
-        console.log(`[SOCKET] Socket ${socket.id} is now in rooms:`, Array.from(socket.rooms));
+        console.log(`User ${userId} joined group ${groupId}`);
     });
 
     // Leave a group chat room
@@ -119,30 +111,15 @@ io.on("connection", (socket) => {
     });
 
     // Send message to group chat
-    socket.on("sendGroupMessage", ({ senderId, groupId, text, fileUrl, senderName, senderFirstname, senderLastname, senderProfilePic }) => {
-        console.log(`[SOCKET] Group message from ${senderId} to group ${groupId}: ${text}`);
-        console.log(`[SOCKET] Broadcasting to group room: ${groupId}`);
-        console.log(`[SOCKET] Current socket rooms:`, Array.from(socket.rooms));
-        
-        // Ensure sender is in the group room before broadcasting
-        if (!socket.rooms.has(groupId)) {
-            console.log(`[SOCKET] Sender not in group room, joining now...`);
-            socket.join(groupId);
-        }
-        
+    socket.on("sendGroupMessage", ({ senderId, groupId, text, fileUrl, senderName }) => {
         // Broadcast to all users in the group (except sender)
         socket.to(groupId).emit("getGroupMessage", {
             senderId,
             groupId,
             text,
             fileUrl,
-            senderName: senderName || "Unknown",
-            senderFirstname: senderFirstname || "Unknown",
-            senderLastname: senderLastname || "User",
-            senderProfilePic: senderProfilePic || null
+            senderName
         });
-        
-        console.log(`[SOCKET] Message broadcasted to group ${groupId}`);
     });
 
     // Handle group creation
@@ -174,29 +151,12 @@ io.on("connection", (socket) => {
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: "*",
+  credentials: true
+}));
 app.use(express.json());
-import path from 'path';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, 'uploads');
-const quizImagesDir = path.join(uploadsDir, 'quiz-images');
-
-if (!fs.existsSync(uploadsDir)) {
-  console.log('[SERVER] Creating uploads directory:', uploadsDir);
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-if (!fs.existsSync(quizImagesDir)) {
-  console.log('[SERVER] Creating quiz-images directory:', quizImagesDir);
-  fs.mkdirSync(quizImagesDir, { recursive: true });
-}
-
-// Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static('uploads'));
 
 // MongoDB connection
 mongoose.connect(process.env.ATLAS_URI)
@@ -313,24 +273,13 @@ app.use('/', userRoutes);
 app.use('/messages', messageRoutes);
 app.use('/group-chats', groupChatRoutes);
 app.use('/group-messages', groupMessageRoutes);
+app.use('/uploads', express.static('uploads'));
 app.use("/events", eventRoutes);
 app.use("/classes", classRoutes);
 app.use("/", auditTrailRoutes);
 app.use("/lessons", lessonRoutes);
-app.use('/uploads/lessons', express.static(path.join(uploadsDir, 'lessons')));
-app.use('/uploads/quiz-images', express.static(path.join(uploadsDir, 'quiz-images')));
-
-// Explicit file endpoint for lessons to handle edge cases (spaces, encodings)
-app.get('/uploads/lessons/:filename', (req, res) => {
-  const filename = req.params.filename;
-  const filePath = path.join(uploadsDir, 'lessons', filename);
-  res.sendFile(filePath, (err) => {
-    if (err) {
-      console.error('[LESSONS FILE SERVE ERROR]', err);
-      res.status(err.statusCode || 404).send('File not found');
-    }
-  });
-});
+app.use('/uploads/lessons', express.static('uploads/lessons'));
+app.use('/uploads/quiz-images', express.static('uploads/quiz-images'));
 app.use("/announcements", announcementRoutes);
 app.use("/assignments", assignmentRoutes);
 app.use('/api/tickets', ticketsRouter);

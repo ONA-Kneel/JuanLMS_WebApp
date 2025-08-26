@@ -194,6 +194,17 @@ export default function Faculty_Grades() {
         );
         
         setClasses(filtered);
+        console.log("Faculty Grades - Filtered classes:", filtered);
+        // Log class details including sections
+        filtered.forEach(cls => {
+          console.log(`Class: ${cls.className}, Section: ${cls.section}, Class Code: ${cls.classCode}`);
+        });
+        
+        // Debug backend endpoints after classes are loaded
+        if (filtered.length > 0) {
+          console.log("🔍 Classes loaded, running debug...");
+          setTimeout(() => debugBackend(), 1000); // Delay to ensure state is set
+        }
       } catch (err) {
         console.error("Failed to fetch classes", err);
       } finally {
@@ -1102,9 +1113,84 @@ export default function Faculty_Grades() {
     }
   };
 
-
-
-
+  // Debug function to test backend endpoints
+  const debugBackend = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      console.log('🔍 [Frontend] Testing backend endpoints...');
+      
+      // Test current user endpoint
+      try {
+        const userResponse = await fetch(`${API_BASE}/classes/debug/current-user`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          console.log('🔍 [Frontend] Current user debug response:', userData);
+        } else {
+          console.log('🔍 [Frontend] Current user debug failed:', userResponse.status);
+        }
+      } catch (error) {
+        console.log('🔍 [Frontend] Current user debug error:', error);
+      }
+      
+      // Test debug classes endpoint
+      try {
+        const classesResponse = await fetch(`${API_BASE}/classes/debug/classes`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (classesResponse.ok) {
+          const classesData = await classesResponse.json();
+          console.log('🔍 [Frontend] Debug classes response:', classesData);
+        } else {
+          console.log('🔍 [Frontend] Debug classes failed:', classesResponse.status);
+        }
+      } catch (error) {
+        console.log('🔍 [Frontend] Debug classes error:', error);
+      }
+      
+      // Test debug users endpoint
+      try {
+        const usersResponse = await fetch(`${API_BASE}/classes/debug/users`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json();
+          console.log('🔍 [Frontend] Debug users response:', usersData);
+        } else {
+          console.log('🔍 [Frontend] Debug users failed:', usersResponse.status);
+        }
+      } catch (error) {
+        console.log('🔍 [Frontend] Debug users error:', error);
+      }
+      
+      // Test specific class members endpoint
+      if (selectedClass !== null && classes[selectedClass]) {
+        const selectedClassObj = classes[selectedClass];
+        console.log('🔍 [Frontend] Testing members endpoint for class:', selectedClassObj.classID);
+        
+        try {
+          const membersResponse = await fetch(`${API_BASE}/classes/${selectedClassObj.classID}/members`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          console.log('🔍 [Frontend] Members endpoint status:', membersResponse.status);
+          
+          if (membersResponse.ok) {
+            const membersData = await membersResponse.json();
+            console.log('🔍 [Frontend] Members endpoint response:', membersData);
+          } else {
+            const errorText = await membersResponse.text();
+            console.log('🔍 [Frontend] Members endpoint error response:', errorText);
+          }
+        } catch (error) {
+          console.log('🔍 [Frontend] Members endpoint error:', error);
+        }
+      }
+      
+    } catch (error) {
+      console.error('🔍 [Frontend] Debug function error:', error);
+    }
+  };
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -1136,7 +1222,16 @@ export default function Faculty_Grades() {
               })}
             </p>
           </div>
-          <ProfileMenu/>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={debugBackend}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
+              title="Debug backend endpoints"
+            >
+              🔍 Debug
+            </button>
+            <ProfileMenu/>
+          </div>
         </div>
 
         

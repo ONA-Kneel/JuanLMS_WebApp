@@ -291,7 +291,14 @@ export default function FacultyCreateClass() {
   };
 
   // Helper to check if a student is assigned to the selected section
+  // For local testing, temporarily disable section filtering
   async function isStudentAssignedToSection(studentId) {
+    // TEMPORARY: Disable section filtering for local testing
+    if (import.meta.env.DEV) {
+      console.log('[CreateClass] Local testing mode: bypassing section assignment check for student:', studentId);
+      return true; // Allow any student to be added to any class during local testing
+    }
+    
     if (!selectedSection || !currentTerm || !academicYear) return false;
     const token = localStorage.getItem('token');
     const res = await fetch(
@@ -331,10 +338,13 @@ export default function FacultyCreateClass() {
       const sectionCode = selectedSection.substring(0, 2).toUpperCase();
       const yearCode = academicYear.schoolYearStart.toString().slice(-2);
       autoClassCode = `${subjectCode}-${sectionCode}-${yearCode}`;
+      
+      // Debug: Log the section being used
+      console.log('[CreateClass] Creating class with section:', selectedSection, '-> classCode:', autoClassCode);
     }
     
-    // Use userID if present, otherwise _id, and filter out any falsy values
-    const members = selectedStudents.map(s => s.userID || s._id).filter(Boolean);
+    // Send userID to backend (backend expects userID, not Mongo _id)
+    const members = selectedStudents.map(s => s.userID || s.schoolID || s._id).filter(Boolean);
     const facultyID = localStorage.getItem("userID"); // get the faculty's userID
     const token = localStorage.getItem("token"); // or whatever you use for auth
 
@@ -361,6 +371,7 @@ export default function FacultyCreateClass() {
     }
 
     try {
+      console.log('[CreateClass] submitting class create with members:', members);
       const res = await fetch(`${API_BASE}/classes`, {
         method: "POST",
         headers: {
@@ -369,6 +380,30 @@ export default function FacultyCreateClass() {
         body: formData,
       });
       if (res.ok) {
+        const createdPayload = await res.json().catch(() => null);
+        console.log('[CreateClass] class created successfully, payload:', createdPayload);
+
+        // Try to persist members explicitly in case the create endpoint ignores the members field
+        try {
+          const createdClassId = createdPayload?.class?.classID || createdPayload?.classID || createdPayload?.ClassID || createdPayload?.id || createdPayload?.class?.id;
+          if (createdClassId) {
+            const memberIdsForPatch = members.map(String);
+            console.log('[CreateClass] patching members to class:', createdClassId, memberIdsForPatch);
+            await fetch(`${API_BASE}/classes/${createdClassId}/members`, {
+              method: 'PATCH',
+              headers: {
+                ...(token && { Authorization: `Bearer ${token}` }),
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ members: memberIdsForPatch })
+            }).catch(err => console.warn('[CreateClass] patch members failed:', err));
+          } else {
+            console.warn('[CreateClass] could not infer created classID from payload. Skipping members patch.');
+          }
+        } catch (e) {
+          console.warn('[CreateClass] error trying to patch members:', e);
+        }
+
         setValidationModal({
           isOpen: true,
           type: 'success',
@@ -382,6 +417,7 @@ export default function FacultyCreateClass() {
         setClassImage(null);
       } else {
         const data = await res.json();
+        console.warn('[CreateClass] create failed payload:', data);
         let errorMessage = data.error || "Failed to create class";
         
         // Handle specific error cases
