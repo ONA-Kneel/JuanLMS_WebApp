@@ -3,27 +3,19 @@ import Principal_Navbar from "./Principal_Navbar";
 import ProfileModal from "../ProfileModal";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Principal_Grades() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [gradeLevels, setGradeLevels] = useState([]);
-  const [strands, setStrands] = useState([]);
-  const [sections, setSections] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [selectedSection, setSelectedSection] = useState(null);
   const [subjects, setSubjects] = useState([]);
+  const [grades, setGrades] = useState({});
   const [students, setStudents] = useState([]);
-  const [grades, setGrades] = useState([]);
-  
-  // Selection states
-  const [selectedGradeLevel, setSelectedGradeLevel] = useState('');
-  const [selectedStrand, setSelectedStrand] = useState('');
-  const [selectedSection, setSelectedSection] = useState('');
-  const [selectedSubject, setSelectedSubject] = useState('');
-  
-  // Loading states
-  const [loading, setLoading] = useState(false);
-  const [loadingGrades, setLoadingGrades] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -66,447 +58,517 @@ export default function Principal_Grades() {
     fetchActiveTermForYear();
   }, [academicYear]);
 
-  // Fetch grade levels
   useEffect(() => {
-    async function fetchGradeLevels() {
+    async function fetchClasses() {
       try {
-        // Use hardcoded grade levels since we don't have a specific endpoint
-        setGradeLevels(['Grade 11', 'Grade 12']);
-      } catch (error) {
-        console.error('Error setting grade levels:', error);
-        setGradeLevels(['Grade 11', 'Grade 12']);
-      }
-    }
-    fetchGradeLevels();
-  }, []);
-
-  // Fetch strands when grade level changes
-  useEffect(() => {
-    if (!selectedGradeLevel) {
-      setStrands([]);
-      setSelectedStrand('');
-      return;
-    }
-
-    async function fetchStrands() {
-      try {
-        setLoading(true);
         const token = localStorage.getItem("token");
-        
-        // Read from the dedicated sections collection instead of grades
-        const response = await fetch(`${API_BASE}/api/sections?schoolYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}&termName=${currentTerm?.termName}`, {
-          headers: { "Authorization": `Bearer ${token}` }
+        // Fetch all classes for the current term and academic year
+        const res = await fetch(`${API_BASE}/api/classes?schoolYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}&termName=${currentTerm?.termName}`, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
         });
+        const data = await res.json();
         
-        if (response.ok) {
-          const sections = await response.json();
-          if (sections && sections.length > 0) {
-            // Extract unique strands from sections that match our grade level
-            const matchingStrands = [...new Set(sections
-              .filter(section => section.gradeLevel === selectedGradeLevel)
-              .map(section => section.strandName)
-              .filter(strand => strand && strand.trim() !== '')
-            )];
-            
-            if (matchingStrands.length > 0) {
-              setStrands(matchingStrands.sort());
-            } else {
-              // Fallback to standard strands
-              setStrands(['STEM', 'ABM', 'HUMSS', 'GAS', 'TVL']);
-            }
-          } else {
-            // Fallback to standard strands
-            setStrands(['STEM', 'ABM', 'HUMSS', 'GAS', 'TVL']);
-          }
-        } else {
-          // Fallback to standard strands
-          setStrands(['STEM', 'ABM', 'HUMSS', 'GAS', 'TVL']);
-        }
-      } catch (error) {
-        console.error('Error fetching strands:', error);
-        // Fallback to standard strands
-        setStrands(['STEM', 'ABM', 'HUMSS', 'GAS', 'TVL']);
+        console.log("🔍 Fetched classes:", data);
+        
+        // Filter classes for current term and academic year
+        const filtered = data.filter(cls => 
+          cls.isArchived !== true &&
+          cls.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
+          cls.termName === currentTerm?.termName
+        );
+        
+        console.log("✅ Filtered classes for grades:", filtered);
+        setClasses(filtered);
+      } catch (err) {
+        console.error("❌ Failed to fetch classes", err);
+        setClasses([]);
       } finally {
         setLoading(false);
       }
     }
-    fetchStrands();
-  }, [selectedGradeLevel, currentTerm, academicYear]);
-
-  // Fetch sections when strand changes
-  useEffect(() => {
-    if (!selectedStrand) {
-      setSections([]);
-      setSelectedSection('');
-      return;
+    
+    // Only fetch classes when we have both academic year and term
+    if (academicYear && currentTerm) {
+      fetchClasses();
     }
+  }, [academicYear, currentTerm]);
 
-    async function fetchSections() {
-      try {
-        setLoading(true);
-        const token = localStorage.getItem("token");
-        
-        // Read from the dedicated sections collection instead of grades
-        const response = await fetch(`${API_BASE}/api/sections?schoolYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}&termName=${currentTerm?.termName}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        
-        if (response.ok) {
-          const sections = await response.json();
-          if (sections && sections.length > 0) {
-            // Extract unique sections that match our grade level and strand
-            const matchingSections = [...new Set(sections
-              .filter(section => 
-                section.gradeLevel === selectedGradeLevel && 
-                section.strandName.toLowerCase().includes(selectedStrand.toLowerCase())
-              )
-              .map(section => section.sectionName)
-              .filter(section => section && section.trim() !== '')
-            )];
-            
-            if (matchingSections.length > 0) {
-              setSections(matchingSections.sort());
-            } else {
-              // Fallback to sample sections
-              setSections(['Section A', 'Section B', 'Section C', 'Section D']);
-            }
-          } else {
-            // Fallback to sample sections
-            setSections(['Section A', 'Section B', 'Section C', 'Section D']);
-          }
-        } else {
-          // Fallback to sample sections
-          setSections(['Section A', 'Section B', 'Section C', 'Section D']);
+  useEffect(() => {
+    if (selectedClass !== null) {
+      fetchSubjects();
+      fetchStudents();
+    }
+  }, [selectedClass]);
+
+  const fetchSubjects = async () => {
+    try {
+      const selectedClassObj = classes[selectedClass];
+      
+      // Create default subjects based on the selected class
+      const defaultSubjects = [
+        {
+          _id: 'subject_1',
+          subjectCode: selectedClassObj.className,
+          subjectDescription: selectedClassObj.className,
+          trackName: selectedClassObj.trackName || 'STEM',
+          gradeLevel: selectedClassObj.gradeLevel || '12'
         }
-      } catch (error) {
-        console.error('Error fetching sections:', error);
-        // Fallback to sample sections
-        setSections(['Section A', 'Section B', 'Section C', 'Section D']);
-      } finally {
-        setLoading(false);
+      ];
+      setSubjects(defaultSubjects);
+      
+      // Initialize grades structure
+      const initialGrades = {};
+      defaultSubjects.forEach(subject => {
+        if (currentTerm?.termName === 'Term 1') {
+          initialGrades[subject._id] = {
+            quarter1: '',
+            quarter2: '',
+            semesterFinal: '',
+            remarks: ''
+          };
+        } else if (currentTerm?.termName === 'Term 2') {
+          initialGrades[subject._id] = {
+            quarter3: '',
+            quarter4: '',
+            semesterFinal: '',
+            remarks: ''
+          };
+        } else {
+          initialGrades[subject._id] = {
+            quarter1: '',
+            quarter2: '',
+            semesterFinal: '',
+            remarks: ''
+          };
+        }
+      });
+      setGrades(initialGrades);
+    } catch (error) {
+      console.error('Error in fetchSubjects:', error);
+    }
+  };
+
+  const fetchStudents = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const selectedClassObj = classes[selectedClass];
+      
+      if (!selectedClassObj) {
+        console.log('❌ No class object found for selected class index:', selectedClass);
+        setStudents([]);
+        return;
       }
-    }
-    fetchSections();
-  }, [selectedStrand, selectedGradeLevel, currentTerm, academicYear]);
-
-  // Fetch subjects when section changes
-  useEffect(() => {
-    if (!selectedSection) {
-      setSubjects([]);
-      setSelectedSubject('');
-      return;
-    }
-
-    async function fetchSubjects() {
+      
+      console.log('🔍 Fetching students for class:', selectedClassObj.classID);
+      
+      // Try multiple endpoints to get students
+      let studentsData = [];
+      
       try {
-        setLoading(true);
-        const token = localStorage.getItem("token");
-        
-        // Read from the dedicated subjects collection instead of grades
-        const response = await fetch(`${API_BASE}/api/subjects?schoolYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}&termName=${currentTerm?.termName}`, {
-          headers: { "Authorization": `Bearer ${token}` }
+        // Try class members endpoint first
+        const response = await fetch(`${API_BASE}/classes/${selectedClassObj.classID}/members`, {
+          headers: { Authorization: `Bearer ${token}` }
         });
         
         if (response.ok) {
-          const subjects = await response.json();
-          if (subjects && subjects.length > 0) {
-            // Filter subjects based on our selection criteria
-            const matchingSubjects = subjects.filter(subject => {
-              // Match grade level
-              const gradeLevelMatch = subject.gradeLevel === selectedGradeLevel;
-              
-              // Match strand (case-insensitive)
-              const strandMatch = subject.strandName?.toLowerCase().includes(selectedStrand.toLowerCase());
-              
-              // Match section by checking if the subject is taught in the selected section
-              // We'll need to check if this subject is available for the selected section
-              // For now, we'll include all subjects that match grade level and strand
-              // The section filtering will happen when we fetch grades
-              
-              return gradeLevelMatch && strandMatch;
+          const data = await response.json();
+          console.log('✅ Class members response:', data);
+          if (data && data.students) {
+            studentsData = (data.students || []).filter(s => {
+              const role = (s.role || '').toLowerCase();
+              return role === 'student' || role === 'students';
             });
-            
-            if (matchingSubjects.length > 0) {
-              // Extract unique subject names
-              const uniqueSubjects = [...new Set(matchingSubjects
-                .map(subject => subject.subjectName)
-                .filter(subject => subject && subject.trim() !== '')
-              )];
-              
-              setSubjects(uniqueSubjects.sort());
-              return;
-            }
+          } else if (data && Array.isArray(data)) {
+            studentsData = (data || []).filter(s => {
+              const role = (s.role || '').toLowerCase();
+              return role === 'student' || role === 'students';
+            });
           }
         }
-        
-        // Fallback to sample subjects if no data found
-        setSubjects(['Mathematics', 'Science', 'English', 'Filipino', 'Social Studies', 'Physical Education', 'Values Education']);
-        
       } catch (error) {
-        console.error('Error fetching subjects:', error);
-        // Fallback to sample subjects
-        setSubjects(['Mathematics', 'Science', 'English', 'Filipino', 'Social Studies', 'Physical Education', 'Values Education']);
-      } finally {
-        setLoading(false);
+        console.log('❌ Class members endpoint error:', error);
       }
-    }
-    fetchSubjects();
-  }, [selectedSection, selectedStrand, selectedGradeLevel, currentTerm, academicYear]);
-
-  // Fetch grades when subject is selected - using improved logic from Student_Grades.jsx
-  useEffect(() => {
-    if (!selectedSubject || !selectedSection || !selectedStrand || !selectedGradeLevel) {
-      setGrades([]);
-      setStudents([]);
-      return;
-    }
-
-    async function fetchGrades() {
-      try {
-        setLoadingGrades(true);
-        const token = localStorage.getItem("token");
-        
-        console.log('🔍 Fetching grades for:', {
-          gradeLevel: selectedGradeLevel,
-          strand: selectedStrand,
-          section: selectedSection,
-          subject: selectedSubject,
-          term: currentTerm?.termName,
-          year: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'N/A'
-        });
-        
-        let allStudents = [];
-        let allGrades = [];
-        
-        // Step 1: Get ALL students in the selected section using the comprehensive endpoint
+      
+      // If no students found, try alternative endpoints
+      if (studentsData.length === 0) {
         try {
-          const comprehensiveResponse = await fetch(
-            `${API_BASE}/api/grading/class/all/section/${selectedSection}/comprehensive?` +
-            `trackName=${selectedStrand}&` +
-            `strandName=${selectedStrand}&` +
-            `gradeLevel=${selectedGradeLevel}&` +
-            `schoolYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}&` +
-            `termName=${currentTerm?.termName}`,
-            {
-              headers: { "Authorization": `Bearer ${token}` }
-            }
-          );
+          const altResponse = await fetch(`${API_BASE}/api/students/class/${selectedClassObj.classCode || selectedClassObj.classID}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
           
-          if (comprehensiveResponse.ok) {
-            const comprehensiveData = await comprehensiveResponse.json();
-            console.log('✅ Comprehensive endpoint response:', comprehensiveData);
-            
-            if (comprehensiveData.success && comprehensiveData.data && comprehensiveData.data.students) {
-              allStudents = comprehensiveData.data.students;
-              console.log(`✅ Found ${allStudents.length} students in section ${selectedSection}`);
+          if (altResponse.ok) {
+            const data = await altResponse.json();
+            if (data) {
+              studentsData = data;
             }
           }
-        } catch {
-          console.log('⚠️ Comprehensive endpoint failed, trying alternative...');
+        } catch (error) {
+          console.log('❌ Alternative endpoint error:', error);
         }
-        
-        // Step 2: If no students found, try to get from sections endpoint
-        if (allStudents.length === 0) {
-          try {
-            const sectionsResponse = await fetch(`${API_BASE}/api/sections?schoolYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}&termName=${currentTerm?.termName}`, {
-              headers: { "Authorization": `Bearer ${token}` }
-            });
-            
-            if (sectionsResponse.ok) {
-              const sections = await sectionsResponse.json();
-              const matchingSection = sections.find(section => 
-                section.sectionName === selectedSection && 
-                section.strandName === selectedStrand &&
-                section.gradeLevel === selectedGradeLevel
-              );
-              
-              if (matchingSection && matchingSection.students) {
-                allStudents = matchingSection.students;
-                console.log(`✅ Found ${allStudents.length} students from sections endpoint`);
-              }
-            }
-          } catch (error) {
-            console.log('⚠️ Sections endpoint failed:', error);
-          }
-        }
-        
-        // Step 3: For each student, fetch their grades for the selected subject
-        if (allStudents.length > 0) {
-          console.log(`🔍 Fetching grades for ${allStudents.length} students...`);
+      }
+      
+      // If still no students, try to get from semestral grades
+      if (studentsData.length === 0) {
+        try {
+          const gradesResponse = await fetch(`${API_BASE}/api/semestral-grades/class/${selectedClassObj.classID}?termName=${currentTerm?.termName}&academicYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
           
-          for (const student of allStudents) {
-            try {
-              const studentID = student.userID || student.studentID || student._id || student.id;
-              if (!studentID) continue;
+          if (gradesResponse.ok) {
+            const gradesData = await gradesResponse.json();
+            if (gradesData.success && gradesData.grades) {
+              // Extract unique students from grades data
+              const uniqueStudents = [];
+              const seenStudents = new Set();
               
-              // Try semestral grades first (same as Student_Grades.jsx)
-              const semestralResponse = await fetch(
-                `${API_BASE}/api/semestral-grades/student/${studentID}?termName=${currentTerm?.termName}&academicYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
-                {
-                  headers: { "Authorization": `Bearer ${token}` }
-                }
-              );
-              
-              if (semestralResponse.ok) {
-                const semestralData = await semestralResponse.json();
-                if (semestralData.success && semestralData.grades) {
-                  // Filter grades for the selected subject
-                  const subjectGrades = semestralData.grades.filter(grade => {
-                    const subjectMatch = grade.subjectName?.toLowerCase().includes(selectedSubject.toLowerCase()) ||
-                                       grade.subjectCode?.toLowerCase().includes(selectedSubject.toLowerCase());
-                    const sectionMatch = !grade.section || grade.section === selectedSection;
-                    const termMatch = grade.termName === currentTerm?.termName;
-                    const yearMatch = grade.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`;
-                    
-                    return subjectMatch && sectionMatch && termMatch && yearMatch;
+              gradesData.grades.forEach(grade => {
+                if (!seenStudents.has(grade.studentID)) {
+                  seenStudents.add(grade.studentID);
+                  uniqueStudents.push({
+                    _id: grade.studentID,
+                    userID: grade.studentID,
+                    name: grade.studentName,
+                    schoolID: grade.schoolID,
+                    section: grade.section || 'default'
                   });
-                  
-                  if (subjectGrades.length > 0) {
-                    // Transform to match expected format (same as Student_Grades.jsx)
-                    const transformedGrades = subjectGrades.map(grade => ({
-                      _id: student._id || studentID,
-                      studentName: student.name || student.studentName || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
-                      schoolID: studentID,
-                      grades: {
-                        quarter1: grade.grades?.quarter1 || grade.quarter1 || '-',
-                        quarter2: grade.grades?.quarter2 || grade.quarter2 || '-',
-                        quarter3: grade.grades?.quarter3 || grade.quarter3 || '-',
-                        quarter4: grade.grades?.quarter4 || grade.quarter4 || '-',
-                        semesterFinal: grade.grades?.semesterFinal || grade.semesterFinal || '-',
-                        remarks: grade.grades?.remarks || grade.remarks || '-'
-                      },
-                      subjectName: grade.subjectName,
-                      subjectCode: grade.subjectCode,
-                      section: grade.section || selectedSection
-                    }));
-                    
-                    allGrades.push(...transformedGrades);
-                    continue; // Skip traditional grades if we found semestral grades
-                  }
                 }
-              }
-              
-              // Fallback: Try traditional grades (same as Student_Grades.jsx)
-              const traditionalResponse = await fetch(`${API_BASE}/api/traditional-grades/student/${studentID}`, {
-                headers: { "Authorization": `Bearer ${token}` }
               });
               
-              if (traditionalResponse.ok) {
-                const traditionalData = await traditionalResponse.json();
-                if (traditionalData.success && traditionalData.grades) {
-                  // Filter grades for the selected subject
-                  const subjectGrades = traditionalData.grades.filter(grade => {
-                    const subjectMatch = grade.subjectName?.toLowerCase().includes(selectedSubject.toLowerCase()) ||
-                                       grade.subjectCode?.toLowerCase().includes(selectedSubject.toLowerCase());
-                    const sectionMatch = !grade.section || grade.section === selectedSection;
-                    
-                    return subjectMatch && sectionMatch;
-                  });
-                  
-                  if (subjectGrades.length > 0) {
-                    // Transform traditional grades to match expected format
-                    const transformedGrades = subjectGrades.map(grade => ({
-                      _id: student._id || studentID,
-                      studentName: student.name || student.studentName || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
-                      schoolID: studentID,
-                      grades: {
-                        quarter1: grade.quarter1 || '-',
-                        quarter2: grade.quarter2 || '-',
-                        quarter3: grade.quarter3 || '-',
-                        quarter4: grade.quarter4 || '-',
-                        semesterFinal: grade.semesterFinal || '-',
-                        remarks: grade.remarks || '-'
-                      },
-                      subjectName: grade.subjectName,
-                      subjectCode: grade.subjectCode,
-                      section: grade.section || selectedSection
-                    }));
-                    
-                    allGrades.push(...transformedGrades);
-                  }
-                }
-              }
-              
-                         } catch (error) {
-               console.log(`⚠️ Error fetching grades for student ${student.name || 'Unknown'}:`, error);
-             }
+              studentsData = uniqueStudents;
+            }
           }
+        } catch (error) {
+          console.log('❌ Semestral grades endpoint error:', error);
+        }
+      }
+      
+      // If still no students, try a more generic approach
+      if (studentsData.length === 0) {
+        try {
+          const genericResponse = await fetch(`${API_BASE}/api/students`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (genericResponse.ok) {
+            const data = await genericResponse.json();
+            if (data && Array.isArray(data)) {
+              studentsData = data.slice(0, 10); // Limit to first 10 for testing
+            }
+          }
+        } catch (error) {
+          console.log('❌ Generic students endpoint error:', error);
+        }
+      }
+      
+      // Transform students data to include grades structure
+      const transformedStudents = studentsData.map(student => {
+        let gradesStructure = {};
+        
+        if (currentTerm?.termName === 'Term 1') {
+          gradesStructure = {
+            quarter1: '',
+            quarter2: '',
+            semesterFinal: '',
+            remarks: ''
+          };
+        } else if (currentTerm?.termName === 'Term 2') {
+          gradesStructure = {
+            quarter3: '',
+            quarter4: '',
+            semesterFinal: '',
+            remarks: ''
+          };
+        } else {
+          gradesStructure = {
+            quarter1: '',
+            quarter2: '',
+            semesterFinal: '',
+            remarks: ''
+          };
         }
         
-        console.log(`✅ Final result: ${allGrades.length} grades found for ${allStudents.length} students`);
-        
-        // Set the grades and students
-        setGrades(allGrades);
-        setStudents(allStudents);
-        
-      } catch (error) {
-        console.error('❌ Error fetching grades:', error);
-        setGrades([]);
-        setStudents([]);
-      } finally {
-        setLoadingGrades(false);
+        return {
+          _id: student._id || student.userID || student.studentID,
+          userID: student.userID || student.studentID || student._id,
+          name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+          schoolID: student.schoolID || student.userID || student.studentID,
+          section: student.section || student.sectionName || 'default',
+          grades: gradesStructure
+        };
+      });
+      
+      console.log('✅ Transformed students:', transformedStudents);
+      setStudents(transformedStudents);
+      
+      // Initialize grades state for all students
+      const initialGrades = {};
+      transformedStudents.forEach(student => {
+        initialGrades[student._id] = { ...student.grades };
+      });
+      setGrades(initialGrades);
+
+      // Load previously saved grades from database
+      if (transformedStudents.length > 0) {
+        loadSavedGradesFromDatabase(selectedClassObj.classID, transformedStudents);
       }
+      
+    } catch (error) {
+      console.error('❌ Error fetching students:', error);
+      setStudents([]);
     }
+  };
 
-    fetchGrades();
-  }, [selectedSubject, selectedSection, selectedStrand, selectedGradeLevel, currentTerm, academicYear]);
+  // Load saved grades from database
+  const loadSavedGradesFromDatabase = async (classID, studentsList) => {
+    try {
+      const token = localStorage.getItem("token");
+      const selectedClassObj = classes[selectedClass];
+      
+      if (!selectedClassObj || !academicYear || !currentTerm) return;
+      
+      console.log('🔍 Loading saved grades for class:', classID);
+      console.log('🔍 Class details:', {
+        classID: selectedClassObj.classID,
+        className: selectedClassObj.className,
+        termName: currentTerm.termName,
+        academicYear: `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`
+      });
+      
+      // Fetch grades from database for this class and term
+      const response = await fetch(`${API_BASE}/api/semestral-grades/class/${selectedClassObj.classID}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      console.log('🔍 API Response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Grades loaded from database:', data);
+        
+        if (data.success && data.grades && data.grades.length > 0) {
+          console.log(`✅ Found ${data.grades.length} grade records in database`);
+          
+          // Update grades state with database data
+          setGrades(prevGrades => {
+            const updatedGrades = { ...prevGrades };
+            
+                         studentsList.forEach(student => {
+               // Find matching grade record for this student
+               const studentGradeRecord = data.grades.find(g => 
+                 g.studentID === student._id || 
+                 g.schoolID === student.schoolID ||
+                 g.studentID === student.schoolID ||
+                 g.schoolID === student._id
+               );
+               
+               if (studentGradeRecord) {
+                 console.log('✅ Found grades for student:', student.name, studentGradeRecord);
+                 console.log('✅ Student grades structure:', studentGradeRecord.grades);
+                 
+                 // Extract the nested grades object and flatten it
+                 const studentGrades = studentGradeRecord.grades || {};
+                 console.log('🔍 Extracted grades object:', studentGrades);
+                 
+                 // Map the grades to the expected structure
+                 const mappedGrades = {
+                   quarter1: studentGrades.quarter1 || studentGrades.q1 || '',
+                   quarter2: studentGrades.quarter2 || studentGrades.q2 || '',
+                   quarter3: studentGrades.quarter3 || studentGrades.q3 || '',
+                   quarter4: studentGrades.quarter4 || studentGrades.q4 || '',
+                   semesterFinal: studentGrades.semesterFinal || studentGrades.final || studentGrades.semester || '',
+                   remarks: studentGrades.remarks || studentGrades.remark || ''
+                 };
+                 
+                 console.log('✅ Mapped grades for display:', mappedGrades);
+                 
+                 updatedGrades[student._id] = {
+                   ...updatedGrades[student._id],
+                   ...mappedGrades,
+                   isLocked: studentGradeRecord.isLocked || false
+                 };
+               } else {
+                 console.log('⚠️ No grades found for student:', student.name, student.schoolID);
+               }
+             });
+            
+            console.log('✅ Updated grades state:', updatedGrades);
+            return updatedGrades;
+          });
+        } else {
+          console.log('⚠️ No grades found in database response or empty grades array');
+          // Try alternative approach - fetch grades by individual students
+          await loadGradesByIndividualStudents(studentsList);
+        }
+      } else {
+        console.log('❌ Failed to load grades from database:', response.status, response.statusText);
+        // Try alternative approach - fetch grades by individual students
+        await loadGradesByIndividualStudents(studentsList);
+      }
+      
+    } catch (error) {
+      console.error('❌ Error loading saved grades from database:', error);
+      // Try alternative approach
+      await loadGradesByIndividualStudents(studentsList);
+    }
+  };
 
-  // Reset selections when higher level changes
-  const handleGradeLevelChange = (gradeLevel) => {
-    setSelectedGradeLevel(gradeLevel);
-    setSelectedStrand('');
-    setSelectedSection('');
-    setSelectedSubject('');
-    setGrades([]);
+  // Alternative approach: Load grades by individual students
+  const loadGradesByIndividualStudents = async (studentsList) => {
+    try {
+      const token = localStorage.getItem("token");
+      console.log('🔍 Trying to load grades by individual students...');
+      
+      const updatedGrades = { ...grades };
+      let gradesLoaded = 0;
+      
+      for (const student of studentsList) {
+        try {
+          const studentSchoolID = student.schoolID || student._id;
+          console.log(`🔍 Fetching grades for student: ${student.name} (ID: ${studentSchoolID})`);
+          
+          const response = await fetch(`${API_BASE}/api/semestral-grades/student/${studentSchoolID}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          console.log(`🔍 Student grades API response for ${student.name}:`, response.status);
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`🔍 Student grades data for ${student.name}:`, data);
+            
+            if (data.success && data.grades && data.grades.length > 0) {
+              // Find grades for this specific class
+              const classGrades = data.grades.find(g => 
+                g.classID === classes[selectedClass].classID ||
+                g.subjectCode === classes[selectedClass].classCode ||
+                g.subjectName === classes[selectedClass].className ||
+                g.className === classes[selectedClass].className
+              );
+              
+                             if (classGrades) {
+                 console.log('✅ Found grades for student:', student.name, classGrades);
+                 console.log('✅ Class grades structure:', classGrades.grades);
+                 
+                 // Extract the nested grades object and flatten it
+                 const studentGrades = classGrades.grades || {};
+                 console.log('🔍 Extracted grades object:', studentGrades);
+                 
+                 // Map the grades to the expected structure
+                 const mappedGrades = {
+                   quarter1: studentGrades.quarter1 || studentGrades.q1 || '',
+                   quarter2: studentGrades.quarter2 || studentGrades.q2 || '',
+                   quarter3: studentGrades.quarter3 || studentGrades.q3 || '',
+                   quarter4: studentGrades.quarter4 || studentGrades.q4 || '',
+                   semesterFinal: studentGrades.semesterFinal || studentGrades.final || studentGrades.semester || '',
+                   remarks: studentGrades.remarks || studentGrades.remark || ''
+                 };
+                 
+                 console.log('✅ Mapped grades for display:', mappedGrades);
+                 
+                 updatedGrades[student._id] = {
+                   ...updatedGrades[student._id],
+                   ...mappedGrades,
+                   isLocked: classGrades.isLocked || false
+                 };
+                 gradesLoaded++;
+               } else {
+                console.log(`⚠️ No matching class grades found for student ${student.name} in class ${classes[selectedClass].className}`);
+                console.log(`🔍 Available grades for this student:`, data.grades);
+              }
+            } else {
+              console.log(`⚠️ No grades data for student ${student.name}`);
+            }
+          } else {
+            console.log(`❌ Failed to fetch grades for student ${student.name}:`, response.status, response.statusText);
+          }
+        } catch (error) {
+          console.log(`❌ Error loading grades for student ${student.name}:`, error);
+        }
+      }
+      
+      if (gradesLoaded > 0) {
+        console.log(`✅ Loaded grades for ${gradesLoaded} students`);
+        setGrades(updatedGrades);
+      } else {
+        console.log('⚠️ No grades loaded from individual student approach');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error in loadGradesByIndividualStudents:', error);
+    }
+  };
+
+  const handleClassChange = (e) => {
+    const classIndex = parseInt(e.target.value);
+    setSelectedClass(classIndex);
+    setSelectedSection(null);
+    setSubjects([]);
+    setGrades({});
     setStudents([]);
   };
 
-  const handleStrandChange = (strand) => {
-    setSelectedStrand(strand);
-    setSelectedSection('');
-    setSelectedSubject('');
-    setGrades([]);
-    setStudents([]);
-  };
-
-  const handleSectionChange = (section) => {
+  const handleSectionChange = (e) => {
+    const section = e.target.value;
     setSelectedSection(section);
-    setSelectedSubject('');
-    setGrades([]);
-    setStudents([]);
   };
 
-  const handleSubjectChange = (subject) => {
-    setSelectedSubject(subject);
-  };
-
-  // Helper function to get semester name based on term (from Student_Grades.jsx)
-  const getSemesterName = (termName) => {
-    if (termName === 'Term 1') return '1st Semester';
-    if (termName === 'Term 2') return '2nd Semester';
-    return termName;
-  };
-
-  // Helper function to get quarter labels based on current term (from Student_Grades.jsx)
-  const getQuarterLabels = () => {
-    if (currentTerm?.termName === 'Term 1') {
-      return { q1: '1st Quarter', q2: '2nd Quarter' };
-    } else if (currentTerm?.termName === 'Term 2') {
-      return { q1: '3rd Quarter', q2: '4th Quarter' };
-    } else {
-      return { q1: '1st Quarter', q2: '2nd Quarter' };
-    }
-  };
-
-  // Helper function to calculate semestral grade (from Student_Grades.jsx)
-  const calculateSemestralGrade = (quarter1, quarter2) => {
+  // Helper function to calculate semester grade
+  const calculateSemesterGrade = (quarter1, quarter2) => {
     if (!quarter1 || !quarter2) return '';
     
     const q1 = parseFloat(quarter1) || 0;
     const q2 = parseFloat(quarter2) || 0;
     
-    const semestralGrade = (q1 + q2) / 2;
-    return semestralGrade.toFixed(2);
+    const semesterGrade = (q1 + q2) / 2;
+    return semesterGrade.toFixed(2);
+  };
+
+  // Helper function to calculate remarks
+  const calculateRemarks = (semesterGrade) => {
+    if (!semesterGrade) return '';
+    
+    const grade = parseFloat(semesterGrade) || 0;
+    
+    if (grade >= 85) {
+      return 'PASSED';
+    } else if (grade >= 80) {
+      return 'INCOMPLETE';
+    } else if (grade >= 75) {
+      return 'REPEAT';
+    } else {
+      return 'FAILED';
+    }
+  };
+
+  // Helper function to calculate general average
+  const calculateGeneralAverage = (quarter) => {
+    const validGrades = subjects
+      .map(subject => {
+        const subjectGrades = grades[subject._id];
+        if (!subjectGrades) return null;
+        
+        if (currentTerm?.termName === 'Term 1') {
+          if (quarter === 'quarter1') return parseFloat(subjectGrades.quarter1) || null;
+          if (quarter === 'quarter2') return parseFloat(subjectGrades.quarter2) || null;
+        } else if (currentTerm?.termName === 'Term 2') {
+          if (quarter === 'quarter3') return parseFloat(subjectGrades.quarter3) || null;
+          if (quarter === 'quarter4') return parseFloat(subjectGrades.quarter4) || null;
+        } else {
+          if (quarter === 'quarter1') return parseFloat(subjectGrades.quarter1) || null;
+          if (quarter === 'quarter2') return parseFloat(subjectGrades.quarter2) || null;
+        }
+        
+        if (quarter === 'semesterFinal') return parseFloat(subjectGrades.semesterFinal) || null;
+        return null;
+      })
+      .filter(grade => grade !== null);
+    
+    if (validGrades.length === 0) return '';
+    
+    const average = validGrades.reduce((sum, grade) => sum + grade, 0) / validGrades.length;
+    return average.toFixed(2);
   };
 
   return (
@@ -529,465 +591,520 @@ export default function Principal_Grades() {
               })}
             </p>
           </div>
-          <ProfileMenu/>
+                      <div className="flex items-center gap-4">
+              {/* Debug toggle for development */}
+              <button
+                onClick={() => setDebugMode(!debugMode)}
+                className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                {debugMode ? "Hide Debug" : "Show Debug"}
+              </button>
+              
+                             {/* Manual refresh button for debugging */}
+               {selectedClass !== null && (
+                 <button
+                   onClick={() => {
+                     console.log('🔄 Manual refresh triggered');
+                     if (selectedClass !== null) {
+                       fetchStudents();
+                     }
+                   }}
+                   className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                   title="Refresh students and grades data"
+                 >
+                   🔄 Refresh
+                 </button>
+               )}
+               
+               {/* Debug grades button */}
+               {selectedClass !== null && (
+                 <button
+                   onClick={async () => {
+                     console.log('🔍 Debug grades triggered');
+                     if (selectedClass !== null && academicYear && currentTerm) {
+                       const token = localStorage.getItem("token");
+                       const selectedClassObj = classes[selectedClass];
+                       
+                       try {
+                         const response = await fetch(`${API_BASE}/api/semestral-grades/class/${selectedClassObj.classID}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
+                           headers: { Authorization: `Bearer ${token}` }
+                         });
+                         
+                         if (response.ok) {
+                           const data = await response.json();
+                           console.log('🔍 Raw database response:', data);
+                           
+                           if (data.success && data.grades && data.grades.length > 0) {
+                             console.log('🔍 First grade record structure:', data.grades[0]);
+                             if (data.grades[0].grades) {
+                               console.log('🔍 Nested grades object:', data.grades[0].grades);
+                               console.log('🔍 Available grade fields:', Object.keys(data.grades[0].grades));
+                             }
+                           }
+                         }
+                       } catch (error) {
+                         console.error('❌ Debug grades error:', error);
+                       }
+                     }
+                   }}
+                   className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                   title="Debug grades structure from database"
+                 >
+                   🔍 Debug Grades
+                 </button>
+               )}
+              
+              <ProfileMenu/>
+            </div>
         </div>
 
-        {/* Grade Selection Controls */}
-        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-          <h3 className="text-lg font-semibold mb-4">Select Grade View Parameters</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Grade Level Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Grade Level</label>
-              <select
-                value={selectedGradeLevel}
-                onChange={(e) => handleGradeLevelChange(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select Grade Level</option>
-                {gradeLevels.map((level) => (
-                  <option key={level} value={level}>{level}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Strand Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Strand</label>
-              <select
-                value={selectedStrand}
-                onChange={(e) => handleStrandChange(e.target.value)}
-                disabled={!selectedGradeLevel || loading}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              >
-                <option value="">Select Strand</option>
-                {strands.map((strand) => (
-                  <option key={strand} value={strand}>{strand}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Section Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Section</label>
-              <select
-                value={selectedSection}
-                onChange={(e) => handleSectionChange(e.target.value)}
-                disabled={!selectedStrand || loading}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              >
-                <option value="">Select Section</option>
-                {sections.map((section) => (
-                  <option key={section} value={section}>{section}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Subject Selection */}
-            <div>
-              <label className="label text-sm font-medium text-gray-700 mb-2">Subject</label>
-              <select
-                value={selectedSubject}
-                onChange={(e) => handleSubjectChange(e.target.value)}
-                disabled={!selectedSection || loading}
-                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              >
-                <option value="">Select Subject</option>
-                {subjects.map((subject) => (
-                  <option key={subject} value={subject}>{subject}</option>
-                ))}
-              </select>
-            </div>
+        {/* Debug info */}
+        {debugMode && (
+          <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
+            <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
+            <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
+            <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
+            <p className="text-sm text-yellow-700">Classes Found: {classes.length}</p>
+            <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
+            <p className="text-sm text-yellow-700">Loading State: {loading ? 'Yes' : 'No'}</p>
+            <p className="text-sm text-yellow-700">Selected Class: {selectedClass !== null ? classes[selectedClass]?.className : 'None'}</p>
+            <p className="text-sm text-yellow-700">Students Count: {students.length}</p>
+            <p className="text-sm text-yellow-700">Grades State: {Object.keys(grades).length} students have grades</p>
+            
+                     {/* Show detailed grades info */}
+         {Object.keys(grades).length > 0 && (
+           <div className="mt-3 p-3 bg-yellow-200 rounded">
+             <h5 className="font-semibold text-yellow-800 mb-2">Current Grades State:</h5>
+             {Object.entries(grades).map(([studentId, gradeData]) => {
+               const student = students.find(s => s._id === studentId);
+               return (
+                 <div key={studentId} className="text-xs text-yellow-700 mb-2 p-2 bg-yellow-300 rounded">
+                   <strong>{student?.name || studentId}:</strong> {JSON.stringify(gradeData)}
+                   <br/>
+                   <span className="text-yellow-600">
+                     Q1: {gradeData.quarter1 || 'N/A'} | 
+                     Q2: {gradeData.quarter2 || 'N/A'} | 
+                     Final: {gradeData.semesterFinal || 'N/A'} | 
+                     Locked: {gradeData.isLocked ? 'Yes' : 'No'}
+                   </span>
+                 </div>
+               );
+             })}
+           </div>
+         )}
           </div>
+        )}
 
+        {/* Class Selection */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Select Class:</label>
+          <select
+            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={selectedClass !== null ? selectedClass : ""}
+            onChange={handleClassChange}
+            disabled={loading}
+          >
+            <option value="">Choose a class...</option>
+            {classes.map((cls, index) => (
+              <option key={cls.classID} value={index}>
+                {cls.className} - {cls.section || cls.classCode || 'No Section'}
+              </option>
+            ))}
+          </select>
+          
+          {/* Loading state */}
           {loading && (
-            <div className="mt-4 text-center text-gray-600">
-              <p>Loading options...</p>
+            <p className="mt-2 text-sm text-blue-600">
+              🔄 Loading classes for {currentTerm?.termName || 'current term'}...
+            </p>
+          )}
+          
+          {/* Warning when no classes available */}
+          {!loading && classes.length === 0 && (
+            <div className="mt-2 p-3 bg-orange-50 border border-orange-200 rounded-md">
+              <p className="text-sm text-orange-800 font-medium">
+                ⚠️ No classes available for the current term and academic year.
+              </p>
+              <div className="text-xs text-orange-700 mt-1 space-y-1">
+                <p>• Current Term: {currentTerm?.termName || 'Not set'}</p>
+                <p>• Academic Year: {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Not set'}</p>
+              </div>
             </div>
+          )}
+          
+          {/* Success message when classes are found */}
+          {!loading && classes.length > 0 && (
+            <p className="mt-2 text-sm text-green-600">
+              ✅ Found {classes.length} class{classes.length !== 1 ? 'es' : ''} for {currentTerm?.termName || 'current term'}
+            </p>
           )}
         </div>
 
-        {/* Grades Table */}
-        {selectedSubject && (
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold">
-                {academicYear?.schoolYearStart}-{academicYear?.schoolYearEnd} {currentTerm ? getSemesterName(currentTerm.termName) : ''}
-              </h3>
-              <p className="text-sm text-gray-600 mt-1">
-                {selectedGradeLevel} - {selectedStrand} - {selectedSection} - {selectedSubject}
+        {/* Section Selection */}
+        {selectedClass !== null && classes[selectedClass] && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select Section:</label>
+            <select
+              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={selectedSection || ""}
+              onChange={handleSectionChange}
+            >
+              <option value="">Choose a section...</option>
+              {/* Show the class's assigned section */}
+              {classes[selectedClass].section && (
+                <option key={classes[selectedClass].section} value={classes[selectedClass].section}>
+                  {classes[selectedClass].section}
+                </option>
+              )}
+              {/* Also show any additional sections from students if they exist */}
+              {students.length > 0 && Array.from(new Set(students.map(student => student.section || 'default')))
+                .filter(section => section !== classes[selectedClass].section && section !== 'default')
+                .map(section => (
+                  <option key={section} value={section}>
+                    {section}
+                  </option>
+                ))}
+              {/* Add a default section option if no sections are available */}
+              {(!classes[selectedClass].section || classes[selectedClass].section === '') && (
+                <option value="default">Default Section</option>
+              )}
+            </select>
+            
+            {/* Show section info */}
+            {selectedSection && (
+              <p className="mt-1 text-sm text-gray-600">
+                Selected section: <strong>{selectedSection}</strong>
+                {selectedSection === 'default' && (
+                  <span className="text-orange-600 ml-2">⚠️ Using default section</span>
+                )}
               </p>
-              <p className="text-sm text-gray-500 mt-1">
-                Showing {students.length} student(s) in section, {grades.length} with grades posted
-              </p>
-            </div>
+            )}
+          </div>
+        )}
 
-            {loadingGrades ? (
-              <div className="p-8 text-center">
-                <p className="text-gray-600">Loading grades...</p>
+        {/* Warning when no sections available for the selected class */}
+        {selectedClass !== null && classes[selectedClass] && !classes[selectedClass].section && (
+          <div className="mb-6">
+            <p className="text-sm text-orange-600">
+              ⚠️ The selected class "{classes[selectedClass].className}" does not have any sections assigned to it.
+            </p>
+            <p className="text-sm text-gray-600 mt-1">
+              💡 You can still proceed by selecting "Default Section" from the dropdown above.
+            </p>
+          </div>
+        )}
+
+        {/* Grades Status Summary */}
+        {selectedClass !== null && selectedSection && students.length > 0 && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Posted to Students: {students.filter(student => grades[student._id]?.isLocked).length}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Pending: {students.filter(student => !grades[student._id]?.isLocked).length}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Total Students: {students.length}
+                  </span>
+                </div>
               </div>
-            ) : students.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="p-3 text-left font-medium text-gray-700">Student Name</th>
-                      <th className="p-3 text-left font-medium text-gray-700">Student ID</th>
-                      <th className="p-3 text-center font-medium text-gray-700">{getQuarterLabels().q1}</th>
-                      <th className="p-3 text-center font-medium text-gray-700">{getQuarterLabels().q2}</th>
-                      <th className="p-3 text-center font-medium text-gray-700">Semestral Grade</th>
-                      <th className="p-3 text-center font-medium text-gray-700">Remarks</th>
-                      <th className="p-3 text-center font-medium text-gray-700">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {students.map((student, index) => {
-                      // Find grades for this student
-                      const studentGrades = grades.find(grade => 
-                        grade._id === student._id || 
-                        grade.schoolID === (student.userID || student.studentID || student._id || student.id)
-                      );
-                      
-                      const studentName = student.name || student.studentName || `${student.firstname || ''} ${student.lastname || ''}`.trim();
-                      const studentID = student.userID || student.studentID || student._id || student.id;
-                      
-                      return (
-                        <tr key={student._id || index} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="p-3 font-medium">{studentName || 'N/A'}</td>
-                          <td className="p-3 text-gray-600">{studentID || 'N/A'}</td>
-                          <td className="p-3 text-center">
-                            {studentGrades?.grades?.quarter1 || '-'}
-                          </td>
-                          <td className="p-3 text-center">
-                            {studentGrades?.grades?.quarter2 || '-'}
-                          </td>
-                          <td className="p-3 text-center font-semibold">
-                            {studentGrades?.grades?.semesterFinal || 
-                             (studentGrades?.grades?.quarter1 && studentGrades?.grades?.quarter2 ? 
-                              calculateSemestralGrade(studentGrades.grades.quarter1, studentGrades.grades.quarter2) : '-')}
-                          </td>
-                          <td className="p-3 text-center">
-                            {studentGrades?.grades?.remarks || '-'}
-                          </td>
-                          <td className="p-3 text-center">
-                            {studentGrades ? (
-                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                                Grades Posted
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                                No Grades
-                              </span>
-                            )}
+              <div className="text-sm text-gray-600">
+                💡 This is a read-only view. You can view all grades but cannot edit them.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Title */}
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold text-gray-800 uppercase tracking-wide">
+            Report on Learning Progress and Achievement
+          </h1>
+        </div>
+
+        {/* Only show tables when both class and section are selected */}
+        {selectedClass !== null && selectedSection && (
+          <>
+            {/* First Semester Section - Only show if Term 1 is active */}
+            {currentTerm?.termName === 'Term 1' && (
+              <div className="mb-8">
+                <div className="mb-4">
+                  <h2 className="text-xl font-bold text-gray-800">
+                    First Semester (Q1 & Q2)
+                    {selectedSection && selectedSection !== 'default' && (
+                      <span className="text-sm font-normal text-gray-600 ml-2">
+                        - Section: {selectedSection}
+                      </span>
+                    )}
+                    {selectedSection === 'default' && (
+                      <span className="text-sm font-normal text-gray-600 ml-2">
+                        - Default Section
+                      </span>
+                    )}
+                  </h2>
+                  {/* Subject information below the semester title */}
+                  {selectedClass !== null && classes[selectedClass] && (
+                    <div className="mt-2 text-sm text-gray-600">
+                      <p><strong>Subject:</strong> {classes[selectedClass].className}</p>
+                      <p><strong>Subject Code:</strong> {classes[selectedClass].classCode}</p>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border border-gray-300 text-sm">
+                    <thead>
+                      <tr>
+                        <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Student ID</th>
+                        <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Students</th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50" colSpan="2">Quarter</th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Remarks</th>
+                      </tr>
+                      <tr>
+                        <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
+                        <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">1</th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">2</th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {students.length > 0 ? (
+                        students.map((student) => {
+                          const studentGrades = grades[student._id] || {};
+                          const semesterGrade = calculateSemesterGrade(studentGrades.quarter1, studentGrades.quarter2);
+                          const remarks = calculateRemarks(semesterGrade);
+                          const isLocked = studentGrades.isLocked;
+                          
+                          return (
+                            <tr key={student._id} className={`hover:bg-gray-50 ${isLocked ? 'bg-green-50' : ''}`}>
+                              <td className="border border-gray-300 p-2 h-12 font-medium text-sm">
+                                {student.schoolID || 'N/A'}
+                              </td>
+                              <td className="border border-gray-300 p-2 h-12 font-medium">
+                                <div className="flex items-center gap-2">
+                                  {student.name}
+                                  {isLocked && (
+                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                      ✅ Posted
+                                    </span>
+                                  )}
+
+                                </div>
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                {studentGrades.quarter1 || '-'}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                {studentGrades.quarter2 || '-'}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                {studentGrades.semesterFinal || semesterGrade || '-'}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                {studentGrades.remarks || remarks || '-'}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan="6" className="border border-gray-300 p-4 text-center text-gray-500">
+                            No students available in this class and section.
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      )}
+                      
+                      {/* General Average */}
+                      <tr className="bg-yellow-100">
+                        <td className="border border-gray-300 p-2 font-bold text-gray-800" colSpan="2">General Average</td>
+                        <td className="border border-gray-300 p-2 text-center font-bold">
+                          {students.length > 0 ? calculateGeneralAverage('quarter1') : ''}
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center font-bold">
+                          {students.length > 0 ? calculateGeneralAverage('quarter2') : ''}
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center font-bold">
+                          {students.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center font-bold">
+                          {/* Remarks column for General Average */}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
+            )}
+
+            {/* Second Semester Section - Only show if Term 2 is active */}
+            {currentTerm?.termName === 'Term 2' && (
+              <div className="mb-8">
+                <div className="mb-4">
+                  <h2 className="text-xl font-bold text-gray-800">
+                    Second Semester (Q3 & Q4)
+                    {selectedSection && selectedSection !== 'default' && (
+                      <span className="text-sm font-normal text-gray-600 ml-2">
+                        - Section: {selectedSection}
+                      </span>
+                    )}
+                    {selectedSection === 'default' && (
+                      <span className="text-sm font-normal text-gray-600 ml-2">
+                        - Default Section
+                      </span>
+                    )}
+                  </h2>
+                  {/* Subject information below the semester title */}
+                  {selectedClass !== null && classes[selectedClass] && (
+                    <div className="mt-2 text-sm text-gray-600">
+                      <p><strong>Subject:</strong> {classes[selectedClass].className}</p>
+                      <p><strong>Subject Code:</strong> {classes[selectedClass].classCode}</p>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border border-gray-300 text-sm">
+                    <thead>
+                      <tr>
+                        <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Student ID</th>
+                        <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Students</th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50" colSpan="2">Quarter</th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Remarks</th>
+                      </tr>
+                      <tr>
+                        <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
+                        <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50"></th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">3</th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">4</th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {students.length > 0 ? (
+                        students.map((student) => {
+                          const studentGrades = grades[student._id] || {};
+                          const semesterGrade = calculateSemesterGrade(studentGrades.quarter3, studentGrades.quarter4);
+                          const remarks = calculateRemarks(semesterGrade);
+                          const isLocked = studentGrades.isLocked;
+                          
+                          return (
+                            <tr key={student._id} className={`hover:bg-gray-50 ${isLocked ? 'bg-green-50' : ''}`}>
+                              <td className="border border-gray-300 p-2 h-12 font-medium text-sm">
+                                {student.schoolID || 'N/A'}
+                              </td>
+                              <td className="border border-gray-300 p-2 h-12 font-medium">
+                                <div className="flex items-center gap-2">
+                                  {student.name}
+                                  {isLocked && (
+                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                      ✅ Posted
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                {studentGrades.quarter3 || '-'}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                {studentGrades.quarter4 || '-'}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                {studentGrades.semesterFinal || semesterGrade || '-'}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                {studentGrades.remarks || remarks || '-'}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan="6" className="border border-gray-300 p-4 text-center text-gray-500">
+                            No students available in this class and section.
+                          </td>
+                        </tr>
+                      )}
+                      
+                      {/* General Average */}
+                      <tr className="bg-yellow-100">
+                        <td className="border border-gray-300 p-2 font-bold text-gray-800" colSpan="2">General Average</td>
+                        <td className="border border-gray-300 p-2 text-center font-bold">
+                          {students.length > 0 ? calculateGeneralAverage('quarter3') : ''}
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center font-bold">
+                          {students.length > 0 ? calculateGeneralAverage('quarter4') : ''}
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center font-bold">
+                          {students.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center font-bold">
+                          {/* Remarks column for General Average */}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Show message when no active term matches */}
+            {(!currentTerm?.termName || (currentTerm?.termName !== 'Term 1' && currentTerm?.termName !== 'Term 2')) && (
+              <div className="text-center py-8 text-gray-600">
+                <p>No active term found. Please check your academic term settings.</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Show message when class or section not selected */}
+        {(selectedClass === null || !selectedSection) && (
+          <div className="text-center py-8 text-gray-600">
+            {selectedClass === null ? (
+              <p>Please select a class to view available sections and the grading table.</p>
+            ) : !selectedSection ? (
+              <p>Please select a section to view the grading table for the selected class.</p>
             ) : (
-              <div className="p-8 text-center text-gray-500">
-                <p>No students found in the selected section.</p>
-                <p className="text-sm mt-2">Please ensure all parameters are selected correctly.</p>
-              </div>
+              <p>Please select both a class and section to view the grading table.</p>
             )}
           </div>
         )}
 
         {/* Instructions */}
-        {!selectedSubject && (
+        {(!selectedClass || !selectedSection) && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
             <h3 className="text-lg font-semibold text-blue-800 mb-2">How to View Grades</h3>
             <p className="text-blue-700">
-              1. Select a <strong>Grade Level</strong> (e.g., Grade 11)<br/>
-              2. Choose a <strong>Strand</strong> (e.g., ABM, STEM, HUMSS)<br/>
-              3. Pick a <strong>Section</strong> (e.g., ABM111, STEM112)<br/>
-              4. Select a <strong>Subject</strong> to view ALL student grades in that section
+              1. Select a <strong>Class</strong> from the dropdown above<br/>
+              2. Choose a <strong>Section</strong> for that class<br/>
+              3. View the grading table with all student grades
             </p>
             <p className="text-sm text-blue-600 mt-2">
-              💡 <strong>Data Source:</strong> Now reading from actual database collections (Sections, Subjects, SemestralGrades)
+              💡 <strong>Read-Only View:</strong> As a Principal, you can view all grades but cannot edit them
             </p>
             <p className="text-sm text-blue-600 mt-1">
-              🔄 <strong>Data Fetching:</strong> Using improved logic from Student_Grades.jsx for better data retrieval
+              📊 <strong>Grade Status:</strong> Green checkmarks indicate grades that have been posted to students
             </p>
             <p className="text-sm text-blue-600 mt-1">
-              📊 <strong>Student Display:</strong> Shows ALL students in the section, with status indicators for grades posted
+              🔒 <strong>Data Source:</strong> Grades are loaded from the Semestral_Grades_Collection database
             </p>
-          </div>
-        )}
-
-        {/* Debug Information - Remove this in production */}
-        {import.meta.env.MODE === 'development' && (
-          <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-            <h3 className="text-lg font-semibold mb-4">🔍 Debug Info</h3>
-            <div className="text-sm space-y-2">
-              <p><strong>Current Term:</strong> {currentTerm?.termName || 'Not set'}</p>
-              <p><strong>Academic Year:</strong> {academicYear ? `${academicYear.schoolYearStart}-${academicYear?.schoolYearEnd}` : 'Not set'}</p>
-              <p><strong>Selected Grade Level:</strong> {selectedGradeLevel || 'None'}</p>
-              <p><strong>Selected Strand:</strong> {selectedStrand || 'None'}</p>
-              <p><strong>Selected Section:</strong> {selectedSection || 'None'}</p>
-              <p><strong>Selected Subject:</strong> {selectedSubject || 'None'}</p>
-              <p><strong>Grades Found:</strong> {grades.length}</p>
-              <p><strong>Students Found:</strong> {students.length}</p>
-              <p><strong>Loading Grades:</strong> {loadingGrades ? 'Yes' : 'No'}</p>
-              <p><strong>API Base:</strong> <code className="bg-gray-100 px-2 py-1 rounded">{API_BASE}</code></p>
-              
-              <div className="mt-4">
-                <button
-                  onClick={() => {
-                    const token = localStorage.getItem("token");
-                    if (token) {
-                      try {
-                        const payload = JSON.parse(atob(token.split('.')[1]));
-                        alert(`🔍 JWT Token Debug:\n\nUser ID: ${payload._id}\nUser Role: ${payload.role}\nEmail: ${payload.email}\nFull Token: ${token.substring(0, 50)}...`);
-                      } catch (e) {
-                        alert(`❌ Could not decode JWT token:\n\nError: ${e.message}`);
-                      }
-                    } else {
-                      alert('❌ No token found in localStorage');
-                    }
-                  }}
-                  className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-                >
-                  🔍 Check User Role
-                </button>
-                
-                <button
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem("token");
-                      const response = await fetch(`${API_BASE}/api/sections?schoolYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}&termName=${currentTerm?.termName}`, {
-                        headers: { "Authorization": `Bearer ${token}` }
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        alert(`✅ Sections API Test Successful!\n\nFound ${data.length || 0} sections\n\nResponse: ${JSON.stringify(data, null, 2)}`);
-                      } else {
-                        const errorData = await response.json();
-                        alert(`❌ Sections API Test Failed!\n\nStatus: ${response.status}\n\nError: ${errorData.message || response.statusText}`);
-                      }
-                    } catch (error) {
-                      alert(`❌ Sections API Test Error!\n\nError: ${error.message}`);
-                    }
-                  }}
-                  className="ml-2 px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
-                >
-                  🧪 Test Sections API
-                </button>
-                
-                <button
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem("token");
-                      const response = await fetch(`${API_BASE}/api/subjects?schoolYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}&termName=${currentTerm?.termName}`, {
-                        headers: { "Authorization": `Bearer ${token}` }
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        alert(`✅ Subjects API Test Successful!\n\nFound ${data.length || 0} subjects\n\nResponse: ${JSON.stringify(data, null, 2)}`);
-                      } else {
-                        const errorData = await response.json();
-                        alert(`❌ Subjects API Test Failed!\n\nStatus: ${response.status}\n\nError: ${errorData.message || response.statusText}`);
-                      }
-                    } catch (error) {
-                      alert(`❌ Subjects API Test Error!\n\nError: ${error.message}`);
-                    }
-                  }}
-                  className="ml-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                >
-                  🧪 Test Subjects API
-                </button>
-                
-                <button
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem("token");
-                      const response = await fetch(`${API_BASE}/api/classes`, {
-                        headers: { "Authorization": `Bearer ${token}` }
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        alert(`✅ Classes API Test Successful!\n\nFound ${data.length || 0} classes\n\nResponse: ${JSON.stringify(data, null, 2)}`);
-                      } else {
-                        const errorData = await response.json();
-                        alert(`❌ Classes API Test Failed!\n\nStatus: ${response.status}\n\nError: ${errorData.message || response.statusText}`);
-                      }
-                    } catch (error) {
-                      alert(`❌ Classes API Test Error!\n\nError: ${error.message}`);
-                    }
-                  }}
-                  className="ml-2 px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
-                >
-                  🧪 Test Classes API
-                </button>
-                
-                <button
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem("token");
-                      const response = await fetch(`${API_BASE}/api/semestral-grades/class/list?termName=${currentTerm?.termName}&academicYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`, {
-                        headers: { "Authorization": `Bearer ${token}` }
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        alert(`✅ Class List API Test Successful!\n\nFound ${data.classes?.length || 0} classes\n\nResponse: ${JSON.stringify(data, null, 2)}`);
-                      } else {
-                        const errorData = await response.json();
-                        alert(`❌ Class List API Test Failed!\n\nStatus: ${response.status}\n\nError: ${errorData.message || response.statusText}`);
-                      }
-                    } catch (error) {
-                      alert(`❌ Class List API Test Error!\n\nError: ${error.message}`);
-                    }
-                  }}
-                  className="ml-2 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
-                >
-                  🧪 Test Class List API
-                </button>
-                
-                <button
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem("token");
-                      const response = await fetch(`${API_BASE}/api/semestral-grades?termName=${currentTerm?.termName}&academicYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`, {
-                        headers: { "Authorization": `Bearer ${token}` }
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        alert(`✅ Semestral Grades API Test Successful!\n\nFound ${data.grades?.length || 0} grades\n\nResponse: ${JSON.stringify(data, null, 2)}`);
-                      } else {
-                        const errorData = await response.json();
-                        alert(`❌ Semestral Grades API Test Failed!\n\nStatus: ${response.status}\n\nError: ${errorData.message || response.statusText}`);
-                      }
-                    } catch (error) {
-                      alert(`❌ Semestral Grades API Test Error!\n\nError: ${error.message}`);
-                    }
-                  }}
-                  className="ml-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                >
-                  🧪 Test Semestral Grades API
-                </button>
-                
-                <button
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem("token");
-                      const response = await fetch(`${API_BASE}/api/semestral-grades/class/all?termName=${currentTerm?.termName}&academicYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`, {
-                        headers: { "Authorization": `Bearer ${token}` }
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        alert(`✅ Class All API Test Successful!\n\nFound ${data.grades?.length || 0} grades\n\nResponse: ${JSON.stringify(data, null, 2)}`);
-                      } else {
-                        const errorData = await response.json();
-                        alert(`❌ Class All API Test Failed!\n\nStatus: ${response.status}\n\nError: ${errorData.message || response.statusText}`);
-                      }
-                    } catch (error) {
-                      alert(`❌ Class All API Test Error!\n\nError: ${error.message}`);
-                    }
-                  }}
-                  className="ml-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                >
-                  🧪 Test Class All API
-                </button>
-                
-                <button
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem("token");
-                      const response = await fetch(`${API_BASE}/api/traditional-grades/all?termName=${currentTerm?.termName}&academicYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`, {
-                        headers: { "Authorization": `Bearer ${token}` }
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        alert(`✅ Traditional Grades API Test Successful!\n\nFound ${data.grades?.length || 0} grades\n\nResponse: ${JSON.stringify(data, null, 2)}`);
-                      } else {
-                        const errorData = await response.json();
-                        alert(`❌ Traditional Grades API Test Failed!\n\nStatus: ${response.status}\n\nError: ${errorData.message || response.statusText}`);
-                      }
-                    } catch (error) {
-                      alert(`❌ Traditional Grades API Test Error!\n\nError: ${error.message}`);
-                    }
-                  }}
-                  className="ml-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                >
-                  🧪 Test Traditional Grades API
-                </button>
-                
-                <button
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem("token");
-                      const response = await fetch(`${API_BASE}/api/semestral-grades/principal-view?gradeLevel=${selectedGradeLevel || 'Grade 11'}&strand=${selectedStrand || 'Cookery'}&section=${selectedSection || 'CKYIII'}&subject=${selectedSubject || 'Introduction to Cooking'}&termName=${currentTerm?.termName}&academicYear=${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`, {
-                        headers: { "Authorization": `Bearer ${token}` }
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        alert(`✅ Principal View API Test Successful!\n\nFound ${data.grades?.length || 0} grades\n\nResponse: ${JSON.stringify(data, null, 2)}`);
-                      } else {
-                        const errorData = await response.json();
-                        alert(`❌ Principal View API Test Failed!\n\nStatus: ${response.status}\n\nError: ${errorData.message || response.statusText}`);
-                      }
-                    } catch (error) {
-                      alert(`❌ Principal View API Test Error!\n\nError: ${error.message}`);
-                    }
-                  }}
-                  className="ml-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                >
-                  🧪 Test Principal View API
-                </button>
-                
-                <button
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem("token");
-                      // Test the comprehensive endpoint that GradingSystem.jsx uses
-                      const response = await fetch(
-                        `${API_BASE}/api/grading/class/all/section/${selectedSection || 'CKYIII'}/comprehensive?` +
-                        `trackName=${selectedStrand || 'Cookery'}&` +
-                        `strandName=${selectedStrand || 'Cookery'}&` +
-                        `gradeLevel=${selectedGradeLevel || 'Grade 11'}&` +
-                        `schoolYear=${academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : '2025-2026'}&` +
-                        `termName=${currentTerm ? currentTerm.termName : 'Term 1'}`,
-                        {
-                          headers: { "Authorization": `Bearer ${token}` }
-                        }
-                      );
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        alert(`✅ Comprehensive Endpoint Test Successful!\n\nFound ${data.data?.students?.length || 0} students\n\nResponse: ${JSON.stringify(data, null, 2)}`);
-                      } else {
-                        const errorData = await response.json();
-                        alert(`❌ Comprehensive Endpoint Test Failed!\n\nStatus: ${response.status}\n\nError: ${errorData.message || response.statusText}`);
-                      }
-                    } catch (error) {
-                      alert(`❌ Comprehensive Endpoint Test Error!\n\nError: ${error.message}`);
-                    }
-                  }}
-                  className="ml-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
-                >
-                  🧪 Test Comprehensive Endpoint
-                </button>
-              </div>
-              
-              <div className="mt-4 p-4 bg-gray-50 rounded">
-                <h4 className="font-semibold mb-2">📊 Data Summary:</h4>
-                <p><strong>Available Grade Levels:</strong> {gradeLevels.join(', ')}</p>
-                <p><strong>Available Strands:</strong> {strands.join(', ')}</p>
-                <p><strong>Available Sections:</strong> {sections.join(', ')}</p>
-                <p><strong>Available Subjects:</strong> {subjects.join(', ')}</p>
-              </div>
-            </div>
+            <p className="text-sm text-blue-600 mt-1">
+              📋 <strong>Principal Access:</strong> You have read-only access to view all faculty grades across all classes
+            </p>
           </div>
         )}
       </div>

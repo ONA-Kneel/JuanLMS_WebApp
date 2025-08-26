@@ -10,7 +10,7 @@ import { getFileUrl } from "../utils/imageUtils";
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
 // Force localhost for local testing
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 const DEBUG_MEMBERS = true;
 
 export default function ClassContent({ selected, isFaculty = false }) {
