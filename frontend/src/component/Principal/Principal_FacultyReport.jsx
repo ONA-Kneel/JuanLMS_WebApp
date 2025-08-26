@@ -4,7 +4,7 @@ import Principal_Navbar from "./Principal_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
 // Use environment variable or fallback to localhost
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Principal_FacultyReport() {
   const [academicYear, setAcademicYear] = useState(null);
