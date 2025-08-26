@@ -3,7 +3,7 @@ import { Headphones, Search, FileText, Clock, CheckCircle, XCircle, Copy, ArrowL
 import axios from 'axios';
 import { getUserTickets } from '../../services/ticketService';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function SupportModal({ onClose }) {
   const [view, setView] = useState('main'); // main | new | submitted | myTickets
@@ -228,7 +228,7 @@ export default function SupportModal({ onClose }) {
         formData.append('file', newTicket.file);
       }
 
-      const response = await axios.post(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/tickets`, formData, {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com"}/api/tickets`, formData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
