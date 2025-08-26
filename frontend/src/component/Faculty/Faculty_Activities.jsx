@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Faculty_Activities() {
   const [activeTab, setActiveTab] = useState("activities-quiz");
