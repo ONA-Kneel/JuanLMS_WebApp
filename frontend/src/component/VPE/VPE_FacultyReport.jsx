@@ -3,6 +3,54 @@ import * as XLSX from "xlsx";
 import VPE_Navbar from "./VPE_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
+// PDF generation function
+const downloadAsPDF = (content, filename) => {
+  // Create a new window with the content
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${filename}</title>
+      <style>
+        body { 
+          font-family: Arial, sans-serif; 
+          line-height: 1.6; 
+          margin: 20px; 
+          color: #333;
+        }
+        .header { 
+          text-align: center; 
+          border-bottom: 2px solid #333; 
+          padding-bottom: 10px; 
+          margin-bottom: 20px;
+        }
+        .content { 
+          white-space: pre-wrap; 
+          font-size: 14px;
+        }
+        @media print {
+          body { margin: 0; }
+          .no-print { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>${filename}</h1>
+        <p>Generated on: ${new Date().toLocaleDateString()}</p>
+      </div>
+      <div class="content">${content}</div>
+      <div class="no-print">
+        <button onclick="window.print()">Print / Save as PDF</button>
+        <button onclick="window.close()">Close</button>
+      </div>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+};
+
 // Use environment variable or fallback to localhost
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -33,6 +81,12 @@ export default function VPE_FacultyReport() {
   const [auditData, setAuditData] = useState([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
   const [auditError, setAuditError] = useState(null);
+
+  // AI Analytics states
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+  const [analysisError, setAnalysisError] = useState(null);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -500,6 +554,50 @@ export default function VPE_FacultyReport() {
   const uniqueCourses = [...new Set(facultyActivities.map(a => a.subject).filter(Boolean))].sort();
   const uniqueFaculty = [...new Set(facultyActivities.map(a => a.facultyName).filter(Boolean))].sort();
 
+  // AI Analysis function
+  const createAIAnalysis = async () => {
+    if (!selectedSchoolYear || !selectedTerm) {
+      setAnalysisError("Please select both school year and term before creating analysis.");
+      return;
+    }
+
+    setLoadingAnalysis(true);
+    setAnalysisError(null);
+    setAiAnalysis(null);
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/api/ai-analytics/create-analysis`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          schoolYear: selectedSchoolYear,
+          termName: selectedTerm,
+          sectionFilter: selectedSection || null,
+          trackFilter: selectedTrack || null,
+          strandFilter: selectedStrand || null
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create AI analysis");
+      }
+
+      const data = await response.json();
+      setAiAnalysis(data.analysis);
+      setShowAnalysisModal(true);
+    } catch (error) {
+      console.error("AI Analysis Error:", error);
+      setAnalysisError(error.message || "Failed to create AI analysis");
+    } finally {
+      setLoadingAnalysis(false);
+    }
+  };
+
   // Calculate summary statistics
   const totalActivities = filteredActivities.length;
   const assignmentsCount = filteredActivities.filter(a => a._kind === 'assignment').length;
@@ -527,6 +625,25 @@ export default function VPE_FacultyReport() {
             </p>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              onClick={createAIAnalysis}
+              disabled={loadingAnalysis || !selectedSchoolYear || !selectedTerm}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {loadingAnalysis ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Creating Analysis...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  Create Analysis
+                </>
+              )}
+            </button>
             <ProfileMenu />
           </div>
         </div>
@@ -1006,6 +1123,100 @@ export default function VPE_FacultyReport() {
           })()}
         </div>
       </div>
+
+      {/* AI Analysis Modal */}
+      {showAnalysisModal && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-xl font-semibold text-gray-800">
+                AI Analysis Report - {selectedSchoolYear} - {selectedTerm}
+              </h3>
+              <button
+                onClick={() => setShowAnalysisModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+              {aiAnalysis ? (
+                <div className="prose max-w-none">
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg mb-6 border-l-4 border-blue-500">
+                    <h4 className="text-lg font-semibold text-blue-800 mb-2">Analysis Summary</h4>
+                    <p className="text-blue-700">
+                      This AI-powered analysis provides insights into faculty performance, student engagement, 
+                      and recommendations for improving academic outcomes.
+                    </p>
+                  </div>
+                  
+                  <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+                    {aiAnalysis}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-red-600">No analysis data available</div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => setShowAnalysisModal(false)}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors bg-white"
+              >
+                Close
+              </button>
+              {aiAnalysis && (
+                <>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(aiAnalysis);
+                      // You could add a toast notification here
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Copy to Clipboard
+                  </button>
+                  <button
+                    onClick={() => downloadAsPDF(aiAnalysis, `AI_Analysis_${selectedSchoolYear}_${selectedTerm}`)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                  >
+                    Download as PDF
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Alert */}
+      {analysisError && (
+        <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-lg z-50 max-w-md">
+          <div className="flex items-start">
+            <svg className="w-5 h-5 text-red-400 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <h4 className="font-medium">Analysis Error</h4>
+              <p className="text-sm mt-1">{analysisError}</p>
+            </div>
+            <button
+              onClick={() => setAnalysisError(null)}
+              className="ml-4 text-red-400 hover:text-red-600"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
