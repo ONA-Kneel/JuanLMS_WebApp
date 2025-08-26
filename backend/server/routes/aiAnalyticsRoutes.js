@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticateToken } from "../middleware/authMiddleware.js";
 import database from "../connect.cjs";
+import { ObjectId } from "mongodb";
 
 const router = express.Router();
 
@@ -47,7 +48,7 @@ router.post("/create-analysis", authenticateToken, async (req, res) => {
         .map(fa => fa.facultyId)
         .filter(Boolean)
         .map(id => {
-          try { return typeof id === 'string' ? new database.ObjectId(id) : id; } catch { return null; }
+          try { return typeof id === 'string' ? new ObjectId(id) : id; } catch { return null; }
         })
         .filter(Boolean)
     )];
@@ -108,11 +109,11 @@ router.post("/create-analysis", authenticateToken, async (req, res) => {
       ...quizzes.map(q => q.createdBy).filter(Boolean)
     ]
       .map(id => {
-        try { return typeof id === 'string' ? new database.ObjectId(id) : id; } catch { return null; }
+        try { return typeof id === 'string' ? new ObjectId(id) : id; } catch { return null; }
       })
       .filter(Boolean);
 
-    const uniqueCreatorIds = [...new Set(creatorIds.map(id => String(id)))].map(id => new database.ObjectId(id));
+    const uniqueCreatorIds = [...new Set(creatorIds.map(id => String(id)))].map(id => new ObjectId(id));
 
     const creatorUsers = uniqueCreatorIds.length > 0
       ? await db.collection('users')
@@ -458,7 +459,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
     }
 
     const analysis = await db.collection('AIAnalytics').findOne({ 
-      _id: new database.ObjectId(req.params.id),
+      _id: new ObjectId(req.params.id),
       createdBy: req.user._id 
     });
 
