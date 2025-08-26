@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
-export default function GradingSystem() {
+export default function GradingSystem({ onStageTemporaryGrades }) {
   const [facultyClasses, setFacultyClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
@@ -422,14 +422,38 @@ export default function GradingSystem() {
           const membersData = await membersRes.json();
           if (membersData?.students?.length) {
             students = membersData.students;
+          } else if (Array.isArray(membersData)) {
+            students = membersData;
+          }
+        }
+      }
+    } catch {}
+    try {
+      if (students.length === 0 && selectedClassObj.classID && academicYear && currentTerm) {
+        const classId = selectedClassObj.classID;
+        const sgRes = await fetch(`${API_BASE}/api/semestral-grades/class/${classId}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (sgRes.ok) {
+          const sgData = await sgRes.json();
+          if (sgData?.success && Array.isArray(sgData.grades)) {
+            const unique = [];
+            const seen = new Set();
+            sgData.grades.forEach(g => {
+              const sid = g.schoolID || g.studentID || g._id;
+              if (sid && !seen.has(sid)) {
+                seen.add(sid);
+                unique.push({ schoolID: sid, name: g.studentName });
+              }
+            });
+            students = unique;
           }
         }
       }
     } catch {}
 
-    // Frontend guard: keep only users with role === 'students'
-    const studentsOnly = (students || []).filter(s => (s.role || '').toLowerCase() === 'students');
-    const normalized = studentsOnly.map((s, idx) => ({
+    const candidates = (students || []).filter(s => (s.studentID || s.schoolID || s.userID || s.id || s._id));
+    const normalized = candidates.map((s, idx) => ({
       id: s.studentID || s.schoolID || s.userID || s.id || s._id || `S${idx + 1}`,
       name: s.name || s.studentName || `${s.firstname || ''} ${s.lastname || ''}`.trim()
     }));
@@ -439,6 +463,79 @@ export default function GradingSystem() {
   };
 
   const hasAccents = (str) => /[^\u0000-\u007f]/.test(str || '');
+
+  // New function to validate required columns
+  const validateRequiredColumns = (row8, row9, row10) => {
+    console.log('🔍 Validating required columns...');
+    console.log('Row 8:', row8);
+    console.log('Row 9:', row9);
+    console.log('Row 10:', row10);
+    
+    const errors = [];
+
+    const norm = (v) => (v == null ? '' : String(v))
+      .replace(/[’‘‛‚`´]/g, "'")
+      .trim()
+      .replace(/\s+/g, ' ')
+      .toUpperCase();
+    const cellContains = (cell, target) => norm(cell).includes(norm(target));
+    const rowHas = (row, target) => (row || []).some(c => cellContains(c, target));
+    const rowHasAny = (row, targets) => targets.some(t => rowHas(row, t));
+
+    // Check Row 8 (Student No., Student Name, etc.)
+    if (!row8 || row8.length === 0) {
+      errors.push('Row 8 is missing or empty. This row should contain column titles.');
+      return errors;
+    }
+
+    // Accept common variants for Student No. and Student Name and ignore exact positions
+    const studentNoAliases = ['STUDENT NO.', 'STUDENT NO', 'STUDENT NUMBER'];
+    const studentNameAliases = ["STUDENT'S NAME", 'STUDENT NAME'];
+
+    if (!rowHasAny(row8, studentNoAliases)) {
+      errors.push('Missing required header in Row 8: Student No.');
+    }
+    if (!rowHasAny(row8, studentNameAliases)) {
+      errors.push("Missing required header in Row 8: STUDENT'S NAME");
+    }
+
+    // Check if Row 9 exists and has content
+    if (!row9 || row9.length === 0) {
+      errors.push('Row 9 is missing or empty. This row should contain group headers.');
+      return errors;
+    }
+
+    // Check if Row 10 exists and has content
+    if (!row10 || row10.length === 0) {
+      errors.push('Row 10 is missing or empty. This row should contain sub-headers.');
+      return errors;
+    }
+
+    // Required group headers (allow anywhere in the row; tolerate merged cells)
+    const requiredRow9Labels = ['WRITTEN WORKS 40%', 'PERFORMANCE TASKS 60%', 'INITIAL GRADE', 'QUARTERLY GRADE'];
+    requiredRow9Labels.forEach(label => {
+      if (!rowHas(row9, label)) {
+        errors.push(`Missing required header in Row 9: ${label}`);
+      }
+    });
+
+    // Required sub-headers (RAW/HPS/PS/WS should appear at least once per row)
+    const requiredRow10Labels = ['RAW', 'HPS', 'PS', 'WS'];
+    requiredRow10Labels.forEach(label => {
+      if (!rowHas(row10, label)) {
+        errors.push(`Missing required sub-header in Row 10: ${label}`);
+      }
+    });
+
+    console.log('🔍 Column validation complete. Errors found:', errors.length);
+    if (errors.length > 0) {
+      console.log('❌ Column validation errors:', errors);
+    } else {
+      console.log('✅ All required columns are present');
+    }
+
+    return errors;
+  };
 
   const validateExcelFile = async (file, selectedClassObj, selectedSectionId) => {
     // Read workbook
@@ -464,17 +561,70 @@ export default function GradingSystem() {
     const errors = [];
     const warnings = [];
 
-    // Missing column / header mismatch
-    if (!arraysEqual(row9.slice(0, expectedHeaderRow9.length), expectedHeaderRow9)) {
-      errors.push('Header row mismatch: expected row 9 group headers.');
+    // Detect metadata in header (first 12 rows) to verify section/class
+    const extractMeta = (rows) => {
+      const norm = (v) => (v == null ? '' : String(v)).trim();
+      const up = (v) => norm(v).toUpperCase();
+      const meta = { subjectCode: '', classCode: '', sectionName: '' };
+      const scanRows = rows.slice(0, Math.min(rows.length, 12));
+      for (const row of scanRows) {
+        if (!Array.isArray(row)) continue;
+        for (let c = 0; c < row.length; c++) {
+          const cell = up(row[c]);
+          if (cell.includes('CLASS CODE')) {
+            // Prefer next cell, else same cell suffix after ':'
+            meta.classCode = norm(row[c + 1] ?? '').trim() || norm(String(row[c]).split(':')[1] || '');
+          }
+          if (cell.includes('SUBJECT CODE')) {
+            meta.subjectCode = norm(row[c + 1] ?? '').trim() || norm(String(row[c]).split(':')[1] || '');
+          }
+          if (cell.includes('SECTION')) {
+            // If template ever includes Section: <name>
+            meta.sectionName = norm(row[c + 1] ?? '').trim() || norm(String(row[c]).split(':')[1] || '');
+          }
+        }
+      }
+      return meta;
+    };
+
+    const sheetMeta = extractMeta(aoa);
+    const selectedSectionObj = sections.find(s => s._id === selectedSectionId) || {};
+    const selectedSectionName = selectedSectionObj.sectionName || '';
+    const selectedClassCode = selectedClassObj?.classCode || selectedClassObj?.classID || '';
+
+    // If the sheet declares a class code or section name and it doesn't match, block upload
+    if (sheetMeta.classCode && selectedClassCode && String(sheetMeta.classCode).trim().toUpperCase() !== String(selectedClassCode).trim().toUpperCase()) {
+      errors.push(`This file appears to be for a different section/class. Found Class Code: "${sheetMeta.classCode}" (expected: "${selectedClassCode}")`);
     }
-    if (!arraysEqual(row10.slice(0, expectedHeaderRow10.length), expectedHeaderRow10)) {
-      errors.push('Header row mismatch: expected row 10 sub-headers.');
+    if (sheetMeta.sectionName && selectedSectionName && String(sheetMeta.sectionName).trim().toUpperCase() !== String(selectedSectionName).trim().toUpperCase()) {
+      errors.push(`This file appears to be for a different section. Found Section: "${sheetMeta.sectionName}" (expected: "${selectedSectionName}")`);
     }
-    // Loosely check row8 titles at A,B,C and M
-    if (!row8 || row8[0] !== 'Student No.' || (row8[1] || '').toString().toUpperCase().indexOf("STUDENT'S NAME") !== 0 || row8[2] === undefined || row8[12] === undefined) {
-      errors.push('Header row mismatch: expected row 8 titles.');
+
+    // NEW: Validate required columns first (relaxed, position-insensitive)
+    const columnErrors = validateRequiredColumns(row8, row9, row10);
+    if (columnErrors.length > 0) {
+      errors.push(...columnErrors);
+      return {
+        ok: false,
+        totalRows: aoa.length,
+        validRows: 0,
+        errors: errors,
+        warnings: warnings,
+        accentedNames: []
+      };
     }
+
+    // Remove strict header equality checks to avoid false positives with merged cells/formatting
+    // Kept as informational warnings if needed in future
+    // if (!arraysEqual(row9.slice(0, expectedHeaderRow9.length), expectedHeaderRow9)) {
+    //   warnings.push('Header row format differs from the canonical template (Row 9).');
+    // }
+    // if (!arraysEqual(row10.slice(0, expectedHeaderRow10.length), expectedHeaderRow10)) {
+    //   warnings.push('Header row format differs from the canonical template (Row 10).');
+    // }
+    // if (!row8 || row8[0] !== 'Student No.' || (row8[1] || '').toString().toUpperCase().indexOf("STUDENT'S NAME") !== 0) {
+    //   warnings.push('Header row format differs from the canonical template (Row 8).');
+    // }
 
     // Extra columns handling beyond W (23 columns)
     const maxCols = 23;
@@ -490,6 +640,8 @@ export default function GradingSystem() {
     const seenIds = new Set();
     const accentedNames = new Set();
     const validRowIndices = [];
+    const duplicateIds = new Set();
+    const unknownIds = new Set();
 
     for (let r = 10; r < aoa.length; r++) {
       const row = aoa[r];
@@ -505,7 +657,8 @@ export default function GradingSystem() {
       // Duplicate student id
       if (studentId) {
         if (seenIds.has(studentId)) {
-          errors.push(`Duplicate student ID at row ${r + 1}: ${studentId}`);
+          errors.push(`Row ${r + 1}: Column A (Student No.) has duplicate ID: ${studentId}`);
+          duplicateIds.add(studentId);
           continue;
         }
         seenIds.add(studentId);
@@ -513,7 +666,8 @@ export default function GradingSystem() {
 
       // Unknown student id (different section or not found)
       if (studentId && !idSet.has(studentId)) {
-        errors.push(`Student not found at row ${r + 1}: ${studentId}. Row skipped.`);
+        errors.push(`Row ${r + 1}: Column A (Student No.) has unknown ID: ${studentId}`);
+        unknownIds.add(studentId);
         continue;
       }
 
@@ -538,14 +692,17 @@ export default function GradingSystem() {
       ];
       for (const g of gradeCols) {
         const val = cells[g.idx];
-        if (val === '' || val === null || typeof val === 'undefined') continue; // allow empty
+        if (val === '' || val === null || typeof val === 'undefined') {
+          errors.push(`Row ${r + 1}: ${g.label} should only be from 0-100. Found: blank`);
+          continue;
+        }
         const num = parseFloat(val);
         if (Number.isNaN(num)) {
-          errors.push(`Non-numeric grade at row ${r + 1}, ${g.label}: "${val}"`);
+          errors.push(`Row ${r + 1}: ${g.label} should only be from 0-100. Found: "${val}"`);
           continue;
         }
         if (num < 0 || num > 100) {
-          errors.push(`Out-of-range grade at row ${r + 1}, ${g.label}: ${num} (must be 0-100)`);
+          errors.push(`Row ${r + 1}: ${g.label} should only be from 0-100. Found: ${num}`);
           continue;
         }
       }
@@ -554,6 +711,14 @@ export default function GradingSystem() {
     }
 
     // Finalize
+    if (duplicateIds.size > 0) {
+      const list = Array.from(duplicateIds).join(', ');
+      errors.unshift(`Column A (Student No.) contains duplicate IDs: ${list}`);
+    }
+    if (unknownIds.size > 0) {
+      const list = Array.from(unknownIds).join(', ');
+      errors.unshift(`Column A (Student No.) contains unknown IDs (not found in database): ${list}`);
+    }
     const summary = {
       totalRows: aoa.length,
       validRows: validRowIndices.length,
@@ -569,32 +734,84 @@ export default function GradingSystem() {
     return { ok: true, ...summary };
   };
 
+  // Parse a validated Excel file into preview grade records for staging on the Grades screen
+  const parseExcelForPreview = async (file, selectedClassObj) => {
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) return [];
+    const sheetName = workbook.SheetNames[0];
+    const ws = workbook.Sheets[sheetName];
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+    const termName = currentTerm?.termName || 'Term 1';
+    const records = [];
+    const maxCols = 23;
+    for (let r = 10; r < aoa.length; r++) {
+      const row = aoa[r];
+      if (!row || row.length === 0 || row.every(c => String(c).trim() === '')) continue;
+      const cells = row.slice(0, maxCols);
+      const studentId = String(cells[0] || '').trim();
+      const studentName = String(cells[1] || '').trim();
+      if (!studentId) continue;
+      // Quarterly Grade columns per our template: L (index 11) and V (index 21)
+      const qA = parseFloat(cells[11]);
+      const qB = parseFloat(cells[21]);
+      const isNum = (n) => typeof n === 'number' && !Number.isNaN(n);
+
+      let gradePayload = { quarter1: '', quarter2: '', quarter3: '', quarter4: '' };
+      if (termName === 'Term 1') {
+        gradePayload.quarter1 = isNum(qA) ? qA.toFixed(2) : '';
+        gradePayload.quarter2 = isNum(qB) ? qB.toFixed(2) : '';
+      } else {
+        gradePayload.quarter3 = isNum(qA) ? qA.toFixed(2) : '';
+        gradePayload.quarter4 = isNum(qB) ? qB.toFixed(2) : '';
+      }
+
+      const a = isNum(qA) ? qA : null;
+      const b = isNum(qB) ? qB : null;
+      const sem = a != null && b != null ? ((a + b) / 2).toFixed(2) : '';
+      const semNum = parseFloat(sem);
+      let remarks = '';
+      if (sem) {
+        if (semNum >= 85) remarks = 'PASSED';
+        else if (semNum >= 80) remarks = 'INCOMPLETE';
+        else if (semNum >= 75) remarks = 'REPEAT';
+        else remarks = 'FAILED';
+      }
+
+      records.push({
+        schoolID: studentId,
+        studentName,
+        grades: {
+          ...gradePayload,
+          semesterFinal: sem,
+          remarks
+        },
+        subjectCode: selectedClassObj?.classCode || selectedClassObj?.className,
+        subjectName: selectedClassObj?.className,
+      });
+    }
+    return records;
+  };
+
   const proceedUploadAfterConfirm = async () => {
     try {
       setShowConfirmUpload(false);
       if (!pendingValidatedFile) return;
       setUploadLoading(true);
-      setUploadStatus('Uploading...');
-      const formData = new FormData();
-      formData.append('file', pendingValidatedFile);
-      formData.append('classId', facultyClasses[selectedClass]._id);
-      formData.append('sectionId', selectedSection);
-
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/api/upload-grades`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-      if (response.ok) {
-        setSuccessMessage('Grades uploaded successfully.');
-        setUploadProgress(100);
-      } else {
-        const err = await response.json().catch(() => ({}));
-        setValidationMessage('Upload failed: ' + (err.message || response.statusText));
-        setValidationType('error');
-        setShowValidationModal(true);
+      setUploadStatus('Staging...');
+      const selectedClassObj = facultyClasses[selectedClass];
+      const previewRecords = await parseExcelForPreview(pendingValidatedFile, selectedClassObj);
+      if (typeof onStageTemporaryGrades === 'function') {
+        onStageTemporaryGrades(previewRecords, {
+          classObj: selectedClassObj,
+          sectionId: selectedSection,
+          termName: currentTerm?.termName,
+          academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''
+        });
       }
+      setSuccessMessage(`Staged ${previewRecords.length} student grade(s) to the Report table. Review and click Post Grades to finalize.`);
+      setUploadProgress(100);
     } catch (e) {
       setValidationMessage('Upload failed: ' + e.message);
       setValidationType('error');
@@ -624,11 +841,16 @@ export default function GradingSystem() {
 
     try {
       setUploadLoading(true);
-      setUploadProgress(10);
+      setUploadProgress(5);
+      setUploadStatus('Preparing...');
+      await new Promise(r => setTimeout(r, 150));
+      setUploadProgress(15);
       setUploadStatus('Validating file...');
 
       const selectedClassObj = facultyClasses[selectedClass];
       const result = await validateExcelFile(excelFile, selectedClassObj, selectedSection);
+      setUploadProgress(40);
+      setUploadStatus('Validation complete');
 
       if (!result.ok) {
         const msg = [
@@ -656,14 +878,31 @@ export default function GradingSystem() {
         setPendingValidatedSummary(result);
         setShowConfirmUpload(true);
         setUploadLoading(false);
-        setUploadProgress(0);
-        setUploadStatus('');
+        setUploadProgress(50);
+        setUploadStatus('Awaiting confirmation...');
         return;
       }
 
-      // No warnings: upload directly
-      setPendingValidatedFile(excelFile);
-      await proceedUploadAfterConfirm();
+      // No warnings: stage records to the Grades screen as temporary (not posted)
+      setUploadStatus('Parsing file...');
+      const previewRecords = await parseExcelForPreview(excelFile, selectedClassObj);
+      setUploadProgress(70);
+      if (typeof onStageTemporaryGrades === 'function') {
+        onStageTemporaryGrades(previewRecords, {
+          classObj: selectedClassObj,
+          sectionId: selectedSection,
+          termName: currentTerm?.termName,
+          academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''
+        });
+      }
+      setUploadStatus('Finalizing...');
+      setUploadProgress(95);
+      await new Promise(r => setTimeout(r, 200));
+      setUploadProgress(100);
+      await new Promise(r => setTimeout(r, 200));
+      setSuccessMessage(`Staged ${previewRecords.length} student grade(s) to the Report table. Review and click Post Grades to finalize.`);
+      setUploadStatus('Completed');
+      setUploadLoading(false);
     } catch (error) {
       setValidationMessage('Validation error: ' + error.message);
       setValidationType('error');
@@ -1204,7 +1443,7 @@ export default function GradingSystem() {
 
       {/* Confirm Upload Modal */}
       {showConfirmUpload && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
           <div className="relative p-8 border w-full max-w-md max-h-full">
             <div className="relative bg-white rounded-lg shadow dark:bg-gray-700">
               <button

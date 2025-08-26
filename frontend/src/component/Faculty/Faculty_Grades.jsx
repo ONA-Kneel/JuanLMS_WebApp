@@ -48,7 +48,7 @@ const Modal = ({ isOpen, onClose, title, children, type = 'info' }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50">
       <div className={`bg-white rounded-lg shadow-xl max-w-md w-full mx-4 border-2 ${getModalStyles()}`}>
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
@@ -92,8 +92,6 @@ export default function Faculty_Grades() {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [selectedStudentName, setSelectedStudentName] = useState('');
   const [studentGrades, setStudentGrades] = useState({});
-  const [uploadingStudentGrades, setUploadingStudentGrades] = useState(false);
-  const [selectedStudentFile, setSelectedStudentFile] = useState(null);
   const [showIndividualManagement, setShowIndividualManagement] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   
@@ -327,10 +325,16 @@ export default function Faculty_Grades() {
           const data = await response.json();
           console.log('✅ Class members response:', data);
           if (data && data.students) {
-            studentsData = (data.students || []).filter(s => (s.role || '').toLowerCase() === 'students');
+            studentsData = (data.students || []).filter(s => {
+              const role = (s.role || '').toLowerCase();
+              return role === 'student' || role === 'students';
+            });
           } else if (data && Array.isArray(data)) {
             // Sometimes the endpoint returns an array directly
-            studentsData = (data || []).filter(s => (s.role || '').toLowerCase() === 'students');
+            studentsData = (data || []).filter(s => {
+              const role = (s.role || '').toLowerCase();
+              return role === 'student' || role === 'students';
+            });
           }
         } else {
           console.log('❌ Class members endpoint failed:', response.status, response.statusText);
@@ -507,6 +511,8 @@ export default function Faculty_Grades() {
       if (transformedStudents.length > 0) {
       loadSavedGradesFromDatabase(selectedClassObj.classID, transformedStudents);
       }
+      // Also load any locally persisted temporary grades for this class/term
+      loadTempGrades(selectedClassObj.classID, transformedStudents);
       
     } catch (error) {
       console.error('❌ Error fetching students:', error);
@@ -576,6 +582,62 @@ export default function Faculty_Grades() {
       console.error('❌ Error loading saved grades from database:', error);
       // Try alternative approach
       await loadGradesByIndividualStudents(studentsList);
+    }
+  };
+
+  // ---- Temporary Grades Persistence (localStorage) ----
+  const getTempKey = (classId) => {
+    const ay = academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'AY';
+    const term = currentTerm?.termName || 'TERM';
+    return `tempGrades:${classId}:${term}:${ay}`;
+  };
+
+  const saveTempGrades = (classId, updatedGradesObj) => {
+    try {
+      const temp = {};
+      Object.entries(updatedGradesObj || {}).forEach(([sid, g]) => {
+        if (g && g.isTemp) temp[sid] = g;
+      });
+      const key = getTempKey(classId);
+      localStorage.setItem(key, JSON.stringify(temp));
+    } catch (e) {
+      console.warn('Failed to persist temp grades:', e);
+    }
+  };
+
+  const loadTempGrades = (classId, studentsList) => {
+    try {
+      const key = getTempKey(classId);
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const temp = JSON.parse(raw || '{}');
+      if (!temp || typeof temp !== 'object') return;
+      setGrades(prev => {
+        const merged = { ...prev };
+        // Ensure any students in temp but missing in list are added to UI
+        const currentStudentIds = new Set((studentsList || []).map(s => s._id));
+        Object.entries(temp).forEach(([sid, g]) => {
+          merged[sid] = { ...(merged[sid] || {}), ...(g || {}), isTemp: true, isLocked: false };
+          if (!currentStudentIds.has(sid)) {
+            const synthetic = {
+              _id: sid,
+              userID: sid,
+              schoolID: sid,
+              name: (g && g.studentName) || 'Student',
+              section: selectedSection || 'default',
+              grades: {}
+            };
+            setStudents(prevStudents => {
+              // Avoid duplicates
+              if (prevStudents.find(s => s._id === sid)) return prevStudents;
+              return [...prevStudents, synthetic];
+            });
+          }
+        });
+        return merged;
+      });
+    } catch (e) {
+      console.warn('Failed to load temp grades:', e);
     }
   };
 
@@ -1033,12 +1095,21 @@ export default function Faculty_Grades() {
       if (response.ok) {
         const result = await response.json();
         
-        // Show success message with confirmation that grades cannot be edited
-        showModal(
-          'Grades Saved Successfully',
-          `${selectedStudentName}'s grades have been saved to the database and are now visible in the Report on Learning Progress and Achievement table.\n\n⚠️ These grades cannot be edited anymore and are now visible to students.\n\n💾 Grades are securely stored in the Semestral_Grades_Collection using School ID: ${studentSchoolID}.`,
-          'success'
-        );
+        // Show success message with summary for this student
+        const finalGradeText = studentGrades.semesterFinal || 'N/A';
+        const summaryMsg = [
+          `${selectedStudentName}'s grades have been saved to the database and are now visible in the Report on Learning Progress and Achievement table.`,
+          '',
+          'Posted Summary:',
+          `• Name: ${selectedStudentName}`,
+          `• School ID: ${studentSchoolID}`,
+          `• Final Grade: ${finalGradeText}`,
+          `• Remarks: ${studentGrades.remarks || 'N/A'}`,
+          '',
+          '⚠️ These grades cannot be edited anymore and are now visible to students.',
+          `💾 Grades are securely stored in the Semestral_Grades_Collection using School ID: ${studentSchoolID}.`
+        ].join('\n');
+        showModal('Grades Saved Successfully', summaryMsg, 'success');
         
         // Update local state to reflect the saved grades
         setGrades(prevGrades => ({
@@ -1046,9 +1117,21 @@ export default function Faculty_Grades() {
           [student._id]: {
             ...prevGrades[student._id],
             ...studentGrades,
-            isLocked: true
+            isLocked: true,
+            isTemp: false
           }
         }));
+        // Clear temp storage for this student
+        const selectedClassObj2 = classes[selectedClass];
+        if (selectedClassObj2) {
+          const key = getTempKey(selectedClassObj2.classID);
+          try {
+            const raw = localStorage.getItem(key);
+            const obj = raw ? JSON.parse(raw) : {};
+            delete obj[student._id];
+            localStorage.setItem(key, JSON.stringify(obj));
+          } catch {}
+        }
 
         // Clear the individual management section
         setShowIndividualManagement(false);
@@ -1067,6 +1150,73 @@ export default function Faculty_Grades() {
         `Failed to save grades: ${error.message || 'Unknown error'}\n\nPlease check your connection and try again.`,
         'error'
       );
+    }
+  };
+
+  // Clear grades for the currently selected student (individual management)
+  const clearSelectedStudentGrades = () => {
+    try {
+      if (!selectedStudentName) {
+        showModal('No Student Selected', 'Please select a student first.', 'warning');
+        return;
+      }
+      const student = students.find(s => s.name === selectedStudentName);
+      if (!student) {
+        showModal('Student Not Found', 'Please select the student again.', 'error');
+        return;
+      }
+      const current = grades[student._id] || {};
+      if (current.isLocked) {
+        showModal('Grades Locked', 'Posted grades cannot be cleared.', 'warning');
+        return;
+      }
+
+      const empty = {
+        quarter1: '',
+        quarter2: '',
+        quarter3: '',
+        quarter4: '',
+        semesterFinal: '',
+        remarks: '',
+        isLocked: false,
+        isTemp: false
+      };
+
+      // Update individual editor values
+      setStudentGrades({
+        quarter1: '',
+        quarter2: '',
+        quarter3: '',
+        quarter4: '',
+        semesterFinal: '',
+        remarks: ''
+      });
+
+      // Update table state
+      setGrades(prev => ({
+        ...prev,
+        [student._id]: {
+          ...(prev[student._id] || {}),
+          ...empty
+        }
+      }));
+
+      // Remove from persisted temp storage if present
+      const selectedClassObj = classes[selectedClass];
+      if (selectedClassObj) {
+        try {
+          const key = getTempKey(selectedClassObj.classID);
+          const raw = localStorage.getItem(key);
+          const obj = raw ? JSON.parse(raw) : {};
+          delete obj[student._id];
+          localStorage.setItem(key, JSON.stringify(obj));
+        } catch {}
+      }
+
+      showModal('Grades Cleared', `${selectedStudentName}'s grades have been cleared.`, 'success');
+    } catch (e) {
+      console.error('Error clearing student grades:', e);
+      showModal('Error', 'Failed to clear grades. Please try again.', 'error');
     }
   };
 
@@ -1354,12 +1504,20 @@ export default function Faculty_Grades() {
       if (response.ok) {
         const result = await response.json();
         
-        // Show success message that grades are posted to student end
-        showModal(
-          'All Grades Posted Successfully',
-          `Grades have been saved to the database (Semestral_Grades_Collection) and posted to the Report on Learning Progress and Achievement table.\n\n👥 These grades are now visible to all students and cannot be edited anymore.\n\n🔒 All grades are now locked and read-only.\n\n🎯 Students can now view their grades in their student dashboard using their School ID.\n\n💾 Data is securely stored with proper encryption.`,
-          'success'
-        );
+        // Build a concise summary of posted grades (name and final grade)
+        const summaryLines = (gradesData.students || []).map(s => `• ${s.studentName}: ${s.grades?.semesterFinal || 'N/A'}`);
+        const summaryText = [
+          'Grades have been saved to the database (Semestral_Grades_Collection) and posted to the Report on Learning Progress and Achievement table.',
+          '',
+          'Posted Summary (Name: Final Grade):',
+          ...summaryLines,
+          '',
+          '👥 These grades are now visible to all students and cannot be edited anymore.',
+          '🔒 All grades are now locked and read-only.',
+          '🎯 Students can now view their grades in their student dashboard using their School ID.',
+          '💾 Data is securely stored with proper encryption.'
+        ].join('\n');
+        showModal('All Grades Posted Successfully', summaryText, 'success');
         
         // Mark all grades as locked/read-only
         setGrades(prevGrades => {
@@ -1367,9 +1525,15 @@ export default function Faculty_Grades() {
           Object.keys(prevGrades).forEach(studentId => {
             updatedGrades[studentId] = {
               ...prevGrades[studentId],
-              isLocked: true // Mark all grades as locked
+              isLocked: true, // Mark all grades as locked
+              isTemp: false
             };
           });
+          // Clear persisted temp grades for this class
+          const selectedClassObj3 = classes[selectedClass];
+          if (selectedClassObj3) {
+            try { localStorage.removeItem(getTempKey(selectedClassObj3.classID)); } catch {}
+          }
           return updatedGrades;
         });
 
@@ -2013,40 +2177,14 @@ export default function Faculty_Grades() {
                          >
                            Save Student Grades
                          </button>
+                         <button
+                           onClick={clearSelectedStudentGrades}
+                           className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                         >
+                           Clear Grades
+                         </button>
                          
-                         {/* File Upload for Student */}
-                         <div className="flex items-center gap-2">
-                           <input
-                             id="student-file-input"
-                             type="file"
-                             accept=".csv,.xlsx,.xls"
-                             onChange={handleStudentFileSelect}
-                             className="hidden"
-                           />
-                           <label
-                             htmlFor="student-file-input"
-                             className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer"
-                           >
-                             Choose File
-                           </label>
-                           {selectedStudentFile && (
-                             <span className="text-sm text-gray-600">{selectedStudentFile.name}</span>
-                           )}
-                         </div>
-                         
-                         {selectedStudentFile && (
-                           <button
-                             onClick={uploadStudentGrades}
-                             disabled={uploadingStudentGrades}
-                             className={`px-4 py-2 rounded-md transition-colors ${
-                               uploadingStudentGrades 
-                                 ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
-                                 : 'bg-orange-600 text-white hover:bg-orange-700'
-                             }`}
-                           >
-                             {uploadingStudentGrades ? 'Uploading...' : 'Upload Student Grades'}
-                           </button>
-                         )}
+                         {/* File upload removed */}
                        </>
                      );
                    })()}
@@ -2075,7 +2213,13 @@ export default function Faculty_Grades() {
                      <div className="flex items-center gap-2">
                        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                        <span className="text-sm font-medium text-gray-700">
-                         Pending: {students.filter(student => !grades[student._id]?.isLocked).length}
+                         Pending: {students.filter(student => !grades[student._id]?.isLocked && !grades[student._id]?.isTemp).length}
+                       </span>
+                     </div>
+                     <div className="flex items-center gap-2">
+                       <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                       <span className="text-sm font-medium text-gray-700">
+                         Uploaded (not posted): {students.filter(student => grades[student._id]?.isTemp && !grades[student._id]?.isLocked).length}
                        </span>
                      </div>
                    </div>
@@ -2171,6 +2315,16 @@ export default function Faculty_Grades() {
                                         {isLocked && (
                                           <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
                                             ✅ Posted
+                                          </span>
+                                        )}
+                                        {!isLocked && (grades[student._id]?.isTemp) && (
+                                          <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                                            🟧 Grade uploaded (not posted)
+                                          </span>
+                                        )}
+                                        {!isLocked && (grades[student._id]?.isTemp) && (
+                                          <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                                            🟧 Grade uploaded (not posted)
                                           </span>
                                         )}
                                       </div>
@@ -2374,7 +2528,81 @@ export default function Faculty_Grades() {
              )}
           </div>
         ) : (
-          <GradingSystem />
+          <GradingSystem
+            onStageTemporaryGrades={(records, meta) => {
+              try {
+                if (!Array.isArray(records)) return;
+                const updatedGrades = { ...grades };
+                const updatedStudents = [...students];
+                const studentIndexBySchoolId = new Map(
+                  (updatedStudents || []).map((s, idx) => [String(s.schoolID || s._id), idx])
+                );
+
+                records.forEach((rec) => {
+                  const key = String(rec.schoolID || '').trim();
+                  if (!key) return;
+                  let idx = studentIndexBySchoolId.get(key);
+                  if (typeof idx === 'undefined') {
+                    const newStudent = {
+                      _id: key,
+                      userID: key,
+                      schoolID: key,
+                      name: rec.studentName || key,
+                      section: selectedSection || 'default',
+                      grades: {}
+                    };
+                    updatedStudents.push(newStudent);
+                    idx = updatedStudents.length - 1;
+                    studentIndexBySchoolId.set(key, idx);
+                  }
+                  const student = updatedStudents[idx];
+                  const sid = student._id;
+                  const prev = updatedGrades[sid] || {};
+                  updatedGrades[sid] = {
+                    ...prev,
+                    ...rec.grades,
+                    isLocked: false,
+                    isTemp: true
+                  };
+                });
+
+                setStudents(updatedStudents);
+                setGrades(updatedGrades);
+                // Persist temp grades locally so they survive reloads
+                const selectedClassObj = classes[selectedClass];
+                if (selectedClassObj) {
+                  saveTempGrades(selectedClassObj.classID, updatedGrades);
+                }
+                setActiveTab('traditional');
+                // Auto-open individual management for first staged record
+                if (updatedStudents.length > 0 && records.length > 0) {
+                  const firstRecId = String(records[0].schoolID || '');
+                  const firstStudent = updatedStudents.find(s => String(s.schoolID || s._id) === firstRecId) || updatedStudents[0];
+                  if (firstStudent) {
+                    setSelectedStudentName(firstStudent.name);
+                    const existing = updatedGrades[firstStudent._id] || {};
+                    setStudentGrades({
+                      quarter1: existing.quarter1 || '',
+                      quarter2: existing.quarter2 || '',
+                      quarter3: existing.quarter3 || '',
+                      quarter4: existing.quarter4 || '',
+                      semesterFinal: existing.semesterFinal || '',
+                      remarks: existing.remarks || ''
+                    });
+                    setShowIndividualManagement(true);
+                  }
+                }
+                showModal(
+                  'Grades Staged',
+                  `Successfully staged ${records.length} student grade(s). They are marked as "Grade uploaded (not posted)" until you click Post Grades.`,
+                  'success'
+                );
+              } catch (e) {
+                console.error('Error staging temporary grades:', e);
+                showModal('Staging Error', 'Failed to stage uploaded grades. Please try again.', 'error');
+              }
+            }}
+          />
         )}
       </div>
     </div>

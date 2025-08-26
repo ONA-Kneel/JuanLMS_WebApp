@@ -133,21 +133,29 @@ export default function Student_Grades() {
     fetchStudentSubjects();
   }, [currentTerm, academicYear]);
 
-  // Fetch actual grades for the student's subjects
+  // Fetch actual grades for the student's subjects (or directly, even if subjects are missing)
   useEffect(() => {
     async function fetchGrades() {
-      if (!studentSubjects.length || !currentTerm || !academicYear) return;
+      if (!currentTerm || !academicYear) return;
       
       try {
         const token = localStorage.getItem("token");
-        let studentSchoolID = localStorage.getItem("schoolID"); // Use ONLY schoolID for consistency
-        
-        // AUTO-FIX: If schoolID is missing, set it to Will Bianca's correct schoolID
+        // Prefer identifier from JWT payload if available for strict consistency
+        let studentSchoolID = localStorage.getItem("schoolID");
+        try {
+          const tokenRaw = localStorage.getItem('token');
+          if (tokenRaw) {
+            const payload = JSON.parse(atob(tokenRaw.split('.')[1] || '')) || {};
+            const claimSchool = payload.schoolID || payload.schoolId;
+            const claimUser = payload.userID || payload.userId || payload.sub;
+            if (claimSchool) studentSchoolID = claimSchool;
+            if ((!studentSchoolID || studentSchoolID === 'null' || studentSchoolID === 'undefined') && claimUser) {
+              studentSchoolID = claimUser;
+            }
+          }
+        } catch {}
         if (!studentSchoolID || studentSchoolID === 'null' || studentSchoolID === 'undefined') {
-          console.log('⚠️ School ID not found in localStorage, setting to Will Bianca\'s schoolID');
-          studentSchoolID = '123332123123'; // Will Bianca's correct schoolID
-          localStorage.setItem('schoolID', studentSchoolID);
-          console.log('✅ School ID set to:', studentSchoolID);
+          studentSchoolID = localStorage.getItem('userID');
         }
         
         console.log('🔍 Fetching grades using School ID:', studentSchoolID);
@@ -255,7 +263,7 @@ export default function Student_Grades() {
     }
     
     fetchGrades();
-  }, [studentSubjects, currentTerm, academicYear]);
+  }, [currentTerm, academicYear]);
 
   // Helper function to get semester name based on term
   const getSemesterName = (termName) => {
@@ -393,8 +401,13 @@ export default function Student_Grades() {
                 </tr>
               </thead>
               <tbody>
-                {studentSubjects.length > 0 ? (
-                  studentSubjects.map((subject, index) => {
+                {(studentSubjects.length > 0 ? studentSubjects : grades.map(g => ({
+                  subjectCode: g.subjectCode,
+                  subjectDescription: g.subjectDescription || g.subjectName,
+                  quarter1: g.quarter1,
+                  quarter2: g.quarter2,
+                  semestralGrade: g.semestralGrade
+                }))).map((subject, index) => {
                     // Get grades for this subject if available
                     const subjectGrades = grades.find(g => g.subjectCode === subject.subjectCode || g.subjectDescription === subject.subjectDescription);
                     const quarter1 = subjectGrades?.quarter1 || subject.quarter1 || '';
@@ -420,19 +433,7 @@ export default function Student_Grades() {
                         </td>
                       </tr>
                     );
-                  })
-                ) : (
-                  // Show empty rows if no subjects
-                  Array.from({ length: 5 }).map((_, index) => (
-                    <tr key={index}>
-                      <td className="p-3 border border-gray-300 h-12"></td>
-                      <td className="p-3 border border-gray-300"></td>
-                      <td className="p-3 border border-gray-300"></td>
-                      <td className="p-3 border border-gray-300"></td>
-                      <td className="p-3 border border-gray-300"></td>
-                    </tr>
-                  ))
-                )}
+                  })}
               </tbody>
             </table>
           </div>

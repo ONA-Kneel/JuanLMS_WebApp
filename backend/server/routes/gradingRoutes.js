@@ -293,11 +293,24 @@ router.post('/upload/:facultyAssignmentId', authenticateToken, upload.single('ex
       // Clean up uploaded file
       fs.unlinkSync(req.file.path);
 
+      // Check if the errors are related to column validation
+      const hasColumnErrors = result.errors.some(error => 
+        error.includes('Column') || 
+        error.includes('Row 8') || 
+        error.includes('Row 9') || 
+        error.includes('Row 10')
+      );
+
+      const errorMessage = hasColumnErrors 
+        ? 'Excel file has incorrect column structure. Please check the required columns and headers.'
+        : 'Excel file contains errors';
+
       return res.status(400).json({
         success: false,
-        message: 'Excel file contains errors',
+        message: errorMessage,
         errors: result.errors,
-        warnings: result.warnings
+        warnings: result.warnings,
+        errorType: hasColumnErrors ? 'column_structure' : 'data_validation'
       });
     }
 
