@@ -4,6 +4,7 @@ import axios from 'axios';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { setupCrossTabSessionListener, redirectToDashboardIfSessionExists } from './utils/sessionUtils';
 // For Logging in into different user and accounts
 import Login from './component/Login';
 import ForgotPassword from './component/ForgotPassword';
@@ -101,6 +102,28 @@ function App() {
     } catch {
       // ignore
     }
+  }, []);
+
+  // Cross-tab session sharing: Listen for authentication changes from other tabs
+  useEffect(() => {
+    // Setup cross-tab session listener
+    const cleanup = setupCrossTabSessionListener();
+
+    // Also check on page focus/visibility change for immediate response
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Page became visible, check if we should redirect
+        redirectToDashboardIfSessionExists();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cleanup event listeners
+    return () => {
+      cleanup();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // Global axios interceptor: catch 401 Token expired/Invalid token

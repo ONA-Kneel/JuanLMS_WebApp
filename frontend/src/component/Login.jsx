@@ -11,6 +11,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { getProfileImageUrl } from '../utils/imageUtils';
 import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
 import ValidationModal from './ValidationModal';
+import { hasValidSession, getDashboardPathForRole } from '../utils/sessionUtils';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -48,6 +49,26 @@ export default function Login() {
 
   // --- EFFECT: Auto-login if credentials are stored in localStorage ---
   useEffect(() => {
+    // --- CHECK: If there's already an active session from another tab, redirect immediately ---
+    const checkExistingSession = () => {
+      if (hasValidSession()) {
+        const role = localStorage.getItem('role');
+        const targetPath = getDashboardPathForRole(role);
+        
+        if (targetPath !== '/') {
+          console.log(`[Login Component] Active session detected, redirecting to ${targetPath} for role: ${role}`);
+          navigate(targetPath, { replace: true });
+          return true; // Session found and redirecting
+        }
+      }
+      return false; // No active session
+    };
+
+    // Check for existing session first
+    if (checkExistingSession()) {
+      return; // Don't proceed with auto-login if redirecting
+    }
+
     // --- HANDLER: Auto-login using stored credentials ---
     const handleAutoLogin = async (email, password) => {
       try {
@@ -79,15 +100,12 @@ export default function Login() {
         // Clear the logout flag since auto-login means user had "Remember Me" enabled
         localStorage.removeItem('shouldLogoutOnReturn');
 
-        // Navigate to dashboard based on user role (case-insensitive comparison)
-        const normalizedRole = role ? role.toLowerCase().trim() : '';
+        // Navigate to dashboard based on user role using utility function
+        const targetPath = getDashboardPathForRole(role);
         
-        if (normalizedRole === 'students' || normalizedRole === 'student') navigate('/student_dashboard');
-        else if (normalizedRole === 'faculty') navigate('/faculty_dashboard');
-        else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president') navigate('/VPE_dashboard');
-        else if (normalizedRole === 'admin') navigate('/admin_dashboard');
-        else if (normalizedRole === 'principal') navigate('/principal_dashboard');
-        else {
+        if (targetPath !== '/') {
+          navigate(targetPath);
+        } else {
           console.error('Unknown role received:', role);
           setValidationModal({
             isOpen: true,
@@ -280,15 +298,12 @@ export default function Login() {
         localStorage.setItem('shouldLogoutOnReturn', 'true');
       }
 
-      // Navigate to dashboard based on user role (case-insensitive comparison)
-      const normalizedRole = role ? role.toLowerCase().trim() : '';
+      // Navigate to dashboard based on user role using utility function
+      const targetPath = getDashboardPathForRole(role);
       
-      if (normalizedRole === 'students' || normalizedRole === 'student') navigate('/student_dashboard');
-      else if (normalizedRole === 'faculty') navigate('/faculty_dashboard');
-      else if (normalizedRole === 'vice president of education' || normalizedRole === 'vice president') navigate('/VPE_dashboard');
-      else if (normalizedRole === 'admin') navigate('/admin_dashboard');
-      else if (normalizedRole === 'principal') navigate('/principal_dashboard');
-      else {
+      if (targetPath !== '/') {
+        navigate(targetPath);
+      } else {
         console.error('Unknown role received:', role);
         setValidationModal({
           isOpen: true,
