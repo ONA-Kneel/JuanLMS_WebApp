@@ -186,7 +186,7 @@ export const isTokenExpiredResponse = (response) => {
     if (typeof errorText === 'string' && errorText.includes('token')) {
       return true;
     }
-  } catch (error) {
+  } catch {
     // If we can't read the response, assume it might be expired
     return response.status === 401 || response.status === 403;
   }
@@ -257,6 +257,41 @@ export const clearSessionData = () => {
       document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
     });
   }
+};
+
+// Debounce function to prevent rapid redirect attempts
+let redirectDebounceTimer = null;
+const REDIRECT_DEBOUNCE_DELAY = 500; // 500ms delay
+
+// Track user activity to prevent redirects during active use
+let lastUserActivity = Date.now();
+const USER_ACTIVITY_TIMEOUT = 30000; // 30 seconds
+
+// Update user activity timestamp
+export const updateUserActivity = () => {
+  lastUserActivity = Date.now();
+};
+
+// Check if user has been active recently
+const isUserRecentlyActive = () => {
+  return (Date.now() - lastUserActivity) < USER_ACTIVITY_TIMEOUT;
+};
+
+export const debouncedRedirectToDashboard = () => {
+  // Don't redirect if user has been active recently
+  if (isUserRecentlyActive()) {
+    console.log('[Session Utils] User recently active, skipping redirect');
+    return;
+  }
+  
+  if (redirectDebounceTimer) {
+    clearTimeout(redirectDebounceTimer);
+  }
+  
+  redirectDebounceTimer = setTimeout(() => {
+    redirectToDashboardIfSessionExists();
+    redirectDebounceTimer = null;
+  }, REDIRECT_DEBOUNCE_DELAY);
 };
 
 

@@ -4,7 +4,7 @@ import axios from 'axios';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { setupCrossTabSessionListener, redirectToDashboardIfSessionExists } from './utils/sessionUtils';
+import { setupCrossTabSessionListener, debouncedRedirectToDashboard, updateUserActivity } from './utils/sessionUtils';
 // For Logging in into different user and accounts
 import Login from './component/Login';
 import ForgotPassword from './component/ForgotPassword';
@@ -109,26 +109,61 @@ function App() {
     // Setup cross-tab session listener
     const cleanup = setupCrossTabSessionListener();
 
-    // Track if this is a new tab or existing tab
+    // Track tab state more reliably to distinguish new tabs from tab switching
     let isNewTab = true;
     let lastVisibilityState = document.visibilityState;
+    let lastFocusTime = Date.now();
+    let tabCreationTime = Date.now();
+
+    // Track user activity to prevent unnecessary redirects
+    const trackUserActivity = () => {
+      // Update user activity in session utils
+      if (typeof updateUserActivity === 'function') {
+        updateUserActivity();
+      }
+    };
 
     // Only check on page focus/visibility change for new tabs, not tab switching
     const handleVisibilityChange = () => {
       const currentVisibility = document.visibilityState;
+      const currentTime = Date.now();
       
-      // Only redirect if:
-      // 1. This is a new tab (first time becoming visible)
-      // 2. We're coming from 'hidden' to 'visible' (not just tab switching)
-      // 3. The previous state was 'hidden' (indicating a new tab or fresh page load)
+      // Only redirect if this is genuinely a new tab/window, not tab switching
       if (isNewTab && currentVisibility === 'visible' && lastVisibilityState === 'hidden') {
-        console.log('[App] New tab detected, checking for session redirect...');
-        redirectToDashboardIfSessionExists();
-        isNewTab = false; // Mark as no longer a new tab
+        // Additional checks to ensure this is really a new tab, not tab switching:
+        
+        // 1. Check if this tab was created very recently (within last 2 seconds)
+        const isRecentlyCreated = (currentTime - tabCreationTime) < 2000;
+        
+        // 2. Check if the previous hidden state lasted long enough to indicate a new tab
+        // (tab switching usually happens very quickly, new tab creation takes longer)
+        const timeSinceLastHidden = currentTime - lastFocusTime;
+        const isLikelyNewTab = timeSinceLastHidden > 100; // More than 100ms suggests new tab
+        
+        // 3. Check if this is the first time this tab becomes visible
+        const isFirstTimeVisible = isNewTab && isRecentlyCreated && isLikelyNewTab;
+        
+        if (isFirstTimeVisible) {
+          console.log('[App] New tab detected, checking for session redirect...');
+          debouncedRedirectToDashboard();
+          isNewTab = false; // Mark as no longer a new tab
+        } else {
+          console.log('[App] Tab switching detected, skipping redirect');
+        }
       }
       
+      // Update tracking variables
+      if (currentVisibility === 'hidden') {
+        lastFocusTime = currentTime;
+      }
       lastVisibilityState = currentVisibility;
     };
+
+    // Track user activity on various events
+    const userActivityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    userActivityEvents.forEach(event => {
+      document.addEventListener(event, trackUserActivity, { passive: true });
+    });
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -136,6 +171,9 @@ function App() {
     return () => {
       cleanup();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      userActivityEvents.forEach(event => {
+        document.removeEventListener(event, trackUserActivity);
+      });
     };
   }, []);
 
