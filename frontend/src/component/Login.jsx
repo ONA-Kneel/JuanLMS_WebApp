@@ -276,6 +276,11 @@ export default function Login() {
       const { _id, role, name, email: userEmail, profilePic, userID } = decoded;
       const normalizedName = name ? name.normalize('NFC') : '';
 
+      // Debug: Log the received data
+      console.log('[Login Debug] JWT decoded:', decoded);
+      console.log('[Login Debug] Role received:', role);
+      console.log('[Login Debug] Role type:', typeof role);
+
       const imageUrl = getProfileImageUrl(profilePic, API_BASE, null);
 
       // Store user info and token in localStorage
@@ -283,6 +288,14 @@ export default function Login() {
       localStorage.setItem('token', token);
       localStorage.setItem('userID', userID);
       localStorage.setItem('role', role);
+
+      // Debug: Log localStorage values
+      console.log('[Login Debug] Stored in localStorage:', {
+        user: JSON.parse(localStorage.getItem('user')),
+        token: localStorage.getItem('token'),
+        userID: localStorage.getItem('userID'),
+        role: localStorage.getItem('role')
+      });
 
       // Store credentials if remember me is checked
       if (rememberMe) {
@@ -300,11 +313,13 @@ export default function Login() {
 
       // Navigate to dashboard based on user role using utility function
       const targetPath = getDashboardPathForRole(role);
+      console.log('[Login Debug] Target path generated:', targetPath);
       
       if (targetPath !== '/') {
+        console.log('[Login Debug] Navigating to:', targetPath);
         navigate(targetPath);
       } else {
-        console.error('Unknown role received:', role);
+        console.error('[Login Debug] Unknown role received:', role);
         setValidationModal({
           isOpen: true,
           type: 'error',

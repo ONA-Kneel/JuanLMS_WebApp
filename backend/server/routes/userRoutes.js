@@ -833,6 +833,9 @@ userRoutes.post('/login', async (req, res) => {
     }
 
     // JWT Token Payload (adapt as needed)
+    console.log('[Backend Debug] User role from database:', user.role);
+    console.log('[Backend Debug] User role type:', typeof user.role);
+    
     const token = jwt.sign({
         id: user._id,
         name: `${user.firstname} ${user.lastname}`,
@@ -843,6 +846,8 @@ userRoutes.post('/login', async (req, res) => {
         profilePic: user.profilePic || null,
         userID: user.userID
     }, process.env.JWT_SECRET || "yourSuperSecretKey123", { expiresIn: '1d' });
+
+    console.log('[Backend Debug] JWT token created with role:', user.role);
 
     // Add audit log for successful login
     try {

@@ -8,21 +8,37 @@ export const getDashboardPathForRole = (role) => {
   const normalizedRole = role.toLowerCase().trim();
   console.log(`[Session Utils] Getting dashboard path for role: "${role}" (normalized: "${normalizedRole}")`);
   
+  // Debug: Log all possible role matches
+  console.log('[Session Utils] Checking role matches:');
+  console.log('[Session Utils] - students/student:', normalizedRole === 'students' || normalizedRole === 'student');
+  console.log('[Session Utils] - faculty:', normalizedRole === 'faculty');
+  console.log('[Session Utils] - vice president of education:', normalizedRole === 'vice president of education');
+  console.log('[Session Utils] - vice president:', normalizedRole === 'vice president');
+  console.log('[Session Utils] - admin:', normalizedRole === 'admin');
+  console.log('[Session Utils] - principal:', normalizedRole === 'principal');
+  
   switch (normalizedRole) {
     case 'students':
     case 'student':
+      console.log('[Session Utils] Matched: students/student -> /student_dashboard');
       return '/student_dashboard';
     case 'faculty':
+      console.log('[Session Utils] Matched: faculty -> /faculty_dashboard');
       return '/faculty_dashboard';
     case 'vice president of education':
+      console.log('[Session Utils] Matched: vice president of education -> /VPE_dashboard');
+      return '/VPE_dashboard';
     case 'vice president':
+      console.log('[Session Utils] Matched: vice president -> /VPE_dashboard');
       return '/VPE_dashboard';
     case 'admin':
+      console.log('[Session Utils] Matched: admin -> /admin_dashboard');
       return '/admin_dashboard';
     case 'principal':
+      console.log('[Session Utils] Matched: principal -> /principal_dashboard');
       return '/principal_dashboard';
     default:
-      console.warn(`[Session Utils] Unknown role: "${role}"`);
+      console.warn(`[Session Utils] Unknown role: "${role}" (normalized: "${normalizedRole}")`);
       return '/';
   }
 };
