@@ -109,12 +109,25 @@ function App() {
     // Setup cross-tab session listener
     const cleanup = setupCrossTabSessionListener();
 
-    // Also check on page focus/visibility change for immediate response
+    // Track if this is a new tab or existing tab
+    let isNewTab = true;
+    let lastVisibilityState = document.visibilityState;
+
+    // Only check on page focus/visibility change for new tabs, not tab switching
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        // Page became visible, check if we should redirect
+      const currentVisibility = document.visibilityState;
+      
+      // Only redirect if:
+      // 1. This is a new tab (first time becoming visible)
+      // 2. We're coming from 'hidden' to 'visible' (not just tab switching)
+      // 3. The previous state was 'hidden' (indicating a new tab or fresh page load)
+      if (isNewTab && currentVisibility === 'visible' && lastVisibilityState === 'hidden') {
+        console.log('[App] New tab detected, checking for session redirect...');
         redirectToDashboardIfSessionExists();
+        isNewTab = false; // Mark as no longer a new tab
       }
+      
+      lastVisibilityState = currentVisibility;
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);

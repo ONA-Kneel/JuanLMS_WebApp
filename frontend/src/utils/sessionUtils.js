@@ -65,18 +65,75 @@ export const redirectToDashboardIfSessionExists = () => {
   if (hasValidSession()) {
     const role = localStorage.getItem('role');
     const targetPath = getDashboardPathForRole(role);
+    const currentPath = window.location.pathname;
     
-    if (targetPath !== '/' && window.location.pathname !== targetPath) {
-      console.log(`[Session Utils] Redirecting to ${targetPath} for role: ${role}`);
-      window.location.href = targetPath;
-      return true;
+    // Only redirect if:
+    // 1. We have a valid target path (not '/')
+    // 2. Current path is not already the target dashboard
+    // 3. Current path is not a valid route for the user's role
+    if (targetPath !== '/' && currentPath !== targetPath) {
+      // Check if current path is a valid route for this role
+      const isValidCurrentRoute = isRouteValidForRole(currentPath, role);
+      
+      if (!isValidCurrentRoute) {
+        console.log(`[Session Utils] Redirecting to ${targetPath} for role: ${role} (current path ${currentPath} is invalid)`);
+        window.location.href = targetPath;
+        return true;
+      } else {
+        console.log(`[Session Utils] No redirect needed. Current path: ${currentPath} is valid for role: ${role}`);
+      }
     } else {
-      console.log(`[Session Utils] No redirect needed. Current path: ${window.location.pathname}, Target path: ${targetPath}`);
+      console.log(`[Session Utils] No redirect needed. Current path: ${currentPath}, Target path: ${targetPath}`);
     }
   } else {
     console.log('[Session Utils] No valid session found, no redirect needed');
   }
   return false;
+};
+
+// Helper function to check if a route is valid for a given role
+const isRouteValidForRole = (path, role) => {
+  if (!role || !path) return false;
+  
+  const normalizedRole = role.toLowerCase().trim();
+  const validRoutes = {
+    'students': [
+      '/student_dashboard', '/student_classes', '/student_activities', '/student_chats',
+      '/student_progress', '/student_grades', '/student_calendar', '/student_meeting',
+      '/student_class'
+    ],
+    'faculty': [
+      '/faculty_dashboard', '/faculty_classes', '/faculty_activities', '/faculty_chats',
+      '/faculty_progress', '/faculty_grades', '/faculty_calendar', '/faculty_createclass',
+      '/faculty_class', '/faculty_meeting', '/faculty_student_report'
+    ],
+    'principal': [
+      '/principal_dashboard', '/principal_calendar', '/principal_faculty_report',
+      '/principal_post_announcement', '/principal_grades', '/principal_audit_trail', '/principal_chats'
+    ],
+    'admin': [
+      '/admin_dashboard', '/admin_accounts', '/admin_academic_settings', '/admin_activities',
+      '/admin_chats', '/admin_grades', '/admin_calendar', '/admin_progress', '/admin_audit_trail',
+      '/admin/support-center', '/admin/academic-settings/terms', '/admin_registrants'
+    ],
+    'vice president of education': [
+      '/VPE_dashboard', '/VPE_chats', '/VPE_calendar', '/VPE_audit_trail',
+      '/VPE_faculty_report', '/vpe_post_announcement'
+    ]
+  };
+  
+  const roleRoutes = validRoutes[normalizedRole] || [];
+  
+  // Check if current path matches any valid route for this role
+  // Also handle dynamic routes like /student_class/:classId
+  return roleRoutes.some(route => {
+    if (route.includes(':')) {
+      // Handle dynamic routes by checking the base path
+      const baseRoute = route.split('/:')[0];
+      return path.startsWith(baseRoute);
+    }
+    return path === route;
+  });
 };
 
 export const setupCrossTabSessionListener = (callback) => {
