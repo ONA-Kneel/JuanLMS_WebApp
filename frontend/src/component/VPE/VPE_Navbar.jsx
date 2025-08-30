@@ -17,11 +17,11 @@ const VPE_Navbar = () => {
 
     const navItems = [
         { path: "/vpe_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
-        { path: "/vpe_calendar", icon: calendarIcon, label: "CALENDAR" },
+        { path: "/vpe_post_announcement", icon: postAnnouncementIcon, label: "ANNOUNCEMENT" },
         { path: "/vpe_faculty_report", icon: facultyReportIcon, label: "FACULTY REPORT" },
         { path: "/vpe_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
+        { path: "/vpe_calendar", icon: calendarIcon, label: "CALENDAR" },
         { path: "/vpe_chats", icon: chatsIcon, label: "CHATS" },
-        { path: "/vpe_post_announcement", icon: postAnnouncementIcon, label: "ANNOUNCEMENT" },
     ];
 
     return (

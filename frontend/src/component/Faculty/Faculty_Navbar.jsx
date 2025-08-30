@@ -21,11 +21,11 @@ const Faculty_Navbar = () => {
         { path: "/faculty_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
         { path: "/faculty_classes", icon: classesIcon, label: "CLASSES" },
         { path: "/faculty_activities", icon: activitiesIcon, label: "ACTIVITIES" },
-        { path: "/faculty_chats", icon: chatsIcon, label: "CHATS" },
         { path: "/faculty_grades", icon: gradesIcon, label: "GRADES" },
-        { path: "/faculty_calendar", icon: calendarIcon, label: "CALENDAR" },
-        { path: "/faculty_meeting", icon: meetingIcon, label: "MEETING" },
         { path: "/faculty_student_report", icon: facultyReportIcon, label: "STUDENT REPORTS" },
+        { path: "/faculty_calendar", icon: calendarIcon, label: "CALENDAR" },
+        { path: "/faculty_chats", icon: chatsIcon, label: "CHATS" },
+        { path: "/faculty_meeting", icon: meetingIcon, label: "MEETING" },
     ];
 
     return (

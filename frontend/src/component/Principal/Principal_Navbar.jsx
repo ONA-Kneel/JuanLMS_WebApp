@@ -21,11 +21,10 @@ const Principal_Navbar = () => {
     const navItems = [
 
         { path: "/principal_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
-        { path: "/principal_calendar", icon: calendarIcon, label: "CALENDAR" },
-        { path: "/principal_faculty_report", icon: facultyReportIcon, label: "FACULTY REPORT" },
         { path: "/principal_post_announcement", icon: postAnnouncementIcon, label: "ANNOUNCEMENT" },
-        { path: "/principal_grades", icon: gradesIcon, label: "GRADES" },
+        { path: "/principal_faculty_report", icon: facultyReportIcon, label: "FACULTY REPORT" },
         { path: "/principal_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
+        { path: "/principal_calendar", icon: calendarIcon, label: "CALENDAR" },
         { path: "/principal_chats", icon: chatsIcon, label: "CHATS" },
     ];
 

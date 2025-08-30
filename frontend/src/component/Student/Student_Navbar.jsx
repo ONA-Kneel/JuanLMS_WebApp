@@ -20,9 +20,9 @@ const Student_Navbar = () => {
     { path: "/student_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
     { path: "/student_classes", icon: classesIcon, label: "CLASSES" },
     { path: "/student_activities", icon: activitiesIcon, label: "ACTIVITIES" },
-    { path: "/student_chats", icon: chatsIcon, label: "CHATS" },
     { path: "/student_grades", icon: gradesIcon, label: "GRADES" },
     { path: "/student_calendar", icon: calendarIcon, label: "CALENDAR" },
+    { path: "/student_chats", icon: chatsIcon, label: "CHATS" },
     { path: "/student_meeting", icon: calendarIcon, label: "MEETING" },
   ];
   return (
