@@ -7,7 +7,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import ProfileMenu from "../ProfileMenu";
 import VPE_Navbar from "./VPE_Navbar";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function VPE_Calendar() {
   const [holidays, setHolidays] = useState([]);

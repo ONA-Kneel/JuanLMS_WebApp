@@ -52,7 +52,7 @@ const downloadAsPDF = (content, filename) => {
 };
 
 // Use environment variable or fallback to localhost
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Principal_FacultyReport() {
   const [academicYear, setAcademicYear] = useState(null);
