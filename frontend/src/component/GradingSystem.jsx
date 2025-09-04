@@ -1219,15 +1219,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
                 Export and manage grades for your assignments, activities, and quizzes
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              {/* Debug toggle for development */}
-              <button
-                onClick={() => setDebugMode(!debugMode)}
-                className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-              >
-                {debugMode ? "Hide Debug" : "Show Debug"}
-              </button>
-            </div>
+            <div className="flex items-center gap-4"></div>
           </div>
         </div>
 
@@ -1250,20 +1242,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
           </div>
         </div>
 
-        {/* Debug info */}
-        {debugMode && (
-          <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
-            <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
-            <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
-            <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
-            <p className="text-sm text-yellow-700">Classes Found: {facultyClasses.length}</p>
-            <p className="text-sm text-yellow-700">Current Faculty ID: {localStorage.getItem("userID") || 'Not set'}</p>
-            <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
-            <p className="text-sm text-yellow-700">Loading State: {loading ? 'Yes' : 'No'}</p>
-            <p className="text-sm text-yellow-700">Selected Class: {selectedClass !== '' ? facultyClasses[selectedClass]?.className : 'None'}</p>
-            <p className="text-sm text-yellow-700">Sections Count: {sections.length}</p>
-          </div>
-        )}
+        
 
         {/* Class Selection */}
         <div className="mb-6 p-4 bg-white rounded-lg shadow">

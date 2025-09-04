@@ -465,39 +465,7 @@ export default function Student_Grades() {
           </div>
         </div>
 
-        {/* Debug Information - Remove this in production */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-            <h3 className="text-lg font-semibold mb-4">🔍 Debug Info</h3>
-            <div className="text-sm space-y-2">
-              <p><strong>School ID:</strong> <span className="bg-yellow-100 px-2 py-1 rounded">{localStorage.getItem('schoolID') || 'Not found'}</span></p>
-              <p><strong>User ID:</strong> <span className="bg-gray-100 px-2 py-1 rounded">{localStorage.getItem('userID') || 'Not found'}</span></p>
-              <p><strong>Expected School ID:</strong> <span className="bg-green-100 px-2 py-1 rounded">123332123123</span></p>
-              <p><strong>School ID Status:</strong> <span className={`px-2 py-1 rounded ${localStorage.getItem('schoolID') === '123332123123' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                {localStorage.getItem('schoolID') === '123332123123' ? '✅ Correct' : '❌ Incorrect/Missing'}
-              </span></p>
-              <p><strong>Current Term:</strong> {currentTerm?.termName || 'Not set'}</p>
-              <p><strong>Academic Year:</strong> {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Not set'}</p>
-              <p><strong>Subjects Found:</strong> {studentSubjects.length}</p>
-              <p><strong>Grades Loaded:</strong> {gradesLoaded}</p>
-              <p><strong>API Base:</strong> <code className="bg-gray-100 px-2 py-1 rounded">{API_BASE}</code></p>
-              <div className="mt-4">
-                <button
-                  onClick={testDatabaseConnection}
-                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                >
-                  🗄️ Test Database Connection
-                </button>
-                <button
-                  onClick={fixSchoolID}
-                  className="ml-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                >
-                  🔧 Fix School ID
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        
 
         {/* Profile Modal */}
         {showProfileModal && (

@@ -1587,31 +1587,11 @@ export default function Faculty_Grades() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            {/* Debug toggle for development */}
-            <button
-              onClick={() => setDebugMode(!debugMode)}
-              className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-            >
-              {debugMode ? "Hide Debug" : "Show Debug"}
-            </button>
           <ProfileMenu/>
           </div>
         </div>
 
-        {/* Debug info */}
-        {debugMode && (
-          <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
-            <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
-            <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
-            <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
-            <p className="text-sm text-yellow-700">Classes Found: {classes.length}</p>
-            <p className="text-sm text-yellow-700">Current Faculty ID: {currentFacultyID}</p>
-            <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
-            <p className="text-sm text-yellow-700">Loading State: {loading ? 'Yes' : 'No'}</p>
-            <p className="text-sm text-yellow-700">Selected Class: {selectedClass !== null ? classes[selectedClass]?.className : 'None'}</p>
-            <p className="text-sm text-yellow-700">Students Count: {students.length}</p>
-          </div>
-        )}
+        
 
         
         {/* Tab Navigation */}
@@ -1750,69 +1730,7 @@ export default function Faculty_Grades() {
                </div>
              )}
 
-              {/* Debug Section - Only show in development */}
-              {process.env.NODE_ENV === 'development' && selectedClass !== null && (
-                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <h3 className="text-lg font-semibold text-yellow-800 mb-3">🔍 Debug Information</h3>
-                  <div className="text-sm space-y-2 mb-4">
-                    <p><strong>Selected Class:</strong> {classes[selectedClass]?.className || 'N/A'}</p>
-                    <p><strong>Class ID:</strong> {classes[selectedClass]?.classID || 'N/A'}</p>
-                    <p><strong>Class Code:</strong> {classes[selectedClass]?.classCode || 'N/A'}</p>
-                    <p><strong>Faculty ID:</strong> {currentFacultyID || 'N/A'}</p>
-                    <p><strong>Current Term:</strong> {currentTerm?.termName || 'Not set'}</p>
-                    <p><strong>Academic Year:</strong> {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Not set'}</p>
-                    <p><strong>Students Found:</strong> {students.length}</p>
-                    <p><strong>Grades Loaded:</strong> {Object.keys(grades).length}</p>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      onClick={testAPIEndpoints}
-                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
-                      title="Test all API endpoints to identify issues"
-                    >
-                      🧪 Test API Endpoints
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        console.log('🔍 Current state debug info:');
-                        console.log('Classes:', classes);
-                        console.log('Selected Class Index:', selectedClass);
-                        console.log('Selected Class Object:', classes[selectedClass]);
-                        console.log('Students:', students);
-                        console.log('Grades:', grades);
-                        console.log('Subjects:', subjects);
-                        console.log('Current Term:', currentTerm);
-                        console.log('Academic Year:', academicYear);
-                        showModal('Debug Info', 'Check browser console for detailed state information', 'info');
-                      }}
-                      className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm"
-                      title="Log current component state to console"
-                    >
-                      📊 Log State to Console
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        if (selectedClass !== null) {
-                          fetchStudents();
-                          showModal('Refresh', 'Refreshing students and grades data...', 'info');
-                        }
-                      }}
-                      className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
-                      title="Refresh students and grades data"
-                    >
-                      🔄 Refresh Data
-                    </button>
-                  </div>
-                  
-                  <div className="mt-3 text-xs text-yellow-700">
-                    💡 This debug section helps identify data fetching issues. Check the browser console for detailed logs.
-                  </div>
-               </div>
-             )}
-
+            
                                                    {/* Student Search */}
               {selectedClass !== null && selectedSection && students.length > 0 && (
                 <div className="mb-6">
