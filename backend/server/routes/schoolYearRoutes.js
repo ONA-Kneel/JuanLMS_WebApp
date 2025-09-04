@@ -7,6 +7,9 @@ import Track from '../models/Track.js';
 import Strand from '../models/Strand.js';
 import Section from '../models/Section.js';
 import Subject from '../models/Subject.js';
+import { authenticateToken } from '../middleware/authMiddleware.js';
+import database from '../connect.cjs';
+import { ObjectId } from 'mongodb';
 
 const router = express.Router();
 
@@ -52,7 +55,7 @@ router.get('/', async (req, res) => {
 //   }
 // });
 
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { schoolYearStart, setAsActive } = req.body;
 
@@ -86,6 +89,34 @@ router.post('/', async (req, res) => {
       await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
     }
 
+    // Create audit log entry via existing audit route (ensures consistent storage)
+    try {
+      const token = req.headers.authorization?.split(' ')[1];
+      const details = `School Year ${schoolYearStart}-${schoolYearStart + 1} created${setAsActive ? ' (active)' : ' (inactive)'}`;
+      const url = `${req.protocol}://${req.get('host')}/audit-log`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'New Year Created',
+          details,
+          userRole: req.user?.role || 'system'
+        })
+      });
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '');
+        console.warn('[Audit] /audit-log responded non-OK:', resp.status, body);
+      } else {
+        const data = await resp.json();
+        console.log('[Audit] Created audit log via /audit-log:', data?._id || data?.id || 'ok');
+      }
+    } catch (logErr) {
+      console.error('[Audit] Failed to create audit log for school year creation (via route):', logErr);
+    }
+
     res.status(201).json(savedYear);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -93,7 +124,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update school year status or details
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', authenticateToken, async (req, res) => {
   try {
     const schoolYear = await SchoolYear.findById(req.params.id);
     if (!schoolYear) {
@@ -106,6 +137,9 @@ router.patch('/:id', async (req, res) => {
         message: 'Cannot edit details of an inactive school year. Only status changes are allowed.' 
       });
     }
+
+    // Keep original year name for audit comparisons
+    const originalYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
 
     // Handle school year start year update
     if (req.body.schoolYearStart) {
@@ -136,6 +170,11 @@ router.patch('/:id', async (req, res) => {
     if (req.body.status) {
       // If setting to active, deactivate all others
       if (req.body.status === 'active') {
+        // Capture currently active years (to log deactivation later)
+        const prevActives = await SchoolYear.find(
+          { _id: { $ne: req.params.id }, status: 'active' }
+        );
+
         await SchoolYear.updateMany(
           { _id: { $ne: req.params.id }, status: 'active' },
           { status: 'inactive' }
@@ -146,6 +185,58 @@ router.patch('/:id', async (req, res) => {
         const updatedSchoolYear = await schoolYear.save();
         const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
         const terms = await Term.find({ schoolYear: schoolYearName });
+
+        // Audit logs: one entry per deactivated previous active year, then activated new year
+        try {
+          const token = req.headers.authorization?.split(' ')[1];
+          const url = `${req.protocol}://${req.get('host')}/audit-log`;
+          // If the name changed as part of this update, log the edit first
+          if (originalYearName !== schoolYearName) {
+            await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'School Year Edited',
+                details: `Updated School Year from ${originalYearName} to ${schoolYearName}`,
+                userRole: req.user?.role || 'system'
+              })
+            });
+          }
+          // Deactivation entries
+          for (const sy of prevActives) {
+            const prevName = `${sy.schoolYearStart}-${sy.schoolYearEnd}`;
+            await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'School Year Deactivated',
+                details: `Deactivated School Year ${prevName}`,
+                userRole: req.user?.role || 'system'
+              })
+            });
+          }
+          // Activation entry
+          await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'School Year Activated',
+              details: `Activated School Year ${schoolYearName}`,
+              userRole: req.user?.role || 'system'
+            })
+          });
+        } catch (auditErr) {
+          console.warn('[Audit] Failed to log activation/deactivation:', auditErr);
+        }
         return res.json({ schoolYear: updatedSchoolYear, terms });
       }
       
@@ -172,10 +263,55 @@ router.patch('/:id', async (req, res) => {
         ]);
         
         console.log(`Successfully archived all entities for school year: ${schoolYearName}`);
+
+        // Audit log for deactivation
+        if (req.body.status === 'inactive') {
+          try {
+            const token = req.headers.authorization?.split(' ')[1];
+            const url = `${req.protocol}://${req.get('host')}/audit-log`;
+            await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'School Year Deactivated',
+                details: `Deactivated School Year ${schoolYearName}`,
+                userRole: req.user?.role || 'system'
+              })
+            });
+          } catch (auditErr) {
+            console.warn('[Audit] Failed to log deactivation:', auditErr);
+          }
+        }
       }
     }
 
     const updatedSchoolYear = await schoolYear.save();
+    // If the year name changed, add an edit log
+    try {
+      const token = req.headers.authorization?.split(' ')[1];
+      const url = `${req.protocol}://${req.get('host')}/audit-log`;
+      const newYearName = `${updatedSchoolYear.schoolYearStart}-${updatedSchoolYear.schoolYearEnd}`;
+      if (originalYearName !== newYearName) {
+        await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'School Year Edited',
+            details: `Updated School Year from ${originalYearName} to ${newYearName}`,
+            userRole: req.user?.role || 'system'
+          })
+        });
+      }
+    } catch (auditErr) {
+      console.warn('[Audit] Failed to log school year edit:', auditErr);
+    }
+
     res.json(updatedSchoolYear);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -256,7 +392,7 @@ router.get('/:id/dependencies', async (req, res) => {
 });
 
 // Delete a school year and all its dependencies
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { confirmCascade } = req.query;
@@ -296,6 +432,30 @@ router.delete('/:id', async (req, res) => {
     await schoolYear.deleteOne();
     
     console.log(`Successfully deleted school year and all connected data`);
+    // Audit: log deletion of school year
+    try {
+      const token = req.headers.authorization?.split(' ')[1];
+      const details = `Deleted School Year ${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd} and all connected data`;
+      const url = `${req.protocol}://${req.get('host')}/audit-log`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'School Year Deleted',
+          details,
+          userRole: req.user?.role || 'system'
+        })
+      });
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '');
+        console.warn('[Audit] /audit-log (delete SY) non-OK:', resp.status, body);
+      }
+    } catch (logErr) {
+      console.error('[Audit] Failed to log school year deletion:', logErr);
+    }
     res.json({ message: 'School year and all connected data deleted successfully' });
   } catch (error) {
     console.error('Error deleting school year:', error);

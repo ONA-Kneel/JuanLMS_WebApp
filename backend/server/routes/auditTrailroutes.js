@@ -139,16 +139,40 @@ router.post('/audit-log', authenticateToken, async (req, res) => {
       await db.createCollection('AuditLogs');
     }
 
+    // Resolve user display name safely
+    const resolvedName = (() => {
+      if (req.user?.firstname || req.user?.lastname) {
+        return `${req.user.firstname || ''} ${req.user.lastname || ''}`.trim();
+      }
+      if (req.user?.name) return req.user.name;
+      return 'Unknown';
+    })();
+
+    console.log('[Audit] /audit-log resolved user:', { id: req.user?._id, name: resolvedName, role: req.user?.role });
+
     // Audit log structure with role
     const newLog = {
       userId: new ObjectId(req.user._id),
-      userName: `${req.user.firstname} ${req.user.lastname}`,
-      userRole: userRole || req.user.role, // Store the role that performed the action
+      userName: resolvedName,
+      userRole: userRole || req.user.role,
       action,
       details,
       ipAddress,
       timestamp: new Date()
     };
+
+    // Deduplicate: if a matching log exists in the last 10s, return it instead of inserting
+    const tenSecondsAgo = new Date(Date.now() - 10 * 1000);
+    const existing = await db.collection('AuditLogs').findOne({
+      userId: newLog.userId,
+      action: newLog.action,
+      details: newLog.details,
+      timestamp: { $gte: tenSecondsAgo }
+    });
+    if (existing) {
+      console.log('[Audit] Duplicate audit avoided (recent match found). Returning existing.');
+      return res.status(200).json(existing);
+    }
 
     const result = await db.collection('AuditLogs').insertOne(newLog);
     return res.status(201).json({ ...newLog, _id: result.insertedId });

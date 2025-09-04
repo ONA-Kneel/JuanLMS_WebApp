@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 
 export default function Admin_AcademicSettings() {
@@ -236,6 +236,7 @@ export default function Admin_AcademicSettings() {
 
     const createSchoolYear = async (startYear, setAsActive) => {
     try {
+      console.info('[AcademicSettings] createSchoolYear(): start', { startYear, setAsActive });
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE}/api/schoolyears`, {
         method: 'POST',
@@ -250,6 +251,10 @@ export default function Admin_AcademicSettings() {
       });
 
       if (res.ok) {
+        const data = await res.json();
+        console.info('[AcademicSettings] createSchoolYear(): success', { id: data?._id, start: data?.schoolYearStart, end: data?.schoolYearEnd, status: data?.status });
+
+        // Audit logging handled by backend; no client-side POST to avoid duplicates
         setSuccessMessage("School year created successfully");
         setShowSuccessModal(true);
         setFormData({ schoolYearStart: "", status: "inactive" });
@@ -260,11 +265,12 @@ export default function Admin_AcademicSettings() {
         setEditingYear(null);
       } else {
         const data = await res.json();
+        console.warn('[AcademicSettings] createSchoolYear(): failed', { status: res.status, message: data?.message });
         setErrorMessage(data.message || "Failed to create school year");
         setShowErrorModal(true);
       }
     } catch (error) {
-      console.error('Error creating school year:', error);
+      console.error('[AcademicSettings] createSchoolYear(): error', error);
       setErrorMessage("Error creating school year");
       setShowErrorModal(true);
     }
@@ -314,6 +320,7 @@ export default function Admin_AcademicSettings() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage("");
+    console.info('[AcademicSettings] Submit school year form');
 
     if (!formData.schoolYearStart) {
       setErrorMessage("Please enter a school year start");
@@ -375,6 +382,7 @@ export default function Admin_AcademicSettings() {
     }
 
     // If no active year, proceed immediately
+    console.info('[AcademicSettings] Creating new school year', { startYear, setAsActive: true });
     createSchoolYear(startYear, true);
   };
 
