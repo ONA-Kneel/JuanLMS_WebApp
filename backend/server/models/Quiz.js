@@ -9,6 +9,7 @@ const quizSchema = new mongoose.Schema({
   dueDate: { type: Date },
   points: { type: Number, min: 1, max: 100, default: 100 }, // total points for the quiz
   type: { type: String, enum: ['quiz'], default: 'quiz' },
+  activityType: { type: String, enum: ['written', 'performance'], default: 'written' },
   questions: [
     {
       type: {

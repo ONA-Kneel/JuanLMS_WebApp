@@ -8,6 +8,7 @@ const assignmentSchema = new mongoose.Schema({
   dueDate: { type: Date },
   points: { type: Number },
   type: { type: String, enum: ['assignment', 'quiz'], default: 'assignment' },
+  activityType: { type: String, enum: ['written', 'performance'], default: 'written' },
   description: { type: String },
   fileUploadRequired: { type: Boolean },
   allowedFileTypes: { type: String },

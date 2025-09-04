@@ -7,6 +7,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 export default function QuizTab({ onQuizCreated, onPointsChange }) {
     const [searchParams] = useSearchParams();
     const editAssignmentId = searchParams.get('edit');
+    const activityType = searchParams.get('type') || 'written'; // Default to 'written' if not specified
     
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
@@ -558,6 +559,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             title,
             instructions: description,
             type: 'quiz',
+            activityType: activityType,
             description,
             points: totalPoints,
             questions,

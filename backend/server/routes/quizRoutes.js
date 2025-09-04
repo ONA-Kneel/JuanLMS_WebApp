@@ -78,6 +78,7 @@ router.post('/', authenticateToken, async (req, res) => {
   if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
   try {
     console.log('[QuizRoutes] Creating quiz with data:', req.body);
+    console.log('[QuizRoutes] ActivityType:', req.body.activityType);
     console.log('[QuizRoutes] Timing data:', req.body.timing);
     // Validate points boundaries before creating
     const total = Array.isArray(req.body.questions)

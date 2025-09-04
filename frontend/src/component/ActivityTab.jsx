@@ -8,6 +8,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const editAssignmentId = searchParams.get('edit');
+    const activityType = searchParams.get('type') || 'written'; // Default to 'written' if not specified
     
     // Removed unused classId
     const [title, setTitle] = useState("");
@@ -382,6 +383,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
             title,
             instructions: description,
             type: "assignment",
+            activityType: activityType,
             description,
             points: activityPoints,
             // attachmentDrive removed

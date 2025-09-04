@@ -52,6 +52,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [editingMembers, setEditingMembers] = useState(false);
   const [newStudentIDs, setNewStudentIDs] = useState([]);
   const [filterType, setFilterType] = useState("all");
+  const [activityTypeFilter, setActivityTypeFilter] = useState("all");
   const [showLessonModal, setShowLessonModal] = useState(false);
   const [lessonLink, setLessonLink] = useState("");
   const [classWithMembers, setClassWithMembers] = useState(null);
@@ -1273,17 +1274,31 @@ export default function ClassContent({ selected, isFaculty = false }) {
         <>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold">Classwork</h2>
-                  <div>
-                    <label className="mr-2 text-sm text-gray-700">Filter:</label>
-                    <select
-                      value={filterType}
-                      onChange={(e) => setFilterType(e.target.value)}
-                      className="px-3 py-1 border border-gray-300 rounded text-sm"
-                    >
-                      <option value="all">All</option>
-                      <option value="quiz">Quiz</option>
-                      <option value="assignment">Assignment</option>
-                    </select>
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <label className="mr-2 text-sm text-gray-700">Type:</label>
+                      <select
+                        value={filterType}
+                        onChange={(e) => setFilterType(e.target.value)}
+                        className="px-3 py-1 border border-gray-300 rounded text-sm"
+                      >
+                        <option value="all">All</option>
+                        <option value="quiz">Quiz</option>
+                        <option value="assignment">Assignment</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mr-2 text-sm text-gray-700">Activity:</label>
+                      <select
+                        value={activityTypeFilter}
+                        onChange={(e) => setActivityTypeFilter(e.target.value)}
+                        className="px-3 py-1 border border-gray-300 rounded text-sm"
+                      >
+                        <option value="all">All</option>
+                        <option value="written">Written Works</option>
+                        <option value="performance">Performance Task</option>
+                      </select>
+                    </div>
                   </div>
             {isFaculty && (
               <div className="relative inline-block" ref={dropdownRef}>
@@ -1326,8 +1341,13 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 // Filter and combine assignments/quizzes
                 let allItems = assignments
                   .filter((item) => {
-                    if (filterType === "all") return true;
-                    return item.type === filterType;
+                    if (filterType !== "all" && item.type !== filterType) return false;
+                    if (activityTypeFilter !== "all") {
+                      const at = (item.activityType || '').toLowerCase();
+                      if (activityTypeFilter === 'written' && at !== 'written') return false;
+                      if (activityTypeFilter === 'performance' && at !== 'performance') return false;
+                    }
+                    return true;
                   })
                   .map(item => ({ ...item, isPosted: isAssignmentPosted(item) }));
                 // Separate unposted and posted
@@ -1423,6 +1443,11 @@ export default function ClassContent({ selected, isFaculty = false }) {
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{item.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
+                                {item.activityType && (
+                                  <span className={`inline-block px-2 py-1 rounded text-[10px] font-semibold ${String(item.activityType).toLowerCase() === 'written' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
+                                    {String(item.activityType).toLowerCase() === 'written' ? 'Written Works' : 'Performance Task'}
+                                  </span>
+                                )}
                               </div>
                               <span className="text-lg font-bold text-blue-900">{item.title}</span>
                               <div className="text-sm mt-1 text-gray-700">{item.instructions}</div>

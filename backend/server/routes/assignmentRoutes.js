@@ -219,8 +219,12 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 // Create assignment or quiz
 router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('attachmentFile'), async (req, res) => {
   try {
-    let { classIDs, classID, title, instructions, type, description, dueDate, points, fileUploadRequired, allowedFileTypes, fileInstructions, questions, assignedTo, attachmentLink, postAt } = req.body;
+    let { classIDs, classID, title, instructions, type, activityType, description, dueDate, points, fileUploadRequired, allowedFileTypes, fileInstructions, questions, assignedTo, attachmentLink, postAt } = req.body;
     const createdBy = req.user._id;
+    
+    // Debug logging
+    console.log('[AssignmentRoutes] Creating assignment with activityType:', activityType);
+    console.log('[AssignmentRoutes] Full request body:', req.body);
     
     // Validate required fields
     if (!title || !title.trim()) {
@@ -265,6 +269,7 @@ router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('at
           title: title.trim(),
           instructions,
           type: type || 'assignment',
+          activityType: activityType || 'written',
           description,
           dueDate,
           points,
