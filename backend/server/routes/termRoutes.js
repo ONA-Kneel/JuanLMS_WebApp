@@ -65,6 +65,14 @@ router.post('/', authenticateToken, async (req, res) => {
       }
     }
 
+    // Enforce a maximum of 2 terms per school year (any status)
+    const totalTermsCount = existingTerms.length;
+    if (totalTermsCount >= 2) {
+      return res.status(400).json({
+        message: 'This school year already has 2 terms. You cannot add another.'
+      });
+    }
+
     // Check for overlapping terms before creating new one
     const overlappingTerms = await Term.find({
       schoolYear: fullSchoolYearName,
