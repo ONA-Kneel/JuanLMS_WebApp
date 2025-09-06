@@ -98,6 +98,7 @@ export default function Faculty_Grades() {
   const [selectedStudentName, setSelectedStudentName] = useState('');
   const [studentGrades, setStudentGrades] = useState({});
   const [showIndividualManagement, setShowIndividualManagement] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   
   // Modal states
@@ -1176,6 +1177,7 @@ export default function Faculty_Grades() {
         setShowIndividualManagement(false);
         setSelectedStudentName('');
         setStudentGrades({});
+        setIsEditMode(false);
 
       } else {
         const errorData = await response.json();
@@ -1190,6 +1192,31 @@ export default function Faculty_Grades() {
         'error'
       );
     }
+  };
+
+  // Handle edit mode toggle
+  const handleEditModeToggle = () => {
+    if (isEditMode) {
+      // If currently in edit mode, cancel and reset to original values
+      const student = students.find(s => s.name === selectedStudentName);
+      if (student) {
+        const existingGrades = grades[student._id] || {};
+        setStudentGrades({
+          quarter1: existingGrades.quarter1 || '',
+          quarter2: existingGrades.quarter2 || '',
+          quarter3: existingGrades.quarter3 || '',
+          quarter4: existingGrades.quarter4 || '',
+          semesterFinal: existingGrades.semesterFinal || '',
+          remarks: existingGrades.remarks || '',
+          writtenWorksRaw: existingGrades.writtenWorksRaw || '',
+          writtenWorksHPS: existingGrades.writtenWorksHPS || '',
+          performanceTasksRaw: existingGrades.performanceTasksRaw || '',
+          performanceTasksHPS: existingGrades.performanceTasksHPS || '',
+          quarterlyExam: existingGrades.quarterlyExam || ''
+        });
+      }
+    }
+    setIsEditMode(!isEditMode);
   };
 
   // Clear grades for the currently selected student (individual management)
@@ -1825,6 +1852,8 @@ export default function Faculty_Grades() {
                               setSelectedStudent('');
                               // Show the individual management section
                               setShowIndividualManagement(true);
+                              // Reset edit mode for new student
+                              setIsEditMode(false);
                             }}
                           >
                             <div className="font-medium">{student.name}</div>
@@ -1850,14 +1879,21 @@ export default function Faculty_Grades() {
                {selectedStudentName && showIndividualManagement && (
                  <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50 relative">
                    <div className="flex justify-between items-start mb-4">
-                     <h3 className="text-lg font-semibold text-gray-800">
-                       Individual Student Grade Management - {currentTerm?.termName || 'Current Term'}
-                       {selectedSection && selectedSection !== 'default' && (
-                         <span className="text-sm font-normal text-gray-600 ml-2">
-                           (Section: {selectedSection})
-                         </span>
+                     <div>
+                       <h3 className="text-lg font-semibold text-gray-800">
+                         Individual Student Grade Management - {currentTerm?.termName || 'Current Term'}
+                         {selectedSection && selectedSection !== 'default' && (
+                           <span className="text-sm font-normal text-gray-600 ml-2">
+                             (Section: {selectedSection})
+                           </span>
+                         )}
+                       </h3>
+                       {isEditMode && (
+                         <div className="mt-2 px-3 py-1 bg-yellow-100 border border-yellow-300 rounded-md text-sm text-yellow-800">
+                           ✏️ Edit Mode Active - You can now modify grades
+                         </div>
                        )}
-                     </h3>
+                     </div>
                      <button
                        onClick={() => setShowIndividualManagement(false)}
                        className="text-gray-500 hover:text-gray-700 text-xl font-bold leading-none p-1 rounded-full hover:bg-gray-200 transition-colors"
@@ -1962,15 +1998,16 @@ export default function Faculty_Grades() {
                       if (currentTerm?.termName === 'Term 1') {
                         return (
                           <>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">1st Quarter</label>
+                           <div>
+                             <label className="block text-sm font-medium text-gray-700 mb-1">1st Quarter</label>
                              <input
                                type="number"
                                min="0"
                                max="100"
                                step="0.01"
                                placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               disabled={!isEditMode}
+                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                value={studentGrades.quarter1 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
                              />
@@ -1989,7 +2026,8 @@ export default function Faculty_Grades() {
                                max="100"
                                step="0.01"
                                placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               disabled={!isEditMode}
+                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                value={studentGrades.quarter2 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
                              />
@@ -2013,7 +2051,8 @@ export default function Faculty_Grades() {
                                max="100"
                                step="0.01"
                                placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               disabled={!isEditMode}
+                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                value={studentGrades.quarter3 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter3', e.target.value)}
                              />
@@ -2032,7 +2071,8 @@ export default function Faculty_Grades() {
                                max="100"
                                step="0.01"
                                placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               disabled={!isEditMode}
+                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                value={studentGrades.quarter4 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter4', e.target.value)}
                              />
@@ -2056,7 +2096,8 @@ export default function Faculty_Grades() {
                                max="100"
                                step="0.01"
                                placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               disabled={!isEditMode}
+                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                value={studentGrades.quarter1 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
                              />
@@ -2075,7 +2116,8 @@ export default function Faculty_Grades() {
                                max="100"
                                step="0.01"
                                placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               disabled={!isEditMode}
+                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                value={studentGrades.quarter2 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
                              />
@@ -2117,7 +2159,8 @@ export default function Faculty_Grades() {
                                   min="0"
                                   step="0.01"
                                   placeholder="0.00"
-                                  className="w-full text-center border-none bg-transparent"
+                                  disabled={!isEditMode}
+                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
                                   value={studentGrades.writtenWorksRaw || ''}
                                   onChange={(e) => handleStudentGradeChange('writtenWorksRaw', e.target.value)}
                                 />
@@ -2128,7 +2171,8 @@ export default function Faculty_Grades() {
                                   min="0"
                                   step="0.01"
                                   placeholder="0.00"
-                                  className="w-full text-center border-none bg-transparent"
+                                  disabled={!isEditMode}
+                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
                                   value={studentGrades.writtenWorksHPS || ''}
                                   onChange={(e) => handleStudentGradeChange('writtenWorksHPS', e.target.value)}
                                 />
@@ -2155,7 +2199,8 @@ export default function Faculty_Grades() {
                                   max="100"
                                   step="0.01"
                                   placeholder="0.00"
-                                  className="w-full text-center border-none bg-transparent"
+                                  disabled={!isEditMode}
+                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
                                   value={studentGrades.quarterlyExam || ''}
                                   onChange={(e) => handleStudentGradeChange('quarterlyExam', e.target.value)}
                                 />
@@ -2169,7 +2214,8 @@ export default function Faculty_Grades() {
                                   min="0"
                                   step="0.01"
                                   placeholder="0.00"
-                                  className="w-full text-center border-none bg-transparent"
+                                  disabled={!isEditMode}
+                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
                                   value={studentGrades.performanceTasksRaw || ''}
                                   onChange={(e) => handleStudentGradeChange('performanceTasksRaw', e.target.value)}
                                 />
@@ -2180,7 +2226,8 @@ export default function Faculty_Grades() {
                                   min="0"
                                   step="0.01"
                                   placeholder="0.00"
-                                  className="w-full text-center border-none bg-transparent"
+                                  disabled={!isEditMode}
+                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
                                   value={studentGrades.performanceTasksHPS || ''}
                                   onChange={(e) => handleStudentGradeChange('performanceTasksHPS', e.target.value)}
                                 />
@@ -2273,10 +2320,10 @@ export default function Faculty_Grades() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
                       <select
-                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         value={studentGrades.remarks || ''}
                         onChange={(e) => handleStudentGradeChange('remarks', e.target.value)}
-                        disabled={(() => {
+                        disabled={!isEditMode || (() => {
                           const student = students.find(s => s.name === selectedStudentName);
                           const studentGradesData = grades[student?._id] || {};
                           return studentGradesData.isLocked;
@@ -2306,22 +2353,37 @@ export default function Faculty_Grades() {
                        );
                      }
                      
+                     if (!isEditMode) {
+                       return (
+                         <button
+                           onClick={handleEditModeToggle}
+                           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                         >
+                           ✏️ Edit Grades
+                         </button>
+                       );
+                     }
+                     
                      return (
                        <>
                          <button
                            onClick={saveStudentGrades}
                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
                          >
-                           Save Student Grades
+                           💾 Save Changes
+                         </button>
+                         <button
+                           onClick={handleEditModeToggle}
+                           className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
+                         >
+                           ❌ Cancel
                          </button>
                          <button
                            onClick={clearSelectedStudentGrades}
-                           className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                           className="px-4 py-2 bg-red-200 text-red-800 rounded-md hover:bg-red-300 transition-colors"
                          >
-                           Clear Grades
+                           🗑️ Clear Grades
                          </button>
-                         
-                         {/* File upload removed */}
                        </>
                      );
                    })()}

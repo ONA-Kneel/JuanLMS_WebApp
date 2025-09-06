@@ -487,6 +487,44 @@ export default function Student_Activities() {
     return filtered;
   };
 
+  // Calculate student scores by class and category
+  const calculateScoresByClass = (activities) => {
+    const scoresByClass = {};
+    
+    activities.forEach(activity => {
+      const className = activity.classInfo?.className || activity.className || 'Unknown Class';
+      const category = activity.activityType === 'written' ? 'written' : 
+                     activity.activityType === 'performance' ? 'performance' : 'uncategorized';
+      
+      if (!scoresByClass[className]) {
+        scoresByClass[className] = { written: 0, performance: 0, uncategorized: 0, total: 0 };
+      }
+      
+      // Get student's score for this activity
+      let studentScore = 0;
+      if (activity.type === 'assignment') {
+        const submission = submissions.find(sub => {
+          const assignmentId = sub.assignment?._id || sub.assignment;
+          const activityId = activity._id;
+          return String(assignmentId) === String(activityId);
+        });
+        studentScore = submission?.grade || 0;
+      } else if (activity.type === 'quiz') {
+        const response = quizResponses.find(resp => {
+          const quizId = resp.quiz?._id || resp.quiz || resp.quizId;
+          const activityId = activity._id;
+          return String(quizId) === String(activityId);
+        });
+        studentScore = response?.score || 0;
+      }
+      
+      scoresByClass[className][category] += studentScore;
+      scoresByClass[className].total += studentScore;
+    });
+    
+    return scoresByClass;
+  };
+
   // Group activities by due date (for Upcoming tab) - same logic as faculty
   const groupActivitiesByDueDate = (activities) => {
     // Separate activities with and without due dates
@@ -806,6 +844,10 @@ export default function Student_Activities() {
                 const statusActivities = getActivitiesByStatus(activeTab);
                 const filteredActivities = getFilteredActivities(statusActivities);
                 
+                // Show score summary table only in completed tab when a specific class is selected (not All Classes)
+                const showScoreTable = activeTab === 'completed' && classFilter !== 'All Classes' && filteredActivities.length > 0;
+                const scoresByClass = showScoreTable ? calculateScoresByClass(filteredActivities) : {};
+                
                 if (filteredActivities.length === 0) {
                   return (
                     <div className="text-center py-8">
@@ -819,34 +861,69 @@ export default function Student_Activities() {
                   );
                 }
                 
-                // Use different grouping based on the active tab - same logic as faculty
-                const { groupedByDate, sortedDateKeys } = activeTab === 'completed' 
-                  ? groupActivitiesBySubmissionDate(filteredActivities)
-                  : groupActivitiesByDueDate(filteredActivities);
-                
-                return sortedDateKeys.map(dateKey => (
-                  <div key={dateKey}>
-                    {/* Date separator */}
-                    <div className="mb-4 mt-6 first:mt-0">
-                      <h4 className="text-lg font-semibold text-gray-700 mb-3">
-                        {dateKey === 'No due date' ? (
-                          'No due date'
-                        ) : (
-                          <>
-                            {activeTab === 'completed' ? 'Submitted on ' : 'Due on '}
-                            {new Date(dateKey).toLocaleDateString('en-US', {
-                              weekday: 'long',
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric'
-                            })}
-                          </>
-                        )}
-                      </h4>
-                    </div>
+                return (
+                  <>
+                    {/* Score Summary Table - only show in completed tab when a specific class is selected */}
+                    {showScoreTable && (
+                      <div className="mb-6 overflow-x-auto">
+                        <div className="mb-2 text-sm text-gray-700">
+                          <span className="font-semibold">Your Total Scores for {classFilter}:</span>
+                        </div>
+                        <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="p-2 border text-left">Class</th>
+                              <th className="p-2 border text-right">Written Works</th>
+                              <th className="p-2 border text-right">Performance Task</th>
+                              <th className="p-2 border text-right">Uncategorized</th>
+                              <th className="p-2 border text-right font-bold">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.keys(scoresByClass).sort((a, b) => a.localeCompare(b)).map((className) => (
+                              <tr key={className} className="hover:bg-gray-50">
+                                <td className="p-2 border">{className}</td>
+                                <td className="p-2 border text-right">{scoresByClass[className].written}</td>
+                                <td className="p-2 border text-right">{scoresByClass[className].performance}</td>
+                                <td className="p-2 border text-right">{scoresByClass[className].uncategorized}</td>
+                                <td className="p-2 border text-right font-bold">{scoresByClass[className].total}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                     
-                    {/* Activities for this date - same display format as faculty */}
-                    {groupedByDate[dateKey].map((activity) => {
+                    {/* Activities List */}
+                    {(() => {
+                      // Use different grouping based on the active tab - same logic as faculty
+                      const { groupedByDate, sortedDateKeys } = activeTab === 'completed' 
+                        ? groupActivitiesBySubmissionDate(filteredActivities)
+                        : groupActivitiesByDueDate(filteredActivities);
+                
+                      return sortedDateKeys.map(dateKey => (
+                        <div key={dateKey}>
+                          {/* Date separator */}
+                          <div className="mb-4 mt-6 first:mt-0">
+                            <h4 className="text-lg font-semibold text-gray-700 mb-3">
+                              {dateKey === 'No due date' ? (
+                                'No due date'
+                              ) : (
+                                <>
+                                  {activeTab === 'completed' ? 'Submitted on ' : 'Due on '}
+                                  {new Date(dateKey).toLocaleDateString('en-US', {
+                                    weekday: 'long',
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                  })}
+                                </>
+                              )}
+                            </h4>
+                          </div>
+                          
+                          {/* Activities for this date - same display format as faculty */}
+                          {groupedByDate[dateKey].map((activity) => {
                       const scoreInfo = getStudentScore(activity);
                       const isCompleted = hasStudentCompleted(activity);
                       
@@ -923,9 +1000,12 @@ export default function Student_Activities() {
                           </div>
                         </div>
                       );
-                    })}
-                  </div>
-                ));
+                          })}
+                        </div>
+                      ));
+                    })()}
+                  </>
+                );
               })()
             )}
           </div>
