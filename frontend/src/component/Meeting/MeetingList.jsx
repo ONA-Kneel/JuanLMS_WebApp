@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Video, Calendar, Clock, Users, Play, Trash2, Edit, AlertCircle } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
   const [meetings, setMeetings] = useState([]);
@@ -55,13 +55,12 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
       console.log('[DEBUG] MeetingList join response result:', result);
 
       if (response.ok) {
-        // Pass both backend result and original meeting to onJoinMeeting
+        // Pass meeting data to onJoinMeeting for display
         if (onJoinMeeting) {
-          const mergedMeeting = { ...meeting, roomUrl: result.roomUrl };
-          console.log('[DEBUG] MeetingList onJoinMeeting mergedMeeting:', mergedMeeting);
-          onJoinMeeting(mergedMeeting);
+          console.log('[DEBUG] MeetingList onJoinMeeting meeting:', meeting);
+          onJoinMeeting(meeting);
         } else {
-          window.open(result.roomUrl, '_blank');
+          alert('Meeting joined successfully! Video conferencing is currently disabled.');
         }
         
         // Refresh meetings to update participant count

@@ -6,7 +6,7 @@ import MeetingList from '../Meeting/MeetingList';
 import VideoMeetingRoom from '../Meeting/VideoMeetingRoom';
 import { Video, Users, Calendar, Plus } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const Faculty_Meeting = () => {
   const [academicYear, setAcademicYear] = useState(null);
@@ -413,7 +413,7 @@ const Faculty_Meeting = () => {
                         <Video className="w-8 h-8 text-purple-600" />
                         <div>
                           <p className="text-sm text-purple-600 font-medium">Video Platform</p>
-                          <p className="text-xs text-purple-500">Powered by Jitsi Meet</p>
+                          <p className="text-xs text-purple-500">Video Meeting System</p>
                         </div>
                       </div>
                     </div>

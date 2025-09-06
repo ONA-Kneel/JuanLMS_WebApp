@@ -17,7 +17,6 @@
     "@fullcalendar/daygrid": "^6.1.17",
     "@fullcalendar/interaction": "^6.1.17",
     "@fullcalendar/react": "^6.1.17",
-    "@jitsi/react-sdk": "^1.4.4",
     "@tailwindcss/vite": "^4.0.14",
     "axios": "^1.9.0",
     "chart.js": "^4.5.0",
