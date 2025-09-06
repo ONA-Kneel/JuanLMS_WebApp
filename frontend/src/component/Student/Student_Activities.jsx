@@ -21,6 +21,13 @@ export default function Student_Activities() {
   const [filter, setFilter] = useState("All");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const filterRef = useRef();
+  const [activityTypeFilter, setActivityTypeFilter] = useState("All");
+  const [showActivityTypeFilterDropdown, setShowActivityTypeFilterDropdown] = useState(false);
+  const activityTypeFilterRef = useRef();
+  const [classFilter, setClassFilter] = useState("All Classes");
+  const [showClassFilterDropdown, setShowClassFilterDropdown] = useState(false);
+  const classFilterRef = useRef();
+  const [studentClasses, setStudentClasses] = useState([]);
   const [debugMode, setDebugMode] = useState(false);
 
   const tabs = [
@@ -139,6 +146,9 @@ export default function Student_Activities() {
           console.log(`Including class: ${cls.className || cls.classCode}`);
           return true;
         });
+        
+        // Store student classes for filtering
+        setStudentClasses(activeClasses);
         
         console.log('Active classes for activities:', activeClasses);
         
@@ -341,6 +351,26 @@ export default function Student_Activities() {
     }
   }, [academicYear, currentTerm]);
 
+  // Click outside to close dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setShowFilterDropdown(false);
+      }
+      if (activityTypeFilterRef.current && !activityTypeFilterRef.current.contains(event.target)) {
+        setShowActivityTypeFilterDropdown(false);
+      }
+      if (classFilterRef.current && !classFilterRef.current.contains(event.target)) {
+        setShowClassFilterDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   // Get activities by status (same logic as before)
   const getActivitiesByStatus = (status) => {
     const now = new Date();
@@ -389,12 +419,72 @@ export default function Student_Activities() {
     return false;
   };
 
+  // Get student's score and highest possible score for completed activities
+  const getStudentScore = (activity) => {
+    if (activity.type === 'assignment') {
+      const submission = submissions.find(sub => {
+        const assignmentId = sub.assignment?._id || sub.assignment;
+        const activityId = activity._id;
+        return String(assignmentId) === String(activityId);
+      });
+      
+      if (submission) {
+        return {
+          studentScore: submission.grade || 0,
+          maxScore: activity.points || 0,
+          isGraded: submission.status === 'graded' || submission.graded
+        };
+      }
+    } else if (activity.type === 'quiz') {
+      const response = quizResponses.find(resp => {
+        const quizId = resp.quiz?._id || resp.quiz || resp.quizId;
+        const activityId = activity._id;
+        return String(quizId) === String(activityId);
+      });
+      
+      if (response) {
+        return {
+          studentScore: response.score || 0,
+          maxScore: activity.points || 0,
+          isGraded: response.graded === true
+        };
+      }
+    }
+    
+    return {
+      studentScore: 0,
+      maxScore: activity.points || 0,
+      isGraded: false
+    };
+  };
+
   // Apply filter to activities
   const getFilteredActivities = (activities) => {
-    if (filter === "All") return activities;
-    if (filter === "Quiz") return activities.filter(a => a.type === "quiz");
-    if (filter === "Assignment") return activities.filter(a => a.type === "assignment");
-    return activities;
+    let filtered = activities;
+    
+    // Apply activity type filter
+    if (filter === "Quiz") {
+      filtered = filtered.filter(a => a.type === "quiz");
+    } else if (filter === "Assignment") {
+      filtered = filtered.filter(a => a.type === "assignment");
+    }
+    
+    // Apply category filter
+    if (activityTypeFilter === "Written Works") {
+      filtered = filtered.filter(a => a.activityType === "written");
+    } else if (activityTypeFilter === "Performance Task") {
+      filtered = filtered.filter(a => a.activityType === "performance");
+    }
+    
+    // Apply class filter
+    if (classFilter !== "All Classes") {
+      filtered = filtered.filter(a => {
+        const className = a.classInfo?.className || a.className || '';
+        return className === classFilter;
+      });
+    }
+    
+    return filtered;
   };
 
   // Group activities by due date (for Upcoming tab) - same logic as faculty
@@ -460,10 +550,10 @@ export default function Student_Activities() {
       return { ...activity, submissionDate };
     });
     
-    // Sort by submission date (ascending - oldest submissions first, latest at bottom)
+    // Sort by submission date (descending - most recent submissions first, oldest at bottom)
     const sortedActivities = activitiesWithSubmissionDate
       .filter(activity => activity.submissionDate) // Only include activities with submission dates
-      .sort((a, b) => new Date(a.submissionDate) - new Date(b.submissionDate));
+      .sort((a, b) => new Date(b.submissionDate) - new Date(a.submissionDate));
     
     // Group by submission date
     const groupedByDate = {};
@@ -476,8 +566,8 @@ export default function Student_Activities() {
       groupedByDate[dateKey].push(activity);
     });
     
-    // Sort date keys (oldest submission date first, latest at bottom)
-    const sortedDateKeys = Object.keys(groupedByDate).sort((a, b) => new Date(a) - new Date(b));
+    // Sort date keys (most recent submission date first, oldest at bottom)
+    const sortedDateKeys = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
     
     return { groupedByDate, sortedDateKeys };
   };
@@ -587,36 +677,117 @@ export default function Student_Activities() {
                   {activeTab === "past-due" && "Past Due"}
                   {activeTab === "completed" && "Completed"}
                 </h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Filter:</span>
-                  <div className="relative" ref={filterRef}>
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">Activity Type:</span>
+                    <div className="relative" ref={filterRef}>
+                      <button
+                        className="bg-white border border-gray-300 text-gray-700 text-sm px-3 py-1 rounded hover:bg-gray-50 flex items-center gap-2 min-w-[100px] justify-between"
+                        onClick={() => setShowFilterDropdown((prev) => !prev)}
+                      >
+                        {filter}
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {showFilterDropdown && (
+                        <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-300 rounded shadow-lg z-10">
+                          {["All", "Quiz", "Assignment"].map((option) => (
+                            <button
+                              key={option}
+                              className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${
+                                filter === option ? "bg-blue-500 text-white" : "text-gray-700"
+                              }`}
+                              onClick={() => {
+                                setFilter(option);
+                                setShowFilterDropdown(false);
+                              }}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">Category:</span>
+                    <div className="relative" ref={activityTypeFilterRef}>
+                      <button
+                        className="bg-white border border-gray-300 text-gray-700 text-sm px-3 py-1 rounded hover:bg-gray-50 flex items-center gap-2 min-w-[140px] justify-between"
+                        onClick={() => setShowActivityTypeFilterDropdown((prev) => !prev)}
+                      >
+                        {activityTypeFilter}
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {showActivityTypeFilterDropdown && (
+                        <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-300 rounded shadow-lg z-10">
+                          {["All", "Written Works", "Performance Task"].map((option) => (
+                            <button
+                              key={option}
+                              className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${
+                                activityTypeFilter === option ? "bg-blue-500 text-white" : "text-gray-700"
+                              }`}
+                              onClick={() => {
+                                setActivityTypeFilter(option);
+                                setShowActivityTypeFilterDropdown(false);
+                              }}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">Class:</span>
+                    <div className="relative" ref={classFilterRef}>
+                      <button
+                        className="bg-white border border-gray-300 text-gray-700 text-sm px-3 py-1 rounded hover:bg-gray-50 flex items-center gap-2 min-w-[160px] justify-between"
+                        onClick={() => setShowClassFilterDropdown((prev) => !prev)}
+                      >
+                        {classFilter}
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {showClassFilterDropdown && (
+                        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-10 max-h-64 overflow-y-auto min-w-[200px]">
+                          {['All Classes', ...[...new Set(studentClasses.map(cls => cls.className).filter(Boolean))].sort((a, b) => a.localeCompare(b))].map((option, idx) => (
+                            <button
+                              key={idx}
+                              className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${
+                                classFilter === option ? 'bg-blue-500 text-white' : 'text-gray-700'
+                              }`}
+                              onClick={() => {
+                                setClassFilter(option);
+                                setShowClassFilterDropdown(false);
+                              }}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <button
-                      className="bg-white border border-gray-300 text-gray-700 text-sm px-3 py-1 rounded hover:bg-gray-50 flex items-center gap-2 min-w-[100px] justify-between"
-                      onClick={() => setShowFilterDropdown((prev) => !prev)}
+                      className="bg-gray-500 hover:bg-gray-600 text-white text-sm px-3 py-1 rounded flex items-center gap-1"
+                      onClick={() => {
+                        setFilter("All");
+                        setActivityTypeFilter("All");
+                        setClassFilter("All Classes");
+                      }}
                     >
-                      {filter}
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
+                      Clear Filters
                     </button>
-                    {showFilterDropdown && (
-                      <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-300 rounded shadow-lg z-10">
-                        {["All", "Quiz", "Assignment"].map((option) => (
-                          <button
-                            key={option}
-                            className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${
-                              filter === option ? "bg-blue-500 text-white" : "text-gray-700"
-                            }`}
-                            onClick={() => {
-                              setFilter(option);
-                              setShowFilterDropdown(false);
-                            }}
-                          >
-                            {option}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -675,50 +846,84 @@ export default function Student_Activities() {
                     </div>
                     
                     {/* Activities for this date - same display format as faculty */}
-                    {groupedByDate[dateKey].map((activity) => (
-                      <div
-                        key={`${activity.type}-${activity._id}-${activity.classInfo?.classCode || 'unknown'}`}
-                        className="bg-[#00418B] p-4 rounded-xl shadow-lg mb-4 hover:bg-[#002d5a] cursor-pointer transition-colors"
-                        onClick={() => {
-                          if (activity.type === 'assignment') {
-                            navigate(`/assignment/${activity._id}`);
-                          } else if (activity.type === 'quiz') {
-                            navigate(`/quiz/${activity._id}`);
-                          }
-                        }}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="text-white text-xl md:text-2xl font-semibold mb-2">{activity.title}</h3>
-                            <p className="text-white/90 text-sm mb-1">
-                              Due at {activity.dueDate ? new Date(activity.dueDate).toLocaleString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: 'numeric',
-                                minute: '2-digit',
-                                hour12: true
-                              }) : 'No due date'}
-                            </p>
-                            <p className="text-white/80 text-sm font-medium">
-                              {activity.classInfo?.classCode || 'N/A'} | {activity.classInfo?.className || 'Unknown Class'}
-                            </p>
-                            {activity.instructions && (
-                              <p className="text-white/70 text-xs mt-1 line-clamp-2">
-                                {activity.instructions}
+                    {groupedByDate[dateKey].map((activity) => {
+                      const scoreInfo = getStudentScore(activity);
+                      const isCompleted = hasStudentCompleted(activity);
+                      
+                      return (
+                        <div
+                          key={`${activity.type}-${activity._id}-${activity.classInfo?.classCode || 'unknown'}`}
+                          className="bg-[#00418B] p-4 rounded-xl shadow-lg mb-4 hover:bg-[#002d5a] cursor-pointer transition-colors"
+                          onClick={() => {
+                            if (activity.type === 'assignment') {
+                              navigate(`/assignment/${activity._id}`);
+                            } else if (activity.type === 'quiz') {
+                              navigate(`/quiz/${activity._id}`);
+                            }
+                          }}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h3 className="text-white text-xl md:text-2xl font-semibold mb-2">{activity.title}</h3>
+                              <p className="text-white/90 text-sm mb-1">
+                                Due at {activity.dueDate ? new Date(activity.dueDate).toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                  hour12: true
+                                }) : 'No due date'}
                               </p>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <div className="bg-white/20 text-white px-3 py-1 rounded text-xs uppercase font-bold mb-1">
-                              {activity.type === 'assignment' ? 'ASSIGNMENT' : 'QUIZ'}
+                              <p className="text-white/80 text-sm font-medium">
+                                {activity.classInfo?.classCode || 'N/A'} | {activity.classInfo?.className || 'Unknown Class'}
+                              </p>
+                              {activity.instructions && (
+                                <p className="text-white/70 text-xs mt-1 line-clamp-2">
+                                  {activity.instructions}
+                                </p>
+                              )}
+                              {/* Show score for completed activities */}
+                              {isCompleted && (
+                                <div className="mt-2 p-2 bg-white/10 rounded-lg">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-white/90 text-sm font-medium">Your Score:</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-lg font-bold ${
+                                        scoreInfo.isGraded 
+                                          ? 'text-white' 
+                                          : 'text-yellow-300'
+                                      }`}>
+                                        {scoreInfo.studentScore} / {scoreInfo.maxScore}
+                                      </span>
+                                      {scoreInfo.isGraded ? (
+                                        <span className="text-green-300 text-xs font-medium">✓ Graded</span>
+                                      ) : (
+                                        <span className="text-yellow-300 text-xs font-medium">⏳ Pending</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {scoreInfo.isGraded && scoreInfo.maxScore > 0 && (
+                                    <div className="mt-1">
+                                      <div className="text-white/70 text-xs">
+                                        Percentage: {((scoreInfo.studentScore / scoreInfo.maxScore) * 100).toFixed(1)}%
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            <div className="text-white font-bold text-lg">
-                              {activity.points || 0} Points
+                            <div className="text-right">
+                              <div className="bg-white/20 text-white px-3 py-1 rounded text-xs uppercase font-bold mb-1">
+                                {activity.type === 'assignment' ? 'ASSIGNMENT' : 'QUIZ'}
+                              </div>
+                              <div className="text-white font-bold text-lg">
+                                {activity.points || 0} Points
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ));
               })()

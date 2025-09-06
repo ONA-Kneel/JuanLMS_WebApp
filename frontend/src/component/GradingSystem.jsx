@@ -1194,7 +1194,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
                           if (!scores[studentId]) {
                             scores[studentId] = { written: 0, performance: 0 };
                           }
-                          scores[studentId][category] += submission.score || 0;
+                          scores[studentId][category] += submission.grade || 0;
                         }
                       });
                     }

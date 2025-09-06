@@ -699,7 +699,12 @@ export default function AssignmentDetailPage() {
                     <p className="text-gray-600 italic">Not yet graded.</p>
                   ) : (
                     <>
-                      <p className="text-blue-900 font-bold mt-2">Grade: {studentSubmission.grade}%</p>
+                      <p className="text-blue-900 font-bold mt-2">
+                        Grade: {assignment?.points ? 
+                          ((studentSubmission.grade / assignment.points) * 100).toFixed(1) : 
+                          studentSubmission.grade
+                        }%
+                      </p>
                       {studentSubmission.feedback && (
                         <p className="text-blue-500 font-semibold mt-1">Feedback: {studentSubmission.feedback}</p>
                       )}
