@@ -26,9 +26,39 @@ const SessionExpiredModal = ({ isOpen, onClose }) => {
   }, [isOpen]);
 
   const handleLogout = () => {
-    // Clear all stored data
-    localStorage.clear();
+    console.log('Session expired - performing logout...');
+    
+    // Clear all authentication data with validation
+    const keysToRemove = [
+      'token',
+      'user',
+      'userID', 
+      'role',
+      'rememberedEmail',
+      'rememberedPassword',
+      'shouldLogoutOnReturn',
+      'schoolID',
+      'globalQuarter',
+      'globalTerm',
+      'globalAcademicYear'
+    ];
+    
+    keysToRemove.forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    // Clear session storage
     sessionStorage.clear();
+    
+    // Validate logout
+    const remainingAuthData = keysToRemove.filter(key => localStorage.getItem(key));
+    if (remainingAuthData.length > 0) {
+      console.error('❌ Session logout validation failed. Remaining data:', remainingAuthData);
+      // Force clear any remaining data
+      remainingAuthData.forEach(key => localStorage.removeItem(key));
+    } else {
+      console.log('✅ Session logout validation successful');
+    }
     
     // Close modal
     onClose();

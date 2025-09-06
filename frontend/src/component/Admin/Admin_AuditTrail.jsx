@@ -83,7 +83,7 @@ export default function Admin_AuditTrail() {
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || (user.role !== 'admin' && user.role !== 'principal')) {
-      navigate('/login');
+      navigate('/');
       return;
     }
     fetchAuditLogs();
@@ -134,7 +134,7 @@ export default function Admin_AuditTrail() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        navigate('/login');
+        navigate('/');
         return;
       }
 
@@ -157,7 +157,7 @@ export default function Admin_AuditTrail() {
     } catch (err) {
       console.error('Error fetching audit logs:', err);
       if (err.response?.status === 401) {
-        navigate('/login');
+        navigate('/');
       } else if (err.response?.status === 500) {
         setError('Server error. Please try again later.');
       } else {
@@ -186,7 +186,7 @@ export default function Admin_AuditTrail() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        navigate('/login');
+        navigate('/');
         return;
       }
 
@@ -238,7 +238,7 @@ export default function Admin_AuditTrail() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        navigate('/login');
+        navigate('/');
         return;
       }
 

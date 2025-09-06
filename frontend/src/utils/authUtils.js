@@ -1,21 +1,49 @@
 // Authentication utility functions
 
 /**
- * Logs out the user and clears all authentication data
+ * Logs out the user and clears all authentication data with validation
  * @param {boolean} clearRemembered - Whether to clear remembered credentials (default: false)
+ * @param {boolean} validate - Whether to validate the logout (default: true)
  */
-export const logout = (clearRemembered = false) => {
-  // Clear all user data
-  localStorage.removeItem('user');
-  localStorage.removeItem('token');
-  localStorage.removeItem('userID');
-  localStorage.removeItem('role');
-  localStorage.removeItem('shouldLogoutOnReturn');
+export const logout = (clearRemembered = false, validate = true) => {
+  console.log('Starting logout process...');
+  
+  // Clear all authentication-related data
+  const keysToRemove = [
+    'user',
+    'token', 
+    'userID',
+    'role',
+    'shouldLogoutOnReturn',
+    'schoolID',
+    'globalQuarter',
+    'globalTerm',
+    'globalAcademicYear'
+  ];
   
   // Optionally clear remembered credentials
   if (clearRemembered) {
-    localStorage.removeItem('rememberedEmail');
-    localStorage.removeItem('rememberedPassword');
+    keysToRemove.push('rememberedEmail', 'rememberedPassword');
+  }
+  
+  // Remove all keys
+  keysToRemove.forEach(key => {
+    localStorage.removeItem(key);
+  });
+  
+  console.log('✅ Local storage cleared');
+  
+  // Validate logout if requested
+  if (validate) {
+    const remainingAuthData = keysToRemove.filter(key => localStorage.getItem(key));
+    if (remainingAuthData.length > 0) {
+      console.error('❌ Logout validation failed. Remaining data:', remainingAuthData);
+      // Force clear any remaining data
+      remainingAuthData.forEach(key => localStorage.removeItem(key));
+      console.log('✅ Force cleared remaining data');
+    } else {
+      console.log('✅ Logout validation successful - all auth data cleared');
+    }
   }
   
   console.log('User logged out successfully');

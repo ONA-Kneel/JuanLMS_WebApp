@@ -3,6 +3,8 @@ import ProfileModal from "../ProfileModal";
 import ProfileMenu from "../ProfileMenu";
 import React, { useEffect, useState } from 'react';
 import GradingSystem from '../GradingSystem';
+import QuarterSelector from "../QuarterSelector";
+import { useQuarter } from "../../context/QuarterContext.jsx";
 
 /**
  * Faculty Grades Component
@@ -79,6 +81,9 @@ const Modal = ({ isOpen, onClose, title, children, type = 'info' }) => {
 };
 
 export default function Faculty_Grades() {
+  // Get quarter context
+  const { globalQuarter, globalTerm, globalAcademicYear } = useQuarter();
+  
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [activeTab, setActiveTab] = useState('traditional'); // 'traditional' or 'excel'
@@ -131,6 +136,13 @@ export default function Faculty_Grades() {
     const gradeNum = parseFloat(grade);
     return !isNaN(gradeNum) && gradeNum >= 0 && gradeNum <= 100;
   };
+
+  // Refetch grades when quarter changes
+  useEffect(() => {
+    if (globalQuarter && globalTerm && globalAcademicYear && selectedClass !== null && students.length > 0) {
+      loadSavedGradesFromDatabase(classes[selectedClass]?.classID, students);
+    }
+  }, [globalQuarter, globalTerm, globalAcademicYear]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -537,8 +549,8 @@ export default function Faculty_Grades() {
       
       console.log('🔍 Loading saved grades for class:', classID);
       
-      // Fetch grades from database for this class and term
-      const response = await fetch(`${API_BASE}/api/semestral-grades/class/${selectedClassObj.classID}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
+      // Fetch grades from database for this class and quarter
+      const response = await fetch(`${API_BASE}/api/semestral-grades/class/${selectedClassObj.classID}?termName=${globalTerm}&academicYear=${globalAcademicYear}&quarter=${globalQuarter}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -814,6 +826,33 @@ export default function Faculty_Grades() {
           'error'
         );
         return; // Exit early, don't update the grade
+      }
+      
+      // Limit to 2 decimal places
+      value = gradeNum.toFixed(2);
+    }
+    
+    // Validate grade breakdown fields
+    if ((field.includes('Raw') || field.includes('HPS') || field === 'quarterlyExam') && value !== '') {
+      const gradeNum = parseFloat(value);
+      
+      // Check if grade is within valid range (0-100 for quarterly exam, 0+ for raw scores)
+      if (isNaN(gradeNum) || gradeNum < 0) {
+        showModal(
+          'Invalid Input',
+          `Values must be positive numbers.\n\nYou entered: ${value}\n\nPlease enter a valid value.`,
+          'error'
+        );
+        return;
+      }
+      
+      if (field === 'quarterlyExam' && gradeNum > 100) {
+        showModal(
+          'Invalid Quarterly Exam Grade',
+          `Quarterly exam grade must be between 0 and 100.\n\nYou entered: ${value}\n\nPlease enter a valid grade.`,
+          'error'
+        );
+        return;
       }
       
       // Limit to 2 decimal places
@@ -1591,9 +1630,19 @@ export default function Faculty_Grades() {
           </div>
         </div>
 
-        
+        {/* Quarter Selector */}
+        <div className="mb-6">
+          <QuarterSelector />
+        </div>
 
-        
+        {/* Current Quarter Display */}
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <p className="text-sm font-medium text-blue-800">
+            Managing grades for: <span className="font-semibold">{globalQuarter} - {globalTerm}</span>
+            <span className="text-blue-600 ml-2">({globalAcademicYear})</span>
+          </p>
+        </div>
+
         {/* Tab Navigation */}
         <div className="mb-6">
           <div className="flex gap-4 border-b">
@@ -2041,6 +2090,176 @@ export default function Faculty_Grades() {
                        );
                      }
                     })()}
+                    
+                    {/* Detailed Grade Breakdown Section */}
+                    <div className="col-span-full mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Detailed Grade Breakdown - {globalQuarter}</h4>
+                      
+                      {/* Grade Breakdown Table */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-gray-100">
+                              <th className="border border-gray-300 p-2 text-left font-semibold">Component</th>
+                              <th className="border border-gray-300 p-2 text-center font-semibold">RAW</th>
+                              <th className="border border-gray-300 p-2 text-center font-semibold">HPS</th>
+                              <th className="border border-gray-300 p-2 text-center font-semibold">PS</th>
+                              <th className="border border-gray-300 p-2 text-center font-semibold">WS</th>
+                              <th className="border border-gray-300 p-2 text-center font-semibold">Quarterly Exam</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td className="border border-gray-300 p-2 font-medium">Written Works (30%)</td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  className="w-full text-center border-none bg-transparent"
+                                  value={studentGrades.writtenWorksRaw || ''}
+                                  onChange={(e) => handleStudentGradeChange('writtenWorksRaw', e.target.value)}
+                                />
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  className="w-full text-center border-none bg-transparent"
+                                  value={studentGrades.writtenWorksHPS || ''}
+                                  onChange={(e) => handleStudentGradeChange('writtenWorksHPS', e.target.value)}
+                                />
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center bg-blue-50 font-semibold">
+                                {(() => {
+                                  const raw = parseFloat(studentGrades.writtenWorksRaw || 0);
+                                  const hps = parseFloat(studentGrades.writtenWorksHPS || 0);
+                                  return hps > 0 ? ((raw / hps) * 100).toFixed(2) : '0.00';
+                                })()}%
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center bg-green-50 font-semibold">
+                                {(() => {
+                                  const raw = parseFloat(studentGrades.writtenWorksRaw || 0);
+                                  const hps = parseFloat(studentGrades.writtenWorksHPS || 0);
+                                  const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                                  return (ps * 0.3).toFixed(2);
+                                })()}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center" rowSpan="2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  className="w-full text-center border-none bg-transparent"
+                                  value={studentGrades.quarterlyExam || ''}
+                                  onChange={(e) => handleStudentGradeChange('quarterlyExam', e.target.value)}
+                                />
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="border border-gray-300 p-2 font-medium">Performance Tasks (50%)</td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  className="w-full text-center border-none bg-transparent"
+                                  value={studentGrades.performanceTasksRaw || ''}
+                                  onChange={(e) => handleStudentGradeChange('performanceTasksRaw', e.target.value)}
+                                />
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  className="w-full text-center border-none bg-transparent"
+                                  value={studentGrades.performanceTasksHPS || ''}
+                                  onChange={(e) => handleStudentGradeChange('performanceTasksHPS', e.target.value)}
+                                />
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center bg-blue-50 font-semibold">
+                                {(() => {
+                                  const raw = parseFloat(studentGrades.performanceTasksRaw || 0);
+                                  const hps = parseFloat(studentGrades.performanceTasksHPS || 0);
+                                  return hps > 0 ? ((raw / hps) * 100).toFixed(2) : '0.00';
+                                })()}%
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center bg-green-50 font-semibold">
+                                {(() => {
+                                  const raw = parseFloat(studentGrades.performanceTasksRaw || 0);
+                                  const hps = parseFloat(studentGrades.performanceTasksHPS || 0);
+                                  const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                                  return (ps * 0.5).toFixed(2);
+                                })()}
+                              </td>
+                            </tr>
+                            <tr className="bg-yellow-50">
+                              <td className="border border-gray-300 p-2 font-semibold">Initial Grade</td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold" colSpan="4">
+                                {(() => {
+                                  const writtenWS = (() => {
+                                    const raw = parseFloat(studentGrades.writtenWorksRaw || 0);
+                                    const hps = parseFloat(studentGrades.writtenWorksHPS || 0);
+                                    const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                                    return ps * 0.3;
+                                  })();
+                                  const performanceWS = (() => {
+                                    const raw = parseFloat(studentGrades.performanceTasksRaw || 0);
+                                    const hps = parseFloat(studentGrades.performanceTasksHPS || 0);
+                                    const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                                    return ps * 0.5;
+                                  })();
+                                  return (writtenWS + performanceWS).toFixed(2);
+                                })()}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold">
+                                {(() => {
+                                  const quarterlyExam = parseFloat(studentGrades.quarterlyExam || 0);
+                                  return quarterlyExam.toFixed(2);
+                                })()}
+                              </td>
+                            </tr>
+                            <tr className="bg-blue-100">
+                              <td className="border border-gray-300 p-2 font-bold">Quarterly Grade</td>
+                              <td className="border border-gray-300 p-2 text-center font-bold" colSpan="5">
+                                {(() => {
+                                  const writtenWS = (() => {
+                                    const raw = parseFloat(studentGrades.writtenWorksRaw || 0);
+                                    const hps = parseFloat(studentGrades.writtenWorksHPS || 0);
+                                    const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                                    return ps * 0.3;
+                                  })();
+                                  const performanceWS = (() => {
+                                    const raw = parseFloat(studentGrades.performanceTasksRaw || 0);
+                                    const hps = parseFloat(studentGrades.performanceTasksHPS || 0);
+                                    const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                                    return ps * 0.5;
+                                  })();
+                                  const initialGrade = writtenWS + performanceWS;
+                                  const quarterlyExam = parseFloat(studentGrades.quarterlyExam || 0);
+                                  const quarterlyGrade = (initialGrade * 0.7) + (quarterlyExam * 0.3);
+                                  return quarterlyGrade.toFixed(2);
+                                })()}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      
+                      <div className="mt-4 text-xs text-gray-600">
+                        <p><strong>Legend:</strong> RAW = Raw Score, HPS = Highest Possible Score, PS = Percentage Score, WS = Weighted Score</p>
+                        <p><strong>Formula:</strong> PS = (RAW/HPS) × 100, WS = PS × Weight, Initial Grade = Sum of WS, Quarterly Grade = (Initial Grade × 0.7) + (Quarterly Exam × 0.3)</p>
+                      </div>
+                    </div>
+                    
                                       <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Semester Final Grade</label>
                       <input

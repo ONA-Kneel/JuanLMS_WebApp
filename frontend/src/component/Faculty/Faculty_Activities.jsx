@@ -3,12 +3,18 @@ import { useNavigate } from "react-router-dom";
 
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
+import QuarterSelector from "../QuarterSelector";
+import { useQuarter } from "../../context/QuarterContext.jsx";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Faculty_Activities() {
   const [activeTab, setActiveTab] = useState("activities-quiz");
   const navigate = useNavigate();
+  
+  // Get quarter context
+  const { globalQuarter, globalTerm, globalAcademicYear } = useQuarter();
+  
   const tabs = [
     { id: "activities-quiz", label: "Activities/Quiz" },
     { id: "ready-to-grade", label: "Ready to Grade" },
@@ -131,20 +137,20 @@ export default function Faculty_Activities() {
     });
   };
 
-  useEffect(() => {
-    async function fetchActivitiesAndQuizzes() {
+  // Define fetchActivitiesAndQuizzes function
+  const fetchActivitiesAndQuizzes = async () => {
       try {
         const token = localStorage.getItem("token");
         
-        // Fetch assignments globally
-        const activityRes = await fetch(`${API_BASE}/assignments`, {
+        // Fetch assignments for selected quarter
+        const activityRes = await fetch(`${API_BASE}/assignments?quarter=${globalQuarter}&termName=${globalTerm}&academicYear=${globalAcademicYear}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         
-        // Fetch quizzes per class (like ClassContent.jsx does)
+        // Fetch quizzes per class for selected quarter
         const allQuizzes = [];
         for (const facultyClass of facultyClasses) {
-          const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${facultyClass.classID}`, {
+          const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${facultyClass.classID}&quarter=${globalQuarter}&termName=${globalTerm}&academicYear=${globalAcademicYear}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (quizRes.ok) {
@@ -183,9 +189,17 @@ export default function Faculty_Activities() {
       } catch (err) {
         console.error("Failed to fetch activities or quizzes", err);
       }
+  };
+
+  // Refetch activities when quarter changes
+  useEffect(() => {
+    if (globalQuarter && globalTerm && globalAcademicYear && facultyClasses.length > 0) {
+      fetchActivitiesAndQuizzes();
     }
-    
-    // Run only after faculty classes are resolved for the term
+  }, [globalQuarter, globalTerm, globalAcademicYear, facultyClasses]);
+
+  // Run only after faculty classes are resolved for the term
+  useEffect(() => {
     if (facultyClasses.length > 0) {
       fetchActivitiesAndQuizzes();
     } else {
@@ -380,6 +394,19 @@ export default function Faculty_Activities() {
           <ProfileMenu />
         </div>
 
+        {/* Quarter Selector */}
+        <div className="mb-6">
+          <QuarterSelector />
+        </div>
+
+        {/* Current Quarter Display */}
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <p className="text-sm font-medium text-blue-800">
+            Showing activities for: <span className="font-semibold">{globalQuarter} - {globalTerm}</span>
+            <span className="text-blue-600 ml-2">({globalAcademicYear})</span>
+          </p>
+        </div>
+
         <ul className="flex flex-wrap border-b border-gray-700 text-xl sm:text-2xl font-medium text-gray-400">
           {tabs.map((tab) => (
             <li
@@ -521,7 +548,7 @@ export default function Faculty_Activities() {
                         className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
                         onClick={() => {
                           setShowDropdown(false);
-                          navigate("/create-assignment?type=written");
+                          navigate(`/create-assignment?type=written&quarter=${globalQuarter}&termName=${globalTerm}&academicYear=${globalAcademicYear}`);
                         }}
                       >
                         Assignment
@@ -530,7 +557,7 @@ export default function Faculty_Activities() {
                         className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
                         onClick={() => {
                           setShowDropdown(false);
-                          navigate("/create-quiz?type=written");
+                          navigate(`/create-quiz?type=written&quarter=${globalQuarter}&termName=${globalTerm}&academicYear=${globalAcademicYear}`);
                         }}
                       >
                         Quiz
@@ -542,7 +569,7 @@ export default function Faculty_Activities() {
                         className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
                         onClick={() => {
                           setShowDropdown(false);
-                          navigate("/create-assignment?type=performance");
+                          navigate(`/create-assignment?type=performance&quarter=${globalQuarter}&termName=${globalTerm}&academicYear=${globalAcademicYear}`);
                         }}
                       >
                         Assignment
@@ -551,7 +578,7 @@ export default function Faculty_Activities() {
                         className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
                         onClick={() => {
                           setShowDropdown(false);
-                          navigate("/create-quiz?type=performance");
+                          navigate(`/create-quiz?type=performance&quarter=${globalQuarter}&termName=${globalTerm}&academicYear=${globalAcademicYear}`);
                         }}
                       >
                         Quiz
@@ -1069,6 +1096,17 @@ export default function Faculty_Activities() {
 
                   // Total points across currently visible graded activities
                   const totalPoints = sortedItems.reduce((sum, item) => sum + (item.points || 0), 0);
+                  
+                  // Debug logging
+                  console.log('🔍 Debug - Total Points Calculation:');
+                  console.log('  - sortedItems length:', sortedItems.length);
+                  console.log('  - sortedItems:', sortedItems.map(item => ({ 
+                    title: item.title, 
+                    points: item.points, 
+                    activityType: item.activityType,
+                    quarter: item.quarter 
+                  })));
+                  console.log('  - totalPoints:', totalPoints);
 
                   // Persist total to localStorage for later use
                   try {

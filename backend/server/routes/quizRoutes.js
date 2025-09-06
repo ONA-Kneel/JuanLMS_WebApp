@@ -80,6 +80,28 @@ router.post('/', authenticateToken, async (req, res) => {
     console.log('[QuizRoutes] Creating quiz with data:', req.body);
     console.log('[QuizRoutes] ActivityType:', req.body.activityType);
     console.log('[QuizRoutes] Timing data:', req.body.timing);
+    
+    // Validate quarter data
+    const { quarter, termName, academicYear } = req.body;
+    if (!quarter || !termName || !academicYear) {
+      return res.status(400).json({ 
+        error: 'Quarter, term name, and academic year are required.' 
+      });
+    }
+
+    // Validate quarter based on term
+    if (termName === 'Term 1' && !['Q1', 'Q2'].includes(quarter)) {
+      return res.status(400).json({
+        error: 'Invalid quarter for Term 1. Must be Q1 or Q2.'
+      });
+    }
+    
+    if (termName === 'Term 2' && !['Q3', 'Q4'].includes(quarter)) {
+      return res.status(400).json({
+        error: 'Invalid quarter for Term 2. Must be Q3 or Q4.'
+      });
+    }
+    
     // Validate points boundaries before creating
     const total = Array.isArray(req.body.questions)
       ? req.body.questions.reduce((sum, q) => sum + (Number(q.points) || 0), 0)
@@ -119,20 +141,28 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Get all quizzes (optionally filter by classID)
+// Get all quizzes (optionally filter by classID, quarter, termName, academicYear)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { classID } = req.query;
+    const { classID, quarter, termName, academicYear } = req.query;
     const userId = req.user.userID;
     const role = req.user.role;
     
-    console.log('[QuizRoutes] GET / - Role:', role, 'UserID:', userId, 'ClassID:', classID);
+    console.log('[QuizRoutes] GET / - Role:', role, 'UserID:', userId, 'ClassID:', classID, 'Quarter:', quarter);
     console.log('[QuizRoutes] Full user object:', req.user);
     
+    // Build query object
+    const query = {};
+    if (classID) query['assignedTo.classID'] = classID;
+    if (quarter) query.quarter = quarter;
+    if (termName) query.termName = termName;
+    if (academicYear) query.academicYear = academicYear;
+
     let quizzes;
-    if (classID) {
-      quizzes = await Quiz.find({ 'assignedTo.classID': classID });
-      console.log('[QuizRoutes] Found quizzes for classID:', classID, 'Count:', quizzes.length);
+    if (Object.keys(query).length > 0) {
+      // Filter by provided parameters
+      quizzes = await Quiz.find(query);
+      console.log('[QuizRoutes] Found quizzes with query:', query, 'Count:', quizzes.length);
     } else if (role === 'faculty') {
       // For faculty, get quizzes from all their classes
       const facultyClasses = await Class.find({ facultyID: userId });

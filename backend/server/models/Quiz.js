@@ -61,7 +61,22 @@ const quizSchema = new mongoose.Schema({
     studentIDs: [{ type: String, required: true }]
   }],
   // Track which students have viewed this quiz
-  views: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+  views: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  // Quarter management fields
+  quarter: { 
+    type: String, 
+    enum: ['Q1', 'Q2', 'Q3', 'Q4'], 
+    required: true 
+  },
+  termName: { 
+    type: String, 
+    enum: ['Term 1', 'Term 2'], 
+    required: true 
+  },
+  academicYear: { 
+    type: String, 
+    required: true 
+  }
 });
 
 // Ensure total points are synchronized and within 1–100 on save/update

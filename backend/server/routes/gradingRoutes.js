@@ -628,6 +628,142 @@ router.get('/faculty-classes-alt/:facultyId', authenticateToken, async (req, res
   }
 });
 
+// Get grade breakdown for a specific student and quarter
+router.get('/student/:studentId/breakdown', authenticateToken, async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { quarter, classId, termName, academicYear } = req.query;
+    
+    console.log('Grade breakdown request:', { studentId, quarter, classId, termName, academicYear });
+
+    // Validate required parameters
+    if (!quarter || !classId || !termName || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters: quarter, classId, termName, academicYear'
+      });
+    }
+
+    // Fetch activities for specific quarter
+    const assignments = await Assignment.find({
+      classID: classId,
+      quarter,
+      termName,
+      academicYear
+    });
+
+    const quizzes = await Quiz.find({
+      classID: classId,
+      quarter,
+      termName,
+      academicYear
+    });
+
+    // Get student submissions
+    const assignmentSubmissions = await Submission.find({
+      student: studentId,
+      assignment: { $in: assignments.map(a => a._id) }
+    });
+
+    const quizResponses = await QuizResponse.find({
+      studentId: studentId,
+      quizId: { $in: quizzes.map(q => q._id) }
+    });
+
+    // Calculate written works breakdown
+    const writtenWorks = {
+      raw: 0,
+      hps: 0,
+      ps: 0,
+      ws: 0,
+      activities: []
+    };
+
+    const performanceTasks = {
+      raw: 0,
+      hps: 0,
+      ps: 0,
+      ws: 0,
+      activities: []
+    };
+
+    // Process assignments
+    assignments.forEach(assignment => {
+      const submission = assignmentSubmissions.find(s => s.assignment.toString() === assignment._id.toString());
+      const earnedPoints = submission?.grade || 0;
+      const maxPoints = assignment.points || 0;
+      
+      const activityData = {
+        id: assignment._id,
+        title: assignment.title,
+        type: 'assignment',
+        earned: earnedPoints,
+        max: maxPoints
+      };
+
+      if (assignment.activityType === 'written') {
+        writtenWorks.raw += earnedPoints;
+        writtenWorks.hps += maxPoints;
+        writtenWorks.activities.push(activityData);
+      } else if (assignment.activityType === 'performance') {
+        performanceTasks.raw += earnedPoints;
+        performanceTasks.hps += maxPoints;
+        performanceTasks.activities.push(activityData);
+      }
+    });
+
+    // Process quizzes
+    quizzes.forEach(quiz => {
+      const response = quizResponses.find(r => r.quizId.toString() === quiz._id.toString());
+      const earnedPoints = response?.score || 0;
+      const maxPoints = quiz.points || 0;
+      
+      const activityData = {
+        id: quiz._id,
+        title: quiz.title,
+        type: 'quiz',
+        earned: earnedPoints,
+        max: maxPoints
+      };
+
+      if (quiz.activityType === 'written') {
+        writtenWorks.raw += earnedPoints;
+        writtenWorks.hps += maxPoints;
+        writtenWorks.activities.push(activityData);
+      } else if (quiz.activityType === 'performance') {
+        performanceTasks.raw += earnedPoints;
+        performanceTasks.hps += maxPoints;
+        performanceTasks.activities.push(activityData);
+      }
+    });
+
+    // Calculate percentage scores and weighted scores
+    writtenWorks.ps = writtenWorks.hps > 0 ? (writtenWorks.raw / writtenWorks.hps) * 100 : 0;
+    writtenWorks.ws = writtenWorks.ps * 0.3; // 30% weight for written works
+
+    performanceTasks.ps = performanceTasks.hps > 0 ? (performanceTasks.raw / performanceTasks.hps) * 100 : 0;
+    performanceTasks.ws = performanceTasks.ps * 0.5; // 50% weight for performance tasks
+
+    const breakdown = {
+      writtenWorks,
+      performanceTasks,
+      quarter,
+      termName,
+      academicYear,
+      totalInitialGrade: writtenWorks.ws + performanceTasks.ws
+    };
+
+    res.json({ success: true, breakdown });
+  } catch (error) {
+    console.error('Error calculating grade breakdown:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to calculate grade breakdown',
+      error: error.message
+    });
+  }
+});
+
 // Get comprehensive grade data for a class section (for export)
 router.get('/class/:classId/section/:sectionName/comprehensive', authenticateToken, async (req, res) => {
   try {

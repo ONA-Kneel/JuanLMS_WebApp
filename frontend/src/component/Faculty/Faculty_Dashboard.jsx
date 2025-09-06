@@ -187,6 +187,7 @@ export default function Faculty_Dashboard() {
           </div>
         )}
 
+
         {/* Announcements (no KPI cards here) */}
         {announcements.length > 0 && (
           <div className="mb-6">

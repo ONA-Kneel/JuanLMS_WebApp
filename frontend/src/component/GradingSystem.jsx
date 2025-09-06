@@ -2,10 +2,14 @@ import React, { useState, useEffect } from 'react';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import ValidationModal from './ValidationModal';
 import * as XLSX from 'xlsx';
+import { useQuarter } from '../context/QuarterContext.jsx';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function GradingSystem({ onStageTemporaryGrades }) {
+  // Get quarter context
+  const { globalQuarter, globalTerm, globalAcademicYear } = useQuarter();
+  
   const [facultyClasses, setFacultyClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
@@ -512,7 +516,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
     }
 
     // Required group headers (allow anywhere in the row; tolerate merged cells)
-    const requiredRow9Labels = ['WRITTEN WORKS 40%', 'PERFORMANCE TASKS 60%', 'INITIAL GRADE', 'QUARTERLY GRADE'];
+    const requiredRow9Labels = ['WRITTEN WORKS 30%', 'PERFORMANCE TASKS 50%', 'INITIAL GRADE', 'QUARTERLY EXAM 20%', 'QUARTERLY GRADE'];
     requiredRow9Labels.forEach(label => {
       if (!rowHas(row9, label)) {
         errors.push(`Missing required header in Row 9: ${label}`);
@@ -626,11 +630,11 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
     //   warnings.push('Header row format differs from the canonical template (Row 8).');
     // }
 
-    // Extra columns handling beyond W (23 columns)
-    const maxCols = 23;
+    // Extra columns handling beyond N (14 columns)
+    const maxCols = 14;
     const headerWidths = [row8.length, row9.length, row10.length];
     if (headerWidths.some(w => w > maxCols)) {
-      warnings.push('This file contains extra columns beyond W; they will be ignored.');
+      warnings.push('This file contains extra columns beyond N; they will be ignored.');
     }
 
     // Fetch section students for validation
@@ -745,7 +749,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
 
     const termName = currentTerm?.termName || 'Term 1';
     const records = [];
-    const maxCols = 23;
+    const maxCols = 14; // Updated for single quarter layout
     for (let r = 10; r < aoa.length; r++) {
       const row = aoa[r];
       if (!row || row.length === 0 || row.every(c => String(c).trim() === '')) continue;
@@ -753,23 +757,40 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
       const studentId = String(cells[0] || '').trim();
       const studentName = String(cells[1] || '').trim();
       if (!studentId) continue;
-      // Quarterly Grade columns per our template: L (index 11) and V (index 21)
-      const qA = parseFloat(cells[11]);
-      const qB = parseFloat(cells[21]);
+      // Quarterly Grade column per our single quarter template: M (index 12)
+      const qA = parseFloat(cells[12]);
       const isNum = (n) => typeof n === 'number' && !Number.isNaN(n);
 
-      let gradePayload = { quarter1: '', quarter2: '', quarter3: '', quarter4: '' };
-      if (termName === 'Term 1') {
+      // Parse grade breakdown fields for single quarter
+      const writtenWorksRaw = parseFloat(cells[2]) || 0;
+      const writtenWorksHPS = parseFloat(cells[3]) || 0;
+      const performanceTasksRaw = parseFloat(cells[6]) || 0;
+      const performanceTasksHPS = parseFloat(cells[7]) || 0;
+      const quarterlyExam = parseFloat(cells[11]) || 0;
+
+      let gradePayload = { 
+        quarter1: '', quarter2: '', quarter3: '', quarter4: '',
+        // Grade breakdown fields for current quarter
+        writtenWorksRaw: writtenWorksRaw,
+        writtenWorksHPS: writtenWorksHPS,
+        performanceTasksRaw: performanceTasksRaw,
+        performanceTasksHPS: performanceTasksHPS,
+        quarterlyExam: quarterlyExam
+      };
+      
+      // Set the appropriate quarter based on current selection
+      if (globalQuarter === 'Q1') {
         gradePayload.quarter1 = isNum(qA) ? qA.toFixed(2) : '';
-        gradePayload.quarter2 = isNum(qB) ? qB.toFixed(2) : '';
-      } else {
+      } else if (globalQuarter === 'Q2') {
+        gradePayload.quarter2 = isNum(qA) ? qA.toFixed(2) : '';
+      } else if (globalQuarter === 'Q3') {
         gradePayload.quarter3 = isNum(qA) ? qA.toFixed(2) : '';
-        gradePayload.quarter4 = isNum(qB) ? qB.toFixed(2) : '';
+      } else if (globalQuarter === 'Q4') {
+        gradePayload.quarter4 = isNum(qA) ? qA.toFixed(2) : '';
       }
 
       const a = isNum(qA) ? qA : null;
-      const b = isNum(qB) ? qB : null;
-      const sem = a != null && b != null ? ((a + b) / 2).toFixed(2) : '';
+      const sem = a != null ? a.toFixed(2) : '';
       const semNum = parseFloat(sem);
       let remarks = '';
       if (sem) {
@@ -1042,12 +1063,31 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
       // Frontend guard: only keep true students
       const studentsOnly = (students || []).filter(s => (s.role || '').toLowerCase() === 'students');
       // Normalize students to have school ID and name
-      const normalizedStudents = studentsOnly.map((s, idx) => ({
-        id:
-          s.studentID || s.schoolID || s.userID || s.id || s._id || `S${idx + 1}`,
-        name:
-          s.name || s.studentName || `${s.firstname || ''} ${s.lastname || ''}`.trim() || `Student ${idx + 1}`
-      }));
+      const normalizedStudents = studentsOnly.map((s, idx) => {
+        const fullName = s.name || s.studentName || `${s.firstname || ''} ${s.lastname || ''}`.trim() || `Student ${idx + 1}`;
+        
+        // Format name as "Last Name, First Name" for sorting
+        const formatNameForSorting = (name) => {
+          const nameParts = name.trim().split(' ');
+          if (nameParts.length >= 2) {
+            const lastName = nameParts[nameParts.length - 1];
+            const firstName = nameParts.slice(0, -1).join(' ');
+            return `${lastName}, ${firstName}`;
+          }
+          return name; // Return as-is if only one name part
+        };
+        
+        return {
+          id: s.studentID || s.schoolID || s.userID || s.id || s._id || `S${idx + 1}`,
+          name: formatNameForSorting(fullName),
+          originalName: fullName // Keep original for reference
+        };
+      });
+      
+      // Sort students alphabetically by last name (which is now first in formatted name)
+      normalizedStudents.sort((a, b) => {
+        return a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
+      });
 
       if (normalizedStudents.length === 0) {
         setValidationMessage('No students found for this section. The template will still be generated with empty rows.');
@@ -1067,43 +1107,203 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
         [
           "Student No.",
           "STUDENT'S NAME (Alphabetical Order with Middle Initials)",
-          quarterLabels.firstQuarterDisplay, "", "", "", "", "", "", "", "", "",
-          quarterLabels.secondQuarterDisplay, "", "", "", "", "", "", "", "",
+          `${quarterLabels.firstQuarterDisplay} - Grade Breakdown`, "", "", "", "", "", "", "", "", "",
           "FINAL GRADE"
         ],
         [
           "", "",
-          "WRITTEN WORKS 40%", "", "", "",
-          "PERFORMANCE TASKS 60%", "", "", "",
-          "INITIAL GRADE",
-          "QUARTERLY GRADE",
-          "WRITTEN WORKS 40%", "", "", "",
-          "PERFORMANCE TASKS 60%", "", "", "",
-          "INITIAL GRADE",
-          "QUARTERLY GRADE",
+          "WRITTEN WORKS 30%", "", "", "",
+          "PERFORMANCE TASKS 50%", "", "", "",
+          "INITIAL\nGRADE",
+          "QUARTERLY\nEXAM 20%",
+          "QUARTERLY\nGRADE",
           ""
         ],
         [
           "", "",
           "RAW", "HPS", "PS", "WS",
           "RAW", "HPS", "PS", "WS",
-          "", "",
-          "RAW", "HPS", "PS", "WS",
-          "RAW", "HPS", "PS", "WS",
-          "", "",
+          "", "", "",
           ""
         ],
       ];
 
-      // Append student rows using normalized students; pad to 15 rows
-      const EMPTY_21 = Array(21).fill("");
+      // Fetch student scores and activity totals using the same method as Faculty_Activities
+      const fetchStudentScores = async () => {
+        const scores = {};
+        const activityTotals = { written: 0, performance: 0 };
+        
+        try {
+          // Fetch assignments for this quarter
+          const assignmentRes = await fetch(`${API_BASE}/assignments?quarter=${globalQuarter}&termName=${globalTerm}&academicYear=${globalAcademicYear}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          let assignments = [];
+          if (assignmentRes.ok) {
+            assignments = await assignmentRes.json();
+            console.log('📋 Fetched Assignments:', assignments.map(a => ({ 
+              id: a._id, 
+              title: a.title, 
+              classID: a.classID, 
+              activityType: a.activityType, 
+              points: a.points,
+              quarter: a.quarter 
+            })));
+          }
+          
+          // Fetch quizzes for this quarter
+          const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${selectedClassObj.classID}&quarter=${globalQuarter}&termName=${globalTerm}&academicYear=${globalAcademicYear}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          let quizzes = [];
+          if (quizRes.ok) {
+            quizzes = await quizRes.json();
+            console.log('📋 Fetched Quizzes:', quizzes.map(q => ({ 
+              id: q._id, 
+              title: q.title, 
+              classID: q.classID, 
+              activityType: q.activityType, 
+              points: q.points,
+              quarter: q.quarter 
+            })));
+          }
+          
+          // Process assignments (same logic as Faculty_Activities)
+          for (const assignment of assignments) {
+            if (assignment.classID === selectedClassObj.classID) {
+              const category = assignment.activityType === 'written' ? 'written' : 'performance';
+              activityTotals[category] += assignment.points || 0;
+              
+              try {
+                const submissionRes = await fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                
+                if (submissionRes.ok) {
+                  const submissions = await submissionRes.json();
+                  if (submissions && submissions.length > 0) {
+                    // Check if all submissions are graded (same logic as Faculty_Activities)
+                    const allGraded = submissions.every(sub => sub.status === 'graded');
+                    if (allGraded) {
+                      // Process each graded submission
+                      submissions.forEach(submission => {
+                        if (submission.status === 'graded') {
+                          const studentId = submission.studentID || submission.student;
+                          if (!scores[studentId]) {
+                            scores[studentId] = { written: 0, performance: 0 };
+                          }
+                          scores[studentId][category] += submission.score || 0;
+                        }
+                      });
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error(`Failed to fetch submissions for assignment ${assignment._id}:`, err);
+              }
+            }
+          }
+          
+          // Process quizzes (same logic as Faculty_Activities)
+          for (const quiz of quizzes) {
+            const category = quiz.activityType === 'written' ? 'written' : 'performance';
+            activityTotals[category] += quiz.points || 0;
+            
+            try {
+              const responseRes = await fetch(`${API_BASE}/api/quizzes/${quiz._id}/responses`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              
+              if (responseRes.ok) {
+                const responses = await responseRes.json();
+                if (responses && responses.length > 0) {
+                  // Check if all responses are graded (same logic as Faculty_Activities)
+                  const allGraded = responses.every(resp => resp.graded === true);
+                  if (allGraded) {
+                    // Process each graded response
+                    responses.forEach(response => {
+                      if (response.graded === true) {
+                        const studentId = response.studentID || response.student;
+                        if (!scores[studentId]) {
+                          scores[studentId] = { written: 0, performance: 0 };
+                        }
+                        scores[studentId][category] += response.score || 0;
+                      }
+                    });
+                  }
+                }
+              }
+            } catch (err) {
+              console.error(`Failed to fetch responses for quiz ${quiz._id}:`, err);
+            }
+          }
+          
+          console.log('🔍 Excel Generation - Processed Data:');
+          console.log('  - Activity Totals:', activityTotals);
+          console.log('  - Student Scores Sample:', Object.keys(scores).slice(0, 3).map(id => ({ id, scores: scores[id] })));
+          console.log('  - Assignments processed:', assignments.length);
+          console.log('  - Quizzes processed:', quizzes.length);
+          console.log('  - All student IDs with scores:', Object.keys(scores));
+          console.log('  - Selected Class ID:', selectedClassObj.classID);
+          console.log('  - Quarter Filter:', globalQuarter, globalTerm, globalAcademicYear);
+          
+        } catch (error) {
+          console.error('Error fetching student scores:', error);
+        }
+        
+        return { scores, activityTotals };
+      };
+
+      // Fetch the actual data
+      const { scores, activityTotals } = await fetchStudentScores();
+      
+      // Debug logging
+      console.log('🔍 Excel Generation Debug:');
+      console.log('  - Activity Totals:', activityTotals);
+      console.log('  - Student Scores Sample:', Object.keys(scores).slice(0, 3).map(id => ({ id, scores: scores[id] })));
+      console.log('  - Selected Quarter:', globalQuarter, globalTerm, globalAcademicYear);
+      
+      // Append student rows with actual data
       const totalRows = Math.max(15, normalizedStudents.length);
       for (let i = 0; i < totalRows; i++) {
         const student = normalizedStudents[i];
         if (student) {
-          wsData.push([student.id, student.name, ...EMPTY_21]);
+          const studentId = student.id;
+          const studentScores = scores[studentId] || { written: 0, performance: 0 };
+          
+          // Calculate PS and WS for each category
+          const writtenPS = activityTotals.written > 0 ? (studentScores.written / activityTotals.written) * 100 : 0;
+          const performancePS = activityTotals.performance > 0 ? (studentScores.performance / activityTotals.performance) * 100 : 0;
+          
+          const writtenWS = writtenPS * 0.3; // 30% weight
+          const performanceWS = performancePS * 0.5; // 50% weight
+          
+          const initialGrade = writtenWS + performanceWS;
+          
+          // Create row with actual data
+          const studentRow = [
+            student.id, // Student No.
+            student.name, // Student Name
+            studentScores.written, // Written Works RAW
+            activityTotals.written, // Written Works HPS
+            writtenPS.toFixed(2), // Written Works PS
+            writtenWS.toFixed(2), // Written Works WS
+            studentScores.performance, // Performance Tasks RAW
+            activityTotals.performance, // Performance Tasks HPS
+            performancePS.toFixed(2), // Performance Tasks PS
+            performanceWS.toFixed(2), // Performance Tasks WS
+            initialGrade.toFixed(2), // Initial Grade
+            "", // Quarterly Exam (blank for faculty input)
+            "", // Quarterly Grade (will be calculated after quarterly exam)
+            "" // Final Grade
+          ];
+          
+          wsData.push(studentRow);
         } else {
-          wsData.push([i + 1, "", ...EMPTY_21]);
+          // Empty row for padding
+          wsData.push([i + 1, "", ...Array(12).fill("")]);
         }
       }
 
@@ -1112,30 +1312,117 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
 
       // Merges to match layout
       ws["!merges"] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 22 } }, // A1:W1
-        { s: { r: 1, c: 0 }, e: { r: 1, c: 22 } }, // A2:W2
-        { s: { r: 3, c: 0 }, e: { r: 3, c: 22 } }, // A4:W4
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 14 } }, // A1:O1
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 14 } }, // A2:O2
+        { s: { r: 3, c: 0 }, e: { r: 3, c: 14 } }, // A4:O4
         { s: { r: 7, c: 0 }, e: { r: 8, c: 0 } },  // A8:A9 Student No.
         { s: { r: 7, c: 1 }, e: { r: 8, c: 1 } },  // B8:B9 Name
-        { s: { r: 7, c: 2 }, e: { r: 7, c: 11 } }, // C8:L8 Quarter 1/3 band
-        { s: { r: 7, c: 12 }, e: { r: 7, c: 21 } },// M8:V8 Quarter 2/4 band
-        { s: { r: 7, c: 22 }, e: { r: 8, c: 22 } },// W8:W9 Final Grade
-        { s: { r: 8, c: 2 }, e: { r: 8, c: 5 } },  // C9:F9 WW 40%
-        { s: { r: 8, c: 6 }, e: { r: 8, c: 9 } },  // G9:J9 PT 60%
-        { s: { r: 8, c: 12 }, e: { r: 8, c: 15 } },// M9:P9 WW 40%
-        { s: { r: 8, c: 16 }, e: { r: 8, c: 19 } },// Q9:T9 PT 60%
+        { s: { r: 7, c: 2 }, e: { r: 7, c: 12 } }, // C8:M8 Quarter band
+        { s: { r: 7, c: 13 }, e: { r: 8, c: 13 } },// N8:N9 Final Grade
+        { s: { r: 8, c: 2 }, e: { r: 8, c: 5 } },  // C8:F8 WW 30%
+        { s: { r: 8, c: 6 }, e: { r: 8, c: 9 } },  // G8:J8 PT 50%
+        // K8, L8, M8 are individual cells (no merging needed)
       ];
 
       // Column widths
       ws["!cols"] = [
         { wch: 12 },
         { wch: 42 },
-        ...Array(20).fill({ wch: 10 }),
+        ...Array(12).fill({ wch: 10 }),
         { wch: 12 },
       ];
 
+      // Set row heights for better text wrapping
+      ws["!rows"] = [
+        { hpt: 20 }, // Row 1
+        { hpt: 20 }, // Row 2
+        { hpt: 20 }, // Row 3
+        { hpt: 20 }, // Row 4
+        { hpt: 20 }, // Row 5
+        { hpt: 20 }, // Row 6
+        { hpt: 20 }, // Row 7
+        { hpt: 50 }, // Row 8 - taller for wrapped text
+        { hpt: 50 }, // Row 9 - taller for wrapped text
+        { hpt: 20 }, // Row 10
+      ];
+
+      // Create styles using a more direct approach
+      const createStyle = (alignment) => ({
+        alignment: {
+          horizontal: alignment.horizontal || 'center',
+          vertical: alignment.vertical || 'center',
+          wrapText: alignment.wrapText || false
+        }
+      });
+
+      // Apply styles directly to specific cells with proper XLSX alignment values
+      const styleCells = [
+        // A8, B8: center, middle align, text wrapped
+        { cell: 'A8', style: { alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
+        { cell: 'B8', style: { alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
+        
+        // C8: center, middle align
+        { cell: 'C8', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        
+        // C9, G9: center, middle align
+        { cell: 'C9', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        { cell: 'G9', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        
+        // K8, L8, M8: center, middle align, text wrapped
+        { cell: 'K8', style: { alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
+        { cell: 'L8', style: { alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
+        { cell: 'M8', style: { alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
+        
+        // C10-J10: center, middle align
+        { cell: 'C10', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        { cell: 'D10', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        { cell: 'E10', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        { cell: 'F10', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        { cell: 'G10', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        { cell: 'H10', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        { cell: 'I10', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        { cell: 'J10', style: { alignment: { horizontal: 'center', vertical: 'center' } } }
+      ];
+
+      // Apply all styles
+      styleCells.forEach(({ cell, style }) => {
+        if (!ws[cell]) ws[cell] = { v: '' };
+        ws[cell].s = style;
+      });
+
       // Freeze panes under headers (A..B fixed, top 10 rows)
       ws["!freeze"] = { xSplit: 2, ySplit: 10 };
+
+      // Force apply all styles by recreating the worksheet with styles
+      const styledData = wsData.map((row, rowIndex) => {
+        return row.map((cell, colIndex) => {
+          const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+          const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+          
+          // Check if this cell needs special formatting
+          const specialCell = styleCells.find(sc => sc.cell === cellRef);
+          if (specialCell) {
+            return {
+              v: cell,
+              s: specialCell.style
+            };
+          }
+          
+          return cell;
+        });
+      });
+
+      // Recreate worksheet with styled data
+      const styledWs = XLSX.utils.aoa_to_sheet(styledData);
+      
+      // Copy merges and other properties
+      styledWs["!merges"] = ws["!merges"];
+      styledWs["!cols"] = ws["!cols"];
+      styledWs["!rows"] = ws["!rows"];
+      styledWs["!freeze"] = ws["!freeze"];
+      
+      // Replace the original worksheet
+      Object.assign(ws, styledWs);
 
       XLSX.utils.book_append_sheet(wb, ws, "Grade Sheet");
 

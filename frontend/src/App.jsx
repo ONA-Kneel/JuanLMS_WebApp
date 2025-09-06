@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { setupCrossTabSessionListener, debouncedRedirectToDashboard, updateUserActivity } from './utils/sessionUtils';
+import { QuarterProvider } from './context/QuarterContext.jsx';
 // For Logging in into different user and accounts
 import Login from './component/Login';
 import ForgotPassword from './component/ForgotPassword';
@@ -196,26 +197,54 @@ function App() {
   const handleLogout = () => {
     if (logoutRequested) return;
     setLogoutRequested(true);
+    
+    console.log('App.jsx - Performing logout...');
+    
     try {
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-      localStorage.removeItem('userID');
-      localStorage.removeItem('role');
-      localStorage.removeItem('rememberedEmail');
-      localStorage.removeItem('rememberedPassword');
-      localStorage.removeItem('shouldLogoutOnReturn');
-    } catch {
-      // ignore
+      // Clear all authentication data with validation
+      const keysToRemove = [
+        'user',
+        'token',
+        'userID',
+        'role',
+        'rememberedEmail',
+        'rememberedPassword',
+        'shouldLogoutOnReturn',
+        'schoolID',
+        'globalQuarter',
+        'globalTerm',
+        'globalAcademicYear'
+      ];
+      
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+      });
+      
+      // Validate logout
+      const remainingAuthData = keysToRemove.filter(key => localStorage.getItem(key));
+      if (remainingAuthData.length > 0) {
+        console.error('❌ App logout validation failed. Remaining data:', remainingAuthData);
+        // Force clear any remaining data
+        remainingAuthData.forEach(key => localStorage.removeItem(key));
+      } else {
+        console.log('✅ App logout validation successful');
+      }
+      
+    } catch (error) {
+      console.error('Error during logout:', error);
     }
+    
     // Hard redirect to login
     window.location.replace('/');
   };
 
   return (
-    <Router>
-      <Routes>
+    <QuarterProvider>
+      <Router>
+        <Routes>
         {/* Login into different User Accounts */}
         <Route path="/" element={<Login />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/pdf-viewer" element={<PdfViewer />} />
         {/* Students */}
@@ -291,6 +320,9 @@ function App() {
         {/* Registration Page */}
         <Route path="/register" element={<Registration />} />
 
+        {/* Catch-all route for unmatched paths */}
+        <Route path="*" element={<Login />} />
+
       </Routes>
 
       {/* Toast Container - Add this at the end, before closing Router */}
@@ -318,7 +350,8 @@ function App() {
           </div>
         </div>
       )}
-    </Router>
+      </Router>
+    </QuarterProvider>
   );
 }
 
