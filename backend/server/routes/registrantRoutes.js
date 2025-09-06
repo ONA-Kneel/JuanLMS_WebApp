@@ -141,18 +141,18 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
     
     if (isStudentId) {
       role = 'students';
-      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@students.sjddef.edu.ph`;
+      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@students.sjdefilms.com`;
     } else if (isFacultyId) {
       role = 'faculty';
-      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjddef.edu.ph`;
+      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjdefilms.com`;
     } else if (isAdminId) {
       role = 'admin';
-      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@admin.sjddef.edu.ph`;
+      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@admin.sjdefilms.com`;
     } else if (isVPEPrincipalId) {
       // Check if it's VPE or Principal based on the specific ID pattern
       // You may need to adjust this logic based on your specific numbering scheme
       role = 'vice president of education'; // or 'principal' based on your needs
-      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@VPE.sjddef.edu.ph`;
+      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@VPE.sjdefilms.com`;
     }
 
     const tempPassword = 'changeme123';

@@ -381,13 +381,48 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
                   `Thank you,\nJuanLMS Team`
             };
 
-            console.log("About to send welcome email");
-            await apiInstance.sendTransacEmail(sendSmtpEmail);
-            console.log("Welcome email sent");
-        } catch (emailErr) {
-            console.error('Error sending welcome email via Brevo:', emailErr);
+        console.log("About to send welcome email");
+        await apiInstance.sendTransacEmail(sendSmtpEmail);
+        console.log("Welcome email sent");
+    } catch (emailErr) {
+        console.error('Error sending welcome email via Brevo:', emailErr);
+    }
+
+    // Create Zoho mailbox for the user
+    let zohoMailboxResult = null;
+    try {
+        const { createZohoMailbox } = await import('../services/zohoMail.js');
+        
+        // Only create Zoho mailbox if ZOHO_ORG_ID is configured
+        if (process.env.ZOHO_ORG_ID) {
+            console.log("Creating Zoho mailbox for user:", email);
+            zohoMailboxResult = await createZohoMailbox(
+                email.toLowerCase(),
+                firstname,
+                lastname,
+                password
+            );
+            console.log("Zoho mailbox created successfully");
+        } else {
+            console.log("ZOHO_ORG_ID not configured, skipping Zoho mailbox creation");
         }
-        res.status(201).json({ success: true, user });
+    } catch (zohoErr) {
+        console.error('Error creating Zoho mailbox:', zohoErr.message);
+        // Don't fail the user creation if Zoho mailbox creation fails
+        // Just log the error and continue
+    }
+
+    res.status(201).json({ 
+        success: true, 
+        user,
+        zohoMailbox: zohoMailboxResult ? {
+            success: true,
+            message: "Zoho mailbox created successfully"
+        } : {
+            success: false,
+            message: "Zoho mailbox creation skipped or failed"
+        }
+    });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Failed to create user" });
@@ -928,11 +963,11 @@ userRoutes.post('/logout', authenticateToken, async (req, res) => {
 // Get user role from email domain
 function getRoleFromEmail(email) {
     const normalized = email.toLowerCase();
-    if (normalized.endsWith('@students.sjddef.edu.ph')) return 'students';
-    if (normalized.endsWith('@VPE.sjddef.edu.ph')) return 'vice president of education';
-    if (normalized.endsWith('@admin.sjddef.edu.ph')) return 'admin';
-    if (normalized.endsWith('@principal.sjddef.edu.ph')) return 'principal';
-    if (normalized.endsWith('@sjddef.edu.ph') && !normalized.includes('@students.') && !normalized.includes('@parent.') && !normalized.includes('@admin.') && !normalized.includes('@principal.')) return 'faculty';
+    if (normalized.endsWith('@students.sjdefilms.com')) return 'students';
+    if (normalized.endsWith('@VPE.sjdefilms.com')) return 'vice president of education';
+    if (normalized.endsWith('@admin.sjdefilms.com')) return 'admin';
+    if (normalized.endsWith('@principal.sjdefilms.com')) return 'principal';
+    if (normalized.endsWith('@sjdefilms.com') && !normalized.includes('@students.') && !normalized.includes('@parent.') && !normalized.includes('@admin.') && !normalized.includes('@principal.')) return 'faculty';
     return 'unknown';
 }
 

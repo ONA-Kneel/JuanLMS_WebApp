@@ -43,6 +43,7 @@ import generalAnnouncementRoutes from './routes/generalAnnouncementRoutes.js';
 import gradeUploadRoutes from './routes/gradeUploadRoutes.js';
 import principalRoutes from './routes/principalRoutes.js';
 import aiAnalyticsRoutes from './routes/aiAnalyticsRoutes.js';
+import zohoRoutes from './routes/zohoRoutes.js';
 
 
 dotenv.config({ path: './config.env' });
@@ -158,6 +159,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
+app.use(zohoRoutes);
 
 // MongoDB connection
 mongoose.connect(process.env.ATLAS_URI)
@@ -333,6 +335,7 @@ app.use('/api/general-announcements', generalAnnouncementRoutes);
 app.use('/api/grades', gradeUploadRoutes);
 app.use('/api/principal', principalRoutes);
 app.use('/api/ai-analytics', aiAnalyticsRoutes);
+app.use('/', zohoRoutes);
 
 // Error handling middleware for multer fileFilter errors
 app.use((error, req, res, next) => {

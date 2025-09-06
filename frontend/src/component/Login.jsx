@@ -433,7 +433,7 @@ export default function Login() {
                 autoComplete="email"
                 spellCheck="false"
                 className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900"
-                placeholder="School E-mail"
+                placeholder="School Email (@sjdefilms.com)"
               />
             </div>
 
