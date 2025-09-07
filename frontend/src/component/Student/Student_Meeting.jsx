@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import Student_Navbar from './Student_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import MeetingList from '../Meeting/MeetingList';
-import VideoMeetingRoom from '../Meeting/VideoMeetingRoom';
 import { Users, Video, Calendar } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
@@ -12,7 +11,6 @@ export default function Student_Meeting() {
   const [selectedClass, setSelectedClass] = useState(null);
   const [loading, setLoading] = useState(true);
   const [meetingRefreshTrigger, setMeetingRefreshTrigger] = useState(0);
-  const [activeMeeting, setActiveMeeting] = useState(null);
   const [userInfo, setUserInfo] = useState({ name: '', email: '' });
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
@@ -165,24 +163,12 @@ export default function Student_Meeting() {
   const handleJoinMeeting = async (meeting) => {
     try {
       console.log('[DEBUG] Student handleJoinMeeting received:', meeting);
-      console.log('[DEBUG] Student meeting roomUrl:', meeting.roomUrl);
-      // MeetingList already called the backend and provided roomUrl
-      const meetingData = {
-        ...meeting,
-        meetingId: String(meeting._id),
-        title: meeting.title || 'Video Meeting',
-      };
-      console.log('[DEBUG] Student setActiveMeeting with:', meetingData);
-      setActiveMeeting(meetingData);
+      // Meeting join functionality - placeholder for future video integration
+      alert('Meeting join functionality will be implemented with your preferred video solution');
     } catch (error) {
-      console.error('Error setting up meeting:', error);
+      console.error('Error joining meeting:', error);
       alert('Error joining meeting. Please try again.');
     }
-  };
-
-  const handleLeaveMeeting = () => {
-    setActiveMeeting(null);
-    setMeetingRefreshTrigger(prev => prev + 1);
   };
 
   return (
@@ -293,16 +279,6 @@ export default function Student_Meeting() {
           </>
         )}
 
-        {/* Video Meeting Room */}
-        {activeMeeting && (
-          <VideoMeetingRoom
-            meetingData={activeMeeting}
-            currentUser={userInfo}
-            onLeave={handleLeaveMeeting}
-            isOpen={!!activeMeeting}
-            isModerator={false}
-          />
-        )}
       </div>
     </div>
   );

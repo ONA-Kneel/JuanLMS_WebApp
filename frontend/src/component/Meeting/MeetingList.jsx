@@ -55,13 +55,11 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
       console.log('[DEBUG] MeetingList join response result:', result);
 
       if (response.ok) {
-        // Pass both backend result and original meeting to onJoinMeeting
+        // Meeting join functionality - placeholder for future video integration
         if (onJoinMeeting) {
-          const mergedMeeting = { ...meeting, roomUrl: result.roomUrl };
-          console.log('[DEBUG] MeetingList onJoinMeeting mergedMeeting:', mergedMeeting);
-          onJoinMeeting(mergedMeeting);
+          onJoinMeeting(meeting);
         } else {
-          window.open(result.roomUrl, '_blank');
+          alert('Meeting join functionality will be implemented with your preferred video solution');
         }
         
         // Refresh meetings to update participant count
