@@ -1099,4 +1099,41 @@ function toProperCase(str) {
         .join(' ');
 }
 
+// Test endpoint to send welcome email
+userRoutes.post('/test-welcome-email', async (req, res) => {
+    try {
+        const { personalEmail, firstName, zohoEmail, password } = req.body;
+        
+        if (!personalEmail || !firstName || !zohoEmail || !password) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "Missing required fields: personalEmail, firstName, zohoEmail, password" 
+            });
+        }
+
+        // Import and use the email service
+        const emailService = await import('../services/emailService.js');
+        
+        // Send welcome email via Brevo
+        const result = await emailService.default.sendWelcomeEmail(
+            personalEmail,
+            firstName,
+            zohoEmail,
+            password
+        );
+
+        res.json({
+            success: true,
+            message: `Welcome email sent to ${personalEmail}`,
+            result: result
+        });
+    } catch (error) {
+        console.error('Error sending test welcome email:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 export default userRoutes;

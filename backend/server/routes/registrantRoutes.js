@@ -141,21 +141,37 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
     
     if (isStudentId) {
       role = 'students';
-      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@students.sjdefilms.com`;
+      schoolEmail = `students.${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjdefilms.com`;
     } else if (isFacultyId) {
       role = 'faculty';
-      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjdefilms.com`;
+      schoolEmail = `faculty.${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjdefilms.com`;
     } else if (isAdminId) {
       role = 'admin';
-      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@admin.sjdefilms.com`;
+      schoolEmail = `admin.${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjdefilms.com`;
     } else if (isVPEPrincipalId) {
       // Check if it's VPE or Principal based on the specific ID pattern
       // You may need to adjust this logic based on your specific numbering scheme
       role = 'vice president of education'; // or 'principal' based on your needs
-      schoolEmail = `${clean(registrant.firstName)}.${clean(registrant.lastName)}@VPE.sjdefilms.com`;
+      schoolEmail = `vpe.${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjdefilms.com`;
     }
 
-    const tempPassword = 'changeme123';
+    // Generate a secure temporary password that meets Zoho requirements
+    const generateSecurePassword = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+      let password = '';
+      // Ensure at least one uppercase, lowercase, number, and special character
+      password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
+      password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)];
+      password += '0123456789'[Math.floor(Math.random() * 10)];
+      password += '!@#$%^&*'[Math.floor(Math.random() * 8)];
+      // Add 8 more random characters
+      for (let i = 0; i < 8; i++) {
+        password += chars[Math.floor(Math.random() * chars.length)];
+      }
+      // Shuffle the password
+      return password.split('').sort(() => Math.random() - 0.5).join('');
+    };
+    const tempPassword = generateSecurePassword();
     const user = new User({
       firstname: registrant.firstName,
       middlename: registrant.middleName,
@@ -174,32 +190,69 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
       console.error('Validation error creating user from registrant:', saveErr);
       return res.status(400).json({ message: saveErr.message || 'Failed to create user from registrant.' });
     }
+
+    // Create Zoho mailbox for the user
+    let zohoMailboxResult = null;
+    try {
+      const { createZohoMailbox } = await import('../services/zohoMail.js');
+      
+      // Only create Zoho mailbox if ZOHO_ORG_ID is configured
+      if (process.env.ZOHO_ORG_ID) {
+        console.log("Creating Zoho mailbox for registrant:", schoolEmail);
+        zohoMailboxResult = await createZohoMailbox(
+          schoolEmail.toLowerCase(),
+          registrant.firstName,
+          registrant.lastName,
+          tempPassword
+        );
+        console.log("Zoho mailbox created successfully for registrant");
+      } else {
+        console.log("ZOHO_ORG_ID not configured, skipping Zoho mailbox creation");
+      }
+    } catch (zohoErr) {
+      console.error('Error creating Zoho mailbox for registrant:', zohoErr.message);
+      // Don't fail the approval if Zoho mailbox creation fails
+      // Just log the error and continue
+    }
     
     registrant.status = 'approved';
     registrant.processedAt = new Date();
     registrant.processedBy = req.body && req.body.adminId ? req.body.adminId : null;
     await registrant.save();
     
-    // Send acceptance email via Brevo using utility (only if email is configured)
-    if (hasEmailConfig) {
-      try {
-        await sendEmail({
-          toEmail: registrant.personalEmail,
-          toName: `${registrant.firstName} ${registrant.lastName}`,
-          subject: 'Admission Offer - Welcome to San Juan De Dios Educational Foundation Inc',
-          textContent:
-`Dear ${registrant.firstName} ${registrant.lastName},\n\nCongratulations! We are pleased to inform you that you have been accepted into our academic institution for the upcoming academic year. Your application demonstrated outstanding qualifications and potential, and we are excited to welcome you into our community.\n\nAs part of your enrollment, your official school credentials have been generated:\n\n- School Email: ${schoolEmail}\n- Temporary Password: ${tempPassword}\n- Role: ${role}\n\nPlease use these credentials to log in to the ${role === 'students' ? 'student' : 'faculty'} portal and complete your onboarding tasks.\n\nWe look forward to seeing the great things you will accomplish here.\n\nWarm regards,\nAdmissions Office`
-        });
-        console.log('Acceptance email sent to', registrant.personalEmail);
-      } catch (emailErr) {
-        console.error('Error sending acceptance email via Brevo:', emailErr);
-        // Don't rollback - just log the error and continue
-        console.warn('Approval completed but email notification failed. User account created successfully.');
-      }
-    } else {
-      console.log('Approval completed without email notification (email system not configured)');
+    // Send acceptance email via Brevo using EmailService
+    let brevoResult = null;
+    try {
+      const emailService = await import('../services/emailService.js');
+      console.log("About to send acceptance email to registrant");
+      brevoResult = await emailService.default.sendWelcomeEmail(
+        registrant.personalEmail,
+        registrant.firstName,
+        schoolEmail,
+        tempPassword
+      );
+      console.log("Acceptance email sent to registrant:", brevoResult.message);
+    } catch (emailErr) {
+      console.error('Error sending acceptance email via Brevo:', emailErr);
+      brevoResult = { success: false, message: 'Failed to send acceptance email' };
     }
-    res.json({ message: 'Registrant approved and user created.' });
+    res.json({ 
+      message: 'Registrant approved and user created.',
+      emailServices: {
+        brevo: brevoResult || {
+          success: false,
+          message: "Acceptance email sending failed"
+        },
+        zohoMailbox: zohoMailboxResult ? {
+          success: true,
+          message: "Zoho mailbox created successfully",
+          email: schoolEmail
+        } : {
+          success: false,
+          message: "Zoho mailbox creation skipped or failed"
+        }
+      }
+    });
   } catch (err) {
     console.error('Server error in approve endpoint:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -397,6 +450,170 @@ router.post('/test-email', async (req, res) => {
   } catch (err) {
     console.error('Error sending test email:', err);
     res.status(500).json({ message: 'Failed to send test email', error: err.message });
+  }
+});
+
+// Test endpoint to simulate approval process
+router.post('/test-approval', async (req, res) => {
+  try {
+    const { personalEmail } = req.body;
+    
+    if (!personalEmail) {
+      return res.status(400).json({ message: 'Personal email is required' });
+    }
+
+    // Find the registrant by personal email
+    const registrant = await Registrant.findOne({ personalEmail });
+    if (!registrant) {
+      return res.status(404).json({ message: 'Registrant not found' });
+    }
+
+    if (registrant.status !== 'pending') {
+      return res.status(400).json({ message: 'Registrant already processed' });
+    }
+
+    // Validate minimal data before creating the user account
+    const isStudentId = /^\d{2}-\d{5}$/.test(registrant.schoolID);
+    const isFacultyId = /^F\d{3}$/.test(registrant.schoolID);
+    const isAdminId = /^A\d{3}$/.test(registrant.schoolID);
+    const isVPEPrincipalId = /^N\d{3}$/.test(registrant.schoolID);
+    
+    if (!(isStudentId || isFacultyId || isAdminId || isVPEPrincipalId)) {
+      return res.status(400).json({ message: 'Registrant has an invalid or missing School ID. Please correct it before approval.' });
+    }
+    if (!/^\d{11}$/.test(registrant.contactNo || '')) {
+      return res.status(400).json({ message: 'Registrant has an invalid contact number. It must be exactly 11 digits.' });
+    }
+
+    // Helper function to clean names for email generation
+    const clean = (str) => (str || '').toLowerCase().replace(/[^\p{L}0-9]/gu, '');
+    
+    // Determine role based on schoolID format
+    let role = 'students'; // default
+    let schoolEmail = '';
+    
+    if (isStudentId) {
+      role = 'students';
+      schoolEmail = `students.${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjdefilms.com`;
+    } else if (isFacultyId) {
+      role = 'faculty';
+      schoolEmail = `faculty.${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjdefilms.com`;
+    } else if (isAdminId) {
+      role = 'admin';
+      schoolEmail = `admin.${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjdefilms.com`;
+    } else if (isVPEPrincipalId) {
+      role = 'vice president of education';
+      schoolEmail = `vpe.${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjdefilms.com`;
+    }
+
+    // Generate a secure temporary password that meets Zoho requirements
+    const generateSecurePassword = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+      let password = '';
+      // Ensure at least one uppercase, lowercase, number, and special character
+      password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
+      password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)];
+      password += '0123456789'[Math.floor(Math.random() * 10)];
+      password += '!@#$%^&*'[Math.floor(Math.random() * 8)];
+      // Add 8 more random characters
+      for (let i = 0; i < 8; i++) {
+        password += chars[Math.floor(Math.random() * chars.length)];
+      }
+      // Shuffle the password
+      return password.split('').sort(() => Math.random() - 0.5).join('');
+    };
+    const tempPassword = generateSecurePassword();
+
+    // Create user account
+    const user = new User({
+      firstname: registrant.firstName,
+      middlename: registrant.middleName,
+      lastname: registrant.lastName,
+      personalemail: registrant.personalEmail,
+      email: schoolEmail,
+      contactNo: registrant.contactNo,
+      schoolID: registrant.schoolID,
+      password: tempPassword,
+      role: role,
+    });
+    
+    try {
+      await user.save();
+    } catch (saveErr) {
+      console.error('Validation error creating user from registrant:', saveErr);
+      return res.status(400).json({ message: saveErr.message || 'Failed to create user from registrant.' });
+    }
+
+    // Create Zoho mailbox for the user
+    let zohoMailboxResult = null;
+    try {
+      const { createZohoMailbox } = await import('../services/zohoMail.js');
+      
+      // Only create Zoho mailbox if ZOHO_ORG_ID is configured
+      if (process.env.ZOHO_ORG_ID) {
+        console.log("Creating Zoho mailbox for registrant:", schoolEmail);
+        zohoMailboxResult = await createZohoMailbox(
+          schoolEmail.toLowerCase(),
+          registrant.firstName,
+          registrant.lastName,
+          tempPassword
+        );
+        console.log("Zoho mailbox created successfully for registrant");
+      } else {
+        console.log("ZOHO_ORG_ID not configured, skipping Zoho mailbox creation");
+      }
+    } catch (zohoErr) {
+      console.error('Error creating Zoho mailbox for registrant:', zohoErr.message);
+      // Don't fail the approval if Zoho mailbox creation fails
+      // Just log the error and continue
+    }
+    
+    registrant.status = 'approved';
+    registrant.processedAt = new Date();
+    await registrant.save();
+    
+    // Send acceptance email via Brevo using EmailService
+    let brevoResult = null;
+    try {
+      const emailService = await import('../services/emailService.js');
+      console.log("About to send acceptance email to registrant");
+      brevoResult = await emailService.default.sendWelcomeEmail(
+        registrant.personalEmail,
+        registrant.firstName,
+        schoolEmail,
+        tempPassword
+      );
+      console.log("Acceptance email sent to registrant:", brevoResult.message);
+    } catch (emailErr) {
+      console.error('Error sending acceptance email via Brevo:', emailErr);
+      brevoResult = { success: false, message: 'Failed to send acceptance email' };
+    }
+
+    res.json({ 
+      message: 'Registrant approved and user created.',
+      user: {
+        email: schoolEmail,
+        password: tempPassword,
+        role: role
+      },
+      emailServices: {
+        brevo: brevoResult || {
+          success: false,
+          message: "Acceptance email sending failed"
+        },
+        zohoMailbox: zohoMailboxResult ? {
+          success: true,
+          message: "Zoho mailbox created successfully",
+          email: schoolEmail
+        } : {
+          success: false,
+          message: "Zoho mailbox creation skipped or failed"
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Server error in test approval endpoint:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 

@@ -274,6 +274,7 @@ export default function Registration() {
               onChange={handleChange}
               disabled={loading}
             />
+            <p className="text-xs text-gray-500 mt-1">Note: Your Zoho Mail (role.firstname.lastname@sjdefilms.com) will be created automatically upon approval</p>
           </div>
           <div>
             <label className="block text-base mb-2">Contact No.<span className="text-red-500">*</span></label>
