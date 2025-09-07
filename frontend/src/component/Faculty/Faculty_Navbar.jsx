@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useLocation } from "react-router-dom";
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from "react-router-dom";
 import dashboardIcon from "../../assets/dashboard.png";
 import classesIcon from "../../assets/classes.png";
 import activitiesIcon from "../../assets/activities.png";
@@ -14,7 +14,27 @@ import facultyReportIcon from "../../assets/facultyreport.png";
 
 const Faculty_Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
+    const [activePath, setActivePath] = useState('/faculty_dashboard');
+    const [isNavigating, setIsNavigating] = useState(false);
+    const isInitialMount = useRef(true);
+    const navigate = useNavigate();
     const location = useLocation();
+
+    // Update active path when location changes with debounce
+    useEffect(() => {
+        if (isInitialMount.current) {
+            // Set immediately on initial mount
+            setActivePath(location.pathname);
+            isInitialMount.current = false;
+        } else {
+            // Use debounce for subsequent changes
+            const timeoutId = setTimeout(() => {
+                setActivePath(location.pathname);
+            }, 50); // Small delay to prevent rapid state changes
+
+            return () => clearTimeout(timeoutId);
+        }
+    }, [location.pathname]);
 
     const navItems = [
 
@@ -54,20 +74,29 @@ const Faculty_Navbar = () => {
                 </div>
 
                 <nav className="space-y-6 flex flex-col ml-1.5">
-                    {navItems.map((item, index) => (
-                        <button
-                            key={index}
-                            onClick={() => {
-                                location.pathname !== item.path && window.location.assign(item.path);
-                                setIsOpen(false);
-                            }}
-                            className={`text-lg flex items-center space-x-3 p-2 w-full rounded-lg transition-colors 
-                            ${location.pathname === item.path ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"}`}
-                        >
-                            <img src={item.icon} alt={item.label} className="w-6 h-6" />
-                            <span>{item.label}</span>
-                        </button>
-                    ))}
+                    {navItems.map((item, index) => {
+                        const isActive = activePath === item.path;
+                        return (
+                            <button
+                                key={index}
+                                onClick={() => {
+                                    if (isNavigating) return; // Prevent multiple rapid clicks
+                                    setIsNavigating(true);
+                                    setActivePath(item.path);
+                                    navigate(item.path);
+                                    setIsOpen(false);
+                                    // Reset navigation state after a short delay
+                                    setTimeout(() => setIsNavigating(false), 300);
+                                }}
+                                disabled={isNavigating}
+                                className={`text-lg flex items-center space-x-3 p-2 w-full rounded-lg transition-colors duration-200
+                                ${isActive ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"} ${isNavigating ? "opacity-50 cursor-not-allowed" : ""}`}
+                            >
+                                <img src={item.icon} alt={item.label} className="w-6 h-6" />
+                                <span>{item.label}</span>
+                            </button>
+                        );
+                    })}
                 </nav>
             </div>
         </>

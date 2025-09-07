@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import dashboardIcon from "../../assets/dashboard.png";
 import classesIcon from "../../assets/classes.png";
@@ -13,8 +13,27 @@ import studentIcon from '../../assets/student.png';
 
 const Admin_Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
+    const [activePath, setActivePath] = useState('/admin_dashboard');
+    const [isNavigating, setIsNavigating] = useState(false);
+    const isInitialMount = useRef(true);
     const navigate = useNavigate();
     const location = useLocation();
+
+    // Update active path when location changes with debounce
+    useEffect(() => {
+        if (isInitialMount.current) {
+            // Set immediately on initial mount
+            setActivePath(location.pathname);
+            isInitialMount.current = false;
+        } else {
+            // Use debounce for subsequent changes
+            const timeoutId = setTimeout(() => {
+                setActivePath(location.pathname);
+            }, 50); // Small delay to prevent rapid state changes
+
+            return () => clearTimeout(timeoutId);
+        }
+    }, [location.pathname]);
 
     const navItems = [
         { path: "/admin_dashboard", icon: dashboardIcon, label: "DASHBOARD" },
@@ -53,27 +72,42 @@ const Admin_Navbar = () => {
                 </div>
 
                 <nav className="space-y-6 flex flex-col ml-1.5">
-                    {navItems.map((item, index) => (
-                        <button
-                            key={index}
-                            onClick={() => {
-                                navigate(item.path);
-                                setIsOpen(false);
-                            }}
-                            className={`text-lg flex items-center p-2 w-full rounded-lg transition-colors 
-                            ${location.pathname === item.path ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"}`}
-                        >
-                            <img src={item.icon} alt={item.label} className={`w-6 h-6 ${item.label === 'REGISTRANTS' ? 'filter-white' : ''}`} style={item.label === 'REGISTRANTS' ? { filter: 'brightness(0) invert(1)' } : {}} />
-                            <span className="flex items-center ml-3">{item.label}</span>
-                        </button>
-                    ))}
+                    {navItems.map((item, index) => {
+                        const isActive = activePath === item.path;
+                        return (
+                            <button
+                                key={index}
+                                onClick={() => {
+                                    if (isNavigating) return; // Prevent multiple rapid clicks
+                                    setIsNavigating(true);
+                                    setActivePath(item.path);
+                                    navigate(item.path);
+                                    setIsOpen(false);
+                                    // Reset navigation state after a short delay
+                                    setTimeout(() => setIsNavigating(false), 300);
+                                }}
+                                disabled={isNavigating}
+                                className={`text-lg flex items-center p-2 w-full rounded-lg transition-colors duration-200
+                                ${isActive ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"} ${isNavigating ? "opacity-50 cursor-not-allowed" : ""}`}
+                            >
+                                <img src={item.icon} alt={item.label} className={`w-6 h-6 ${item.label === 'REGISTRANTS' ? 'filter-white' : ''}`} style={item.label === 'REGISTRANTS' ? { filter: 'brightness(0) invert(1)' } : {}} />
+                                <span className="flex items-center ml-3">{item.label}</span>
+                            </button>
+                        );
+                    })}
                     <button
                         onClick={() => {
+                            if (isNavigating) return; // Prevent multiple rapid clicks
+                            setIsNavigating(true);
+                            setActivePath('/admin/support-center');
                             navigate('/admin/support-center');
                             setIsOpen(false);
+                            // Reset navigation state after a short delay
+                            setTimeout(() => setIsNavigating(false), 300);
                         }}
-                        className={`text-lg flex items-center p-2 w-full rounded-lg transition-colors 
-                        ${location.pathname === '/admin/support-center' ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"}`}
+                        disabled={isNavigating}
+                        className={`text-lg flex items-center p-2 w-full rounded-lg transition-colors duration-200
+                        ${activePath === '/admin/support-center' ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"} ${isNavigating ? "opacity-50 cursor-not-allowed" : ""}`}
                     >
                         <HelpCircle className="w-6 h-6" />
                         <span className="ml-3">SUPPORT CENTER</span>
