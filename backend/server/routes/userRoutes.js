@@ -360,33 +360,22 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
         });
         console.log("Audit log written");
 
-        // Send welcome email via Brevo (Sendinblue)
+        // Send welcome email via Brevo using EmailService
+        let brevoResult = null;
         try {
-            let defaultClient = SibApiV3Sdk.ApiClient.instance;
-            let apiKey = defaultClient.authentications['api-key'];
-            apiKey.apiKey = process.env.BREVO_API_KEY;
-
-            let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-
-            let sendSmtpEmail = {
-                to: [{ email: personalemail, name: firstname || '' }],
-                sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
-                subject: 'Welcome to JuanLMS!',
-                textContent:
-                  `Hello ${firstname || ''},\n\n` +
-                  `Your JuanLMS account has been created.\n` +
-                  `School Email: ${email}\n` +
-                  `Password: ${password}\n\n` +
-                  `Please log in and change your password after your first login.\n\n` +
-                  `Thank you,\nJuanLMS Team`
-            };
-
-        console.log("About to send welcome email");
-        await apiInstance.sendTransacEmail(sendSmtpEmail);
-        console.log("Welcome email sent");
-    } catch (emailErr) {
-        console.error('Error sending welcome email via Brevo:', emailErr);
-    }
+            const emailService = await import('../services/emailService.js');
+            console.log("About to send welcome email");
+            brevoResult = await emailService.default.sendWelcomeEmail(
+                personalemail,
+                firstname,
+                email,
+                password
+            );
+            console.log("Welcome email sent:", brevoResult.message);
+        } catch (emailErr) {
+            console.error('Error sending welcome email via Brevo:', emailErr);
+            brevoResult = { success: false, message: 'Failed to send welcome email' };
+        }
 
     // Create Zoho mailbox for the user
     let zohoMailboxResult = null;
@@ -415,12 +404,19 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
     res.status(201).json({ 
         success: true, 
         user,
-        zohoMailbox: zohoMailboxResult ? {
-            success: true,
-            message: "Zoho mailbox created successfully"
-        } : {
-            success: false,
-            message: "Zoho mailbox creation skipped or failed"
+        emailServices: {
+            brevo: brevoResult || {
+                success: false,
+                message: "Welcome email sending failed"
+            },
+            zohoMailbox: zohoMailboxResult ? {
+                success: true,
+                message: "Zoho mailbox created successfully",
+                email: email
+            } : {
+                success: false,
+                message: "Zoho mailbox creation skipped or failed"
+            }
         }
     });
     } catch (err) {
@@ -598,23 +594,20 @@ userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
         { _id: user._id },
         { $set: { resetOTP: otp, resetOTPExpires: otpExpiry } }
     );
-    // Send OTP via Brevo (Sendinblue)
-    let defaultClient = SibApiV3Sdk.ApiClient.instance;
-    let apiKey = defaultClient.authentications['api-key'];
-    apiKey.apiKey = process.env.BREVO_API_KEY;
-    let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-    let sendSmtpEmail = {
-        to: [{ email: decryptedPersonalEmail, name: user.firstname || '' }],
-        sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
-        subject: 'Your JuanLMS Password Change OTP',
-        textContent: `Hello ${user.firstname || ''},\n\nYour OTP for password change is: ${otp}\n\nIf you did not request this, please ignore this email.\n\nThank you,\nJuanLMS Team`
-    };
+    // Send OTP via Brevo to Zoho Mail address
     try {
-        await apiInstance.sendTransacEmail(sendSmtpEmail);
+        const emailService = await import('../services/emailService.js');
+        await emailService.default.sendOTP(
+            user.email, // Send to Zoho Mail address instead of personal email
+            user.firstname,
+            otp,
+            'password_change',
+            user.email
+        );
     } catch (emailErr) {
-        console.error('Error sending OTP email via Brevo:', emailErr);
+        console.error('Error sending OTP email to Zoho Mail via Brevo:', emailErr);
     }
-    return res.json({ message: 'OTP sent to your personal email.' });
+    return res.json({ message: 'OTP sent to your Zoho Mail address.' });
 });
 
 // Change password route (requires current password, after OTP is validated)
@@ -664,7 +657,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ message: 'Enter a valid email address.' });
     }
 
-    const genericMsg = 'If your email is registered, a reset link or OTP has been sent to your personal email.';
+    const genericMsg = 'If your email is registered, a reset link or OTP has been sent to your Zoho Mail address.';
 
     try {
         // Find user by personalemailHash
@@ -694,28 +687,21 @@ userRoutes.post('/forgot-password', async (req, res) => {
             { $set: { resetOTP: otp, resetOTPExpires: otpExpiry } }
         );
 
-        // --- Send OTP via Brevo (Sendinblue) ---
-        let defaultClient = SibApiV3Sdk.ApiClient.instance;
-        let apiKey = defaultClient.authentications['api-key'];
-        apiKey.apiKey = process.env.BREVO_API_KEY;
-
-        let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-
-        // Use a plain object for sendSmtpEmail
-        let sendSmtpEmail = {
-            to: [{ email: decryptedPersonalEmail, name: user.firstname || '' }],
-            sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
-            subject: 'Your JuanLMS Password Reset OTP',
-            textContent: `Hello ${user.firstname || ''},\n\nYour OTP for password reset is: ${otp}\n\nIf you did not request this, please ignore this email.\n\nThank you,\nJuanLMS Team`
-        };
-
-        console.log('About to call Brevo sendTransacEmail...');
+        // --- Send OTP via Brevo to Zoho Mail address ---
+        console.log('About to send OTP to Zoho Mail via EmailService...');
 
         try {
-            const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
-            console.log('OTP email sent to', decryptedPersonalEmail, 'Result:', result);
+            const emailService = await import('../services/emailService.js');
+            const result = await emailService.default.sendOTP(
+                user.email, // Send to Zoho Mail address instead of personal email
+                user.firstname,
+                otp,
+                'password_reset',
+                user.email
+            );
+            console.log('OTP email sent to Zoho Mail:', user.email, 'Result:', result);
         } catch (emailErr) {
-            console.error('Error sending OTP email via Brevo:', emailErr);
+            console.error('Error sending OTP email to Zoho Mail via Brevo:', emailErr);
         }
 
         console.log('After sendTransacEmail call');

@@ -333,4 +333,45 @@ router.post("/zoho/send-email", async (req, res) => {
   }
 });
 
+// Test endpoint to send OTP to Zoho Mail via Brevo
+router.post("/zoho/test-brevo-to-zoho", async (req, res) => {
+  try {
+    const { zohoEmail, firstName = "Test User" } = req.body;
+    
+    if (!zohoEmail) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Missing required field: zohoEmail" 
+      });
+    }
+
+    // Generate a test OTP
+    const testOTP = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Import and use the email service
+    const emailService = await import('../services/emailService.js');
+    
+    // Send OTP to Zoho Mail address via Brevo
+    const result = await emailService.default.sendOTP(
+      zohoEmail,
+      firstName,
+      testOTP,
+      'verification',
+      zohoEmail
+    );
+
+    res.json({
+      success: true,
+      message: `Test OTP sent to ${zohoEmail} via Brevo`,
+      otp: testOTP,
+      result: result
+    });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      error: e.response?.data || e.message,
+    });
+  }
+});
+
 export default router;

@@ -84,7 +84,7 @@ function ChangePasswordModal({ userId, onClose }) {
     setLoading(true);
     try {
       await axios.post(`${API_BASE}/users/${userId}/request-password-change-otp`);
-      setSuccess("OTP sent to your personal email.");
+      setSuccess("OTP sent to your Zoho Mail address.");
       setStep(2);
       setCooldown(20); // 20s cooldown
     } catch (err) {

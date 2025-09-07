@@ -158,10 +158,11 @@ export default function ForgotPassword() {
                 type="email"
                 required
                 className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900"
-                placeholder="username@gmail.com"
+                placeholder="your.personal@gmail.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
               />
+              <p className="text-xs text-gray-500 mt-1">Note: OTP will be sent to your Zoho Mail address</p>
             </div>
             <button
               type="submit"
