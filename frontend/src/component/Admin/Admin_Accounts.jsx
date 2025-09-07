@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import ProfileMenu from "../ProfileMenu";
 import Admin_Navbar from "./Admin_Navbar";
 import axios from "axios";
@@ -162,23 +162,50 @@ export default function Admin_Accounts() {
   };
 
   // Auto-generate school email when firstname, lastname, or role changes
-  useEffect(() => {
-    const { firstname, lastname } = formData;
+  const generateEmail = useCallback((firstname, lastname, role) => {
     const clean = (str) =>
       str
         .toLowerCase()
         .trim()
         .replace(/\s+/g, "") // remove spaces
         .replace(/[^\p{L}]/gu, ""); // remove non-letters (including international characters)
-    if (firstname && lastname) {
-      const emailDomain = "sjddef.edu.ph"; // Always use this domain
-      // If same name duplicates exist, the backend will propose a unique suggestion on submit
-      const generatedEmail = `${clean(firstname)}.${clean(lastname)}@${emailDomain}`;
-      setFormData((prev) => ({ ...prev, email: generatedEmail }));
-    } else {
-      setFormData((prev) => ({ ...prev, email: "" }));
+    
+    if (firstname && lastname && role) {
+      // Use Zoho Mail domain with role prefix
+      const emailDomain = "sjdefilms.com"; // Zoho Mail domain
+      
+      // Create role prefix
+      let rolePrefix = "";
+      switch (role) {
+        case "students":
+          rolePrefix = "students";
+          break;
+        case "faculty":
+          rolePrefix = "faculty";
+          break;
+        case "admin":
+          rolePrefix = "admin";
+          break;
+        case "vice president of education":
+          rolePrefix = "vpe";
+          break;
+        case "principal":
+          rolePrefix = "principal";
+          break;
+        default:
+          rolePrefix = "staff";
+      }
+      
+      // Generate email with role prefix: role.firstname.lastname@sjdefilms.com
+      return `${rolePrefix}.${clean(firstname)}.${clean(lastname)}@${emailDomain}`;
     }
-  }, [formData]);
+    return "";
+  }, []);
+
+  useEffect(() => {
+    const generatedEmail = generateEmail(formData.firstname, formData.lastname, formData.role);
+    setFormData((prev) => ({ ...prev, email: generatedEmail }));
+  }, [formData.firstname, formData.lastname, formData.role, generateEmail]);
 
   const handleSubmit = async (e, overrideEmail = null) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -1092,8 +1119,9 @@ export default function Admin_Accounts() {
                   {/* Row 2: School Email, Personal Email, School ID */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-2">
                     <div>
-                      <label className="block font-semibold mb-1" htmlFor="email">School Email</label>
-                      <input id="email" type="email" name="email" value={formData.email} readOnly placeholder="School Email (auto-generated)" className="border rounded p-4 text-lg w-full bg-gray-100 cursor-not-allowed" required />
+                      <label className="block font-semibold mb-1" htmlFor="email">Zoho Mail Address</label>
+                      <input id="email" type="email" name="email" value={formData.email} readOnly placeholder="Zoho Mail (auto-generated with role)" className="border rounded p-4 text-lg w-full bg-gray-100 cursor-not-allowed" required />
+                      <p className="text-xs text-gray-500 mt-1">Format: role.firstname.lastname@sjdefilms.com</p>
                     </div>
                     <div>
                       <label className="block font-semibold mb-1" htmlFor="personalemail">Personal Email</label>

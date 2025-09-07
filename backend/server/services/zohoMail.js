@@ -6,7 +6,7 @@ dotenv.config({ path: './config.env' });
 
 /**
  * Creates a new Zoho Mail mailbox for a user
- * @param {string} userEmail - The email address for the mailbox
+ * @param {string} userEmail - The email address for the mailbox (e.g., john.doe@faculty.sjdefilms.com)
  * @param {string} firstName - User's first name
  * @param {string} lastName - User's last name
  * @param {string} password - Password for the mailbox

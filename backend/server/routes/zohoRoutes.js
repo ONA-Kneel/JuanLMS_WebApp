@@ -47,7 +47,7 @@ router.get("/zoho/oauth/authorize", (req, res) => {
     });
   }
 
-  const authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoMail.organization.READ,ZohoMail.organization.accounts.CREATE,ZohoMail.organization.accounts.READ,ZohoMail.organization.accounts.UPDATE&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(process.env.ZOHO_REDIRECT_URI)}&access_type=offline&prompt=consent`;
+  const authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=AaaServer.profile.Read,ZohoMail.organization.READ,ZohoMail.organization.accounts.READ,ZohoMail.organization.accounts.CREATE,ZohoMail.organization.accounts.UPDATE,ZohoMail.messages.CREATE,ZohoMail.messages.READ&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(process.env.ZOHO_REDIRECT_URI)}&access_type=offline&prompt=consent`;
 
 
 
@@ -93,7 +93,59 @@ router.get("/zoho/oauth/callback", async (req, res) => {
 });
 
 /* -----------------------------------
-   STEP 3: Fetch Organization Info
+   STEP 3: Test Access Token
+----------------------------------- */
+router.get("/zoho/test", async (req, res) => {
+  try {
+    const missing = requiredEnv();
+    if (missing.length) {
+      return res.status(500).json({
+        success: false,
+        error: `Missing env vars: ${missing.join(", ")}`
+      });
+    }
+
+    // 1) refresh access token
+    const params = new URLSearchParams();
+    params.append("refresh_token", process.env.ZOHO_REFRESH_TOKEN);
+    params.append("client_id", process.env.ZOHO_CLIENT_ID);
+    params.append("client_secret", process.env.ZOHO_CLIENT_SECRET);
+    params.append("grant_type", "refresh_token");
+
+    const tokenResp = await axios.post(
+      "https://accounts.zoho.com/oauth/v2/token",
+      params.toString(),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    );
+
+    const t = tokenResp?.data;
+    if (!t || !t.access_token) {
+      return res.status(500).json({
+        success: false,
+        error: "No access_token returned from Zoho",
+        details: t || tokenResp?.data
+      });
+    }
+
+    const accessToken = t.access_token.trim();
+
+    // 2) test with user info endpoint
+    const userResp = await axios.get(
+      "https://accounts.zoho.com/oauth/user/info",
+      { headers: { Authorization: `Zoho-oauthtoken ${accessToken}` } }
+    );
+
+    return res.json({ success: true, data: userResp.data });
+  } catch (e) {
+    return res.status(500).json({
+      success: false,
+      error: e.response?.data || e.message
+    });
+  }
+});
+
+/* -----------------------------------
+   STEP 4: Fetch Organization Info
 ----------------------------------- */
 router.get("/zoho/org", async (req, res) => {
   try {
@@ -129,17 +181,20 @@ router.get("/zoho/org", async (req, res) => {
 
     const accessToken = t.access_token.trim();
 
-    // 2) call Zoho Mail org API (US DC)
+    // 2) Try Zoho Mail API with organization ID
     const orgResp = await axios.get(
-      "https://mail.zoho.com/api/organization",
+      "https://mail.zoho.com/api/organization/898669091/accounts",
       { headers: { Authorization: `Zoho-oauthtoken ${accessToken}` } }
     );
 
     return res.json({ success: true, data: orgResp.data });
   } catch (e) {
+    console.log("Organization endpoint error:", e.response?.data || e.message);
     return res.status(500).json({
       success: false,
-      error: e.response?.data || e.message
+      error: e.response?.data || e.message,
+      details: e.response?.status,
+      fullError: e.toString()
     });
   }
 });
@@ -167,7 +222,7 @@ router.post("/zoho/mailbox/create", async (req, res) => {
       role: "member", // or "admin"
     });
 
-    const url = `https://mail.zoho.com/api/organization/${orgId}/accounts`;
+    const url = `https://mail.zoho.com/api/organization/898669091/accounts`;
 
     const { data } = await axios.post(url, body, {
       headers: {
@@ -177,6 +232,99 @@ router.post("/zoho/mailbox/create", async (req, res) => {
     });
 
     res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      error: e.response?.data || e.message,
+    });
+  }
+});
+
+/* -----------------------------------
+   STEP 5: Create Email Account (Correct Implementation)
+----------------------------------- */
+router.post("/zoho/create-email", async (req, res) => {
+  try {
+    const { firstName, lastName, email, password } = req.body;
+    if (!firstName || !lastName) {
+      return res.status(400).json({ success: false, error: "Missing firstName or lastName" });
+    }
+
+    // Generate email address if not provided
+    const emailAddress = email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}@sjdefilms.com`;
+    const userPassword = password || `SecurePass${Math.random().toString(36).substring(2, 8)}!`;
+
+    const accessToken = await getZohoAccessToken();
+    const zoid = "898669091"; // Your organization ID
+
+    // Correct JSON body format as per Gemini's information
+    const body = {
+      primaryEmailAddress: emailAddress,
+      password: userPassword,
+      firstName: firstName,
+      lastName: lastName
+    };
+
+    const url = `https://mail.zoho.com/api/organization/${zoid}/accounts`;
+
+    const { data } = await axios.post(url, body, {
+      headers: {
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    res.json({ 
+      success: true, 
+      message: "Email account created successfully",
+      email: emailAddress,
+      password: userPassword,
+      data 
+    });
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      error: e.response?.data || e.message,
+    });
+  }
+});
+
+/* -----------------------------------
+   STEP 6: Send Email from Zoho Mail
+----------------------------------- */
+router.post("/zoho/send-email", async (req, res) => {
+  try {
+    const { toEmail, subject, content } = req.body;
+    if (!toEmail || !subject || !content) {
+      return res.status(400).json({ success: false, error: "Missing required fields: toEmail, subject, content" });
+    }
+
+    const accessToken = await getZohoAccessToken();
+    
+    // Use your existing admin account to send emails
+    const accountId = "8208068000000008002"; // From the organization data we got earlier
+    
+    const emailData = {
+      fromAddress: "juanlms.sjddefi@sjdefilms.com",
+      toAddress: toEmail,
+      subject: subject,
+      content: content
+    };
+
+    const url = `https://mail.zoho.com/api/accounts/${accountId}/messages`;
+
+    const { data } = await axios.post(url, emailData, {
+      headers: {
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    res.json({ 
+      success: true, 
+      message: "Email sent successfully",
+      data 
+    });
   } catch (e) {
     res.status(500).json({
       success: false,
