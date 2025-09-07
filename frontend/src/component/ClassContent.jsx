@@ -9,7 +9,7 @@ import { getFileUrl } from "../utils/imageUtils";
 // import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function ClassContent({ selected, isFaculty = false }) {
   // --- ROUTER PARAMS ---

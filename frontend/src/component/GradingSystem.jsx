@@ -3,7 +3,7 @@ import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import ValidationModal from './ValidationModal';
 import * as XLSX from 'xlsx';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function GradingSystem({ onStageTemporaryGrades }) {
   const [facultyClasses, setFacultyClasses] = useState([]);

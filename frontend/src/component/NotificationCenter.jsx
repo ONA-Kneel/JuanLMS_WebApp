@@ -14,7 +14,7 @@ const NotificationCenter = ({
   const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const API_BASE = "https://juanlms-webapp-server.onrender.com";
+  const API_BASE = "http://localhost:5000";
 
   const getTimeAgo = (timestamp) => {
     const now = new Date();

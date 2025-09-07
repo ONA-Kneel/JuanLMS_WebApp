@@ -4,7 +4,7 @@ import ProfileMenu from '../ProfileMenu';
 import MeetingList from '../Meeting/MeetingList';
 import { Users, Video, Calendar } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Student_Meeting() {
   const [classes, setClasses] = useState([]);

@@ -9,7 +9,7 @@ import "@fullcalendar/common/main.css";
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 export default function Student_Calendar() {
   const [adminEvents, setAdminEvents] = useState([]);
   const [holidays, setHolidays] = useState([]);
