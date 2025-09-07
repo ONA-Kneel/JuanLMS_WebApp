@@ -3,10 +3,9 @@ import Faculty_Navbar from './Faculty_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import CreateMeetingModal from '../Meeting/CreateMeetingModal';
 import MeetingList from '../Meeting/MeetingList';
-import VideoMeetingRoom from '../Meeting/VideoMeetingRoom';
 import { Video, Users, Calendar, Plus } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const Faculty_Meeting = () => {
   const [academicYear, setAcademicYear] = useState(null);
@@ -15,7 +14,6 @@ const Faculty_Meeting = () => {
   const [selectedClass, setSelectedClass] = useState(null);
   const [showCreateMeetingModal, setShowCreateMeetingModal] = useState(false);
   const [meetingRefreshTrigger, setMeetingRefreshTrigger] = useState(0);
-  const [activeMeeting, setActiveMeeting] = useState(null);
   const [userInfo, setUserInfo] = useState({ name: '', email: '' });
   const [loading, setLoading] = useState(true);
   const [studentCounts, setStudentCounts] = useState({});
@@ -253,33 +251,11 @@ const Faculty_Meeting = () => {
   // Meeting handlers
   const handleMeetingCreated = (newMeeting) => {
     setMeetingRefreshTrigger(prev => prev + 1);
-    if (newMeeting.meetingType === 'instant') {
-      // Auto-join instant meetings
-      setActiveMeeting(newMeeting);
-    }
   };
 
   const handleJoinMeeting = async (meeting) => {
-    try {
-      console.log('[DEBUG] Faculty handleJoinMeeting received:', meeting);
-      console.log('[DEBUG] Faculty meeting roomUrl:', meeting.roomUrl);
-      // MeetingList already called the backend and provided roomUrl
-      const meetingData = {
-        ...meeting,
-        meetingId: String(meeting._id),
-        title: meeting.title || 'Video Meeting',
-      };
-      console.log('[DEBUG] Faculty setActiveMeeting with:', meetingData);
-      setActiveMeeting(meetingData);
-    } catch (error) {
-      console.error('Error setting up meeting:', error);
-      alert('Error joining meeting. Please try again.');
-    }
-  };
-
-  const handleLeaveMeeting = () => {
-    setActiveMeeting(null);
-    setMeetingRefreshTrigger(prev => prev + 1);
+    // Meeting functionality removed - show placeholder message
+    alert('Meeting functionality has been disabled. Please contact your administrator for video conferencing options.');
   };
 
   return (
@@ -412,8 +388,8 @@ const Faculty_Meeting = () => {
                       <div className="flex items-center gap-3">
                         <Video className="w-8 h-8 text-purple-600" />
                         <div>
-                          <p className="text-sm text-purple-600 font-medium">Video Platform</p>
-                          <p className="text-xs text-purple-500">Powered by Jitsi Meet</p>
+                          <p className="text-sm text-purple-600 font-medium">Meeting Platform</p>
+                          <p className="text-xs text-purple-500">Schedule and manage meetings</p>
                         </div>
                       </div>
                     </div>
@@ -445,16 +421,6 @@ const Faculty_Meeting = () => {
           />
         )}
 
-        {/* Video Meeting Room */}
-        {activeMeeting && (
-          <VideoMeetingRoom
-            meetingData={activeMeeting}
-            currentUser={userInfo}
-            onLeave={handleLeaveMeeting}
-            isOpen={!!activeMeeting}
-            isModerator={true}
-          />
-        )}
       </div>
     </div>
   );

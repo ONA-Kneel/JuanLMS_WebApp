@@ -2,17 +2,15 @@ import React, { useEffect, useState } from 'react';
 import Student_Navbar from './Student_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import MeetingList from '../Meeting/MeetingList';
-import VideoMeetingRoom from '../Meeting/VideoMeetingRoom';
 import { Users, Video, Calendar } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Student_Meeting() {
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [loading, setLoading] = useState(true);
   const [meetingRefreshTrigger, setMeetingRefreshTrigger] = useState(0);
-  const [activeMeeting, setActiveMeeting] = useState(null);
   const [userInfo, setUserInfo] = useState({ name: '', email: '' });
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
@@ -163,26 +161,8 @@ export default function Student_Meeting() {
   }, [classes]);
 
   const handleJoinMeeting = async (meeting) => {
-    try {
-      console.log('[DEBUG] Student handleJoinMeeting received:', meeting);
-      console.log('[DEBUG] Student meeting roomUrl:', meeting.roomUrl);
-      // MeetingList already called the backend and provided roomUrl
-      const meetingData = {
-        ...meeting,
-        meetingId: String(meeting._id),
-        title: meeting.title || 'Video Meeting',
-      };
-      console.log('[DEBUG] Student setActiveMeeting with:', meetingData);
-      setActiveMeeting(meetingData);
-    } catch (error) {
-      console.error('Error setting up meeting:', error);
-      alert('Error joining meeting. Please try again.');
-    }
-  };
-
-  const handleLeaveMeeting = () => {
-    setActiveMeeting(null);
-    setMeetingRefreshTrigger(prev => prev + 1);
+    // Meeting functionality removed - show placeholder message
+    alert('Meeting functionality has been disabled. Please contact your instructor for video conferencing options.');
   };
 
   return (
@@ -293,16 +273,6 @@ export default function Student_Meeting() {
           </>
         )}
 
-        {/* Video Meeting Room */}
-        {activeMeeting && (
-          <VideoMeetingRoom
-            meetingData={activeMeeting}
-            currentUser={userInfo}
-            onLeave={handleLeaveMeeting}
-            isOpen={!!activeMeeting}
-            isModerator={false}
-          />
-        )}
       </div>
     </div>
   );

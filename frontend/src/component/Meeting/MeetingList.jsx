@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Video, Calendar, Clock, Users, Play, Trash2, Edit, AlertCircle } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
   const [meetings, setMeetings] = useState([]);
@@ -40,39 +40,11 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
   }, [classId, refreshTrigger]);
 
   const handleJoinMeeting = async (meeting) => {
-    try {
-      console.log('[DEBUG] MeetingList handleJoinMeeting - meeting:', meeting);
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/api/meetings/${meeting._id}/join`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      console.log('[DEBUG] MeetingList join response status:', response.status);
-      const result = await response.json();
-      console.log('[DEBUG] MeetingList join response result:', result);
-
-      if (response.ok) {
-        // Pass both backend result and original meeting to onJoinMeeting
-        if (onJoinMeeting) {
-          const mergedMeeting = { ...meeting, roomUrl: result.roomUrl };
-          console.log('[DEBUG] MeetingList onJoinMeeting mergedMeeting:', mergedMeeting);
-          onJoinMeeting(mergedMeeting);
-        } else {
-          window.open(result.roomUrl, '_blank');
-        }
-        
-        // Refresh meetings to update participant count
-        fetchMeetings();
-      } else {
-        console.error('[DEBUG] MeetingList join failed:', result);
-        alert(result.message || 'Failed to join meeting');
-      }
-    } catch (error) {
-      console.error('[DEBUG] MeetingList join error:', error);
-      alert('Network error. Please try again.');
+    // Meeting functionality removed - show placeholder message
+    if (onJoinMeeting) {
+      onJoinMeeting(meeting);
+    } else {
+      alert('Meeting functionality has been disabled. Please contact your instructor for video conferencing options.');
     }
   };
 
