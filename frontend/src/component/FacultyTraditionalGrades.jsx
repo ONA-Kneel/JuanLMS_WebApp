@@ -3,6 +3,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './FacultyTraditionalGrades.css';
+import ValidationModal from './ValidationModal';
 
 const FacultyTraditionalGrades = () => {
   const [classes, setClasses] = useState([]);
@@ -15,6 +16,12 @@ const FacultyTraditionalGrades = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
 
   useEffect(() => {
     fetchAcademicYear();
@@ -55,7 +62,7 @@ const FacultyTraditionalGrades = () => {
         setAcademicYear(response.data);
       }
     } catch (error) {
-      console.error('Error fetching academic year:', error);
+      // Error fetching academic year
     }
   };
 
@@ -72,7 +79,7 @@ const FacultyTraditionalGrades = () => {
         setCurrentTerm(active || null);
       }
     } catch (error) {
-      console.error('Error fetching active term:', error);
+      // Error fetching active term
     }
   };
 
@@ -97,8 +104,13 @@ const FacultyTraditionalGrades = () => {
         setClasses(filteredClasses);
       }
     } catch (error) {
-      console.error('Error fetching faculty classes:', error);
-      toast.error('Failed to fetch classes');
+      // Error fetching faculty classes
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Load Failed',
+        message: 'Failed to fetch classes. Please try again later.'
+      });
     } finally {
       setLoading(false);
     }
@@ -130,7 +142,7 @@ const FacultyTraditionalGrades = () => {
         setSubjects(defaultSubjects);
       }
     } catch (error) {
-      console.error('Error fetching subjects:', error);
+      // Error fetching subjects
       // Create default subject if API fails
       const selectedClassObj = classes[selectedClass];
       const defaultSubjects = [
@@ -165,7 +177,7 @@ const FacultyTraditionalGrades = () => {
           studentsData = response.data.students;
         }
       } catch (error) {
-        console.log('Class members endpoint failed, trying alternatives');
+        // Class members endpoint failed, trying alternatives
       }
       
       // If no students found, try alternative endpoints
@@ -179,7 +191,7 @@ const FacultyTraditionalGrades = () => {
             studentsData = altResponse.data;
           }
         } catch (altError) {
-          console.log('Alternative endpoint also failed');
+          // Alternative endpoint also failed
         }
       }
       
@@ -201,8 +213,13 @@ const FacultyTraditionalGrades = () => {
       
       setStudents(transformedStudents);
     } catch (error) {
-      console.error('Error fetching students:', error);
-      toast.error('Failed to fetch students');
+      // Error fetching students
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Load Failed',
+        message: 'Failed to fetch students. Please try again later.'
+      });
       setStudents([]);
     } finally {
       setLoading(false);
@@ -272,8 +289,13 @@ const FacultyTraditionalGrades = () => {
       
       toast.success('Template downloaded successfully');
     } catch (error) {
-      console.error('Error downloading template:', error);
-      toast.error('Failed to download template');
+      // Error downloading template
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Download Failed',
+        message: 'Failed to download template. Please try again later.'
+      });
     } finally {
       setLoading(false);
     }
@@ -317,11 +339,21 @@ const FacultyTraditionalGrades = () => {
         // Refresh students list to show updated grades
         fetchStudents();
       } else {
-        toast.error(response.data.message || 'Failed to upload grades');
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Upload Failed',
+          message: response.data.message || 'Failed to upload grades. Please check your file and try again.'
+        });
       }
     } catch (error) {
-      console.error('Error uploading grades:', error);
-      toast.error(error.response?.data?.message || 'Failed to upload grades');
+      // Error uploading grades
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Upload Failed',
+        message: error.response?.data?.message || 'Failed to upload grades. Please check your file and try again.'
+      });
     } finally {
       setUploading(false);
     }
@@ -375,8 +407,13 @@ const FacultyTraditionalGrades = () => {
 
       toast.success('Grade updated successfully');
     } catch (error) {
-      console.error('Error updating grade:', error);
-      toast.error('Failed to update grade');
+      // Error updating grade
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Update Failed',
+        message: 'Failed to update grade. Please try again later.'
+      });
     }
   };
 
@@ -574,6 +611,15 @@ const FacultyTraditionalGrades = () => {
           <p>Please select both a class and subject to view grades.</p>
         </div>
       )}
+      
+      {/* Validation Modal */}
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
+      />
     </div>
   );
 };

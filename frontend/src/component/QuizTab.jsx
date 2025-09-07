@@ -158,7 +158,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                     }
                 })
                 .catch(err => {
-                    console.error('Failed to load quiz:', err);
+                    // Failed to load quiz
                     let errorMessage = 'Failed to load quiz data. Please try again.';
                     if (err.message.includes('404')) {
                         errorMessage = 'Quiz not found. It may have been deleted or you may not have permission to view it.';
@@ -193,7 +193,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                     setAcademicYear(year);
                 }
             } catch (err) {
-                console.error("Failed to fetch academic year", err);
+                // Failed to fetch academic year
             }
         }
         fetchAcademicYear();
@@ -245,14 +245,13 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                         cls.termName === currentTerm.termName
                     );
                     
-                    console.log('[QuizTab] Available classes for current term:', filteredClasses);
                     setAvailableClasses(filteredClasses);
                 } else {
-                    console.error('Failed to fetch classes for quiz creation');
+                    // Failed to fetch classes for quiz creation
                     setAvailableClasses([]);
                 }
             } catch (err) {
-                console.error('Error fetching classes:', err);
+                // Error fetching classes
                 setAvailableClasses([]);
             }
         }
@@ -337,7 +336,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                 setForm(f => ({ ...f, image: data.url }));
                 
             } catch (error) {
-                console.error('[QuizTab] Image upload error:', error);
+                // Image upload error
                 setValidationModal({
                     isOpen: true,
                     type: 'error',
@@ -459,7 +458,6 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
     const FAR_FUTURE_DATE = "2099-12-31T23:59";
 
     const handleSave = async () => {
-        console.log("shuffleQuestions value at save:", shuffleQuestions);
         if (!title.trim()) {
             setValidationModal({
                 isOpen: true,
@@ -577,8 +575,6 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
         };
 
         // Debug: Log the payload being sent
-        console.log('[QuizTab] Quiz payload being sent:', payload);
-        console.log('[QuizTab] Timing data:', payload.timing);
 
         // Schedule post logic (PH time)
         if (schedulePost && dueDate) {
@@ -680,7 +676,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                 });
             }
         } catch (err) {
-            console.error('Network error:', err);
+            // Network error
             setValidationModal({
                 isOpen: true,
                 type: 'error',
@@ -769,15 +765,13 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                                             alt="Question"
                                             className="max-h-40 rounded border transition-transform duration-200 group-hover:scale-105 group-hover:brightness-90 cursor-zoom-in"
                                             onError={(e) => {
-                                                console.error('[QuizTab] Image display error for:', q.image);
-                                                console.error('[QuizTab] Error details:', e);
+                                                // Image display error
                                                 // Handle broken images
                                                 e.target.style.display = 'none';
                                                 const fallback = e.target.nextElementSibling;
                                                 if (fallback) fallback.style.display = 'block';
                                             }}
                                             onLoad={() => {
-                                                console.log('[QuizTab] Image loaded successfully:', q.image);
                                             }}
                                         />
                                         <div className="hidden text-sm text-gray-500 bg-gray-100 p-2 rounded border">
@@ -863,14 +857,13 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                                         alt="Question" 
                                         className="max-h-40 rounded border"
                                         onError={(e) => {
-                                            console.error('[QuizTab] Form image display error for:', form.image);
+                                            // Form image display error
                                             // Handle broken images
                                             e.target.style.display = 'none';
                                             const fallback = e.target.nextElementSibling;
                                             if (fallback) fallback.style.display = 'block';
                                         }}
                                         onLoad={() => {
-                                            console.log('[QuizTab] Form image loaded successfully:', form.image);
                                         }}
                                     />
                                     <div className="hidden text-sm text-gray-500 bg-gray-100 p-2 rounded border">

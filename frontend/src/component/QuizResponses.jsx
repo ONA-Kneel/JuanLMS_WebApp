@@ -206,11 +206,21 @@ export default function QuizResponses() {
         toast.success('All quiz responses have been marked as graded!');
       } else {
         const err = await res.json();
-        toast.error(`Failed to mark responses as graded: ${err.error || 'Unknown error'}`);
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Mark Failed',
+          message: `Failed to mark responses as graded: ${err.error || 'Unknown error'}`
+        });
       }
     } catch (err) {
-      console.error('Error marking responses as graded:', err);
-      toast.error('Network error. Please check your connection and try again.');
+      // Error marking responses as graded
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: 'Network error. Please check your connection and try again.'
+      });
     }
   };
 
@@ -240,7 +250,6 @@ export default function QuizResponses() {
           });
           const data = await res.json();
           membersData = Array.isArray(data.students) ? data.students : [];
-          console.log("Loaded assigned members:", membersData);
           
           // Create a map of student IDs to student objects for quick lookup
           const studentMap = {};
@@ -275,12 +284,12 @@ export default function QuizResponses() {
             }
             
             // If we can't find the student, log it for debugging
-            console.warn('Could not find student for response:', response);
+            // Could not find student for response
             return response;
           });
           
         } catch (error) {
-          console.error('Error fetching students:', error);
+          // Error fetching students
           membersData = [];
         }
       }
@@ -290,7 +299,7 @@ export default function QuizResponses() {
       setMembers(membersData);
       setLoading(false);
     }).catch((error) => {
-      console.error('Error loading quiz data:', error);
+      // Error loading quiz data
       setError('Failed to load quiz or responses.');
       setLoading(false);
     });

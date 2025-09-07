@@ -57,7 +57,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                     setAcademicYear(year);
                 }
             } catch (err) {
-                console.error("Failed to fetch academic year", err);
+                // Failed to fetch academic year
             }
         }
         fetchAcademicYear();
@@ -108,14 +108,11 @@ export default function ActivityTab({ onAssignmentCreated }) {
                         cls.termName === currentTerm.termName
                     );
                     
-                    console.log('[ActivityTab] Available classes for current term:', filteredClasses);
                     setAvailableClasses(filteredClasses);
                 } else {
-                    console.error('Failed to fetch classes for activity creation');
                     setAvailableClasses([]);
                 }
             } catch (err) {
-                console.error('Error fetching classes:', err);
                 setAvailableClasses([]);
             }
         }
@@ -181,7 +178,6 @@ export default function ActivityTab({ onAssignmentCreated }) {
                     }
                 })
                 .catch(err => {
-                    console.error('Failed to load assignment:', err);
                     let errorMessage = 'Failed to load assignment data. Please try again.';
                     
                     if (err.message.includes('404')) {
@@ -234,7 +230,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                     if (Array.isArray(alt)) students = alt;
                                 }
                             } catch (err) {
-                                console.warn('Alternative member fetch failed:', err);
+                                // Alternative member fetch failed
                             }
                         }
 
@@ -272,7 +268,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                     }
                                 }
                             } catch (err) {
-                                console.warn('Fallback class fetch failed:', err);
+                                // Fallback class fetch failed
                             }
                         }
 
@@ -501,7 +497,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                 });
             }
         } catch (err) {
-            console.error('Network error:', err);
+            // Network error
             setValidationModal({
                 isOpen: true,
                 type: 'error',

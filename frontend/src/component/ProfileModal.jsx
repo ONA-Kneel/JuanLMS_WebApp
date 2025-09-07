@@ -338,16 +338,14 @@ export default function ProfileModal({
 
   // Helper function to get role description with fallbacks
   const getRoleDescription = (role) => {
-    console.log('ProfileModal: getRoleDescription called with role:', role);
     
     if (!role) {
-      console.log('ProfileModal: No role provided, returning default');
+      // No role provided, returning default
       return "User | (To implement soon)";
     }
     
     // Try exact match first
     if (roleDescriptions[role]) {
-      console.log('ProfileModal: Exact match found:', roleDescriptions[role]);
       return roleDescriptions[role];
     }
     
@@ -355,7 +353,6 @@ export default function ProfileModal({
     const lowerRole = role.toLowerCase();
     for (const [key, value] of Object.entries(roleDescriptions)) {
       if (key.toLowerCase() === lowerRole) {
-        console.log('ProfileModal: Case-insensitive match found:', value);
         return value;
       }
     }
@@ -363,7 +360,6 @@ export default function ProfileModal({
     // Fallback: capitalize the role and add default text
     const capitalizedRole = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
     const fallbackDescription = `${capitalizedRole} | (To implement soon)`;
-    console.log('ProfileModal: Using fallback description:', fallbackDescription);
     return fallbackDescription;
   };
 
@@ -390,27 +386,21 @@ export default function ProfileModal({
 
   // Handle logout
   const handleLogout = async () => {
-    console.log('Logout button clicked');
     try {
       // Call logout endpoint to create audit log
       const token = localStorage.getItem('token');
-      console.log('Token found:', !!token);
       if (token) {
-        console.log('Making logout API call to:', `${API_BASE}/logout`);
         const response = await axios.post(`${API_BASE}/logout`, {}, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        console.log('Logout API response:', response.data);
       }
     } catch (error) {
-      console.error('Error during logout:', error);
-      console.error('Error details:', error.response?.data);
+      // Error during logout
       // Continue with logout even if audit log fails
     }
 
-    console.log('Clearing local storage...');
     // Clear local storage
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -419,7 +409,6 @@ export default function ProfileModal({
     localStorage.removeItem('rememberedEmail');
     localStorage.removeItem('rememberedPassword');
 
-    console.log('Closing modal and redirecting...');
     // Close modal and redirect to login
     onClose();
     window.location.href = '/';
@@ -542,7 +531,7 @@ export default function ProfileModal({
       closeCropModal();
       resetCropState();
     } catch (e) {
-      console.error(e);
+      // Error
       setValidationModal({
         isOpen: true,
         type: 'error',

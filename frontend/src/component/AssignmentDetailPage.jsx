@@ -38,6 +38,12 @@ export default function AssignmentDetailPage() {
   const [submissionContext, setSubmissionContext] = useState('');
   const [filteredSubmissions, setFilteredSubmissions] = useState(submissions); // New state for filtered submissions
   const [viewTracked, setViewTracked] = useState(false); // Track if view has been recorded
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
 
   // --- Track when a student views an assignment ---
   useEffect(() => {
@@ -51,7 +57,7 @@ export default function AssignmentDetailPage() {
         setViewTracked(true); // Mark as tracked to prevent duplicate calls
       })
       .catch(err => {
-        console.error('Failed to track view:', err);
+        // Failed to track view
       });
     }
   }, [assignmentId, viewTracked]);
@@ -81,7 +87,6 @@ export default function AssignmentDetailPage() {
         setAssignment(data);
       })
       .catch(err => {
-        console.error('Failed to fetch assignment:', err);
         let errorMessage = 'Failed to fetch assignment. Please try again.';
 
         if (err.message.includes('404')) {
@@ -118,7 +123,7 @@ export default function AssignmentDetailPage() {
           } else if (members && Array.isArray(members.students)) {
             memberList = members.students;
           } else {
-            console.error('No valid members array found:', members);
+            // No valid members array found
           }
           // setClassMembers(memberList); // This line is removed
           // Fetch submissions
@@ -128,7 +133,7 @@ export default function AssignmentDetailPage() {
             .then(res => res.json())
             .then(subs => {
               if (!Array.isArray(subs)) {
-                console.error('Expected array for submissions, got:', subs);
+                // Expected array for submissions
               }
               // Merge members and submissions
               const merged = memberList.map(member => {
@@ -150,24 +155,15 @@ export default function AssignmentDetailPage() {
         .then(res => res.json())
         .then(data => {
           const userId = localStorage.getItem('userID');
-          console.log('Fetched submissions:', data, 'Current user:', userId);
-          console.log('userId:', `"${userId}"`, typeof userId);
           if (Array.isArray(data)) {
             data.forEach((s, i) => {
               if (s.student) {
-                console.log(`Submission[${i}].studentID:`, `"${s.student.studentID}"`, typeof s.student.studentID);
               }
             });
           }
           const sub = Array.isArray(data)
             ? data.find(s => {
               if (!s.student) return false;
-              console.log(
-                'Comparing:',
-                String(s.student._id), 'vs', String(userId),
-                String(s.student), 'vs', String(userId),
-                String(s.student.userID), 'vs', String(userId)
-              );
               return (
                 String(s.student._id) === String(userId) ||
                 String(s.student) === String(userId) ||
@@ -175,7 +171,6 @@ export default function AssignmentDetailPage() {
               );
             })
             : null;
-          console.log('Matched submission:', sub);
           setStudentSubmission(sub);
         });
     }
@@ -341,16 +336,28 @@ export default function AssignmentDetailPage() {
             setSubmissions(submissions);
             setFilteredSubmissions(submissions); // Update filtered submissions
           })
-          .catch(err => console.error('Error refreshing submissions:', err));
+          .catch(err => {
+            // Error refreshing submissions
+          });
         
         toast.success('All submissions have been marked as graded!');
       } else {
         const err = await res.json();
-        toast.error(`Failed to mark submissions as graded: ${err.error || 'Unknown error'}`);
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Mark Failed',
+          message: `Failed to mark submissions as graded: ${err.error || 'Unknown error'}`
+        });
       }
     } catch (err) {
-      console.error('Error marking submissions as graded:', err);
-      toast.error('Network error. Please check your connection and try again.');
+      // Error marking submissions as graded
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Network Error',
+        message: 'Network error. Please check your connection and try again.'
+      });
     } finally {
       setGradeLoading(false);
     }
@@ -414,7 +421,9 @@ export default function AssignmentDetailPage() {
               setSubmissions(submissions);
               setFilteredSubmissions(submissions); // Update filtered submissions
             })
-            .catch(err => console.error('Error refreshing submissions:', err));
+            .catch(err => {
+            // Error refreshing submissions
+          });
         }
 
         // Close the grading modal
@@ -440,7 +449,7 @@ export default function AssignmentDetailPage() {
         setGradeError(errorMessage);
       }
     } catch (err) {
-      console.error('Grading error:', err);
+      // Grading error
       setGradeError('Network error. Please check your connection and try again.');
     } finally {
       setGradeLoading(false);
@@ -1240,6 +1249,15 @@ export default function AssignmentDetailPage() {
         confirmText="Delete"
         showCancel={true}
         cancelText="Cancel"
+      />
+      
+      {/* Validation Modal for errors */}
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
       />
     </div>
   );

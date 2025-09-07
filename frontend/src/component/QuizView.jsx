@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import seedrandom from 'seedrandom';
+import ValidationModal from './ValidationModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -24,6 +25,12 @@ export default function QuizView() {
   const [showUnansweredModal, setShowUnansweredModal] = useState(false);
   const [unansweredNumbers, setUnansweredNumbers] = useState([]);
   const [showViolationModal, setShowViolationModal] = useState(false);
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
   const [violationMessage, setViolationMessage] = useState('');
   const violationCountRef = useRef(0);
   const [violationEvents, setViolationEvents] = useState([]); // {question: number, time: ISO string}
@@ -62,17 +69,13 @@ export default function QuizView() {
       setLoading(false);
 
       // Debug: Log timing data
-      console.log('[QuizView] Quiz timing data:', data.timing);
-      console.log('[QuizView] timeLimitEnabled:', data.timing?.timeLimitEnabled);
-      console.log('[QuizView] timeLimit:', data.timing?.timeLimit);
 
       // 🕒 Handle quiz time limit
       if (data.timing && data.timing.timeLimitEnabled && data.timing.timeLimit) {
-        console.log('[QuizView] Setting timer with', data.timing.timeLimit, 'minutes');
         setTimeLeft(data.timing.timeLimit * 60);
         setTimeWarned(false); // Reset warning flag on new quiz load
       } else {
-        console.log('[QuizView] Timer not enabled or missing data');
+        // Timer not enabled or missing data
       }
 
       // 👤 Set student info
@@ -96,8 +99,13 @@ export default function QuizView() {
       }
 
     } catch (err) {
-      console.error('Error loading quiz:', err);
-      setError('Failed to load quiz.');
+      // Error loading quiz
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Quiz Load Failed',
+        message: 'Failed to load quiz. Please try again later.'
+      });
       setLoading(false);
     }
   };
@@ -108,30 +116,19 @@ export default function QuizView() {
 
   // Timer logic
   useEffect(() => {
-    console.log('[QuizView] Timer effect triggered:', {
-      hasQuiz: !!quiz,
-      hasTiming: !!quiz?.timing,
-      timeLimitEnabled: quiz?.timing?.timeLimitEnabled,
-      timeLimit: quiz?.timing?.timeLimit,
-      timeLeft,
-      submitted,
-      timeWarned,
-      timerStarted,
-      showIntro
-    });
     
     // Only start timer when quiz has started (not on intro page) and timer is enabled
     if (!quiz || !quiz.timing || !quiz.timing.timeLimitEnabled || !quiz.timing.timeLimit || submitted || showIntro || !timerStarted) {
-      console.log('[QuizView] Timer effect early return');
+      // Timer effect early return
       return;
     }
     if (timeLeft === null || timerStartTimeRef.current === null) {
-      console.log('[QuizView] Timer effect: timeLeft or timerStartTime is null');
+      // Timer effect: timeLeft or timerStartTime is null
       return;
     }
     
     const totalSeconds = quiz.timing.timeLimit * 60;
-    console.log('[QuizView] Timer running:', { timeLeft, totalSeconds, warningThreshold: totalSeconds * 0.4 });
+    // Timer running
     
     // Calculate elapsed time and update timeLeft based on actual elapsed time
     const updateTimer = () => {
@@ -140,7 +137,7 @@ export default function QuizView() {
       const remainingSeconds = totalSeconds - elapsedSeconds;
       
       if (remainingSeconds <= 0) {
-        console.log('[QuizView] Time expired, auto-submitting');
+        // Time expired, auto-submitting
         setTimeLeft(0);
         autoSubmit(); // Call auto-submit when timer expires
         return;
@@ -150,7 +147,7 @@ export default function QuizView() {
       
       // Show warning modal at 60% elapsed (40% left)
       if (!timeWarned && remainingSeconds <= totalSeconds * 0.4 && remainingSeconds > 0) {
-        console.log('[QuizView] Showing time warning modal');
+        // Showing time warning modal
         setShowTimeWarning(true);
         setTimeWarned(true);
       }
@@ -221,7 +218,7 @@ export default function QuizView() {
 
   // Function to start the quiz and timer
   const handleStartQuiz = () => {
-    console.log('[QuizView] Starting quiz and timer');
+    // Starting quiz and timer
     setShowIntro(false);
     setTimerStarted(true);
     timerStartTimeRef.current = Date.now(); // Record when timer actually started
@@ -295,7 +292,7 @@ export default function QuizView() {
 
   // Separate function for auto-submit when timer expires (ignores required questions)
   const autoSubmit = async () => {
-    console.log('[QuizView] Auto-submitting due to time expiration');
+    // Auto-submitting due to time expiration
     // Record time for last question
     recordLastQuestionTime();
     // Auto-submit regardless of required questions
@@ -331,7 +328,12 @@ export default function QuizView() {
       }
       setSubmitted(true);
     } catch (e) {
-      setError(e.message || 'Failed to submit quiz.');
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Submission Failed',
+        message: e.message || 'Failed to submit quiz. Please try again.'
+      });
     } finally {
       setSubmitting(false);
     }
@@ -642,6 +644,15 @@ export default function QuizView() {
           )}
         </div>
       </div>
+      
+      {/* Validation Modal */}
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
+      />
     </div>
   );
 }

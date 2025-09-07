@@ -8,9 +8,9 @@ import logo from '../assets/logo/Logo4.svg';
 import logo6 from '../assets/logo/SJDD Logo.svg';
 import axios from 'axios';
 import { Eye, EyeOff } from 'lucide-react';
+import ValidationModal from './ValidationModal';
 import { getProfileImageUrl } from '../utils/imageUtils';
 import { jwtDecode } from 'jwt-decode'; // ✅ import for decoding JWT
-import ValidationModal from './ValidationModal';
 import { hasValidSession, getDashboardPathForRole } from '../utils/sessionUtils';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
@@ -56,7 +56,6 @@ export default function Login() {
         const targetPath = getDashboardPathForRole(role);
         
         if (targetPath !== '/') {
-          console.log(`[Login Component] Active session detected, redirecting to ${targetPath} for role: ${role}`);
           navigate(targetPath, { replace: true });
           return true; // Session found and redirecting
         }
@@ -85,8 +84,6 @@ export default function Login() {
         const normalizedName = name ? name.normalize('NFC') : '';
     
         // Debug: Log the role to see what's being received
-        console.log('Received role:', role);
-        console.log('Role type:', typeof role);
     
         // If user has a profile picture, build the image URL
         const imageUrl = getProfileImageUrl(profilePic, API_BASE, null);
@@ -106,7 +103,7 @@ export default function Login() {
         if (targetPath !== '/') {
           navigate(targetPath);
         } else {
-          console.error('Unknown role received:', role);
+          // Unknown role received
           setValidationModal({
             isOpen: true,
             type: 'error',
@@ -115,7 +112,7 @@ export default function Login() {
           });
         }
       } catch (error) {
-        console.error('Auto-login failed:', error);
+        // Auto-login failed
         // Clear stored credentials if auto-login fails
         localStorage.removeItem('rememberedEmail');
         localStorage.removeItem('rememberedPassword');
@@ -138,7 +135,6 @@ export default function Login() {
       localStorage.removeItem('rememberedEmail');
       localStorage.removeItem('rememberedPassword');
       
-      console.log('Auto-logout: User returned to login page without "Remember Me"');
       return; // Don't proceed with auto-login
     }
     
@@ -183,7 +179,6 @@ export default function Login() {
         localStorage.removeItem('rememberedEmail');
         localStorage.removeItem('rememberedPassword');
         
-        console.log('Auto-logout: User returned to login page without "Remember Me"');
       }
     };
 
@@ -205,7 +200,6 @@ export default function Login() {
           localStorage.removeItem('rememberedEmail');
           localStorage.removeItem('rememberedPassword');
           
-          console.log('Auto-logout: User returned to page without "Remember Me"');
         }
       }
     };
@@ -277,9 +271,6 @@ export default function Login() {
       const normalizedName = name ? name.normalize('NFC') : '';
 
       // Debug: Log the received data
-      console.log('[Login Debug] JWT decoded:', decoded);
-      console.log('[Login Debug] Role received:', role);
-      console.log('[Login Debug] Role type:', typeof role);
 
       const imageUrl = getProfileImageUrl(profilePic, API_BASE, null);
 
@@ -290,12 +281,6 @@ export default function Login() {
       localStorage.setItem('role', role);
 
       // Debug: Log localStorage values
-      console.log('[Login Debug] Stored in localStorage:', {
-        user: JSON.parse(localStorage.getItem('user')),
-        token: localStorage.getItem('token'),
-        userID: localStorage.getItem('userID'),
-        role: localStorage.getItem('role')
-      });
 
       // Store credentials if remember me is checked
       if (rememberMe) {
@@ -313,13 +298,11 @@ export default function Login() {
 
       // Navigate to dashboard based on user role using utility function
       const targetPath = getDashboardPathForRole(role);
-      console.log('[Login Debug] Target path generated:', targetPath);
       
       if (targetPath !== '/') {
-        console.log('[Login Debug] Navigating to:', targetPath);
         navigate(targetPath);
       } else {
-        console.error('[Login Debug] Unknown role received:', role);
+        // Unknown role received
         setValidationModal({
           isOpen: true,
           type: 'error',
@@ -329,7 +312,7 @@ export default function Login() {
       }
   
     } catch (error) {
-      console.error('Login failed:', error);
+      // Login failed
       
       // Handle archived account case first
       if (

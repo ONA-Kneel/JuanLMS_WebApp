@@ -42,11 +42,11 @@ const NotificationCenter = ({
         const data = await response.json();
         setAcknowledgedAnnouncements(data);
       } else {
-        console.error('Failed to fetch acknowledged announcements:', response.status);
+        // Failed to fetch acknowledged announcements
         setAcknowledgedAnnouncements([]);
       }
     } catch (error) {
-      console.error('Error fetching acknowledged announcements:', error);
+      // Error fetching acknowledged announcements
       setAcknowledgedAnnouncements([]);
     } finally {
       setIsLoadingAnnouncements(false);

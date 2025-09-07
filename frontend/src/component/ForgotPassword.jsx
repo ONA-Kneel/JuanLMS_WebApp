@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import ValidationModal from './ValidationModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -23,6 +24,12 @@ export default function ForgotPassword() {
   const [otpLockout, setOtpLockout] = useState(false);
   const [otpLockoutTime, setOtpLockoutTime] = useState(0);
   const [cooldown, setCooldown] = useState(0);
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
 
   // Lockout timer effect
   useEffect(() => {
@@ -80,7 +87,12 @@ export default function ForgotPassword() {
       setStep(2); // Move to next step
       setCooldown(20); // 20s cooldown
     } catch (err) {
-      setError(err.response?.data?.message || 'Something went wrong. Please try again.');
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Request Failed',
+        message: err.response?.data?.message || 'Something went wrong. Please try again.'
+      });
     } finally {
       setLoading(false);
     }
@@ -112,7 +124,12 @@ export default function ForgotPassword() {
         }
         return newAttempts;
       });
-      setError(err.response?.data?.message || 'Invalid or expired OTP.');
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'OTP Validation Failed',
+        message: err.response?.data?.message || 'Invalid or expired OTP.'
+      });
     } finally {
       setLoading(false);
     }
@@ -125,7 +142,12 @@ export default function ForgotPassword() {
     setError('');
     setMessage('');
     if (newPassword !== confirmPassword) {
-      setError('Passwords do not match.');
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Password Mismatch',
+        message: 'Passwords do not match.'
+      });
       setLoading(false);
       return;
     }
@@ -138,7 +160,12 @@ export default function ForgotPassword() {
       setMessage(response.data.message || 'Password reset successful.');
       setStep(4); // Show success message
     } catch (err) {
-      setError(err.response?.data?.message || 'Something went wrong. Please try again.');
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Reset Failed',
+        message: err.response?.data?.message || 'Something went wrong. Please try again.'
+      });
     } finally {
       setLoading(false);
     }
@@ -272,6 +299,15 @@ export default function ForgotPassword() {
           <button className="mt-6 text-blue-700 hover:underline" onClick={() => navigate('/')}>Back to Login</button>
         )}
       </div>
+      
+      {/* Validation Modal */}
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
+      />
     </div>
   );
 } 

@@ -9,9 +9,7 @@ import { getFileUrl } from "../utils/imageUtils";
 // import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
-// Force localhost for local testing
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
-const DEBUG_MEMBERS = true;
 
 export default function ClassContent({ selected, isFaculty = false }) {
   // --- ROUTER PARAMS ---
@@ -137,7 +135,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
           }
         }
       } catch (err) {
-        console.warn(`Failed to check section assignment for student ${student._id}:`, err);
+        // Failed to check section assignment
       }
     }
     
@@ -179,7 +177,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
         return true; // Temporarily allow all students to be added
       }
     } catch (err) {
-      console.warn(`Failed to check class enrollment for student ${studentId}:`, err);
+      // Failed to check class enrollment
     }
     
     return false;
@@ -204,14 +202,12 @@ export default function ClassContent({ selected, isFaculty = false }) {
         if (allActiveStudents.length > 0) {
           const allStudentIds = allActiveStudents.map(s => String(s._id)).filter(Boolean);
           setEnrolledStudentIds(allStudentIds);
-          if (DEBUG_MEMBERS) console.log('[Members] all active student IDs considered enrolled:', allStudentIds);
         } else {
           setEnrolledStudentIds(memberIds);
-          if (DEBUG_MEMBERS) console.log('[Members] enrolled student IDs from members:', memberIds);
         }
       }
     } catch (err) {
-      console.warn(`Failed to fetch enrolled student IDs:`, err);
+      // Failed to fetch enrolled student IDs
     }
   };
 
@@ -282,9 +278,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
   // Fetch assignments and quizzes from backend
   useEffect(() => {
     if (selected === "classwork" && classId) {
-      if (DEBUG_MEMBERS) {
-        console.log(`[ClassContent] Fetching assignments/quizzes for classId: "${classId}" (type: ${typeof classId})`);
-      }
       
       setAssignmentsLoading(true);
       setAssignmentError(null);
@@ -300,10 +293,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
         }).then(res => res.ok ? res.json() : [])
       ])
       .then(([assignmentsData, quizzesData]) => {
-        if (DEBUG_MEMBERS) {
-          console.log(`[ClassContent] Raw assignments data:`, assignmentsData);
-          console.log(`[ClassContent] Raw quizzes data:`, quizzesData);
-        }
         
         const merged = [
           ...(Array.isArray(assignmentsData) ? assignmentsData : []),
@@ -314,16 +303,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
           const matchesClassId = a.classID === classId;
           const matchesAssignedTo = Array.isArray(a.assignedTo) && a.assignedTo.some(at => String(at.classID) === String(classId));
           
-          if (DEBUG_MEMBERS) {
-            console.log(`[ClassContent] Assignment ${a.title} (${a._id}):`, {
-              classID: a.classID,
-              classId: classId,
-              assignedTo: a.assignedTo,
-              matchesClassId,
-              matchesAssignedTo,
-              willInclude: matchesClassId || matchesAssignedTo
-            });
-          }
           
           return matchesClassId || matchesAssignedTo;
         });
@@ -331,9 +310,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
         // For local testing, if no assignments match the strict criteria, include all assignments
         let finalFiltered = filtered;
         if (import.meta.env.DEV && filtered.length === 0 && merged.length > 0) {
-          if (DEBUG_MEMBERS) {
-            console.log(`[ClassContent] DEV MODE: No assignments matched strict criteria, including all ${merged.length} assignments for debugging`);
-          }
           finalFiltered = merged;
         }
         
@@ -341,23 +317,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
         const userRole = localStorage.getItem('role');
         const isStudent = userRole === 'students' || userRole === 'student';
         
-        if (DEBUG_MEMBERS) {
-          console.log(`[ClassContent] User role from localStorage: "${userRole}"`);
-          console.log(`[ClassContent] Is student: ${isStudent}`);
-        }
         
         const filteredForRole = isStudent ? finalFiltered.filter(isAssignmentPosted) : finalFiltered;
         
-        if (DEBUG_MEMBERS) {
-          console.log(`[ClassContent] Role: ${localStorage.getItem('role')}`);
-          console.log(`[ClassContent] Merged assignments/quizzes:`, merged.length);
-          console.log(`[ClassContent] After class filtering:`, filtered.length);
-          console.log(`[ClassContent] After dev mode adjustment:`, finalFiltered.length);
-          console.log(`[ClassContent] After role filtering:`, filteredForRole.length);
-          console.log(`[ClassContent] Final assignments for class ${classId}:`, filteredForRole);
-        }
-
-          console.log("Filtered assignments/quizzes for class", classId, filteredForRole);
 
           // If user is a student, fetch their submissions to filter out completed assignments
         if (isStudent) {
@@ -366,12 +328,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 headers: { 'Authorization': `Bearer ${token}` }
               }).then(async res => {
                 if (!res.ok) {
-                  console.warn(`Failed to fetch submissions for assignment ${assignment._id}`);
                   return [];
                 }
                 return res.json();
               }).catch(err => {
-                console.warn(`Error fetching submissions for assignment ${assignment._id}:`, err);
                 return [];
               })
             )).then(submissionsArrays => {
@@ -382,7 +342,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
               setAssignments(assignmentsWithSubmission);
               setAssignmentsLoading(false);
             }).catch(err => {
-              console.error('Error processing submissions:', err);
             setAssignments(filteredForRole);
               setAssignmentsLoading(false);
             });
@@ -392,7 +351,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
           }
         })
         .catch(err => {
-        console.error('Error fetching assignments/quizzes:', err);
         setAssignmentError('Failed to fetch assignments/quizzes. Please try again.');
           setAssignmentsLoading(false);
         });
@@ -420,20 +378,13 @@ export default function ClassContent({ selected, isFaculty = false }) {
               let res = await fetch(`${API_BASE}/users?page=1&limit=1000`, {
       headers: { 'Authorization': `Bearer ${token}` }
               });
-              if (res.ok) {
-                const payload = await res.json();
-                const list = Array.isArray(payload?.users) ? payload.users : (Array.isArray(payload) ? payload : []);
-                allStudentsData = list.filter(u => (u.role || '').toLowerCase() === 'students');
-                if (DEBUG_MEMBERS) {
-                  console.log('[Members] loaded students directory:', allStudentsData.length);
-                  if (allStudentsData.length > 0) {
-                    console.log('[Members] Sample student structure:', allStudentsData[0]);
-                    console.log('[Members] Sample student IDs:', getCandidateIds(allStudentsData[0]));
-                  }
+                if (res.ok) {
+                  const payload = await res.json();
+                  const list = Array.isArray(payload?.users) ? payload.users : (Array.isArray(payload) ? payload : []);
+                  allStudentsData = list.filter(u => (u.role || '').toLowerCase() === 'students');
                 }
-              }
             } catch (err) {
-              if (DEBUG_MEMBERS) console.warn('[Members] failed to load directory:', err);
+              // Failed to load directory
             }
           }
           setAllStudents(allStudentsData);
@@ -445,13 +396,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
             });
                          if (membersRes.ok) {
                const membersData = await membersRes.json();
-               if (DEBUG_MEMBERS) console.log('[Members] direct members endpoint response:', membersData);
-               if (DEBUG_MEMBERS) console.log('[Members] faculty array length:', membersData.faculty?.length || 0);
-               if (DEBUG_MEMBERS) console.log('[Members] students array length:', membersData.students?.length || 0);
                
                // Use the direct response if we get populated students array, but also store faculty data
                if (Array.isArray(membersData.students) && membersData.students.length > 0) {
-                 if (DEBUG_MEMBERS) console.log('[Members] using direct students response - faculty:', membersData.faculty, 'students:', membersData.students);
                  const studentsOnly = (membersData.students || []).filter(s => (s.role || '').toLowerCase() === 'students');
                  
                  // Store the students directly since they're already populated with full data
@@ -462,22 +409,16 @@ export default function ClassContent({ selected, isFaculty = false }) {
                  const memberIds = studentsOnly.map(s => String(s._id)).filter(Boolean);
                  setMemberIdsRaw(memberIds);
                  
-                 if (DEBUG_MEMBERS) {
-                   console.log('[Members] set members - faculty count:', (membersData.faculty || []).length, 'students count:', studentsOnly.length);
-                   console.log('[Members] member IDs (MongoDB _id):', memberIds);
-                   console.log('[Members] Final members state from direct endpoint:', { faculty: membersData.faculty || [], students: studentsOnly });
-                 }
                  return;
                }
                
                // If we got faculty but no students, store faculty and continue to fallback for students
                if (Array.isArray(membersData.faculty) && membersData.faculty.length > 0) {
-                 if (DEBUG_MEMBERS) console.log('[Members] got faculty data, storing for later merge with student fallback');
                  setMembers(prev => ({ ...prev, faculty: membersData.faculty }));
                }
              }
           } catch (err) {
-            if (DEBUG_MEMBERS) console.warn('[Members] direct members endpoint failed:', err);
+            // Direct members endpoint failed
           }
           
           // Step 3: Fallback to class list approach
@@ -487,19 +428,15 @@ export default function ClassContent({ selected, isFaculty = false }) {
             });
             if (classesRes.ok) {
               const classesList = await classesRes.json();
-              if (DEBUG_MEMBERS) console.log('[Members] classes list length:', Array.isArray(classesList) ? classesList.length : 'n/a');
               
               const foundClass = classesList.find(c => String(c.classID || (c._id && (c._id.$oid || c._id))) === String(classId));
               if (foundClass) {
                 // Store the class section for filtering students
                 if (foundClass.section) {
                   setClassSection(foundClass.section);
-                  if (DEBUG_MEMBERS) console.log('[Members] class section found:', foundClass.section);
                 }
                 
                 if (Array.isArray(foundClass.members) && foundClass.members.length > 0) {
-                  if (DEBUG_MEMBERS) console.log('[Members] found class with members:', foundClass.members);
-                  
                   // Map the member IDs to actual student objects
                   const memberIds = foundClass.members.map(v => String(v));
                   
@@ -509,8 +446,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     memberIds.includes(String(s._id))
                   );
                   
-                  if (DEBUG_MEMBERS) console.log('[Members] mapped students:', mappedStudents.length, 'from', memberIds);
-                  
                   // Set the results, preserving any faculty data we already have
                   setMemberIdsRaw(memberIds);
                   setMembers(prev => ({ 
@@ -518,28 +453,15 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     students: mappedStudents 
                   }));
                   setHasMappedMembers(true);
-                  
-                  if (DEBUG_MEMBERS) {
-                    console.log('[Members] Members loaded from class list approach');
-                    console.log('[Members] Member IDs (MongoDB _id):', memberIds);
-                    console.log('[Members] Mapped students:', mappedStudents);
-                    console.log('[Members] Final members state:', { 
-                      faculty: prev.faculty.length > 0 ? prev.faculty : (foundClass.faculty || []), 
-                      students: mappedStudents 
-                    });
-                  }
                 } else {
-                  if (DEBUG_MEMBERS) console.log('[Members] no members found in class or empty members array');
                   setMembers({ faculty: [], students: [] });
                 }
               }
             }
           } catch (err) {
-            if (DEBUG_MEMBERS) console.warn('[Members] classes list approach failed:', err);
             setMembersError("Failed to fetch class data.");
           }
         } catch (err) {
-          if (DEBUG_MEMBERS) console.error('[Members] overall error:', err);
           setMembersError("Failed to load members.");
         } finally {
           setMembersLoading(false);
@@ -559,15 +481,12 @@ export default function ClassContent({ selected, isFaculty = false }) {
        // Always set all active students for editing
        const activeStudents = getAllActiveStudents(allStudents);
        setAllActiveStudents(activeStudents);
-       if (DEBUG_MEMBERS) console.log('[Members] all active students:', activeStudents.length);
        
        // If we have a section, also filter by section
        if (classSection) {
          const filterStudentsBySection = async () => {
-           if (DEBUG_MEMBERS) console.log('[Members] filtering students by section:', classSection);
            const filtered = await getStudentsInSameSection(allStudents, classSection);
            setStudentsInSameSection(filtered);
-           if (DEBUG_MEMBERS) console.log('[Members] students in same section:', filtered.length);
          };
          filterStudentsBySection();
        } else {
@@ -579,16 +498,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
      }
    }, [classSection, allStudents, isFaculty]);
 
-   // Debug effect to monitor members state changes
-   useEffect(() => {
-     if (DEBUG_MEMBERS) {
-       console.log('[Members] members state changed:', members);
-       console.log('[Members] members.students count:', members.students.length);
-       console.log('[Members] memberIdsRaw:', memberIdsRaw);
-       console.log('[Members] newStudentIDs:', newStudentIDs);
-       console.log('[Members] editingMembers:', editingMembers);
-     }
-   }, [members, memberIdsRaw, newStudentIDs, editingMembers]);
 
   // --- HANDLERS FOR ADDING CONTENT (Faculty only) ---
 
@@ -877,7 +786,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       const createdLesson = payload.lesson || payload;
       // Ensure lesson has an _id for future delete/edit ops
       if (!createdLesson || !createdLesson._id) {
-        console.warn('Unexpected create lesson payload:', payload);
+        // Unexpected create lesson payload
       }
       setBackendLessons(lessons => [createdLesson, ...lessons]);
     } else {
@@ -999,10 +908,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
       formData.append('files', file);
     }
 
-    // Optional: Log all formData content for debugging
-    for (let [key, val] of formData.entries()) {
-      console.log(`${key}:`, val);
-    }
 
     try {
       const res = await fetch(`${API_BASE}/lessons`, {
@@ -1028,7 +933,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
         });
       } else {
         const error = await res.json();
-        console.error("Server Response:", error);
         setValidationModal({
           isOpen: true,
           type: 'error',
@@ -1037,7 +941,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
         });
       }
     } catch (err) {
-      console.error("Network Error:", err);
       setValidationModal({
         isOpen: true,
         type: 'error',
@@ -1718,11 +1621,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
                           setEditingMembers(true);
                           // Use MongoDB _id values since that's what the backend stores
                           const currentMemberIds = members.students.map(s => String(s._id)).filter(Boolean);
-                          if (DEBUG_MEMBERS) {
-                            console.log('[Members] Edit Members clicked');
-                            console.log('[Members] Current members:', members.students);
-                            console.log('[Members] Current member IDs (MongoDB _id):', currentMemberIds);
-                          }
                           setNewStudentIDs(currentMemberIds);
                         }}
                     >
@@ -1994,11 +1892,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                             students: [...prev.students, student]
                                           }));
                                           
-                                          if (DEBUG_MEMBERS) {
-                                            console.log('[Members] Student added to newStudentIDs:', studentId);
-                                            console.log('[Members] Updated newStudentIDs:', [...newStudentIDs, studentId]);
-                                            console.log('[Members] Updated members.students count:', members.students.length + 1);
-                                          }
                                           
                                           setValidationModal({ isOpen: false, type: 'info', title: '', message: '', onConfirm: null });
                                         },
@@ -2054,14 +1947,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                           const token = localStorage.getItem('token');
                           try {
                             setMembersSaving(true);
-                            if (DEBUG_MEMBERS) {
-                              console.log('[Members] Save button clicked');
-                              console.log('[Members] newStudentIDs state before save:', newStudentIDs);
-                              console.log('[Members] current members.students count:', members.students.length);
-                              console.log('[Members] current members.students:', members.students);
-                            }
                             const idsToSend = newStudentIDs.map(String);
-                            if (DEBUG_MEMBERS) console.log('[Members] saving member IDs:', idsToSend);
                             
                             // Validate that we have at least some members
                             if (idsToSend.length === 0) {
@@ -2080,10 +1966,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
                               return;
                             }
                             
-                            if (DEBUG_MEMBERS) {
-                              console.log('[Members] Sending PATCH request to:', `${API_BASE}/classes/${classId}/members`);
-                              console.log('[Members] Request payload:', { members: idsToSend });
-                            }
                             
                             const res = await fetch(`${API_BASE}/classes/${classId}/members`, {
                               method: 'PATCH',
@@ -2094,46 +1976,20 @@ export default function ClassContent({ selected, isFaculty = false }) {
                               body: JSON.stringify({ members: idsToSend })
                             });
                             
-                            if (DEBUG_MEMBERS) {
-                              console.log('[Members] Response status:', res.status);
-                              console.log('[Members] Response headers:', Object.fromEntries(res.headers.entries()));
-                            }
                             
                             if (res.ok) {
                               const updated = await res.json();
-                              if (DEBUG_MEMBERS) {
-                                console.log('[Members] save response:', updated);
-                                console.log('[Members] response keys:', Object.keys(updated));
-                                console.log('[Members] members array:', updated?.members);
-                                console.log('[Members] originalMemberIds array:', updated?.originalMemberIds);
-                              }
                               
                               // Update the members state with the new data
                               // The backend returns the entire updated class object with originalMemberIds
                               const ids = Array.isArray(updated?.members) ? updated.members.map(String) : idsToSend;
                               const originalIds = Array.isArray(updated?.originalMemberIds) ? updated.originalMemberIds.map(String) : idsToSend;
                               
-                              if (DEBUG_MEMBERS) {
-                                console.log('[Members] extracted member IDs from response:', ids);
-                                console.log('[Members] original member IDs from response:', originalIds);
-                              }
                               
                               // Map the member IDs to actual student objects
                               // The backend returns MongoDB _id values in the members array, so map directly using _id
                               let mapped = (allStudents || []).filter(s => ids.includes(String(s._id)));
                               
-                              if (DEBUG_MEMBERS) {
-                                console.log('[Members] Mapping students using MongoDB _id values:', ids);
-                                console.log('[Members] Found mapped students:', mapped.length);
-                              }
-                              
-                              if (DEBUG_MEMBERS) {
-                                console.log('[Members] allStudents available:', allStudents.length);
-                                console.log('[Members] member IDs from response:', ids);
-                                console.log('[Members] idsToSend (original):', idsToSend);
-                                console.log('[Members] mapped students after save:', mapped);
-                                console.log('[Members] current members state before update:', members);
-                              }
                               
                               // Update both the raw IDs and the mapped members
                               setMemberIdsRaw(ids);
@@ -2142,7 +1998,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                   faculty: prev.faculty, // Keep existing faculty
                                   students: mapped 
                                 };
-                                if (DEBUG_MEMBERS) console.log('[Members] new members state:', newState);
                                 return newState;
                               });
                               
@@ -2176,12 +2031,8 @@ export default function ClassContent({ selected, isFaculty = false }) {
                               }, 100);
                               
                               // No need to refresh from server since we already have the updated data
-                              if (DEBUG_MEMBERS) {
-                                console.log('[Members] Members updated successfully, no need to refresh from server');
-                              }
                             } else {
                               const errorData = await res.json().catch(() => ({}));
-                              console.error('[Members] Update failed:', res.status, errorData);
                               
                               // Handle specific error cases
                               let errorMessage = errorData.error || `HTTP ${res.status}`;
@@ -2217,7 +2068,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
                               });
                             }
                           } catch (error) {
-                            console.error('[Members] Network error:', error);
                             setValidationModal({
                               isOpen: true,
                               type: 'error',
@@ -2537,7 +2387,6 @@ function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmat
             });
           }
         } catch (err) {
-          console.error('Network error:', err);
           setValidationModal({
             isOpen: true,
             type: 'error',
@@ -2620,7 +2469,6 @@ function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmat
         });
       }
     } catch (err) {
-      console.error('Network error:', err);
       setValidationModal({
         isOpen: true,
         type: 'error',

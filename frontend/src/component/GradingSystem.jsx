@@ -63,9 +63,9 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
           const year = await yearRes.json();
           setAcademicYear(year);
         }
-      } catch (err) {
-        console.error("Failed to fetch academic year", err);
-      }
+        } catch (err) {
+            // Failed to fetch academic year
+        }
     }
     fetchAcademicYear();
   }, []);
@@ -99,9 +99,6 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
       if (!currentTerm || !academicYear) return;
       try {
         const token = localStorage.getItem("token");
-        console.log('Fetching sections for term:', currentTerm._id);
-        console.log('Current term name:', currentTerm.termName);
-        console.log('Current school year:', `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`);
         
         let sectionsData = [];
         
@@ -112,22 +109,16 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
         
         if (response.ok) {
           sectionsData = await response.json();
-          console.log('Fetched sections from term endpoint:', sectionsData);
         } else {
-          console.log('Term-specific endpoint failed, trying fallback');
+          // Term-specific endpoint failed, trying fallback
           
           // Try general sections endpoint
-          console.log('Trying general sections endpoint');
           const fallbackResponse = await fetch(`${API_BASE}/api/sections`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           
           if (fallbackResponse.ok) {
             const allSectionsData = await fallbackResponse.json();
-            console.log('All sections from general endpoint:', allSectionsData);
-            console.log('Looking for sections with:');
-            console.log('  termName:', currentTerm.termName);
-            console.log('  schoolYear:', `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`);
             
             // Filter sections by term and school year
             sectionsData = allSectionsData.filter(section => 
@@ -135,20 +126,17 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
               section.schoolYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` &&
               section.status === 'active'
             );
-            console.log('Filtered sections for current term:', sectionsData);
           } else {
-            console.log('General sections endpoint also failed');
+            // General sections endpoint also failed
             
             // Try track/strand approach
             try {
-              console.log('Trying to fetch sections by track/strand');
               const tracksResponse = await fetch(`${API_BASE}/api/tracks`, {
                 headers: { Authorization: `Bearer ${token}` }
               });
               
               if (tracksResponse.ok) {
                 const tracks = await tracksResponse.json();
-                console.log('Available tracks:', tracks);
                 
                 for (const track of tracks) {
                   const strandsResponse = await fetch(`${API_BASE}/api/strands/track/${track.trackName}`, {
@@ -157,7 +145,6 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
                   
                   if (strandsResponse.ok) {
                     const strands = await strandsResponse.json();
-                    console.log(`Strands for track ${track.trackName}:`, strands);
                     
                     for (const strand of strands) {
                       const sectionsResponse = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}`, {
@@ -166,7 +153,6 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
                       
                       if (sectionsResponse.ok) {
                         const trackStrandSections = await sectionsResponse.json();
-                        console.log(`Sections for track ${track.trackName}, strand ${strand.strandName}:`, trackStrandSections);
                         sectionsData.push(...trackStrandSections.filter(s => s.status === 'active'));
                       }
                     }
@@ -174,41 +160,37 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
                 }
               }
             } catch (error) {
-              console.log('Track/strand approach failed:', error);
+              // Track/strand approach failed
             }
             
             // If still no sections, try to get all sections and find close matches
             if (sectionsData.length === 0) {
               try {
-                console.log('Trying to get ALL sections without filtering');
                 const allSectionsResponse = await fetch(`${API_BASE}/api/sections`, {
                   headers: { Authorization: `Bearer ${token}` }
                 });
                 
                 if (allSectionsResponse.ok) {
                   const allSectionsData = await allSectionsResponse.json();
-                  console.log('ALL sections in database:', allSectionsData);
                   
                   // Find sections with similar term names or school years
                   const closeMatches = allSectionsData.filter(section => 
                     (section.termName && section.termName.toLowerCase().includes(currentTerm.termName.toLowerCase())) ||
                     (section.schoolYear && section.schoolYear.includes(academicYear.schoolYearStart.toString()))
                   );
-                  console.log('Close matches found:', closeMatches);
                   
                   if (closeMatches.length > 0) {
                     sectionsData = closeMatches.filter(s => s.status === 'active');
                   }
                 }
               } catch (error) {
-                console.log('Getting all sections failed:', error);
+                // Getting all sections failed
               }
             }
             
             // Final fallback: show all active sections
             if (sectionsData.length === 0) {
               try {
-                console.log('Final fallback: showing all active sections');
                 const fallbackResponse = await fetch(`${API_BASE}/api/sections`, {
                   headers: { Authorization: `Bearer ${token}` }
                 });
@@ -216,26 +198,19 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
                 if (fallbackResponse.ok) {
                   const allSectionsData = await fallbackResponse.json();
                   sectionsData = allSectionsData.filter(s => s.status === 'active');
-                  console.log('Fallback sections (all active):', sectionsData);
                 }
               } catch (error) {
-                console.log('Final fallback failed:', error);
+                // Final fallback failed
               }
             }
           }
         }
         
-        console.log('Final sections data:', sectionsData);
-        console.log('Sections data type:', typeof sectionsData);
-        console.log('Sections data length:', sectionsData?.length || 'undefined');
-        if (sectionsData && sectionsData.length > 0) {
-          console.log('First section sample:', sectionsData[0]);
-        }
         
         setAllSections(sectionsData);
         setSections(sectionsData);
       } catch (error) {
-        console.error('Failed to fetch sections:', error);
+        // Failed to fetch sections
       }
     }
     fetchSections();
@@ -245,21 +220,18 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
   useEffect(() => {
     if (selectedClass !== '' && facultyClasses[selectedClass]) {
       const selectedClassObj = facultyClasses[selectedClass];
-      console.log('Filtering sections for class:', selectedClassObj.className);
       
       // Check if the class has a section assigned
       const classSection = selectedClassObj.section;
-      console.log('Class assigned section:', classSection);
       
       if (classSection) {
         // Filter sections to show only the assigned section
         const filteredSections = allSections.filter(section => 
           section.sectionName === classSection
         );
-        console.log('Filtered sections:', filteredSections);
         setSections(filteredSections);
       } else {
-        console.log('Class has no section assigned:', selectedClassObj.className);
+        // Class has no section assigned
         setSections([]);
       }
     } else {
@@ -281,8 +253,6 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Faculty classes data from /classes/my-classes:', data);
-        console.log('Number of classes:', data.length);
         
         let filteredClasses = [];
         
@@ -293,20 +263,19 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
             cls.academicYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` &&
             cls.termName === currentTerm.termName
           );
-          console.log('Filtered classes by term:', filteredClasses);
         }
         
         setFacultyClasses(filteredClasses);
         setSelectedClass('');
         setSelectedSection('');
       } else {
-        console.error('Failed to fetch faculty classes:', response.status);
+        // Failed to fetch faculty classes
         setValidationMessage('Failed to fetch faculty classes. Please try again.');
         setValidationType('error');
         setShowValidationModal(true);
       }
     } catch (error) {
-      console.error('Error fetching faculty classes:', error);
+      // Error fetching faculty classes
       setValidationMessage('Error fetching faculty classes. Please check your connection and try again.');
       setValidationType('error');
       setShowValidationModal(true);
@@ -327,8 +296,6 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
       
       if (response.ok) {
         const data = await response.json();
-        console.log('API Test - Classes found:', data.length);
-        console.log('API Test - Sample class:', data[0]);
         setValidationMessage(`API Test Successful! Found ${data.length} classes.`);
         setValidationType('success');
         setShowValidationModal(true);
@@ -338,7 +305,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
         setShowValidationModal(true);
       }
     } catch (error) {
-      console.error('API Test Error:', error);
+      // API Test Error
       setValidationMessage(`API Test Error: ${error.message}`);
       setValidationType('error');
       setShowValidationModal(true);
@@ -466,10 +433,6 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
 
   // New function to validate required columns
   const validateRequiredColumns = (row8, row9, row10) => {
-    console.log('🔍 Validating required columns...');
-    console.log('Row 8:', row8);
-    console.log('Row 9:', row9);
-    console.log('Row 10:', row10);
     
     const errors = [];
 
@@ -527,12 +490,6 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
       }
     });
 
-    console.log('🔍 Column validation complete. Errors found:', errors.length);
-    if (errors.length > 0) {
-      console.log('❌ Column validation errors:', errors);
-    } else {
-      console.log('✅ All required columns are present');
-    }
 
     return errors;
   };
@@ -1144,7 +1101,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
       
       setSuccessMessage('Template downloaded successfully!');
     } catch (error) {
-      console.error('Template generation error:', error);
+      // Template generation error
       setValidationMessage('Failed to generate template: ' + error.message);
       setValidationType('error');
       setShowValidationModal(true);

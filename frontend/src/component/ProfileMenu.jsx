@@ -73,7 +73,7 @@ export default function ProfileMenu() {
         break;
         
       default:
-        console.log('Unknown notification type:', notification.type);
+        // Unknown notification type
     }
   };
 
@@ -97,26 +97,23 @@ export default function ProfileMenu() {
   const getUserRole = () => {
     // First try to get role from userInfo (backend data)
     if (userInfo.role) {
-      console.log('ProfileMenu: Role from userInfo:', userInfo.role);
       return userInfo.role;
     }
     
     // Fallback to localStorage user data
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     if (user.role) {
-      console.log('ProfileMenu: Role from localStorage user:', user.role);
       return user.role;
     }
     
     // Final fallback to localStorage role
     const role = localStorage.getItem('role');
     if (role) {
-      console.log('ProfileMenu: Role from localStorage role:', role);
       return role;
     }
     
     // Default fallback
-    console.log('ProfileMenu: No role found, using default: user');
+    // No role found, using default: user
     return 'user';
   };
 

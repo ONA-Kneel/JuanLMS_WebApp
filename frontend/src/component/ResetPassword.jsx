@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import ValidationModal from './ValidationModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -19,6 +20,12 @@ export default function ResetPassword() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: ''
+  });
 
   // --- HANDLER: Submit OTP and new password to backend ---
   const handleSubmit = async (e) => {
@@ -26,7 +33,12 @@ export default function ResetPassword() {
     setError('');
     setMessage('');
     if (newPassword !== confirmPassword) {
-      setError('Passwords do not match.');
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Password Mismatch',
+        message: 'Passwords do not match.'
+      });
       return;
     }
     setLoading(true);
@@ -38,7 +50,12 @@ export default function ResetPassword() {
       });
       setMessage(response.data.message);
     } catch (err) {
-      setError(err.response?.data?.message || 'Something went wrong.');
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Reset Failed',
+        message: err.response?.data?.message || 'Something went wrong.'
+      });
     } finally {
       setLoading(false);
     }
@@ -108,6 +125,15 @@ export default function ResetPassword() {
         {/* Back to login navigation */}
         <button className="mt-6 text-blue-700 hover:underline" onClick={() => navigate('/login')}>Back to Login</button>
       </div>
+      
+      {/* Validation Modal */}
+      <ValidationModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        type={validationModal.type}
+        title={validationModal.title}
+        message={validationModal.message}
+      />
     </div>
   );
 } 
