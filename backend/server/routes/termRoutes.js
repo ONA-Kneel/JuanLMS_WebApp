@@ -121,6 +121,25 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     const newTerm = await term.save();
+    // Audit: Term added
+    try {
+      const token = req.headers.authorization?.split(' ')[1];
+      const url = `${req.protocol}://${req.get('host')}/audit-log`;
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'Term Added',
+          details: `Added ${newTerm.termName} for School Year ${newTerm.schoolYear}`,
+          userRole: req.user?.role || 'system'
+        })
+      });
+    } catch (auditErr) {
+      console.warn('[Audit] Failed to log term addition:', auditErr);
+    }
     res.status(201).json(newTerm);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -166,7 +185,27 @@ router.patch('/:termId/archive', authenticateToken, async (req, res) => {
     ]);
     
     console.log(`Successfully archived all entities for term: ${term.termName}`);
-    
+
+    // Audit: Term archived
+    try {
+      const token = req.headers.authorization?.split(' ')[1];
+      const url = `${req.protocol}://${req.get('host')}/audit-log`;
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'Term Archived',
+          details: `Archived ${term.termName} for School Year ${term.schoolYear}`,
+          userRole: req.user?.role || 'system'
+        })
+      });
+    } catch (auditErr) {
+      console.warn('[Audit] Failed to log term archiving:', auditErr);
+    }
+
     res.json(term);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -239,6 +278,26 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       ]);
       
       console.log(`Successfully reactivated all entities for term: ${term.termName}`);
+
+      // Audit: Term reactivated
+      try {
+        const token = req.headers.authorization?.split(' ')[1];
+        const url = `${req.protocol}://${req.get('host')}/audit-log`;
+        await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Term Reactivated',
+            details: `Reactivated ${term.termName} for School Year ${term.schoolYear}`,
+            userRole: req.user?.role || 'system'
+          })
+        });
+      } catch (auditErr) {
+        console.warn('[Audit] Failed to log term reactivation:', auditErr);
+      }
       
     } else if (req.body.status === 'archived') {
       term.status = 'archived';
@@ -271,12 +330,57 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       ]);
       
       console.log(`Successfully archived all entities for term: ${term.termName}`);
+
+      // Audit: Term archived (via status patch)
+      try {
+        const token = req.headers.authorization?.split(' ')[1];
+        const url = `${req.protocol}://${req.get('host')}/audit-log`;
+        await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Term Archived',
+            details: `Archived ${term.termName} for School Year ${term.schoolYear}`,
+            userRole: req.user?.role || 'system'
+          })
+        });
+      } catch (auditErr) {
+        console.warn('[Audit] Failed to log term archiving (status):', auditErr);
+      }
       
+    } else if (req.body.status === 'inactive') {
+      // Deactivate term (set status to inactive). We do NOT delete; we leave related data as-is or optionally archive.
+      term.status = 'inactive';
+
+      // Audit: Term deactivated
+      try {
+        const token = req.headers.authorization?.split(' ')[1];
+        const url = `${req.protocol}://${req.get('host')}/audit-log`;
+        await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Term Deactivated',
+            details: `Deactivated ${term.termName} for School Year ${term.schoolYear}`,
+            userRole: req.user?.role || 'system'
+          })
+        });
+      } catch (auditErr) {
+        console.warn('[Audit] Failed to log term deactivation:', auditErr);
+      }
     } else if (req.body.status) {
       term.status = req.body.status;
     }
 
-    // Handle date updates
+    // Handle date updates (track changes for audit)
+    const originalStart = term.startDate;
+    const originalEnd = term.endDate;
     if (req.body.startDate) {
       term.startDate = new Date(req.body.startDate);
     }
@@ -326,6 +430,32 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     }
 
     const updatedTerm = await term.save();
+
+    // Audit: Term edited (dates changed)
+    try {
+      if ((req.body.startDate && originalStart?.toISOString() !== updatedTerm.startDate?.toISOString()) ||
+          (req.body.endDate && originalEnd?.toISOString() !== updatedTerm.endDate?.toISOString())) {
+        const token = req.headers.authorization?.split(' ')[1];
+        const url = `${req.protocol}://${req.get('host')}/audit-log`;
+        const startStr = new Date(updatedTerm.startDate).toLocaleDateString('en-CA');
+        const endStr = new Date(updatedTerm.endDate).toLocaleDateString('en-CA');
+        await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Term Edited',
+            details: `Edited ${updatedTerm.termName} (${updatedTerm.schoolYear}) to ${startStr} - ${endStr}`,
+            userRole: req.user?.role || 'system'
+          })
+        });
+      }
+    } catch (auditErr) {
+      console.warn('[Audit] Failed to log term edit:', auditErr);
+    }
+
     res.json(updatedTerm);
   } catch (error) {
     res.status(400).json({ message: error.message });

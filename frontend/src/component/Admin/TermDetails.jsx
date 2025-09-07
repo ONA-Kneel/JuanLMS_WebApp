@@ -457,6 +457,22 @@ export default function TermDetails() {
       if (res.ok) {
         const newTrack = await res.json();
         setTracks([...tracks, newTrack]);
+        // Audit log: Track Added
+        try {
+          const token = localStorage.getItem('token');
+          fetch(`${API_BASE}/audit-log`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'Track Added',
+              details: `Added Track "${newTrack.trackName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+              userRole: 'admin'
+            })
+          }).catch(() => {});
+        } catch {}
         window.alert('Track added successfully!');
         setTrackFormData({ trackName: '' }); // Clear form
         setShowTrackModal(false); // Close modal
@@ -477,7 +493,6 @@ export default function TermDetails() {
     });
     setShowTrackModal(true);
   };
-
   const handleUpdateTrack = async (e) => {
     e.preventDefault();
     if (termDetails.status === 'archived') return;
@@ -505,6 +520,24 @@ export default function TermDetails() {
           setTracks(tracks.map(track =>
             track._id === editingTrack._id ? updatedTrack : track
           ));
+          // Audit log: Track Edited
+          try {
+            const token = localStorage.getItem('token');
+            const oldName = editingTrack?.trackName;
+            const newName = trackFormData.trackName.trim();
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Track Edited',
+                details: `Edited Track "${oldName}" to "${newName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           window.alert('Track updated successfully!');
           setIsEditMode(false);
           setEditingTrack(null);
@@ -566,6 +599,22 @@ export default function TermDetails() {
           fetchSubjects();
           fetchFacultyAssignments();
           fetchStudentAssignments();
+          // Audit log: Track Deleted
+          try {
+            const token = localStorage.getItem('token');
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Track Deleted',
+                details: `Deleted Track "${track.trackName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           
           window.alert('Track and all connected data deleted successfully!');
         } else {
@@ -613,6 +662,22 @@ export default function TermDetails() {
       if (res.ok) {
         const newStrand = await res.json();
         setStrands([...strands, newStrand]);
+        // Audit log: Strand Added
+        try {
+          const token = localStorage.getItem('token');
+          fetch(`${API_BASE}/audit-log`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'Strand Added',
+              details: `Added Strand "${newStrand.strandName}" under Track "${selectedTrack.trackName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+              userRole: 'admin'
+            })
+          }).catch(() => {});
+        } catch {}
         window.alert('Strand added successfully!');
         setStrandFormData({ trackId: '', strandName: '' }); // Clear form
         setIsStrandModalOpen(false); // Close modal
@@ -631,7 +696,6 @@ export default function TermDetails() {
     setStrandFormData({ trackId: strand.trackId, strandName: strand.strandName });
     setIsStrandModalOpen(true);
   };
-
   const handleUpdateStrand = async (e) => {
     e.preventDefault();
     if (termDetails.status === 'archived') return;
@@ -666,6 +730,24 @@ export default function TermDetails() {
           setStrands(strands.map(strand =>
             strand._id === editingStrand._id ? updatedStrand : strand
           ));
+          // Audit log: Strand Edited
+          try {
+            const token = localStorage.getItem('token');
+            const oldName = editingStrand?.strandName;
+            const newName = strandFormData.strandName.trim();
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Strand Edited',
+                details: `Edited Strand "${oldName}" to "${newName}" under Track "${selectedTrack.trackName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           window.alert('Strand updated successfully!');
           setIsStrandEditMode(false);
           setEditingStrand(null);
@@ -725,6 +807,22 @@ export default function TermDetails() {
           fetchSubjects();
           fetchFacultyAssignments();
           fetchStudentAssignments();
+          // Audit log: Strand Deleted
+          try {
+            const token = localStorage.getItem('token');
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Strand Deleted',
+                details: `Deleted Strand "${strand.strandName}" under Track "${strand.trackName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           
           window.alert('Strand and all connected data deleted successfully!');
         } else {
@@ -775,6 +873,22 @@ export default function TermDetails() {
       if (res.ok) {
         const newSection = await res.json();
         setSections([...sections, newSection]);
+        // Audit log: Section Added
+        try {
+          const token = localStorage.getItem('token');
+          fetch(`${API_BASE}/audit-log`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'Section Added',
+              details: `Added Section "${newSection.sectionName}" (Grade ${newSection.gradeLevel}) under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+              userRole: 'admin'
+            })
+          }).catch(() => {});
+        } catch {}
         window.alert('Section added successfully!');
         setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' }); // Clear form
       } else {
@@ -797,7 +911,6 @@ export default function TermDetails() {
     });
     setIsSectionModalOpen(true);
   };
-
   const handleUpdateSection = async (e) => {
     e.preventDefault();
     setSectionError('');
@@ -833,6 +946,26 @@ export default function TermDetails() {
           setSections(sections.map(section =>
             section._id === editingSection._id ? updatedSection : section
           ));
+          // Audit log: Section Edited
+          try {
+            const token = localStorage.getItem('token');
+            const oldName = editingSection?.sectionName;
+            const newName = sectionFormData.sectionName.trim();
+            const oldGrade = editingSection?.gradeLevel;
+            const newGrade = sectionFormData.gradeLevel;
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Section Edited',
+                details: `Edited Section "${oldName}" (Grade ${oldGrade}) to "${newName}" (Grade ${newGrade}) under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           window.alert('Section updated successfully!');
           setIsSectionEditMode(false);
           setEditingSection(null);
@@ -887,6 +1020,22 @@ export default function TermDetails() {
           fetchSections();
           fetchFacultyAssignments();
           fetchStudentAssignments();
+          // Audit log: Section Deleted
+          try {
+            const token = localStorage.getItem('token');
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Section Deleted',
+                details: `Deleted Section "${section.sectionName}" (Grade ${section.gradeLevel}) under Track "${section.trackName}" / Strand "${section.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           
           window.alert('Section and all connected data deleted successfully!');
         } else {
@@ -937,7 +1086,6 @@ export default function TermDetails() {
     return selectedTrack && selectedStrand && section.trackName === selectedTrack.trackName && section.strandName === selectedStrand.strandName &&
       section.gradeLevel === studentFormData.gradeLevel; // Added gradeLevel filter
   });
-
   // Handle change for Faculty form (updated to include search)
   const handleChangeFacultyForm = async (e) => {
     const { name, value } = e.target;
@@ -1175,6 +1323,22 @@ export default function TermDetails() {
       });
 
       if (res.ok) {
+        const newAssignment = await res.json();
+        // Audit log: Faculty Assignment Added
+        try {
+          fetch(`${API_BASE}/audit-log`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'Faculty Assignment Added',
+              details: `Assigned Faculty "${facultyToAssign.firstname} ${facultyToAssign.lastname}" to Section "${selectedSection.sectionName}" (Grade ${facultyFormData.gradeLevel}) for Subject "${facultyFormData.subjectName}" under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+              userRole: 'admin'
+            })
+          }).catch(() => {});
+        } catch {}
         window.alert('Faculty assigned successfully!');
         fetchFacultyAssignments(); // Refresh assignments list using the new API
         setFacultyFormData({ facultyId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '', subjectName: '' }); // Clear form
@@ -1216,7 +1380,6 @@ export default function TermDetails() {
     });
     setIsFacultyModalOpen(true);
   };
-
   // Handle Update Faculty Assignment (updated to use facultySearchTerm and selected facultyId)
   const handleUpdateFacultyAssignment = async (e) => {
     e.preventDefault();
@@ -1270,6 +1433,25 @@ export default function TermDetails() {
         });
 
         if (res.ok) {
+          const updatedAssignment = await res.json();
+          // Audit log: Faculty Assignment Edited
+          try {
+            const oldFaculty = faculties.find(f => f._id === editingFacultyAssignment.facultyId);
+            const oldFacultyName = oldFaculty ? `${oldFaculty.firstname} ${oldFaculty.lastname}` : 'Unknown';
+            const newFacultyName = `${facultyToAssign.firstname} ${facultyToAssign.lastname}`;
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Faculty Assignment Edited',
+                details: `Edited Faculty Assignment from "${oldFacultyName}" to "${newFacultyName}" for Section "${selectedSection.sectionName}" (Grade ${facultyFormData.gradeLevel}) Subject "${facultyFormData.subjectName}" under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           window.alert('Faculty assignment updated successfully!');
           fetchFacultyAssignments(); // Refresh assignments list
           setIsFacultyEditMode(false);
@@ -1300,6 +1482,23 @@ export default function TermDetails() {
         });
 
         if (res.ok) {
+          // Audit log: Faculty Assignment Deleted
+          try {
+            const faculty = faculties.find(f => f._id === assignment.facultyId);
+            const facultyName = faculty ? `${faculty.firstname} ${faculty.lastname}` : 'Unknown';
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Faculty Assignment Deleted',
+                details: `Removed Faculty Assignment for "${facultyName}" from Section "${assignment.sectionName}" (Grade ${assignment.gradeLevel}) Subject "${assignment.subjectName}" under Track "${assignment.trackName}" / Strand "${assignment.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           window.alert('Faculty assignment removed successfully!');
           fetchFacultyAssignments(); // Refresh assignments list
         } else {
@@ -1326,6 +1525,23 @@ export default function TermDetails() {
         });
 
         if (res.ok) {
+          // Audit log: Faculty Assignment Unarchived
+          try {
+            const faculty = faculties.find(f => f._id === assignment.facultyId);
+            const facultyName = faculty ? `${faculty.firstname} ${faculty.lastname}` : 'Unknown';
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Faculty Assignment Unarchived',
+                details: `Unarchived Faculty Assignment for "${facultyName}" from Section "${assignment.sectionName}" (Grade ${assignment.gradeLevel}) Subject "${assignment.subjectName}" under Track "${assignment.trackName}" / Strand "${assignment.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           window.alert('Faculty assignment unarchived successfully!');
           fetchFacultyAssignments(); // Refresh assignments list
         } else {
@@ -1378,6 +1594,22 @@ export default function TermDetails() {
       });
 
       if (res.ok) {
+        const newAssignment = await res.json();
+        // Audit log: Student Assignment Added
+        try {
+          fetch(`${API_BASE}/audit-log`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'Student Assignment Added',
+              details: `Assigned Student "${studentToAssign.firstname} ${studentToAssign.lastname}" to Section "${selectedSection.sectionName}" (Grade ${studentFormData.gradeLevel}) under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+              userRole: 'admin'
+            })
+          }).catch(() => {});
+        } catch {}
         window.alert('Student assigned successfully!');
         fetchStudentAssignments();
         setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
@@ -1419,7 +1651,6 @@ export default function TermDetails() {
       gradeLevel: assignment.gradeLevel || '', // Populate gradeLevel
     });
   };
-
   const handleUpdateStudentAssignment = async (e) => {
     e.preventDefault();
     setStudentError('');
@@ -1459,6 +1690,26 @@ export default function TermDetails() {
         });
 
         if (res.ok) {
+          const updatedAssignment = await res.json();
+          // Audit log: Student Assignment Edited
+          try {
+            const oldStudent = students.find(s => s._id === editingStudentAssignment.studentId);
+            const oldStudentName = oldStudent ? `${oldStudent.firstname} ${oldStudent.lastname}` : editingStudentAssignment.studentName || 'Unknown';
+            const newStudent = students.find(s => s._id === studentFormData.studentId);
+            const newStudentName = newStudent ? `${newStudent.firstname} ${newStudent.lastname}` : 'Unknown';
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Student Assignment Edited',
+                details: `Edited Student Assignment from "${oldStudentName}" to "${newStudentName}" for Section "${selectedSection.sectionName}" (Grade ${studentFormData.gradeLevel}) under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           window.alert('Student assignment updated successfully!');
           fetchStudentAssignments();
           setIsStudentEditMode(false);
@@ -1488,6 +1739,23 @@ export default function TermDetails() {
         });
 
         if (res.ok) {
+          // Audit log: Student Assignment Deleted
+          try {
+            const student = students.find(s => s._id === assignment.studentId);
+            const studentName = student ? `${student.firstname} ${student.lastname}` : assignment.studentName || 'Unknown';
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Student Assignment Deleted',
+                details: `Removed Student Assignment for "${studentName}" from Section "${assignment.sectionName}" (Grade ${assignment.gradeLevel}) under Track "${assignment.trackName}" / Strand "${assignment.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           window.alert('Student assignment removed successfully!');
           fetchStudentAssignments();
         } else {
@@ -1514,6 +1782,23 @@ export default function TermDetails() {
         });
 
         if (res.ok) {
+          // Audit log: Student Assignment Unarchived
+          try {
+            const student = students.find(s => s._id === assignment.studentId);
+            const studentName = student ? `${student.firstname} ${student.lastname}` : assignment.studentName || 'Unknown';
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Student Assignment Unarchived',
+                details: `Unarchived Student Assignment for "${studentName}" from Section "${assignment.sectionName}" (Grade ${assignment.gradeLevel}) under Track "${assignment.trackName}" / Strand "${assignment.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           window.alert('Student assignment unarchived successfully!');
           fetchStudentAssignments(); // Refresh assignments list
         } else {
@@ -1573,7 +1858,6 @@ export default function TermDetails() {
       setError('Failed to generate template. Please try again.');
     }
   };
-
   const validateTracks = async (tracksToValidate) => {
     const status = {};
     const trackNames = new Set();
@@ -1704,6 +1988,22 @@ export default function TermDetails() {
       if (res.ok) {
         const newTracks = await res.json();
         setTracks([...tracks, ...newTracks]);
+        // Audit log: Batch Upload Tracks
+        try {
+          const token = localStorage.getItem('token');
+          fetch(`${API_BASE}/audit-log`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'Batch Upload Tracks',
+              details: `Uploaded ${validTracks.length} Tracks for ${termDetails.schoolYear} ${termDetails.termName}`,
+              userRole: 'admin'
+            })
+          }).catch(() => {});
+        } catch {}
         window.alert(`${validTracks.length} tracks uploaded successfully!`);
         setExcelFile(null);
         setPreviewModalOpen(false);
@@ -1847,7 +2147,6 @@ export default function TermDetails() {
     }
     return status;
   };
-
   const handleStrandExcelFile = async (e) => {
     const file = e.target.files[0];
     setStrandError('');
@@ -2273,6 +2572,22 @@ export default function TermDetails() {
       }
 
       setSections([...sections, ...createdSections]);
+      // Audit log: Batch Upload Sections
+      try {
+        const token = localStorage.getItem('token');
+        fetch(`${API_BASE}/audit-log`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Batch Upload Sections',
+            details: `Uploaded ${validSections.length} Sections for ${termDetails.schoolYear} ${termDetails.termName}`,
+            userRole: 'admin'
+          })
+        }).catch(() => {});
+      } catch {}
       window.alert(`${validSections.length} sections uploaded successfully!`);
       setSectionExcelFile(null);
       setSectionPreviewModalOpen(false);
@@ -2285,7 +2600,6 @@ export default function TermDetails() {
       setIsSectionUploading(false);
     }
   };
-
   // Add new functions for faculty assignment Excel handling
   const downloadFacultyAssignmentTemplate = async () => {
     try {
@@ -2420,7 +2734,6 @@ export default function TermDetails() {
       setFacultyError('Failed to generate template. Please try again.');
     }
   };
-
   const validateFacultyAssignments = async (assignmentsToValidate) => {
     const status = {};
     const uploadedAssignmentCombos = new Set(); // For duplicates within the uploaded file
@@ -2694,6 +3007,21 @@ export default function TermDetails() {
 
       // Refresh the faculty assignments list after successful upload
       fetchFacultyAssignments();
+      // Audit log: Batch Upload Faculty Assignments
+      try {
+        fetch(`${API_BASE}/audit-log`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Batch Upload Faculty Assignments',
+            details: `Uploaded ${createdAssignments.length} Faculty Assignments for ${termDetails.schoolYear} ${termDetails.termName}`,
+            userRole: 'admin'
+          })
+        }).catch(() => {});
+      } catch {}
       window.alert(`${createdAssignments.length} faculty assignment(s) uploaded successfully!`);
       setFacultyAssignmentExcelFile(null);
       setFacultyAssignmentPreviewModalOpen(false);
@@ -2706,7 +3034,6 @@ export default function TermDetails() {
       setIsFacultyAssignmentUploading(false);
     }
   };
-
   // Download Student Assignment Template
   const downloadStudentAssignmentTemplate = async () => {
     try {
@@ -2994,7 +3321,6 @@ export default function TermDetails() {
     }
     return status;
   };
-
   // Handle Excel File Upload for Student Assignments
   const handleStudentAssignmentExcelFile = async (e) => {
     setStudentExcelError('');
@@ -3084,7 +3410,6 @@ export default function TermDetails() {
       console.error(err);
     }
   };
-
   // Handle Confirm Student Assignment Upload
   const handleConfirmStudentAssignmentUpload = async () => {
     const validAssignments = studentPreviewData.filter((_, index) => studentValidationStatus[index]?.valid);
@@ -3140,6 +3465,21 @@ export default function TermDetails() {
 
       // Refresh the student assignments list after successful upload
       fetchStudentAssignments();
+      // Audit log: Batch Upload Student Assignments
+      try {
+        fetch(`${API_BASE}/audit-log`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Batch Upload Student Assignments',
+            details: `Uploaded ${createdAssignments.length} Student Assignments for ${termDetails.schoolYear} ${termDetails.termName}`,
+            userRole: 'admin'
+          })
+        }).catch(() => {});
+      } catch {}
       window.alert(`${createdAssignments.length} student assignment(s) uploaded successfully!`);
       setStudentExcelFile(null);
       setStudentPreviewModalOpen(false);
@@ -3180,7 +3520,6 @@ export default function TermDetails() {
     const { name, value } = e.target;
     setSubjectFormData(prev => ({ ...prev, [name]: value }));
   };
-
   const handleAddSubject = async (e) => {
     e.preventDefault();
     setSubjectError('');
@@ -3199,7 +3538,24 @@ export default function TermDetails() {
         })
       });
       if (res.ok) {
+        const newSubject = await res.json();
         await fetchSubjects();
+        // Audit log: Subject Added
+        try {
+          const token = localStorage.getItem('token');
+          fetch(`${API_BASE}/audit-log`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'Subject Added',
+              details: `Added Subject "${newSubject.subjectName}" (Grade ${newSubject.gradeLevel}) under Track "${newSubject.trackName}" / Strand "${newSubject.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+              userRole: 'admin'
+            })
+          }).catch(() => {});
+        } catch {}
         setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' });
         window.alert('Subject added successfully!');
       } else {
@@ -3210,7 +3566,6 @@ export default function TermDetails() {
       setSubjectError('Error adding subject');
     }
   };
-
   const handleEditSubject = (subject) => {
     setIsSubjectEditMode(true);
     setEditingSubject(subject);
@@ -3241,7 +3596,28 @@ export default function TermDetails() {
         })
       });
       if (res.ok) {
+        const updatedSubject = await res.json();
         await fetchSubjects();
+        // Audit log: Subject Edited
+        try {
+          const token = localStorage.getItem('token');
+          const oldName = editingSubject?.subjectName;
+          const newName = subjectFormData.subjectName;
+          const oldGrade = editingSubject?.gradeLevel;
+          const newGrade = subjectFormData.gradeLevel;
+          fetch(`${API_BASE}/audit-log`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'Subject Edited',
+              details: `Edited Subject "${oldName}" (Grade ${oldGrade}) to "${newName}" (Grade ${newGrade}) under Track "${subjectFormData.trackName}" / Strand "${subjectFormData.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+              userRole: 'admin'
+            })
+          }).catch(() => {});
+        } catch {}
         setIsSubjectEditMode(false);
         setEditingSubject(null);
         setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' });
@@ -3293,6 +3669,22 @@ export default function TermDetails() {
           // Refresh all data since we may have deleted related records
           fetchSubjects();
           fetchFacultyAssignments();
+          // Audit log: Subject Deleted
+          try {
+            const token = localStorage.getItem('token');
+            fetch(`${API_BASE}/audit-log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'Subject Deleted',
+                details: `Deleted Subject "${subject.subjectName}" (Grade ${subject.gradeLevel}) under Track "${subject.trackName}" / Strand "${subject.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+                userRole: 'admin'
+              })
+            }).catch(() => {});
+          } catch {}
           
           window.alert('Subject and all connected data deleted successfully!');
         } else {
@@ -3562,6 +3954,22 @@ export default function TermDetails() {
         }
       }
       await fetchSubjects();
+      // Audit log: Batch Upload Subjects
+      try {
+        const token = localStorage.getItem('token');
+        fetch(`${API_BASE}/audit-log`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Batch Upload Subjects',
+            details: `Uploaded ${validSubjects.length} Subjects for ${termDetails.schoolYear} ${termDetails.termName}`,
+            userRole: 'admin'
+          })
+        }).catch(() => {});
+      } catch {}
       window.alert(`${validSubjects.length} subject(s) uploaded successfully!`);
       setSubjectExcelFile(null);
       setSubjectPreviewModalOpen(false);
@@ -3591,13 +3999,28 @@ export default function TermDetails() {
       const ws = XLSX.utils.aoa_to_sheet(tracksData);
       XLSX.utils.book_append_sheet(wb, ws, 'Active Tracks');
       XLSX.writeFile(wb, 'active_tracks.xlsx');
+      // Audit log: Extract Tracks
+      try {
+        const token = localStorage.getItem('token');
+        fetch(`${API_BASE}/audit-log`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Extract Tracks',
+            details: `Extracted Tracks for ${termDetails.schoolYear} ${termDetails.termName}`,
+            userRole: 'admin'
+          })
+        }).catch(() => {});
+      } catch {}
     } catch (error) {
       console.error('Error extracting tracks to Excel:', error);
       // Optionally, show an alert to the user
       alert('Failed to extract tracks to Excel. Please try again.');
     }
   };
-
   const extractStrandsToExcel = () => {
     try {
       const wb = XLSX.utils.book_new();
@@ -3618,6 +4041,22 @@ export default function TermDetails() {
       const ws = XLSX.utils.aoa_to_sheet(strandsData);
       XLSX.utils.book_append_sheet(wb, ws, 'Current Strands');
       XLSX.writeFile(wb, 'current_strands.xlsx');
+      // Audit log: Extract Strands
+      try {
+        const token = localStorage.getItem('token');
+        fetch(`${API_BASE}/audit-log`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Extract Strands',
+            details: `Extracted Strands for ${termDetails.schoolYear} ${termDetails.termName}`,
+            userRole: 'admin'
+          })
+        }).catch(() => {});
+      } catch {}
     } catch (error) {
       console.error('Error extracting strands to Excel:', error);
       alert('Failed to extract strands to Excel. Please try again.');
@@ -3642,12 +4081,27 @@ export default function TermDetails() {
       const ws = XLSX.utils.aoa_to_sheet(sectionsData);
       XLSX.utils.book_append_sheet(wb, ws, 'Active Sections');
       XLSX.writeFile(wb, 'active_sections.xlsx');
+      // Audit log: Extract Sections
+      try {
+        const token = localStorage.getItem('token');
+        fetch(`${API_BASE}/audit-log`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Extract Sections',
+            details: `Extracted Sections for ${termDetails.schoolYear} ${termDetails.termName}`,
+            userRole: 'admin'
+          })
+        }).catch(() => {});
+      } catch {}
     } catch (error) {
       console.error('Error extracting sections to Excel:', error);
       alert('Failed to extract sections to Excel. Please try again.');
     }
   };
-
   const extractSubjectsToExcel = () => {
     try {
       const wb = XLSX.utils.book_new();
@@ -3666,12 +4120,27 @@ export default function TermDetails() {
       const ws = XLSX.utils.aoa_to_sheet(subjectsData);
       XLSX.utils.book_append_sheet(wb, ws, 'Active Subjects');
       XLSX.writeFile(wb, 'active_subjects.xlsx');
+      // Audit log: Extract Subjects
+      try {
+        const token = localStorage.getItem('token');
+        fetch(`${API_BASE}/audit-log`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Extract Subjects',
+            details: `Extracted Subjects for ${termDetails.schoolYear} ${termDetails.termName}`,
+            userRole: 'admin'
+          })
+        }).catch(() => {});
+      } catch {}
     } catch (error) {
       console.error('Error extracting subjects to Excel:', error);
       alert('Failed to extract subjects to Excel. Please try again.');
     }
   };
-
   const extractFacultiesToExcel = () => {
     try {
       const wb = XLSX.utils.book_new();
@@ -3692,6 +4161,22 @@ export default function TermDetails() {
       const ws = XLSX.utils.aoa_to_sheet(facultyAssignmentData);
       XLSX.utils.book_append_sheet(wb, ws, 'Active Faculty Assignments');
       XLSX.writeFile(wb, 'active_faculty_assignments.xlsx');
+      // Audit log: Extract Faculty
+      try {
+        const token = localStorage.getItem('token');
+        fetch(`${API_BASE}/audit-log`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Extract Faculty',
+            details: `Extracted Faculty Assignments for ${termDetails.schoolYear} ${termDetails.termName}`,
+            userRole: 'admin'
+          })
+        }).catch(() => {});
+      } catch {}
     } catch (error) {
       console.error('Error extracting faculty assignments to Excel:', error);
       alert('Failed to extract faculty assignments to Excel. Please try again.');
@@ -3717,12 +4202,27 @@ export default function TermDetails() {
       const ws = XLSX.utils.aoa_to_sheet(studentAssignmentData);
       XLSX.utils.book_append_sheet(wb, ws, 'Active Student Assignments');
       XLSX.writeFile(wb, 'active_student_assignments.xlsx');
+      // Audit log: Extract Student
+      try {
+        const token = localStorage.getItem('token');
+        fetch(`${API_BASE}/audit-log`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Extract Student',
+            details: `Extracted Student Assignments for ${termDetails.schoolYear} ${termDetails.termName}`,
+            userRole: 'admin'
+          })
+        }).catch(() => {});
+      } catch {}
     } catch (error) {
       console.error('Error extracting student assignments to Excel:', error);
       alert('Failed to extract student assignments to Excel. Please try again.');
     }
   };
-
   const handleImportExcelFile = async (e) => {
     const file = e.target.files[0];
     setImportError('');
@@ -3976,7 +4476,6 @@ export default function TermDetails() {
     setValidationResults(results);
     setValidationModalOpen(true);
   };
-
   // Handle Confirm Import Upload
   const handleConfirmImportUpload = async () => {
     if (!importExcelFile) return;
@@ -4234,7 +4733,6 @@ Successfully processed ${importedCount} new entries.`;
       if (skippedCount > 0) {
         alertMessage += `
 Skipped ${skippedCount} duplicate or invalid entries:
-
 Validation issues (${skippedCount} items):
 - ${skippedMessages.join('\n- ')}`;
       }
@@ -4269,6 +4767,23 @@ Validation issues (${skippedCount} items):
       fetchStudents();
       fetchFacultyAssignments();
       fetchStudentAssignments();
+
+      // Audit log: Import Term Data
+      try {
+        const token = localStorage.getItem('token');
+        fetch(`${API_BASE}/audit-log`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Import Term Data',
+            details: `Imported term data for ${termDetails.schoolYear} ${termDetails.termName} (Imported: ${importedCount}, Skipped: ${skippedCount})`,
+            userRole: 'admin'
+          })
+        }).catch(() => {});
+      } catch {}
 
     } catch (err) {
       setImportError(err.message || 'Error during import.');
@@ -4328,7 +4843,6 @@ Validation issues (${skippedCount} items):
   const uniqueStrandNames = Array.from(
     new Set(filteredStrands.map(strand => strand.strandName))
   );
-
   return (
     
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -4493,10 +5007,26 @@ Validation issues (${skippedCount} items):
 
                       // Save the workbook
                       XLSX.writeFile(wb, `${termDetails.schoolYear}_${termDetails.termName}_data.xlsx`);
+                      // Audit: Export Term Data (button)
+                      try {
+                        const token = localStorage.getItem('token');
+                        fetch(`${API_BASE}/audit-log`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          },
+                          body: JSON.stringify({
+                            action: 'Export Term Data',
+                            details: `Exported full term data for ${termDetails.schoolYear} ${termDetails.termName}`,
+                            userRole: 'admin'
+                          })
+                        }).catch(() => {});
+                      } catch {}
                     }}
                     className="bg-yellow-400 text-white py-2 px-4 rounded-md hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2"
                   >
-                    Extract Term Data
+                    Export Term Data
                   </button>
                   {/* Hidden file input for import */}
                   <input
@@ -4666,7 +5196,6 @@ Validation issues (${skippedCount} items):
        </div>
      </div>
    )}
-
             {activeTab === 'tracks' && (
               <div>
                 {termDetails.status === 'archived' && (
@@ -5268,7 +5797,6 @@ Validation issues (${skippedCount} items):
                 )}
               </div>
             )}
-
             {/* SUBJECTS */}
             {activeTab === 'subjects' && (
               <div>
@@ -5377,7 +5905,11 @@ Validation issues (${skippedCount} items):
                             <label className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
                             <select name="strandName" value={subjectFormData.strandName} onChange={handleChangeSubjectForm} className="w-full px-3 py-2 border border-gray-300 rounded-md" required disabled={termDetails.status === 'archived'}>
                               <option value="">Select Strand</option>
-                              {[...new Map(strands.filter(strand => strand.trackName === subjectFormData.trackName).map(strand => [strand.strandName, strand])).values()].map(strand => (
+                              {[...new Map(
+                                strands
+                                  .filter(strand => strand.trackName === subjectFormData.trackName)
+                                  .map(strand => [strand.strandName, strand])
+                              ).values()].map(strand => (
                                 <option key={strand._id} value={strand.strandName}>{strand.strandName}</option>
                               ))}
                             </select>
@@ -5571,7 +6103,6 @@ Validation issues (${skippedCount} items):
                 )}
               </div>
             )}
-
             {/* FACULTY TAB */}
             {activeTab === 'faculty' && (
               <div className="">
@@ -6000,7 +6531,6 @@ Validation issues (${skippedCount} items):
                 )}
               </div>
             )}
-          
             {/* STUDENTS TAB */}
             {activeTab === 'students' && (
               <div className="">
@@ -6486,7 +7016,6 @@ Validation issues (${skippedCount} items):
           </div>
         </div>
       )}
-
       {/* Import Term Data Modal */}
       {importModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -6789,7 +7318,6 @@ Validation issues (${skippedCount} items):
           </div>
         </div>
       )}
-
       {/* Validation Results Modal */}
       {validationModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -6968,7 +7496,6 @@ const validateImportData = async (data, existingData, termDetails) => {
 
   return validationResults;
 };
-
 // Individual validation functions (stubs for now, will implement logic later)
 const validateTracksImport = async (tracksToValidate, existingTracks, termDetails) => {
   const results = [];
@@ -7129,7 +7656,6 @@ const validateFacultyAssignmentsImport = async (assignmentsToValidate, existingA
   }
   return results;
 };
-
 const validateStudentAssignmentsImport = async (assignmentsToValidate, existingAssignments, allStudents, allTracks, allStrands, allSections, termDetails) => {
   const results = [];
   const activeAssignments = existingAssignments.filter(a => a.status === 'active' && a.schoolYear === termDetails.schoolYear && a.termName === termDetails.termName);

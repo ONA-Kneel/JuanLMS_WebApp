@@ -361,7 +361,7 @@ export default function Admin_AcademicSettings() {
 
       // Show confirmation modal
       setConfirmMessage("Save changes to this school year?");
-      setConfirmAction(() => {
+      setConfirmAction(() => () => {
         // This will be executed when confirmed
         handleEditSubmitInternal();
       });
@@ -431,7 +431,7 @@ export default function Admin_AcademicSettings() {
     
          // Show confirmation modal
      setConfirmMessage(`Are you sure you want to archive ${term.termName}?`);
-     setConfirmAction(() => {
+     setConfirmAction(() => () => {
        handleArchiveTermInternal(term);
      });
      setShowConfirmModal(true);
@@ -474,7 +474,7 @@ export default function Admin_AcademicSettings() {
     
          // Show confirmation modal
      setConfirmMessage(`Are you sure you want to activate ${term.termName}?`);
-     setConfirmAction(() => {
+     setConfirmAction(() => () => {
        handleActivateTermInternal(term);
      });
      setShowConfirmModal(true);
@@ -794,7 +794,10 @@ export default function Admin_AcademicSettings() {
       });
       const res = await fetch(`${API_BASE}/api/terms/${editingTerm._id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
           startDate: editTermFormData.startDate,
           endDate: editTermFormData.endDate
@@ -839,7 +842,10 @@ export default function Admin_AcademicSettings() {
       console.log('Sending status update:', { status: newStatus });
       const res = await fetch(`${API_BASE}/api/terms/${term._id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({ status: newStatus })
       });
       
