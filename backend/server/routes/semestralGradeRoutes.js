@@ -3,6 +3,7 @@ import { authenticateToken } from '../middleware/authMiddleware.js';
 import SemestralGrade from '../models/SemestralGrade.js';
 import User from '../models/User.js';
 import Class from '../models/Class.js';
+import SemestralDraft from '../models/SemestralDraft.js';
 
 const router = express.Router();
 
@@ -334,6 +335,43 @@ router.post('/save-bulk', authenticateToken, async (req, res) => {
       message: 'Failed to save bulk grades',
       error: error.message
     });
+  }
+});
+
+// Save or update draft for a single student (NOT posted)
+router.post('/save-draft', authenticateToken, async (req, res) => {
+  try {
+    const { schoolID, subjectCode, classID, section, academicYear, termName, facultyID, grades, breakdownByQuarter, studentId, studentName } = req.body;
+    if (!schoolID || !subjectCode || !classID || !section || !academicYear || !termName || !facultyID) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+    const filter = { schoolID, subjectCode, academicYear, termName };
+    const update = {
+      schoolID, subjectCode, classID, section, academicYear, termName, facultyID,
+      studentId, studentName,
+      grades: grades || {},
+      breakdownByQuarter: breakdownByQuarter || {},
+      isLocked: false,
+      lastUpdated: new Date()
+    };
+    const options = { upsert: true, new: true };
+    const doc = await SemestralDraft.findOneAndUpdate(filter, update, options);
+    return res.json({ success: true, message: 'Draft saved', draft: doc });
+  } catch (e) {
+    console.error('save-draft error', e);
+    return res.status(500).json({ success: false, message: 'Failed to save draft' });
+  }
+});
+
+// Fetch drafts for a class
+router.get('/drafts/class/:classID', authenticateToken, async (req, res) => {
+  try {
+    const { classID } = req.params;
+    const { academicYear, termName } = req.query;
+    const drafts = await SemestralDraft.find({ classID, ...(academicYear && { academicYear }), ...(termName && { termName }) });
+    return res.json({ success: true, drafts });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: 'Failed to load drafts' });
   }
 });
 

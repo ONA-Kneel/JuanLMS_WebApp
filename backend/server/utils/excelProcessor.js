@@ -367,28 +367,124 @@ export function generateGradingTemplate(students, options = {}) {
     // Create workbook and worksheet
     const workbook = XLSX.utils.book_new();
 
-    // Prepare data
+    // Options and dynamic columns
+    const addRawHps = Boolean(options.addRawHps); // adds Raw and HPS numeric columns
+    const addPercentFormula = Boolean(options.addPercentFormula); // adds a Percent column with formula Raw/HPS
+    const customFormula = typeof options.formula === 'string' ? options.formula : null; // e.g. 'A{row}/B{row}'
+
+    // Build headers dynamically
+    const headers = ['Student Name'];
+    if (addRawHps) {
+      headers.push('Raw');
+      headers.push('HPS');
+    }
+    headers.push('Grade');
+    headers.push('Feedback');
+    if (addPercentFormula) headers.push('Percent');
+    if (customFormula) headers.push('Computed');
+
+    // Prepare data rows (values only; formulas applied after sheet creation)
     const data = [
-      ['Student Name', 'Grade', 'Feedback'],
-      ...students.map(student => [
-        `${student.firstname} ${student.lastname}`,
-        '',
-        ''
-      ])
+      headers,
+      ...students.map(student => {
+        const row = [];
+        // Student Name
+        row.push(`${student.firstname} ${student.lastname}`);
+        // Raw/HPS (optional)
+        if (addRawHps) {
+          row.push(''); // Raw
+          row.push(''); // HPS
+        }
+        // Grade and Feedback
+        row.push(''); // Grade
+        row.push(''); // Feedback
+        // Percent (placeholder)
+        if (addPercentFormula) row.push('');
+        // Computed (placeholder)
+        if (customFormula) row.push('');
+        return row;
+      })
     ];
 
     // Create worksheet
     const worksheet = XLSX.utils.aoa_to_sheet(data);
 
     // Set column widths
-    worksheet['!cols'] = [
-      { width: 25 }, // Student Name
-      { width: 10 }, // Grade
-      { width: 30 }  // Feedback
-    ];
+    const cols = [];
+    // Student Name
+    cols.push({ width: 25 });
+    // Raw/HPS
+    if (addRawHps) {
+      cols.push({ width: 10 }); // Raw
+      cols.push({ width: 10 }); // HPS
+    }
+    // Grade
+    cols.push({ width: 10 });
+    // Feedback
+    cols.push({ width: 30 });
+    // Percent
+    if (addPercentFormula) cols.push({ width: 12 });
+    // Computed
+    if (customFormula) cols.push({ width: 14 });
+    worksheet['!cols'] = cols;
+
+    // Apply formulas after sheet creation
+    const headerRowIndex = 1; // 1-based in Excel
+    const firstDataRowIndex = headerRowIndex + 1; // 2
+    const totalRows = students.length;
+
+    // Helper to find column index by header label (0-based)
+    const findColumnIndex = (label) => {
+      const headerRow = headers;
+      return headerRow.findIndex(h => h === label);
+    };
+
+    // Fill Percent formulas if requested and Raw/HPS present
+    if (addPercentFormula && addRawHps) {
+      const percentCol = findColumnIndex('Percent');
+      const rawCol = findColumnIndex('Raw');
+      const hpsCol = findColumnIndex('HPS');
+      if (percentCol !== -1 && rawCol !== -1 && hpsCol !== -1) {
+        for (let i = 0; i < totalRows; i++) {
+          const excelRow = firstDataRowIndex + i; // 2..n
+          // Convert 0-based col index to Excel letter
+          const colLetter = (idx) => XLSX.utils.encode_col(idx);
+          const percentCellRef = `${colLetter(percentCol)}${excelRow}`;
+          const rawRef = `${colLetter(rawCol)}${excelRow}`;
+          const hpsRef = `${colLetter(hpsCol)}${excelRow}`;
+          worksheet[percentCellRef] = { t: 'n', f: `IFERROR(${rawRef}/${hpsRef},0)` };
+        }
+      }
+    }
+
+    // Fill custom formula if provided (supports {row} placeholder)
+    if (customFormula) {
+      const computedCol = findColumnIndex('Computed');
+      if (computedCol !== -1) {
+        for (let i = 0; i < totalRows; i++) {
+          const excelRow = firstDataRowIndex + i;
+          const colLetter = (idx) => XLSX.utils.encode_col(idx);
+          const cellRef = `${colLetter(computedCol)}${excelRow}`;
+          const f = customFormula.replace(/\{row\}/g, String(excelRow));
+          worksheet[cellRef] = { t: 'n', f };
+        }
+      }
+    }
 
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Grades');
+
+    // Add Info sheet with metadata (academic year, term, quarter)
+    const infoRows = [
+      ['JuanLMS Grading Export Info'],
+      ['Academic Year', options.academicYear || ''],
+      ['Term', options.termName || ''],
+      ['Quarter', options.quarter || ''],
+      ['Generated At', new Date().toISOString()]
+    ];
+    const infoSheet = XLSX.utils.aoa_to_sheet(infoRows);
+    infoSheet['!cols'] = [{ width: 20 }, { width: 30 }];
+    XLSX.utils.book_append_sheet(workbook, infoSheet, 'Info');
 
     // Generate buffer
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
@@ -440,3 +536,93 @@ export function validateExcelStructure(fileBuffer) {
     };
   }
 } 
+
+/**
+ * Generate a quarter-scoped class list with WW/PT Raw/HPS/PS/WS and grades.
+ * Input studentsData: [{ studentName, wwRaw, wwHps, ptRaw, ptHps }]
+ * Options: { academicYear, termName, quarter, wwWeight=0.4, ptWeight=0.6 }
+ */
+export function generateQuarterSummaryClassList(studentsData, options = {}) {
+  try {
+    const workbook = XLSX.utils.book_new();
+
+    const wwWeight = options.wwWeight != null ? Number(options.wwWeight) : 0.4;
+    const ptWeight = options.ptWeight != null ? Number(options.ptWeight) : 0.6;
+
+    const headers = [
+      'Student Name',
+      'WW Raw', 'WW HPS', 'WW PS', 'WW WS',
+      'PT Raw', 'PT HPS', 'PT PS', 'PT WS',
+      'Initial Grade', 'Quarterly Exam', 'Final Grade'
+    ];
+
+    const data = [
+      headers,
+      ...studentsData.map(s => [
+        s.studentName || '',
+        Number(s.wwRaw || 0), Number(s.wwHps || 0), '', '',
+        Number(s.ptRaw || 0), Number(s.ptHps || 0), '', '',
+        '', '', ''
+      ])
+    ];
+
+    const sheet = XLSX.utils.aoa_to_sheet(data);
+
+    // Column widths
+    sheet['!cols'] = [
+      { width: 28 },
+      { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 },
+      { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 },
+      { width: 14 }, { width: 14 }, { width: 12 }
+    ];
+
+    // Apply per-row formulas
+    const firstDataRow = 2; // row 1 is headers
+    for (let i = 0; i < studentsData.length; i++) {
+      const r = firstDataRow + i; // Excel row number
+      const c = (idx) => XLSX.utils.encode_col(idx);
+
+      // Indices of columns
+      const col = {
+        wwRaw: 1, wwHps: 2, wwPs: 3, wwWs: 4,
+        ptRaw: 5, ptHps: 6, ptPs: 7, ptWs: 8,
+        initial: 9, qExam: 10, final: 11
+      };
+
+      // PS = IFERROR(RAW/HPS*100,0)
+      sheet[`${c(col.wwPs)}${r}`] = { t: 'n', f: `IFERROR(${c(col.wwRaw)}${r}/${c(col.wwHps)}${r}*100,0)` };
+      sheet[`${c(col.ptPs)}${r}`] = { t: 'n', f: `IFERROR(${c(col.ptRaw)}${r}/${c(col.ptHps)}${r}*100,0)` };
+
+      // WS = PS * weight
+      sheet[`${c(col.wwWs)}${r}`] = { t: 'n', f: `${c(col.wwPs)}${r}*${wwWeight}` };
+      sheet[`${c(col.ptWs)}${r}`] = { t: 'n', f: `${c(col.ptPs)}${r}*${ptWeight}` };
+
+      // Initial Grade = ROUND(WS_WW + WS_PT, 0)
+      sheet[`${c(col.initial)}${r}`] = { t: 'n', f: `ROUND(${c(col.wwWs)}${r}+${c(col.ptWs)}${r},0)` };
+
+      // Quarterly Exam intentionally left blank for manual input
+
+      // Final Grade for now mirrors Initial (professor may later adjust using exam)
+      sheet[`${c(col.final)}${r}`] = { t: 'n', f: `${c(col.initial)}${r}` };
+    }
+
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Quarter Grades');
+
+    // Info sheet
+    const infoRows = [
+      ['JuanLMS Quarter Export'],
+      ['Academic Year', options.academicYear || ''],
+      ['Term', options.termName || ''],
+      ['Quarter', options.quarter || ''],
+      ['Weights', `WW=${wwWeight*100}% PT=${ptWeight*100}%`],
+      ['Generated At', new Date().toISOString()]
+    ];
+    const infoSheet = XLSX.utils.aoa_to_sheet(infoRows);
+    infoSheet['!cols'] = [{ width: 18 }, { width: 32 }];
+    XLSX.utils.book_append_sheet(workbook, infoSheet, 'Info');
+
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+  } catch (err) {
+    throw new Error(`Error generating quarter summary: ${err.message}`);
+  }
+}

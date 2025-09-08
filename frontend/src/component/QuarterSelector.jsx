@@ -7,8 +7,6 @@ const QuarterSelector = ({ showTitle = true, className = "" }) => {
     globalTerm,
     globalAcademicYear,
     setGlobalQuarter,
-    setGlobalTerm,
-    setGlobalAcademicYear,
     getAvailableQuarters,
     getCurrentQuarterInfo
   } = useQuarter();
@@ -16,19 +14,9 @@ const QuarterSelector = ({ showTitle = true, className = "" }) => {
   const availableQuarters = getAvailableQuarters();
   const quarterInfo = getCurrentQuarterInfo();
 
-  const handleTermChange = (e) => {
-    const newTerm = e.target.value;
-    setGlobalTerm(newTerm);
-  };
-
   const handleQuarterChange = (e) => {
     const newQuarter = e.target.value;
     setGlobalQuarter(newQuarter);
-  };
-
-  const handleAcademicYearChange = (e) => {
-    const newYear = e.target.value;
-    setGlobalAcademicYear(newYear);
   };
 
   return (
@@ -40,35 +28,24 @@ const QuarterSelector = ({ showTitle = true, className = "" }) => {
       )}
       
       <div className="quarter-controls grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Academic Year Selection */}
+        {/* Academic Year Display (read-only) */}
         <div className="control-group">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Academic Year
           </label>
-          <select
-            value={globalAcademicYear}
-            onChange={handleAcademicYearChange}
-            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="2024-2025">2024-2025</option>
-            <option value="2025-2026">2025-2026</option>
-            <option value="2026-2027">2026-2027</option>
-          </select>
+          <div className="w-full p-2 border border-gray-200 rounded-md bg-gray-50 text-gray-700">
+            {globalAcademicYear}
+          </div>
         </div>
 
-        {/* Term Selection */}
+        {/* Term Display (read-only) */}
         <div className="control-group">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Term
           </label>
-          <select
-            value={globalTerm}
-            onChange={handleTermChange}
-            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="Term 1">Term 1</option>
-            <option value="Term 2">Term 2</option>
-          </select>
+          <div className="w-full p-2 border border-gray-200 rounded-md bg-gray-50 text-gray-700">
+            {globalTerm}
+          </div>
         </div>
 
         {/* Quarter Selection */}
@@ -112,7 +89,7 @@ const QuarterSelector = ({ showTitle = true, className = "" }) => {
       {/* Help Text */}
       <div className="help-text mt-2 text-xs text-gray-500">
         <p>
-          Select the quarter you're currently working on. This will filter activities and grades accordingly.
+          Select the quarter you're currently working on. Current term and academic year are read-only here.
         </p>
       </div>
     </div>

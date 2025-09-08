@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
+import QuarterSelector from "../QuarterSelector";
+import { useQuarter } from "../../context/QuarterContext.jsx";
 
 // Force localhost for local testing
 const API_BASE = import.meta.env.DEV ? "http://localhost:5000" : (import.meta.env.VITE_API_URL || "http://localhost:5000");
@@ -29,6 +31,11 @@ export default function Student_Activities() {
   const classFilterRef = useRef();
   const [studentClasses, setStudentClasses] = useState([]);
   const [debugMode, setDebugMode] = useState(false);
+
+  // Quarter context (shared with faculty)
+  const { globalQuarter, globalTerm, globalAcademicYear } = useQuarter();
+
+  // Students cannot export grades; removed export helper
 
   const tabs = [
     { id: "upcoming", label: "Upcoming" },
@@ -88,7 +95,7 @@ export default function Student_Activities() {
     fetchActiveTermForYear();
   }, [academicYear]);
 
-  // Fetch activities using the same robust logic as Student_Dashboard
+  // Fetch activities using the same robust logic as Student_Dashboard, scoped by quarter/term/year
   useEffect(() => {
     const fetchActivities = async () => {
       if (!academicYear || !currentTerm) return;
@@ -162,7 +169,7 @@ export default function Student_Activities() {
           
           try {
             // Fetch assignments for this class
-            const assignmentRes = await fetch(`${API_BASE}/assignments?classID=${classCode}`, {
+            const assignmentRes = await fetch(`${API_BASE}/assignments?classID=${classCode}&quarter=${encodeURIComponent(globalQuarter)}&termName=${encodeURIComponent(globalTerm)}&academicYear=${encodeURIComponent(globalAcademicYear)}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -207,7 +214,7 @@ export default function Student_Activities() {
             }
             
             // Fetch quizzes for this class
-            const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${classCode}`, {
+            const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${classCode}&quarter=${encodeURIComponent(globalQuarter)}&termName=${encodeURIComponent(globalTerm)}&academicYear=${encodeURIComponent(globalAcademicYear)}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -349,7 +356,7 @@ export default function Student_Activities() {
     if (academicYear && currentTerm) {
       fetchActivities();
     }
-  }, [academicYear, currentTerm]);
+  }, [academicYear, currentTerm, globalQuarter, globalTerm, globalAcademicYear]);
 
   // Click outside to close dropdowns
   useEffect(() => {
@@ -677,6 +684,17 @@ export default function Student_Activities() {
             </div>
           </div>
 
+          {/* Quarter Selector and current selection banner */}
+          <div className="mb-6">
+            <QuarterSelector />
+          </div>
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+            <p className="text-sm font-medium text-blue-800">
+              Showing activities for: <span className="font-semibold">{globalQuarter} - {globalTerm}</span>
+              <span className="text-blue-600 ml-2">({globalAcademicYear})</span>
+            </p>
+          </div>
+
           {/* Debug info */}
           {debugMode && (
             <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
@@ -827,6 +845,7 @@ export default function Student_Activities() {
                       Clear Filters
                     </button>
                   </div>
+                  {/* Export button removed for students */}
                 </div>
               </div>
             </div>
