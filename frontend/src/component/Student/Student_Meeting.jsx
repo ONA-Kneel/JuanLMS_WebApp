@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Student_Navbar from './Student_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import MeetingList from '../Meeting/MeetingList';
-import VideoMeetingRoom from '../Meeting/VideoMeetingRoom';
+import StreamMeetingRoom from '../Meeting/StreamMeetingRoom';
 import { Users, Video, Calendar } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
@@ -293,14 +293,20 @@ export default function Student_Meeting() {
           </>
         )}
 
-        {/* Video Meeting Room */}
+        {/* Stream Meeting Room */}
         {activeMeeting && (
-          <VideoMeetingRoom
+          <StreamMeetingRoom
             meetingData={activeMeeting}
             currentUser={userInfo}
             onLeave={handleLeaveMeeting}
             isOpen={!!activeMeeting}
-            isModerator={false}
+            isHost={false}
+            credentials={{
+              apiKey: 'mmhfdzb5evj2',
+              token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Byb250by5nZXRzdHJlYW0uaW8iLCJzdWIiOiJ1c2VyL1dvb2xseV9QYXRjaCIsInVzZXJfaWQiOiJXb29sbHlfUGF0Y2giLCJ2YWxpZGl0eV9pbl9zZWNvbmRzIjo2MDQ4MDAsImlhdCI6MTc1NzM0MDk5OCwiZXhwIjoxNzU3OTQ1Nzk4fQ.nsL1ALmGwSTl8QUawile5zJdsCjGPW8lOkDy5vRWm2I',
+              userId: 'Woolly_Patch',
+              callId: '9IH1mIBCkfbdP9y4q34W2',
+            }}
           />
         )}
       </div>

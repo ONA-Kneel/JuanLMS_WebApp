@@ -3,7 +3,7 @@ import Faculty_Navbar from './Faculty_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import CreateMeetingModal from '../Meeting/CreateMeetingModal';
 import MeetingList from '../Meeting/MeetingList';
-import VideoMeetingRoom from '../Meeting/VideoMeetingRoom';
+import StreamMeetingRoom from '../Meeting/StreamMeetingRoom';
 import { Video, Users, Calendar, Plus } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
@@ -413,7 +413,7 @@ const Faculty_Meeting = () => {
                         <Video className="w-8 h-8 text-purple-600" />
                         <div>
                           <p className="text-sm text-purple-600 font-medium">Video Platform</p>
-                          <p className="text-xs text-purple-500">Powered by Jitsi Meet</p>
+                          <p className="text-xs text-purple-500">Powered by Stream IO</p>
                         </div>
                       </div>
                     </div>
@@ -445,14 +445,21 @@ const Faculty_Meeting = () => {
           />
         )}
 
-        {/* Video Meeting Room */}
+        {/* Stream Meeting Room */}
         {activeMeeting && (
-          <VideoMeetingRoom
+          <StreamMeetingRoom
             meetingData={activeMeeting}
             currentUser={userInfo}
             onLeave={handleLeaveMeeting}
             isOpen={!!activeMeeting}
-            isModerator={true}
+            isHost={true}
+            hostUserId={'Woolly_Patch'}
+            credentials={{
+              apiKey: 'mmhfdzb5evj2',
+              token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Byb250by5nZXRzdHJlYW0uaW8iLCJzdWIiOiJ1c2VyL1dvb2xseV9QYXRjaCIsInVzZXJfaWQiOiJXb29sbHlfUGF0Y2giLCJ2YWxpZGl0eV9pbl9zZWNvbmRzIjo2MDQ4MDAsImlhdCI6MTc1NzM0MDk5OCwiZXhwIjoxNzU3OTQ1Nzk4fQ.nsL1ALmGwSTl8QUawile5zJdsCjGPW8lOkDy5vRWm2I',
+              userId: 'Woolly_Patch',
+              callId: '9IH1mIBCkfbdP9y4q34W2',
+            }}
           />
         )}
       </div>

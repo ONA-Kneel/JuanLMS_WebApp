@@ -1,0 +1,150 @@
+.stream-meeting-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #111318;
+  display: flex;
+  flex-direction: column;
+}
+
+.stream-meeting-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #1a1d24;
+  color: #e5e7eb;
+  border-bottom: 1px solid #2a2f3a;
+}
+
+.stream-confirm .bg-white { color: #111827; }
+
+.stream-meeting-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.stream-meeting-grid {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.stream-meeting-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.stream-meeting-stage .stage-primary {
+  flex: 1;
+  min-width: 0;
+}
+
+.waiting-host {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.waiting-card {
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  text-align: center;
+}
+.waiting-title { font-weight: 600; font-size: 18px; margin-bottom: 4px; }
+.waiting-sub { font-size: 14px; color: #4b5563; }
+
+.stream-meeting-sidepanel {
+  width: 320px;
+  background: #141720;
+  border-left: 1px solid #2a2f3a;
+  color: #e5e7eb;
+}
+
+/* Force the side panel to remain visible on all viewports */
+.stream-meeting-sidepanel { display: block; }
+
+/* Make Stream participants list readable on dark bg */
+.stream-meeting-sidepanel .str-video__participants,
+.stream-meeting-sidepanel .str-video__participant,
+.stream-meeting-sidepanel .str-video__text,
+.stream-meeting-sidepanel .str-video__label,
+.stream-meeting-sidepanel input::placeholder {
+  color: #e5e7eb !important;
+}
+.stream-meeting-sidepanel .str-video__input,
+.stream-meeting-sidepanel input {
+  background: #0f1218 !important;
+  color: #e5e7eb !important;
+  border-color: #2a2f3a !important;
+}
+.stream-meeting-sidepanel .str-video__muted-badge {
+  color: #cbd5e1 !important;
+}
+
+.stream-controls-wrap {
+  position: relative;
+  background: transparent;
+}
+
+.stream-controls {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 16px;
+  background: #1a1d24;
+  border: 1px solid #2a2f3a;
+  border-radius: 16px;
+  padding: 8px 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+
+.stream-controls .str-video__call-controls {
+  background: transparent !important;
+}
+
+.stream-controls .str-video__button,
+.stream-controls button {
+  border-radius: 10px !important;
+}
+
+/* Improve icon visibility on dark theme */
+.stream-controls .str-video__button,
+.stream-controls .str-video__icon,
+.stream-controls .str-video__text,
+.stream-controls svg {
+  color: #e5e7eb !important;
+  fill: #e5e7eb !important;
+}
+.stream-controls .str-video__button[aria-pressed="true"] {
+  background: #0f172a !important;
+}
+.stream-controls .str-video__button:hover {
+  background: #111827 !important;
+}
+
+.stream-leave-button {
+  background: #e11d48 !important;
+  color: #fff !important;
+}
+
+/* Force stats panel to be opaque and readable */
+.str-video__call-stats,
+.str-video__call-stats * {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+.str-video__call-stats .str-video__panel,
+.str-video__call-stats .str-video__card {
+  background: #ffffff !important;
+  border-color: #e5e7eb !important;
+}
+
+
