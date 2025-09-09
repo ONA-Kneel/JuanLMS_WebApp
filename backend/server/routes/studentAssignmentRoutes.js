@@ -37,7 +37,7 @@ router.get('/', authenticateToken, async (req, res) => {
           sectionName: assignment.sectionName,
           termId: assignment.termId,
           status: assignment.status,
-          schoolID: assignment.studentId.schoolID,
+          schoolID: assignment.studentId.getDecryptedSchoolID ? assignment.studentId.getDecryptedSchoolID() : assignment.studentId.schoolID,
           email: assignment.studentId.email,
           middlename: assignment.studentId.middlename,
           firstname: assignment.studentId.firstname,

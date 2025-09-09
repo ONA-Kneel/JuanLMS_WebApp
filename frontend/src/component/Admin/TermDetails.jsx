@@ -3117,7 +3117,7 @@ export default function TermDetails() {
       const currentStudentAssignmentsData = [
         ['Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'], // Updated headers to use School ID
         ...currentStudentAssignments.map(assignment => [
-          assignment.studentSchoolID || '', // Use school ID instead of object ID
+          assignment.schoolID || '', // Use school ID instead of object ID
           assignment.studentName,
           assignment.gradeLevel || '',
           assignment.trackName,
@@ -4277,7 +4277,7 @@ export default function TermDetails() {
       const studentAssignmentData = [
         ['Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'],
         ...currentStudentAssignments.map(assignment => [
-          assignment.studentSchoolID || '',
+          assignment.schoolID || '',
           assignment.studentName,
           assignment.gradeLevel || '',
           assignment.trackName,
@@ -4374,6 +4374,7 @@ export default function TermDetails() {
                   parsedData.subjects = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], gradeLevel: row['Grade Level'], subjectName: row['Subject Name'] }));
                 } else if (sheetName === 'Faculty Assignments') {
                   parsedData.facultyAssignments = normalizedRows.map(row => ({
+                    facultySchoolID: row['Faculty School ID'] || row['Faculty Sc'] || row['Faculty ID'],
                     facultyName: row['Faculty Name'] || row['Faculty Na'] || row['Faculty'],
                     trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
                     strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
@@ -4383,6 +4384,7 @@ export default function TermDetails() {
                   }));
                 } else if (sheetName === 'Student Assignments') {
                   parsedData.studentAssignments = normalizedRows.map(row => ({
+                    studentSchoolID: row['Student School ID'] || row['Student Sc'] || row['Student ID'],
                     studentName: row['Student Name'] || row['Student Nam'] || row['Student'],
                     gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
                     trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
@@ -5068,9 +5070,10 @@ Validation issues (${skippedCount} items):
                       // Extract Faculty Assignments
                       const currentFacultyAssignments = facultyAssignments.filter(fa => fa.status === 'active');
                       const facultyAssignmentData = [
-                        ['Object ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Grade Level', 'Section Name', 'Subject', 'Status'],
+                        ['Object ID', 'Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Grade Level', 'Section Name', 'Subject', 'Status'],
                         ...currentFacultyAssignments.map(assignment => [
                           assignment._id,
+                          assignment.facultySchoolID || '',
                           assignment.facultyName,
                           assignment.trackName,
                           assignment.strandName,
@@ -5086,9 +5089,10 @@ Validation issues (${skippedCount} items):
                       // Extract Student Assignments
                       const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
                       const studentAssignmentData = [
-                        ['Object ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'],
+                        ['Object ID', 'Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'],
                         ...currentStudentAssignments.map(assignment => [
                           assignment._id,
+                          assignment.schoolID || '',
                           assignment.studentName,
                           assignment.gradeLevel || '',
                           assignment.trackName,

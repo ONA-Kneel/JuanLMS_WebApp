@@ -24,6 +24,7 @@ router.get('/', authenticateToken, async (req, res) => {
           _id: assignment._id, // ID of the assignment document
           facultyId: assignment.facultyId._id,
           facultyName: `${assignment.facultyId.firstname} ${assignment.facultyId.lastname}`,
+          facultySchoolID: assignment.facultyId.getDecryptedSchoolID ? assignment.facultyId.getDecryptedSchoolID() : assignment.facultyId.schoolID,
           trackName: assignment.trackName,
           strandName: assignment.strandName,
           sectionName: assignment.sectionName,
