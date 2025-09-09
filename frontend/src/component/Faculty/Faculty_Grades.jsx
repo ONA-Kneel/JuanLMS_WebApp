@@ -572,11 +572,19 @@ export default function Faculty_Grades() {
               
               if (studentGradeRecord) {
                 console.log('✅ Found grades for student:', student.name, studentGradeRecord);
-                updatedGrades[student._id] = {
+                console.log('🔍 isLocked from database:', studentGradeRecord.isLocked);
+                // Store grades with both student._id and schoolID to ensure UI can find them
+                const gradeData = {
                   ...updatedGrades[student._id],
                   ...studentGradeRecord.grades,
                   isLocked: studentGradeRecord.isLocked || false
                 };
+                updatedGrades[student._id] = gradeData;
+                // Also store with schoolID if it's different
+                if (student.schoolID && student.schoolID !== student._id) {
+                  updatedGrades[student.schoolID] = gradeData;
+                }
+                console.log('🔍 Final isLocked value:', updatedGrades[student._id].isLocked);
               }
             });
             
@@ -621,9 +629,15 @@ export default function Faculty_Grades() {
   const loadTempGrades = (classId, studentsList) => {
     try {
       const key = getTempKey(classId);
+      console.log('🔍 loadTempGrades - Key:', key);
       const raw = localStorage.getItem(key);
-      if (!raw) return;
+      console.log('🔍 loadTempGrades - Raw localStorage data:', raw);
+      if (!raw) {
+        console.log('🔍 loadTempGrades - No temp grades found in localStorage');
+        return;
+      }
       const temp = JSON.parse(raw || '{}');
+      console.log('🔍 loadTempGrades - Parsed temp data:', temp);
       if (!temp || typeof temp !== 'object') return;
       setGrades(prev => {
         const merged = { ...prev };
@@ -633,9 +647,30 @@ export default function Faculty_Grades() {
         Object.entries(temp).forEach(([sid, g]) => {
           // Only process if this student ID exists in the current students list
           if (currentStudentIds.has(sid)) {
-            merged[sid] = { ...(merged[sid] || {}), ...(g || {}), isTemp: true, isLocked: false };
+            // Find the student to get their schoolID
+            const student = studentsList.find(s => s._id === sid);
+            if (!student) return;
+            
+            // Check if grades are already locked (posted) for this student
+            // Check both student._id and schoolID keys
+            const existingGradesById = merged[sid] || {};
+            const existingGradesBySchoolId = student.schoolID ? (merged[student.schoolID] || {}) : {};
+            const isAlreadyLocked = existingGradesById.isLocked || existingGradesBySchoolId.isLocked;
+            
+            console.log('🔍 loadTempGrades - Student ID:', sid, 'SchoolID:', student.schoolID);
+            console.log('🔍 loadTempGrades - Existing grades by ID isLocked:', existingGradesById.isLocked);
+            console.log('🔍 loadTempGrades - Existing grades by SchoolID isLocked:', existingGradesBySchoolId.isLocked);
+            console.log('🔍 loadTempGrades - Is already locked:', isAlreadyLocked);
+            
+            if (!isAlreadyLocked) {
+              console.log('🔍 Loading temp grades for student:', sid);
+              merged[sid] = { ...existingGradesById, ...(g || {}), isTemp: true, isLocked: false };
+            } else {
+              console.log('🔍 Skipping temp grades for locked student:', sid);
+            }
           }
         });
+        console.log('🔍 Final merged grades after loadTempGrades:', merged);
         return merged;
       });
     } catch (e) {
@@ -948,7 +983,9 @@ export default function Faculty_Grades() {
           ...prevGrades,
           [student._id]: {
             ...prevGrades[student._id],
-            [field]: value
+            [field]: value,
+            // Preserve the isLocked status - don't allow editing if grades are posted
+            isLocked: prevGrades[student._id]?.isLocked || false
           }
         }));
       }
@@ -1078,7 +1115,8 @@ export default function Faculty_Grades() {
               ...prevGrades[student._id],
               ...gradeData,
               isUploaded: true,
-              isLocked: false,
+              // Preserve the isLocked status - don't overwrite posted grades
+              isLocked: prevGrades[student._id]?.isLocked || false,
               lastUpdated: new Date().toISOString()
             }
           }));
@@ -1343,7 +1381,8 @@ export default function Faculty_Grades() {
       // If currently in edit mode, cancel and reset to original values
       const student = students.find(s => s.name === selectedStudentName);
       if (student) {
-        const existingGrades = grades[student._id] || {};
+        const schoolID = student.schoolID || student._id;
+        const existingGrades = grades[schoolID] || {};
         setStudentGrades({
           quarter1: existingGrades.quarter1 || '',
           quarter2: existingGrades.quarter2 || '',
@@ -1375,7 +1414,8 @@ export default function Faculty_Grades() {
         showModal('Student Not Found', 'Please select the student again.', 'error');
         return;
       }
-      const current = grades[student._id] || {};
+      const schoolID = student.schoolID || student._id;
+      const current = grades[schoolID] || {};
       if (current.isLocked) {
         showModal('Grades Locked', 'Posted grades cannot be cleared.', 'warning');
         return;
@@ -1407,7 +1447,9 @@ export default function Faculty_Grades() {
         ...prev,
         [student._id]: {
           ...(prev[student._id] || {}),
-          ...empty
+          ...empty,
+          // Preserve the isLocked status - don't allow clearing posted grades
+          isLocked: prev[student._id]?.isLocked || false
         }
       }));
 
@@ -1600,9 +1642,20 @@ export default function Faculty_Grades() {
 
   // Save grades to backend
   const saveGrades = async () => {
-    if (!selectedClass || subjects.length === 0) return;
+    console.log('🔍 Post Grades debug:', {
+      selectedClass,
+      subjectsLength: subjects.length,
+      subjects: subjects,
+      studentsLength: students.length
+    });
+    
+    if (selectedClass === null || selectedClass === undefined || subjects.length === 0) {
+      showModal('Cannot Post Grades', `Cannot post grades.\n\nSelected Class: ${selectedClass !== null ? classes[selectedClass]?.className || 'Invalid' : 'None'}\nSubjects: ${subjects.length}\n\nPlease ensure a class is selected and subjects are loaded.`, 'warning');
+      return;
+    }
     
     // Show confirmation dialog first
+    console.log('🔍 Showing confirmation dialog...');
     const confirmed = window.confirm(
       `⚠️ CONFIRMATION REQUIRED\n\n` +
       `Are you sure you want to save and post ALL grades for ${classes[selectedClass]?.className}?\n\n` +
@@ -1614,7 +1667,10 @@ export default function Faculty_Grades() {
       `Click "OK" to proceed or "Cancel" to abort.`
     );
     
+    console.log('🔍 Confirmation result:', confirmed);
+    
     if (!confirmed) {
+      console.log('🔍 User cancelled posting grades');
       return;
     }
     
@@ -1624,7 +1680,8 @@ export default function Faculty_Grades() {
       // Validate all grades before saving
       const invalidGrades = [];
       students.forEach((student, index) => {
-        const studentGrades = grades[student._id] || {};
+        const schoolID = student.schoolID || student._id;
+        const studentGrades = grades[schoolID] || {};
         const quarterFields = ['quarter1', 'quarter2', 'quarter3', 'quarter4'];
         
         quarterFields.forEach(field => {
@@ -1655,7 +1712,8 @@ export default function Faculty_Grades() {
         facultyID: currentFacultyID,
         section: selectedSection,
         students: students.map(student => {
-          const studentGrades = grades[student._id] || {};
+          const schoolID = student.schoolID || student._id;
+        const studentGrades = grades[schoolID] || {};
           let gradesStructure = {};
           
           if (currentTerm?.termName === 'Term 1') {
@@ -1764,8 +1822,15 @@ export default function Faculty_Grades() {
 
   // Export grades to Excel with RAW, HPS, WS, RS format
   const exportGradesToExcel = () => {
-    if (!selectedClass || students.length === 0) {
-      showModal('No Data', 'No students or grades to export', 'warning');
+    console.log('🔍 Export debug:', {
+      selectedClass,
+      studentsLength: students.length,
+      students: students,
+      grades: grades
+    });
+    
+    if (selectedClass === null || selectedClass === undefined || students.length === 0) {
+      showModal('No Data', `No students or grades to export.\n\nSelected Class: ${selectedClass !== null ? classes[selectedClass]?.className || 'Invalid' : 'None'}\nStudents: ${students.length}\n\nPlease select a class and ensure students are loaded.`, 'warning');
       return;
     }
 
@@ -1773,46 +1838,55 @@ export default function Faculty_Grades() {
       const selectedClassObj = classes[selectedClass];
       const currentDate = new Date().toISOString().split('T')[0];
       
-      // Prepare CSV content
+      // Prepare CSV content matching the exact template structure
       const headers = [
-        'Student ID',
-        'Student Name',
-        'Section',
-        'Quarter 1',
-        'Quarter 2', 
-        'Quarter 3',
-        'Quarter 4',
-        'Semester Final',
-        'Remarks',
-        'Written Works RAW',
-        'Written Works HPS',
-        'Written Works PS',
-        'Written Works WS',
-        'Performance Tasks RAW',
-        'Performance Tasks HPS', 
-        'Performance Tasks PS',
-        'Performance Tasks WS',
-        'Quarterly Exam',
-        'Initial Grade',
-        'Quarterly Grade'
+        'Student No.',
+        'STUDENT\'S NAME (Alphabetical Order with Middle)',
+        // Written Works 40% - nested structure
+        'WRITTEN WORKS 40%',
+        '', // Empty for RAW sub-header
+        '', // Empty for HPS sub-header  
+        '', // Empty for PS sub-header
+        '', // Empty for WS sub-header
+        // Performance Tasks 60% - nested structure
+        'PERFORMANCE TASKS 60%',
+        '', // Empty for RAW sub-header
+        '', // Empty for HPS sub-header
+        '', // Empty for PS sub-header  
+        '', // Empty for WS sub-header
+        // Initial Grade Quarterly - two columns
+        'INITIAL GRA QUARTERLY',
+        '' // Empty for second quarterly column
       ];
 
-      const csvRows = [headers.join(',')];
+      // Add sub-headers row for the nested structure
+      const subHeaders = [
+        '', '', // Student info columns
+        'RAW', 'HPS', 'PS', 'WS', // Written Works sub-headers
+        'RAW', 'HPS', 'PS', 'WS', // Performance Tasks sub-headers
+        'Initial', 'Final' // Initial Grade Quarterly sub-headers
+      ];
+
+      const csvRows = [
+        headers.join(','),
+        subHeaders.join(',')
+      ];
 
       students.forEach(student => {
-        const studentGrades = grades[student._id] || {};
+        const schoolID = student.schoolID || student._id;
+        const studentGrades = grades[schoolID] || {};
         const breakdown = studentGrades.breakdownByQuarter?.[globalQuarter] || {};
         
-        // Calculate PS (Percentage Score) and WS (Weighted Score)
+        // Calculate PS (Percentage Score) and WS (Weighted Score) with template weights
         const wwRaw = parseFloat(breakdown.ww?.raw || studentGrades.writtenWorksRaw || 0);
         const wwHPS = parseFloat(breakdown.ww?.hps || studentGrades.writtenWorksHPS || 0);
         const wwPS = wwHPS > 0 ? (wwRaw / wwHPS) * 100 : 0;
-        const wwWS = wwPS * 0.3; // 30% weight
+        const wwWS = wwPS * 0.4; // 40% weight (matching template)
 
         const ptRaw = parseFloat(breakdown.pt?.raw || studentGrades.performanceTasksRaw || 0);
         const ptHPS = parseFloat(breakdown.pt?.hps || studentGrades.performanceTasksHPS || 0);
         const ptPS = ptHPS > 0 ? (ptRaw / ptHPS) * 100 : 0;
-        const ptWS = ptPS * 0.5; // 50% weight
+        const ptWS = ptPS * 0.6; // 60% weight (matching template)
 
         const exam = parseFloat(breakdown.exam || studentGrades.quarterlyExam || 0);
         const examPS = exam; // Exam is already a percentage
@@ -1824,22 +1898,17 @@ export default function Faculty_Grades() {
         const row = [
           student.schoolID || student._id,
           `"${student.name}"`,
-          `"${student.section || selectedSection || 'N/A'}"`,
-          studentGrades.quarter1 || '',
-          studentGrades.quarter2 || '',
-          studentGrades.quarter3 || '',
-          studentGrades.quarter4 || '',
-          studentGrades.semesterFinal || '',
-          studentGrades.remarks || '',
+          // Written Works 40% breakdown
           wwRaw || '',
           wwHPS || '',
           wwPS.toFixed(2),
           wwWS.toFixed(2),
+          // Performance Tasks 60% breakdown
           ptRaw || '',
           ptHPS || '',
           ptPS.toFixed(2),
           ptWS.toFixed(2),
-          exam || '',
+          // Initial Grade Quarterly (two columns)
           initialGrade.toFixed(2),
           quarterlyGrade.toFixed(2)
         ];
@@ -1849,8 +1918,9 @@ export default function Faculty_Grades() {
 
       const csvContent = csvRows.join('\n');
       
-      // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      // Create and download file with proper UTF-8 encoding
+      const BOM = '\uFEFF'; // Byte Order Mark for UTF-8
+      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
@@ -1878,12 +1948,25 @@ export default function Faculty_Grades() {
       const selectedClassObj = classes[selectedClass];
       if (!selectedClassObj) return;
       
-      // Ensure all staged items remain marked as temp
+      // Only save draft for non-locked grades (don't overwrite posted grades)
       const draft = {};
       Object.entries(grades || {}).forEach(([sid, g]) => {
-        draft[sid] = { ...g, isTemp: true, isLocked: false };
+        // Only include grades that are not locked (not posted)
+        if (!g.isLocked) {
+          draft[sid] = { ...g, isTemp: true, isLocked: false };
+        }
       });
-      setGrades(draft);
+      
+      // Only update grades state if there are draft grades to save
+      if (Object.keys(draft).length > 0) {
+        setGrades(prev => {
+          const updated = { ...prev };
+          Object.entries(draft).forEach(([sid, g]) => {
+            updated[sid] = g;
+          });
+          return updated;
+        });
+      }
       saveTempGrades(selectedClassObj.classID, draft);
       
       // Save to backend semestral_draft_collections
@@ -1892,7 +1975,8 @@ export default function Faculty_Grades() {
       
       // Prepare draft data for all students
       const draftData = students.map(student => {
-        const studentGrades = grades[student._id] || {};
+        const schoolID = student.schoolID || student._id;
+        const studentGrades = grades[schoolID] || {};
         return {
           schoolID: student.schoolID || student._id,
           studentId: student._id,
@@ -1984,13 +2068,19 @@ export default function Faculty_Grades() {
         });
         const merged = { ...grades };
         Object.values(latestByStudent).forEach(d => {
-          merged[d.schoolID || d.studentId] = {
-            ...(merged[d.schoolID || d.studentId] || {}),
-            ...d.grades,
-            breakdownByQuarter: d.breakdownByQuarter || {},
-            isTemp: true,
-            isLocked: false
-          };
+          const studentKey = d.schoolID || d.studentId;
+          const existingGrades = merged[studentKey] || {};
+          
+          // Only load draft grades if the grades are not already locked (posted)
+          if (!existingGrades.isLocked) {
+            merged[studentKey] = {
+              ...existingGrades,
+              ...d.grades,
+              breakdownByQuarter: d.breakdownByQuarter || {},
+              isTemp: true,
+              isLocked: false
+            };
+          }
         });
         setGrades(merged);
       } catch {}
@@ -2219,7 +2309,8 @@ export default function Faculty_Grades() {
                             onClick={() => {
                               setSelectedStudentName(student.name);
                               // Set the student grades to the selected student's existing grades
-                              const existingGrades = grades[student._id] || {};
+                              const schoolID = student.schoolID || student._id;
+        const existingGrades = grades[schoolID] || {};
                               
                               setStudentGrades({
                                 quarter1: existingGrades.quarter1 || '',
@@ -2291,7 +2382,8 @@ export default function Faculty_Grades() {
                              ...(grades[sid] || {}),
                              ...studentGrades,
                              isTemp: true,
-                             isLocked: false
+                             // Preserve the isLocked status - don't overwrite posted grades
+                             isLocked: grades[sid]?.isLocked || false
                            };
                            setGrades(prev => ({ ...prev, [sid]: next }));
                            const selectedClassObj = classes[selectedClass];
@@ -2889,19 +2981,40 @@ export default function Faculty_Grades() {
                      <div className="flex items-center gap-2">
                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                        <span className="text-sm font-medium text-gray-700">
-                         Posted to Students: {students.filter(student => grades[student._id]?.isLocked).length}
+                         Posted to Students: {(() => {
+                           const postedCount = students.filter(student => {
+                             // Use schoolID for grade lookup instead of database _id
+                             const schoolID = student.schoolID || student._id;
+                             return grades[schoolID]?.isLocked;
+                           }).length;
+                           console.log('🔍 UI Status Calculation - Posted count:', postedCount);
+                           console.log('🔍 UI Status Calculation - Students:', students.map(s => ({ 
+                             name: s.name, 
+                             schoolID: s.schoolID, 
+                             dbID: s._id, 
+                             isLocked: grades[s.schoolID || s._id]?.isLocked 
+                           })));
+                           console.log('🔍 UI Status Calculation - Grades object:', grades);
+                           return postedCount;
+                         })()}
                        </span>
                      </div>
                      <div className="flex items-center gap-2">
                        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                        <span className="text-sm font-medium text-gray-700">
-                         Pending: {students.filter(student => !grades[student._id]?.isLocked && !grades[student._id]?.isTemp).length}
+                         Pending: {students.filter(student => {
+                           const schoolID = student.schoolID || student._id;
+                           return !grades[schoolID]?.isLocked && !grades[schoolID]?.isTemp;
+                         }).length}
                        </span>
                      </div>
                      <div className="flex items-center gap-2">
                        <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
                        <span className="text-sm font-medium text-gray-700">
-                         Uploaded (not posted): {students.filter(student => grades[student._id]?.isTemp && !grades[student._id]?.isLocked).length}
+                         Uploaded (not posted): {students.filter(student => {
+                           const schoolID = student.schoolID || student._id;
+                           return grades[schoolID]?.isTemp && !grades[schoolID]?.isLocked;
+                         }).length}
                        </span>
                      </div>
                    </div>
@@ -3005,7 +3118,8 @@ export default function Faculty_Grades() {
                                                  <tbody>
                            {students.length > 0 ? (
                                                            students.map((student) => {
-                                const studentGrades = grades[student._id] || {};
+                                const schoolID = student.schoolID || student._id;
+                                const studentGrades = grades[schoolID] || {};
                                 
                                 // Helper function to get quarterly grade from breakdown data if available
                                 const getQuarterlyGrade = (quarter) => {
@@ -3036,7 +3150,7 @@ export default function Faculty_Grades() {
                                             ✅ Posted
                                           </span>
                                         )}
-                                        {!isLocked && (grades[student._id]?.isTemp) && (
+                                        {!isLocked && (grades[schoolID]?.isTemp) && (
                                           <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
                                             🟧 Grade uploaded (not posted)
                                           </span>
@@ -3176,7 +3290,8 @@ export default function Faculty_Grades() {
                                                  <tbody>
                            {students.length > 0 ? (
                                                            students.map((student) => {
-                                const studentGrades = grades[student._id] || {};
+                                const schoolID = student.schoolID || student._id;
+                                const studentGrades = grades[schoolID] || {};
                                 
                                 // Helper function to get quarterly grade from breakdown data if available
                                 const getQuarterlyGrade = (quarter) => {
@@ -3357,7 +3472,8 @@ export default function Faculty_Grades() {
                     breakdownByQuarter: nextBreakdowns,
                     breakdown: breakdownForQuarter, // for current panel binding
                     [targetQuarterField]: breakdownForQuarter.quarterly,
-                    isLocked: false,
+                    // Preserve the isLocked status - don't overwrite posted grades
+                    isLocked: prev.isLocked || false,
                     isTemp: true
                   };
                 });
