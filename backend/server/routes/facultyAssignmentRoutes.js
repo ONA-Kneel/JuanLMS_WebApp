@@ -4,6 +4,39 @@ import User from '../models/User.js'; // To populate faculty details
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import Term from '../models/Term.js';
 
+// Validation function to check for faculty assignment conflicts
+const validateFacultyAssignment = async (facultyId, subjectName, sectionName, schoolYear, termName, excludeAssignmentId = null) => {
+  try {
+    // Check if the same subject-section combination is already assigned to a different faculty
+    const existingAssignment = await FacultyAssignment.findOne({
+      subjectName: subjectName,
+      sectionName: sectionName,
+      schoolYear: schoolYear,
+      termName: termName,
+      status: 'active',
+      facultyId: { $ne: facultyId }, // Different faculty
+      ...(excludeAssignmentId && { _id: { $ne: excludeAssignmentId } }) // Exclude current assignment when updating
+    }).populate('facultyId', 'firstname lastname');
+
+    if (existingAssignment) {
+      return {
+        isValid: false,
+        conflict: {
+          facultyId: existingAssignment.facultyId._id,
+          facultyName: `${existingAssignment.facultyId.firstname} ${existingAssignment.facultyId.lastname}`,
+          subjectName: existingAssignment.subjectName,
+          sectionName: existingAssignment.sectionName
+        }
+      };
+    }
+
+    return { isValid: true, conflict: null };
+  } catch (error) {
+    console.error('Error validating faculty assignment:', error);
+    return { isValid: true, conflict: null }; // Allow assignment if validation fails
+  }
+};
+
 const router = express.Router();
 
 // Get all faculty assignments (can be filtered by termId)
@@ -114,6 +147,22 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'facultyId or facultyName is required' });
     }
 
+    // Validate assignment conflicts
+    const validation = await validateFacultyAssignment(
+      actualFacultyId, 
+      subjectName, 
+      sectionName, 
+      term.schoolYear, 
+      term.termName
+    );
+
+    if (!validation.isValid) {
+      return res.status(400).json({ 
+        message: `Subject "${subjectName}" in Section "${sectionName}" is already assigned to ${validation.conflict.facultyName}`,
+        conflict: validation.conflict
+      });
+    }
+
     const assignment = new FacultyAssignment({
       facultyId: actualFacultyId,
       trackName,
@@ -203,6 +252,24 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 
         if (!actualFacultyId) {
           errors.push({ assignment: assignmentData, message: 'facultyId or facultyName is required' });
+          continue;
+        }
+
+        // Validate assignment conflicts for bulk creation
+        const validation = await validateFacultyAssignment(
+          actualFacultyId, 
+          subjectName, 
+          sectionName, 
+          term.schoolYear, 
+          term.termName
+        );
+
+        if (!validation.isValid) {
+          errors.push({ 
+            assignment: assignmentData, 
+            message: `Subject "${subjectName}" in Section "${sectionName}" is already assigned to ${validation.conflict.facultyName}`,
+            conflict: validation.conflict
+          });
           continue;
         }
 
@@ -301,10 +368,31 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     if (!term) {
       return res.status(404).json({ message: 'Term not found' });
     }
+
+    // Always validate conflicts on edit - hard gate
+    const newSubjectName = subjectName || assignment.subjectName;
+    const newSectionName = sectionName || assignment.sectionName;
+    
+    const validation = await validateFacultyAssignment(
+      assignment.facultyId,
+      newSubjectName,
+      newSectionName,
+      term.schoolYear,
+      term.termName,
+      req.params.id // Exclude current assignment
+    );
+
+    if (!validation.isValid) {
+      return res.status(400).json({ 
+        message: `Subject "${newSubjectName}" in Section "${newSectionName}" is already assigned to ${validation.conflict.facultyName}. Please change the subject or section, or delete the conflicting assignment.`,
+        conflict: validation.conflict
+      });
+    }
+
     assignment.trackName = trackName || assignment.trackName;
     assignment.strandName = strandName || assignment.strandName;
-    assignment.sectionName = sectionName || assignment.sectionName;
-    assignment.subjectName = subjectName || assignment.subjectName;
+    assignment.sectionName = newSectionName;
+    assignment.subjectName = newSubjectName;
     assignment.gradeLevel = gradeLevel || assignment.gradeLevel;
     assignment.termId = currentTermId;
     assignment.schoolYear = term.schoolYear;

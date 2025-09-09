@@ -64,5 +64,16 @@ facultyAssignmentSchema.index(
   { unique: true }
 );
 
+// Add index for efficient conflict checking
+facultyAssignmentSchema.index(
+  { 
+    subjectName: 1, 
+    sectionName: 1, 
+    schoolYear: 1,
+    termName: 1,
+    status: 1
+  }
+);
+
 const FacultyAssignment = mongoose.model('FacultyAssignment', facultyAssignmentSchema);
 export default FacultyAssignment; 

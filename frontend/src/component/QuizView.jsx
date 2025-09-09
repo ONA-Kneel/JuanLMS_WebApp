@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import seedrandom from 'seedrandom';
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function QuizView() {
   const { quizId } = useParams();

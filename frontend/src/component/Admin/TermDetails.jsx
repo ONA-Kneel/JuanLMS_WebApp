@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -1391,7 +1391,11 @@ export default function TermDetails() {
         setFacultySearchTerm(''); // Clear search term
       } else {
         const data = await res.json();
-        setFacultyError(data.message || 'Failed to assign faculty');
+        if (data.conflict) {
+          setFacultyError(`Subject "${data.conflict.subjectName}" in Section "${data.conflict.sectionName}" is already assigned to ${data.conflict.facultyName}`);
+        } else {
+          setFacultyError(data.message || 'Failed to assign faculty');
+        }
       }
     } catch (err) {
       setFacultyError('Error assigning faculty');
@@ -2931,6 +2935,22 @@ export default function TermDetails() {
         }
       }
 
+      // 8. Check for subject-section conflicts (NEW VALIDATION)
+      if (isValid) {
+        const conflictingAssignment = existingAssignments.find(ea => 
+          ea.subjectName.toLowerCase() === subjectName.toLowerCase() &&
+          ea.sectionName.toLowerCase() === sectionName.toLowerCase() &&
+          ea.facultyId !== facultyId &&
+          ea.status === 'active'
+        );
+        
+        if (conflictingAssignment) {
+          isValid = false;
+          message = `Subject "${subjectName}" in Section "${sectionName}" is already assigned to another faculty`;
+          console.log(`Row ${i + 1}: Found subject-section conflict`);
+        }
+      }
+
       status[i] = { valid: isValid, message: message, facultyId: facultyId };
       console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
     }
@@ -3068,6 +3088,7 @@ export default function TermDetails() {
           createdAssignments.push(newAssignment);
         } else {
           const data = await res.json();
+          console.error(`Failed to create assignment for ${assignment.facultyName}:`, data.message);
           throw new Error(data.message || `Failed to create assignment for ${assignment.facultyNameInput}`);
         }
       }
@@ -7777,6 +7798,19 @@ const validateFacultyAssignmentsImport = async (assignmentsToValidate, existingA
     );
     if (exists) {
       results.push({ valid: false, message: 'Assignment already exists' });
+      continue;
+    }
+
+    // Check for subject-section conflicts (NEW VALIDATION)
+    const conflictingAssignment = activeAssignments.find(ea => 
+      ea.subjectName.toLowerCase() === assignment.subjectName.toLowerCase() &&
+      ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase() &&
+      ea.facultyId !== faculty._id &&
+      ea.status === 'active'
+    );
+    
+    if (conflictingAssignment) {
+      results.push({ valid: false, message: `Subject "${assignment.subjectName}" in Section "${assignment.sectionName}" is already assigned to another faculty` });
     } else {
       results.push({ valid: true, facultyId: faculty._id });
     }
