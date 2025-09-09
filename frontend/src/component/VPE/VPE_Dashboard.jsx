@@ -16,9 +16,8 @@ export default function VPE_Dashboard() {
   const [holidays, setHolidays] = useState([]);
   const [classDates, setClassDates] = useState([]);
 
-  // Announcement modal state
-  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
-  const [announcementToShow, setAnnouncementToShow] = useState(null);
+  // Announcements (inline box)
+  const [announcements, setAnnouncements] = useState([]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -61,55 +60,52 @@ export default function VPE_Dashboard() {
     fetchActiveTermForYear();
   }, [academicYear]);
 
-  // Fetch active general announcements for VPE and show the latest in a modal
+  /* ------------------------------ helpers ------------------------------ */
+  const DISMISSED_KEY = "vpe_dashboard_dismissed_announcements";
+  const getDismissed = () => {
+    try { return JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]"); }
+    catch { return []; }
+  };
+  const addDismissed = (id) => {
+    const next = Array.from(new Set([...(getDismissed() || []), id]));
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
+  };
+
+  /* ----------------------------- Announcements ---------------------------- */
   useEffect(() => {
-    async function fetchActiveAnnouncements() {
+    async function fetchAnnouncements() {
       try {
         const token = localStorage.getItem("token");
         if (!token) return;
 
         const res = await fetch(`${API_BASE}/api/general-announcements`, {
-          headers: { "Authorization": `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return;
 
-        const announcements = await res.json(); // API now returns only the most recent unacknowledged announcement
-        if (!announcements || announcements.length === 0) return;
+        const all = await res.json();
+        const dismissed = new Set(getDismissed());
 
-        // Show the announcement (only one will be returned)
-        setAnnouncementToShow(announcements[0]);
-        setShowAnnouncementModal(true);
+        // Only show if created by Principal OR any "vice ... education"
+        const filtered = (all || []).filter((a) => {
+          const role = (a?.createdBy?.role || "").toLowerCase();
+          const fromPrincipal = role.includes("principal");
+          const fromVPE = role.includes("vice") && role.includes("education");
+          return (fromPrincipal || fromVPE) && !dismissed.has(a._id);
+        });
+
+        setAnnouncements(filtered);
       } catch (err) {
-        console.error('Failed to fetch general announcements', err);
+        console.error("Failed to fetch announcements", err);
       }
     }
 
-    // Show on initial dashboard load
-    fetchActiveAnnouncements();
+    fetchAnnouncements();
   }, []);
 
-  const acknowledgeAnnouncement = async () => {
-    if (!announcementToShow?._id) return;
-
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`${API_BASE}/api/general-announcements/${announcementToShow._id}/acknowledge`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        // Close modal and clear announcement
-        setShowAnnouncementModal(false);
-        setAnnouncementToShow(null);
-      } else {
-        console.error('Failed to acknowledge announcement');
-      }
-    } catch (error) {
-      console.error('Error acknowledging announcement:', error);
-    }
+  const dismissAnnouncement = (id) => {
+    addDismissed(id);
+    setAnnouncements((prev) => prev.filter((a) => a._id !== id));
   };
 
   useEffect(() => {
@@ -203,6 +199,49 @@ export default function VPE_Dashboard() {
               </p>
             </div>
           </div>
+
+          {/* Announcements (inline box) */}
+          {announcements.length > 0 && (
+            <div className="mb-6">
+              <div className="bg-white rounded-2xl shadow p-4 md:p-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-lg font-semibold">Announcements</h4>
+                  <button
+                    onClick={() => dismissAnnouncement(announcements[0]._id)}
+                    className="text-gray-500 hover:text-gray-700"
+                    aria-label="Dismiss announcement"
+                    title="Dismiss"
+                  >
+                    {/* simple × so no extra icon deps */}
+                    <span className="text-xl leading-none">&times;</span>
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-base font-semibold text-gray-900">
+                    {announcements[0].title}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {announcements[0].termName} • {announcements[0].schoolYear}
+                  </div>
+                  <div className="text-sm text-gray-800 whitespace-pre-wrap break-words overflow-hidden mt-2">
+                    {announcements[0].body}
+                  </div>
+                  {announcements[0]?.createdBy && (
+                    <div className="text-xs text-gray-600 mt-3">
+                      {(announcements[0].createdBy.firstname || "") +
+                        (announcements[0].createdBy.lastname
+                          ? " " + announcements[0].createdBy.lastname
+                          : "")}
+                      {announcements[0].createdBy.role
+                        ? ` — ${announcements[0].createdBy.role}`
+                        : ""}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Faculty Report Preview */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -304,41 +343,6 @@ export default function VPE_Dashboard() {
         </div>
       </div>
 
-      {/* Announcement Modal */}
-      {showAnnouncementModal && announcementToShow && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full relative">
-            <h3 className="text-xl font-semibold mb-2 text-gray-900">{announcementToShow.title}</h3>
-            <div className="text-sm text-gray-500 mb-4">
-              {announcementToShow.termName} • {announcementToShow.schoolYear}
-            </div>
-            <div className="mb-6 text-gray-800 whitespace-pre-wrap break-words overflow-hidden">
-              {announcementToShow.body}
-            </div>
-            
-            {/* Footer with signature and button - symmetrical layout */}
-            <div className="flex justify-between items-end">
-              {/* Signature - Bottom Left */}
-              <div className="text-xs text-gray-600">
-                {announcementToShow.createdBy?.firstname || announcementToShow.createdBy?.lastname ? (
-                  <span>
-                    {(announcementToShow.createdBy?.firstname || '') + (announcementToShow.createdBy?.lastname ? ' ' + announcementToShow.createdBy.lastname : '')}
-                    {announcementToShow.createdBy?.role ? ` - ${announcementToShow.createdBy.role}` : ''}
-                  </span>
-                ) : null}
-              </div>
-              
-              {/* Button - Bottom Right */}
-              <button
-                onClick={acknowledgeAnnouncement}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-              >
-                Acknowledge
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
