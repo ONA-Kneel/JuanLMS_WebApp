@@ -3,7 +3,7 @@ import Principal_Navbar from "./Principal_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Principal_AuditTrail() {
   const [auditLogs, setAuditLogs] = useState([]);
@@ -39,7 +39,7 @@ export default function Principal_AuditTrail() {
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || (user.role !== 'admin' && user.role !== 'principal')) {
-      navigate('/login');
+      navigate('/');
       return;
     }
     fetchAuditLogs();
@@ -90,7 +90,7 @@ export default function Principal_AuditTrail() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        navigate('/login');
+        navigate('/');
         return;
       }
 
@@ -110,7 +110,7 @@ export default function Principal_AuditTrail() {
     } catch (err) {
       console.error('Error fetching audit logs:', err);
       if (err.response?.status === 401) {
-        navigate('/login');
+        navigate('/');
       } else if (err.response?.status === 500) {
         setError('Server error. Please try again later.');
       } else {
@@ -143,7 +143,7 @@ export default function Principal_AuditTrail() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        navigate('/login');
+        navigate('/');
         return;
       }
 

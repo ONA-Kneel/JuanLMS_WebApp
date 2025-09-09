@@ -5,7 +5,7 @@ import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import Student_Navbar from './Student/Student_Navbar';
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function AssignmentDetailPage() {
   const { assignmentId } = useParams();
@@ -708,7 +708,12 @@ export default function AssignmentDetailPage() {
                     <p className="text-gray-600 italic">Not yet graded.</p>
                   ) : (
                     <>
-                      <p className="text-blue-900 font-bold mt-2">Grade: {studentSubmission.grade}%</p>
+                      <p className="text-blue-900 font-bold mt-2">
+                        Grade: {assignment?.points ? 
+                          ((studentSubmission.grade / assignment.points) * 100).toFixed(1) : 
+                          studentSubmission.grade
+                        }%
+                      </p>
                       {studentSubmission.feedback && (
                         <p className="text-blue-500 font-semibold mt-1">Feedback: {studentSubmission.feedback}</p>
                       )}

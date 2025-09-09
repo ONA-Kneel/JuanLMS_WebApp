@@ -9,6 +9,7 @@ const quizSchema = new mongoose.Schema({
   dueDate: { type: Date },
   points: { type: Number, min: 1, max: 100, default: 100 }, // total points for the quiz
   type: { type: String, enum: ['quiz'], default: 'quiz' },
+  activityType: { type: String, enum: ['written', 'performance'], default: 'written' },
   questions: [
     {
       type: {
@@ -60,7 +61,22 @@ const quizSchema = new mongoose.Schema({
     studentIDs: [{ type: String, required: true }]
   }],
   // Track which students have viewed this quiz
-  views: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+  views: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  // Quarter management fields
+  quarter: { 
+    type: String, 
+    enum: ['Q1', 'Q2', 'Q3', 'Q4'], 
+    required: true 
+  },
+  termName: { 
+    type: String, 
+    enum: ['Term 1', 'Term 2'], 
+    required: true 
+  },
+  academicYear: { 
+    type: String, 
+    required: true 
+  }
 });
 
 // Ensure total points are synchronized and within 1–100 on save/update

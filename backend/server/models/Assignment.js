@@ -8,6 +8,7 @@ const assignmentSchema = new mongoose.Schema({
   dueDate: { type: Date },
   points: { type: Number },
   type: { type: String, enum: ['assignment', 'quiz'], default: 'assignment' },
+  activityType: { type: String, enum: ['written', 'performance'], default: 'written' },
   description: { type: String },
   fileUploadRequired: { type: Boolean },
   allowedFileTypes: { type: String },
@@ -21,7 +22,22 @@ const assignmentSchema = new mongoose.Schema({
   }],
   attachmentLink: { type: String },
   attachmentFile: { type: String },
-  postAt: { type: Date }
+  postAt: { type: Date },
+  // Quarter management fields
+  quarter: { 
+    type: String, 
+    enum: ['Q1', 'Q2', 'Q3', 'Q4'], 
+    required: true 
+  },
+  termName: { 
+    type: String, 
+    enum: ['Term 1', 'Term 2'], 
+    required: true 
+  },
+  academicYear: { 
+    type: String, 
+    required: true 
+  }
 });
 
 // Pre-save hook to ensure no duplicate views

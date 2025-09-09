@@ -9,7 +9,7 @@ import FacultyAssignment from '../models/FacultyAssignment.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import Submission from '../models/Submission.js';
 import Class from '../models/Class.js';
-import { processGradingExcel, generateGradingTemplate } from '../utils/excelProcessor.js';
+import { processGradingExcel, generateGradingTemplate, generateQuarterSummaryClassList } from '../utils/excelProcessor.js';
 import User from '../models/User.js'; // Added import for User
 import Quiz from '../models/Quiz.js'; // Added import for Quiz
 import QuizResponse from '../models/QuizResponse.js'; // Added import for QuizResponse
@@ -628,6 +628,142 @@ router.get('/faculty-classes-alt/:facultyId', authenticateToken, async (req, res
   }
 });
 
+// Get grade breakdown for a specific student and quarter
+router.get('/student/:studentId/breakdown', authenticateToken, async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { quarter, classId, termName, academicYear } = req.query;
+    
+    console.log('Grade breakdown request:', { studentId, quarter, classId, termName, academicYear });
+
+    // Validate required parameters
+    if (!quarter || !classId || !termName || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters: quarter, classId, termName, academicYear'
+      });
+    }
+
+    // Fetch activities for specific quarter
+    const assignments = await Assignment.find({
+      classID: classId,
+      quarter,
+      termName,
+      academicYear
+    });
+
+    const quizzes = await Quiz.find({
+      classID: classId,
+      quarter,
+      termName,
+      academicYear
+    });
+
+    // Get student submissions
+    const assignmentSubmissions = await Submission.find({
+      student: studentId,
+      assignment: { $in: assignments.map(a => a._id) }
+    });
+
+    const quizResponses = await QuizResponse.find({
+      studentId: studentId,
+      quizId: { $in: quizzes.map(q => q._id) }
+    });
+
+    // Calculate written works breakdown
+    const writtenWorks = {
+      raw: 0,
+      hps: 0,
+      ps: 0,
+      ws: 0,
+      activities: []
+    };
+
+    const performanceTasks = {
+      raw: 0,
+      hps: 0,
+      ps: 0,
+      ws: 0,
+      activities: []
+    };
+
+    // Process assignments
+    assignments.forEach(assignment => {
+      const submission = assignmentSubmissions.find(s => s.assignment.toString() === assignment._id.toString());
+      const earnedPoints = submission?.grade || 0;
+      const maxPoints = assignment.points || 0;
+      
+      const activityData = {
+        id: assignment._id,
+        title: assignment.title,
+        type: 'assignment',
+        earned: earnedPoints,
+        max: maxPoints
+      };
+
+      if (assignment.activityType === 'written') {
+        writtenWorks.raw += earnedPoints;
+        writtenWorks.hps += maxPoints;
+        writtenWorks.activities.push(activityData);
+      } else if (assignment.activityType === 'performance') {
+        performanceTasks.raw += earnedPoints;
+        performanceTasks.hps += maxPoints;
+        performanceTasks.activities.push(activityData);
+      }
+    });
+
+    // Process quizzes
+    quizzes.forEach(quiz => {
+      const response = quizResponses.find(r => r.quizId.toString() === quiz._id.toString());
+      const earnedPoints = response?.score || 0;
+      const maxPoints = quiz.points || 0;
+      
+      const activityData = {
+        id: quiz._id,
+        title: quiz.title,
+        type: 'quiz',
+        earned: earnedPoints,
+        max: maxPoints
+      };
+
+      if (quiz.activityType === 'written') {
+        writtenWorks.raw += earnedPoints;
+        writtenWorks.hps += maxPoints;
+        writtenWorks.activities.push(activityData);
+      } else if (quiz.activityType === 'performance') {
+        performanceTasks.raw += earnedPoints;
+        performanceTasks.hps += maxPoints;
+        performanceTasks.activities.push(activityData);
+      }
+    });
+
+    // Calculate percentage scores and weighted scores
+    writtenWorks.ps = writtenWorks.hps > 0 ? (writtenWorks.raw / writtenWorks.hps) * 100 : 0;
+    writtenWorks.ws = writtenWorks.ps * 0.3; // 30% weight for written works
+
+    performanceTasks.ps = performanceTasks.hps > 0 ? (performanceTasks.raw / performanceTasks.hps) * 100 : 0;
+    performanceTasks.ws = performanceTasks.ps * 0.5; // 50% weight for performance tasks
+
+    const breakdown = {
+      writtenWorks,
+      performanceTasks,
+      quarter,
+      termName,
+      academicYear,
+      totalInitialGrade: writtenWorks.ws + performanceTasks.ws
+    };
+
+    res.json({ success: true, breakdown });
+  } catch (error) {
+    console.error('Error calculating grade breakdown:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to calculate grade breakdown',
+      error: error.message
+    });
+  }
+});
+
 // Get comprehensive grade data for a class section (for export)
 router.get('/class/:classId/section/:sectionName/comprehensive', authenticateToken, async (req, res) => {
   try {
@@ -775,6 +911,114 @@ router.get('/class/:classId/section/:sectionName/comprehensive', authenticateTok
       success: false, 
       error: 'Failed to retrieve comprehensive grade data' 
     });
+  }
+});
+
+// Export quarter-scoped class list (WW/PT Raw/HPS/PS/WS) for a class section
+router.get('/export/quarter-classlist', authenticateToken, async (req, res) => {
+  try {
+    const { classId, sectionName, academicYear, termName, quarter, wwWeight, ptWeight } = req.query;
+
+    if (!classId || !academicYear || !termName || !quarter) {
+      return res.status(400).json({ success: false, message: 'Missing required query params: classId, academicYear, termName, quarter' });
+    }
+
+    let students = [];
+    if (sectionName) {
+      // Prefer section-based lookup when provided
+      const studentAssignments = await StudentAssignment.find({
+        sectionName,
+        schoolYear: academicYear,
+        termName
+      }).populate('studentId', 'firstname lastname userID');
+      students = studentAssignments.map(sa => sa.studentId).filter(Boolean);
+    }
+    if (!students.length) {
+      // Fallback: get students from Class roster
+      const classDoc = await Class.findOne({ classID: classId });
+      if (classDoc && Array.isArray(classDoc.studentIDs) && classDoc.studentIDs.length) {
+        students = await User.find({ _id: { $in: classDoc.studentIDs } }, 'firstname lastname userID');
+      }
+    }
+
+    // Fetch quarter activities
+    const assignments = await Assignment.find({ classID: classId, academicYear, termName, quarter });
+    // Quizzes can be attached via assignedTo.classID, not always top-level classID
+    const quizzes = await Quiz.find({ 'assignedTo.classID': classId, academicYear, termName, quarter });
+
+    console.log('[EXPORT][params]', { classId, sectionName, academicYear, termName, quarter });
+    console.log('[EXPORT][counts before]', { students: students.length, assignments: assignments.length, quizzes: quizzes.length });
+
+    // Fetch submissions/responses
+    const assignmentIds = assignments.map(a => a._id);
+    const quizIds = quizzes.map(q => q._id);
+
+    const submissions = await Submission.find({ assignment: { $in: assignmentIds } });
+    const responses = await QuizResponse.find({ quizId: { $in: quizIds } });
+    console.log('[EXPORT][subs/resps]', { submissions: submissions.length, responses: responses.length });
+
+    // Build per-student WW/PT raw/hps
+    const studentsData = students.map(stu => {
+      let wwRaw = 0, wwHps = 0, ptRaw = 0, ptHps = 0;
+
+      // Assignments
+      assignments.forEach(a => {
+        const sub = submissions.find(s => {
+          const sAssign = s.assignment?.toString?.();
+          const sStudentObj = s.student?.toString?.();
+          const sStudentAlt = s.studentID ? String(s.studentID) : undefined;
+          const targetObj = stu?._id?.toString?.();
+          const targetAlt = stu?.userID ? String(stu.userID) : undefined;
+          return sAssign === a._id.toString() && (
+            (sStudentObj && targetObj && sStudentObj === targetObj) ||
+            (sStudentAlt && targetAlt && sStudentAlt === targetAlt)
+          );
+        });
+        const earned = sub?.grade || 0;
+        const max = a.points || 0;
+        if (a.activityType === 'written') { wwRaw += earned; wwHps += max; }
+        else if (a.activityType === 'performance') { ptRaw += earned; ptHps += max; }
+      });
+
+      // Quizzes
+      quizzes.forEach(q => {
+        const resp = responses.find(r => {
+          const rQuiz = r.quizId?.toString?.();
+          const rObj = r.studentId?._id?.toString?.() || r.studentId?.toString?.();
+          const rAlt = r.studentID ? String(r.studentID) : undefined;
+          const targetObj = stu?._id?.toString?.();
+          const targetAlt = stu?.userID ? String(stu.userID) : undefined;
+          return rQuiz === q._id.toString() && (
+            (rObj && targetObj && rObj === targetObj) ||
+            (rAlt && targetAlt && rAlt === targetAlt)
+          );
+        });
+        const earned = resp?.score || 0;
+        const max = q.points || 0;
+        if (q.activityType === 'written') { wwRaw += earned; wwHps += max; }
+        else if (q.activityType === 'performance') { ptRaw += earned; ptHps += max; }
+      });
+
+      return {
+        studentName: `${stu.firstname} ${stu.lastname}`,
+        wwRaw, wwHps, ptRaw, ptHps
+      };
+    });
+
+    const buffer = generateQuarterSummaryClassList(studentsData, {
+      academicYear,
+      termName,
+      quarter,
+      wwWeight: wwWeight ? Number(wwWeight) : 0.4,
+      ptWeight: ptWeight ? Number(ptWeight) : 0.6
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="quarter_classlist_${classId}_${sectionName}_${quarter}.xlsx"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Error exporting quarter class list:', error);
+    res.status(500).json({ success: false, message: 'Failed to export', error: error.message });
   }
 });
 

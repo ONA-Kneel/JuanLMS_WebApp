@@ -2,10 +2,14 @@ import React, { useState, useEffect } from 'react';
 import Faculty_Navbar from './Faculty/Faculty_Navbar';
 import ValidationModal from './ValidationModal';
 import * as XLSX from 'xlsx';
+import { useQuarter } from '../context/QuarterContext.jsx';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function GradingSystem({ onStageTemporaryGrades }) {
+  // Get quarter context
+  const { globalQuarter, globalTerm, globalAcademicYear } = useQuarter();
+  
   const [facultyClasses, setFacultyClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
@@ -30,6 +34,8 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
   const [pendingValidatedFile, setPendingValidatedFile] = useState(null);
   const [pendingValidatedSummary, setPendingValidatedSummary] = useState(null);
   const [exportLoading, setExportLoading] = useState(false);
+  const [rosterPreview, setRosterPreview] = useState([]);
+  const [rosterLoading, setRosterLoading] = useState(false);
 
   // Consolidated getQuarterLabels function - used throughout the component
   const getQuarterLabels = (semester) => {
@@ -320,66 +326,28 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
     }
   };
 
-  const expectedHeaderRow8 = (q1, q2) => [
+  // Simplified expected headers for 7-column layout
+  const expectedHeaderRow8 = () => [
     "Student No.",
     "STUDENT'S NAME (Alphabetical Order with Middle Initials)",
-    q1, "", "", "", "", "", "", "", "", "",
-    q2, "", "", "", "", "", "", "", "",
-    "FINAL GRADE"
+    "WRITTEN WORKS 30%", "",
+    "PERFORMANCE TASKS 50%", "",
+    "QUARTERLY\nEXAM"
   ];
   const expectedHeaderRow9 = [
     "", "",
-    "WRITTEN WORKS 40%", "", "", "",
-    "PERFORMANCE TASKS 60%", "", "", "",
-    "INITIAL GRADE",
-    "QUARTERLY GRADE",
-    "WRITTEN WORKS 40%", "", "", "",
-    "PERFORMANCE TASKS 60%", "", "", "",
-    "INITIAL GRADE",
-    "QUARTERLY GRADE",
+    "RAW", "HPS",
+    "RAW", "HPS",
     ""
   ];
-  const expectedHeaderRow10 = [
-    "", "",
-    "RAW", "HPS", "PS", "WS",
-    "RAW", "HPS", "PS", "WS",
-    "", "",
-    "RAW", "HPS", "PS", "WS",
-    "RAW", "HPS", "PS", "WS",
-    "", "",
-    ""
-  ];
+  const expectedHeaderRow10 = [];
 
   const arraysEqual = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 
   const normalizeStudentsForSection = async (selectedClassObj, selectedSectionId) => {
     const token = localStorage.getItem('token');
     let students = [];
-    try {
-      const classId = selectedClassObj.classID || selectedClassObj._id || selectedClassObj.classCode;
-      const compRes = await fetch(`${API_BASE}/api/grading/class/${classId}/section/${selectedSectionId}/comprehensive`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (compRes.ok) {
-        const compData = await compRes.json();
-        if (compData?.success && compData?.data?.students?.length) {
-          students = compData.data.students;
-        }
-      }
-    } catch {}
-    try {
-      if (students.length === 0) {
-        const directRes = await fetch(`${API_BASE}/api/students/section/${selectedSectionId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (directRes.ok) {
-          const directData = await directRes.json();
-          if (Array.isArray(directData) && directData.length) {
-            students = directData;
-          }
-        }
-      }
-    } catch {}
+    // Removed calls to protected/nonexistent preview endpoints to avoid 403/404
     try {
       if (students.length === 0 && selectedClassObj.classID) {
         const membersRes = await fetch(`${API_BASE}/classes/${selectedClassObj.classID}/members`, {
@@ -468,25 +436,23 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
       return errors;
     }
 
-    // Check if Row 10 exists and has content
-    if (!row10 || row10.length === 0) {
-      errors.push('Row 10 is missing or empty. This row should contain sub-headers.');
-      return errors;
-    }
+    // Row 10 (legacy sub-headers) is now optional in the compact template
 
-    // Required group headers (allow anywhere in the row; tolerate merged cells)
-    const requiredRow9Labels = ['WRITTEN WORKS 40%', 'PERFORMANCE TASKS 60%', 'INITIAL GRADE', 'QUARTERLY GRADE'];
-    requiredRow9Labels.forEach(label => {
-      if (!rowHas(row9, label)) {
-        errors.push(`Missing required header in Row 9: ${label}`);
+    // Required group headers (can appear in Row 8 or Row 9 due to merges/wrapping)
+    const requiredGroupLabels = ['WRITTEN WORKS 30%', 'PERFORMANCE TASKS 50%', 'QUARTERLY EXAM'];
+    requiredGroupLabels.forEach(label => {
+      const found = rowHas(row9, label) || rowHas(row8, label);
+      if (!found) {
+        errors.push(`Missing required header (Row 8/9): ${label}`);
       }
     });
 
-    // Required sub-headers (RAW/HPS/PS/WS should appear at least once per row)
-    const requiredRow10Labels = ['RAW', 'HPS', 'PS', 'WS'];
-    requiredRow10Labels.forEach(label => {
-      if (!rowHas(row10, label)) {
-        errors.push(`Missing required sub-header in Row 10: ${label}`);
+    // Required sub-headers: RAW/HPS must appear (in row 9 for compact, or row 10 for legacy)
+    const requiredSubHeaders = ['RAW', 'HPS'];
+    requiredSubHeaders.forEach(label => {
+      const found = rowHas(row9, label) || rowHas(row10, label);
+      if (!found) {
+        errors.push(`Missing required sub-header: ${label}`);
       }
     });
 
@@ -509,8 +475,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
     }
 
     // Expect header rows at indices 7,8,9 (0-based)
-    const qLabels = getQuarterLabels();
-    const reqRow8 = expectedHeaderRow8(qLabels.firstQuarterDisplay, qLabels.secondQuarterDisplay);
+    const reqRow8 = expectedHeaderRow8();
     const row8 = aoa[7] || [];
     const row9 = aoa[8] || [];
     const row10 = aoa[9] || [];
@@ -583,11 +548,11 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
     //   warnings.push('Header row format differs from the canonical template (Row 8).');
     // }
 
-    // Extra columns handling beyond W (23 columns)
-    const maxCols = 23;
+    // Extra columns handling beyond G (7 columns)
+    const maxCols = 7;
     const headerWidths = [row8.length, row9.length, row10.length];
     if (headerWidths.some(w => w > maxCols)) {
-      warnings.push('This file contains extra columns beyond W; they will be ignored.');
+      warnings.push('This file contains extra columns beyond G; they will be ignored.');
     }
 
     // Fetch section students for validation
@@ -628,11 +593,10 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
         continue;
       }
 
-      // Optional: name mismatch can indicate different section; flag and skip
+      // Optional: name mismatch can indicate different section; flag as warning but do not skip row
       const expectedName = studentId ? (idToName.get(studentId) || '') : '';
       if (studentId && expectedName && studentName && expectedName.trim().toLowerCase() !== studentName.trim().toLowerCase()) {
-        errors.push(`Name mismatch for student ${studentId} at row ${r + 1}. Expected "${expectedName}", got "${studentName}". Row skipped.`);
-        continue;
+        warnings.push(`Name mismatch for student ${studentId} at row ${r + 1}. Expected "${expectedName}", got "${studentName}". Row will be processed by ID.`);
       }
 
       // Accents detection
@@ -640,26 +604,16 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
         accentedNames.add(`${studentName} (${studentId})`);
       }
 
-      // Numeric validations for K (10), L (11), U (20), V (21)
-      const gradeCols = [
-        { idx: 10, label: 'Initial Grade (K)' },
-        { idx: 11, label: 'Quarterly Grade (L)' },
-        { idx: 20, label: 'Initial Grade (U)' },
-        { idx: 21, label: 'Quarterly Grade (V)' },
-      ];
-      for (const g of gradeCols) {
-        const val = cells[g.idx];
-        if (val === '' || val === null || typeof val === 'undefined') {
-          errors.push(`Row ${r + 1}: ${g.label} should only be from 0-100. Found: blank`);
-          continue;
-        }
-        const num = parseFloat(val);
-        if (Number.isNaN(num)) {
-          errors.push(`Row ${r + 1}: ${g.label} should only be from 0-100. Found: "${val}"`);
-          continue;
-        }
-        if (num < 0 || num > 100) {
-          errors.push(`Row ${r + 1}: ${g.label} should only be from 0-100. Found: ${num}`);
+      // Require Quarterly Exam (column G, index 6) to be present and 0-100
+      const qExam = cells[6];
+      if (qExam === '' || qExam === null || typeof qExam === 'undefined') {
+        errors.push(`Row ${r + 1}: Quarterly Exam (G) is required.`);
+        continue;
+      }
+      {
+        const num = parseFloat(qExam);
+        if (Number.isNaN(num) || num < 0 || num > 100) {
+          errors.push(`Row ${r + 1}: Quarterly Exam (G) should be a number between 0-100.`);
           continue;
         }
       }
@@ -702,7 +656,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
 
     const termName = currentTerm?.termName || 'Term 1';
     const records = [];
-    const maxCols = 23;
+    const maxCols = 7; // Compact layout: A..G
     for (let r = 10; r < aoa.length; r++) {
       const row = aoa[r];
       if (!row || row.length === 0 || row.every(c => String(c).trim() === '')) continue;
@@ -710,39 +664,38 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
       const studentId = String(cells[0] || '').trim();
       const studentName = String(cells[1] || '').trim();
       if (!studentId) continue;
-      // Quarterly Grade columns per our template: L (index 11) and V (index 21)
-      const qA = parseFloat(cells[11]);
-      const qB = parseFloat(cells[21]);
+      // Quarterly Exam column is G (index 6)
+      const qExam = parseFloat(cells[6]);
       const isNum = (n) => typeof n === 'number' && !Number.isNaN(n);
 
-      let gradePayload = { quarter1: '', quarter2: '', quarter3: '', quarter4: '' };
-      if (termName === 'Term 1') {
-        gradePayload.quarter1 = isNum(qA) ? qA.toFixed(2) : '';
-        gradePayload.quarter2 = isNum(qB) ? qB.toFixed(2) : '';
-      } else {
-        gradePayload.quarter3 = isNum(qA) ? qA.toFixed(2) : '';
-        gradePayload.quarter4 = isNum(qB) ? qB.toFixed(2) : '';
-      }
+      // Parse grade breakdown fields for compact layout
+      const writtenWorksRaw = parseFloat(cells[2]) || 0; // C
+      const writtenWorksHPS = parseFloat(cells[3]) || 0; // D
+      const performanceTasksRaw = parseFloat(cells[4]) || 0; // E
+      const performanceTasksHPS = parseFloat(cells[5]) || 0; // F
+      const quarterlyExam = isNaN(qExam) ? 0 : qExam; // G
 
-      const a = isNum(qA) ? qA : null;
-      const b = isNum(qB) ? qB : null;
-      const sem = a != null && b != null ? ((a + b) / 2).toFixed(2) : '';
-      const semNum = parseFloat(sem);
-      let remarks = '';
-      if (sem) {
-        if (semNum >= 85) remarks = 'PASSED';
-        else if (semNum >= 80) remarks = 'INCOMPLETE';
-        else if (semNum >= 75) remarks = 'REPEAT';
-        else remarks = 'FAILED';
-      }
+      let gradePayload = { 
+        quarter1: '', quarter2: '', quarter3: '', quarter4: '',
+        // Grade breakdown fields for current quarter
+        writtenWorksRaw: writtenWorksRaw,
+        writtenWorksHPS: writtenWorksHPS,
+        performanceTasksRaw: performanceTasksRaw,
+        performanceTasksHPS: performanceTasksHPS,
+        quarterlyExam: quarterlyExam
+      };
+      
+      // Set the appropriate quarter based on current selection
+      // Quarterly grade is computed later; we only carry exam + raw/hps now
+
+      // Quarterly grade/remarks are computed later in the UI; no need to derive here
 
       records.push({
         schoolID: studentId,
         studentName,
         grades: {
           ...gradePayload,
-          semesterFinal: sem,
-          remarks
+          // Quarterly grade/remarks computed later; no semester here
         },
         subjectCode: selectedClassObj?.classCode || selectedClassObj?.className,
         subjectName: selectedClassObj?.className,
@@ -764,7 +717,8 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
           classObj: selectedClassObj,
           sectionId: selectedSection,
           termName: currentTerm?.termName,
-          academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''
+          academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : '',
+          quarter: globalQuarter
         });
       }
       setSuccessMessage(`Staged ${previewRecords.length} student grade(s) to the Report table. Review and click Post Grades to finalize.`);
@@ -849,7 +803,8 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
           classObj: selectedClassObj,
           sectionId: selectedSection,
           termName: currentTerm?.termName,
-          academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''
+          academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : '',
+          quarter: globalQuarter
         });
       }
       setUploadStatus('Finalizing...');
@@ -943,6 +898,8 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
         return;
       }
 
+      // Use legacy client-side template generation (rest of function)
+
       const quarterLabels = getQuarterLabels();
 
       // Dynamic fields
@@ -999,12 +956,33 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
       // Frontend guard: only keep true students
       const studentsOnly = (students || []).filter(s => (s.role || '').toLowerCase() === 'students');
       // Normalize students to have school ID and name
-      const normalizedStudents = studentsOnly.map((s, idx) => ({
-        id:
-          s.studentID || s.schoolID || s.userID || s.id || s._id || `S${idx + 1}`,
-        name:
-          s.name || s.studentName || `${s.firstname || ''} ${s.lastname || ''}`.trim() || `Student ${idx + 1}`
-      }));
+      const normalizedStudents = studentsOnly.map((s, idx) => {
+        const fullName = s.name || s.studentName || `${s.firstname || ''} ${s.lastname || ''}`.trim() || `Student ${idx + 1}`;
+        
+        // Format name as "Last Name, First Name" for sorting
+        const formatNameForSorting = (name) => {
+          const nameParts = name.trim().split(' ');
+          if (nameParts.length >= 2) {
+            const lastName = nameParts[nameParts.length - 1];
+            const firstName = nameParts.slice(0, -1).join(' ');
+            return `${lastName}, ${firstName}`;
+          }
+          return name; // Return as-is if only one name part
+        };
+        
+        return {
+          id: s.studentID || s.schoolID || s.userID || s.id || s._id || `S${idx + 1}`,
+          name: formatNameForSorting(fullName),
+          originalName: fullName, // Keep original for reference
+          objectId: s._id || s.id || null,
+          userId: s.userID || s.studentID || s.schoolID || null
+        };
+      });
+      
+      // Sort students alphabetically by last name (which is now first in formatted name)
+      normalizedStudents.sort((a, b) => {
+        return a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
+      });
 
       if (normalizedStudents.length === 0) {
         setValidationMessage('No students found for this section. The template will still be generated with empty rows.');
@@ -1019,80 +997,309 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
         [""],
         [subjectName],
         ["Track:", trackName, "", "Semester:", currentSemester, "", "School Year:", schoolYear],
-        ["Subject Code:", subjectCode, "", "Class Code:", classCode],
+        ["Subject Code:", subjectCode, "", "Class Code:", classCode, "", `Quarter: ${globalQuarter}`],
         [""],
         [
           "Student No.",
           "STUDENT'S NAME (Alphabetical Order with Middle Initials)",
-          quarterLabels.firstQuarterDisplay, "", "", "", "", "", "", "", "", "",
-          quarterLabels.secondQuarterDisplay, "", "", "", "", "", "", "", "",
-          "FINAL GRADE"
+          "WRITTEN WORKS 30%", "",
+          "PERFORMANCE TASKS 50%", "",
+          "QUARTERLY\nEXAM"
         ],
         [
           "", "",
-          "WRITTEN WORKS 40%", "", "", "",
-          "PERFORMANCE TASKS 60%", "", "", "",
-          "INITIAL GRADE",
-          "QUARTERLY GRADE",
-          "WRITTEN WORKS 40%", "", "", "",
-          "PERFORMANCE TASKS 60%", "", "", "",
-          "INITIAL GRADE",
-          "QUARTERLY GRADE",
-          ""
-        ],
-        [
-          "", "",
-          "RAW", "HPS", "PS", "WS",
-          "RAW", "HPS", "PS", "WS",
-          "", "",
-          "RAW", "HPS", "PS", "WS",
-          "RAW", "HPS", "PS", "WS",
-          "", "",
+          "RAW", "HPS",
+          "RAW", "HPS",
           ""
         ],
       ];
 
-      // Append student rows using normalized students; pad to 15 rows
-      const EMPTY_21 = Array(21).fill("");
+      // Fetch student scores and activity totals using the same method as Faculty_Activities
+      const fetchStudentScores = async () => {
+        const scores = {};
+        const activityTotals = { written: 0, performance: 0 };
+        
+        try {
+          // Fetch assignments for this quarter
+          const assignmentRes = await fetch(`${API_BASE}/assignments?quarter=${globalQuarter}&termName=${globalTerm}&academicYear=${globalAcademicYear}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          let assignments = [];
+          if (assignmentRes.ok) {
+            assignments = await assignmentRes.json();
+            console.log('📋 Fetched Assignments:', assignments.map(a => ({ 
+              id: a._id, 
+              title: a.title, 
+              classID: a.classID, 
+              activityType: a.activityType, 
+              points: a.points,
+              quarter: a.quarter 
+            })));
+          }
+          
+          // Fetch quizzes for this quarter
+          const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${selectedClassObj.classID}&quarter=${globalQuarter}&termName=${globalTerm}&academicYear=${globalAcademicYear}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          let quizzes = [];
+          if (quizRes.ok) {
+            quizzes = await quizRes.json();
+            console.log('📋 Fetched Quizzes:', quizzes.map(q => ({ 
+              id: q._id, 
+              title: q.title, 
+              classID: q.classID, 
+              activityType: q.activityType, 
+              points: q.points,
+              quarter: q.quarter 
+            })));
+          }
+          
+          // Process assignments (same logic as Faculty_Activities)
+          for (const assignment of assignments) {
+            if (assignment.classID === selectedClassObj.classID) {
+              const category = assignment.activityType === 'written' ? 'written' : 'performance';
+              activityTotals[category] += assignment.points || 0;
+              
+              try {
+                const submissionRes = await fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                
+                if (submissionRes.ok) {
+                  const submissions = await submissionRes.json();
+                  if (submissions && submissions.length > 0) {
+                    // Check if all submissions are graded (same logic as Faculty_Activities)
+                    const allGraded = submissions.every(sub => sub.status === 'graded');
+                    if (allGraded) {
+                      // Process each graded submission
+                      submissions.forEach(submission => {
+                        if (submission.status === 'graded') {
+                          const objectKey = submission.student && typeof submission.student === 'object' && submission.student._id ? String(submission.student._id) : String(submission.student || '');
+                          const altKey = submission.studentID ? String(submission.studentID) : null;
+                          const keys = [objectKey, altKey].filter(Boolean);
+                          keys.forEach(k => {
+                            if (!scores[k]) {
+                              scores[k] = { written: 0, performance: 0 };
+                            }
+                            scores[k][category] += submission.grade || 0;
+                          });
+                        }
+                      });
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error(`Failed to fetch submissions for assignment ${assignment._id}:`, err);
+              }
+            }
+          }
+          
+          // Process quizzes (same logic as Faculty_Activities)
+          for (const quiz of quizzes) {
+            const category = quiz.activityType === 'written' ? 'written' : 'performance';
+            activityTotals[category] += quiz.points || 0;
+            
+            try {
+              const responseRes = await fetch(`${API_BASE}/api/quizzes/${quiz._id}/responses`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              
+              if (responseRes.ok) {
+                const responses = await responseRes.json();
+                if (responses && responses.length > 0) {
+                  // Check if all responses are graded (same logic as Faculty_Activities)
+                  const allGraded = responses.every(resp => resp.graded === true);
+                  if (allGraded) {
+                    // Process each graded response
+                    responses.forEach(response => {
+                      if (response.graded === true) {
+                        const objectKey = response.studentId && typeof response.studentId === 'object' && response.studentId._id ? String(response.studentId._id) : String(response.studentId || '');
+                        const altKey = response.studentID ? String(response.studentID) : null;
+                        const keys = [objectKey, altKey].filter(Boolean);
+                        keys.forEach(k => {
+                          if (!scores[k]) {
+                            scores[k] = { written: 0, performance: 0 };
+                          }
+                          scores[k][category] += response.score || 0;
+                        });
+                      }
+                    });
+                  }
+                }
+              }
+            } catch (err) {
+              console.error(`Failed to fetch responses for quiz ${quiz._id}:`, err);
+            }
+          }
+          
+          console.log('🔍 Excel Generation - Processed Data:');
+          console.log('  - Activity Totals:', activityTotals);
+          console.log('  - Student Scores Sample:', Object.keys(scores).slice(0, 3).map(id => ({ id, scores: scores[id] })));
+          console.log('  - Assignments processed:', assignments.length);
+          console.log('  - Quizzes processed:', quizzes.length);
+          console.log('  - All student IDs with scores:', Object.keys(scores));
+          console.log('  - Selected Class ID:', selectedClassObj.classID);
+          console.log('  - Quarter Filter:', globalQuarter, globalTerm, globalAcademicYear);
+          
+        } catch (error) {
+          console.error('Error fetching student scores:', error);
+        }
+        
+        return { scores, activityTotals };
+      };
+
+      // Fetch the actual data
+      const { scores, activityTotals } = await fetchStudentScores();
+      
+      // Debug logging
+      console.log('🔍 Excel Generation Debug:');
+      console.log('  - Activity Totals:', activityTotals);
+      console.log('  - Student Scores Sample:', Object.keys(scores).slice(0, 3).map(id => ({ id, scores: scores[id] })));
+      console.log('  - Selected Quarter:', globalQuarter, globalTerm, globalAcademicYear);
+      
+      // Append student rows with actual data
       const totalRows = Math.max(15, normalizedStudents.length);
       for (let i = 0; i < totalRows; i++) {
         const student = normalizedStudents[i];
         if (student) {
-          wsData.push([student.id, student.name, ...EMPTY_21]);
+          const keyCandidates = [
+            student.objectId ? String(student.objectId) : null,
+            student.userId ? String(student.userId) : null,
+            student.id ? String(student.id) : null
+          ].filter(Boolean);
+          let studentScores = { written: 0, performance: 0 };
+          for (const k of keyCandidates) {
+            if (scores[k]) { studentScores = scores[k]; break; }
+          }
+          
+          // Create row with actual data
+          const studentRow = [
+            student.id, // A Student No.
+            student.name, // B Name
+            studentScores.written, // C WW RAW
+            activityTotals.written, // D WW HPS
+            studentScores.performance, // E PT RAW
+            activityTotals.performance, // F PT HPS
+            "" // G Quarterly Grade (blank)
+          ];
+          
+          wsData.push(studentRow);
         } else {
-          wsData.push([i + 1, "", ...EMPTY_21]);
+          // Empty row for padding
+          wsData.push([i + 1, "", "", "", "", "", ""]);
         }
       }
 
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-      // Merges to match layout
+      // Merges to match simplified layout (A..G)
       ws["!merges"] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 22 } }, // A1:W1
-        { s: { r: 1, c: 0 }, e: { r: 1, c: 22 } }, // A2:W2
-        { s: { r: 3, c: 0 }, e: { r: 3, c: 22 } }, // A4:W4
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // A1:G1
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } }, // A2:G2
+        { s: { r: 3, c: 0 }, e: { r: 3, c: 6 } }, // A4:G4
         { s: { r: 7, c: 0 }, e: { r: 8, c: 0 } },  // A8:A9 Student No.
         { s: { r: 7, c: 1 }, e: { r: 8, c: 1 } },  // B8:B9 Name
-        { s: { r: 7, c: 2 }, e: { r: 7, c: 11 } }, // C8:L8 Quarter 1/3 band
-        { s: { r: 7, c: 12 }, e: { r: 7, c: 21 } },// M8:V8 Quarter 2/4 band
-        { s: { r: 7, c: 22 }, e: { r: 8, c: 22 } },// W8:W9 Final Grade
-        { s: { r: 8, c: 2 }, e: { r: 8, c: 5 } },  // C9:F9 WW 40%
-        { s: { r: 8, c: 6 }, e: { r: 8, c: 9 } },  // G9:J9 PT 60%
-        { s: { r: 8, c: 12 }, e: { r: 8, c: 15 } },// M9:P9 WW 40%
-        { s: { r: 8, c: 16 }, e: { r: 8, c: 19 } },// Q9:T9 PT 60%
+        { s: { r: 7, c: 2 }, e: { r: 7, c: 3 } },  // C8:D8 WW 30% (RAW,HPS)
+        { s: { r: 7, c: 4 }, e: { r: 7, c: 5 } },  // E8:F8 PT 50% (RAW,HPS)
+        { s: { r: 7, c: 6 }, e: { r: 8, c: 6 } },  // G8:G9 Quarterly Exam
       ];
 
-      // Column widths
+      // Column widths (A..G)
       ws["!cols"] = [
-        { wch: 12 },
-        { wch: 42 },
-        ...Array(20).fill({ wch: 10 }),
-        { wch: 12 },
+        { wch: 12 }, // A Student No.
+        { wch: 42 }, // B Name
+        { wch: 10 }, // C WW RAW
+        { wch: 10 }, // D WW HPS
+        { wch: 10 }, // E PT RAW
+        { wch: 10 }, // F PT HPS
+        { wch: 14 }, // G Quarterly Grade
       ];
+
+      // Set row heights for better text wrapping
+      ws["!rows"] = [
+        { hpt: 20 }, // Row 1
+        { hpt: 20 }, // Row 2
+        { hpt: 20 }, // Row 3
+        { hpt: 20 }, // Row 4
+        { hpt: 20 }, // Row 5
+        { hpt: 20 }, // Row 6
+        { hpt: 20 }, // Row 7
+        { hpt: 50 }, // Row 8 - taller for wrapped text
+        { hpt: 50 }, // Row 9 - taller for wrapped text
+        { hpt: 20 }, // Row 10
+      ];
+
+      // Create styles using a more direct approach
+      const createStyle = (alignment) => ({
+        alignment: {
+          horizontal: alignment.horizontal || 'center',
+          vertical: alignment.vertical || 'center',
+          wrapText: alignment.wrapText || false
+        }
+      });
+
+      // Apply styles directly to specific cells with proper XLSX alignment values
+      const styleCells = [
+        // A8, B8: center, middle align, text wrapped
+        { cell: 'A8', style: { alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
+        { cell: 'B8', style: { alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
+        
+        // C8,E8: center, middle align
+        { cell: 'C8', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        { cell: 'E8', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        
+        // C9..F9: center, middle align (RAW/HPS row)
+        { cell: 'C9', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        { cell: 'D9', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        { cell: 'E9', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        { cell: 'F9', style: { alignment: { horizontal: 'center', vertical: 'center' } } },
+        
+        // G8: Quarterly Exam header
+        { cell: 'G8', style: { alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } }
+      ];
+
+      // Apply all styles
+      styleCells.forEach(({ cell, style }) => {
+        if (!ws[cell]) ws[cell] = { v: '' };
+        ws[cell].s = style;
+      });
 
       // Freeze panes under headers (A..B fixed, top 10 rows)
       ws["!freeze"] = { xSplit: 2, ySplit: 10 };
+
+      // Force apply all styles by recreating the worksheet with styles
+      const styledData = wsData.map((row, rowIndex) => {
+        return row.map((cell, colIndex) => {
+          const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+          const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+          
+          // Check if this cell needs special formatting
+          const specialCell = styleCells.find(sc => sc.cell === cellRef);
+          if (specialCell) {
+            return {
+              v: cell,
+              s: specialCell.style
+            };
+          }
+          
+          return cell;
+        });
+      });
+
+      // Recreate worksheet with styled data
+      const styledWs = XLSX.utils.aoa_to_sheet(styledData);
+      
+      // Copy merges and other properties
+      styledWs["!merges"] = ws["!merges"];
+      styledWs["!cols"] = ws["!cols"];
+      styledWs["!rows"] = ws["!rows"];
+      styledWs["!freeze"] = ws["!freeze"];
+      
+      // Replace the original worksheet
+      Object.assign(ws, styledWs);
 
       XLSX.utils.book_append_sheet(wb, ws, "Grade Sheet");
 
@@ -1176,15 +1383,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
                 Export and manage grades for your assignments, activities, and quizzes
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              {/* Debug toggle for development */}
-              <button
-                onClick={() => setDebugMode(!debugMode)}
-                className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-              >
-                {debugMode ? "Hide Debug" : "Show Debug"}
-              </button>
-            </div>
+            <div className="flex items-center gap-4"></div>
           </div>
         </div>
 
@@ -1207,20 +1406,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
           </div>
         </div>
 
-        {/* Debug info */}
-        {debugMode && (
-          <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
-            <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
-            <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
-            <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
-            <p className="text-sm text-yellow-700">Classes Found: {facultyClasses.length}</p>
-            <p className="text-sm text-yellow-700">Current Faculty ID: {localStorage.getItem("userID") || 'Not set'}</p>
-            <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
-            <p className="text-sm text-yellow-700">Loading State: {loading ? 'Yes' : 'No'}</p>
-            <p className="text-sm text-yellow-700">Selected Class: {selectedClass !== '' ? facultyClasses[selectedClass]?.className : 'None'}</p>
-            <p className="text-sm text-yellow-700">Sections Count: {sections.length}</p>
-          </div>
-        )}
+        
 
         {/* Class Selection */}
         <div className="mb-6 p-4 bg-white rounded-lg shadow">
@@ -1379,6 +1565,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
                 {uploadStatus}
               </p>
             )}
+            {/* Roster Preview removed per request */}
           </div>
         )}
 

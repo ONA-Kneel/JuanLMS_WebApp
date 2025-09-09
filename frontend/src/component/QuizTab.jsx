@@ -2,11 +2,17 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function QuizTab({ onQuizCreated, onPointsChange }) {
     const [searchParams] = useSearchParams();
     const editAssignmentId = searchParams.get('edit');
+    const activityType = searchParams.get('type') || 'written'; // Default to 'written' if not specified
+    
+    // Get quarter parameters from URL
+    const quarterFromUrl = searchParams.get('quarter');
+    const termNameFromUrl = searchParams.get('termName');
+    const academicYearFromUrl = searchParams.get('academicYear');
     
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
@@ -556,6 +562,7 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             title,
             instructions: description,
             type: 'quiz',
+            activityType: activityType,
             description,
             points: totalPoints,
             questions,
@@ -568,6 +575,10 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                 timeLimitEnabled: timingLimitEnabled
             },
             createdBy: userId,
+            // Add quarter parameters
+            quarter: quarterFromUrl || 'Q1',
+            termName: termNameFromUrl || 'Term 1',
+            academicYear: academicYearFromUrl || '2024-2025',
             questionBehaviour: {
                 shuffle: shuffleQuestions === "Yes"
             },
@@ -724,6 +735,15 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             {/* Main Content */}
             <div className="flex-1 p-10 font-poppinsr">
                 <h1 className="text-2xl font-bold mb-8">Create a Quiz</h1>
+                
+                {/* Quarter Indicator */}
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm font-medium text-blue-800">
+                        Creating quiz for: <span className="font-semibold">{quarterFromUrl || 'Q1'} - {termNameFromUrl || 'Term 1'}</span>
+                        <span className="text-blue-600 ml-2">({academicYearFromUrl || '2024-2025'})</span>
+                    </p>
+                </div>
+                
                 <div className="bg-white rounded-xl shadow p-8 mb-8">
                     <label className="block font-bold text-lg mb-1">Title of Quiz</label>
                     <input

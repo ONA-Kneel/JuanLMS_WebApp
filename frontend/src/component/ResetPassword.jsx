@@ -7,7 +7,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 
 export default function ResetPassword() {
@@ -123,7 +123,7 @@ export default function ResetPassword() {
         {message && <p className="text-green-600 mt-4">{message}</p>}
         {error && <p className="text-red-600 mt-4">{error}</p>}
         {/* Back to login navigation */}
-        <button className="mt-6 text-blue-700 hover:underline" onClick={() => navigate('/login')}>Back to Login</button>
+        <button className="mt-6 text-blue-700 hover:underline" onClick={() => navigate('/')}>Back to Login</button>
       </div>
       
       {/* Validation Modal */}

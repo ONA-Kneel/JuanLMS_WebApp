@@ -3,6 +3,8 @@ import ProfileModal from "../ProfileModal";
 import ProfileMenu from "../ProfileMenu";
 import React, { useEffect, useState } from 'react';
 import GradingSystem from '../GradingSystem';
+import QuarterSelector from "../QuarterSelector";
+import { useQuarter } from "../../context/QuarterContext.jsx";
 
 /**
  * Faculty Grades Component
@@ -15,7 +17,7 @@ import GradingSystem from '../GradingSystem';
  * - Real-time Grade Calculation: Automatic calculation of final grades and remarks
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // Modal Component
 const Modal = ({ isOpen, onClose, title, children, type = 'info' }) => {
@@ -79,6 +81,9 @@ const Modal = ({ isOpen, onClose, title, children, type = 'info' }) => {
 };
 
 export default function Faculty_Grades() {
+  // Get quarter context
+  const { globalQuarter, globalTerm, globalAcademicYear } = useQuarter();
+  
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [activeTab, setActiveTab] = useState('traditional'); // 'traditional' or 'excel'
@@ -93,6 +98,7 @@ export default function Faculty_Grades() {
   const [selectedStudentName, setSelectedStudentName] = useState('');
   const [studentGrades, setStudentGrades] = useState({});
   const [showIndividualManagement, setShowIndividualManagement] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   
   // Modal states
@@ -131,6 +137,13 @@ export default function Faculty_Grades() {
     const gradeNum = parseFloat(grade);
     return !isNaN(gradeNum) && gradeNum >= 0 && gradeNum <= 100;
   };
+
+  // Refetch grades when quarter changes
+  useEffect(() => {
+    if (globalQuarter && globalTerm && globalAcademicYear && selectedClass !== null && students.length > 0) {
+      loadSavedGradesFromDatabase(classes[selectedClass]?.classID, students);
+    }
+  }, [globalQuarter, globalTerm, globalAcademicYear]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -537,8 +550,8 @@ export default function Faculty_Grades() {
       
       console.log('🔍 Loading saved grades for class:', classID);
       
-      // Fetch grades from database for this class and term
-      const response = await fetch(`${API_BASE}/api/semestral-grades/class/${selectedClassObj.classID}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
+      // Fetch grades from database for this class and quarter
+      const response = await fetch(`${API_BASE}/api/semestral-grades/class/${selectedClassObj.classID}?termName=${globalTerm}&academicYear=${globalAcademicYear}&quarter=${globalQuarter}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -819,6 +832,33 @@ export default function Faculty_Grades() {
       // Limit to 2 decimal places
       value = gradeNum.toFixed(2);
     }
+    
+    // Validate grade breakdown fields
+    if ((field.includes('Raw') || field.includes('HPS') || field === 'quarterlyExam') && value !== '') {
+      const gradeNum = parseFloat(value);
+      
+      // Check if grade is within valid range (0-100 for quarterly exam, 0+ for raw scores)
+      if (isNaN(gradeNum) || gradeNum < 0) {
+        showModal(
+          'Invalid Input',
+          `Values must be positive numbers.\n\nYou entered: ${value}\n\nPlease enter a valid value.`,
+          'error'
+        );
+        return;
+      }
+      
+      if (field === 'quarterlyExam' && gradeNum > 100) {
+        showModal(
+          'Invalid Quarterly Exam Grade',
+          `Quarterly exam grade must be between 0 and 100.\n\nYou entered: ${value}\n\nPlease enter a valid grade.`,
+          'error'
+        );
+        return;
+      }
+      
+      // Limit to 2 decimal places
+      value = gradeNum.toFixed(2);
+    }
 
     setStudentGrades(prevGrades => {
       const updatedGrades = {
@@ -848,6 +888,7 @@ export default function Faculty_Grades() {
               remarks = 'INCOMPLETE';
             }
             
+            // Ensure semester final is always computed and not user-editable
             updatedGrades.semesterFinal = semesterGrade.toFixed(2);
             updatedGrades.remarks = remarks;
           }
@@ -873,6 +914,7 @@ export default function Faculty_Grades() {
               remarks = 'INCOMPLETE';
             }
             
+            // Ensure semester final is always computed and not user-editable
             updatedGrades.semesterFinal = semesterGrade.toFixed(2);
             updatedGrades.remarks = remarks;
           }
@@ -898,6 +940,7 @@ export default function Faculty_Grades() {
               remarks = 'INCOMPLETE';
             }
             
+            // Ensure semester final is always computed and not user-editable
             updatedGrades.semesterFinal = semesterGrade.toFixed(2);
             updatedGrades.remarks = remarks;
           }
@@ -943,32 +986,181 @@ export default function Faculty_Grades() {
         return;
       }
       
-      // For now, simulate file upload since the API endpoint doesn't exist
-      // This is a temporary solution until the backend endpoint is implemented
-      console.log('Simulating file upload for student:', student.name);
+      console.log('Processing excel file for student:', student.name);
       
-      // Simulate processing delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Parse the file content (basic CSV/Excel simulation)
+      // Parse the file content (CSV/Excel)
       const fileReader = new FileReader();
       fileReader.onload = (e) => {
         try {
           const content = e.target.result;
           console.log('File content:', content);
           
-          // For now, just show success message
-          showModal('Upload Successful', 'Student grades uploaded successfully! (Simulated - saved to localStorage)', 'success');
+          // Parse CSV content
+          const lines = content.split('\n');
+          const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+          
+          // Find the data row (skip header)
+          let dataRow = null;
+          for (let i = 1; i < lines.length; i++) {
+            const row = lines[i].split(',').map(cell => cell.trim());
+            if (row.length > 0 && row[0] !== '') {
+              dataRow = row;
+              break;
+            }
+          }
+          
+          if (!dataRow) {
+            showModal('Invalid File', 'No data found in the uploaded file', 'error');
+            return;
+          }
+          
+          // Extract grade data based on column headers
+          const gradeData = {};
+          
+          // Map CSV columns to grade fields
+          headers.forEach((header, index) => {
+            const value = dataRow[index] || '';
+            const numValue = parseFloat(value);
+            
+            switch (header) {
+              case 'quarter1':
+              case 'q1':
+                gradeData.quarter1 = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'quarter2':
+              case 'q2':
+                gradeData.quarter2 = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'quarter3':
+              case 'q3':
+                gradeData.quarter3 = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'quarter4':
+              case 'q4':
+                gradeData.quarter4 = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'written_works_raw':
+              case 'ww_raw':
+              case 'writtenworksraw':
+                gradeData.writtenWorksRaw = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'written_works_hps':
+              case 'ww_hps':
+              case 'writtenworkshps':
+                gradeData.writtenWorksHPS = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'performance_tasks_raw':
+              case 'pt_raw':
+              case 'performancetasksraw':
+                gradeData.performanceTasksRaw = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'performance_tasks_hps':
+              case 'pt_hps':
+              case 'performancetaskshps':
+                gradeData.performanceTasksHPS = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'quarterly_exam':
+              case 'quarterlyexam':
+              case 'exam':
+                gradeData.quarterlyExam = isNaN(numValue) ? '' : numValue;
+                break;
+            }
+          });
+          
+          // Calculate semester final grade if we have quarter grades
+          if (gradeData.quarter1 && gradeData.quarter2 && currentTerm?.termName === 'Term 1') {
+            gradeData.semesterFinal = ((gradeData.quarter1 + gradeData.quarter2) / 2).toFixed(2);
+          } else if (gradeData.quarter3 && gradeData.quarter4 && currentTerm?.termName === 'Term 2') {
+            gradeData.semesterFinal = ((gradeData.quarter3 + gradeData.quarter4) / 2).toFixed(2);
+          }
+          
+          // Update student grades with uploaded data
+          setStudentGrades(prev => ({
+            ...prev,
+            ...gradeData,
+            isUploaded: true, // Mark as uploaded but not posted
+            lastUpdated: new Date().toISOString()
+          }));
+          
+          // Update the main grades state
+          setGrades(prevGrades => ({
+            ...prevGrades,
+            [student._id]: {
+              ...prevGrades[student._id],
+              ...gradeData,
+              isUploaded: true,
+              isLocked: false,
+              lastUpdated: new Date().toISOString()
+            }
+          }));
+          
+          // Save to draft collection
+          const token = localStorage.getItem("token");
+          const selectedClassObj = classes[selectedClass];
+          
+          const draftData = {
+            schoolID: student.schoolID || student._id,
+            studentId: student._id,
+            studentName: student.name,
+            subjectCode: selectedClassObj?.classCode || selectedClassObj?.className,
+            subjectName: selectedClassObj?.className,
+            classID: selectedClassObj?.classID,
+            section: student.section || selectedSection,
+            academicYear: `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
+            termName: currentTerm?.termName,
+            facultyID: localStorage.getItem('userID') || 'unknown',
+            grades: {
+              quarter1: gradeData.quarter1 || null,
+              quarter2: gradeData.quarter2 || null,
+              quarter3: gradeData.quarter3 || null,
+              quarter4: gradeData.quarter4 || null,
+              semesterFinal: gradeData.semesterFinal || null,
+              remarks: gradeData.remarks || ''
+            },
+            breakdownByQuarter: {
+              [globalQuarter]: {
+                ww: {
+                  raw: gradeData.writtenWorksRaw || '',
+                  hps: gradeData.writtenWorksHPS || ''
+                },
+                pt: {
+                  raw: gradeData.performanceTasksRaw || '',
+                  hps: gradeData.performanceTasksHPS || ''
+                },
+                exam: gradeData.quarterlyExam || ''
+              }
+            },
+            isLocked: false,
+            lastUpdated: new Date().toISOString()
+          };
+          
+          // Save to backend draft collection
+          fetch(`${API_BASE}/api/semestral-grades/save-draft`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(draftData)
+          }).then(response => {
+            if (response.ok) {
+              console.log('Draft saved successfully');
+            } else {
+              console.error('Failed to save draft');
+            }
+          }).catch(error => {
+            console.error('Error saving draft:', error);
+          });
+          
+          showModal('Upload Successful', `Student grades uploaded successfully! Data includes RAW HPS and QUARTER EXAM values. Grades are saved as draft and can be edited before posting.`, 'success');
           
           // Clear the file input
           setSelectedStudentFile(null);
           document.getElementById('student-file-input').value = '';
           
-          // Refresh students list to show updated grades
-          fetchStudents();
         } catch (error) {
           console.error('Error processing file:', error);
-          showModal('Processing Error', 'Failed to process file. Please try again.', 'error');
+          showModal('Processing Error', 'Failed to process file. Please check the file format and try again.', 'error');
         }
       };
       
@@ -1137,6 +1329,7 @@ export default function Faculty_Grades() {
         setShowIndividualManagement(false);
         setSelectedStudentName('');
         setStudentGrades({});
+        setIsEditMode(false);
 
       } else {
         const errorData = await response.json();
@@ -1151,6 +1344,31 @@ export default function Faculty_Grades() {
         'error'
       );
     }
+  };
+
+  // Handle edit mode toggle
+  const handleEditModeToggle = () => {
+    if (isEditMode) {
+      // If currently in edit mode, cancel and reset to original values
+      const student = students.find(s => s.name === selectedStudentName);
+      if (student) {
+        const existingGrades = grades[student._id] || {};
+        setStudentGrades({
+          quarter1: existingGrades.quarter1 || '',
+          quarter2: existingGrades.quarter2 || '',
+          quarter3: existingGrades.quarter3 || '',
+          quarter4: existingGrades.quarter4 || '',
+          semesterFinal: existingGrades.semesterFinal || '',
+          remarks: existingGrades.remarks || '',
+          writtenWorksRaw: existingGrades.writtenWorksRaw || existingGrades.breakdown?.ww?.raw || existingGrades.breakdownByQuarter?.[globalQuarter]?.ww?.raw || '',
+          writtenWorksHPS: existingGrades.writtenWorksHPS || existingGrades.breakdown?.ww?.hps || existingGrades.breakdownByQuarter?.[globalQuarter]?.ww?.hps || '',
+          performanceTasksRaw: existingGrades.performanceTasksRaw || existingGrades.breakdown?.pt?.raw || existingGrades.breakdownByQuarter?.[globalQuarter]?.pt?.raw || '',
+          performanceTasksHPS: existingGrades.performanceTasksHPS || existingGrades.breakdown?.pt?.hps || existingGrades.breakdownByQuarter?.[globalQuarter]?.pt?.hps || '',
+          quarterlyExam: existingGrades.quarterlyExam || existingGrades.breakdown?.exam || existingGrades.breakdownByQuarter?.[globalQuarter]?.exam || ''
+        });
+      }
+    }
+    setIsEditMode(!isEditMode);
   };
 
   // Clear grades for the currently selected student (individual management)
@@ -1552,6 +1770,242 @@ export default function Faculty_Grades() {
     }
   };
 
+  // Export grades to Excel with RAW, HPS, WS, RS format
+  const exportGradesToExcel = () => {
+    if (!selectedClass || students.length === 0) {
+      showModal('No Data', 'No students or grades to export', 'warning');
+      return;
+    }
+
+    try {
+      const selectedClassObj = classes[selectedClass];
+      const currentDate = new Date().toISOString().split('T')[0];
+      
+      // Prepare CSV content
+      const headers = [
+        'Student ID',
+        'Student Name',
+        'Section',
+        'Quarter 1',
+        'Quarter 2', 
+        'Quarter 3',
+        'Quarter 4',
+        'Semester Final',
+        'Remarks',
+        'Written Works RAW',
+        'Written Works HPS',
+        'Written Works PS',
+        'Written Works WS',
+        'Performance Tasks RAW',
+        'Performance Tasks HPS', 
+        'Performance Tasks PS',
+        'Performance Tasks WS',
+        'Quarterly Exam',
+        'Initial Grade',
+        'Quarterly Grade'
+      ];
+
+      const csvRows = [headers.join(',')];
+
+      students.forEach(student => {
+        const studentGrades = grades[student._id] || {};
+        const breakdown = studentGrades.breakdownByQuarter?.[globalQuarter] || {};
+        
+        // Calculate PS (Percentage Score) and WS (Weighted Score)
+        const wwRaw = parseFloat(breakdown.ww?.raw || studentGrades.writtenWorksRaw || 0);
+        const wwHPS = parseFloat(breakdown.ww?.hps || studentGrades.writtenWorksHPS || 0);
+        const wwPS = wwHPS > 0 ? (wwRaw / wwHPS) * 100 : 0;
+        const wwWS = wwPS * 0.3; // 30% weight
+
+        const ptRaw = parseFloat(breakdown.pt?.raw || studentGrades.performanceTasksRaw || 0);
+        const ptHPS = parseFloat(breakdown.pt?.hps || studentGrades.performanceTasksHPS || 0);
+        const ptPS = ptHPS > 0 ? (ptRaw / ptHPS) * 100 : 0;
+        const ptWS = ptPS * 0.5; // 50% weight
+
+        const exam = parseFloat(breakdown.exam || studentGrades.quarterlyExam || 0);
+        const examPS = exam; // Exam is already a percentage
+        const examWS = examPS * 0.2; // 20% weight
+
+        const initialGrade = wwWS + ptWS;
+        const quarterlyGrade = (initialGrade * 0.8) + (exam * 0.2);
+
+        const row = [
+          student.schoolID || student._id,
+          `"${student.name}"`,
+          `"${student.section || selectedSection || 'N/A'}"`,
+          studentGrades.quarter1 || '',
+          studentGrades.quarter2 || '',
+          studentGrades.quarter3 || '',
+          studentGrades.quarter4 || '',
+          studentGrades.semesterFinal || '',
+          studentGrades.remarks || '',
+          wwRaw || '',
+          wwHPS || '',
+          wwPS.toFixed(2),
+          wwWS.toFixed(2),
+          ptRaw || '',
+          ptHPS || '',
+          ptPS.toFixed(2),
+          ptWS.toFixed(2),
+          exam || '',
+          initialGrade.toFixed(2),
+          quarterlyGrade.toFixed(2)
+        ];
+
+        csvRows.push(row.join(','));
+      });
+
+      const csvContent = csvRows.join('\n');
+      
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${selectedClassObj?.className || 'Grades'}_${globalQuarter}_${currentDate}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showModal(
+        'Export Successful', 
+        `Successfully exported ${students.length} student grades to Excel format.\n\nFile includes:\n• RAW scores and HPS values\n• Calculated PS (Percentage Score)\n• Calculated WS (Weighted Score)\n• Initial Grade and Quarterly Grade calculations\n\nFile saved as: ${selectedClassObj?.className || 'Grades'}_${globalQuarter}_${currentDate}.csv`,
+        'success'
+      );
+
+    } catch (error) {
+      console.error('Error exporting grades:', error);
+      showModal('Export Failed', 'Failed to export grades. Please try again.', 'error');
+    }
+  };
+
+  // Save a draft of current grades to both local storage and backend
+  const saveDraftGrades = async () => {
+    try {
+      const selectedClassObj = classes[selectedClass];
+      if (!selectedClassObj) return;
+      
+      // Ensure all staged items remain marked as temp
+      const draft = {};
+      Object.entries(grades || {}).forEach(([sid, g]) => {
+        draft[sid] = { ...g, isTemp: true, isLocked: false };
+      });
+      setGrades(draft);
+      saveTempGrades(selectedClassObj.classID, draft);
+      
+      // Save to backend semestral_draft_collections
+      const token = localStorage.getItem("token");
+      const facultyID = localStorage.getItem('userID') || 'unknown';
+      
+      // Prepare draft data for all students
+      const draftData = students.map(student => {
+        const studentGrades = grades[student._id] || {};
+        return {
+          schoolID: student.schoolID || student._id,
+          studentId: student._id,
+          studentName: student.name,
+          subjectCode: selectedClassObj?.classCode || selectedClassObj?.className,
+          subjectName: selectedClassObj?.className,
+          classID: selectedClassObj?.classID,
+          section: student.section || selectedSection,
+          academicYear: `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
+          termName: currentTerm?.termName,
+          facultyID: facultyID,
+          grades: {
+            quarter1: studentGrades.quarter1 || null,
+            quarter2: studentGrades.quarter2 || null,
+            quarter3: studentGrades.quarter3 || null,
+            quarter4: studentGrades.quarter4 || null,
+            semesterFinal: studentGrades.semesterFinal || null,
+            remarks: studentGrades.remarks || ''
+          },
+          breakdownByQuarter: studentGrades.breakdownByQuarter || {
+            [globalQuarter]: {
+              ww: {
+                raw: studentGrades.writtenWorksRaw || '',
+                hps: studentGrades.writtenWorksHPS || ''
+              },
+              pt: {
+                raw: studentGrades.performanceTasksRaw || '',
+                hps: studentGrades.performanceTasksHPS || ''
+              },
+              exam: studentGrades.quarterlyExam || ''
+            }
+          },
+          isLocked: false,
+          lastUpdated: new Date().toISOString()
+        };
+      });
+      
+      // Save all drafts to backend
+      const response = await fetch(`${API_BASE}/api/semestral-grades/save-draft-bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          drafts: draftData,
+          classID: selectedClassObj.classID,
+          academicYear: `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
+          termName: currentTerm?.termName
+        })
+      });
+      
+      if (response.ok) {
+        showModal('Draft Saved', `Successfully saved draft for ${students.length} students to the database. These grades are not posted and are only visible to you.`, 'success');
+      } else {
+        console.error('Failed to save draft to backend');
+        showModal('Draft Saved Locally', 'Draft saved locally but failed to save to database. Please check your connection.', 'warning');
+      }
+      
+    } catch (e) {
+      console.error('Failed to save draft:', e);
+      showModal('Save Draft Failed', 'Could not save the draft. Please try again.', 'error');
+    }
+  };
+
+  useEffect(() => {
+    // Load drafts from backend for consistency across reloads
+    const loadDrafts = async () => {
+      try {
+        const selectedClassObj = classes[selectedClass];
+        if (!selectedClassObj) return;
+        const token = localStorage.getItem('token');
+        const params = new URLSearchParams();
+        if (academicYear) params.set('academicYear', `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`);
+        if (currentTerm?.termName) params.set('termName', currentTerm.termName);
+        const res = await fetch(`${API_BASE}/api/semestral-grades/drafts/class/${selectedClassObj.classID}?${params.toString()}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data?.success) return;
+        const latestByStudent = {};
+        (data.drafts || []).forEach(d => {
+          const key = d.schoolID || d.studentId;
+          const prev = latestByStudent[key];
+          if (!prev || new Date(d.updatedAt || d.lastUpdated || d.createdAt || 0) > new Date(prev.updatedAt || prev.lastUpdated || prev.createdAt || 0)) {
+            latestByStudent[key] = d;
+          }
+        });
+        const merged = { ...grades };
+        Object.values(latestByStudent).forEach(d => {
+          merged[d.schoolID || d.studentId] = {
+            ...(merged[d.schoolID || d.studentId] || {}),
+            ...d.grades,
+            breakdownByQuarter: d.breakdownByQuarter || {},
+            isTemp: true,
+            isLocked: false
+          };
+        });
+        setGrades(merged);
+      } catch {}
+    };
+    loadDrafts();
+  }, [selectedClass, selectedSection, academicYear, currentTerm]);
+
 
 
 
@@ -1587,33 +2041,23 @@ export default function Faculty_Grades() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            {/* Debug toggle for development */}
-            <button
-              onClick={() => setDebugMode(!debugMode)}
-              className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-            >
-              {debugMode ? "Hide Debug" : "Show Debug"}
-            </button>
           <ProfileMenu/>
           </div>
         </div>
 
-        {/* Debug info */}
-        {debugMode && (
-          <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
-            <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
-            <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
-            <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
-            <p className="text-sm text-yellow-700">Classes Found: {classes.length}</p>
-            <p className="text-sm text-yellow-700">Current Faculty ID: {currentFacultyID}</p>
-            <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
-            <p className="text-sm text-yellow-700">Loading State: {loading ? 'Yes' : 'No'}</p>
-            <p className="text-sm text-yellow-700">Selected Class: {selectedClass !== null ? classes[selectedClass]?.className : 'None'}</p>
-            <p className="text-sm text-yellow-700">Students Count: {students.length}</p>
-          </div>
-        )}
+        {/* Quarter Selector */}
+        <div className="mb-6">
+          <QuarterSelector />
+        </div>
 
-        
+        {/* Current Quarter Display */}
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <p className="text-sm font-medium text-blue-800">
+            Managing grades for: <span className="font-semibold">{globalQuarter} - {globalTerm}</span>
+            <span className="text-blue-600 ml-2">({globalAcademicYear})</span>
+          </p>
+        </div>
+
         {/* Tab Navigation */}
         <div className="mb-6">
           <div className="flex gap-4 border-b">
@@ -1750,69 +2194,7 @@ export default function Faculty_Grades() {
                </div>
              )}
 
-              {/* Debug Section - Only show in development */}
-              {process.env.NODE_ENV === 'development' && selectedClass !== null && (
-                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <h3 className="text-lg font-semibold text-yellow-800 mb-3">🔍 Debug Information</h3>
-                  <div className="text-sm space-y-2 mb-4">
-                    <p><strong>Selected Class:</strong> {classes[selectedClass]?.className || 'N/A'}</p>
-                    <p><strong>Class ID:</strong> {classes[selectedClass]?.classID || 'N/A'}</p>
-                    <p><strong>Class Code:</strong> {classes[selectedClass]?.classCode || 'N/A'}</p>
-                    <p><strong>Faculty ID:</strong> {currentFacultyID || 'N/A'}</p>
-                    <p><strong>Current Term:</strong> {currentTerm?.termName || 'Not set'}</p>
-                    <p><strong>Academic Year:</strong> {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Not set'}</p>
-                    <p><strong>Students Found:</strong> {students.length}</p>
-                    <p><strong>Grades Loaded:</strong> {Object.keys(grades).length}</p>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      onClick={testAPIEndpoints}
-                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
-                      title="Test all API endpoints to identify issues"
-                    >
-                      🧪 Test API Endpoints
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        console.log('🔍 Current state debug info:');
-                        console.log('Classes:', classes);
-                        console.log('Selected Class Index:', selectedClass);
-                        console.log('Selected Class Object:', classes[selectedClass]);
-                        console.log('Students:', students);
-                        console.log('Grades:', grades);
-                        console.log('Subjects:', subjects);
-                        console.log('Current Term:', currentTerm);
-                        console.log('Academic Year:', academicYear);
-                        showModal('Debug Info', 'Check browser console for detailed state information', 'info');
-                      }}
-                      className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm"
-                      title="Log current component state to console"
-                    >
-                      📊 Log State to Console
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        if (selectedClass !== null) {
-                          fetchStudents();
-                          showModal('Refresh', 'Refreshing students and grades data...', 'info');
-                        }
-                      }}
-                      className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
-                      title="Refresh students and grades data"
-                    >
-                      🔄 Refresh Data
-                    </button>
-                  </div>
-                  
-                  <div className="mt-3 text-xs text-yellow-700">
-                    💡 This debug section helps identify data fetching issues. Check the browser console for detailed logs.
-                  </div>
-               </div>
-             )}
-
+            
                                                    {/* Student Search */}
               {selectedClass !== null && selectedSection && students.length > 0 && (
                 <div className="mb-6">
@@ -1852,12 +2234,19 @@ export default function Faculty_Grades() {
                                 quarter3: existingGrades.quarter3 || '',
                                 quarter4: existingGrades.quarter4 || '',
                                 semesterFinal: existingGrades.semesterFinal || '',
-                                remarks: existingGrades.remarks || ''
+                                remarks: existingGrades.remarks || '',
+                                writtenWorksRaw: existingGrades.writtenWorksRaw || existingGrades.breakdown?.ww?.raw || existingGrades.breakdownByQuarter?.[globalQuarter]?.ww?.raw || '',
+                                writtenWorksHPS: existingGrades.writtenWorksHPS || existingGrades.breakdown?.ww?.hps || existingGrades.breakdownByQuarter?.[globalQuarter]?.ww?.hps || '',
+                                performanceTasksRaw: existingGrades.performanceTasksRaw || existingGrades.breakdown?.pt?.raw || existingGrades.breakdownByQuarter?.[globalQuarter]?.pt?.raw || '',
+                                performanceTasksHPS: existingGrades.performanceTasksHPS || existingGrades.breakdown?.pt?.hps || existingGrades.breakdownByQuarter?.[globalQuarter]?.pt?.hps || '',
+                                quarterlyExam: existingGrades.quarterlyExam || existingGrades.breakdown?.exam || existingGrades.breakdownByQuarter?.[globalQuarter]?.exam || ''
                               });
                               // Clear the search input after selection
                               setSelectedStudent('');
                               // Show the individual management section
                               setShowIndividualManagement(true);
+                              // Reset edit mode for new student
+                              setIsEditMode(false);
                             }}
                           >
                             <div className="font-medium">{student.name}</div>
@@ -1883,21 +2272,82 @@ export default function Faculty_Grades() {
                {selectedStudentName && showIndividualManagement && (
                  <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50 relative">
                    <div className="flex justify-between items-start mb-4">
-                     <h3 className="text-lg font-semibold text-gray-800">
-                       Individual Student Grade Management - {currentTerm?.termName || 'Current Term'}
-                       {selectedSection && selectedSection !== 'default' && (
-                         <span className="text-sm font-normal text-gray-600 ml-2">
-                           (Section: {selectedSection})
-                         </span>
+                     <div>
+                       <h3 className="text-lg font-semibold text-gray-800">
+                         Individual Student Grade Management - {currentTerm?.termName || 'Current Term'}
+                         {selectedSection && selectedSection !== 'default' && (
+                           <span className="text-sm font-normal text-gray-600 ml-2">
+                             (Section: {selectedSection})
+                           </span>
+                         )}
+                       </h3>
+                       {isEditMode && (
+                         <div className="mt-2 px-3 py-1 bg-yellow-100 border border-yellow-300 rounded-md text-sm text-yellow-800">
+                           ✏️ Edit Mode Active - You can now modify grades
+                         </div>
                        )}
-                     </h3>
-                     <button
-                       onClick={() => setShowIndividualManagement(false)}
-                       className="text-gray-500 hover:text-gray-700 text-xl font-bold leading-none p-1 rounded-full hover:bg-gray-200 transition-colors"
-                       title="Close Individual Student Grade Management"
-                     >
-                       ×
-                     </button>
+                     </div>
+                     <div className="flex items-center gap-2">
+                       <button
+                         onClick={async () => {
+                           // Save only this student's current grades as a draft (local temp)
+                           const student = students.find(s => s.name === selectedStudentName);
+                           if (!student) return;
+                           const sid = student._id;
+                           const next = {
+                             ...(grades[sid] || {}),
+                             ...studentGrades,
+                             isTemp: true,
+                             isLocked: false
+                           };
+                           setGrades(prev => ({ ...prev, [sid]: next }));
+                           const selectedClassObj = classes[selectedClass];
+                           if (selectedClassObj) {
+                             saveTempGrades(selectedClassObj.classID, { ...grades, [sid]: next });
+                           }
+                           // Persist draft to backend
+                           try {
+                             const token = localStorage.getItem('token');
+                             await fetch(`${API_BASE}/api/semestral-grades/save-draft`, {
+                               method: 'POST',
+                               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                               body: JSON.stringify({
+                                 schoolID: student.schoolID || sid,
+                                 subjectCode: selectedClassObj?.classCode || selectedClassObj?.className,
+                                 subjectName: selectedClassObj?.className,
+                                 classID: selectedClassObj?.classID,
+                                 section: selectedSection,
+                                 academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : '',
+                                 termName: currentTerm?.termName,
+                                 facultyID: currentFacultyID,
+                                 grades: {
+                                   quarter1: next.quarter1 || null,
+                                   quarter2: next.quarter2 || null,
+                                   quarter3: next.quarter3 || null,
+                                   quarter4: next.quarter4 || null,
+                                   semesterFinal: next.semesterFinal || null,
+                                   remarks: next.remarks || ''
+                                 },
+                                 breakdownByQuarter: next.breakdownByQuarter || {}
+                               })
+                             });
+                           } catch {}
+                           showModal('Draft Saved', `Saved draft for ${selectedStudentName}. This is not posted.`, 'success');
+                         }}
+                         className={`px-3 py-1.5 rounded-md ${isEditMode ? 'bg-gray-700 text-white hover:bg-gray-800' : 'bg-gray-400 text-gray-600 cursor-not-allowed'}`}
+                         disabled={!isEditMode}
+                         title="Save as draft for this student (not posted)"
+                       >
+                         Save as Draft
+                       </button>
+                       <button
+                         onClick={() => setShowIndividualManagement(false)}
+                         className="text-gray-500 hover:text-gray-700 text-xl font-bold leading-none p-1 rounded-full hover:bg-gray-200 transition-colors"
+                         title="Close Individual Student Grade Management"
+                       >
+                         ×
+                       </button>
+                     </div>
                    </div>
                   
                                     {/* Student Name and ID Display */}
@@ -1995,15 +2445,16 @@ export default function Faculty_Grades() {
                       if (currentTerm?.termName === 'Term 1') {
                         return (
                           <>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">1st Quarter</label>
+                           <div>
+                             <label className="block text-sm font-medium text-gray-700 mb-1">1st Quarter</label>
                              <input
                                type="number"
                                min="0"
                                max="100"
                                step="0.01"
                                placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               disabled={!isEditMode}
+                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                value={studentGrades.quarter1 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
                              />
@@ -2022,7 +2473,8 @@ export default function Faculty_Grades() {
                                max="100"
                                step="0.01"
                                placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               disabled={!isEditMode}
+                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                value={studentGrades.quarter2 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
                              />
@@ -2046,7 +2498,8 @@ export default function Faculty_Grades() {
                                max="100"
                                step="0.01"
                                placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               disabled={!isEditMode}
+                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                value={studentGrades.quarter3 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter3', e.target.value)}
                              />
@@ -2065,7 +2518,8 @@ export default function Faculty_Grades() {
                                max="100"
                                step="0.01"
                                placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               disabled={!isEditMode}
+                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                value={studentGrades.quarter4 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter4', e.target.value)}
                              />
@@ -2089,7 +2543,8 @@ export default function Faculty_Grades() {
                                max="100"
                                step="0.01"
                                placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               disabled={!isEditMode}
+                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                value={studentGrades.quarter1 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
                              />
@@ -2108,7 +2563,8 @@ export default function Faculty_Grades() {
                                max="100"
                                step="0.01"
                                placeholder="Grade"
-                               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               disabled={!isEditMode}
+                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                value={studentGrades.quarter2 || ''}
                                onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
                              />
@@ -2123,6 +2579,224 @@ export default function Faculty_Grades() {
                        );
                      }
                     })()}
+                    
+                    {/* Detailed Grade Breakdown Section */}
+                    <div className="col-span-full mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Detailed Grade Breakdown - {globalQuarter}</h4>
+                      
+                      {/* Grade Breakdown Table */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-gray-100">
+                              <th className="border border-gray-300 p-2 text-left font-semibold">Component</th>
+                              <th className="border border-gray-300 p-2 text-center font-semibold">RAW</th>
+                              <th className="border border-gray-300 p-2 text-center font-semibold">HPS</th>
+                              <th className="border border-gray-300 p-2 text-center font-semibold">PS</th>
+                              <th className="border border-gray-300 p-2 text-center font-semibold">WS</th>
+                              <th className="border border-gray-300 p-2 text-center font-semibold">Quarterly Exam</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td className="border border-gray-300 p-2 font-medium">Written Works (30%)</td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  disabled={!isEditMode}
+                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
+                                  value={studentGrades.writtenWorksRaw || ''}
+                                  onChange={(e) => handleStudentGradeChange('writtenWorksRaw', e.target.value)}
+                                />
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  disabled={!isEditMode}
+                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
+                                  value={studentGrades.writtenWorksHPS || ''}
+                                  onChange={(e) => handleStudentGradeChange('writtenWorksHPS', e.target.value)}
+                                />
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center bg-blue-50 font-semibold">
+                                {(() => {
+                                  const raw = parseFloat(studentGrades.writtenWorksRaw || 0);
+                                  const hps = parseFloat(studentGrades.writtenWorksHPS || 0);
+                                  return hps > 0 ? ((raw / hps) * 100).toFixed(2) : '0.00';
+                                })()}%
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center bg-green-50 font-semibold">
+                                {(() => {
+                                  const raw = parseFloat(studentGrades.writtenWorksRaw || 0);
+                                  const hps = parseFloat(studentGrades.writtenWorksHPS || 0);
+                                  const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                                  return (ps * 0.3).toFixed(2);
+                                })()}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center" rowSpan="2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  disabled={!isEditMode}
+                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
+                                  value={studentGrades.quarterlyExam || ''}
+                                  onChange={(e) => handleStudentGradeChange('quarterlyExam', e.target.value)}
+                                />
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="border border-gray-300 p-2 font-medium">Performance Tasks (50%)</td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  disabled={!isEditMode}
+                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
+                                  value={studentGrades.performanceTasksRaw || ''}
+                                  onChange={(e) => handleStudentGradeChange('performanceTasksRaw', e.target.value)}
+                                />
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  disabled={!isEditMode}
+                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
+                                  value={studentGrades.performanceTasksHPS || ''}
+                                  onChange={(e) => handleStudentGradeChange('performanceTasksHPS', e.target.value)}
+                                />
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center bg-blue-50 font-semibold">
+                                {(() => {
+                                  const raw = parseFloat(studentGrades.performanceTasksRaw || 0);
+                                  const hps = parseFloat(studentGrades.performanceTasksHPS || 0);
+                                  return hps > 0 ? ((raw / hps) * 100).toFixed(2) : '0.00';
+                                })()}%
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center bg-green-50 font-semibold">
+                                {(() => {
+                                  const raw = parseFloat(studentGrades.performanceTasksRaw || 0);
+                                  const hps = parseFloat(studentGrades.performanceTasksHPS || 0);
+                                  const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                                  return (ps * 0.5).toFixed(2);
+                                })()}
+                              </td>
+                            </tr>
+                            <tr className="bg-yellow-50">
+                              <td className="border border-gray-300 p-2 font-semibold">Initial Grade</td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold" colSpan="4">
+                                {(() => {
+                                  const writtenWS = (() => {
+                                    const raw = parseFloat(studentGrades.writtenWorksRaw || 0);
+                                    const hps = parseFloat(studentGrades.writtenWorksHPS || 0);
+                                    const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                                    return ps * 0.3;
+                                  })();
+                                  const performanceWS = (() => {
+                                    const raw = parseFloat(studentGrades.performanceTasksRaw || 0);
+                                    const hps = parseFloat(studentGrades.performanceTasksHPS || 0);
+                                    const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                                    return ps * 0.5;
+                                  })();
+                                  return (writtenWS + performanceWS).toFixed(2);
+                                })()}
+                              </td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold">
+                                {(() => {
+                                  const quarterlyExam = parseFloat(studentGrades.quarterlyExam || 0);
+                                  return quarterlyExam.toFixed(2);
+                                })()}
+                              </td>
+                            </tr>
+                            <tr className="bg-blue-100">
+                              <td className="border border-gray-300 p-2 font-bold">Quarterly Grade</td>
+                              <td className="border border-gray-300 p-2 text-center font-bold" colSpan="5">
+                                {(() => {
+                                  const writtenWS = (() => {
+                                    const raw = parseFloat(studentGrades.writtenWorksRaw || 0);
+                                    const hps = parseFloat(studentGrades.writtenWorksHPS || 0);
+                                    const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                                    return ps * 0.3;
+                                  })();
+                                  const performanceWS = (() => {
+                                    const raw = parseFloat(studentGrades.performanceTasksRaw || 0);
+                                    const hps = parseFloat(studentGrades.performanceTasksHPS || 0);
+                                    const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                                    return ps * 0.5;
+                                  })();
+                                  const initialGrade = writtenWS + performanceWS;
+                                  const quarterlyExam = parseFloat(studentGrades.quarterlyExam || 0);
+                                  const quarterlyGrade = (initialGrade * 0.8) + (quarterlyExam * 0.2);
+                                  return quarterlyGrade.toFixed(2);
+                                })()}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      
+                      <div className="mt-4 text-xs text-gray-600">
+                        <p><strong>Legend:</strong> RAW = Raw Score, HPS = Highest Possible Score, PS = Percentage Score, WS = Weighted Score</p>
+                        <p><strong>Formula:</strong> PS = (RAW/HPS) × 100, WS = PS × Weight, Initial Grade = Sum of WS, Quarterly Grade = (Initial Grade × 0.8) + (Quarterly Exam × 0.2)</p>
+                      </div>
+                      
+                      {/* Edit Controls for Detailed Grade Breakdown */}
+                      <div className="mt-4 flex justify-end gap-2">
+                        {(() => {
+                          if (!isEditMode) {
+                            return (
+                              <button
+                                onClick={handleEditModeToggle}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                                title="Enable edit mode for detailed grade breakdown"
+                              >
+                                ✏️ Edit
+                              </button>
+                            );
+                          } else {
+                            return (
+                              <>
+                                <button
+                                  onClick={saveStudentGrades}
+                                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                                  title="Save changes to detailed grade breakdown"
+                                >
+                                  💾 Save Grades
+                                </button>
+                                <button
+                                  onClick={handleEditModeToggle}
+                                  className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
+                                  title="Cancel editing and revert changes"
+                                >
+                                  ❌ Cancel
+                                </button>
+                                <button
+                                  onClick={clearSelectedStudentGrades}
+                                  className="px-4 py-2 bg-red-200 text-red-800 rounded-md hover:bg-red-300 transition-colors"
+                                  title="Clear all grades in detailed breakdown"
+                                >
+                                  🗑️ Clear Grades
+                                </button>
+                              </>
+                            );
+                          }
+                        })()}
+                      </div>
+                    </div>
+                    
                                       <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Semester Final Grade</label>
                       <input
@@ -2136,10 +2810,10 @@ export default function Faculty_Grades() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
                       <select
-                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         value={studentGrades.remarks || ''}
                         onChange={(e) => handleStudentGradeChange('remarks', e.target.value)}
-                        disabled={(() => {
+                        disabled={!isEditMode || (() => {
                           const student = students.find(s => s.name === selectedStudentName);
                           const studentGradesData = grades[student?._id] || {};
                           return studentGradesData.isLocked;
@@ -2169,22 +2843,37 @@ export default function Faculty_Grades() {
                        );
                      }
                      
+                     if (!isEditMode) {
+                       return (
+                         <button
+                           onClick={handleEditModeToggle}
+                           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                         >
+                           ✏️ Edit Grades
+                         </button>
+                       );
+                     }
+                     
                      return (
                        <>
                          <button
                            onClick={saveStudentGrades}
                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
                          >
-                           Save Student Grades
+                           💾 Save Changes
+                         </button>
+                         <button
+                           onClick={handleEditModeToggle}
+                           className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
+                         >
+                           ❌ Cancel
                          </button>
                          <button
                            onClick={clearSelectedStudentGrades}
-                           className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                           className="px-4 py-2 bg-red-200 text-red-800 rounded-md hover:bg-red-300 transition-colors"
                          >
-                           Clear Grades
+                           🗑️ Clear Grades
                          </button>
-                         
-                         {/* File upload removed */}
                        </>
                      );
                    })()}
@@ -2262,6 +2951,30 @@ export default function Faculty_Grades() {
                         )}
                       </div>
                       <div className="flex gap-2">
+                        <button
+                          onClick={exportGradesToExcel}
+                          className={`px-4 py-2 rounded-md transition-colors ${
+                            students.length > 0 
+                              ? 'bg-green-600 text-white hover:bg-green-700' 
+                              : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                          }`}
+                          title="Export all grades to Excel with RAW, HPS, WS, RS format"
+                          disabled={students.length === 0}
+                        >
+                          📊 Export Excel
+                        </button>
+                        <button
+                          onClick={saveDraftGrades}
+                          className={`px-4 py-2 rounded-md transition-colors ${
+                            students.length > 0 
+                              ? 'bg-gray-600 text-white hover:bg-gray-700' 
+                              : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                          }`}
+                          title="Save draft locally (not posted)"
+                          disabled={students.length === 0}
+                        >
+                          Save Draft
+                        </button>
                         <button
                           onClick={saveGrades}
                           className={`px-4 py-2 rounded-md transition-colors ${
@@ -2402,6 +3115,30 @@ export default function Faculty_Grades() {
                       </div>
                       <div className="flex gap-2">
                         <button
+                          onClick={exportGradesToExcel}
+                          className={`px-4 py-2 rounded-md transition-colors ${
+                            students.length > 0 
+                              ? 'bg-green-600 text-white hover:bg-green-700' 
+                              : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                          }`}
+                          title="Export all grades to Excel with RAW, HPS, WS, RS format"
+                          disabled={students.length === 0}
+                        >
+                          📊 Export Excel
+                        </button>
+                        <button
+                          onClick={saveDraftGrades}
+                          className={`px-4 py-2 rounded-md transition-colors ${
+                            students.length > 0 
+                              ? 'bg-gray-600 text-white hover:bg-gray-700' 
+                              : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                          }`}
+                          title="Save draft locally (not posted)"
+                          disabled={students.length === 0}
+                        >
+                          Save Draft
+                        </button>
+                        <button
                           onClick={saveGrades}
                           className={`px-4 py-2 rounded-md transition-colors ${
                             students.length > 0 
@@ -2538,6 +3275,10 @@ export default function Faculty_Grades() {
                   (updatedStudents || []).map((s, idx) => [String(s.schoolID || s._id), idx])
                 );
 
+                const activeQuarter = meta?.quarter || 'Q1';
+                const quarterFieldMap = { Q1: 'quarter1', Q2: 'quarter2', Q3: 'quarter3', Q4: 'quarter4' };
+                const targetQuarterField = quarterFieldMap[activeQuarter] || 'quarter1';
+
                 records.forEach((rec) => {
                   const key = String(rec.schoolID || '').trim();
                   if (!key) return;
@@ -2558,9 +3299,39 @@ export default function Faculty_Grades() {
                   const student = updatedStudents[idx];
                   const sid = student._id;
                   const prev = updatedGrades[sid] || {};
+                  // Merge per-quarter values and compact breakdown fields
+                  const g = rec.grades || {};
+                  const wwRaw = Number(g.writtenWorksRaw || 0);
+                  const wwHps = Number(g.writtenWorksHPS || 0);
+                  const ptRaw = Number(g.performanceTasksRaw || 0);
+                  const ptHps = Number(g.performanceTasksHPS || 0);
+                  const qExam = Number(g.quarterlyExam || 0);
+
+                  // Compute PS/WS and initial based on 30/50
+                  const wwPs = wwHps > 0 ? (wwRaw / wwHps) * 100 : 0;
+                  const ptPs = ptHps > 0 ? (ptRaw / ptHps) * 100 : 0;
+                  const wwWs = wwPs * 0.30;
+                  const ptWs = ptPs * 0.50;
+                  const initial = wwWs + ptWs;
+                  const quarterlyGrade = (initial * 0.80) + (qExam * 0.20);
+
+                  const breakdownForQuarter = {
+                    ww: { raw: wwRaw, hps: wwHps, ps: wwPs, ws: wwWs },
+                    pt: { raw: ptRaw, hps: ptHps, ps: ptPs, ws: ptWs },
+                    initial: Number.isFinite(initial) ? initial.toFixed(2) : '0.00',
+                    exam: Number.isFinite(qExam) ? qExam.toFixed(2) : '0.00',
+                    quarterly: Number.isFinite(quarterlyGrade) ? quarterlyGrade.toFixed(2) : '0.00'
+                  };
+
+                  const existingBreakdowns = prev.breakdownByQuarter || {};
+                  const nextBreakdowns = { ...existingBreakdowns, [activeQuarter]: breakdownForQuarter };
+
                   updatedGrades[sid] = {
                     ...prev,
-                    ...rec.grades,
+                    ...g,
+                    breakdownByQuarter: nextBreakdowns,
+                    breakdown: breakdownForQuarter, // for current panel binding
+                    [targetQuarterField]: breakdownForQuarter.quarterly,
                     isLocked: false,
                     isTemp: true
                   };
@@ -2573,7 +3344,6 @@ export default function Faculty_Grades() {
                 if (selectedClassObj) {
                   saveTempGrades(selectedClassObj.classID, updatedGrades);
                 }
-                setActiveTab('traditional');
                 // Auto-open individual management for first staged record
                 if (updatedStudents.length > 0 && records.length > 0) {
                   const firstRecId = String(records[0].schoolID || '');
@@ -2587,16 +3357,56 @@ export default function Faculty_Grades() {
                       quarter3: existing.quarter3 || '',
                       quarter4: existing.quarter4 || '',
                       semesterFinal: existing.semesterFinal || '',
-                      remarks: existing.remarks || ''
+                      remarks: existing.remarks || '',
+                      writtenWorksRaw: existing.writtenWorksRaw || existing.breakdown?.ww?.raw || existingGrades.breakdownByQuarter?.[globalQuarter]?.ww?.raw || '',
+                      writtenWorksHPS: existing.writtenWorksHPS || existing.breakdown?.ww?.hps || existingGrades.breakdownByQuarter?.[globalQuarter]?.ww?.hps || '',
+                      performanceTasksRaw: existing.performanceTasksRaw || existing.breakdown?.pt?.raw || existingGrades.breakdownByQuarter?.[globalQuarter]?.pt?.raw || '',
+                      performanceTasksHPS: existing.performanceTasksHPS || existing.breakdown?.pt?.hps || existingGrades.breakdownByQuarter?.[globalQuarter]?.pt?.hps || '',
+                      quarterlyExam: existing.quarterlyExam || existing.breakdown?.exam || existingGrades.breakdownByQuarter?.[globalQuarter]?.exam || ''
                     });
-                    setShowIndividualManagement(true);
+                    // Keep user on Excel tab; do not auto-open panel
                   }
                 }
                 showModal(
-                  'Grades Staged',
-                  `Successfully staged ${records.length} student grade(s). They are marked as "Grade uploaded (not posted)" until you click Post Grades.`,
+                  'Grades Staged to Grading Table',
+                  `Successfully staged ${records.length} student grade(s) to the Grading Table. They are marked as "Grade uploaded (not posted)" until you click Post Grades.
+
+You can review them under the Grading Table tab when ready.`,
                   'success'
                 );
+                // Persist staged breakdowns to draft collection
+                (async () => {
+                  try {
+                    const token = localStorage.getItem('token');
+                    const selectedClassObj = classes[selectedClass];
+                    await Promise.all(Object.entries(updatedGrades).map(async ([sid, g]) => {
+                      const body = {
+                        schoolID: sid,
+                        subjectCode: selectedClassObj?.classCode || selectedClassObj?.className,
+                        subjectName: selectedClassObj?.className,
+                        classID: selectedClassObj?.classID,
+                        section: selectedSection,
+                        academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : '',
+                        termName: currentTerm?.termName,
+                        facultyID: currentFacultyID,
+                        grades: {
+                          quarter1: g.quarter1 || null,
+                          quarter2: g.quarter2 || null,
+                          quarter3: g.quarter3 || null,
+                          quarter4: g.quarter4 || null,
+                          semesterFinal: g.semesterFinal || null,
+                          remarks: g.remarks || ''
+                        },
+                        breakdownByQuarter: g.breakdownByQuarter || {}
+                      };
+                      await fetch(`${API_BASE}/api/semestral-grades/save-draft`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify(body)
+                      });
+                    }));
+                  } catch {}
+                })();
               } catch (e) {
                 console.error('Error staging temporary grades:', e);
                 showModal('Staging Error', 'Failed to stage uploaded grades. Please try again.', 'error');

@@ -57,12 +57,15 @@ const upload = uploadMiddleware.submissionUpload; // For backward compatibility
 
 // Get all assignments for a class
 router.get('/', authenticateToken, async (req, res) => {
-  const { classID } = req.query;
+  const { classID, quarter, termName, academicYear } = req.query;
   const userId = req.user.userID; // Use userID (school ID) for filtering
   const role = req.user.role;
 
   console.log('[DEBUG][ASSIGNMENTS] Request details:', {
     classID,
+    quarter,
+    termName,
+    academicYear,
     userId,
     role,
     userObject: req.user,
@@ -70,13 +73,19 @@ router.get('/', authenticateToken, async (req, res) => {
     roleFromToken: req.user.role
   });
 
+  // Build query object
+  const query = {};
+  if (classID) query.classID = classID;
+  if (quarter) query.quarter = quarter;
+  if (termName) query.termName = termName;
+  if (academicYear) query.academicYear = academicYear;
+
   let assignments;
-  if (classID) {
-    // Always filter by classID if provided
-    console.log('[DEBUG][ASSIGNMENTS] Querying assignments for classID:', classID);
-    console.log('[DEBUG][ASSIGNMENTS] MongoDB query: Assignment.find({ classID: "' + classID + '" })');
-    assignments = await Assignment.find({ classID }).sort({ createdAt: -1 });
-    console.log('[DEBUG][ASSIGNMENTS] Found assignments:', assignments.length, assignments.map(a => ({ id: a._id, title: a.title, classID: a.classID })));
+  if (Object.keys(query).length > 0) {
+    // Filter by provided parameters
+    console.log('[DEBUG][ASSIGNMENTS] Querying assignments with query:', query);
+    assignments = await Assignment.find(query).sort({ createdAt: -1 });
+    console.log('[DEBUG][ASSIGNMENTS] Found assignments:', assignments.length, assignments.map(a => ({ id: a._id, title: a.title, classID: a.classID, quarter: a.quarter })));
   } else if (role === 'faculty') {
     // Optionally: show all assignments created by this faculty
     assignments = await Assignment.find({ createdBy: req.user._id }).sort({ createdAt: -1 });
@@ -219,8 +228,12 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 // Create assignment or quiz
 router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('attachmentFile'), async (req, res) => {
   try {
-    let { classIDs, classID, title, instructions, type, description, dueDate, points, fileUploadRequired, allowedFileTypes, fileInstructions, questions, assignedTo, attachmentLink, postAt } = req.body;
+    let { classIDs, classID, title, instructions, type, activityType, description, dueDate, points, fileUploadRequired, allowedFileTypes, fileInstructions, questions, assignedTo, attachmentLink, postAt, quarter, termName, academicYear } = req.body;
     const createdBy = req.user._id;
+    
+    // Debug logging
+    console.log('[AssignmentRoutes] Creating assignment with activityType:', activityType);
+    console.log('[AssignmentRoutes] Full request body:', req.body);
     
     // Validate required fields
     if (!title || !title.trim()) {
@@ -233,6 +246,26 @@ router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('at
     
     if (points !== undefined && (points < 1 || points > 100)) {
       return res.status(400).json({ error: 'Points must be between 1 and 100.' });
+    }
+
+    // Validate quarter data
+    if (!quarter || !termName || !academicYear) {
+      return res.status(400).json({ 
+        error: 'Quarter, term name, and academic year are required.' 
+      });
+    }
+
+    // Validate quarter based on term
+    if (termName === 'Term 1' && !['Q1', 'Q2'].includes(quarter)) {
+      return res.status(400).json({
+        error: 'Invalid quarter for Term 1. Must be Q1 or Q2.'
+      });
+    }
+    
+    if (termName === 'Term 2' && !['Q3', 'Q4'].includes(quarter)) {
+      return res.status(400).json({
+        error: 'Invalid quarter for Term 2. Must be Q3 or Q4.'
+      });
     }
     
     // Parse arrays/objects if sent as FormData
@@ -265,6 +298,7 @@ router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('at
           title: title.trim(),
           instructions,
           type: type || 'assignment',
+          activityType: activityType || 'written',
           description,
           dueDate,
           points,
@@ -276,7 +310,10 @@ router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('at
           assignedTo,
           attachmentLink,
           attachmentFile,
-          postAt
+          postAt,
+          quarter,
+          termName,
+          academicYear
         });
         await assignment.save();
         assignments.push(assignment);
@@ -291,6 +328,7 @@ router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('at
         title: title.trim(),
         instructions,
         type: type || 'assignment',
+        activityType: activityType || 'written',
         description,
         dueDate,
         points,
@@ -302,7 +340,10 @@ router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('at
         assignedTo,
         attachmentLink,
         attachmentFile,
-        postAt
+        postAt,
+        quarter,
+        termName,
+        academicYear
       });
       await assignment.save();
       

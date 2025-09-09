@@ -8,13 +8,15 @@ import Cropper from 'react-easy-crop';
 import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 import SupportModal from './Support/SupportModal';
+import { validateLogout, forceLogout } from '../utils/logoutValidation';
 import profileicon from "../assets/profileicon (1).svg";
 import ValidationModal from './ValidationModal';
+import ConfirmationModal from './ConfirmationModal';
 import { getProfileImageUrl } from "../utils/imageUtils";
 
 Modal.setAppElement('#root');
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // ===================== ChangePasswordModal =====================
 function ChangePasswordModal({ userId, onClose }) {
@@ -84,7 +86,7 @@ function ChangePasswordModal({ userId, onClose }) {
     setLoading(true);
     try {
       await axios.post(`${API_BASE}/users/${userId}/request-password-change-otp`);
-      setSuccess("OTP sent to your Zoho Mail address.");
+      setSuccess("OTP sent to your personal email.");
       setStep(2);
       setCooldown(20); // 20s cooldown
     } catch (err) {
@@ -323,6 +325,7 @@ export default function ProfileModal({
     title: '',
     message: ''
   });
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // --- Role Descriptions ---
   const roleDescriptions = {
@@ -338,14 +341,16 @@ export default function ProfileModal({
 
   // Helper function to get role description with fallbacks
   const getRoleDescription = (role) => {
+    console.log('ProfileModal: getRoleDescription called with role:', role);
     
     if (!role) {
-      // No role provided, returning default
+      console.log('ProfileModal: No role provided, returning default');
       return "User | (To implement soon)";
     }
     
     // Try exact match first
     if (roleDescriptions[role]) {
+      console.log('ProfileModal: Exact match found:', roleDescriptions[role]);
       return roleDescriptions[role];
     }
     
@@ -353,6 +358,7 @@ export default function ProfileModal({
     const lowerRole = role.toLowerCase();
     for (const [key, value] of Object.entries(roleDescriptions)) {
       if (key.toLowerCase() === lowerRole) {
+        console.log('ProfileModal: Case-insensitive match found:', value);
         return value;
       }
     }
@@ -360,6 +366,7 @@ export default function ProfileModal({
     // Fallback: capitalize the role and add default text
     const capitalizedRole = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
     const fallbackDescription = `${capitalizedRole} | (To implement soon)`;
+    console.log('ProfileModal: Using fallback description:', fallbackDescription);
     return fallbackDescription;
   };
 
@@ -384,34 +391,100 @@ export default function ProfileModal({
     }
   };
 
-  // Handle logout
+  // Handle logout button click - show confirmation modal
+  const handleLogoutClick = () => {
+    console.log('Logout button clicked');
+    setShowLogoutConfirm(true);
+  };
+
+  // Handle actual logout with validation
   const handleLogout = async () => {
+    console.log('Confirming logout...');
+    setShowLogoutConfirm(false);
+
     try {
       // Call logout endpoint to create audit log
       const token = localStorage.getItem('token');
+      console.log('Token found:', !!token);
+      
       if (token) {
+        console.log('Making logout API call to:', `${API_BASE}/logout`);
         const response = await axios.post(`${API_BASE}/logout`, {}, {
           headers: {
             'Authorization': `Bearer ${token}`
-          }
+          },
+          timeout: 5000 // 5 second timeout
         });
+        console.log('Logout API response:', response.data);
+        
+        // Validate logout response
+        if (response.data && response.data.message === 'Logged out successfully') {
+          console.log('✅ Logout successful on server');
+        } else {
+          console.warn('⚠️ Unexpected logout response:', response.data);
+        }
       }
     } catch (error) {
-      // Error during logout
+      console.error('Error during logout:', error);
+      console.error('Error details:', error.response?.data);
+      
+      // Show user-friendly error message
+      if (error.code === 'ECONNABORTED') {
+        console.warn('Logout request timed out, continuing with local logout');
+      } else if (error.response?.status === 401) {
+        console.warn('Token already invalid, continuing with local logout');
+      } else {
+        console.warn('Server logout failed, continuing with local logout');
+      }
       // Continue with logout even if audit log fails
     }
 
-    // Clear local storage
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('userID');
-    localStorage.removeItem('role');
-    localStorage.removeItem('rememberedEmail');
-    localStorage.removeItem('rememberedPassword');
+    console.log('Clearing local storage...');
+    
+    // Clear all authentication-related data
+    const keysToRemove = [
+      'token',
+      'user', 
+      'userID',
+      'role',
+      'rememberedEmail',
+      'rememberedPassword',
+      'shouldLogoutOnReturn',
+      'schoolID',
+      'globalQuarter',
+      'globalTerm', 
+      'globalAcademicYear'
+    ];
+    
+    keysToRemove.forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    console.log('✅ Local storage cleared');
+    
+    // Validate logout using utility function
+    const validation = validateLogout();
+    if (!validation.success) {
+      console.error('❌ Logout validation failed:', validation.message);
+      // Force clear any remaining data
+      const forceResult = forceLogout();
+      if (forceResult.success) {
+        console.log('✅ Force logout successful');
+      } else {
+        console.error('❌ Force logout failed:', forceResult.message);
+      }
+    } else {
+      console.log('✅ Logout validation successful - all auth data cleared');
+    }
 
+    console.log('Closing modal and redirecting...');
     // Close modal and redirect to login
     onClose();
-    window.location.href = '/';
+    
+    // Redirect to login page after a short delay
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 100);
   };
 
   useEffect(() => {
@@ -531,7 +604,7 @@ export default function ProfileModal({
       closeCropModal();
       resetCropState();
     } catch (e) {
-      // Error
+      console.error(e);
       setValidationModal({
         isOpen: true,
         type: 'error',
@@ -555,7 +628,7 @@ export default function ProfileModal({
         >
           {/* Logout Button */}
           <button 
-            onClick={handleLogout}
+            onClick={handleLogoutClick}
             className="absolute right-10 top-6 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-poppinsb transition-colors"
           >
             Logout
@@ -704,6 +777,18 @@ export default function ProfileModal({
           type={validationModal.type}
           title={validationModal.title}
           message={validationModal.message}
+        />
+
+        {/* Logout Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={showLogoutConfirm}
+          onClose={() => setShowLogoutConfirm(false)}
+          onConfirm={handleLogout}
+          title="Confirm Logout"
+          message="Are you sure you want to logout? You will need to login again to access your account."
+          confirmText="Logout"
+          cancelText="Cancel"
+          type="danger"
         />
       </div>
     </div>,
