@@ -50,7 +50,7 @@ const Modal = ({ isOpen, onClose, title, children, type = 'info' }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50">
       <div className={`bg-white rounded-lg shadow-xl max-w-md w-full mx-4 border-2 ${getModalStyles()}`}>
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
@@ -627,24 +627,13 @@ export default function Faculty_Grades() {
       if (!temp || typeof temp !== 'object') return;
       setGrades(prev => {
         const merged = { ...prev };
-        // Ensure any students in temp but missing in list are added to UI
+        // Only load temp grades for students that already exist in the studentsList
+        // This prevents creating duplicate/synthetic students
         const currentStudentIds = new Set((studentsList || []).map(s => s._id));
         Object.entries(temp).forEach(([sid, g]) => {
-          merged[sid] = { ...(merged[sid] || {}), ...(g || {}), isTemp: true, isLocked: false };
-          if (!currentStudentIds.has(sid)) {
-            const synthetic = {
-              _id: sid,
-              userID: sid,
-              schoolID: sid,
-              name: (g && g.studentName) || 'Student',
-              section: selectedSection || 'default',
-              grades: {}
-            };
-            setStudents(prevStudents => {
-              // Avoid duplicates
-              if (prevStudents.find(s => s._id === sid)) return prevStudents;
-              return [...prevStudents, synthetic];
-            });
+          // Only process if this student ID exists in the current students list
+          if (currentStudentIds.has(sid)) {
+            merged[sid] = { ...(merged[sid] || {}), ...(g || {}), isTemp: true, isLocked: false };
           }
         });
         return merged;
@@ -1268,6 +1257,8 @@ export default function Faculty_Grades() {
           semesterFinal: studentGrades.semesterFinal || '',
           remarks: studentGrades.remarks || ''
         },
+        // Include breakdownByQuarter data for detailed breakdown storage
+        breakdownByQuarter: studentGrades.breakdownByQuarter || {},
         isLocked: true,
         timestamp: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
@@ -1370,6 +1361,7 @@ export default function Faculty_Grades() {
     }
     setIsEditMode(!isEditMode);
   };
+
 
   // Clear grades for the currently selected student (individual management)
   const clearSelectedStudentGrades = () => {
@@ -2228,6 +2220,7 @@ export default function Faculty_Grades() {
                               setSelectedStudentName(student.name);
                               // Set the student grades to the selected student's existing grades
                               const existingGrades = grades[student._id] || {};
+                              
                               setStudentGrades({
                                 quarter1: existingGrades.quarter1 || '',
                                 quarter2: existingGrades.quarter2 || '',
@@ -3013,7 +3006,20 @@ export default function Faculty_Grades() {
                            {students.length > 0 ? (
                                                            students.map((student) => {
                                 const studentGrades = grades[student._id] || {};
-                                const semesterGrade = calculateSemesterGrade(studentGrades.quarter1, studentGrades.quarter2);
+                                
+                                // Helper function to get quarterly grade from breakdown data if available
+                                const getQuarterlyGrade = (quarter) => {
+                                  if (studentGrades[quarter]) {
+                                    return studentGrades[quarter];
+                                  }
+                                  // Try to get from breakdownByQuarter
+                                  const breakdown = studentGrades.breakdownByQuarter?.[quarter] || studentGrades.breakdownByQuarter?.[quarter.toUpperCase()];
+                                  return breakdown?.quarterly || '-';
+                                };
+                                
+                                const quarter1Grade = getQuarterlyGrade('quarter1');
+                                const quarter2Grade = getQuarterlyGrade('quarter2');
+                                const semesterGrade = calculateSemesterGrade(quarter1Grade, quarter2Grade);
                                 const remarks = calculateRemarks(semesterGrade);
                                 const isLocked = studentGrades.isLocked;
                                 
@@ -3035,18 +3041,13 @@ export default function Faculty_Grades() {
                                             🟧 Grade uploaded (not posted)
                                           </span>
                                         )}
-                                        {!isLocked && (grades[student._id]?.isTemp) && (
-                                          <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
-                                            🟧 Grade uploaded (not posted)
-                                          </span>
-                                        )}
                                       </div>
                                     </td>
-                                                                        <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                                       {studentGrades.quarter1 || '-'}
+                                    <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                       {quarter1Grade}
                                      </td>
                                      <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                                       {studentGrades.quarter2 || '-'}
+                                       {quarter2Grade}
                                      </td>
                                                                         <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
                                        {studentGrades.semesterFinal || semesterGrade || '-'}
@@ -3176,7 +3177,20 @@ export default function Faculty_Grades() {
                            {students.length > 0 ? (
                                                            students.map((student) => {
                                 const studentGrades = grades[student._id] || {};
-                                const semesterGrade = calculateSemesterGrade(studentGrades.quarter3, studentGrades.quarter4);
+                                
+                                // Helper function to get quarterly grade from breakdown data if available
+                                const getQuarterlyGrade = (quarter) => {
+                                  if (studentGrades[quarter]) {
+                                    return studentGrades[quarter];
+                                  }
+                                  // Try to get from breakdownByQuarter
+                                  const breakdown = studentGrades.breakdownByQuarter?.[quarter] || studentGrades.breakdownByQuarter?.[quarter.toUpperCase()];
+                                  return breakdown?.quarterly || '-';
+                                };
+                                
+                                const quarter3Grade = getQuarterlyGrade('quarter3');
+                                const quarter4Grade = getQuarterlyGrade('quarter4');
+                                const semesterGrade = calculateSemesterGrade(quarter3Grade, quarter4Grade);
                                 const remarks = calculateRemarks(semesterGrade);
                                 const isLocked = studentGrades.isLocked;
                                 
@@ -3195,11 +3209,11 @@ export default function Faculty_Grades() {
                                         )}
                                       </div>
                                     </td>
-                                                                        <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                                       {studentGrades.quarter3 || '-'}
+                                    <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
+                                       {quarter3Grade}
                                      </td>
                                      <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                                       {studentGrades.quarter4 || '-'}
+                                       {quarter4Grade}
                                      </td>
                                      <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
                                        {studentGrades.semesterFinal || semesterGrade || '-'}
@@ -3284,17 +3298,28 @@ export default function Faculty_Grades() {
                   if (!key) return;
                   let idx = studentIndexBySchoolId.get(key);
                   if (typeof idx === 'undefined') {
-                    const newStudent = {
-                      _id: key,
-                      userID: key,
-                      schoolID: key,
-                      name: rec.studentName || key,
-                      section: selectedSection || 'default',
-                      grades: {}
-                    };
-                    updatedStudents.push(newStudent);
-                    idx = updatedStudents.length - 1;
-                    studentIndexBySchoolId.set(key, idx);
+                    // Only create new student if we can't find existing one by schoolID
+                    // Try to find by matching schoolID in existing students
+                    const existingStudent = updatedStudents.find(s => 
+                      String(s.schoolID || s._id) === key
+                    );
+                    if (existingStudent) {
+                      idx = updatedStudents.indexOf(existingStudent);
+                      studentIndexBySchoolId.set(key, idx);
+                    } else {
+                      // Only create synthetic student as last resort
+                      const newStudent = {
+                        _id: key,
+                        userID: key,
+                        schoolID: key,
+                        name: rec.studentName || key,
+                        section: selectedSection || 'default',
+                        grades: {}
+                      };
+                      updatedStudents.push(newStudent);
+                      idx = updatedStudents.length - 1;
+                      studentIndexBySchoolId.set(key, idx);
+                    }
                   }
                   const student = updatedStudents[idx];
                   const sid = student._id;

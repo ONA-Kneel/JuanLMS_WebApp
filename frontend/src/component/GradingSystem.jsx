@@ -1159,38 +1159,31 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
       console.log('  - Student Scores Sample:', Object.keys(scores).slice(0, 3).map(id => ({ id, scores: scores[id] })));
       console.log('  - Selected Quarter:', globalQuarter, globalTerm, globalAcademicYear);
       
-      // Append student rows with actual data
-      const totalRows = Math.max(15, normalizedStudents.length);
-      for (let i = 0; i < totalRows; i++) {
-        const student = normalizedStudents[i];
-        if (student) {
-          const keyCandidates = [
-            student.objectId ? String(student.objectId) : null,
-            student.userId ? String(student.userId) : null,
-            student.id ? String(student.id) : null
-          ].filter(Boolean);
-          let studentScores = { written: 0, performance: 0 };
-          for (const k of keyCandidates) {
-            if (scores[k]) { studentScores = scores[k]; break; }
-          }
-          
-          // Create row with actual data
-          const studentRow = [
-            student.id, // A Student No.
-            student.name, // B Name
-            studentScores.written, // C WW RAW
-            activityTotals.written, // D WW HPS
-            studentScores.performance, // E PT RAW
-            activityTotals.performance, // F PT HPS
-            "" // G Quarterly Grade (blank)
-          ];
-          
-          wsData.push(studentRow);
-        } else {
-          // Empty row for padding
-          wsData.push([i + 1, "", "", "", "", "", ""]);
+      // Append student rows with actual data - only include real students
+      normalizedStudents.forEach((student) => {
+        const keyCandidates = [
+          student.objectId ? String(student.objectId) : null,
+          student.userId ? String(student.userId) : null,
+          student.id ? String(student.id) : null
+        ].filter(Boolean);
+        let studentScores = { written: 0, performance: 0 };
+        for (const k of keyCandidates) {
+          if (scores[k]) { studentScores = scores[k]; break; }
         }
-      }
+        
+        // Create row with actual data
+        const studentRow = [
+          student.id, // A Student No.
+          student.name, // B Name
+          studentScores.written, // C WW RAW
+          activityTotals.written, // D WW HPS
+          studentScores.performance, // E PT RAW
+          activityTotals.performance, // F PT HPS
+          "" // G Quarterly Grade (blank)
+        ];
+        
+        wsData.push(studentRow);
+      });
 
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -1542,7 +1535,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
                 disabled={templateLoading}
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
-                {templateLoading ? 'Generating...' : 'Download Template'}
+                {templateLoading ? 'Generating...' : 'Download Student Grades Template'}
               </button>
               <button
                 onClick={exportGradesToStudents}
@@ -1587,7 +1580,7 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
 
       {/* Confirm Upload Modal */}
       {showConfirmUpload && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 bg-opacity-30 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50">
           <div className="relative p-8 border w-full max-w-md max-h-full">
             <div className="relative bg-white rounded-lg shadow dark:bg-gray-700">
               <button
