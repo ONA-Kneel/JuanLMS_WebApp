@@ -986,32 +986,181 @@ export default function Faculty_Grades() {
         return;
       }
       
-      // For now, simulate file upload since the API endpoint doesn't exist
-      // This is a temporary solution until the backend endpoint is implemented
-      console.log('Simulating file upload for student:', student.name);
+      console.log('Processing excel file for student:', student.name);
       
-      // Simulate processing delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Parse the file content (basic CSV/Excel simulation)
+      // Parse the file content (CSV/Excel)
       const fileReader = new FileReader();
       fileReader.onload = (e) => {
         try {
           const content = e.target.result;
           console.log('File content:', content);
           
-          // For now, just show success message
-          showModal('Upload Successful', 'Student grades uploaded successfully! (Simulated - saved to localStorage)', 'success');
+          // Parse CSV content
+          const lines = content.split('\n');
+          const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+          
+          // Find the data row (skip header)
+          let dataRow = null;
+          for (let i = 1; i < lines.length; i++) {
+            const row = lines[i].split(',').map(cell => cell.trim());
+            if (row.length > 0 && row[0] !== '') {
+              dataRow = row;
+              break;
+            }
+          }
+          
+          if (!dataRow) {
+            showModal('Invalid File', 'No data found in the uploaded file', 'error');
+            return;
+          }
+          
+          // Extract grade data based on column headers
+          const gradeData = {};
+          
+          // Map CSV columns to grade fields
+          headers.forEach((header, index) => {
+            const value = dataRow[index] || '';
+            const numValue = parseFloat(value);
+            
+            switch (header) {
+              case 'quarter1':
+              case 'q1':
+                gradeData.quarter1 = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'quarter2':
+              case 'q2':
+                gradeData.quarter2 = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'quarter3':
+              case 'q3':
+                gradeData.quarter3 = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'quarter4':
+              case 'q4':
+                gradeData.quarter4 = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'written_works_raw':
+              case 'ww_raw':
+              case 'writtenworksraw':
+                gradeData.writtenWorksRaw = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'written_works_hps':
+              case 'ww_hps':
+              case 'writtenworkshps':
+                gradeData.writtenWorksHPS = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'performance_tasks_raw':
+              case 'pt_raw':
+              case 'performancetasksraw':
+                gradeData.performanceTasksRaw = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'performance_tasks_hps':
+              case 'pt_hps':
+              case 'performancetaskshps':
+                gradeData.performanceTasksHPS = isNaN(numValue) ? '' : numValue;
+                break;
+              case 'quarterly_exam':
+              case 'quarterlyexam':
+              case 'exam':
+                gradeData.quarterlyExam = isNaN(numValue) ? '' : numValue;
+                break;
+            }
+          });
+          
+          // Calculate semester final grade if we have quarter grades
+          if (gradeData.quarter1 && gradeData.quarter2 && currentTerm?.termName === 'Term 1') {
+            gradeData.semesterFinal = ((gradeData.quarter1 + gradeData.quarter2) / 2).toFixed(2);
+          } else if (gradeData.quarter3 && gradeData.quarter4 && currentTerm?.termName === 'Term 2') {
+            gradeData.semesterFinal = ((gradeData.quarter3 + gradeData.quarter4) / 2).toFixed(2);
+          }
+          
+          // Update student grades with uploaded data
+          setStudentGrades(prev => ({
+            ...prev,
+            ...gradeData,
+            isUploaded: true, // Mark as uploaded but not posted
+            lastUpdated: new Date().toISOString()
+          }));
+          
+          // Update the main grades state
+          setGrades(prevGrades => ({
+            ...prevGrades,
+            [student._id]: {
+              ...prevGrades[student._id],
+              ...gradeData,
+              isUploaded: true,
+              isLocked: false,
+              lastUpdated: new Date().toISOString()
+            }
+          }));
+          
+          // Save to draft collection
+          const token = localStorage.getItem("token");
+          const selectedClassObj = classes[selectedClass];
+          
+          const draftData = {
+            schoolID: student.schoolID || student._id,
+            studentId: student._id,
+            studentName: student.name,
+            subjectCode: selectedClassObj?.classCode || selectedClassObj?.className,
+            subjectName: selectedClassObj?.className,
+            classID: selectedClassObj?.classID,
+            section: student.section || selectedSection,
+            academicYear: `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
+            termName: currentTerm?.termName,
+            facultyID: localStorage.getItem('userID') || 'unknown',
+            grades: {
+              quarter1: gradeData.quarter1 || null,
+              quarter2: gradeData.quarter2 || null,
+              quarter3: gradeData.quarter3 || null,
+              quarter4: gradeData.quarter4 || null,
+              semesterFinal: gradeData.semesterFinal || null,
+              remarks: gradeData.remarks || ''
+            },
+            breakdownByQuarter: {
+              [globalQuarter]: {
+                ww: {
+                  raw: gradeData.writtenWorksRaw || '',
+                  hps: gradeData.writtenWorksHPS || ''
+                },
+                pt: {
+                  raw: gradeData.performanceTasksRaw || '',
+                  hps: gradeData.performanceTasksHPS || ''
+                },
+                exam: gradeData.quarterlyExam || ''
+              }
+            },
+            isLocked: false,
+            lastUpdated: new Date().toISOString()
+          };
+          
+          // Save to backend draft collection
+          fetch(`${API_BASE}/api/semestral-grades/save-draft`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(draftData)
+          }).then(response => {
+            if (response.ok) {
+              console.log('Draft saved successfully');
+            } else {
+              console.error('Failed to save draft');
+            }
+          }).catch(error => {
+            console.error('Error saving draft:', error);
+          });
+          
+          showModal('Upload Successful', `Student grades uploaded successfully! Data includes RAW HPS and QUARTER EXAM values. Grades are saved as draft and can be edited before posting.`, 'success');
           
           // Clear the file input
           setSelectedStudentFile(null);
           document.getElementById('student-file-input').value = '';
           
-          // Refresh students list to show updated grades
-          fetchStudents();
         } catch (error) {
           console.error('Error processing file:', error);
-          showModal('Processing Error', 'Failed to process file. Please try again.', 'error');
+          showModal('Processing Error', 'Failed to process file. Please check the file format and try again.', 'error');
         }
       };
       
@@ -1621,11 +1770,122 @@ export default function Faculty_Grades() {
     }
   };
 
-  // Save a draft of current grades (local only, not posted)
-  const saveDraftGrades = () => {
+  // Export grades to Excel with RAW, HPS, WS, RS format
+  const exportGradesToExcel = () => {
+    if (!selectedClass || students.length === 0) {
+      showModal('No Data', 'No students or grades to export', 'warning');
+      return;
+    }
+
+    try {
+      const selectedClassObj = classes[selectedClass];
+      const currentDate = new Date().toISOString().split('T')[0];
+      
+      // Prepare CSV content
+      const headers = [
+        'Student ID',
+        'Student Name',
+        'Section',
+        'Quarter 1',
+        'Quarter 2', 
+        'Quarter 3',
+        'Quarter 4',
+        'Semester Final',
+        'Remarks',
+        'Written Works RAW',
+        'Written Works HPS',
+        'Written Works PS',
+        'Written Works WS',
+        'Performance Tasks RAW',
+        'Performance Tasks HPS', 
+        'Performance Tasks PS',
+        'Performance Tasks WS',
+        'Quarterly Exam',
+        'Initial Grade',
+        'Quarterly Grade'
+      ];
+
+      const csvRows = [headers.join(',')];
+
+      students.forEach(student => {
+        const studentGrades = grades[student._id] || {};
+        const breakdown = studentGrades.breakdownByQuarter?.[globalQuarter] || {};
+        
+        // Calculate PS (Percentage Score) and WS (Weighted Score)
+        const wwRaw = parseFloat(breakdown.ww?.raw || studentGrades.writtenWorksRaw || 0);
+        const wwHPS = parseFloat(breakdown.ww?.hps || studentGrades.writtenWorksHPS || 0);
+        const wwPS = wwHPS > 0 ? (wwRaw / wwHPS) * 100 : 0;
+        const wwWS = wwPS * 0.3; // 30% weight
+
+        const ptRaw = parseFloat(breakdown.pt?.raw || studentGrades.performanceTasksRaw || 0);
+        const ptHPS = parseFloat(breakdown.pt?.hps || studentGrades.performanceTasksHPS || 0);
+        const ptPS = ptHPS > 0 ? (ptRaw / ptHPS) * 100 : 0;
+        const ptWS = ptPS * 0.5; // 50% weight
+
+        const exam = parseFloat(breakdown.exam || studentGrades.quarterlyExam || 0);
+        const examPS = exam; // Exam is already a percentage
+        const examWS = examPS * 0.2; // 20% weight
+
+        const initialGrade = wwWS + ptWS;
+        const quarterlyGrade = (initialGrade * 0.8) + (exam * 0.2);
+
+        const row = [
+          student.schoolID || student._id,
+          `"${student.name}"`,
+          `"${student.section || selectedSection || 'N/A'}"`,
+          studentGrades.quarter1 || '',
+          studentGrades.quarter2 || '',
+          studentGrades.quarter3 || '',
+          studentGrades.quarter4 || '',
+          studentGrades.semesterFinal || '',
+          studentGrades.remarks || '',
+          wwRaw || '',
+          wwHPS || '',
+          wwPS.toFixed(2),
+          wwWS.toFixed(2),
+          ptRaw || '',
+          ptHPS || '',
+          ptPS.toFixed(2),
+          ptWS.toFixed(2),
+          exam || '',
+          initialGrade.toFixed(2),
+          quarterlyGrade.toFixed(2)
+        ];
+
+        csvRows.push(row.join(','));
+      });
+
+      const csvContent = csvRows.join('\n');
+      
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${selectedClassObj?.className || 'Grades'}_${globalQuarter}_${currentDate}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showModal(
+        'Export Successful', 
+        `Successfully exported ${students.length} student grades to Excel format.\n\nFile includes:\n• RAW scores and HPS values\n• Calculated PS (Percentage Score)\n• Calculated WS (Weighted Score)\n• Initial Grade and Quarterly Grade calculations\n\nFile saved as: ${selectedClassObj?.className || 'Grades'}_${globalQuarter}_${currentDate}.csv`,
+        'success'
+      );
+
+    } catch (error) {
+      console.error('Error exporting grades:', error);
+      showModal('Export Failed', 'Failed to export grades. Please try again.', 'error');
+    }
+  };
+
+  // Save a draft of current grades to both local storage and backend
+  const saveDraftGrades = async () => {
     try {
       const selectedClassObj = classes[selectedClass];
       if (!selectedClassObj) return;
+      
       // Ensure all staged items remain marked as temp
       const draft = {};
       Object.entries(grades || {}).forEach(([sid, g]) => {
@@ -1633,10 +1893,76 @@ export default function Faculty_Grades() {
       });
       setGrades(draft);
       saveTempGrades(selectedClassObj.classID, draft);
-      showModal('Draft Saved', 'Your current grades have been saved as a local draft for this class, term, and academic year. These are not posted and are only visible to you.', 'success');
+      
+      // Save to backend semestral_draft_collections
+      const token = localStorage.getItem("token");
+      const facultyID = localStorage.getItem('userID') || 'unknown';
+      
+      // Prepare draft data for all students
+      const draftData = students.map(student => {
+        const studentGrades = grades[student._id] || {};
+        return {
+          schoolID: student.schoolID || student._id,
+          studentId: student._id,
+          studentName: student.name,
+          subjectCode: selectedClassObj?.classCode || selectedClassObj?.className,
+          subjectName: selectedClassObj?.className,
+          classID: selectedClassObj?.classID,
+          section: student.section || selectedSection,
+          academicYear: `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
+          termName: currentTerm?.termName,
+          facultyID: facultyID,
+          grades: {
+            quarter1: studentGrades.quarter1 || null,
+            quarter2: studentGrades.quarter2 || null,
+            quarter3: studentGrades.quarter3 || null,
+            quarter4: studentGrades.quarter4 || null,
+            semesterFinal: studentGrades.semesterFinal || null,
+            remarks: studentGrades.remarks || ''
+          },
+          breakdownByQuarter: studentGrades.breakdownByQuarter || {
+            [globalQuarter]: {
+              ww: {
+                raw: studentGrades.writtenWorksRaw || '',
+                hps: studentGrades.writtenWorksHPS || ''
+              },
+              pt: {
+                raw: studentGrades.performanceTasksRaw || '',
+                hps: studentGrades.performanceTasksHPS || ''
+              },
+              exam: studentGrades.quarterlyExam || ''
+            }
+          },
+          isLocked: false,
+          lastUpdated: new Date().toISOString()
+        };
+      });
+      
+      // Save all drafts to backend
+      const response = await fetch(`${API_BASE}/api/semestral-grades/save-draft-bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          drafts: draftData,
+          classID: selectedClassObj.classID,
+          academicYear: `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`,
+          termName: currentTerm?.termName
+        })
+      });
+      
+      if (response.ok) {
+        showModal('Draft Saved', `Successfully saved draft for ${students.length} students to the database. These grades are not posted and are only visible to you.`, 'success');
+      } else {
+        console.error('Failed to save draft to backend');
+        showModal('Draft Saved Locally', 'Draft saved locally but failed to save to database. Please check your connection.', 'warning');
+      }
+      
     } catch (e) {
       console.error('Failed to save draft:', e);
-      showModal('Save Draft Failed', 'Could not save the draft locally. Please try again.', 'error');
+      showModal('Save Draft Failed', 'Could not save the draft. Please try again.', 'error');
     }
   };
 
@@ -2426,6 +2752,49 @@ export default function Faculty_Grades() {
                         <p><strong>Legend:</strong> RAW = Raw Score, HPS = Highest Possible Score, PS = Percentage Score, WS = Weighted Score</p>
                         <p><strong>Formula:</strong> PS = (RAW/HPS) × 100, WS = PS × Weight, Initial Grade = Sum of WS, Quarterly Grade = (Initial Grade × 0.8) + (Quarterly Exam × 0.2)</p>
                       </div>
+                      
+                      {/* Edit Controls for Detailed Grade Breakdown */}
+                      <div className="mt-4 flex justify-end gap-2">
+                        {(() => {
+                          if (!isEditMode) {
+                            return (
+                              <button
+                                onClick={handleEditModeToggle}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                                title="Enable edit mode for detailed grade breakdown"
+                              >
+                                ✏️ Edit
+                              </button>
+                            );
+                          } else {
+                            return (
+                              <>
+                                <button
+                                  onClick={saveStudentGrades}
+                                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                                  title="Save changes to detailed grade breakdown"
+                                >
+                                  💾 Save Grades
+                                </button>
+                                <button
+                                  onClick={handleEditModeToggle}
+                                  className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
+                                  title="Cancel editing and revert changes"
+                                >
+                                  ❌ Cancel
+                                </button>
+                                <button
+                                  onClick={clearSelectedStudentGrades}
+                                  className="px-4 py-2 bg-red-200 text-red-800 rounded-md hover:bg-red-300 transition-colors"
+                                  title="Clear all grades in detailed breakdown"
+                                >
+                                  🗑️ Clear Grades
+                                </button>
+                              </>
+                            );
+                          }
+                        })()}
+                      </div>
                     </div>
                     
                                       <div>
@@ -2583,6 +2952,18 @@ export default function Faculty_Grades() {
                       </div>
                       <div className="flex gap-2">
                         <button
+                          onClick={exportGradesToExcel}
+                          className={`px-4 py-2 rounded-md transition-colors ${
+                            students.length > 0 
+                              ? 'bg-green-600 text-white hover:bg-green-700' 
+                              : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                          }`}
+                          title="Export all grades to Excel with RAW, HPS, WS, RS format"
+                          disabled={students.length === 0}
+                        >
+                          📊 Export Excel
+                        </button>
+                        <button
                           onClick={saveDraftGrades}
                           className={`px-4 py-2 rounded-md transition-colors ${
                             students.length > 0 
@@ -2733,6 +3114,18 @@ export default function Faculty_Grades() {
                         )}
                       </div>
                       <div className="flex gap-2">
+                        <button
+                          onClick={exportGradesToExcel}
+                          className={`px-4 py-2 rounded-md transition-colors ${
+                            students.length > 0 
+                              ? 'bg-green-600 text-white hover:bg-green-700' 
+                              : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                          }`}
+                          title="Export all grades to Excel with RAW, HPS, WS, RS format"
+                          disabled={students.length === 0}
+                        >
+                          📊 Export Excel
+                        </button>
                         <button
                           onClick={saveDraftGrades}
                           className={`px-4 py-2 rounded-md transition-colors ${

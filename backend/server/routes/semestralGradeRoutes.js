@@ -363,6 +363,107 @@ router.post('/save-draft', authenticateToken, async (req, res) => {
   }
 });
 
+// Save bulk drafts for multiple students
+router.post('/save-draft-bulk', authenticateToken, async (req, res) => {
+  try {
+    const { drafts, classID, academicYear, termName } = req.body;
+    
+    if (!drafts || !Array.isArray(drafts) || !classID || !academicYear || !termName) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing required fields: drafts array, classID, academicYear, termName' 
+      });
+    }
+
+    // Check if faculty has permission
+    if (req.user.role !== 'faculty') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Faculty only.'
+      });
+    }
+
+    const results = [];
+    const errors = [];
+
+    // Process each draft
+    for (const draftData of drafts) {
+      try {
+        const {
+          schoolID,
+          studentId,
+          studentName,
+          subjectCode,
+          subjectName,
+          classID: draftClassID,
+          section,
+          academicYear: draftAcademicYear,
+          termName: draftTermName,
+          facultyID,
+          grades,
+          breakdownByQuarter
+        } = draftData;
+
+        if (!schoolID || !studentName || !subjectCode) {
+          errors.push(`Missing required fields for student ${studentName}`);
+          continue;
+        }
+
+        const filter = { 
+          schoolID, 
+          subjectCode, 
+          academicYear: draftAcademicYear, 
+          termName: draftTermName 
+        };
+        
+        const update = {
+          schoolID,
+          studentId,
+          studentName,
+          subjectCode,
+          subjectName,
+          classID: draftClassID,
+          section,
+          academicYear: draftAcademicYear,
+          termName: draftTermName,
+          facultyID,
+          grades: grades || {},
+          breakdownByQuarter: breakdownByQuarter || {},
+          isLocked: false,
+          lastUpdated: new Date()
+        };
+        
+        const options = { upsert: true, new: true };
+        const doc = await SemestralDraft.findOneAndUpdate(filter, update, options);
+        
+        results.push({
+          studentName,
+          success: true,
+          draftId: doc._id
+        });
+
+      } catch (error) {
+        errors.push(`Error processing ${draftData.studentName}: ${error.message}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Processed ${results.length} draft records successfully`,
+      results,
+      errors: errors.length > 0 ? errors : undefined
+    });
+
+  } catch (error) {
+    console.error('Error saving bulk drafts:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to save bulk drafts',
+      error: error.message
+    });
+  }
+});
+
 // Fetch drafts for a class
 router.get('/drafts/class/:classID', authenticateToken, async (req, res) => {
   try {
