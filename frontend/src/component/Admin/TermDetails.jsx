@@ -18,6 +18,36 @@ import termDashboardIcon from "../../assets/termdashboard.png"; // Reverted to d
 import * as XLSX from 'xlsx'; // Add this import for Excel handling
 import DependencyWarningModal from './DependencyWarningModal';
 
+// Student School ID validation function (xx-xxxxx format)
+const validateStudentSchoolIDFormat = (schoolID) => {
+  if (!schoolID || typeof schoolID !== 'string') {
+    return false;
+  }
+  
+  // Remove any whitespace
+  const trimmedID = schoolID.trim();
+  
+  // Check if it matches the pattern xx-xxxxx (2 digits, hyphen, 5 digits)
+  const studentSchoolIDPattern = /^\d{2}-\d{5}$/;
+  
+  return studentSchoolIDPattern.test(trimmedID);
+};
+
+// Faculty School ID validation function (F000 format)
+const validateFacultySchoolIDFormat = (schoolID) => {
+  if (!schoolID || typeof schoolID !== 'string') {
+    return false;
+  }
+  
+  // Remove any whitespace
+  const trimmedID = schoolID.trim();
+  
+  // Check if it matches the pattern F followed by 3 digits
+  const facultySchoolIDPattern = /^F\d{3}$/;
+  
+  return facultySchoolIDPattern.test(trimmedID);
+};
+
 export default function TermDetails() {
   const { termId } = useParams();
   const navigate = useNavigate();
@@ -95,8 +125,10 @@ export default function TermDetails() {
   // Add state for search functionality for Faculty and Students
   const [facultySearchTerm, setFacultySearchTerm] = useState('');
   const [showFacultySuggestions, setShowFacultySuggestions] = useState(false);
+  const [facultySearchResults, setFacultySearchResults] = useState([]); // Separate state for search results
   const [studentSearchTerm, setStudentSearchTerm] = useState('');
   const [showStudentSuggestions, setShowStudentSuggestions] = useState(false);
+  const [studentSearchResults, setStudentSearchResults] = useState([]); // Separate state for search results
 
   const [excelFile, setExcelFile] = useState(null);
 
@@ -1106,7 +1138,14 @@ export default function TermDetails() {
           if (res.ok) {
             const data = await res.json();
             const facultyUsers = data.filter(user => user.role === 'faculty');
-            setFaculties(facultyUsers);
+            // Also filter by school ID if the search term matches a school ID pattern
+            const filteredFaculties = facultyUsers.filter(faculty => {
+              const searchTerm = value.toLowerCase();
+              const fullName = `${faculty.firstname} ${faculty.lastname}`.toLowerCase();
+              const schoolID = (faculty.schoolID || '').toLowerCase();
+              return fullName.includes(searchTerm) || schoolID.includes(searchTerm);
+            });
+            setFacultySearchResults(filteredFaculties);
           }
         } catch (err) {
           console.error("Error searching faculty:", err);
@@ -1139,7 +1178,7 @@ export default function TermDetails() {
   // Handle selection of a faculty from suggestions
   const handleSelectFaculty = (faculty) => {
     setFacultyFormData(prev => ({ ...prev, facultyId: faculty._id }));
-    setFacultySearchTerm(`${faculty.firstname} ${faculty.lastname}`);
+    setFacultySearchTerm(`${faculty.firstname} ${faculty.lastname} (${faculty.schoolID})`);
     setShowFacultySuggestions(false);
   };
 
@@ -1162,7 +1201,14 @@ export default function TermDetails() {
           if (res.ok) {
             const data = await res.json();
             const studentUsers = data.filter(user => user.role === 'students');
-            setStudents(studentUsers);
+            // Also filter by school ID if the search term matches a school ID pattern
+            const filteredStudents = studentUsers.filter(student => {
+              const searchTerm = value.toLowerCase();
+              const fullName = `${student.firstname} ${student.lastname}`.toLowerCase();
+              const schoolID = (student.schoolID || '').toLowerCase();
+              return fullName.includes(searchTerm) || schoolID.includes(searchTerm);
+            });
+            setStudentSearchResults(filteredStudents);
           }
         } catch (err) {
           console.error("Error searching students:", err);
@@ -1195,7 +1241,7 @@ export default function TermDetails() {
   // Handle selection of a student from suggestions
   const handleSelectStudent = (student) => {
     setStudentFormData(prev => ({ ...prev, studentId: student._id }));
-    setStudentSearchTerm(`${student.firstname} ${student.lastname}`);
+    setStudentSearchTerm(`${student.firstname} ${student.lastname} (${student.schoolID})`);
     setShowStudentSuggestions(false);
   };
 
@@ -2606,16 +2652,16 @@ export default function TermDetails() {
       const wb = XLSX.utils.book_new();
       // Sheet 1: Template for adding new faculty assignments
       const templateWs = XLSX.utils.aoa_to_sheet([
-        ['Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject'], // Updated headers
+        ['Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject'], // Updated headers to include both School ID and Name
       ]);
       XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Faculty Assignments');
 
       // Sheet 2: Current faculty assignments in the system (only active)
       const currentFacultyAssignments = facultyAssignments.filter(fa => fa.status === 'active');
       const currentFacultyAssignmentsData = [
-        ['Object ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject', 'Status'], // Updated headers
+        ['Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject', 'Status'], // Updated headers to use School ID
         ...currentFacultyAssignments.map(assignment => [
-          assignment._id,
+          assignment.facultySchoolID || '', // Use school ID instead of object ID
           assignment.facultyName,
           assignment.trackName,
           assignment.strandName,
@@ -2635,9 +2681,9 @@ export default function TermDetails() {
       // Sheet 3: Available Faculty
       const activeFaculties = faculties.filter(f => f.role === 'faculty' && !f.isArchived);
       const availableFacultiesData = [
-        ['Object ID', 'Faculty Name', 'Email', 'Status'],
+        ['Faculty School ID', 'Faculty Name', 'Email', 'Status'],
         ...activeFaculties.map(f => [
-          f._id,
+          f.schoolID || '', // Use school ID instead of object ID
           `${f.firstname} ${f.lastname}`,
           f.email,
           f.isArchived ? 'Archived' : 'Active'
@@ -2739,7 +2785,8 @@ export default function TermDetails() {
     const uploadedAssignmentCombos = new Set(); // For duplicates within the uploaded file
 
     // Pre-fetch active data for validation efficiency
-    const activeFacultiesMap = new Map(faculties.filter(f => f.role === 'faculty' && !f.isArchived).map(f => [`${f.firstname} ${f.lastname}`, f])); // Corrected filter
+    const activeFaculties = faculties.filter(f => f.role === 'faculty' && !f.isArchived);
+    const activeFacultiesMap = new Map(activeFaculties.map(f => [`${f.firstname} ${f.lastname}`, f])); // Corrected filter
     const activeTracksMap = new Map(tracks.filter(t => t.status === 'active').map(t => [t.trackName, t]));
     const activeStrandsMap = new Map(); // Store as {trackName-strandName: strandObject}
     const activeSectionsMap = new Map(); // Store as {trackName-strandName-sectionName: sectionObject}
@@ -2783,7 +2830,8 @@ export default function TermDetails() {
 
     for (let i = 0; i < assignmentsToValidate.length; i++) {
       const assignment = assignmentsToValidate[i];
-      const facultyNameInput = assignment.facultyNameInput?.trim() || ''; // Correctly use facultyNameInput
+      const facultySchoolID = assignment.facultySchoolID?.trim() || '';
+      const facultyName = assignment.facultyName?.trim() || '';
       const trackName = assignment.trackName?.trim() || '';
       const strandName = assignment.strandName?.trim() || '';
       const sectionName = assignment.sectionName?.trim() || '';
@@ -2795,23 +2843,41 @@ export default function TermDetails() {
       let facultyId = ''; // To store the faculty ID for valid assignments
 
       // 1. Check for missing required fields
-      if (!facultyNameInput || !trackName || !strandName || !sectionName || !gradeLevel || !subjectName) {
+      if (!facultySchoolID || !facultyName || !trackName || !strandName || !sectionName || !gradeLevel || !subjectName) {
         isValid = false;
-        message = 'Missing Faculty Name, Track Name, Strand Name, Section Name, Grade Level, or Subject';
-        console.log(`Row ${i + 1}: Missing required fields - facultyNameInput: "${facultyNameInput}", trackName: "${trackName}", strandName: "${strandName}", sectionName: "${sectionName}", gradeLevel: "${gradeLevel}", subjectName: "${subjectName}"`);
+        message = 'Missing Faculty School ID, Faculty Name, Track Name, Strand Name, Section Name, Grade Level, or Subject';
+        console.log(`Row ${i + 1}: Missing required fields - facultySchoolID: "${facultySchoolID}", facultyName: "${facultyName}", trackName: "${trackName}", strandName: "${strandName}", sectionName: "${sectionName}", gradeLevel: "${gradeLevel}", subjectName: "${subjectName}"`);
         status[i] = { valid: isValid, message: message, facultyId: facultyId };
         console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
         continue; // Skip all other validations for this row
       }
 
-      // 2. Check if faculty exists and is active
+      // 1.5. Check faculty school ID format
+      if (isValid && !validateFacultySchoolIDFormat(facultySchoolID)) {
+        isValid = false;
+        message = `Invalid Faculty School ID format "${facultySchoolID}". Faculty School ID must be in format F000 (e.g., F001, F123)`;
+        console.log(`Row ${i + 1}: Invalid faculty school ID format - "${facultySchoolID}"`);
+        status[i] = { valid: isValid, message: message, facultyId: facultyId };
+        console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
+        continue; // Skip all other validations for this row
+      }
+
+      // 2. Check if faculty exists and is active (search by school ID)
       if (isValid) {
-        const facultyFound = activeFacultiesMap.get(facultyNameInput);
+        const facultyFound = activeFaculties.find(f => f.schoolID === facultySchoolID && f.role === 'faculty' && !f.isArchived);
         if (!facultyFound) {
           isValid = false;
-          message = `Faculty "${facultyNameInput}" does not exist or is not active`;
+          message = `Faculty with School ID "${facultySchoolID}" does not exist or is not active`;
         } else {
-          facultyId = facultyFound._id;
+          // 2.5. Verify that the name matches the school ID
+          const expectedName = `${facultyFound.firstname} ${facultyFound.lastname}`.toLowerCase();
+          const providedName = facultyName.toLowerCase();
+          if (expectedName !== providedName) {
+            isValid = false;
+            message = `Faculty Name "${facultyName}" does not match School ID "${facultySchoolID}". Expected: "${facultyFound.firstname} ${facultyFound.lastname}"`;
+          } else {
+            facultyId = facultyFound._id;
+          }
         }
       }
 
@@ -2844,7 +2910,7 @@ export default function TermDetails() {
 
       // 6. Check for duplicates within the uploaded data
       if (isValid) {
-        const currentCombo = `${facultyId || facultyNameInput}-${trackName}-${strandName}-${sectionName}`;
+        const currentCombo = `${facultyId || facultySchoolID}-${trackName}-${strandName}-${sectionName}`;
         if (uploadedAssignmentCombos.has(currentCombo)) {
           isValid = false;
           message = 'Duplicate faculty assignment in uploaded file';
@@ -2901,7 +2967,7 @@ export default function TermDetails() {
             }
           }
 
-          const requiredHeaders = ['Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject'];
+          const requiredHeaders = ['Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject'];
           const missingOrMismatchedHeaders = requiredHeaders.filter(header => !actualHeaders.includes(header));
 
           if (missingOrMismatchedHeaders.length > 0) {
@@ -2918,7 +2984,8 @@ export default function TermDetails() {
           }
 
           const assignmentsToPreview = jsonData.map(row => ({
-            facultyNameInput: String(row[actualHeaders.indexOf('Faculty Name')] || '').trim(),
+            facultySchoolID: String(row[actualHeaders.indexOf('Faculty School ID')] || '').trim(),
+            facultyName: String(row[actualHeaders.indexOf('Faculty Name')] || '').trim(),
             trackName: String(row[actualHeaders.indexOf('Track Name')] || '').trim(),
             strandName: String(row[actualHeaders.indexOf('Strand Name')] || '').trim(),
             sectionName: String(row[actualHeaders.indexOf('Section Name')] || '').trim(),
@@ -3041,16 +3108,16 @@ export default function TermDetails() {
 
       // Sheet 1: Template for adding new student assignments
       const templateWs = XLSX.utils.aoa_to_sheet([
-        ['Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name'], // Headers
+        ['Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name'], // Updated headers to include both School ID and Name
       ]);
       XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Student Assignments');
 
       // Sheet 2: Current student assignments in the system
       const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
       const currentStudentAssignmentsData = [
-        ['Object ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'], // Headers
+        ['Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'], // Updated headers to use School ID
         ...currentStudentAssignments.map(assignment => [
-          assignment._id,
+          assignment.studentSchoolID || '', // Use school ID instead of object ID
           assignment.studentName,
           assignment.gradeLevel || '',
           assignment.trackName,
@@ -3070,9 +3137,9 @@ export default function TermDetails() {
       // Sheet 3: Available Students
       const activeStudents = students.filter(s => !s.isArchived);
       const availableStudentsData = [
-        ['Object ID', 'Student Name', 'Email', 'Status'], // Headers
+        ['Student School ID', 'Student Name', 'Email', 'Status'], // Updated headers to use School ID
         ...activeStudents.map(s => [
-          s._id,
+          s.schoolID || '', // Use school ID instead of object ID
           `${s.firstname} ${s.lastname}`,
           s.email,
           s.isArchived ? 'Archived' : 'Active'
@@ -3159,7 +3226,7 @@ export default function TermDetails() {
 
     // Pre-fetch active data for validation efficiency
     console.log("Fetching active students, tracks, strands, sections for validation...");
-    const activeStudentsMap = new Map(students.filter(s => !s.isArchived).map(s => [`${s.firstname} ${s.lastname}`, s]));
+    const activeStudentsMap = new Map(students.filter(s => !s.isArchived).map(s => [s.schoolID, s]));
     const activeTracksMap = new Map(tracks.filter(t => t.status === 'active').map(t => [t.trackName, t]));
     const activeStrandsMap = new Map(); // Store as {trackName-strandName: strandObject}
     const activeSectionsMap = new Map(); // Store as {trackName-strandName-sectionName: sectionObject}
@@ -3221,22 +3288,33 @@ export default function TermDetails() {
     for (let i = 0; i < assignmentsToValidate.length; i++) {
       const assignment = assignmentsToValidate[i];
       console.log(`Validating assignment ${i + 1}:`, assignment);
+      const studentSchoolIDInput = assignment['Student School ID']?.trim() || '';
       const studentNameInput = assignment['Student Name']?.trim() || '';
       const gradeLevel = assignment['Grade Level']?.trim() || '';
       const trackName = assignment['Track Name']?.trim() || '';
       const strandName = assignment['Strand Name']?.trim() || '';
       const sectionName = assignment['Section Name']?.trim() || '';
-      console.log(`Extracted: Student: "${studentNameInput}", Grade Level: "${gradeLevel}", Track: "${trackName}", Strand: "${strandName}", Section: "${sectionName}"`);
+      console.log(`Extracted: Student School ID: "${studentSchoolIDInput}", Student Name: "${studentNameInput}", Grade Level: "${gradeLevel}", Track: "${trackName}", Strand: "${strandName}", Section: "${sectionName}"`);
 
       let isValid = true;
       let message = 'Valid';
       let studentId = ''; // To store the student ID for valid assignments
 
       // 1. Check for missing required fields
-      if (!studentNameInput || !gradeLevel || !trackName || !strandName || !sectionName) {
+      if (!studentSchoolIDInput || !studentNameInput || !gradeLevel || !trackName || !strandName || !sectionName) {
         isValid = false;
-        message = 'Missing Student Name, Grade Level, Track Name, Strand Name, or Section Name';
-        console.log(`Row ${i + 1}: Missing required fields - studentNameInput: "${studentNameInput}", gradeLevel: "${gradeLevel}", trackName: "${trackName}", strandName: "${strandName}", sectionName: "${sectionName}"`);
+        message = 'Missing Student School ID, Student Name, Grade Level, Track Name, Strand Name, or Section Name';
+        console.log(`Row ${i + 1}: Missing required fields - studentSchoolIDInput: "${studentSchoolIDInput}", studentNameInput: "${studentNameInput}", gradeLevel: "${gradeLevel}", trackName: "${trackName}", strandName: "${strandName}", sectionName: "${sectionName}"`);
+        status[i] = { valid: isValid, message: message, studentId: studentId };
+        console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
+        continue; // Skip all other validations for this row
+      }
+
+      // 1.5. Check student school ID format
+      if (isValid && !validateStudentSchoolIDFormat(studentSchoolIDInput)) {
+        isValid = false;
+        message = `Invalid Student School ID format "${studentSchoolIDInput}". Student School ID must be in format xx-xxxxx (e.g., 25-00017, 22-00014)`;
+        console.log(`Row ${i + 1}: Invalid student school ID format - "${studentSchoolIDInput}"`);
         status[i] = { valid: isValid, message: message, studentId: studentId };
         console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
         continue; // Skip all other validations for this row
@@ -3250,15 +3328,23 @@ export default function TermDetails() {
         continue; // Skip all other validations for this row
       }
 
-      // 2. Check if student exists and is active
+      // 2. Check if student exists and is active (search by school ID and verify name matches)
       if (isValid) {
-        const studentFound = activeStudentsMap.get(studentNameInput);
-        console.log(`Student "${studentNameInput}" found:`, studentFound);
+        const studentFound = activeStudentsMap.get(studentSchoolIDInput);
+        console.log(`Student with School ID "${studentSchoolIDInput}" found:`, studentFound);
         if (!studentFound) {
           isValid = false;
-          message = `Student "${studentNameInput}" does not exist or is not active`;
+          message = `Student with School ID "${studentSchoolIDInput}" does not exist or is not active`;
+        } else {
+          // Verify that the name matches the school ID
+          const expectedName = `${studentFound.firstname} ${studentFound.lastname}`.toLowerCase();
+          const providedName = studentNameInput.toLowerCase();
+          if (expectedName !== providedName) {
+            isValid = false;
+            message = `Name "${studentNameInput}" does not match School ID "${studentSchoolIDInput}". Expected: "${studentFound.firstname} ${studentFound.lastname}"`;
         } else {
           studentId = studentFound._id;
+          }
         }
       }
 
@@ -3351,6 +3437,7 @@ export default function TermDetails() {
 
       // Define expected headers and create a mapping for flexible matching
       const expectedHeadersMap = {
+        'Student School ID': '',
         'Student Name': '',
         'Grade Level': '',
         'Track Name': '',
@@ -4146,9 +4233,9 @@ export default function TermDetails() {
       const wb = XLSX.utils.book_new();
       const currentFacultyAssignments = facultyAssignments.filter(fa => fa.status === 'active');
       const facultyAssignmentData = [
-        ['Object ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Grade Level', 'Section Name', 'Subject', 'Status'],
+        ['Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Grade Level', 'Section Name', 'Subject', 'Status'],
         ...currentFacultyAssignments.map(assignment => [
-          assignment._id,
+          assignment.facultySchoolID || '',
           assignment.facultyName,
           assignment.trackName,
           assignment.strandName,
@@ -4188,9 +4275,9 @@ export default function TermDetails() {
       const wb = XLSX.utils.book_new();
       const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
       const studentAssignmentData = [
-        ['Object ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'],
+        ['Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'],
         ...currentStudentAssignments.map(assignment => [
-          assignment._id,
+          assignment.studentSchoolID || '',
           assignment.studentName,
           assignment.gradeLevel || '',
           assignment.trackName,
@@ -4683,11 +4770,19 @@ export default function TermDetails() {
       // Import student assignments
       for (const assignment of validStudentAssignments) {
         try {
-          // Find student by name
-          const student = students.find(s => `${s.firstname} ${s.lastname}`.toLowerCase() === assignment.studentName.toLowerCase());
+          // Find student by school ID
+          const student = students.find(s => s.schoolID === assignment.studentSchoolID);
           if (!student) {
             skippedCount++;
-            skippedMessages.push(`Student "${assignment.studentName}" not found`);
+            skippedMessages.push(`Student with School ID "${assignment.studentSchoolID}" not found`);
+            continue;
+          }
+
+          // Verify name matches
+          const expectedName = `${student.firstname} ${student.lastname}`;
+          if (assignment.studentName !== expectedName) {
+            skippedCount++;
+            skippedMessages.push(`Name "${assignment.studentName}" does not match School ID "${assignment.studentSchoolID}". Expected: "${expectedName}"`);
             continue;
           }
 
@@ -6212,19 +6307,20 @@ Validation issues (${skippedCount} items):
                               onFocus={() => setShowFacultySuggestions(true)}
                               onBlur={() => setTimeout(() => setShowFacultySuggestions(false), 200)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Search Faculty..."
+                              placeholder="Search Faculty by name or School ID..."
                               required
                               disabled={termDetails.status === 'archived'}
                             />
                             {showFacultySuggestions && facultySearchTerm.length > 0 && (
                               <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
-                                {faculties.map(faculty => (
+                                {facultySearchResults.map(faculty => (
                                   <li
                                     key={faculty._id}
                                     onClick={() => handleSelectFaculty(faculty)}
                                     className="p-2 hover:bg-gray-100 cursor-pointer"
                                   >
-                                    {faculty.firstname} {faculty.lastname}
+                                    <div className="font-medium">{faculty.firstname} {faculty.lastname}</div>
+                                    <div className="text-sm text-gray-500">School ID: {faculty.schoolID || 'N/A'}</div>
                                   </li>
                                 ))}
                                 {faculties.length === 0 && (
@@ -6362,26 +6458,28 @@ Validation issues (${skippedCount} items):
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                   <thead>
                       <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border w-1/8">Faculty Name</th>
-                        <th className="p-3 border w-1/8">Track Name</th>
-                        <th className="p-3 border w-1/8">Strand Name</th>
-                        <th className="p-3 border w-1/8">Grade Level</th>
-                        <th className="p-3 border w-1/8">Section</th>
-                        <th className="p-3 border w-1/8">Subject</th>
-                        <th className="p-3 border w-1/8">Status</th>
-                        <th className="p-3 border w-1/8">Actions</th>
+                        <th className="p-3 border w-1/9">Faculty School ID</th>
+                        <th className="p-3 border w-1/9">Faculty Name</th>
+                        <th className="p-3 border w-1/9">Track Name</th>
+                        <th className="p-3 border w-1/9">Strand Name</th>
+                        <th className="p-3 border w-1/9">Grade Level</th>
+                        <th className="p-3 border w-1/9">Section</th>
+                        <th className="p-3 border w-1/9">Subject</th>
+                        <th className="p-3 border w-1/9">Status</th>
+                        <th className="p-3 border w-1/9">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {facultyAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="8" className="p-3 border text-center text-gray-500">
+                          <td colSpan="9" className="p-3 border text-center text-gray-500">
                             No faculty assignments found.
                           </td>
                         </tr>
                       ) : (
                         facultyAssignments.map((assignment) => (
                           <tr key={assignment._id}>
+                            <td className="p-3 border">{assignment.facultySchoolID || ''}</td>
                             <td className="p-3 border">{assignment.facultyName}</td>
                             <td className="p-3 border">{assignment.trackName}</td>
                             <td className="p-3 border">{assignment.strandName}</td>
@@ -6470,6 +6568,7 @@ Validation issues (${skippedCount} items):
                         <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
                           <thead>
                             <tr className="bg-gray-100 text-left">
+                              <th className="p-3 border">Faculty School ID</th>
                               <th className="p-3 border">Faculty Name</th>
                               <th className="p-3 border">Track Name</th>
                               <th className="p-3 border">Strand Name</th>
@@ -6485,7 +6584,8 @@ Validation issues (${skippedCount} items):
                               const message = facultyAssignmentValidationStatus[index]?.message;
                               return (
                                 <tr key={index} className={!isValid ? 'bg-red-50' : ''}>
-                                  <td className="p-3 border">{assignment.facultyNameInput}</td>
+                                  <td className="p-3 border">{assignment.facultySchoolID || ''}</td>
+                                  <td className="p-3 border">{assignment.facultyName || ''}</td>
                                   <td className="p-3 border">{assignment.trackName}</td>
                                   <td className="p-3 border">{assignment.strandName}</td>
                                   <td className="p-3 border">{assignment.sectionName}</td>
@@ -6640,19 +6740,20 @@ Validation issues (${skippedCount} items):
                               onFocus={() => setShowStudentSuggestions(true)}
                               onBlur={() => setTimeout(() => setShowStudentSuggestions(false), 200)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Search Student..."
+                              placeholder="Search Student by name or School ID..."
                               required
                               disabled={termDetails.status === 'archived'}
                             />
                             {showStudentSuggestions && studentSearchTerm.length > 0 && (
                               <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
-                                {students.map(student => (
+                                {studentSearchResults.map(student => (
                                   <li
                                     key={student._id}
                                     onClick={() => handleSelectStudent(student)}
                                     className="p-2 hover:bg-gray-100 cursor-pointer"
                                   >
-                                    {student.firstname} {student.lastname}
+                                    <div className="font-medium">{student.firstname} {student.lastname}</div>
+                                    <div className="text-sm text-gray-500">School ID: {student.schoolID || 'N/A'}</div>
                                   </li>
                                 ))}
                                 {students.length === 0 && (
@@ -6801,6 +6902,7 @@ Validation issues (${skippedCount} items):
                         <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
                           <thead>
                             <tr className="bg-gray-100 text-left">
+                              <th className="p-3 border">Student School ID</th>
                               <th className="p-3 border">Student Name</th>
                               <th className="p-3 border">Grade Level</th>
                               <th className="p-3 border">Track Name</th>
@@ -6815,6 +6917,7 @@ Validation issues (${skippedCount} items):
                               const message = studentValidationStatus[index]?.message;
                               return (
                                 <tr key={index} className={!isValid ? 'bg-red-50' : ''}>
+                                  <td className="p-3 border">{assignment['Student School ID'] || ''}</td>
                                   <td className="p-3 border">{assignment['Student Name']}</td>
                                   <td className="p-3 border">{assignment['Grade Level']}</td>
                                   <td className="p-3 border">{assignment['Track Name']}</td>
@@ -6864,6 +6967,7 @@ Validation issues (${skippedCount} items):
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                     <thead>
                       <tr className="bg-gray-100 text-left">
+                        <th className="p-3 border">Student School ID</th>
                         <th className="p-3 border">Student Name</th>
                         <th className="p-3 border">Track Name</th>
                         <th className="p-3 border">Strand Name</th>
@@ -6876,7 +6980,7 @@ Validation issues (${skippedCount} items):
                     <tbody>
                       {studentAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="7" className="p-3 border text-center text-gray-500">
+                          <td colSpan="8" className="p-3 border text-center text-gray-500">
                             No student assignments found.
                           </td>
                         </tr>
@@ -6885,6 +6989,7 @@ Validation issues (${skippedCount} items):
                           const student = students.find(s => s._id === assignment.studentId);
                           return (
                             <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
+                              <td className="p-3 border">{student?.schoolID || assignment.studentSchoolID || ''}</td>
                               <td className="p-3 border">{assignment.studentName || 'Unknown'}</td>
                               <td className="p-3 border">{assignment.trackName}</td>
                               <td className="p-3 border">{assignment.strandName}</td>
@@ -7223,6 +7328,7 @@ Validation issues (${skippedCount} items):
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
                     <thead>
                       <tr className="bg-gray-100 text-left">
+                        <th className="p-2 border">Faculty School ID</th>
                         <th className="p-2 border">Faculty Name</th>
                         <th className="p-2 border">Track Name</th>
                         <th className="p-2 border">Strand Name</th>
@@ -7235,6 +7341,7 @@ Validation issues (${skippedCount} items):
                     <tbody>
                       {importPreviewData.facultyAssignments.map((assignment, index) => (
                         <tr key={index} className={importValidationStatus.facultyAssignments[index]?.valid ? 'bg-white' : 'bg-red-50'}>
+                          <td className="p-2 border">{assignment.facultySchoolID || ''}</td>
                           <td className="p-2 border">{assignment.facultyName}</td>
                           <td className="p-2 border">{assignment.trackName}</td>
                           <td className="p-2 border">{assignment.strandName}</td>
@@ -7259,6 +7366,7 @@ Validation issues (${skippedCount} items):
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
                     <thead>
                       <tr className="bg-gray-100 text-left">
+                        <th className="p-2 border">Student School ID</th>
                         <th className="p-2 border">Student Name</th>
                         <th className="p-2 border">Track Name</th>
                         <th className="p-2 border">Strand Name</th>
@@ -7270,6 +7378,7 @@ Validation issues (${skippedCount} items):
                     <tbody>
                       {importPreviewData.studentAssignments.map((assignment, index) => (
                         <tr key={index} className={importValidationStatus.studentAssignments[index]?.valid ? 'bg-white' : 'bg-red-50'}>
+                          <td className="p-2 border">{assignment.studentSchoolID || ''}</td>
                           <td className="p-2 border">{assignment.studentName}</td>
                           <td className="p-2 border">{assignment.trackName}</td>
                           <td className="p-2 border">{assignment.strandName}</td>
@@ -7627,15 +7736,29 @@ const validateFacultyAssignmentsImport = async (assignmentsToValidate, existingA
   // Don't check for existing tracks/strands/sections/subjects since they'll be created during import
 
   for (const assignment of assignmentsToValidate) {
-    if (!assignment.facultyName || !assignment.trackName || !assignment.strandName || !assignment.sectionName || !assignment.gradeLevel || !assignment.subjectName) {
+    if (!assignment.facultySchoolID || !assignment.facultyName || !assignment.trackName || !assignment.strandName || !assignment.sectionName || !assignment.gradeLevel || !assignment.subjectName) {
       results.push({ valid: false, message: 'Missing required fields' });
       continue;
     }
 
-    // Check if faculty exists
-    const faculty = activeFaculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === assignment.facultyName.toLowerCase() && f.role === 'faculty');
+    // Check faculty school ID format
+    if (!validateFacultySchoolIDFormat(assignment.facultySchoolID)) {
+      results.push({ valid: false, message: `Invalid Faculty School ID format "${assignment.facultySchoolID}". Faculty School ID must be in format F000 (e.g., F001, F123)` });
+      continue;
+    }
+
+    // Check if faculty exists (search by school ID)
+    const faculty = activeFaculties.find(f => f.schoolID === assignment.facultySchoolID && f.role === 'faculty');
     if (!faculty) {
-      results.push({ valid: false, message: `Faculty '${assignment.facultyName}' not found` });
+      results.push({ valid: false, message: `Faculty with School ID '${assignment.facultySchoolID}' not found` });
+      continue;
+    }
+
+    // Verify that the name matches the school ID
+    const expectedName = `${faculty.firstname} ${faculty.lastname}`.toLowerCase();
+    const providedName = assignment.facultyName.toLowerCase();
+    if (expectedName !== providedName) {
+      results.push({ valid: false, message: `Faculty Name "${assignment.facultyName}" does not match School ID "${assignment.facultySchoolID}". Expected: "${faculty.firstname} ${faculty.lastname}"` });
       continue;
     }
 
@@ -7663,15 +7786,29 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
   // Don't check for existing tracks/strands/sections since they'll be created during import
 
   for (const assignment of assignmentsToValidate) {
-    if (!assignment.studentName || !assignment.trackName || !assignment.strandName || !assignment.sectionName || !assignment.gradeLevel) {
+    if (!assignment.studentSchoolID || !assignment.studentName || !assignment.trackName || !assignment.strandName || !assignment.sectionName || !assignment.gradeLevel) {
       results.push({ valid: false, message: 'Missing required fields' });
       continue;
     }
 
-    // Check if student exists
-    const student = activeStudents.find(s => `${s.firstname} ${s.lastname}`.toLowerCase() === assignment.studentName.toLowerCase() && s.role === 'students');
+    // Check student school ID format
+    if (!validateStudentSchoolIDFormat(assignment.studentSchoolID)) {
+      results.push({ valid: false, message: `Invalid Student School ID format "${assignment.studentSchoolID}". Student School ID must be in format xx-xxxxx (e.g., 25-00017, 22-00014)` });
+      continue;
+    }
+
+    // Check if student exists (search by school ID and verify name matches)
+    const student = activeStudents.find(s => s.schoolID === assignment.studentSchoolID && s.role === 'students');
     if (!student) {
-      results.push({ valid: false, message: `Student '${assignment.studentName}' not found` });
+      results.push({ valid: false, message: `Student with School ID '${assignment.studentSchoolID}' not found` });
+      continue;
+    }
+
+    // Verify that the name matches the school ID
+    const expectedName = `${student.firstname} ${student.lastname}`.toLowerCase();
+    const providedName = assignment.studentName.toLowerCase();
+    if (expectedName !== providedName) {
+      results.push({ valid: false, message: `Name "${assignment.studentName}" does not match School ID "${assignment.studentSchoolID}". Expected: "${student.firstname} ${student.lastname}"` });
       continue;
     }
 
