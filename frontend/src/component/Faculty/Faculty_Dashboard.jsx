@@ -4,7 +4,7 @@ import Faculty_Navbar from "./Faculty_Navbar";
 import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Faculty_Dashboard() {
   const [classes, setClasses] = useState([]);

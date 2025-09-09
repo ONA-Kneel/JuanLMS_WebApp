@@ -4,7 +4,7 @@ import ValidationModal from './ValidationModal';
 import * as XLSX from 'xlsx';
 import { useQuarter } from '../context/QuarterContext.jsx';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function GradingSystem({ onStageTemporaryGrades }) {
   // Get quarter context
