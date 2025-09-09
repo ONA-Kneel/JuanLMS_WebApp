@@ -24,6 +24,7 @@ export default function Admin_Accounts() {
   const [suggestedEmail, setSuggestedEmail] = useState("");
   const [userToArchive, setUserToArchive] = useState(null);
   const [showCancellationMessage, setShowCancellationMessage] = useState(false);
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   
   const [formData, setFormData] = useState({
     firstname: "",
@@ -209,6 +210,12 @@ export default function Admin_Accounts() {
 
   const handleSubmit = async (e, overrideEmail = null) => {
     if (e && e.preventDefault) e.preventDefault();
+    
+    // Set loading state when creating account
+    if (!isEditMode) {
+      setIsCreatingAccount(true);
+    }
+    
     const requiredFields = ["firstname", "lastname", "email", "password", "role", "schoolID", "contactNo"];
     for (const field of requiredFields) {
       if (!formData[field]) {
@@ -218,6 +225,7 @@ export default function Admin_Accounts() {
           title: 'Missing Field',
           message: `Please fill in ${field}.`
         });
+        setIsCreatingAccount(false);
         return;
       }
     }
@@ -230,6 +238,7 @@ export default function Admin_Accounts() {
         title: 'Invalid Personal Email',
         message: 'Enter a valid personal email address.'
       });
+      setIsCreatingAccount(false);
       return;
     }
     // Prevent admin from creating student accounts
@@ -240,6 +249,7 @@ export default function Admin_Accounts() {
         title: 'Invalid Role',
         message: "Student accounts can only be registered through the public registration form."
       });
+      setIsCreatingAccount(false);
       return;
     }
     // SchoolID validation for all roles
@@ -251,6 +261,7 @@ export default function Admin_Accounts() {
           title: 'Invalid Faculty ID',
           message: "Faculty ID must be F followed by exactly 3 digits (e.g., F001, F010, F100)."
         });
+        setIsCreatingAccount(false);
         return;
       }
     } else if (formData.role === "admin") {
@@ -261,6 +272,7 @@ export default function Admin_Accounts() {
           title: 'Invalid Admin ID',
           message: "Admin ID must be A followed by exactly 3 digits (e.g., A001, A010, A100)."
         });
+        setIsCreatingAccount(false);
         return;
       }
     } else if (formData.role === "vice president of education" || formData.role === "principal") {
@@ -271,6 +283,7 @@ export default function Admin_Accounts() {
           title: 'Invalid VP/Principal ID',
           message: "VP/Principal ID must be N followed by exactly 3 digits (e.g., N001, N010, N100)."
         });
+        setIsCreatingAccount(false);
         return;
       }
     }
@@ -282,6 +295,7 @@ export default function Admin_Accounts() {
         title: 'Invalid Contact Number',
         message: "Contact number must be exactly 11 digits and start with 09 (e.g., 09000000000)"
       });
+      setIsCreatingAccount(false);
       return;
     }
     if (isEditMode) {
@@ -300,6 +314,7 @@ export default function Admin_Accounts() {
           title: 'No Changes',
           message: "No changes were made to the account."
         });
+        setIsCreatingAccount(false);
         return;
       }
 
@@ -365,6 +380,7 @@ export default function Admin_Accounts() {
             contactNo: '',
           });
           fetchUsers();
+          setIsCreatingAccount(false);
         } else {
           setValidationModal({
             isOpen: true,
@@ -372,11 +388,13 @@ export default function Admin_Accounts() {
             title: 'Creation Failed',
             message: 'Error: Failed to create account'
           });
+          setIsCreatingAccount(false);
         }
       } catch (err) {
         if (err?.response?.status === 409 && err?.response?.data?.suggestedEmail) {
           setSuggestedEmail(err.response.data.suggestedEmail);
           setDuplicateEmailModal(true);
+          setIsCreatingAccount(false);
         } else {
           setValidationModal({
             isOpen: true,
@@ -384,6 +402,7 @@ export default function Admin_Accounts() {
             title: 'Creation Failed',
             message: 'Error: Failed to create account'
           });
+          setIsCreatingAccount(false);
         }
       }
     }
@@ -476,6 +495,9 @@ export default function Admin_Accounts() {
   const handleDuplicateEmailCancel = () => {
     setDuplicateEmailModal(false);
     setSuggestedEmail("");
+    setIsCreatingAccount(false);
+    // Close the create modal as well
+    setShowCreateModal(false);
     // Reset form to prevent any pending account creation
     setFormData({
       firstname: '',
@@ -986,6 +1008,7 @@ export default function Admin_Accounts() {
                   <button
                     onClick={async () => {
                       setDuplicateEmailModal(false);
+                      setIsCreatingAccount(true);
                       await handleSubmit(null, suggestedEmail);
                       setSuggestedEmail("");
                     }}
@@ -1082,6 +1105,7 @@ export default function Admin_Accounts() {
                     setShowCreateModal(false);
                     setIsEditMode(false);
                     setEditingUser(null);
+                    setIsCreatingAccount(false);
                     setFormData({
                       firstname: "",
                       middlename: "",
@@ -1159,9 +1183,25 @@ export default function Admin_Accounts() {
                   </div>
                   {/* Submit button row */}
                   <div className="col-span-1 md:col-span-3 flex gap-2 mt-4">
-                    <button type="submit" disabled={!isFormValid} className={`flex-1 text-white rounded p-4 text-lg ${isFormValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'}`}>{isEditMode ? 'Save Edited Account' : 'Create Account'}</button>
+                    <button 
+                      type="submit" 
+                      disabled={!isFormValid || isCreatingAccount} 
+                      className={`flex-1 text-white rounded p-4 text-lg flex items-center justify-center gap-2 ${
+                        isFormValid && !isCreatingAccount 
+                          ? 'bg-blue-600 hover:bg-blue-700' 
+                          : 'bg-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {isCreatingAccount && (
+                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      )}
+                      {isCreatingAccount ? 'Creating Account...' : (isEditMode ? 'Save Edited Account' : 'Create Account')}
+                    </button>
                     {isEditMode && (
-                      <button type="button" onClick={() => { setIsEditMode(false); setEditingUser(null); setFormData({ firstname: "", middlename: "", lastname: "", email: "", personalemail: "", schoolID: "", password: "", role: "faculty", userID: "", contactNo: '' }); setShowCreateModal(false); }} className="flex-1 bg-gray-500 hover:bg-gray-600 text-white rounded p-4 text-lg">Cancel Edit</button>
+                      <button type="button" onClick={() => { setIsEditMode(false); setEditingUser(null); setIsCreatingAccount(false); setFormData({ firstname: "", middlename: "", lastname: "", email: "", personalemail: "", schoolID: "", password: "", role: "faculty", userID: "", contactNo: '' }); setShowCreateModal(false); }} className="flex-1 bg-gray-500 hover:bg-gray-600 text-white rounded p-4 text-lg">Cancel Edit</button>
                     )}
                   </div>
                 </form>
