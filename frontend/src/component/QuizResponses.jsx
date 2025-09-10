@@ -686,11 +686,21 @@ export default function QuizResponses() {
                         return assignedIDs.includes(student._id) || assignedIDs.includes(student.userID);
                       })
                       .map(student => {
-                        const response = responses.find(r =>
-                          r.studentId?._id === student._id ||
-                          r.studentId === student._id ||
-                          r.studentId?.userID === student.userID
-                        );
+                        const response = responses.find(r => {
+                          // Match by _id (most reliable)
+                          if (r.studentId?._id && student._id && r.studentId._id.toString() === student._id.toString()) {
+                            return true;
+                          }
+                          // Match by direct studentId reference
+                          if (r.studentId && typeof r.studentId === 'string' && r.studentId === student._id.toString()) {
+                            return true;
+                          }
+                          // Match by userID only if both are defined and not undefined
+                          if (r.studentId?.userID && student.userID && r.studentId.userID === student.userID) {
+                            return true;
+                          }
+                          return false;
+                        });
                         let status = "Not Yet Viewed";
                         if (response) {
                           if (response.graded) {

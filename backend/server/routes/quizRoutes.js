@@ -226,7 +226,7 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/:quizId/response/:studentId', authenticateToken, async (req, res) => {
   try {
     const { quizId, studentId } = req.params;
-    const response = await QuizResponse.findOne({ quizId, studentId }).populate('studentId', 'firstname lastname email');
+    const response = await QuizResponse.findOne({ quizId, studentId }).populate('studentId', 'firstname lastname email _id userID');
     if (!response) return res.status(404).json({ error: 'Response not found.' });
     res.json(response);
   } catch (err) {
@@ -330,14 +330,38 @@ router.post('/:quizId/submit', authenticateToken, async (req, res) => {
     const { quizId } = req.params;
     const studentId = req.user ? req.user._id : req.body.studentId;
     const { answers, violationCount, violationEvents, questionTimes } = req.body;
+    
     if (!Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ error: 'Answers are required.' });
     }
+    
     const existing = await QuizResponse.findOne({ quizId, studentId });
     if (existing) {
       return res.status(400).json({ error: 'You have already submitted this quiz. You cannot submit again.' });
     }
+    
     const quiz = await Quiz.findById(quizId);
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found.' });
+    }
+    
+    // Validate that at least one question has been answered (not empty)
+    const hasValidAnswers = answers.some(answer => {
+      if (answer && answer.answer !== null && answer.answer !== undefined) {
+        if (typeof answer.answer === 'string') {
+          return answer.answer.trim() !== '';
+        } else if (Array.isArray(answer.answer)) {
+          return answer.answer.length > 0 && answer.answer.some(a => a !== null && a !== undefined && a !== '');
+        }
+        return true; // For other types (boolean, number, etc.)
+      }
+      return false;
+    });
+    
+    if (!hasValidAnswers) {
+      return res.status(400).json({ error: 'You must answer at least one question before submitting.' });
+    }
+    
     let score = 0;
     let checkedAnswers = [];
     quiz.questions.forEach((q, i) => {
@@ -369,7 +393,7 @@ router.post('/:quizId/submit', authenticateToken, async (req, res) => {
 router.get('/:quizId/responses', authenticateToken, async (req, res) => {
   try {
     const { quizId } = req.params;
-    const responses = await QuizResponse.find({ quizId }).populate('studentId', 'firstname lastname email');
+    const responses = await QuizResponse.find({ quizId }).populate('studentId', 'firstname lastname email _id userID');
     res.json(responses);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -441,7 +465,13 @@ router.post('/students/by-ids', authenticateToken, async (req, res) => {
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'No student IDs provided.' });
     }
-    const students = await User.find({ userID: { $in: ids } }, 'firstname lastname email _id userID');
+    // Search by both _id and userID to handle different ID formats
+    const students = await User.find({ 
+      $or: [
+        { _id: { $in: ids } },
+        { userID: { $in: ids } }
+      ]
+    }, 'firstname lastname email _id userID');
     res.json({ students });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -480,6 +510,52 @@ function seededShuffle(array, seed) {
   }
   return arr;
 }
+
+// Debug endpoint to troubleshoot quiz assignment data
+router.get('/:quizId/debug', authenticateToken, async (req, res) => {
+  try {
+    const { quizId } = req.params;
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+    
+    const responses = await QuizResponse.find({ quizId }).populate('studentId', 'firstname lastname email _id userID');
+    
+    // Get assigned student IDs
+    const assignedIDs = quiz?.assignedTo?.[0]?.studentIDs || [];
+    
+    // Try to find students by these IDs
+    const students = await User.find({ 
+      $or: [
+        { _id: { $in: assignedIDs } },
+        { userID: { $in: assignedIDs } }
+      ]
+    }, 'firstname lastname email _id userID');
+    
+    res.json({
+      quiz: {
+        _id: quiz._id,
+        title: quiz.title,
+        assignedTo: quiz.assignedTo
+      },
+      assignedIDs,
+      studentsFound: students.length,
+      students: students.map(s => ({
+        _id: s._id,
+        userID: s.userID,
+        firstname: s.firstname,
+        lastname: s.lastname
+      })),
+      responses: responses.map(r => ({
+        _id: r._id,
+        studentId: r.studentId,
+        score: r.score,
+        graded: r.graded
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Mark quiz as viewed by a student
 router.post('/:id/view', authenticateToken, async (req, res) => {
