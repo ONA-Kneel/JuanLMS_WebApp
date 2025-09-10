@@ -5576,13 +5576,7 @@ Validation issues (${skippedCount} items):
                       <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStrandsPage(p => Math.min(paginate(uniqueStrands, strandsPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={strandsPage === paginate(uniqueStrands, strandsPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
                     </div>
                   )}
-                  {filteredTracks.length > 0 && (
-                    <div className="flex justify-center items-center gap-2 mt-3">
-                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setTracksPage(p => Math.max(1, p - 1))} disabled={tracksPage === 1}>{'<'}</button>
-                      <span className="text-xs">Page {paginate(filteredTracks, tracksPage, ROWS_PER_PAGE).currentPage} of {paginate(filteredTracks, tracksPage, ROWS_PER_PAGE).totalPages}</span>
-                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setTracksPage(p => Math.min(paginate(filteredTracks, tracksPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={tracksPage === paginate(filteredTracks, tracksPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
-                    </div>
-                  )}
+                  
                 </div>
               </div>
             )}
