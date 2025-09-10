@@ -1,5 +1,5 @@
 // Test script for AI Analytics endpoint
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://juanlms-webapp-server.onrender.com";
 
 async function testAIAnalytics() {
   try {

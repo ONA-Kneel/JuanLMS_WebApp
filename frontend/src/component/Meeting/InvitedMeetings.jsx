@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Video, Users, Calendar, Clock, User } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 const InvitedMeetings = ({ onJoinMeeting, refreshTrigger = 0 }) => {
   const [invitedMeetings, setInvitedMeetings] = useState([]);

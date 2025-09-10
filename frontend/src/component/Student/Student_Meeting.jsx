@@ -6,7 +6,7 @@ import StreamMeetingRoom from '../Meeting/StreamMeetingRoom';
 import InvitedMeetings from '../Meeting/InvitedMeetings';
 import { Users, Video, Calendar, UserPlus } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Student_Meeting() {
   const [classes, setClasses] = useState([]);

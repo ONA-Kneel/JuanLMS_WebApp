@@ -19,7 +19,7 @@ export const QuarterProvider = ({ children }) => {
           return;
         }
 
-        const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+        const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
         const response = await fetch(`${API_BASE}/api/schoolyears/active`, {
           headers: { Authorization: `Bearer ${token}` },
         });

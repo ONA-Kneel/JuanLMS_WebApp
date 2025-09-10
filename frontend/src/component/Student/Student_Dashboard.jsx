@@ -5,7 +5,7 @@ import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import { Link } from "react-router-dom";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Student_Dashboard() {
   const [classes, setClasses] = useState([]);
@@ -42,7 +42,7 @@ export default function Student_Dashboard() {
     try {
       const me = JSON.parse(localStorage.getItem('user') || '{}');
       const token = localStorage.getItem('token');
-      const api = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const api = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
       await fetch(`${api}/users/${me._id}/preferences`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
