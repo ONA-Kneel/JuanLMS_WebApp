@@ -85,18 +85,29 @@ router.post('/save', authenticateToken, async (req, res) => {
         gradeRecord.grades.semesterFinal = (parseFloat(grades.quarter3) + parseFloat(grades.quarter4)) / 2;
       }
       
-      // Calculate remarks based on semester final
-      if (gradeRecord.grades.semesterFinal !== null) {
-        const semesterFinal = gradeRecord.grades.semesterFinal;
-        if (semesterFinal >= 85) {
-          gradeRecord.grades.remarks = 'PASSED';
-        } else if (semesterFinal >= 80) {
-          gradeRecord.grades.remarks = 'INCOMPLETE';
-        } else if (semesterFinal >= 75) {
-          gradeRecord.grades.remarks = 'REPEAT';
+      // Calculate remarks based on semester final - ensure it's always a valid enum value
+      if (gradeRecord.grades.semesterFinal !== null && gradeRecord.grades.semesterFinal !== undefined && gradeRecord.grades.semesterFinal !== '') {
+        const semesterFinal = parseFloat(gradeRecord.grades.semesterFinal);
+        if (!isNaN(semesterFinal)) {
+          if (semesterFinal >= 85) {
+            gradeRecord.grades.remarks = 'PASSED';
+          } else if (semesterFinal >= 80) {
+            gradeRecord.grades.remarks = 'INCOMPLETE';
+          } else if (semesterFinal >= 75) {
+            gradeRecord.grades.remarks = 'REPEAT';
+          } else {
+            gradeRecord.grades.remarks = 'FAILED';
+          }
         } else {
-          gradeRecord.grades.remarks = 'FAILED';
+          gradeRecord.grades.remarks = 'INCOMPLETE';
         }
+      } else {
+        gradeRecord.grades.remarks = 'INCOMPLETE';
+      }
+      
+      // Ensure remarks is never empty or invalid
+      if (!gradeRecord.grades.remarks || gradeRecord.grades.remarks === '' || !['PASSED', 'FAILED', 'REPEAT', 'INCOMPLETE'].includes(gradeRecord.grades.remarks)) {
+        gradeRecord.grades.remarks = 'INCOMPLETE';
       }
       
       gradeRecord.isLocked = true;
@@ -114,19 +125,28 @@ router.post('/save', authenticateToken, async (req, res) => {
         newGrades.semesterFinal = (parseFloat(grades.quarter3) + parseFloat(grades.quarter4)) / 2;
       }
       
-      // Calculate remarks
-      if (newGrades.semesterFinal !== null) {
-        const semesterFinal = newGrades.semesterFinal;
-        if (semesterFinal >= 85) {
-          newGrades.remarks = 'PASSED';
-        } else if (semesterFinal >= 80) {
-          newGrades.remarks = 'INCOMPLETE';
-        } else if (semesterFinal >= 75) {
-          newGrades.remarks = 'REPEAT';
+      // Calculate remarks - ensure it's always a valid enum value
+      if (newGrades.semesterFinal !== null && newGrades.semesterFinal !== undefined && newGrades.semesterFinal !== '') {
+        const semesterFinal = parseFloat(newGrades.semesterFinal);
+        if (!isNaN(semesterFinal)) {
+          if (semesterFinal >= 85) {
+            newGrades.remarks = 'PASSED';
+          } else if (semesterFinal >= 80) {
+            newGrades.remarks = 'INCOMPLETE';
+          } else if (semesterFinal >= 75) {
+            newGrades.remarks = 'REPEAT';
+          } else {
+            newGrades.remarks = 'FAILED';
+          }
         } else {
-          newGrades.remarks = 'FAILED';
+          newGrades.remarks = 'INCOMPLETE';
         }
       } else {
+        newGrades.remarks = 'INCOMPLETE';
+      }
+      
+      // Ensure remarks is never empty or invalid
+      if (!newGrades.remarks || newGrades.remarks === '' || !['PASSED', 'FAILED', 'REPEAT', 'INCOMPLETE'].includes(newGrades.remarks)) {
         newGrades.remarks = 'INCOMPLETE';
       }
 
@@ -243,18 +263,29 @@ router.post('/save-quarter', authenticateToken, async (req, res) => {
             gradeRecord.grades.semesterFinal = (parseFloat(grades.quarter3) + parseFloat(grades.quarter4)) / 2;
           }
           
-          // Recalculate remarks based on semester final
-          if (gradeRecord.grades.semesterFinal !== null) {
-            const semesterFinal = gradeRecord.grades.semesterFinal;
-            if (semesterFinal >= 85) {
-              gradeRecord.grades.remarks = 'PASSED';
-            } else if (semesterFinal >= 80) {
-              gradeRecord.grades.remarks = 'INCOMPLETE';
-            } else if (semesterFinal >= 75) {
-              gradeRecord.grades.remarks = 'REPEAT';
+          // Recalculate remarks based on semester final - ensure it's always a valid enum value
+          if (gradeRecord.grades.semesterFinal !== null && gradeRecord.grades.semesterFinal !== undefined && gradeRecord.grades.semesterFinal !== '') {
+            const semesterFinal = parseFloat(gradeRecord.grades.semesterFinal);
+            if (!isNaN(semesterFinal)) {
+              if (semesterFinal >= 85) {
+                gradeRecord.grades.remarks = 'PASSED';
+              } else if (semesterFinal >= 80) {
+                gradeRecord.grades.remarks = 'INCOMPLETE';
+              } else if (semesterFinal >= 75) {
+                gradeRecord.grades.remarks = 'REPEAT';
+              } else {
+                gradeRecord.grades.remarks = 'FAILED';
+              }
             } else {
-              gradeRecord.grades.remarks = 'FAILED';
+              gradeRecord.grades.remarks = 'INCOMPLETE';
             }
+          } else {
+            gradeRecord.grades.remarks = 'INCOMPLETE';
+          }
+          
+          // Ensure remarks is never empty or invalid
+          if (!gradeRecord.grades.remarks || gradeRecord.grades.remarks === '' || !['PASSED', 'FAILED', 'REPEAT', 'INCOMPLETE'].includes(gradeRecord.grades.remarks)) {
+            gradeRecord.grades.remarks = 'INCOMPLETE';
           }
           
           // Mark the specific quarter as locked
@@ -273,19 +304,28 @@ router.post('/save-quarter', authenticateToken, async (req, res) => {
             newGrades.semesterFinal = (parseFloat(grades.quarter3) + parseFloat(grades.quarter4)) / 2;
           }
           
-          // Calculate remarks
-          if (newGrades.semesterFinal !== null) {
-            const semesterFinal = newGrades.semesterFinal;
-            if (semesterFinal >= 85) {
-              newGrades.remarks = 'PASSED';
-            } else if (semesterFinal >= 80) {
-              newGrades.remarks = 'INCOMPLETE';
-            } else if (semesterFinal >= 75) {
-              newGrades.remarks = 'REPEAT';
+          // Calculate remarks - ensure it's always a valid enum value
+          if (newGrades.semesterFinal !== null && newGrades.semesterFinal !== undefined && newGrades.semesterFinal !== '') {
+            const semesterFinal = parseFloat(newGrades.semesterFinal);
+            if (!isNaN(semesterFinal)) {
+              if (semesterFinal >= 85) {
+                newGrades.remarks = 'PASSED';
+              } else if (semesterFinal >= 80) {
+                newGrades.remarks = 'INCOMPLETE';
+              } else if (semesterFinal >= 75) {
+                newGrades.remarks = 'REPEAT';
+              } else {
+                newGrades.remarks = 'FAILED';
+              }
             } else {
-              newGrades.remarks = 'FAILED';
+              newGrades.remarks = 'INCOMPLETE';
             }
           } else {
+            newGrades.remarks = 'INCOMPLETE';
+          }
+          
+          // Ensure remarks is never empty or invalid
+          if (!newGrades.remarks || newGrades.remarks === '' || !['PASSED', 'FAILED', 'REPEAT', 'INCOMPLETE'].includes(newGrades.remarks)) {
             newGrades.remarks = 'INCOMPLETE';
           }
 
@@ -428,18 +468,29 @@ router.post('/save-bulk', authenticateToken, async (req, res) => {
             gradeRecord.grades.semesterFinal = (parseFloat(grades.quarter3) + parseFloat(grades.quarter4)) / 2;
           }
           
-          // Calculate remarks
-          if (gradeRecord.grades.semesterFinal !== null) {
-            const semesterFinal = gradeRecord.grades.semesterFinal;
-            if (semesterFinal >= 85) {
-              gradeRecord.grades.remarks = 'PASSED';
-            } else if (semesterFinal >= 80) {
-              gradeRecord.grades.remarks = 'INCOMPLETE';
-            } else if (semesterFinal >= 75) {
-              gradeRecord.grades.remarks = 'REPEAT';
+          // Calculate remarks - ensure it's always a valid enum value
+          if (gradeRecord.grades.semesterFinal !== null && gradeRecord.grades.semesterFinal !== undefined && gradeRecord.grades.semesterFinal !== '') {
+            const semesterFinal = parseFloat(gradeRecord.grades.semesterFinal);
+            if (!isNaN(semesterFinal)) {
+              if (semesterFinal >= 85) {
+                gradeRecord.grades.remarks = 'PASSED';
+              } else if (semesterFinal >= 80) {
+                gradeRecord.grades.remarks = 'INCOMPLETE';
+              } else if (semesterFinal >= 75) {
+                gradeRecord.grades.remarks = 'REPEAT';
+              } else {
+                gradeRecord.grades.remarks = 'FAILED';
+              }
             } else {
-              gradeRecord.grades.remarks = 'FAILED';
+              gradeRecord.grades.remarks = 'INCOMPLETE';
             }
+          } else {
+            gradeRecord.grades.remarks = 'INCOMPLETE';
+          }
+          
+          // Ensure remarks is never empty or invalid
+          if (!gradeRecord.grades.remarks || gradeRecord.grades.remarks === '' || !['PASSED', 'FAILED', 'REPEAT', 'INCOMPLETE'].includes(gradeRecord.grades.remarks)) {
+            gradeRecord.grades.remarks = 'INCOMPLETE';
           }
           
           gradeRecord.isLocked = true;
@@ -457,19 +508,28 @@ router.post('/save-bulk', authenticateToken, async (req, res) => {
             newGrades.semesterFinal = (parseFloat(grades.quarter3) + parseFloat(grades.quarter4)) / 2;
           }
           
-          // Calculate remarks
-          if (newGrades.semesterFinal !== null) {
-            const semesterFinal = newGrades.semesterFinal;
-            if (semesterFinal >= 85) {
-              newGrades.remarks = 'PASSED';
-            } else if (semesterFinal >= 80) {
-              newGrades.remarks = 'INCOMPLETE';
-            } else if (semesterFinal >= 75) {
-              newGrades.remarks = 'REPEAT';
+          // Calculate remarks - ensure it's always a valid enum value
+          if (newGrades.semesterFinal !== null && newGrades.semesterFinal !== undefined && newGrades.semesterFinal !== '') {
+            const semesterFinal = parseFloat(newGrades.semesterFinal);
+            if (!isNaN(semesterFinal)) {
+              if (semesterFinal >= 85) {
+                newGrades.remarks = 'PASSED';
+              } else if (semesterFinal >= 80) {
+                newGrades.remarks = 'INCOMPLETE';
+              } else if (semesterFinal >= 75) {
+                newGrades.remarks = 'REPEAT';
+              } else {
+                newGrades.remarks = 'FAILED';
+              }
             } else {
-              newGrades.remarks = 'FAILED';
+              newGrades.remarks = 'INCOMPLETE';
             }
           } else {
+            newGrades.remarks = 'INCOMPLETE';
+          }
+          
+          // Ensure remarks is never empty or invalid
+          if (!newGrades.remarks || newGrades.remarks === '' || !['PASSED', 'FAILED', 'REPEAT', 'INCOMPLETE'].includes(newGrades.remarks)) {
             newGrades.remarks = 'INCOMPLETE';
           }
 
@@ -1110,17 +1170,29 @@ router.put('/update/:gradeId', authenticateToken, async (req, res) => {
       gradeRecord.grades.semesterFinal = (parseFloat(grades.quarter3) + parseFloat(grades.quarter4)) / 2;
     }
 
-    if (gradeRecord.grades.semesterFinal !== null) {
-      const semesterFinal = gradeRecord.grades.semesterFinal;
-      if (semesterFinal >= 85) {
-        gradeRecord.grades.remarks = 'PASSED';
-      } else if (semesterFinal >= 80) {
-        gradeRecord.grades.remarks = 'INCOMPLETE';
-      } else if (semesterFinal >= 75) {
-        gradeRecord.grades.remarks = 'REPEAT';
+    // Calculate remarks - ensure it's always a valid enum value
+    if (gradeRecord.grades.semesterFinal !== null && gradeRecord.grades.semesterFinal !== undefined && gradeRecord.grades.semesterFinal !== '') {
+      const semesterFinal = parseFloat(gradeRecord.grades.semesterFinal);
+      if (!isNaN(semesterFinal)) {
+        if (semesterFinal >= 85) {
+          gradeRecord.grades.remarks = 'PASSED';
+        } else if (semesterFinal >= 80) {
+          gradeRecord.grades.remarks = 'INCOMPLETE';
+        } else if (semesterFinal >= 75) {
+          gradeRecord.grades.remarks = 'REPEAT';
+        } else {
+          gradeRecord.grades.remarks = 'FAILED';
+        }
       } else {
-        gradeRecord.grades.remarks = 'FAILED';
+        gradeRecord.grades.remarks = 'INCOMPLETE';
       }
+    } else {
+      gradeRecord.grades.remarks = 'INCOMPLETE';
+    }
+    
+    // Ensure remarks is never empty or invalid
+    if (!gradeRecord.grades.remarks || gradeRecord.grades.remarks === '' || !['PASSED', 'FAILED', 'REPEAT', 'INCOMPLETE'].includes(gradeRecord.grades.remarks)) {
+      gradeRecord.grades.remarks = 'INCOMPLETE';
     }
 
     gradeRecord.lastUpdated = new Date();

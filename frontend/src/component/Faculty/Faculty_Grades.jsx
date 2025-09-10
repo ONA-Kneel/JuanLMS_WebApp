@@ -100,6 +100,17 @@ export default function Faculty_Grades() {
   const [showIndividualManagement, setShowIndividualManagement] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
+  const [userEditedQuarterlyExam, setUserEditedQuarterlyExam] = useState(() => {
+    // Try to restore the flag from localStorage
+    try {
+      const saved = localStorage.getItem('userEditedQuarterlyExam');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [selectedStudentSchoolID, setSelectedStudentSchoolID] = useState(null);
+  const [tableRefreshKey, setTableRefreshKey] = useState(0);
   
   // Modal states
   const [modal, setModal] = useState({
@@ -144,6 +155,76 @@ export default function Faculty_Grades() {
       loadSavedGradesFromDatabase(classes[selectedClass]?.classID, students);
     }
   }, [globalQuarter, globalTerm, globalAcademicYear]);
+
+  // Update studentGrades when quarter changes (for individual management)
+  useEffect(() => {
+    if (selectedStudentName && globalQuarter) {
+      const student = students.find(s => s.name === selectedStudentName);
+      if (student) {
+        const schoolID = student.schoolID;
+        const existingGrades = grades[schoolID] || {};
+        
+        // Get current quarter breakdown data
+        const currentQuarterBreakdown = existingGrades.breakdownByQuarter?.[globalQuarter] || {};
+        
+        // Check if user has edited the quarterly exam
+        const hasUserEdited = userEditedQuarterlyExam || localStorage.getItem('userEditedQuarterlyExam') === 'true';
+        
+        if (hasUserEdited) {
+          console.log('🔄 useEffect skipped - user has edited quarterly exam, preserving changes');
+          // Restore the saved quarterly exam value
+          try {
+            const savedValue = localStorage.getItem('quarterlyExamValue');
+            if (savedValue !== null) {
+              console.log('🔄 Restoring saved quarterly exam value:', savedValue);
+              setStudentGrades(prev => ({
+                ...prev,
+                // Update detailed breakdown data for current quarter
+                writtenWorksRaw: currentQuarterBreakdown.ww?.raw || existingGrades.writtenWorksRaw || '',
+                writtenWorksHPS: currentQuarterBreakdown.ww?.hps || existingGrades.writtenWorksHPS || '',
+                performanceTasksRaw: currentQuarterBreakdown.pt?.raw || existingGrades.performanceTasksRaw || '',
+                performanceTasksHPS: currentQuarterBreakdown.pt?.hps || existingGrades.performanceTasksHPS || '',
+                // Use saved quarterly exam value
+                quarterlyExam: savedValue
+              }));
+            }
+          } catch (e) {
+            console.log('Failed to restore quarterly exam value:', e);
+          }
+        } else {
+          console.log('🔄 useEffect running - updating studentGrades from database');
+          setStudentGrades(prev => ({
+            ...prev,
+            // Update detailed breakdown data for current quarter
+            writtenWorksRaw: currentQuarterBreakdown.ww?.raw || existingGrades.writtenWorksRaw || '',
+            writtenWorksHPS: currentQuarterBreakdown.ww?.hps || existingGrades.writtenWorksHPS || '',
+            performanceTasksRaw: currentQuarterBreakdown.pt?.raw || existingGrades.performanceTasksRaw || '',
+            performanceTasksHPS: currentQuarterBreakdown.pt?.hps || existingGrades.performanceTasksHPS || '',
+            // Only update quarterlyExam if user hasn't edited it (preserve user input)
+            quarterlyExam: currentQuarterBreakdown.exam || existingGrades.quarterlyExam || ''
+          }));
+        }
+      }
+    }
+  }, [globalQuarter, selectedStudentName, students, grades, userEditedQuarterlyExam]);
+
+  // Debug: Monitor studentGrades changes
+  useEffect(() => {
+    console.log('🔄 studentGrades changed:', studentGrades);
+  }, [studentGrades]);
+
+  // Debug: Monitor user edit flag changes
+  useEffect(() => {
+    console.log('🔄 userEditedQuarterlyExam changed:', userEditedQuarterlyExam);
+    if (userEditedQuarterlyExam === false) {
+      console.log('⚠️ userEditedQuarterlyExam was reset to false - this may cause value to be overridden');
+    }
+  }, [userEditedQuarterlyExam]);
+
+  // Debug: Monitor selected student school ID changes
+  useEffect(() => {
+    console.log('🔄 selectedStudentSchoolID changed:', selectedStudentSchoolID);
+  }, [selectedStudentSchoolID]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -679,8 +760,8 @@ export default function Faculty_Grades() {
           if (student) {
             console.log('🔍 loadTempGrades - Found student:', student.name, 'for ID:', sid);
             
-            // Use the student's _id as the key for consistency
-            const studentKey = student._id;
+            // Use the student's schoolID as the key for consistency
+            const studentKey = student.schoolID;
             
             // Check if grades are already locked (posted) for this student
             const existingGrades = merged[studentKey] || {};
@@ -741,8 +822,8 @@ export default function Faculty_Grades() {
               
               if (classGrades) {
                 console.log('✅ Found grades for student:', student.name, classGrades);
-                updatedGrades[student._id] = {
-                  ...updatedGrades[student._id],
+                updatedGrades[studentSchoolID] = {
+                  ...updatedGrades[studentSchoolID],
                   ...classGrades.grades,
                   isLocked: classGrades.isLocked || false
                 };
@@ -859,6 +940,14 @@ export default function Faculty_Grades() {
     setSelectedStudentName('');
     setStudentGrades({});
     setShowIndividualManagement(false);
+    setUserEditedQuarterlyExam(false);
+    setSelectedStudentSchoolID(null);
+    try {
+      localStorage.removeItem('userEditedQuarterlyExam');
+      localStorage.removeItem('quarterlyExamValue');
+    } catch (e) {
+      console.log('Failed to clear userEditedQuarterlyExam flag:', e);
+    }
   };
 
   const handleSectionChange = (e) => {
@@ -868,13 +957,26 @@ export default function Faculty_Grades() {
     setSelectedStudentName('');
     setStudentGrades({});
     setShowIndividualManagement(false);
+    setUserEditedQuarterlyExam(false);
+    setSelectedStudentSchoolID(null);
+    try {
+      localStorage.removeItem('userEditedQuarterlyExam');
+      localStorage.removeItem('quarterlyExamValue');
+    } catch (e) {
+      console.log('Failed to clear userEditedQuarterlyExam flag:', e);
+    }
   };
 
 
 
   const handleStudentGradeChange = (field, value) => {
-    // Validate grade input for quarter grades (0-100 range)
-    if (field.includes('quarter') && value !== '') {
+    console.log('🔄 handleStudentGradeChange called:', field, value);
+    
+    // Allow empty values - don't validate empty strings
+    if (value === '' || value === null || value === undefined) {
+      console.log('🔄 Empty value detected, allowing it');
+      // Don't return early for empty values, let them pass through
+    } else if (field.includes('quarter') && value !== '') {
       const gradeNum = parseFloat(value);
       
       // Check if grade is within valid range (0-100)
@@ -892,8 +994,8 @@ export default function Faculty_Grades() {
       value = gradeNum.toFixed(2);
     }
     
-    // Validate grade breakdown fields
-    if ((field.includes('Raw') || field.includes('HPS') || field === 'quarterlyExam') && value !== '') {
+    // Validate grade breakdown fields (but allow empty values)
+    if ((field.includes('Raw') || field.includes('HPS') || field === 'quarterlyExam') && value !== '' && value !== null && value !== undefined) {
       const gradeNum = parseFloat(value);
       
       // Check if grade is within valid range (0-100 for quarterly exam, 0+ for raw scores)
@@ -907,23 +1009,95 @@ export default function Faculty_Grades() {
       }
       
       if (field === 'quarterlyExam' && gradeNum > 100) {
-        showModal(
-          'Invalid Quarterly Exam Grade',
-          `Quarterly exam grade must be between 0 and 100.\n\nYou entered: ${value}\n\nPlease enter a valid grade.`,
-          'error'
-        );
-        return;
+        // Show warning but allow the value to be entered
+        console.log('⚠️ Warning: Quarterly exam grade is greater than 100:', value);
+        // Don't return early - let the value be entered but show a warning
       }
       
       // Limit to 2 decimal places
       value = gradeNum.toFixed(2);
     }
+    
+    // Special handling for quarterly exam - allow empty values
+    if (field === 'quarterlyExam' && (value === '' || value === null || value === undefined)) {
+      console.log('🔄 Quarterly exam cleared, allowing empty value');
+      setUserEditedQuarterlyExam(true); // Mark as user-edited
+      // Save the flag and value to localStorage to persist across reloads
+      try {
+        localStorage.setItem('userEditedQuarterlyExam', 'true');
+        localStorage.setItem('quarterlyExamValue', value);
+        console.log('🔄 Saved cleared quarterly exam value to localStorage:', value);
+      } catch (e) {
+        console.log('Failed to save userEditedQuarterlyExam flag:', e);
+      }
+      // Don't return early, let the empty value pass through
+    }
+    
+    // Mark quarterly exam as user-edited when changed
+    if (field === 'quarterlyExam') {
+      setUserEditedQuarterlyExam(true);
+      // Save the flag and value to localStorage to persist across reloads
+      try {
+        localStorage.setItem('userEditedQuarterlyExam', 'true');
+        localStorage.setItem('quarterlyExamValue', value);
+        console.log('🔄 Saved quarterly exam value to localStorage:', value);
+      } catch (e) {
+        console.log('Failed to save userEditedQuarterlyExam flag:', e);
+      }
+      console.log('🔄 Quarterly exam marked as user-edited');
+    }
 
     setStudentGrades(prevGrades => {
+      console.log('🔄 setStudentGrades called with:', { field, value, prevGrades });
       const updatedGrades = {
         ...prevGrades,
         [field]: value
       };
+      console.log('🔄 updatedGrades after setting field:', updatedGrades);
+      
+      // If quarterly exam is changed, recalculate the quarterly grade
+      if (field === 'quarterlyExam') {
+        const wwRaw = parseFloat(prevGrades.writtenWorksRaw || 0);
+        const wwHps = parseFloat(prevGrades.writtenWorksHPS || 0);
+        const ptRaw = parseFloat(prevGrades.performanceTasksRaw || 0);
+        const ptHps = parseFloat(prevGrades.performanceTasksHPS || 0);
+        const qExam = parseFloat(value || 0);
+        
+        // Calculate PS and WS
+        const wwPs = wwHps > 0 ? (wwRaw / wwHps) * 100 : 0;
+        const ptPs = ptHps > 0 ? (ptRaw / ptHps) * 100 : 0;
+        const wwWs = wwPs * 0.30;
+        const ptWs = ptPs * 0.50;
+        const initial = wwWs + ptWs;
+        
+        // Update the current quarter grade
+        const quarterFieldMap = {
+          'Q1': 'quarter1',
+          'Q2': 'quarter2', 
+          'Q3': 'quarter3',
+          'Q4': 'quarter4'
+        };
+        const currentQuarterField = quarterFieldMap[globalQuarter];
+        
+        if (currentQuarterField) {
+          // If quarterly exam is empty, clear the quarter grade
+          if (value === '' || value === null || value === undefined) {
+            updatedGrades[currentQuarterField] = '';
+            console.log('🔄 Quarterly exam cleared, clearing quarter grade');
+          } else {
+            // Cap the quarterly exam at 100 for calculation purposes
+            const cappedQExam = Math.min(qExam, 100);
+            const quarterlyGrade = (initial * 0.80) + (cappedQExam * 0.20);
+            updatedGrades[currentQuarterField] = quarterlyGrade.toFixed(2);
+            console.log('🔄 Quarterly exam changed, recalculated grade:', {
+              wwRaw, wwHps, ptRaw, ptHps, qExam, cappedQExam,
+              wwPs, ptPs, wwWs, ptWs, initial,
+              quarterlyGrade: quarterlyGrade.toFixed(2),
+              currentQuarterField
+            });
+          }
+        }
+      }
       
       // Calculate semester final grade based on current term
       if (currentTerm?.termName === 'Term 1') {
@@ -932,7 +1106,11 @@ export default function Faculty_Grades() {
           const quarter1 = field === 'quarter1' ? value : prevGrades.quarter1;
           const quarter2 = field === 'quarter2' ? value : prevGrades.quarter2;
           
-          if (quarter1 && quarter2) {
+          // Handle empty values properly - clear semester final if any quarter is empty
+          if (quarter1 === '' || quarter2 === '' || quarter1 === null || quarter2 === null) {
+            updatedGrades.semesterFinal = '';
+            updatedGrades.remarks = '';
+          } else {
             const q1Num = parseFloat(quarter1) || 0;
             const q2Num = parseFloat(quarter2) || 0;
             
@@ -958,7 +1136,41 @@ export default function Faculty_Grades() {
           const quarter3 = field === 'quarter3' ? value : prevGrades.quarter3;
           const quarter4 = field === 'quarter4' ? value : prevGrades.quarter4;
           
-          if (quarter3 && quarter4) {
+          // Handle empty values properly - clear semester final if any quarter is empty
+          if (quarter3 === '' || quarter4 === '' || quarter3 === null || quarter4 === null) {
+            updatedGrades.semesterFinal = '';
+            updatedGrades.remarks = '';
+          } else {
+            const q3Num = parseFloat(quarter3) || 0;
+            const q4Num = parseFloat(quarter4) || 0;
+            
+            const semesterGrade = (q3Num + q4Num) / 2;
+            let remarks = 'PASSED';
+            
+            if (semesterGrade < 75) {
+              remarks = 'FAILED';
+            } else if (semesterGrade < 80) {
+              remarks = 'REPEAT';
+            } else if (semesterGrade < 85) {
+              remarks = 'INCOMPLETE';
+            }
+            
+            // Ensure semester final is always computed and not user-editable
+            updatedGrades.semesterFinal = semesterGrade.toFixed(2);
+            updatedGrades.remarks = remarks;
+          }
+        }
+      } else if (currentTerm?.termName === 'Term 2') {
+        // Term 2: Calculate average of Q3 and Q4
+        if (field === 'quarter3' || field === 'quarter4') {
+          const quarter3 = field === 'quarter3' ? value : prevGrades.quarter3;
+          const quarter4 = field === 'quarter4' ? value : prevGrades.quarter4;
+          
+          // Handle empty values properly - clear semester final if any quarter is empty
+          if (quarter3 === '' || quarter4 === '' || quarter3 === null || quarter4 === null) {
+            updatedGrades.semesterFinal = '';
+            updatedGrades.remarks = '';
+          } else {
             const q3Num = parseFloat(quarter3) || 0;
             const q4Num = parseFloat(quarter4) || 0;
             
@@ -984,7 +1196,11 @@ export default function Faculty_Grades() {
           const quarter1 = field === 'quarter1' ? value : prevGrades.quarter1;
           const quarter2 = field === 'quarter2' ? value : prevGrades.quarter2;
           
-          if (quarter1 && quarter2) {
+          // Handle empty values properly - clear semester final if any quarter is empty
+          if (quarter1 === '' || quarter2 === '' || quarter1 === null || quarter2 === null) {
+            updatedGrades.semesterFinal = '';
+            updatedGrades.remarks = '';
+          } else {
             const q1Num = parseFloat(quarter1) || 0;
             const q2Num = parseFloat(quarter2) || 0;
             
@@ -1006,6 +1222,7 @@ export default function Faculty_Grades() {
         }
       }
       
+      console.log('🔄 Final updatedGrades before return:', updatedGrades);
       return updatedGrades;
     });
     
@@ -1014,15 +1231,80 @@ export default function Faculty_Grades() {
       // Find the student by name to get their ID
       const student = students.find(s => s.name === selectedStudentName);
       if (student) {
-        setGrades(prevGrades => ({
-          ...prevGrades,
-          [student._id]: {
-            ...prevGrades[student._id],
-            [field]: value,
-            // Preserve the isLocked status - don't allow editing if grades are posted
-            isLocked: prevGrades[student._id]?.isLocked || false
+        const schoolID = student.schoolID;
+        setGrades(prevGrades => {
+          const updatedMainGrades = {
+            ...prevGrades,
+            [schoolID]: {
+              ...prevGrades[schoolID],
+              [field]: value,
+              // Preserve the isLocked status - don't allow editing if grades are posted
+              isLocked: prevGrades[schoolID]?.isLocked || false
+            }
+          };
+          
+          // If quarterly exam is changed, also update the current quarter grade in main grades
+          if (field === 'quarterlyExam') {
+            const quarterFieldMap = {
+              'Q1': 'quarter1',
+              'Q2': 'quarter2', 
+              'Q3': 'quarter3',
+              'Q4': 'quarter4'
+            };
+            const currentQuarterField = quarterFieldMap[globalQuarter];
+            if (currentQuarterField) {
+              // If quarterly exam is empty, clear the quarter grade in main grades too
+              if (value === '' || value === null || value === undefined) {
+                updatedMainGrades[schoolID][currentQuarterField] = '';
+                
+                // Also clear the breakdownByQuarter structure
+                if (updatedMainGrades[schoolID].breakdownByQuarter && updatedMainGrades[schoolID].breakdownByQuarter[globalQuarter]) {
+                  updatedMainGrades[schoolID].breakdownByQuarter[globalQuarter].exam = '';
+                }
+                
+                console.log('🔄 Quarterly exam cleared, clearing main grades quarter grade');
+              } else {
+                // Get the recalculated grade from studentGrades state
+                const currentStudentGrades = studentGrades;
+                const wwRaw = parseFloat(currentStudentGrades.writtenWorksRaw || 0);
+                const wwHps = parseFloat(currentStudentGrades.writtenWorksHPS || 0);
+                const ptRaw = parseFloat(currentStudentGrades.performanceTasksRaw || 0);
+                const ptHps = parseFloat(currentStudentGrades.performanceTasksHPS || 0);
+                const qExam = parseFloat(value || 0);
+                
+                const wwPs = wwHps > 0 ? (wwRaw / wwHps) * 100 : 0;
+                const ptPs = ptHps > 0 ? (ptRaw / ptHps) * 100 : 0;
+                const wwWs = wwPs * 0.30;
+                const ptWs = ptPs * 0.50;
+                const initial = wwWs + ptWs;
+                // Cap the quarterly exam at 100 for calculation purposes
+                const cappedQExam = Math.min(qExam, 100);
+                const quarterlyGrade = (initial * 0.80) + (cappedQExam * 0.20);
+                
+                updatedMainGrades[schoolID][currentQuarterField] = quarterlyGrade.toFixed(2);
+                
+                // Also update the breakdownByQuarter structure
+                if (!updatedMainGrades[schoolID].breakdownByQuarter) {
+                  updatedMainGrades[schoolID].breakdownByQuarter = {};
+                }
+                if (!updatedMainGrades[schoolID].breakdownByQuarter[globalQuarter]) {
+                  updatedMainGrades[schoolID].breakdownByQuarter[globalQuarter] = {};
+                }
+                updatedMainGrades[schoolID].breakdownByQuarter[globalQuarter].exam = value;
+                
+                console.log('🔄 Updated main grades with new quarterly grade:', {
+                  currentQuarterField,
+                  newGrade: quarterlyGrade.toFixed(2),
+                  originalQExam: qExam,
+                  cappedQExam: cappedQExam,
+                  breakdownByQuarter: updatedMainGrades[schoolID].breakdownByQuarter[globalQuarter]
+                });
+              }
+            }
           }
-        }));
+          
+          return updatedMainGrades;
+        });
       }
     }
   };
@@ -1323,12 +1605,12 @@ export default function Faculty_Grades() {
         termName: currentTerm?.termName,
         facultyID: currentFacultyID,
         grades: {
-          quarter1: studentGrades.quarter1 || '',
-          quarter2: studentGrades.quarter2 || '',
-          quarter3: studentGrades.quarter3 || '',
-          quarter4: studentGrades.quarter4 || '',
-          semesterFinal: studentGrades.semesterFinal || '',
-          remarks: studentGrades.remarks || ''
+          quarter1: studentGrades.quarter1 || null,
+          quarter2: studentGrades.quarter2 || null,
+          quarter3: studentGrades.quarter3 || null,
+          quarter4: studentGrades.quarter4 || null,
+          semesterFinal: studentGrades.semesterFinal || null
+          // remarks will be calculated by the backend based on semesterFinal
         },
         // Include breakdownByQuarter data for detailed breakdown storage
         breakdownByQuarter: studentGrades.breakdownByQuarter || {},
@@ -1394,6 +1676,14 @@ export default function Faculty_Grades() {
         setSelectedStudentName('');
         setStudentGrades({});
         setIsEditMode(false);
+        setUserEditedQuarterlyExam(false);
+        setSelectedStudentSchoolID(null);
+        try {
+          localStorage.removeItem('userEditedQuarterlyExam');
+          localStorage.removeItem('quarterlyExamValue');
+        } catch (e) {
+          console.log('Failed to clear userEditedQuarterlyExam flag:', e);
+        }
 
       } else {
         const errorData = await response.json();
@@ -1412,11 +1702,13 @@ export default function Faculty_Grades() {
 
   // Handle edit mode toggle
   const handleEditModeToggle = () => {
+    console.log('🔄 Edit mode toggle clicked. Current isEditMode:', isEditMode);
+    
     if (isEditMode) {
       // If currently in edit mode, cancel and reset to original values
       const student = students.find(s => s.name === selectedStudentName);
       if (student) {
-        const schoolID = student.schoolID || student._id;
+        const schoolID = student.schoolID;
         const existingGrades = grades[schoolID] || {};
         setStudentGrades({
           quarter1: existingGrades.quarter1 || '',
@@ -1433,7 +1725,10 @@ export default function Faculty_Grades() {
         });
       }
     }
-    setIsEditMode(!isEditMode);
+    
+    const newEditMode = !isEditMode;
+    console.log('🔄 Setting edit mode to:', newEditMode);
+    setIsEditMode(newEditMode);
   };
 
 
@@ -1480,11 +1775,11 @@ export default function Faculty_Grades() {
       // Update table state
       setGrades(prev => ({
         ...prev,
-        [student._id]: {
-          ...(prev[student._id] || {}),
+        [schoolID]: {
+          ...(prev[schoolID] || {}),
           ...empty,
           // Preserve the isLocked status - don't allow clearing posted grades
-          isLocked: prev[student._id]?.isLocked || false
+          isLocked: prev[schoolID]?.isLocked || false
         }
       }));
 
@@ -1495,7 +1790,7 @@ export default function Faculty_Grades() {
           const key = getTempKey(selectedClassObj.classID);
           const raw = localStorage.getItem(key);
           const obj = raw ? JSON.parse(raw) : {};
-          delete obj[student._id];
+          delete obj[schoolID];
           localStorage.setItem(key, JSON.stringify(obj));
         } catch {}
       }
@@ -2241,31 +2536,60 @@ export default function Faculty_Grades() {
         const res = await fetch(`${API_BASE}/api/semestral-grades/drafts/class/${selectedClassObj.classID}?${params.toString()}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          console.log('❌ Failed to load drafts:', res.status, res.statusText);
+          return;
+        }
         const data = await res.json();
-        if (!data?.success) return;
-        const latestByStudent = {};
-        (data.drafts || []).forEach(d => {
-          const key = d.schoolID || d.studentId;
-          const prev = latestByStudent[key];
-          if (!prev || new Date(d.updatedAt || d.lastUpdated || d.createdAt || 0) > new Date(prev.updatedAt || prev.lastUpdated || prev.createdAt || 0)) {
-            latestByStudent[key] = d;
-          }
-        });
+        if (!data?.success) {
+          console.log('❌ No drafts found or API error:', data);
+          return;
+        }
+        console.log('📊 Loaded drafts from database:', data.drafts);
+               const latestByStudent = {};
+               (data.drafts || []).forEach(d => {
+                 // Use only schoolID to avoid confusion
+                 const key = d.schoolID;
+                 if (!key) return; // Skip if no schoolID
+                 
+                 const prev = latestByStudent[key];
+                 if (!prev || new Date(d.updatedAt || d.lastUpdated || d.createdAt || 0) > new Date(prev.updatedAt || prev.lastUpdated || prev.createdAt || 0)) {
+                   latestByStudent[key] = d;
+                 }
+               });
         const merged = { ...grades };
         Object.values(latestByStudent).forEach(d => {
-          const studentKey = d.schoolID || d.studentId;
+          const studentKey = d.schoolID;
+          if (!studentKey) return; // Skip if no schoolID
+          
           const existingGrades = merged[studentKey] || {};
           
           // Only load draft grades if the grades are not already locked (posted)
           if (!existingGrades.isLocked) {
-            merged[studentKey] = {
-              ...existingGrades,
-              ...d.grades,
-              breakdownByQuarter: d.breakdownByQuarter || {},
-              isTemp: true,
-              isLocked: false
-            };
+            const draftTimestamp = new Date(d.updatedAt || d.lastUpdated || d.createdAt || 0);
+            const existingTimestamp = existingGrades.draftTimestamp ? new Date(existingGrades.draftTimestamp) : new Date(0);
+            
+            // Only load if this draft is newer than what's already loaded
+            if (draftTimestamp >= existingTimestamp) {
+              const draftGradeData = {
+                ...existingGrades,
+                ...d.grades,
+                breakdownByQuarter: d.breakdownByQuarter || {},
+                isTemp: true,
+                isLocked: false,
+                // Ensure the draft timestamp is preserved for comparison
+                draftTimestamp: d.updatedAt || d.lastUpdated || d.createdAt
+              };
+              
+              // Store with both schoolID and _id keys to ensure compatibility
+              merged[studentKey] = draftGradeData;
+              console.log(`📊 Loaded draft for schoolID ${studentKey}:`, draftGradeData);
+            } else {
+              console.log(`⏰ Skipping older draft for ${studentKey}:`, {
+                draftTime: draftTimestamp,
+                existingTime: existingTimestamp
+              });
+            }
           }
         });
         setGrades(merged);
@@ -2498,25 +2822,32 @@ export default function Faculty_Grades() {
                               const schoolID = student.schoolID || student._id;
         const existingGrades = grades[schoolID] || {};
                               
-                              setStudentGrades({
-                                quarter1: existingGrades.quarter1 || '',
-                                quarter2: existingGrades.quarter2 || '',
-                                quarter3: existingGrades.quarter3 || '',
-                                quarter4: existingGrades.quarter4 || '',
-                                semesterFinal: existingGrades.semesterFinal || '',
-                                remarks: existingGrades.remarks || '',
-                                writtenWorksRaw: existingGrades.writtenWorksRaw || existingGrades.breakdown?.ww?.raw || existingGrades.breakdownByQuarter?.[globalQuarter]?.ww?.raw || '',
-                                writtenWorksHPS: existingGrades.writtenWorksHPS || existingGrades.breakdown?.ww?.hps || existingGrades.breakdownByQuarter?.[globalQuarter]?.ww?.hps || '',
-                                performanceTasksRaw: existingGrades.performanceTasksRaw || existingGrades.breakdown?.pt?.raw || existingGrades.breakdownByQuarter?.[globalQuarter]?.pt?.raw || '',
-                                performanceTasksHPS: existingGrades.performanceTasksHPS || existingGrades.breakdown?.pt?.hps || existingGrades.breakdownByQuarter?.[globalQuarter]?.pt?.hps || '',
-                                quarterlyExam: existingGrades.quarterlyExam || existingGrades.breakdown?.exam || existingGrades.breakdownByQuarter?.[globalQuarter]?.exam || ''
-                              });
+                              // Get current quarter breakdown data
+                              const currentQuarterBreakdown = existingGrades.breakdownByQuarter?.[globalQuarter] || {};
+                              
+                              // Don't set studentGrades here - let the useEffect handle it
+                              // This prevents overriding user changes
                               // Clear the search input after selection
                               setSelectedStudent('');
                               // Show the individual management section
                               setShowIndividualManagement(true);
                               // Reset edit mode for new student
                               setIsEditMode(false);
+                              // Only reset user edit flag if selecting a different student
+                              if (selectedStudentSchoolID !== student.schoolID) {
+                                console.log('🔄 Different student selected, resetting edit flag');
+                                setUserEditedQuarterlyExam(false);
+                                try {
+                                  localStorage.removeItem('userEditedQuarterlyExam');
+                                  localStorage.removeItem('quarterlyExamValue');
+                                  console.log('🔄 Cleared localStorage values for new student');
+                                } catch (e) {
+                                  console.log('Failed to clear userEditedQuarterlyExam flag:', e);
+                                }
+                              } else {
+                                console.log('🔄 Same student selected, preserving edit flag');
+                              }
+                              setSelectedStudentSchoolID(student.schoolID);
                             }}
                           >
                             <div className="font-medium">{student.name}</div>
@@ -2556,6 +2887,11 @@ export default function Faculty_Grades() {
                            ✏️ Edit Mode Active - You can now modify grades
                          </div>
                        )}
+                       {!isEditMode && (
+                         <div className="mt-2 px-3 py-1 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-600">
+                           🔒 View Mode - Click "Edit Grades" to enable editing
+                         </div>
+                       )}
                      </div>
                      <div className="flex items-center gap-2">
                        <button
@@ -2563,7 +2899,7 @@ export default function Faculty_Grades() {
                            // Save only this student's current grades as a draft (local temp)
                            const student = students.find(s => s.name === selectedStudentName);
                            if (!student) return;
-                           const sid = student._id;
+                           const sid = student.schoolID;
                            const next = {
                              ...(grades[sid] || {}),
                              ...studentGrades,
@@ -2637,7 +2973,7 @@ export default function Faculty_Grades() {
                    {/* Check if grades are locked */}
                    {(() => {
                      const student = students.find(s => s.name === selectedStudentName);
-                     const studentGradesData = grades[student?._id] || {};
+                     const studentGradesData = grades[student?.schoolID] || {};
                      const isLocked = studentGradesData.isLocked;
                      
                      if (isLocked) {
@@ -2657,226 +2993,75 @@ export default function Faculty_Grades() {
                      return null;
                    })()}
                   
-                  {/* Student Grade Inputs */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                  {/* Student Grade Inputs - Show only current quarter */}
+                  <div className="grid grid-cols-1 gap-4 mb-4">
                     {(() => {
                       const student = students.find(s => s.name === selectedStudentName);
-                      const studentGradesData = grades[student?._id] || {};
+                      const studentGradesData = grades[student?.schoolID] || {};
                       const isLocked = studentGradesData.isLocked;
                       
+                      // Map globalQuarter to quarter field names
+                      const quarterFieldMap = {
+                        'Q1': 'quarter1',
+                        'Q2': 'quarter2', 
+                        'Q3': 'quarter3',
+                        'Q4': 'quarter4'
+                      };
+                      
+                      const currentQuarterField = quarterFieldMap[globalQuarter];
+                      const currentQuarterLabel = globalQuarter === 'Q1' ? '1st Quarter' : 
+                                                globalQuarter === 'Q2' ? '2nd Quarter' :
+                                                globalQuarter === 'Q3' ? '3rd Quarter' : '4th Quarter';
+                      
                       if (isLocked) {
-                        // Show read-only grades when locked
+                        // Show read-only grade when locked
                         return (
-                          <>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">1st Quarter</label>
-                              <input
-                                type="text"
-                                readOnly
-                                className="w-full p-2 border border-gray-300 rounded-md bg-gray-100 font-semibold"
-                                value={studentGrades.quarter1 || studentGradesData.quarter1 || ''}
-                              />
-                              <p className="text-xs text-gray-500 mt-1">Grades locked - cannot edit</p>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">2nd Quarter</label>
-                              <input
-                                type="text"
-                                readOnly
-                                className="w-full p-2 border border-gray-300 rounded-md bg-gray-100 font-semibold"
-                                value={studentGrades.quarter2 || studentGradesData.quarter2 || ''}
-                              />
-                              <p className="text-xs text-gray-500 mt-1">Grades locked - cannot edit</p>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Semester Final Grade</label>
-                              <input
-                                type="text"
-                                readOnly
-                                className="w-full p-2 border border-gray-300 rounded-md bg-blue-50 font-semibold"
-                                value={studentGrades.semesterFinal || studentGradesData.semesterFinal || ''}
-                              />
-                              <p className="text-xs text-gray-500 mt-1">Auto-calculated from quarter grades</p>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                              <input
-                                type="text"
-                                readOnly
-                                className="w-full p-2 border border-gray-300 rounded-md bg-gray-100 font-semibold"
-                                value={studentGrades.remarks || studentGradesData.remarks || ''}
-                              />
-                              <p className="text-xs text-gray-500 mt-1">Auto-calculated remarks</p>
-                            </div>
-                          </>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">{currentQuarterLabel}</label>
+                            <input
+                              type="text"
+                              readOnly
+                              className="w-full p-2 border border-gray-300 rounded-md bg-gray-100 font-semibold"
+                              value={studentGrades[currentQuarterField] || studentGradesData[currentQuarterField] || ''}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Grades locked - cannot edit</p>
+                          </div>
                         );
                       }
-                      
-                      // Show editable inputs when not locked
-                      if (currentTerm?.termName === 'Term 1') {
-                        return (
-                          <>
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                               1st Quarter
-                               {studentGrades.quarter1Locked && <span className="text-green-600 ml-2">🔒 Posted</span>}
-                             </label>
-                             <input
-                               type="number"
-                               min="0"
-                               max="100"
-                               step="0.01"
-                               placeholder="Grade"
-                               disabled={!isEditMode || studentGrades.quarter1Locked}
-                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                 !isEditMode || studentGrades.quarter1Locked ? 'bg-gray-100 cursor-not-allowed' : ''
-                               }`}
-                               value={studentGrades.quarter1 || ''}
-                               onChange={(e) => handleStudentGradeChange('quarter1', e.target.value)}
-                             />
-                             <p className="text-xs text-gray-500 mt-1">
-                               {studentGrades.quarter1Locked ? '🔒 Grade posted - cannot edit' : 'Valid range: 0.00 - 100.00'}
-                             </p>
-                             {studentGrades.quarter1 && (
-                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter1) ? 'text-green-600' : 'text-red-600'}`}>
-                                 {isValidGrade(studentGrades.quarter1) ? '✅ Valid grade' : '❌ Invalid grade'}
-                               </p>
-                             )}
-                           </div>
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                               2nd Quarter
-                               {studentGrades.quarter2Locked && <span className="text-green-600 ml-2">🔒 Posted</span>}
-                             </label>
-                             <input
-                               type="number"
-                               min="0"
-                               max="100"
-                               step="0.01"
-                               placeholder="Grade"
-                               disabled={!isEditMode || studentGrades.quarter2Locked}
-                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                 !isEditMode || studentGrades.quarter2Locked ? 'bg-gray-100 cursor-not-allowed' : ''
-                               }`}
-                               value={studentGrades.quarter2 || ''}
-                               onChange={(e) => handleStudentGradeChange('quarter2', e.target.value)}
-                             />
-                             <p className="text-xs text-gray-500 mt-1">
-                               {studentGrades.quarter2Locked ? '🔒 Grade posted - cannot edit' : 'Valid range: 0.00 - 100.00'}
-                             </p>
-                             {studentGrades.quarter2 && (
-                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter2) ? 'text-green-600' : 'text-red-600'}`}>
-                                 {isValidGrade(studentGrades.quarter2) ? '✅ Valid grade' : '❌ Invalid grade'}
-                               </p>
-                             )}
-                           </div>
-                         </>
-                       );
-                     } else if (currentTerm?.termName === 'Term 2') {
-                       return (
-                         <>
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">3rd Quarter</label>
-                             <input
-                               type="number"
-                               min="0"
-                               max="100"
-                               step="0.01"
-                               placeholder="Grade"
-                               disabled={!isEditMode}
-                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                               value={studentGrades.quarter3 || ''}
-                               onChange={(e) => handleStudentGradeChange('quarter3', e.target.value)}
-                             />
-                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
-                             {studentGrades.quarter3 && (
-                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter3) ? 'text-green-600' : 'text-red-600'}`}>
-                                 {isValidGrade(studentGrades.quarter3) ? '✅ Valid grade' : '❌ Invalid grade'}
-                               </p>
-                             )}
-                           </div>
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">4th Quarter</label>
-                             <input
-                               type="number"
-                               min="0"
-                               max="100"
-                               step="0.01"
-                               placeholder="Grade"
-                               disabled={!isEditMode}
-                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                               value={studentGrades.quarter4 || ''}
-                               onChange={(e) => handleStudentGradeChange('quarter4', e.target.value)}
-                             />
-                             <p className="text-xs text-gray-500 mt-1">Valid range: 0.00 - 100.00</p>
-                             {studentGrades.quarter4 && (
-                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter4) ? 'text-green-600' : 'text-red-600'}`}>
-                                 {isValidGrade(studentGrades.quarter4) ? '✅ Valid grade' : '❌ Invalid grade'}
-                               </p>
-                             )}
-                           </div>
-                         </>
-                       );
-                     } else {
-                       return (
-                         <>
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                               3rd Quarter
-                               {studentGrades.quarter3Locked && <span className="text-green-600 ml-2">🔒 Posted</span>}
-                             </label>
-                             <input
-                               type="number"
-                               min="0"
-                               max="100"
-                               step="0.01"
-                               placeholder="Grade"
-                               disabled={!isEditMode || studentGrades.quarter3Locked}
-                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                 !isEditMode || studentGrades.quarter3Locked ? 'bg-gray-100 cursor-not-allowed' : ''
-                               }`}
-                               value={studentGrades.quarter3 || ''}
-                               onChange={(e) => handleStudentGradeChange('quarter3', e.target.value)}
-                             />
-                             <p className="text-xs text-gray-500 mt-1">
-                               {studentGrades.quarter3Locked ? '🔒 Grade posted - cannot edit' : 'Valid range: 0.00 - 100.00'}
-                             </p>
-                             {studentGrades.quarter3 && (
-                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter3) ? 'text-green-600' : 'text-red-600'}`}>
-                                 {isValidGrade(studentGrades.quarter3) ? '✅ Valid grade' : '❌ Invalid grade'}
-                               </p>
-                             )}
-                           </div>
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                               4th Quarter
-                               {studentGrades.quarter4Locked && <span className="text-green-600 ml-2">🔒 Posted</span>}
-                             </label>
-                             <input
-                               type="number"
-                               min="0"
-                               max="100"
-                               step="0.01"
-                               placeholder="Grade"
-                               disabled={!isEditMode || studentGrades.quarter4Locked}
-                               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                 !isEditMode || studentGrades.quarter4Locked ? 'bg-gray-100 cursor-not-allowed' : ''
-                               }`}
-                               value={studentGrades.quarter4 || ''}
-                               onChange={(e) => handleStudentGradeChange('quarter4', e.target.value)}
-                             />
-                             <p className="text-xs text-gray-500 mt-1">
-                               {studentGrades.quarter4Locked ? '🔒 Grade posted - cannot edit' : 'Valid range: 0.00 - 100.00'}
-                             </p>
-                             {studentGrades.quarter4 && (
-                               <p className={`text-xs mt-1 ${isValidGrade(studentGrades.quarter4) ? 'text-green-600' : 'text-red-600'}`}>
-                                 {isValidGrade(studentGrades.quarter4) ? '✅ Valid grade' : '❌ Invalid grade'}
-                               </p>
-                             )}
-                           </div>
-                         </>
-                       );
-                     }
+
+                      // Show editable input for current quarter
+                      return (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {currentQuarterLabel}
+                            {studentGrades[`${currentQuarterField}Locked`] && <span className="text-green-600 ml-2">🔒 Posted</span>}
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            placeholder="Grade"
+                            disabled={!isEditMode || studentGrades[`${currentQuarterField}Locked`]}
+                            className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                              !isEditMode || studentGrades[`${currentQuarterField}Locked`] ? 'bg-gray-100 cursor-not-allowed' : ''
+                            }`}
+                            value={studentGrades[currentQuarterField] || ''}
+                            onChange={(e) => {
+                              console.log('🔄 Input changed:', currentQuarterField, 'new value:', e.target.value, 'isEditMode:', isEditMode);
+                              handleStudentGradeChange(currentQuarterField, e.target.value);
+                            }}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            {studentGrades[`${currentQuarterField}Locked`] ? '🔒 Grade posted - cannot edit' : 'Valid range: 0.00 - 100.00'}
+                          </p>
+                          {studentGrades[currentQuarterField] && (
+                            <p className={`text-xs mt-1 ${isValidGrade(studentGrades[currentQuarterField]) ? 'text-green-600' : 'text-red-600'}`}>
+                              {isValidGrade(studentGrades[currentQuarterField]) ? '✅ Valid grade' : '❌ Invalid grade'}
+                            </p>
+                          )}
+                        </div>
+                      );
                     })()}
                     
                     {/* Detailed Grade Breakdown Section */}
@@ -2899,29 +3084,11 @@ export default function Faculty_Grades() {
                           <tbody>
                             <tr>
                               <td className="border border-gray-300 p-2 font-medium">Written Works (30%)</td>
-                              <td className="border border-gray-300 p-2 text-center">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  disabled={!isEditMode}
-                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
-                                  value={studentGrades.writtenWorksRaw || ''}
-                                  onChange={(e) => handleStudentGradeChange('writtenWorksRaw', e.target.value)}
-                                />
+                              <td className="border border-gray-300 p-2 text-center bg-gray-50">
+                                <span className="font-semibold">{studentGrades.writtenWorksRaw || '0'}</span>
                               </td>
-                              <td className="border border-gray-300 p-2 text-center">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  disabled={!isEditMode}
-                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
-                                  value={studentGrades.writtenWorksHPS || ''}
-                                  onChange={(e) => handleStudentGradeChange('writtenWorksHPS', e.target.value)}
-                                />
+                              <td className="border border-gray-300 p-2 text-center bg-gray-50">
+                                <span className="font-semibold">{studentGrades.writtenWorksHPS || '0'}</span>
                               </td>
                               <td className="border border-gray-300 p-2 text-center bg-blue-50 font-semibold">
                                 {(() => {
@@ -2946,37 +3113,33 @@ export default function Faculty_Grades() {
                                   step="0.01"
                                   placeholder="0.00"
                                   disabled={!isEditMode}
-                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
-                                  value={studentGrades.quarterlyExam || ''}
-                                  onChange={(e) => handleStudentGradeChange('quarterlyExam', e.target.value)}
+                                  className={`w-full text-center border border-blue-300 bg-blue-50 focus:bg-white focus:border-blue-500 ${!isEditMode ? 'cursor-not-allowed bg-gray-100' : 'bg-blue-50'}`}
+                                  value={studentGrades.quarterlyExam ?? ''}
+                                  onChange={(e) => {
+                                    const newValue = e.target.value;
+                                    console.log('🔄 Quarterly exam input changed:', newValue, 'type:', typeof newValue, 'length:', newValue.length);
+                                    handleStudentGradeChange('quarterlyExam', newValue);
+                                  }}
+                                  onBlur={(e) => {
+                                    console.log('🔄 Quarterly exam onBlur:', e.target.value);
+                                  }}
+                                  onFocus={(e) => {
+                                    console.log('🔄 Quarterly exam onFocus:', e.target.value);
+                                  }}
                                 />
+                                <p className="text-xs text-blue-600 mt-1">✏️ Editable</p>
+                                {studentGrades.quarterlyExam && parseFloat(studentGrades.quarterlyExam) > 100 && (
+                                  <p className="text-xs text-red-600 mt-1">⚠️ Warning: Grade exceeds 100</p>
+                                )}
                               </td>
                             </tr>
                             <tr>
                               <td className="border border-gray-300 p-2 font-medium">Performance Tasks (50%)</td>
-                              <td className="border border-gray-300 p-2 text-center">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  disabled={!isEditMode}
-                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
-                                  value={studentGrades.performanceTasksRaw || ''}
-                                  onChange={(e) => handleStudentGradeChange('performanceTasksRaw', e.target.value)}
-                                />
+                              <td className="border border-gray-300 p-2 text-center bg-gray-50">
+                                <span className="font-semibold">{studentGrades.performanceTasksRaw || '0'}</span>
                               </td>
-                              <td className="border border-gray-300 p-2 text-center">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  disabled={!isEditMode}
-                                  className={`w-full text-center border-none bg-transparent ${!isEditMode ? 'cursor-not-allowed' : ''}`}
-                                  value={studentGrades.performanceTasksHPS || ''}
-                                  onChange={(e) => handleStudentGradeChange('performanceTasksHPS', e.target.value)}
-                                />
+                              <td className="border border-gray-300 p-2 text-center bg-gray-50">
+                                <span className="font-semibold">{studentGrades.performanceTasksHPS || '0'}</span>
                               </td>
                               <td className="border border-gray-300 p-2 text-center bg-blue-50 font-semibold">
                                 {(() => {
@@ -3050,6 +3213,7 @@ export default function Faculty_Grades() {
                       <div className="mt-4 text-xs text-gray-600">
                         <p><strong>Legend:</strong> RAW = Raw Score, HPS = Highest Possible Score, PS = Percentage Score, WS = Weighted Score</p>
                         <p><strong>Formula:</strong> PS = (RAW/HPS) × 100, WS = PS × Weight, Initial Grade = Sum of WS, Quarterly Grade = (Initial Grade × 0.8) + (Quarterly Exam × 0.2)</p>
+                        <p><strong>Note:</strong> RAW, HPS, PS, and WS values are from the system (Excel upload) and cannot be edited. Only the <strong>Quarterly Exam</strong> can be modified, which will automatically recalculate the final quarterly grade.</p>
                       </div>
                       
                       {/* Edit Controls for Detailed Grade Breakdown */}
@@ -3114,7 +3278,7 @@ export default function Faculty_Grades() {
                         onChange={(e) => handleStudentGradeChange('remarks', e.target.value)}
                         disabled={!isEditMode || (() => {
                           const student = students.find(s => s.name === selectedStudentName);
-                          const studentGradesData = grades[student?._id] || {};
+                          const studentGradesData = grades[student?.schoolID] || {};
                           return studentGradesData.isLocked;
                         })()}
                       >
@@ -3131,7 +3295,7 @@ export default function Faculty_Grades() {
                  <div className="flex flex-wrap gap-3">
                    {(() => {
                      const student = students.find(s => s.name === selectedStudentName);
-                     const studentGradesData = grades[student?._id] || {};
+                     const studentGradesData = grades[student?.schoolID] || {};
                      const isLocked = studentGradesData.isLocked;
                      
                      if (isLocked) {
@@ -3206,7 +3370,7 @@ export default function Faculty_Grades() {
                              name: s.name, 
                              schoolID: s.schoolID, 
                              dbID: s._id, 
-                             isLocked: grades[s.schoolID || s._id]?.isLocked 
+                             isLocked: grades[s.schoolID]?.isLocked 
                            })));
                            console.log('🔍 UI Status Calculation - Grades object:', grades);
                            return postedCount;
@@ -3388,7 +3552,7 @@ export default function Faculty_Grades() {
                                                  <tbody>
                            {students.length > 0 ? (
                                                            students.map((student) => {
-                                const schoolID = student.schoolID || student._id;
+                                const schoolID = student.schoolID;
                                 const studentGrades = grades[schoolID] || {};
                                 
                                 // Helper function to get quarterly grade from breakdown data if available
@@ -3627,7 +3791,7 @@ export default function Faculty_Grades() {
                                                  <tbody>
                            {students.length > 0 ? (
                                                            students.map((student) => {
-                                const schoolID = student.schoolID || student._id;
+                                const schoolID = student.schoolID;
                                 const studentGrades = grades[schoolID] || {};
                                 
                                 // Helper function to get quarterly grade from breakdown data if available
@@ -3832,7 +3996,7 @@ export default function Faculty_Grades() {
                     }
                   }
                   const student = updatedStudents[idx];
-                  const sid = student._id;
+                  const sid = student.schoolID;
                   const prev = updatedGrades[sid] || {};
                   // Merge per-quarter values and compact breakdown fields
                   const g = rec.grades || {};
@@ -3874,13 +4038,23 @@ export default function Faculty_Grades() {
                     ...g,
                     breakdownByQuarter: nextBreakdowns,
                     breakdown: breakdownForQuarter, // for current panel binding
+                    // Explicitly set the target quarter grade to ensure it overwrites the old one
                     [targetQuarterField]: breakdownForQuarter.quarterly,
                     // Preserve the isLocked status - don't overwrite posted grades
                     isLocked: prev.isLocked || false,
                     isTemp: true
                   };
                   
-                  updatedGrades[sid] = updatedGrade;
+                  console.log('🔄 Grade update details:', {
+                    studentName: rec.studentName,
+                    targetQuarterField,
+                    oldGrade: prev[targetQuarterField],
+                    newGrade: breakdownForQuarter.quarterly,
+                    updatedGrade: updatedGrade[targetQuarterField]
+                  });
+                  
+                  // Use only schoolID to avoid confusion and grade overwrites
+                  updatedGrades[key] = updatedGrade;
                   
                   console.log('📊 Updated grades for student:', {
                     studentName: student.name,
@@ -3895,6 +4069,24 @@ export default function Faculty_Grades() {
 
                 setStudents(updatedStudents);
                 setGrades(updatedGrades);
+                
+                // Force a re-render of the main table by updating the grades state
+                console.log('🔄 Force updating main table with new grades...');
+                setTimeout(() => {
+                  setGrades(prev => {
+                    console.log('🔄 Main table refresh - current grades:', prev);
+                    // Create a completely new object to force React to re-render
+                    const newGrades = { ...prev };
+                    Object.keys(updatedGrades).forEach(key => {
+                      newGrades[key] = { ...updatedGrades[key] };
+                    });
+                    console.log('🔄 New grades object:', newGrades);
+                    return newGrades;
+                  });
+                  // Force table re-render
+                  setTableRefreshKey(prev => prev + 1);
+                }, 100);
+                
                 // Persist temp grades locally so they survive reloads
                 const selectedClassObj = classes[selectedClass];
                 if (selectedClassObj) {
