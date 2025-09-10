@@ -1115,10 +1115,12 @@ export default function Faculty_Grades() {
             const q2Num = parseFloat(quarter2) || 0;
             
             const semesterGrade = (q1Num + q2Num) / 2;
-            let remarks = 'FAILED';
+            let remarks = 'REPEAT';
             
             if (semesterGrade >= 75) {
               remarks = 'PASSED';
+            } else if (semesterGrade >= 59) {
+              remarks = 'FAILED';
             }
             
             // Ensure semester final is always computed and not user-editable
@@ -1141,10 +1143,12 @@ export default function Faculty_Grades() {
             const q4Num = parseFloat(quarter4) || 0;
             
             const semesterGrade = (q3Num + q4Num) / 2;
-            let remarks = 'FAILED';
+            let remarks = 'REPEAT';
             
             if (semesterGrade >= 75) {
               remarks = 'PASSED';
+            } else if (semesterGrade >= 59) {
+              remarks = 'FAILED';
             }
             
             // Ensure semester final is always computed and not user-editable
@@ -1167,10 +1171,12 @@ export default function Faculty_Grades() {
             const q4Num = parseFloat(quarter4) || 0;
             
             const semesterGrade = (q3Num + q4Num) / 2;
-            let remarks = 'FAILED';
+            let remarks = 'REPEAT';
             
             if (semesterGrade >= 75) {
               remarks = 'PASSED';
+            } else if (semesterGrade >= 59) {
+              remarks = 'FAILED';
             }
             
             // Ensure semester final is always computed and not user-editable
@@ -1193,10 +1199,12 @@ export default function Faculty_Grades() {
             const q2Num = parseFloat(quarter2) || 0;
             
             const semesterGrade = (q1Num + q2Num) / 2;
-            let remarks = 'FAILED';
+            let remarks = 'REPEAT';
             
             if (semesterGrade >= 75) {
               remarks = 'PASSED';
+            } else if (semesterGrade >= 59) {
+              remarks = 'FAILED';
             }
             
             // Ensure semester final is always computed and not user-editable
@@ -1808,10 +1816,12 @@ export default function Faculty_Grades() {
             const q2Num = parseFloat(quarter2) || 0;
             
             const semesterGrade = (q1Num + q2Num) / 2;
-            let remarks = 'FAILED';
+            let remarks = 'REPEAT';
             
             if (semesterGrade >= 75) {
               remarks = 'PASSED';
+            } else if (semesterGrade >= 59) {
+              remarks = 'FAILED';
             }
             
             updatedGrades[subjectId].semesterFinal = semesterGrade.toFixed(2);
@@ -1829,10 +1839,12 @@ export default function Faculty_Grades() {
             const q4Num = parseFloat(quarter4) || 0;
             
             const semesterGrade = (q3Num + q4Num) / 2;
-            let remarks = 'FAILED';
+            let remarks = 'REPEAT';
             
             if (semesterGrade >= 75) {
               remarks = 'PASSED';
+            } else if (semesterGrade >= 59) {
+              remarks = 'FAILED';
             }
             
             updatedGrades[subjectId].semesterFinal = semesterGrade.toFixed(2);
@@ -1850,10 +1862,12 @@ export default function Faculty_Grades() {
             const q2Num = parseFloat(quarter2) || 0;
             
             const semesterGrade = (q1Num + q2Num) / 2;
-            let remarks = 'FAILED';
+            let remarks = 'REPEAT';
             
             if (semesterGrade >= 75) {
               remarks = 'PASSED';
+            } else if (semesterGrade >= 59) {
+              remarks = 'FAILED';
             }
             
             updatedGrades[subjectId].semesterFinal = semesterGrade.toFixed(2);
@@ -1898,8 +1912,10 @@ export default function Faculty_Grades() {
     
     if (grade >= 75) {
       return 'PASSED';
-    } else {
+    } else if (grade >= 59) {
       return 'FAILED';
+    } else {
+      return 'REPEAT';
     }
   };
 
@@ -3270,6 +3286,8 @@ export default function Faculty_Grades() {
                         <option value="">Select remarks...</option>
                         <option value="PASSED">PASSED</option>
                         <option value="FAILED">FAILED</option>
+                        <option value="REPEAT">REPEAT</option>
+                        <option value="INCOMPLETE">INCOMPLETE</option>
                       </select>
                     </div>
                  </div>

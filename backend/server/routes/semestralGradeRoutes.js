@@ -91,8 +91,10 @@ router.post('/save', authenticateToken, async (req, res) => {
         if (!isNaN(semesterFinal)) {
           if (semesterFinal >= 75) {
             gradeRecord.grades.remarks = 'PASSED';
-          } else {
+          } else if (semesterFinal >= 59) {
             gradeRecord.grades.remarks = 'FAILED';
+          } else {
+            gradeRecord.grades.remarks = 'REPEAT';
           }
         } else {
           gradeRecord.grades.remarks = 'INCOMPLETE';
@@ -127,8 +129,10 @@ router.post('/save', authenticateToken, async (req, res) => {
         if (!isNaN(semesterFinal)) {
           if (semesterFinal >= 75) {
             newGrades.remarks = 'PASSED';
-          } else {
+          } else if (semesterFinal >= 59) {
             newGrades.remarks = 'FAILED';
+          } else {
+            newGrades.remarks = 'REPEAT';
           }
         } else {
           newGrades.remarks = 'INCOMPLETE';
@@ -261,8 +265,10 @@ router.post('/save-quarter', authenticateToken, async (req, res) => {
             if (!isNaN(semesterFinal)) {
               if (semesterFinal >= 75) {
                 gradeRecord.grades.remarks = 'PASSED';
-              } else {
+              } else if (semesterFinal >= 59) {
                 gradeRecord.grades.remarks = 'FAILED';
+              } else {
+                gradeRecord.grades.remarks = 'REPEAT';
               }
             } else {
               gradeRecord.grades.remarks = 'INCOMPLETE';
@@ -458,8 +464,10 @@ router.post('/save-bulk', authenticateToken, async (req, res) => {
             if (!isNaN(semesterFinal)) {
           if (semesterFinal >= 75) {
             gradeRecord.grades.remarks = 'PASSED';
-          } else {
+          } else if (semesterFinal >= 59) {
             gradeRecord.grades.remarks = 'FAILED';
+          } else {
+            gradeRecord.grades.remarks = 'REPEAT';
           }
             } else {
               gradeRecord.grades.remarks = 'INCOMPLETE';
@@ -1152,8 +1160,10 @@ router.put('/update/:gradeId', authenticateToken, async (req, res) => {
       if (!isNaN(semesterFinal)) {
           if (semesterFinal >= 75) {
             gradeRecord.grades.remarks = 'PASSED';
-          } else {
+          } else if (semesterFinal >= 59) {
             gradeRecord.grades.remarks = 'FAILED';
+          } else {
+            gradeRecord.grades.remarks = 'REPEAT';
           }
       } else {
         gradeRecord.grades.remarks = 'INCOMPLETE';

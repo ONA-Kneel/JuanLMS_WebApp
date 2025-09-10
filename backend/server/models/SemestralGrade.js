@@ -186,8 +186,10 @@ semestralGradeSchema.methods.calculateRemarks = function() {
   
   if (semesterFinal >= 75) {
     return 'PASSED';
-  } else {
+  } else if (semesterFinal >= 59) {
     return 'FAILED';
+  } else {
+    return 'REPEAT';
   }
 };
 
