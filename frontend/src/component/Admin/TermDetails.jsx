@@ -195,6 +195,24 @@ export default function TermDetails() {
   const [isSubjectUploading, setIsSubjectUploading] = useState(false);
   const [subjectExcelError, setSubjectExcelError] = useState('');
 
+  // Pagination states (10 per page)
+  const ROWS_PER_PAGE = 10;
+  const [tracksPage, setTracksPage] = useState(1);
+  const [strandsPage, setStrandsPage] = useState(1);
+  const [sectionsPage, setSectionsPage] = useState(1);
+  const [subjectsPage, setSubjectsPage] = useState(1);
+  const [facultyAssignPage, setFacultyAssignPage] = useState(1);
+  const [studentAssignPage, setStudentAssignPage] = useState(1);
+
+  const paginate = (items, page, perPage) => {
+    const total = items?.length || 0;
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    const currentPage = Math.min(Math.max(1, page), totalPages);
+    const start = (currentPage - 1) * perPage;
+    const end = start + perPage;
+    return { slice: (items || []).slice(start, end), totalPages, currentPage };
+  };
+
   // SHOW TRACK MODAL
   const [showTrackModal, setShowTrackModal] = useState(false);
   const [showStrandModal, setShowStrandModal] = useState(false);
@@ -5337,7 +5355,7 @@ Validation issues (${skippedCount} items):
                           </td>
                         </tr>
                       ) : (
-                        filteredTracks.map(track => (
+                        paginate(filteredTracks, tracksPage, ROWS_PER_PAGE).slice.map(track => (
                           <tr key={track._id}>
                             <td className="p-3 border">{track.trackName}</td>
                             <td className="p-3 border">{track.status}</td>
@@ -5517,7 +5535,7 @@ Validation issues (${skippedCount} items):
                         </td>
                       </tr>
                     ) : (
-                      uniqueStrands.map((strand) => (
+                      paginate(uniqueStrands, strandsPage, ROWS_PER_PAGE).slice.map((strand) => (
                         <tr key={strand._id}>
                           <td className="p-3 border">{strand.trackName}</td>
                           <td className="p-3 border">{strand.strandName}</td>
@@ -5551,6 +5569,20 @@ Validation issues (${skippedCount} items):
                     )}
                   </tbody>
                   </table>
+                  {uniqueStrands.length > 0 && (
+                    <div className="flex justify-center items-center gap-2 mt-3">
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStrandsPage(p => Math.max(1, p - 1))} disabled={strandsPage === 1}>{'<'}</button>
+                      <span className="text-xs">Page {paginate(uniqueStrands, strandsPage, ROWS_PER_PAGE).currentPage} of {paginate(uniqueStrands, strandsPage, ROWS_PER_PAGE).totalPages}</span>
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStrandsPage(p => Math.min(paginate(uniqueStrands, strandsPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={strandsPage === paginate(uniqueStrands, strandsPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
+                    </div>
+                  )}
+                  {filteredTracks.length > 0 && (
+                    <div className="flex justify-center items-center gap-2 mt-3">
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setTracksPage(p => Math.max(1, p - 1))} disabled={tracksPage === 1}>{'<'}</button>
+                      <span className="text-xs">Page {paginate(filteredTracks, tracksPage, ROWS_PER_PAGE).currentPage} of {paginate(filteredTracks, tracksPage, ROWS_PER_PAGE).totalPages}</span>
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setTracksPage(p => Math.min(paginate(filteredTracks, tracksPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={tracksPage === paginate(filteredTracks, tracksPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -5770,7 +5802,7 @@ Validation issues (${skippedCount} items):
                         </td>
                       </tr>
                     ) : (
-                      sections.map((section) => (
+                      paginate(sections, sectionsPage, ROWS_PER_PAGE).slice.map((section) => (
                         <tr key={section._id}>
                           <td className="p-3 border">{section.trackName}</td>
                           <td className="p-3 border">{section.strandName}</td>
@@ -5806,6 +5838,13 @@ Validation issues (${skippedCount} items):
                     )}
                   </tbody>
                   </table>
+                  {sections.length > 0 && (
+                    <div className="flex justify-center items-center gap-2 mt-3">
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setSectionsPage(p => Math.max(1, p - 1))} disabled={sectionsPage === 1}>{'<'}</button>
+                      <span className="text-xs">Page {paginate(sections, sectionsPage, ROWS_PER_PAGE).currentPage} of {paginate(sections, sectionsPage, ROWS_PER_PAGE).totalPages}</span>
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setSectionsPage(p => Math.min(paginate(sections, sectionsPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={sectionsPage === paginate(sections, sectionsPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
+                    </div>
+                  )}
                 </div>
                 {/* Section Preview Modal */}
                 {sectionPreviewModalOpen && (
@@ -6075,7 +6114,7 @@ Validation issues (${skippedCount} items):
                         </td>
                       </tr>
                     ) : (
-                      filteredSubjects.map((subject) => (
+                      paginate(filteredSubjects, subjectsPage, ROWS_PER_PAGE).slice.map((subject) => (
                         <tr key={subject._id}>
                           <td className="p-3 border">{subject.trackName}</td>
                           <td className="p-3 border">{subject.strandName}</td>
@@ -6111,6 +6150,13 @@ Validation issues (${skippedCount} items):
                     )}
                   </tbody>
                   </table>
+                  {filteredSubjects.length > 0 && (
+                    <div className="flex justify-center items-center gap-2 mt-3">
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setSubjectsPage(p => Math.max(1, p - 1))} disabled={subjectsPage === 1}>{'<'}</button>
+                      <span className="text-xs">Page {paginate(filteredSubjects, subjectsPage, ROWS_PER_PAGE).currentPage} of {paginate(filteredSubjects, subjectsPage, ROWS_PER_PAGE).totalPages}</span>
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setSubjectsPage(p => Math.min(paginate(filteredSubjects, subjectsPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={subjectsPage === paginate(filteredSubjects, subjectsPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
+                    </div>
+                  )}
                 </div>
                 
                 {/* Subject Preview Modal */}
@@ -6481,7 +6527,7 @@ Validation issues (${skippedCount} items):
                           </td>
                         </tr>
                       ) : (
-                        facultyAssignments.map((assignment) => (
+                        paginate(facultyAssignments, facultyAssignPage, ROWS_PER_PAGE).slice.map((assignment) => (
                           <tr key={assignment._id}>
                             <td className="p-3 border">{assignment.facultySchoolID || ''}</td>
                             <td className="p-3 border">{assignment.facultyName}</td>
@@ -6538,6 +6584,13 @@ Validation issues (${skippedCount} items):
                       )}
                     </tbody>
                   </table>
+                  {facultyAssignments.length > 0 && (
+                    <div className="flex justify-center items-center gap-2 mt-3">
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setFacultyAssignPage(p => Math.max(1, p - 1))} disabled={facultyAssignPage === 1}>{'<'}</button>
+                      <span className="text-xs">Page {paginate(facultyAssignments, facultyAssignPage, ROWS_PER_PAGE).currentPage} of {paginate(facultyAssignments, facultyAssignPage, ROWS_PER_PAGE).totalPages}</span>
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setFacultyAssignPage(p => Math.min(paginate(facultyAssignments, facultyAssignPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={facultyAssignPage === paginate(facultyAssignments, facultyAssignPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
+                    </div>
+                  )}
                 </div>
                 
                 {/* Faculty Assignment Preview Modal */}
@@ -6989,7 +7042,7 @@ Validation issues (${skippedCount} items):
                           </td>
                         </tr>
                       ) : (
-                        studentAssignments.map((assignment) => {
+                        paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).slice.map((assignment) => {
                           const student = students.find(s => s._id === assignment.studentId);
                           return (
                             <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
@@ -7048,6 +7101,13 @@ Validation issues (${skippedCount} items):
                       )}
                     </tbody>
                   </table>
+                  {studentAssignments.length > 0 && (
+                    <div className="flex justify-center items-center gap-2 mt-3">
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStudentAssignPage(p => Math.max(1, p - 1))} disabled={studentAssignPage === 1}>{'<'}</button>
+                      <span className="text-xs">Page {paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).currentPage} of {paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}</span>
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStudentAssignPage(p => Math.min(paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={studentAssignPage === paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

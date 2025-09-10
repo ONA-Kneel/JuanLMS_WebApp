@@ -4,7 +4,7 @@ import Admin_Navbar from "./Admin_Navbar";
 import axios from "axios";
 import ValidationModal from "../ValidationModal";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Admin_Accounts() {
   const [isEditMode, setIsEditMode] = useState(false);
@@ -78,12 +78,13 @@ export default function Admin_Accounts() {
   // Fetch users on mount and after successful account creation
   const fetchUsers = async (page = 1, limit = ITEMS_PER_PAGE) => {
     try {
-      const res = await fetch(`${API_BASE}/users?page=${page}&limit=${limit}`);
+      const roleParam = activeTab && activeTab !== 'all' ? `&role=${encodeURIComponent(activeTab)}` : '';
+      const res = await fetch(`${API_BASE}/users?page=${page}&limit=${limit}${roleParam}`);
       const data = await res.json();
       if (res.ok) {
         setUsers(data.users);
         setTotalPages(data.pagination.totalPages);
-        setCurrentPage(data.pagination.currentPage);
+        // Do not force-set currentPage from server response to avoid flicker/back-forth
       } else {
         console.error("Failed to fetch users:", data);
       }
@@ -99,31 +100,42 @@ export default function Admin_Accounts() {
     userID: "",
   });
   
-  const filteredUsers = users.filter((user) => {
-    const matchesFirst = (user.firstname || "").toLowerCase().includes(searchTerms.firstname.toLowerCase());
-    const matchesLast = (user.lastname || "").toLowerCase().includes(searchTerms.lastname.toLowerCase());
-    const matchesMiddle = (user.middlename || "").toLowerCase().includes(searchTerms.middlename.toLowerCase());
-    const matchesUserID = searchTerms.userID === "" || (user.userID || "").toLowerCase().includes(searchTerms.userID.toLowerCase());
-    return matchesFirst && matchesLast && matchesMiddle && matchesUserID;
-  });
-  
-  const paginatedUsers = [...filteredUsers].sort((a, b) => {
-    if (!sortConfig.key) return 0;
-    const aValue = (a[sortConfig.key] || "").toLowerCase();
-    const bValue = (b[sortConfig.key] || "").toLowerCase();
-    if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
-    if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
-    return 0;
-  });
+  // NOTE: Server returns paginated and role-filtered users; use directly to avoid sparse pages
+  const displayedUsers = users;
 
-  // Filter users by active tab (role)
-  const tabFilteredUsers = activeTab === 'all'
-    ? paginatedUsers
-    : paginatedUsers.filter(user => user.role === activeTab);
+  // Optional client-side search can be applied here if desired in the future
 
   useEffect(() => {
-    fetchUsers(currentPage, ITEMS_PER_PAGE);
-  }, [currentPage]);
+    // Reset to first page when switching tabs to get correct pagination per role
+    setCurrentPage(1);
+  }, [activeTab]);
+
+  useEffect(() => {
+    let isActive = true;
+    (async () => {
+      const pageAtCall = currentPage;
+      try {
+        const roleParam = activeTab && activeTab !== 'all' ? `&role=${encodeURIComponent(activeTab)}` : '';
+        const res = await fetch(`${API_BASE}/users?page=${pageAtCall}&limit=${ITEMS_PER_PAGE}${roleParam}`);
+        const data = await res.json();
+        if (!isActive) return;
+        if (res.ok) {
+          // Only update if the response corresponds to the latest requested page
+          if (pageAtCall === currentPage) {
+            setUsers(data.users);
+            setTotalPages(data.pagination.totalPages);
+          }
+        } else {
+          console.error("Failed to fetch users:", data);
+        }
+      } catch (err) {
+        if (isActive) console.error("Error fetching users:", err);
+      }
+    })();
+    return () => {
+      isActive = false;
+    };
+  }, [currentPage, activeTab]);
 
   useEffect(() => {
     if (showArchivedTable) {
@@ -298,6 +310,34 @@ export default function Admin_Accounts() {
       setIsCreatingAccount(false);
       return;
     }
+    // Check duplicate School ID before proceeding (create mode only)
+    if (!isEditMode) {
+      try {
+        const checkRes = await fetch(`${API_BASE}/users/check-schoolid?schoolID=${encodeURIComponent(formData.schoolID)}`);
+        const check = await checkRes.json();
+        if (check?.exists) {
+          setValidationModal({
+            isOpen: true,
+            type: 'warning',
+            title: 'Duplicate School ID',
+            message: 'This School ID is already in use. Please enter a unique School ID.'
+          });
+          setIsCreatingAccount(false);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to check School ID uniqueness', err);
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Validation Error',
+          message: 'Unable to validate School ID uniqueness. Please try again.'
+        });
+        setIsCreatingAccount(false);
+        return;
+      }
+    }
+
     if (isEditMode) {
       // Validate if any changes were made
       const hasChanges = 
@@ -321,8 +361,8 @@ export default function Admin_Accounts() {
       // Show save confirmation modal instead of proceeding directly
       setShowSaveConfirm(true);
     } else {
-      const randomNum = Math.floor(100 + Math.random() * 900);
-      const userID = `${formData.role.charAt(0).toUpperCase()}${randomNum}`;
+      // Use the manually entered School ID as the system userID
+      const userID = formData.schoolID;
 
       let accountData = {
         ...formData,
@@ -411,12 +451,8 @@ export default function Admin_Accounts() {
   const confirmSave = async () => {
     setShowSaveConfirm(false);
     try {
-      // Generate new userID if role changed
-      let updatedUserID = formData.userID;
-      if (formData.role !== editingUser.role) {
-        const randomNum = Math.floor(100 + Math.random() * 900);
-        updatedUserID = `${formData.role.charAt(0).toUpperCase()}${randomNum}`;
-      }
+      // Keep userID in sync with School ID (no random generation)
+      let updatedUserID = formData.schoolID;
 
       const res = await fetch(`${API_BASE}/users/${editingUser._id}`, {
         method: "PATCH",
@@ -807,7 +843,7 @@ export default function Admin_Accounts() {
                   </button>
                 ))}
               </div>
-              <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+              <table className="min-w-full bg-white border rounded-lg text-sm table-fixed overflow-visible">
                 <thead>
                   <tr className="bg-gray-50 text-left">
                     <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("schoolID")}>School ID {sortConfig.key === "schoolID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
@@ -838,14 +874,14 @@ export default function Admin_Accounts() {
                   </tr>
                 </thead>
                 <tbody>
-                  {tabFilteredUsers.length === 0 ? (
+                  {displayedUsers.length === 0 ? (
                     <tr>
                       <td colSpan="6" className="text-center p-4 text-gray-500">
                         No users found.
                       </td>
                     </tr>
                   ) : (
-                    tabFilteredUsers.map((user, idx) => (
+                    displayedUsers.map((user, idx) => (
                       <tr key={user._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
                         <td className="p-3 border-b">{formatSchoolId(user.schoolID)}</td>
                         <td className="p-3 border-b">{user.lastname}</td>
@@ -872,7 +908,7 @@ export default function Admin_Accounts() {
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                               </svg>
-                              <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Edit</span>
+                              <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">Edit</span>
                             </button>
                             <button
                               onClick={() => handleArchive(user)}
@@ -883,7 +919,7 @@ export default function Admin_Accounts() {
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                               </svg>
-                              <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Archive</span>
+                              <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">Archive</span>
                             </button>
                           </div>
                         </td>

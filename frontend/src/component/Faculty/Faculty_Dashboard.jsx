@@ -4,7 +4,7 @@ import Faculty_Navbar from "./Faculty_Navbar";
 import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Faculty_Dashboard() {
   const [classes, setClasses] = useState([]);
@@ -12,11 +12,49 @@ export default function Faculty_Dashboard() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [debugMode, setDebugMode] = useState(false);
+  const [userInfo, setUserInfo] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; }
+  });
+  const [showSuggestPw, setShowSuggestPw] = useState(false);
+  const [dontShowAgain, setDontShowAgain] = useState(false);
+  const [showChangePwModal, setShowChangePwModal] = useState(false);
 
   // Announcements (Principal/VPE only, dismissible)
   const [announcements, setAnnouncements] = useState([]);
 
   const currentFacultyID = localStorage.getItem("userID");
+  // On mount, decide whether to show the change-password suggestion
+  useEffect(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      setUserInfo(user);
+      const attempts = user?.changePassAttempts || 0;
+      const suppressed = user?.changePassModal === true;
+      setShowSuggestPw(attempts === 0 && !suppressed);
+    } catch {
+      setShowSuggestPw(false);
+    }
+  }, []);
+
+  const handleNeverShowAgain = async () => {
+    try {
+      const me = JSON.parse(localStorage.getItem('user') || '{}');
+      const token = localStorage.getItem('token');
+      // Persist flag on user preferences
+      await fetch(`${API_BASE}/users/${me._id}/preferences`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ changePassModal: true })
+      });
+      const updated = { ...me, changePassModal: true };
+      localStorage.setItem('user', JSON.stringify(updated));
+      setUserInfo(updated);
+      setShowSuggestPw(false);
+    } catch (e) {
+      // Fallback: still hide locally
+      setShowSuggestPw(false);
+    }
+  };
 
   /* ------------------------------ helpers ------------------------------ */
   const DISMISSED_KEY = "faculty_dashboard_dismissed_announcements";
@@ -141,6 +179,56 @@ export default function Faculty_Dashboard() {
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr md:ml-64">
       <Faculty_Navbar />
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr">
+
+        {/* Suggest change password modal */}
+        {showSuggestPw && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h3 className="text-xl font-semibold mb-2">Change Password</h3>
+              <p className="text-sm text-gray-600 mb-4">To improve your account security, please change your password.</p>
+              <div className="flex items-center justify-between mb-4">
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={dontShowAgain} onChange={(e) => setDontShowAgain(e.target.checked)} />
+                  Don't show again
+                </label>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  className="px-4 py-2 rounded bg-gray-300"
+                  onClick={() => {
+                    if (dontShowAgain) handleNeverShowAgain();
+                    setShowSuggestPw(false);
+                  }}
+                >
+                  Later
+                </button>
+                <button
+                  className="px-4 py-2 rounded bg-blue-900 text-white"
+                  onClick={() => {
+                    if (dontShowAgain) handleNeverShowAgain();
+                    setShowSuggestPw(false);
+                    setShowChangePwModal(true);
+                  }}
+                >
+                  Change
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Inline change password modal (reusing existing Profile modal flow not available here). Simple link to open Profile menu change password */}
+        {showChangePwModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold mb-2">Open Change Password</h3>
+              <p className="text-sm text-gray-600 mb-4">Open your profile and use the Change Password option.</p>
+              <div className="flex justify-end gap-2">
+                <button className="px-4 py-2 rounded bg-gray-300" onClick={() => setShowChangePwModal(false)}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Header */}
         <div className="flex justify-between items-center mb-6">

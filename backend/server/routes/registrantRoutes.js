@@ -182,6 +182,7 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
       schoolID: registrant.schoolID,
       password: tempPassword,
       role: role, // Use the determined role instead of hardcoded 'students'
+      changePassAttempts: 0,
     });
     
     try {

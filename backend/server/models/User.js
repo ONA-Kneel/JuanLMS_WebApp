@@ -37,6 +37,10 @@ const userSchema = new mongoose.Schema({
   archiveLockUntil: { type: Date, default: null },
   recoverAttempts: { type: Number, default: 0 },
   recoverLockUntil: { type: Date, default: null },
+  // Track number of attempts to change password
+  changePassAttempts: { type: Number, default: 0 },
+  // If true, never show the change-password suggestion modal again
+  changePassModal: { type: Boolean, default: false },
 });
 
 // Hash password and encrypt sensitive fields before saving

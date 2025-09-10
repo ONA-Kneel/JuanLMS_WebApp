@@ -69,36 +69,70 @@ userRoutes.get('/user-counts', authenticateToken, async (req, res) => {
 
 // Search students by name (must be before /users/:id)
 userRoutes.get("/users/search", authenticateToken, async (req, res) => {
-    const query = req.query.q || "";
-    let users = [];
-    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(query)) {
-        // Search by emailHash
-        const emailHash = crypto.createHash('sha256').update(query.toLowerCase()).digest('hex');
-        users = await User.find({ emailHash, isArchived: { $ne: true } });
-    } else {
-        users = await User.find({
+    try {
+        const query = (req.query.q || "").toString().trim();
+        if (!query) return res.json([]);
+
+        // If full email, use hash for exact match (works across domains)
+        if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(query)) {
+            const emailHash = crypto.createHash('sha256').update(query.toLowerCase()).digest('hex');
+            const users = await User.find({ emailHash, isArchived: { $ne: true } });
+            const decrypted = users.map(user => ({
+                ...user.toObject(),
+                email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+                schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
+                personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+                middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
+                firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
+                lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
+                profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+                password: undefined,
+            }));
+            return res.json(decrypted);
+        }
+
+        // Name-based candidates by regex
+        const nameCandidates = await User.find({
             isArchived: { $ne: true },
             $or: [
                 { firstname: { $regex: query, $options: "i" } },
                 { middlename: { $regex: query, $options: "i" } },
                 { lastname: { $regex: query, $options: "i" } },
-                { email: { $regex: query, $options: "i" } }
             ],
-        });
+        }).limit(200);
+
+        // If the query looks like an email fragment (contains '@' or a dot),
+        // fetch a broader set and post-filter by decrypted email containing the fragment
+        let emailCandidates = [];
+        if (query.includes('@') || query.includes('.')) {
+            const pool = await User.find({ isArchived: { $ne: true } }).limit(1000);
+            emailCandidates = pool.filter(u => {
+                const dec = u.getDecryptedEmail ? u.getDecryptedEmail() : u.email;
+                return (dec || '').toLowerCase().includes(query.toLowerCase());
+            });
+        }
+
+        // Merge unique by _id
+        const mapById = new Map();
+        [...nameCandidates, ...emailCandidates].forEach(u => mapById.set(String(u._id), u));
+        const merged = Array.from(mapById.values());
+
+        const decryptedUsers = merged.map(user => ({
+            ...user.toObject(),
+            email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+            schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
+            personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
+            middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
+            firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
+            lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
+            profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
+            password: undefined,
+        }));
+        return res.json(decryptedUsers);
+    } catch (err) {
+        console.error('User search error:', err);
+        return res.status(500).json({ error: 'Failed to search users' });
     }
-    // Decrypt fields
-    const decryptedUsers = users.map(user => ({
-        ...user.toObject(),
-        email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
-        schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
-        personalemail: user.getDecryptedPersonalEmail ? user.getDecryptedPersonalEmail() : user.personalemail,
-        middlename: user.getDecryptedMiddlename ? user.getDecryptedMiddlename() : user.middlename,
-        firstname: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
-        lastname: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
-        profilePic: user.getDecryptedProfilePic ? user.getDecryptedProfilePic() : user.profilePic,
-        password: undefined,
-    }));
-    res.json(decryptedUsers);
 });
 
 // Retrieve ALL users (paginated)
@@ -108,6 +142,10 @@ userRoutes.get("/users", async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
         const filter = { isArchived: { $ne: true } };
+        const role = (req.query.role || '').toString();
+        if (role && role !== 'all') {
+            filter.role = role;
+        }
         const totalUsers = await User.countDocuments(filter);
         const users = await User.find(filter)
             .skip(skip)
@@ -132,6 +170,27 @@ userRoutes.get("/users", async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Failed to fetch users" });
+    }
+});
+
+// Check if a School ID already exists (handles encrypted storage)
+userRoutes.get('/users/check-schoolid', async (req, res) => {
+    try {
+        const rawSchoolID = (req.query.schoolID || '').toString().trim();
+        if (!rawSchoolID) {
+            return res.status(400).json({ message: 'schoolID is required' });
+        }
+        // Fetch only schoolID field to minimize payload
+        const users = await User.find({}, { schoolID: 1 }).lean();
+        const exists = users.some(u => {
+            const stored = u.schoolID;
+            const val = (typeof stored === 'string' && stored.includes(':')) ? decrypt(stored) : stored;
+            return val === rawSchoolID;
+        });
+        return res.json({ exists });
+    } catch (error) {
+        console.error('Error checking schoolID:', error);
+        return res.status(500).json({ message: 'Error checking schoolID' });
     }
 });
 
@@ -339,6 +398,7 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
             archiveLockUntil: null,
             recoverAttempts: 0,
             recoverLockUntil: null,
+            changePassAttempts: 0,
             resetOTP: null,
             resetOTPExpires: null,
         });
@@ -463,6 +523,34 @@ userRoutes.route("/users/:id").patch(authenticateToken, async (req, res) => {
     } catch (error) {
         console.error("Error updating user:", error);
         res.status(500).json({ message: "Error updating user", error: error.message });
+    }
+});
+
+// Update user preferences (self or admin) - e.g., changePassModal
+userRoutes.patch('/users/:id/preferences', authenticateToken, async (req, res) => {
+    try {
+        const targetUserId = req.params.id;
+        const isSelf = req.user && (String(req.user._id) === String(targetUserId));
+        const isAdmin = req.user && req.user.role === 'admin';
+        if (!isSelf && !isAdmin) {
+            return res.status(403).json({ message: 'Access denied.' });
+        }
+
+        const updates = {};
+        if (typeof req.body.changePassModal === 'boolean') {
+            updates.changePassModal = req.body.changePassModal;
+        }
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ message: 'No valid preference fields provided.' });
+        }
+
+        const updated = await User.findByIdAndUpdate(targetUserId, { $set: updates }, { new: true });
+        if (!updated) return res.status(404).json({ message: 'User not found.' });
+        return res.json({ success: true, preferences: { changePassModal: updated.changePassModal } });
+    } catch (err) {
+        console.error('Error updating preferences:', err);
+        return res.status(500).json({ message: 'Failed to update preferences' });
     }
 });
 
@@ -638,7 +726,7 @@ userRoutes.patch("/users/:id/change-password", async (req, res) => {
 
   await db.collection("users").updateOne(
     { _id: new ObjectId(userId) },
-    { $set: { password: hashedNewPassword }, $unset: { resetOTP: '', resetOTPExpires: '' } }
+    { $set: { password: hashedNewPassword }, $unset: { resetOTP: '', resetOTPExpires: '' }, $inc: { changePassAttempts: 1 } }
   );
 
   res.json({ success: true, message: "Password updated successfully." });

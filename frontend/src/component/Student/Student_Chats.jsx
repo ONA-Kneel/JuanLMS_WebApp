@@ -16,7 +16,12 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.
 export default function Student_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState(() => {
+    try {
+      const cached = localStorage.getItem('users_all_student');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
@@ -88,6 +93,8 @@ export default function Student_Chats() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
+  const chatListRef = useRef(null);
+  const fetchedGroupPreviewIds = useRef(new Set());
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -290,13 +297,12 @@ export default function Student_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        setIsLoadingChats(true);
-        const res = await axios.get(`${API_BASE}/users`);
-        // Support both array and paginated object
-        const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
+        if (users.length === 0) setIsLoadingChats(true);
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_BASE}/users/active`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const userArray = Array.isArray(res.data) ? res.data : [];
         setUsers(userArray);
-        setSelectedChat(null);
-        localStorage.removeItem("selectedChatId_student");
+        try { localStorage.setItem('users_all_student', JSON.stringify(userArray)); } catch {}
       } catch (err) {
         if (err.response && err.response.status === 401) {
           window.location.href = '/';
@@ -450,35 +456,47 @@ export default function Student_Chats() {
           headers: { "Authorization": `Bearer ${token}` }
         });
         setGroups(res.data);
-        
-        // Fetch messages for all groups to determine which ones should appear in sidebar
-        if (res.data && res.data.length > 0) {
-          const allGroupMessages = {};
-          for (const group of res.data) {
-            try {
-              const groupRes = await axios.get(`${API_BASE}/group-messages/${group._id}?userId=${currentUserId}`, {
-                headers: { "Authorization": `Bearer ${token}` }
-              });
-              if (groupRes.data && groupRes.data.length > 0) {
-                allGroupMessages[group._id] = groupRes.data;
+        // Join all groups in Socket.IO
+        res.data.forEach(group => {
+          socket.current?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
+        });
+
+        // Lazy hydrate previews
+        const hydrateRange = async (startIndex, endIndex) => {
+          const slice = res.data.slice(startIndex, endIndex).filter(g => !fetchedGroupPreviewIds.current.has(g._id));
+          if (slice.length === 0) return;
+          slice.forEach(g => fetchedGroupPreviewIds.current.add(g._id));
+          try {
+            const batch = await Promise.all(
+              slice.map(group =>
+                axios.get(`${API_BASE}/group-messages/${group._id}?userId=${currentUserId}&limit=1&sort=desc`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                }).then(r => ({ groupId: group._id, list: Array.isArray(r.data) ? r.data : [] })).catch(() => ({ groupId: group._id, list: [] }))
+              )
+            );
+            const previews = {};
+            batch.forEach(({ groupId, list }) => {
+              const last = list.length > 0 ? list[list.length - 1] : null;
+              if (last) {
+                const prefix = last.senderId === currentUserId ? 'You: ' : `${last.senderName || 'Unknown'}: `;
+                const text = last.message ? last.message : (last.fileUrl ? 'File sent' : '');
+                previews[groupId] = { prefix, text };
               }
-            } catch {
-              // Group might not have messages yet, continue
-              continue;
-            }
-          }
-          setGroupMessages(allGroupMessages);
-          
-          // Join all groups in Socket.IO for real-time updates
-          res.data.forEach(group => {
-            socket.current?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
-          });
+            });
+            if (Object.keys(previews).length > 0) setLastMessages(prev => ({ ...prev, ...previews }));
+          } catch {}
+        };
+        hydrateRange(0, 15);
+        const el = chatListRef.current; if (el) {
+          let t=null; const onScroll=()=>{ if (t) cancelAnimationFrame(t); t=requestAnimationFrame(()=>{ const h=64; const start=Math.max(0, Math.floor(el.scrollTop/h)-5); const end=start+25; hydrateRange(start,end); }); };
+          el.addEventListener('scroll', onScroll); return () => el.removeEventListener('scroll', onScroll);
         }
       } catch (err) {
         console.error("Error fetching groups:", err);
       }
     };
-    fetchGroups();
+    const cleanup = fetchGroups();
+    return () => { if (typeof cleanup === 'function') cleanup(); };
   }, [currentUserId]);
 
   // ================= FETCH MESSAGES =================
@@ -1106,7 +1124,7 @@ export default function Student_Chats() {
               </div>
             </div>
             {/* Unified Chat List */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+            <div ref={chatListRef} className="flex-1 overflow-y-auto space-y-2 pr-1">
               {isLoadingChats ? (
                 <div className="text-center py-10">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-900 mx-auto"></div>
@@ -1149,20 +1167,10 @@ export default function Student_Chats() {
                         <strong className="truncate text-sm">
                           {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
                         </strong>
-                        {chat.type === 'group' ? (
+                        {lastMessages[chat._id] && (
                           <span className="text-xs text-gray-500 truncate">
-                            {lastMessages[chat._id] && (
-                              <span className="text-xs text-gray-500 truncate">
-                                {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
-                              </span>
-                            )}
+                            {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
                           </span>
-                        ) : (
-                          lastMessages[chat._id] && (
-                            <span className="text-xs text-gray-500 truncate">
-                              {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
-                            </span>
-                          )
                         )}
                       </div>
                       {chat.type === 'group' && (

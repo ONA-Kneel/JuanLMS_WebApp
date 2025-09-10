@@ -16,7 +16,14 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.
 export default function Principal_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState(() => {
+    try {
+      const cached = localStorage.getItem('users_all_principal');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
@@ -88,6 +95,8 @@ export default function Principal_Chats() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
+  const chatListRef = useRef(null);
+  const fetchedGroupPreviewIds = useRef(new Set());
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -96,6 +105,27 @@ export default function Principal_Chats() {
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
 
   const navigate = useNavigate();
+  // Compute last message preview for a chat (individual or group)
+  const getLastPreview = (chat) => {
+    if (!chat) return null;
+    if (lastMessages[chat._id]) return lastMessages[chat._id];
+    if (chat.type === 'group') {
+      const list = (groupMessages[chat._id] || []);
+      if (list.length === 0) return null;
+      const last = list[list.length - 1];
+      const prefix = last.senderId === currentUserId ? 'You: ' : `${last.senderName || 'Unknown'}: `;
+      const text = last.message ? last.message : (last.fileUrl ? 'File sent' : '');
+      return { prefix, text };
+    } else {
+      const list = (messages[chat._id] || []);
+      if (list.length === 0) return null;
+      const last = list[list.length - 1];
+      const prefix = last.senderId === currentUserId ? 'You: ' : `${chat.lastname}, ${chat.firstname}: `;
+      const text = last.message ? last.message : (last.fileUrl ? 'File sent' : '');
+      return { prefix, text };
+    }
+  };
+
 
   useEffect(() => {
     if (!currentUserId) {
@@ -180,31 +210,14 @@ export default function Principal_Chats() {
             [chat._id]: { prefix, text }
           }));
           
-          // Bump chat to top
+          // Bump chat to top (no delayed refresh)
           bumpChatToTop(chat);
-          
-                  // Refresh recent conversations to update sidebar
-        setTimeout(() => {
-          fetchRecentConversations();
-        }, 100);
         }
         
         return newMessages;
       });
       
-      // Also update the messages state immediately for real-time display
-      setMessages(prev => ({
-        ...prev,
-        [incomingMessage.senderId]: [
-          ...(prev[incomingMessage.senderId] || []),
-          incomingMessage,
-        ],
-      }));
-      
-      // Force a re-render by updating the messages state
-      setTimeout(() => {
-        setMessages(prev => ({ ...prev }));
-      }, 50);
+      // Avoid double-appending / forced re-render
     });
 
     // Group chat socket events
@@ -290,16 +303,14 @@ export default function Principal_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        setIsLoadingChats(true);
+        if (users.length === 0) setIsLoadingChats(true);
         const token = localStorage.getItem("token");
-        const res = await axios.get(`${API_BASE}/users`, {
+        const res = await axios.get(`${API_BASE}/users/active`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
-        // Support both array and paginated object
-        const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
+        const userArray = Array.isArray(res.data) ? res.data : [];
         setUsers(userArray);
-        setSelectedChat(null);
-        localStorage.removeItem("selectedChatId_principal");
+        try { localStorage.setItem('users_all_principal', JSON.stringify(userArray)); } catch {}
       } catch (err) {
         if (err.response && err.response.status === 401) {
           window.location.href = '/';
@@ -454,34 +465,64 @@ export default function Principal_Chats() {
         });
         setGroups(res.data);
         
-        // Fetch messages for all groups to determine which ones should appear in sidebar
-        if (res.data && res.data.length > 0) {
-          const allGroupMessages = {};
-          for (const group of res.data) {
-            try {
-              const groupRes = await axios.get(`${API_BASE}/group-messages/${group._id}?userId=${currentUserId}`, {
-                headers: { "Authorization": `Bearer ${token}` }
-              });
-              if (groupRes.data && groupRes.data.length > 0) {
-                allGroupMessages[group._id] = groupRes.data;
+        // Join all groups in socket
+        res.data.forEach(group => {
+          socket.current?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
+        });
+
+        // Lazily hydrate visible group previews and then on scroll
+        const hydrateRange = async (startIndex, endIndex) => {
+          const slice = res.data.slice(startIndex, endIndex).filter(g => !fetchedGroupPreviewIds.current.has(g._id));
+          if (slice.length === 0) return;
+          slice.forEach(g => fetchedGroupPreviewIds.current.add(g._id));
+          try {
+            const batch = await Promise.all(
+              slice.map(group =>
+                axios
+                  .get(`${API_BASE}/group-messages/${group._id}?userId=${currentUserId}&limit=1&sort=desc`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  })
+                  .then(r => ({ groupId: group._id, list: Array.isArray(r.data) ? r.data : [] }))
+                  .catch(() => ({ groupId: group._id, list: [] }))
+              )
+            );
+            const previews = {};
+            batch.forEach(({ groupId, list }) => {
+              const last = list.length > 0 ? list[list.length - 1] : null;
+              if (last) {
+                const prefix = last.senderId === currentUserId ? 'You: ' : `${last.senderName || 'Unknown'}: `;
+                const text = last.message ? last.message : (last.fileUrl ? 'File sent' : '');
+                previews[groupId] = { prefix, text };
               }
-            } catch {
-              // Group might not have messages yet, continue
-              continue;
+            });
+            if (Object.keys(previews).length > 0) {
+              setLastMessages(prev => ({ ...prev, ...previews }));
             }
-          }
-          setGroupMessages(allGroupMessages);
-          
-          // Join all groups in Socket.IO for real-time updates
-          res.data.forEach(group => {
-            socket.current?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
-          });
+          } catch {}
+        };
+        hydrateRange(0, 15);
+        const el = chatListRef.current;
+        if (el) {
+          let t = null;
+          const onScroll = () => {
+            if (t) cancelAnimationFrame(t);
+            t = requestAnimationFrame(() => {
+              const itemApproxHeight = 64;
+              const start = Math.max(0, Math.floor(el.scrollTop / itemApproxHeight) - 5);
+              const end = start + 25;
+              hydrateRange(start, end);
+            });
+          };
+        
+          el.addEventListener('scroll', onScroll);
+          return () => el.removeEventListener('scroll', onScroll);
         }
       } catch (err) {
         console.error("Error fetching groups:", err);
       }
     };
-    fetchGroups();
+    const cleanup = fetchGroups();
+    return () => { if (typeof cleanup === 'function') cleanup(); };
   }, [currentUserId]);
 
   // ================= FETCH MESSAGES =================
@@ -1135,7 +1176,7 @@ export default function Principal_Chats() {
               </div>
             </div>
             {/* Unified Chat List */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+            <div ref={chatListRef} className="flex-1 overflow-y-auto space-y-2 pr-1">
               {isLoadingChats ? (
                 <div className="text-center py-10">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-900 mx-auto"></div>
@@ -1178,21 +1219,14 @@ export default function Principal_Chats() {
                         <strong className="truncate text-sm">
                           {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
                         </strong>
-                        {chat.type === 'group' ? (
-                          <span className="text-xs text-gray-500 truncate">
-                            {lastMessages[chat._id] && (
-                              <span className="text-xs text-gray-500 truncate">
-                                {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          lastMessages[chat._id] && (
+                        {(() => {
+                          const preview = getLastPreview(chat.type === 'group' ? { ...chat, type: 'group' } : chat);
+                          return preview ? (
                             <span className="text-xs text-gray-500 truncate">
-                              {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
+                              {preview.prefix}{preview.text}
                             </span>
-                          )
-                        )}
+                          ) : null;
+                        })()}
                       </div>
                       {chat.type === 'group' && (
                         <span className="ml-2 text-blue-900 text-xs font-bold">Group</span>

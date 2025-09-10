@@ -16,7 +16,7 @@ import { getProfileImageUrl } from "../utils/imageUtils";
 
 Modal.setAppElement('#root');
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // ===================== ChangePasswordModal =====================
 function ChangePasswordModal({ userId, onClose }) {
@@ -146,6 +146,15 @@ function ChangePasswordModal({ userId, onClose }) {
         newPassword
       });
       setSuccess("Password changed successfully!");
+      // Optimistically reflect changePassAttempts++ in local storage/user state
+      try {
+        const stored = localStorage.getItem('user');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const updated = { ...parsed, changePassAttempts: (parsed.changePassAttempts || 0) + 1 };
+          localStorage.setItem('user', JSON.stringify(updated));
+        }
+      } catch {}
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");

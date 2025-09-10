@@ -19,6 +19,39 @@ export default function VPE_Dashboard() {
   // Announcements (inline box)
   const [announcements, setAnnouncements] = useState([]);
 
+  // Change password suggest modal
+  const [showSuggestPw, setShowSuggestPw] = useState(false);
+  const [dontShowAgain, setDontShowAgain] = useState(false);
+  const [showChangePwModal, setShowChangePwModal] = useState(false);
+
+  useEffect(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const attempts = user?.changePassAttempts || 0;
+      const suppressed = user?.changePassModal === true;
+      setShowSuggestPw(attempts === 0 && !suppressed);
+    } catch {
+      setShowSuggestPw(false);
+    }
+  }, []);
+
+  const handleNeverShowAgain = async () => {
+    try {
+      const me = JSON.parse(localStorage.getItem('user') || '{}');
+      const token = localStorage.getItem('token');
+      await fetch(`${API_BASE}/users/${me._id}/preferences`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ changePassModal: true })
+      });
+      const updated = { ...me, changePassModal: true };
+      localStorage.setItem('user', JSON.stringify(updated));
+      setShowSuggestPw(false);
+    } catch {
+      setShowSuggestPw(false);
+    }
+  };
+
   useEffect(() => {
     async function fetchAcademicYear() {
       try {
@@ -182,6 +215,46 @@ export default function VPE_Dashboard() {
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr">
       <VPE_Navbar />
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64 flex flex-col md:flex-row gap-6">
+        {/* Suggest change password modal */}
+        {showSuggestPw && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h3 className="text-xl font-semibold mb-2">Change Password</h3>
+              <p className="text-sm text-gray-600 mb-4">To improve your account security, please change your password.</p>
+              <div className="flex items-center justify-between mb-4">
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={dontShowAgain} onChange={(e) => setDontShowAgain(e.target.checked)} />
+                  Don't show again
+                </label>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  className="px-4 py-2 rounded bg-gray-300"
+                  onClick={() => { if (dontShowAgain) handleNeverShowAgain(); setShowSuggestPw(false); }}
+                >
+                  Later
+                </button>
+                <button
+                  className="px-4 py-2 rounded bg-blue-900 text-white"
+                  onClick={() => { if (dontShowAgain) handleNeverShowAgain(); setShowSuggestPw(false); setShowChangePwModal(true); }}
+                >
+                  Change
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showChangePwModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold mb-2">Open Change Password</h3>
+              <p className="text-sm text-gray-600 mb-4">Open your profile and use the Change Password option.</p>
+              <div className="flex justify-end gap-2">
+                <button className="px-4 py-2 rounded bg-gray-300" onClick={() => setShowChangePwModal(false)}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Main Content */}
         <div className="flex-1">
           <div className="flex justify-between items-center mb-6">
