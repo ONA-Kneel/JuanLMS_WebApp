@@ -316,14 +316,19 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 // Delete a faculty assignment
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
+    console.log('Delete request received for assignment ID:', req.params.id);
     const assignment = await FacultyAssignment.findById(req.params.id);
     if (!assignment) {
+      console.log('Assignment not found with ID:', req.params.id);
       return res.status(404).json({ message: 'Assignment not found' });
     }
 
+    console.log('Found assignment:', assignment);
     await assignment.deleteOne();
+    console.log('Assignment deleted successfully');
     res.json({ message: 'Assignment deleted' });
   } catch (err) {
+    console.error('Error deleting assignment:', err);
     res.status(500).json({ message: err.message });
   }
 });

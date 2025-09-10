@@ -13,7 +13,7 @@ export default function Faculty_Activities() {
   const navigate = useNavigate();
   
   // Get quarter context
-  const { globalQuarter, globalTerm, globalAcademicYear } = useQuarter();
+  const { globalQuarter, globalTerm, globalAcademicYear, isLoading: quarterLoading } = useQuarter();
   
   const tabs = [
     { id: "activities-quiz", label: "Activities/Quiz" },
@@ -403,7 +403,7 @@ export default function Faculty_Activities() {
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
           <p className="text-sm font-medium text-blue-800">
             Showing activities for: <span className="font-semibold">{globalQuarter} - {globalTerm}</span>
-            <span className="text-blue-600 ml-2">({globalAcademicYear})</span>
+            <span className="text-blue-600 ml-2">({quarterLoading ? "Loading..." : globalAcademicYear})</span>
           </p>
         </div>
 

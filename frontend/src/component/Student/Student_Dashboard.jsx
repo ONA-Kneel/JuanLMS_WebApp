@@ -42,7 +42,7 @@ export default function Student_Dashboard() {
     try {
       const me = JSON.parse(localStorage.getItem('user') || '{}');
       const token = localStorage.getItem('token');
-      const api = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+      const api = import.meta.env.VITE_API_URL || "http://localhost:5000";
       await fetch(`${api}/users/${me._id}/preferences`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },

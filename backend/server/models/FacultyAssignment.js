@@ -51,13 +51,14 @@ const facultyAssignmentSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Update unique index to include schoolYear and termName
+// Update unique index to include schoolYear, termName, and subjectName
 facultyAssignmentSchema.index(
   { 
     facultyId: 1, 
     trackName: 1, 
     strandName: 1, 
     sectionName: 1, 
+    subjectName: 1,
     schoolYear: 1,
     termName: 1
   }, 

@@ -7,8 +7,43 @@ export const QuarterProvider = ({ children }) => {
   const [globalQuarter, setGlobalQuarter] = useState('Q1');
   const [globalTerm, setGlobalTerm] = useState('Term 1');
   const [globalAcademicYear, setGlobalAcademicYear] = useState('2024-2025');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load saved values from localStorage on mount
+  // Fetch active academic year from API on mount
+  useEffect(() => {
+    async function fetchActiveAcademicYear() {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          setIsLoading(false);
+          return;
+        }
+
+        const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+        const response = await fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.ok) {
+          const academicYear = await response.json();
+          if (academicYear) {
+            const yearString = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+            setGlobalAcademicYear(yearString);
+            // Update localStorage with the fetched value
+            localStorage.setItem('selectedAcademicYear', yearString);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch active academic year:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchActiveAcademicYear();
+  }, []);
+
+  // Load saved values from localStorage on mount (but don't override API-fetched academic year)
   useEffect(() => {
     const savedQuarter = localStorage.getItem('selectedQuarter');
     const savedTerm = localStorage.getItem('selectedTerm');
@@ -16,8 +51,11 @@ export const QuarterProvider = ({ children }) => {
 
     if (savedQuarter) setGlobalQuarter(savedQuarter);
     if (savedTerm) setGlobalTerm(savedTerm);
-    if (savedAcademicYear) setGlobalAcademicYear(savedAcademicYear);
-  }, []);
+    // Only use saved academic year if we haven't fetched from API yet
+    if (savedAcademicYear && !isLoading) {
+      setGlobalAcademicYear(savedAcademicYear);
+    }
+  }, [isLoading]);
 
   // Save to localStorage whenever values change
   useEffect(() => {
@@ -94,6 +132,7 @@ export const QuarterProvider = ({ children }) => {
     globalQuarter,
     globalTerm,
     globalAcademicYear,
+    isLoading,
     
     // Setters
     setGlobalQuarter: updateQuarter,

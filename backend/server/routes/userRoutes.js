@@ -228,7 +228,7 @@ userRoutes.get('/users/check-schoolid', async (req, res) => {
 });
 
 // Add GET /users/active for all non-archived users (no pagination, for search/autocomplete)
-userRoutes.get("/users/active", async (req, res) => {
+userRoutes.get("/users/active", authenticateToken, async (req, res) => {
     try {
         const users = await User.find({ isArchived: { $ne: true } });
         const decryptedUsers = users.map(user => ({

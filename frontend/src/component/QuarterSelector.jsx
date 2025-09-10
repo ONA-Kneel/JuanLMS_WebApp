@@ -6,6 +6,7 @@ const QuarterSelector = ({ showTitle = true, className = "" }) => {
     globalQuarter,
     globalTerm,
     globalAcademicYear,
+    isLoading,
     setGlobalQuarter,
     getAvailableQuarters,
     getCurrentQuarterInfo
@@ -34,7 +35,7 @@ const QuarterSelector = ({ showTitle = true, className = "" }) => {
             Academic Year
           </label>
           <div className="w-full p-2 border border-gray-200 rounded-md bg-gray-50 text-gray-700">
-            {globalAcademicYear}
+            {isLoading ? "Loading..." : globalAcademicYear}
           </div>
         </div>
 
