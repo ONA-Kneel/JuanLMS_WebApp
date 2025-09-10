@@ -21,6 +21,7 @@ export const QuarterProvider = ({ children }) => {
 
   // Save to localStorage whenever values change
   useEffect(() => {
+    console.log('🎯 QuarterContext: Quarter changed to', globalQuarter);
     localStorage.setItem('selectedQuarter', globalQuarter);
   }, [globalQuarter]);
 
@@ -33,6 +34,7 @@ export const QuarterProvider = ({ children }) => {
   }, [globalAcademicYear]);
 
   const updateQuarter = (quarter) => {
+    console.log('🎯 QuarterContext: Updating quarter from', globalQuarter, 'to', quarter);
     setGlobalQuarter(quarter);
   };
 

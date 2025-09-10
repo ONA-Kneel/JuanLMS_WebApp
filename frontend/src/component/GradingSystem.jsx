@@ -10,6 +10,12 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
   // Get quarter context
   const { globalQuarter, globalTerm, globalAcademicYear } = useQuarter();
   
+  console.log('🎯 GradingSystem quarter context:', {
+    globalQuarter,
+    globalTerm,
+    globalAcademicYear
+  });
+  
   const [facultyClasses, setFacultyClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
@@ -674,6 +680,14 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
       const performanceTasksRaw = parseFloat(cells[4]) || 0; // E
       const performanceTasksHPS = parseFloat(cells[5]) || 0; // F
       const quarterlyExam = isNaN(qExam) ? 0 : qExam; // G
+      
+      console.log('📊 Excel parsing for', studentName, ':', {
+        globalQuarter,
+        cells: cells.slice(0, 7), // Show first 7 columns
+        writtenWorksRaw, writtenWorksHPS,
+        performanceTasksRaw, performanceTasksHPS,
+        quarterlyExam
+      });
 
       let gradePayload = { 
         quarter1: '', quarter2: '', quarter3: '', quarter4: '',

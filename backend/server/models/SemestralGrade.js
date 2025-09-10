@@ -98,6 +98,24 @@ const semestralGradeSchema = new mongoose.Schema({
     default: false
   },
   
+  // Quarter-specific locking
+  quarter1Locked: {
+    type: Boolean,
+    default: false
+  },
+  quarter2Locked: {
+    type: Boolean,
+    default: false
+  },
+  quarter3Locked: {
+    type: Boolean,
+    default: false
+  },
+  quarter4Locked: {
+    type: Boolean,
+    default: false
+  },
+  
   // Timestamps
   timestamp: {
     type: Date,

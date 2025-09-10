@@ -66,52 +66,82 @@ export default function Student_Grades() {
       try {
         setLoading(true);
         const token = localStorage.getItem("token");
-        const studentID = localStorage.getItem("userID");
+        let studentID = localStorage.getItem("userID");
         
-        // Try to fetch student's enrolled classes/subjects for the current term
-        const response = await fetch(`${API_BASE}/api/student-assignments/enrolled-subjects/${studentID}?termName=${currentTerm.termName}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // If userID is not available, try to get it from the JWT token
+        if (!studentID || studentID === 'undefined' || studentID === 'null') {
+          try {
+            const tokenRaw = localStorage.getItem('token');
+            if (tokenRaw) {
+              const payload = JSON.parse(atob(tokenRaw.split('.')[1] || '')) || {};
+              studentID = payload.userID || payload.userId || payload.sub;
+            }
+          } catch (e) {
+            console.error('Error parsing JWT token:', e);
+          }
+        }
         
-        if (response.ok) {
-          const data = await response.json();
-          setStudentSubjects(data.subjects || []);
-        } else {
-          // Fallback: try to get classes where student is a member
-          const classesResponse = await fetch(`${API_BASE}/classes/my-classes`, {
+        console.log('🔍 Student ID for subjects fetch:', studentID);
+        
+        // Only try to fetch subjects if we have a valid student ID
+        if (studentID && studentID !== 'undefined' && studentID !== 'null') {
+          // Try to fetch student's enrolled classes/subjects for the current term
+          const response = await fetch(`${API_BASE}/api/student-assignments/enrolled-subjects/${studentID}?termName=${currentTerm.termName}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
-          
-          if (classesResponse.ok) {
-            const classesData = await classesResponse.json();
-            // Filter classes for current term
-            const currentTermClasses = classesData.filter(cls => 
-              cls.termName === currentTerm.termName && 
-              cls.academicYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`
-            );
-            
-            // Transform classes to subjects format
-            const subjects = currentTermClasses.map(cls => ({
-              subjectCode: cls.classCode || 'N/A',
-              subjectDescription: cls.className || 'N/A',
-              quarter1: '', // Will be populated when grades are available
-              quarter2: '',
-              semestralGrade: ''
-            }));
-            
-            setStudentSubjects(subjects);
+        
+          if (response.ok) {
+            const data = await response.json();
+            setStudentSubjects(data.subjects || []);
           } else {
-            // If no specific endpoint, create sample data for demonstration
-            setStudentSubjects([
-              {
-                subjectCode: 'INT-CK-25',
-                subjectDescription: 'Introduction to Cooking',
-                quarter1: '',
+            // Fallback: try to get classes where student is a member
+            const classesResponse = await fetch(`${API_BASE}/classes/my-classes`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            if (classesResponse.ok) {
+              const classesData = await classesResponse.json();
+              // Filter classes for current term
+              const currentTermClasses = classesData.filter(cls => 
+                cls.termName === currentTerm.termName && 
+                cls.academicYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`
+              );
+              
+              // Transform classes to subjects format
+              const subjects = currentTermClasses.map(cls => ({
+                subjectCode: cls.classCode || 'N/A',
+                subjectDescription: cls.className || 'N/A',
+                quarter1: '', // Will be populated when grades are available
                 quarter2: '',
                 semestralGrade: ''
-              }
-            ]);
+              }));
+              
+              setStudentSubjects(subjects);
+            } else {
+              // If no specific endpoint, create sample data for demonstration
+              setStudentSubjects([
+                {
+                  subjectCode: 'INT-CK-25',
+                  subjectDescription: 'Introduction to Cooking',
+                  quarter1: '',
+                  quarter2: '',
+                  semestralGrade: ''
+                }
+              ]);
+            }
           }
+        } else {
+          console.log('⚠️ No valid student ID found, using fallback subjects');
+          // If no valid student ID, create sample data for demonstration
+          setStudentSubjects([
+            {
+              subjectCode: 'INT-CK-25',
+              subjectDescription: 'Introduction to Cooking',
+              quarter1: '',
+              quarter2: '',
+              semestralGrade: ''
+            }
+          ]);
         }
       } catch (error) {
         console.error('Error fetching student subjects:', error);
@@ -159,6 +189,20 @@ export default function Student_Grades() {
         }
         
         console.log('🔍 Fetching grades using School ID:', studentSchoolID);
+        console.log('🔍 JWT Token payload:', JSON.parse(atob(localStorage.getItem('token').split('.')[1] || '')));
+        
+        // First, test if the backend route is working
+        try {
+          const testResponse = await fetch(`${API_BASE}/api/semestral-grades/test`);
+          if (testResponse.ok) {
+            const testData = await testResponse.json();
+            console.log('✅ Backend route test successful:', testData);
+          } else {
+            console.error('❌ Backend route test failed:', testResponse.status);
+          }
+        } catch (testError) {
+          console.error('❌ Backend route test error:', testError);
+        }
         
         // Try to fetch grades from the Semestral_Grades_Collection endpoint using schoolID
         const response = await fetch(`${API_BASE}/api/semestral-grades/student/${studentSchoolID}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
@@ -186,6 +230,10 @@ export default function Student_Grades() {
             setGradesLoaded(transformedGrades.length);
             return; // Exit early since we got grades from the new endpoint
           }
+        } else {
+          // Log the actual error response
+          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+          console.error('❌ Semestral grades API error:', response.status, errorData);
         }
         
         // Fallback: Try to fetch from traditional grades endpoint

@@ -7,6 +7,15 @@ import SemestralDraft from '../models/SemestralDraft.js';
 
 const router = express.Router();
 
+// Test endpoint to verify the route is working
+router.get('/test', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Semestral grades route is working',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Save individual student grades
 router.post('/save', authenticateToken, async (req, res) => {
   try {
@@ -151,6 +160,178 @@ router.post('/save', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to save grades',
+      error: error.message
+    });
+  }
+});
+
+// Save specific quarter grades for multiple students
+router.post('/save-quarter', authenticateToken, async (req, res) => {
+  try {
+    const {
+      classID,
+      className,
+      academicYear,
+      termName,
+      facultyID,
+      section,
+      quarter,
+      students
+    } = req.body;
+
+    // Validate required fields
+    if (!classID || !academicYear || !termName || !facultyID || !section || !quarter || !students || !Array.isArray(students)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: classID, academicYear, termName, facultyID, section, quarter, students array'
+      });
+    }
+
+    // Check if faculty has permission
+    if (req.user.role !== 'faculty') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Faculty only.'
+      });
+    }
+
+    const results = [];
+    const errors = [];
+
+    // Process each student's grades for the specific quarter
+    for (const studentData of students) {
+      try {
+        const {
+          studentID,
+          schoolID,
+          studentName,
+          subjectCode,
+          subjectName,
+          grades
+        } = studentData;
+
+        if (!schoolID || !studentName || !subjectCode) {
+          errors.push(`Missing required fields for student ${studentName}`);
+          continue;
+        }
+
+        // Validate the specific quarter grade
+        if (grades[quarter] !== null && grades[quarter] !== undefined && grades[quarter] !== '') {
+          const grade = parseFloat(grades[quarter]);
+          if (isNaN(grade) || grade < 0 || grade > 100) {
+            errors.push(`Invalid ${quarter} grade for ${studentName}: must be between 0-100`);
+            continue;
+          }
+        }
+
+        // Find existing grade record or create new one
+        let gradeRecord = await SemestralGrade.findOne({
+          schoolID,
+          subjectCode,
+          academicYear,
+          termName
+        });
+
+        if (gradeRecord) {
+          // Update existing record - only update the specific quarter
+          gradeRecord.grades[quarter] = grades[quarter] || null;
+          
+          // Recalculate semester final grade if both quarters for the term are available
+          if (termName === 'Term 1' && grades.quarter1 && grades.quarter2) {
+            gradeRecord.grades.semesterFinal = (parseFloat(grades.quarter1) + parseFloat(grades.quarter2)) / 2;
+          } else if (termName === 'Term 2' && grades.quarter3 && grades.quarter4) {
+            gradeRecord.grades.semesterFinal = (parseFloat(grades.quarter3) + parseFloat(grades.quarter4)) / 2;
+          }
+          
+          // Recalculate remarks based on semester final
+          if (gradeRecord.grades.semesterFinal !== null) {
+            const semesterFinal = gradeRecord.grades.semesterFinal;
+            if (semesterFinal >= 85) {
+              gradeRecord.grades.remarks = 'PASSED';
+            } else if (semesterFinal >= 80) {
+              gradeRecord.grades.remarks = 'INCOMPLETE';
+            } else if (semesterFinal >= 75) {
+              gradeRecord.grades.remarks = 'REPEAT';
+            } else {
+              gradeRecord.grades.remarks = 'FAILED';
+            }
+          }
+          
+          // Mark the specific quarter as locked
+          gradeRecord[`${quarter}Locked`] = true;
+          gradeRecord.lastUpdated = new Date();
+          
+          await gradeRecord.save();
+        } else {
+          // Create new record
+          const newGrades = { ...grades };
+          
+          // Calculate semester final grade if both quarters for the term are available
+          if (termName === 'Term 1' && grades.quarter1 && grades.quarter2) {
+            newGrades.semesterFinal = (parseFloat(grades.quarter1) + parseFloat(grades.quarter2)) / 2;
+          } else if (termName === 'Term 2' && grades.quarter3 && grades.quarter4) {
+            newGrades.semesterFinal = (parseFloat(grades.quarter3) + parseFloat(grades.quarter4)) / 2;
+          }
+          
+          // Calculate remarks
+          if (newGrades.semesterFinal !== null) {
+            const semesterFinal = newGrades.semesterFinal;
+            if (semesterFinal >= 85) {
+              newGrades.remarks = 'PASSED';
+            } else if (semesterFinal >= 80) {
+              newGrades.remarks = 'INCOMPLETE';
+            } else if (semesterFinal >= 75) {
+              newGrades.remarks = 'REPEAT';
+            } else {
+              newGrades.remarks = 'FAILED';
+            }
+          } else {
+            newGrades.remarks = 'INCOMPLETE';
+          }
+
+          gradeRecord = new SemestralGrade({
+            studentId: studentID,
+            schoolID,
+            studentName,
+            subjectCode,
+            subjectName,
+            classID,
+            section,
+            academicYear,
+            termName,
+            facultyID,
+            grades: newGrades,
+            [`${quarter}Locked`]: true, // Mark specific quarter as locked
+            isLocked: false // Overall record is not locked yet
+          });
+
+          await gradeRecord.save();
+        }
+
+        results.push({
+          studentName,
+          success: true,
+          gradeId: gradeRecord._id,
+          quarterPosted: quarter
+        });
+
+      } catch (error) {
+        errors.push(`Error processing ${studentData.studentName}: ${error.message}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Processed ${results.length} students successfully for ${quarter}`,
+      results,
+      errors: errors.length > 0 ? errors : undefined
+    });
+
+  } catch (error) {
+    console.error('Error saving quarter grades:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to save quarter grades',
       error: error.message
     });
   }
@@ -342,7 +523,17 @@ router.post('/save-bulk', authenticateToken, async (req, res) => {
 router.post('/save-draft', authenticateToken, async (req, res) => {
   try {
     const { schoolID, subjectCode, classID, section, academicYear, termName, facultyID, grades, breakdownByQuarter, studentId, studentName } = req.body;
+    
+    console.log('🔍 save-draft endpoint called with:', {
+      schoolID, subjectCode, classID, section, academicYear, termName, facultyID,
+      hasGrades: !!grades, hasBreakdown: !!breakdownByQuarter, studentId, studentName
+    });
+    
     if (!schoolID || !subjectCode || !classID || !section || !academicYear || !termName || !facultyID) {
+      console.log('❌ Missing required fields:', {
+        schoolID: !!schoolID, subjectCode: !!subjectCode, classID: !!classID, 
+        section: !!section, academicYear: !!academicYear, termName: !!termName, facultyID: !!facultyID
+      });
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
     const filter = { schoolID, subjectCode, academicYear, termName };
@@ -481,11 +672,19 @@ router.get('/student/:schoolID', authenticateToken, async (req, res) => {
   try {
     const { schoolID } = req.params;
     
-    // Students can only view their own grades
-    if (req.user.role === 'student') {
+    console.log('🔍 Student grades API called:', {
+      schoolID,
+      userRole: req.user.role,
+      userSchoolID: req.user.schoolID,
+      userID: req.user.userID
+    });
+    
+    // Students can only view their own grades (check both 'student' and 'students' roles)
+    if (req.user.role === 'student' || req.user.role === 'students') {
       const studentSchoolID = req.user.schoolID;
       const studentUserID = req.user.userID;
       if (studentSchoolID !== schoolID && studentUserID !== schoolID) {
+        console.log('❌ Access denied for student:', { studentSchoolID, studentUserID, requestedSchoolID: schoolID });
         return res.status(403).json({
           success: false,
           message: 'Access denied. You can only view your own grades.'
@@ -493,14 +692,45 @@ router.get('/student/:schoolID', authenticateToken, async (req, res) => {
       }
     }
 
-    // Support lookup by either schoolID or userId stored as studentId in records
-    const grades = await SemestralGrade.find({
-      $or: [
-        { schoolID: schoolID },
-        { studentId: schoolID }
-      ]
-    })
-      .sort({ academicYear: -1, termName: 1, subjectName: 1 });
+    // Query by schoolID only (studentId is ObjectId, not string)
+    // For students, only return posted grades (isLocked: true)
+    const query = {
+      schoolID: schoolID
+    };
+    
+    // If the user is a student, only show posted grades (check both 'student' and 'students' roles)
+    if (req.user.role === 'student' || req.user.role === 'students') {
+      query.isLocked = true;
+    }
+    
+    console.log('🔍 Database query:', query);
+    
+    // Let's also check what's actually in the database
+    try {
+      const allGrades = await SemestralGrade.find({}).limit(5);
+      console.log('🔍 Sample grades in database:', allGrades.map(g => ({
+        schoolID: g.schoolID,
+        studentId: g.studentId,
+        subjectCode: g.subjectCode,
+        isLocked: g.isLocked
+      })));
+    } catch (sampleError) {
+      console.error('❌ Error fetching sample grades:', sampleError);
+    }
+    
+    let grades;
+    try {
+      grades = await SemestralGrade.find(query)
+        .sort({ academicYear: -1, termName: 1, subjectName: 1 });
+      console.log('🔍 Found grades:', grades.length);
+    } catch (dbError) {
+      console.error('❌ Database query error:', dbError);
+      return res.status(500).json({
+        success: false,
+        message: 'Database query failed',
+        error: dbError.message
+      });
+    }
 
     if (grades.length === 0) {
       return res.json({
@@ -516,7 +746,8 @@ router.get('/student/:schoolID', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching student grades:', error);
+    console.error('❌ Error fetching student grades:', error);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch grades',
@@ -529,6 +760,15 @@ router.get('/student/:schoolID', authenticateToken, async (req, res) => {
 router.get('/class/:classID', authenticateToken, async (req, res) => {
   try {
     const { classID } = req.params;
+    const { termName, academicYear, quarter } = req.query;
+    
+    console.log('🔍 Class grades API called:', {
+      classID,
+      termName,
+      academicYear,
+      quarter,
+      userRole: req.user.role
+    });
     
     // Only faculty can view class grades
     if (req.user.role !== 'faculty') {
@@ -538,7 +778,14 @@ router.get('/class/:classID', authenticateToken, async (req, res) => {
       });
     }
 
-    const grades = await SemestralGrade.find({ classID })
+    // Build query with filters
+    const query = { classID };
+    if (termName) query.termName = termName;
+    if (academicYear) query.academicYear = academicYear;
+    
+    console.log('🔍 Database query:', query);
+    
+    const grades = await SemestralGrade.find(query)
       .sort({ studentName: 1, academicYear: -1, termName: 1 });
 
     if (grades.length === 0) {
