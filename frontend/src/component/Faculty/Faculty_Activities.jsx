@@ -124,68 +124,72 @@ export default function Faculty_Activities() {
     fetchFacultyClasses();
   }, [academicYear, currentTerm]);
 
-  // Helper: filter items so they belong to one of the active faculty classes for this term
-  const filterByActiveClassesInTerm = (items) => {
-    if (!Array.isArray(items) || facultyClasses.length === 0) return [];
-    const allowedCodes = new Set(facultyClasses.map((c) => c.classCode).filter(Boolean));
-    const allowedIds = new Set(facultyClasses.map((c) => c.classID).filter(Boolean));
-    return items.filter((item) => {
-      const ci = item.classInfo || item.class || {};
-      const code = ci.classCode || item.classCode;
-      const id = ci.classID || item.classID || item.classId;
-      return (code && allowedCodes.has(code)) || (id && allowedIds.has(id));
-    });
-  };
 
   // Define fetchActivitiesAndQuizzes function
   const fetchActivitiesAndQuizzes = async () => {
       try {
         const token = localStorage.getItem("token");
         
-        // Fetch assignments for selected quarter
-        const activityRes = await fetch(`${API_BASE}/assignments?quarter=${globalQuarter}&termName=${globalTerm}&academicYear=${globalAcademicYear}`, {
-          headers: { Authorization: `Bearer ${token}` },
+        // Fetch assignments and quizzes per class (same approach as ClassContent)
+        const allActivities = [];
+        const allQuizzes = [];
+        
+        for (const facultyClass of facultyClasses) {
+          try {
+            // Fetch assignments for this class
+            const activityRes = await fetch(`${API_BASE}/assignments?classID=${facultyClass.classID}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            
+            // Fetch quizzes for this class
+            const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${facultyClass.classID}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            
+            if (activityRes.ok) {
+              const activityData = await activityRes.json();
+              if (Array.isArray(activityData)) {
+                allActivities.push(...activityData);
+              }
+            }
+            
+            if (quizRes.ok) {
+              const quizData = await quizRes.json();
+              if (Array.isArray(quizData)) {
+                allQuizzes.push(...quizData);
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to fetch activities for class ${facultyClass.classID}:`, err);
+          }
+        }
+        
+        // Filter activities by quarter (client-side filtering)
+        const filteredActivities = allActivities.filter(activity => {
+          // Check if activity matches the selected quarter
+          return activity.quarter === globalQuarter;
         });
         
-        // Fetch quizzes per class for selected quarter
-        const allQuizzes = [];
-        for (const facultyClass of facultyClasses) {
-          const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${facultyClass.classID}&quarter=${globalQuarter}&termName=${globalTerm}&academicYear=${globalAcademicYear}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (quizRes.ok) {
-            const quizData = await quizRes.json();
-            allQuizzes.push(...(Array.isArray(quizData) ? quizData : []));
-          }
-        }
+        // Filter quizzes by quarter (client-side filtering)
+        const filteredQuizzes = allQuizzes.filter(quiz => {
+          // Check if quiz matches the selected quarter
+          return quiz.quarter === globalQuarter;
+        });
         
-        if (activityRes.ok) {
-          const activityData = await activityRes.json();
-          
-          // Debug logging
-          console.log('[Faculty_Activities] Raw activity data:', activityData);
-          if (activityData.length > 0) {
-            console.log('[Faculty_Activities] First activity sample:', activityData[0]);
-            console.log('[Faculty_Activities] First activity activityType:', activityData[0].activityType);
-          }
-          
-          // Only keep items that belong to the faculty's active classes for this year/term
-          const filteredActivities = filterByActiveClassesInTerm(activityData);
-          const filteredQuizzes = allQuizzes; // No filtering needed since we fetched per class
-          
-          console.log('[Faculty_Activities] Filtered activities:', filteredActivities);
-          if (filteredActivities.length > 0) {
-            console.log('[Faculty_Activities] First filtered activity activityType:', filteredActivities[0].activityType);
-          }
-          
-          setActivities(filteredActivities);
-          setQuizzes(filteredQuizzes);
-          
-          // Fetch submissions for ready to grade
-          await fetchReadyToGradeItems(filteredActivities, filteredQuizzes, token);
-          // Fetch graded items
-          await fetchGradedItems(filteredActivities, filteredQuizzes, token);
-        }
+        // Debug logging
+        console.log('[Faculty_Activities] Raw activity data:', allActivities);
+        console.log('[Faculty_Activities] Filtered activities by quarter:', filteredActivities);
+        console.log('[Faculty_Activities] Raw quiz data:', allQuizzes);
+        console.log('[Faculty_Activities] Filtered quizzes by quarter:', filteredQuizzes);
+        
+        setActivities(filteredActivities);
+        setQuizzes(filteredQuizzes);
+        
+        // Fetch submissions for ready to grade
+        await fetchReadyToGradeItems(filteredActivities, filteredQuizzes, token);
+        // Fetch graded items
+        await fetchGradedItems(filteredActivities, filteredQuizzes, token);
+        
       } catch (err) {
         console.error("Failed to fetch activities or quizzes", err);
       }
@@ -193,10 +197,10 @@ export default function Faculty_Activities() {
 
   // Refetch activities when quarter changes
   useEffect(() => {
-    if (globalQuarter && globalTerm && globalAcademicYear && facultyClasses.length > 0) {
+    if (globalQuarter && facultyClasses.length > 0) {
       fetchActivitiesAndQuizzes();
     }
-  }, [globalQuarter, globalTerm, globalAcademicYear, facultyClasses]);
+  }, [globalQuarter, facultyClasses]);
 
   // Run only after faculty classes are resolved for the term
   useEffect(() => {
