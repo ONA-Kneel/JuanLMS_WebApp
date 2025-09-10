@@ -184,12 +184,8 @@ semestralGradeSchema.methods.calculateRemarks = function() {
     return 'INCOMPLETE';
   }
   
-  if (semesterFinal >= 85) {
+  if (semesterFinal >= 75) {
     return 'PASSED';
-  } else if (semesterFinal >= 80) {
-    return 'INCOMPLETE';
-  } else if (semesterFinal >= 75) {
-    return 'REPEAT';
   } else {
     return 'FAILED';
   }

@@ -89,12 +89,8 @@ router.post('/save', authenticateToken, async (req, res) => {
       if (gradeRecord.grades.semesterFinal !== null && gradeRecord.grades.semesterFinal !== undefined && gradeRecord.grades.semesterFinal !== '') {
         const semesterFinal = parseFloat(gradeRecord.grades.semesterFinal);
         if (!isNaN(semesterFinal)) {
-          if (semesterFinal >= 85) {
+          if (semesterFinal >= 75) {
             gradeRecord.grades.remarks = 'PASSED';
-          } else if (semesterFinal >= 80) {
-            gradeRecord.grades.remarks = 'INCOMPLETE';
-          } else if (semesterFinal >= 75) {
-            gradeRecord.grades.remarks = 'REPEAT';
           } else {
             gradeRecord.grades.remarks = 'FAILED';
           }
@@ -129,12 +125,8 @@ router.post('/save', authenticateToken, async (req, res) => {
       if (newGrades.semesterFinal !== null && newGrades.semesterFinal !== undefined && newGrades.semesterFinal !== '') {
         const semesterFinal = parseFloat(newGrades.semesterFinal);
         if (!isNaN(semesterFinal)) {
-          if (semesterFinal >= 85) {
+          if (semesterFinal >= 75) {
             newGrades.remarks = 'PASSED';
-          } else if (semesterFinal >= 80) {
-            newGrades.remarks = 'INCOMPLETE';
-          } else if (semesterFinal >= 75) {
-            newGrades.remarks = 'REPEAT';
           } else {
             newGrades.remarks = 'FAILED';
           }
@@ -267,12 +259,8 @@ router.post('/save-quarter', authenticateToken, async (req, res) => {
           if (gradeRecord.grades.semesterFinal !== null && gradeRecord.grades.semesterFinal !== undefined && gradeRecord.grades.semesterFinal !== '') {
             const semesterFinal = parseFloat(gradeRecord.grades.semesterFinal);
             if (!isNaN(semesterFinal)) {
-              if (semesterFinal >= 85) {
+              if (semesterFinal >= 75) {
                 gradeRecord.grades.remarks = 'PASSED';
-              } else if (semesterFinal >= 80) {
-                gradeRecord.grades.remarks = 'INCOMPLETE';
-              } else if (semesterFinal >= 75) {
-                gradeRecord.grades.remarks = 'REPEAT';
               } else {
                 gradeRecord.grades.remarks = 'FAILED';
               }
@@ -308,12 +296,8 @@ router.post('/save-quarter', authenticateToken, async (req, res) => {
           if (newGrades.semesterFinal !== null && newGrades.semesterFinal !== undefined && newGrades.semesterFinal !== '') {
             const semesterFinal = parseFloat(newGrades.semesterFinal);
             if (!isNaN(semesterFinal)) {
-              if (semesterFinal >= 85) {
+              if (semesterFinal >= 75) {
                 newGrades.remarks = 'PASSED';
-              } else if (semesterFinal >= 80) {
-                newGrades.remarks = 'INCOMPLETE';
-              } else if (semesterFinal >= 75) {
-                newGrades.remarks = 'REPEAT';
               } else {
                 newGrades.remarks = 'FAILED';
               }
@@ -472,15 +456,11 @@ router.post('/save-bulk', authenticateToken, async (req, res) => {
           if (gradeRecord.grades.semesterFinal !== null && gradeRecord.grades.semesterFinal !== undefined && gradeRecord.grades.semesterFinal !== '') {
             const semesterFinal = parseFloat(gradeRecord.grades.semesterFinal);
             if (!isNaN(semesterFinal)) {
-              if (semesterFinal >= 85) {
-                gradeRecord.grades.remarks = 'PASSED';
-              } else if (semesterFinal >= 80) {
-                gradeRecord.grades.remarks = 'INCOMPLETE';
-              } else if (semesterFinal >= 75) {
-                gradeRecord.grades.remarks = 'REPEAT';
-              } else {
-                gradeRecord.grades.remarks = 'FAILED';
-              }
+          if (semesterFinal >= 75) {
+            gradeRecord.grades.remarks = 'PASSED';
+          } else {
+            gradeRecord.grades.remarks = 'FAILED';
+          }
             } else {
               gradeRecord.grades.remarks = 'INCOMPLETE';
             }
@@ -512,12 +492,8 @@ router.post('/save-bulk', authenticateToken, async (req, res) => {
           if (newGrades.semesterFinal !== null && newGrades.semesterFinal !== undefined && newGrades.semesterFinal !== '') {
             const semesterFinal = parseFloat(newGrades.semesterFinal);
             if (!isNaN(semesterFinal)) {
-              if (semesterFinal >= 85) {
+              if (semesterFinal >= 75) {
                 newGrades.remarks = 'PASSED';
-              } else if (semesterFinal >= 80) {
-                newGrades.remarks = 'INCOMPLETE';
-              } else if (semesterFinal >= 75) {
-                newGrades.remarks = 'REPEAT';
               } else {
                 newGrades.remarks = 'FAILED';
               }
@@ -1174,15 +1150,11 @@ router.put('/update/:gradeId', authenticateToken, async (req, res) => {
     if (gradeRecord.grades.semesterFinal !== null && gradeRecord.grades.semesterFinal !== undefined && gradeRecord.grades.semesterFinal !== '') {
       const semesterFinal = parseFloat(gradeRecord.grades.semesterFinal);
       if (!isNaN(semesterFinal)) {
-        if (semesterFinal >= 85) {
-          gradeRecord.grades.remarks = 'PASSED';
-        } else if (semesterFinal >= 80) {
-          gradeRecord.grades.remarks = 'INCOMPLETE';
-        } else if (semesterFinal >= 75) {
-          gradeRecord.grades.remarks = 'REPEAT';
-        } else {
-          gradeRecord.grades.remarks = 'FAILED';
-        }
+          if (semesterFinal >= 75) {
+            gradeRecord.grades.remarks = 'PASSED';
+          } else {
+            gradeRecord.grades.remarks = 'FAILED';
+          }
       } else {
         gradeRecord.grades.remarks = 'INCOMPLETE';
       }

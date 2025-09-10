@@ -1115,14 +1115,10 @@ export default function Faculty_Grades() {
             const q2Num = parseFloat(quarter2) || 0;
             
             const semesterGrade = (q1Num + q2Num) / 2;
-            let remarks = 'PASSED';
+            let remarks = 'FAILED';
             
-            if (semesterGrade < 75) {
-              remarks = 'FAILED';
-            } else if (semesterGrade < 80) {
-              remarks = 'REPEAT';
-            } else if (semesterGrade < 85) {
-              remarks = 'INCOMPLETE';
+            if (semesterGrade >= 75) {
+              remarks = 'PASSED';
             }
             
             // Ensure semester final is always computed and not user-editable
@@ -1145,14 +1141,10 @@ export default function Faculty_Grades() {
             const q4Num = parseFloat(quarter4) || 0;
             
             const semesterGrade = (q3Num + q4Num) / 2;
-            let remarks = 'PASSED';
+            let remarks = 'FAILED';
             
-            if (semesterGrade < 75) {
-              remarks = 'FAILED';
-            } else if (semesterGrade < 80) {
-              remarks = 'REPEAT';
-            } else if (semesterGrade < 85) {
-              remarks = 'INCOMPLETE';
+            if (semesterGrade >= 75) {
+              remarks = 'PASSED';
             }
             
             // Ensure semester final is always computed and not user-editable
@@ -1175,14 +1167,10 @@ export default function Faculty_Grades() {
             const q4Num = parseFloat(quarter4) || 0;
             
             const semesterGrade = (q3Num + q4Num) / 2;
-            let remarks = 'PASSED';
+            let remarks = 'FAILED';
             
-            if (semesterGrade < 75) {
-              remarks = 'FAILED';
-            } else if (semesterGrade < 80) {
-              remarks = 'REPEAT';
-            } else if (semesterGrade < 85) {
-              remarks = 'INCOMPLETE';
+            if (semesterGrade >= 75) {
+              remarks = 'PASSED';
             }
             
             // Ensure semester final is always computed and not user-editable
@@ -1205,14 +1193,10 @@ export default function Faculty_Grades() {
             const q2Num = parseFloat(quarter2) || 0;
             
             const semesterGrade = (q1Num + q2Num) / 2;
-            let remarks = 'PASSED';
+            let remarks = 'FAILED';
             
-            if (semesterGrade < 75) {
-              remarks = 'FAILED';
-            } else if (semesterGrade < 80) {
-              remarks = 'REPEAT';
-            } else if (semesterGrade < 85) {
-              remarks = 'INCOMPLETE';
+            if (semesterGrade >= 75) {
+              remarks = 'PASSED';
             }
             
             // Ensure semester final is always computed and not user-editable
@@ -1824,14 +1808,10 @@ export default function Faculty_Grades() {
             const q2Num = parseFloat(quarter2) || 0;
             
             const semesterGrade = (q1Num + q2Num) / 2;
-            let remarks = 'PASSED';
+            let remarks = 'FAILED';
             
-            if (semesterGrade < 75) {
-              remarks = 'FAILED';
-            } else if (semesterGrade < 80) {
-              remarks = 'REPEAT';
-            } else if (semesterGrade < 85) {
-              remarks = 'INCOMPLETE';
+            if (semesterGrade >= 75) {
+              remarks = 'PASSED';
             }
             
             updatedGrades[subjectId].semesterFinal = semesterGrade.toFixed(2);
@@ -1849,14 +1829,10 @@ export default function Faculty_Grades() {
             const q4Num = parseFloat(quarter4) || 0;
             
             const semesterGrade = (q3Num + q4Num) / 2;
-            let remarks = 'PASSED';
+            let remarks = 'FAILED';
             
-            if (semesterGrade < 75) {
-              remarks = 'FAILED';
-            } else if (semesterGrade < 80) {
-              remarks = 'REPEAT';
-            } else if (semesterGrade < 85) {
-              remarks = 'INCOMPLETE';
+            if (semesterGrade >= 75) {
+              remarks = 'PASSED';
             }
             
             updatedGrades[subjectId].semesterFinal = semesterGrade.toFixed(2);
@@ -1874,14 +1850,10 @@ export default function Faculty_Grades() {
             const q2Num = parseFloat(quarter2) || 0;
             
             const semesterGrade = (q1Num + q2Num) / 2;
-            let remarks = 'PASSED';
+            let remarks = 'FAILED';
             
-            if (semesterGrade < 75) {
-              remarks = 'FAILED';
-            } else if (semesterGrade < 80) {
-              remarks = 'REPEAT';
-            } else if (semesterGrade < 85) {
-              remarks = 'INCOMPLETE';
+            if (semesterGrade >= 75) {
+              remarks = 'PASSED';
             }
             
             updatedGrades[subjectId].semesterFinal = semesterGrade.toFixed(2);
@@ -1924,12 +1896,8 @@ export default function Faculty_Grades() {
     
     const grade = parseFloat(semesterGrade) || 0;
     
-    if (grade >= 85) {
+    if (grade >= 75) {
       return 'PASSED';
-    } else if (grade >= 80) {
-      return 'INCOMPLETE';
-    } else if (grade >= 75) {
-      return 'REPEAT';
     } else {
       return 'FAILED';
     }
@@ -2335,8 +2303,8 @@ export default function Faculty_Grades() {
         '', // Empty for HPS sub-header
         '', // Empty for PS sub-header  
         '', // Empty for WS sub-header
-        // Initial Grade Quarterly - two columns
-        'INITIAL GRA QUARTERLY',
+        // Remove INITIAL GRA QUARTERLY header - just leave empty
+        '',
         '' // Empty for second quarterly column
       ];
 
@@ -2345,7 +2313,7 @@ export default function Faculty_Grades() {
         '', '', // Student info columns
         'RAW', 'HPS', 'PS', 'WS', // Written Works sub-headers
         'RAW', 'HPS', 'PS', 'WS', // Performance Tasks sub-headers
-        'Initial', 'Final' // Initial Grade Quarterly sub-headers
+        '**Initial**', '**Final**' // Bold the Initial and Final headers
       ];
 
       const csvRows = [
@@ -2376,6 +2344,23 @@ export default function Faculty_Grades() {
         const initialGrade = wwWS + ptWS;
         const quarterlyGrade = (initialGrade * 0.8) + (exam * 0.2);
 
+        // Get the quarter final grade from the student's grades data
+        // Map Q1 -> quarter1, Q2 -> quarter2, etc.
+        const quarterFieldMap = {
+          'Q1': 'quarter1',
+          'Q2': 'quarter2', 
+          'Q3': 'quarter3',
+          'Q4': 'quarter4'
+        };
+        const currentQuarterField = quarterFieldMap[globalQuarter];
+        let quarterFinalGrade = currentQuarterField ? studentGrades[currentQuarterField] || '' : '';
+        
+        // Fallback: try to get from breakdownByQuarter if direct access fails
+        if (!quarterFinalGrade && studentGrades.breakdownByQuarter && studentGrades.breakdownByQuarter[globalQuarter]) {
+          quarterFinalGrade = studentGrades.breakdownByQuarter[globalQuarter].quarterlyGrade || '';
+        }
+        
+
         const row = [
           student.schoolID || student._id,
           `"${student.name}"`,
@@ -2391,7 +2376,7 @@ export default function Faculty_Grades() {
           ptWS.toFixed(2),
           // Initial Grade Quarterly (two columns)
           initialGrade.toFixed(2),
-          quarterlyGrade.toFixed(2)
+          quarterFinalGrade || quarterlyGrade.toFixed(2) // Show quarter final grade if available, otherwise calculated grade
         ];
 
         csvRows.push(row.join(','));
@@ -2413,7 +2398,7 @@ export default function Faculty_Grades() {
 
       showModal(
         'Export Successful', 
-        `Successfully exported ${students.length} student grades to Excel format.\n\nFile includes:\n• RAW scores and HPS values\n• Calculated PS (Percentage Score)\n• Calculated WS (Weighted Score)\n• Initial Grade and Quarterly Grade calculations\n\nFile saved as: ${selectedClassObj?.className || 'Grades'}_${globalQuarter}_${currentDate}.csv`,
+        `Successfully exported ${students.length} student grades to Excel format.\n\nFile includes:\n• RAW scores and HPS values\n• Calculated PS (Percentage Score)\n• Calculated WS (Weighted Score)\n• Initial Grade and ${globalQuarter} Final Grade\n\nFile saved as: ${selectedClassObj?.className || 'Grades'}_${globalQuarter}_${currentDate}.csv`,
         'success'
       );
 
@@ -3285,8 +3270,6 @@ export default function Faculty_Grades() {
                         <option value="">Select remarks...</option>
                         <option value="PASSED">PASSED</option>
                         <option value="FAILED">FAILED</option>
-                        <option value="REPEAT">REPEAT</option>
-                        <option value="INCOMPLETE">INCOMPLETE</option>
                       </select>
                     </div>
                  </div>
@@ -3612,7 +3595,7 @@ export default function Faculty_Grades() {
                                        {studentGrades.semesterFinal || semesterGrade || '-'}
                                      </td>
                                      <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                                       {studentGrades.remarks || remarks || '-'}
+                                       {remarks || '-'}
                                      </td>
                                    </tr>
                                  );
@@ -3846,7 +3829,7 @@ export default function Faculty_Grades() {
                                        {studentGrades.semesterFinal || semesterGrade || '-'}
                                      </td>
                                      <td className="border border-gray-300 p-2 text-center font-semibold bg-gray-100">
-                                       {studentGrades.remarks || remarks || '-'}
+                                       {remarks || '-'}
                                      </td>
                                    </tr>
                                  );
