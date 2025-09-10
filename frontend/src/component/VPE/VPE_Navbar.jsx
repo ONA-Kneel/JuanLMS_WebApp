@@ -8,7 +8,7 @@ import facultyReportIcon from "../../assets/facultyreport.png";
 import postAnnouncementIcon from "../../assets/announcement.png";
 import logo5 from "../../assets/logo/Logo5.svg";
 import logo6 from "../../assets/logo/SJDD Logo.svg";
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Video } from 'lucide-react';
 
 const VPE_Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -40,6 +40,7 @@ const VPE_Navbar = () => {
         { path: "/vpe_faculty_report", icon: facultyReportIcon, label: "FACULTY REPORT" },
         { path: "/vpe_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
         { path: "/vpe_calendar", icon: calendarIcon, label: "CALENDAR" },
+        { path: "/vpe_meeting", icon: Video, label: "MEETING", isIcon: true },
         { path: "/vpe_chats", icon: chatsIcon, label: "CHATS" },
     ];
 
@@ -88,7 +89,11 @@ const VPE_Navbar = () => {
                                 className={`text-lg flex items-center space-x-3 p-2 w-full rounded-lg transition-colors duration-200
                                 ${isActive ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"} ${isNavigating ? "opacity-50 cursor-not-allowed" : ""}`}
                             >
-                                <img src={item.icon} alt={item.label} className="w-6 h-6" />
+                                {item.isIcon ? (
+                                    <item.icon className="w-6 h-6" />
+                                ) : (
+                                    <img src={item.icon} alt={item.label} className="w-6 h-6" />
+                                )}
                                 <span>{item.label}</span>
                             </button>
                         );

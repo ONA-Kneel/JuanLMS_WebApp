@@ -11,11 +11,22 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
   const fetchMeetings = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/api/meetings/class/${classId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      let response;
+      
+      // Handle direct invitation meetings differently
+      if (classId === 'direct-invite') {
+        response = await fetch(`${API_BASE}/api/meetings/direct-invite`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+      } else {
+        response = await fetch(`${API_BASE}/api/meetings/class/${classId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+      }
 
       const result = await response.json();
 
@@ -288,9 +299,34 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
                         </div>
                         <div className="flex items-center gap-1">
                           <Users className="w-4 h-4" />
-                          {meeting.participantCount || 0} participants
+                          {meeting.isDirectInvite 
+                            ? `${meeting.invitedUsers?.length || 0} invited`
+                            : `${meeting.participantCount || 0} participants`
+                          }
                         </div>
                       </div>
+                      
+                      {/* Show invited users for direct invitation meetings */}
+                      {meeting.isDirectInvite && meeting.invitedUsers && meeting.invitedUsers.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs text-gray-500 mb-1">Invited:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {meeting.invitedUsers.slice(0, 5).map((invitedUser, index) => (
+                              <span
+                                key={index}
+                                className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs"
+                              >
+                                {invitedUser.name}
+                              </span>
+                            ))}
+                            {meeting.invitedUsers.length > 5 && (
+                              <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+                                +{meeting.invitedUsers.length - 5} more
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     <div className="flex items-center gap-2 ml-4">

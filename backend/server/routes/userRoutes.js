@@ -24,6 +24,39 @@ const JWT_SECRET = process.env.JWT_SECRET || "yourSuperSecretKey123"; // 👈 us
 
 // ------------------ CRUD ROUTES ------------------
 
+// Get all users for meeting invitations (VPE and Principal only)
+userRoutes.get('/users/all', authenticateToken, async (req, res) => {
+  try {
+    console.log('[USERS] User role:', req.user.role, 'User ID:', req.user._id);
+    // Only VPE and Principal can access this endpoint
+    if (!['vpe', 'principal', 'vice president of education'].includes(req.user.role)) {
+      console.log('[USERS] Access denied for role:', req.user.role);
+      return res.status(403).json({ error: 'Access denied. Only VPE and Principal can view all users.' });
+    }
+
+    const users = await User.find({ 
+      isArchived: { $ne: true },
+      status: { $ne: 'inactive' }
+    }).select('-password'); // Exclude password field
+
+    const decryptedUsers = users.map(user => ({
+      _id: user._id,
+      firstName: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
+      lastName: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
+      email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+      role: user.role,
+      status: user.status,
+      isArchived: user.isArchived,
+      createdAt: user.createdAt
+    }));
+
+    res.json(decryptedUsers);
+  } catch (err) {
+    console.error('Failed to fetch all users:', err);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
 // Get all active (non-archived) students
 userRoutes.get('/users/students', authenticateToken, async (req, res) => {
   try {
@@ -684,13 +717,18 @@ userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
     );
     // Send OTP via Brevo to Zoho Mail address
     try {
+        // Decrypt the email address before sending
+        const { decrypt } = await import('../utils/encryption.js');
+        const decryptedEmail = decrypt(user.email);
+        console.log('Decrypted email for password change OTP:', decryptedEmail);
+        
         const emailService = await import('../services/emailService.js');
         await emailService.default.sendOTP(
-            user.email, // Send to Zoho Mail address instead of personal email
+            decryptedEmail, // Send to decrypted Zoho Mail address
             user.firstname,
             otp,
             'password_change',
-            user.email
+            decryptedEmail
         );
     } catch (emailErr) {
         console.error('Error sending OTP email to Zoho Mail via Brevo:', emailErr);
@@ -748,22 +786,16 @@ userRoutes.post('/forgot-password', async (req, res) => {
     const genericMsg = 'If your email is registered, a reset link or OTP has been sent to your Zoho Mail address.';
 
     try {
-        // Find user by personalemailHash
+        // Find user by emailHash (deterministic hash for searching)
+        const crypto = await import('crypto');
         const emailHash = crypto.createHash('sha256').update(email.toLowerCase()).digest('hex');
-        const user = await db.collection('users').findOne({ personalemailHash: emailHash });
+        console.log('Searching for emailHash:', emailHash);
+        const user = await db.collection('users').findOne({ emailHash: emailHash });
         console.log('User found:', user);
-        if (!user || !user.personalemail) {
-            console.log('User not found or missing personalemail');
+        if (!user) {
+            console.log('User not found with email:', email);
             // Explicitly inform user that the email is not registered
-            return res.status(404).json({ message: 'This email is not registered. Please check that it\'s correct.' });
-        }
-        // Decrypt personal email
-        const decryptedPersonalEmail = user.getDecryptedPersonalEmail
-          ? user.getDecryptedPersonalEmail()
-          : (typeof user.personalemail === 'string' ? decrypt(user.personalemail) : '');
-        if (!decryptedPersonalEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(decryptedPersonalEmail)) {
-          console.error('Invalid or missing personal email for user:', user);
-          return res.json({ message: genericMsg });
+            return res.status(404).json({ message: 'This Zoho Mail address is not registered. Please check that it\'s correct.' });
         }
         // --- Generate OTP and expiry ---
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -779,15 +811,20 @@ userRoutes.post('/forgot-password', async (req, res) => {
         console.log('About to send OTP to Zoho Mail via EmailService...');
 
         try {
+            // Decrypt the email address before sending
+            const { decrypt } = await import('../utils/encryption.js');
+            const decryptedEmail = decrypt(user.email);
+            console.log('Decrypted email for OTP:', decryptedEmail);
+            
             const emailService = await import('../services/emailService.js');
             const result = await emailService.default.sendOTP(
-                user.email, // Send to Zoho Mail address instead of personal email
+                decryptedEmail, // Send to decrypted Zoho Mail address
                 user.firstname,
                 otp,
                 'password_reset',
-                user.email
+                decryptedEmail
             );
-            console.log('OTP email sent to Zoho Mail:', user.email, 'Result:', result);
+            console.log('OTP email sent to Zoho Mail:', decryptedEmail, 'Result:', result);
         } catch (emailErr) {
             console.error('Error sending OTP email to Zoho Mail via Brevo:', emailErr);
         }
@@ -831,18 +868,19 @@ userRoutes.get('/test-email', async (req, res) => {
 // Reset Password (OTP verification and password update)
 userRoutes.post('/reset-password', async (req, res) => {
     const db = database.getDb();
-    const { personalemail, otp, newPassword } = req.body;
+    const { email, otp, newPassword } = req.body;
 
-    if (!personalemail || !otp || !newPassword) {
+    if (!email || !otp || !newPassword) {
         return res.status(400).json({ message: 'All fields are required.' });
     }
     if (newPassword.length < 8) {
         return res.status(400).json({ message: 'Password must be at least 8 characters.' });
     }
 
-    // Find user by personalemailHash
-    const emailHash = crypto.createHash('sha256').update(personalemail.toLowerCase()).digest('hex');
-    const user = await db.collection('users').findOne({ personalemailHash: emailHash });
+    // Find user by emailHash (deterministic hash for searching)
+    const crypto = await import('crypto');
+    const emailHash = crypto.createHash('sha256').update(email.toLowerCase()).digest('hex');
+    const user = await db.collection('users').findOne({ emailHash: emailHash });
     if (!user) return res.status(404).json({ message: 'User not found.' });
 
     // --- OTP validation ---
@@ -868,13 +906,14 @@ userRoutes.post('/reset-password', async (req, res) => {
 // Validate OTP only (for password reset flow)
 userRoutes.post('/validate-otp', async (req, res) => {
     const db = database.getDb();
-    const { personalemail, otp } = req.body;
-    if (!personalemail || !otp) {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
         return res.status(400).json({ message: 'All fields are required.' });
     }
-    // Find user by personalemailHash
-    const emailHash = crypto.createHash('sha256').update(personalemail.toLowerCase()).digest('hex');
-    const user = await db.collection('users').findOne({ personalemailHash: emailHash });
+    // Find user by emailHash (deterministic hash for searching)
+    const crypto = await import('crypto');
+    const emailHash = crypto.createHash('sha256').update(email.toLowerCase()).digest('hex');
+    const user = await db.collection('users').findOne({ emailHash: emailHash });
     if (!user) return res.status(404).json({ message: 'User not found.' });
     // --- OTP validation ---
     if (
@@ -1217,6 +1256,48 @@ userRoutes.post('/test-welcome-email', async (req, res) => {
         });
     } catch (error) {
         console.error('Error sending test welcome email:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Test endpoint to send OTP email
+userRoutes.post('/test-otp-email', async (req, res) => {
+    try {
+        const { email, firstName, otp, purpose } = req.body;
+        
+        if (!email || !firstName || !otp) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "Missing required fields: email, firstName, otp" 
+            });
+        }
+
+        console.log('🧪 [TEST] Sending OTP to:', email);
+        console.log('🧪 [TEST] OTP:', otp);
+        console.log('🧪 [TEST] Purpose:', purpose || 'password_reset');
+
+        // Import and use the email service
+        const emailService = await import('../services/emailService.js');
+        
+        // Send OTP email via Brevo
+        const result = await emailService.default.sendOTP(
+            email,
+            firstName,
+            otp,
+            purpose || 'password_reset',
+            email
+        );
+
+        res.json({
+            success: true,
+            message: `OTP email sent to ${email}`,
+            result: result
+        });
+    } catch (error) {
+        console.error('Error sending test OTP email:', error);
         res.status(500).json({
             success: false,
             error: error.message

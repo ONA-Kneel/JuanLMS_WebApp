@@ -4,7 +4,8 @@ import ProfileMenu from '../ProfileMenu';
 import CreateMeetingModal from '../Meeting/CreateMeetingModal';
 import MeetingList from '../Meeting/MeetingList';
 import StreamMeetingRoom from '../Meeting/StreamMeetingRoom';
-import { Video, Users, Calendar, Plus } from 'lucide-react';
+import InvitedMeetings from '../Meeting/InvitedMeetings';
+import { Video, Users, Calendar, Plus, UserPlus } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -19,6 +20,7 @@ const Faculty_Meeting = () => {
   const [userInfo, setUserInfo] = useState({ name: '', email: '' });
   const [loading, setLoading] = useState(true);
   const [studentCounts, setStudentCounts] = useState({});
+  const [activeTab, setActiveTab] = useState('class-meetings'); // 'class-meetings' or 'invited-meetings'
 
   // Get user info from token
   useEffect(() => {
@@ -331,8 +333,43 @@ const Faculty_Meeting = () => {
           </div>
         ) : (
           <>
-            {/* Class Selector */}
+            {/* Tab Navigation */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+              <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+                <button
+                  onClick={() => setActiveTab('class-meetings')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === 'class-meetings'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Class Meetings
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('invited-meetings')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === 'invited-meetings'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <UserPlus className="w-4 h-4" />
+                    Direct Invitations
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Tab Content */}
+            {activeTab === 'class-meetings' && (
+              <>
+                {/* Class Selector */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Class for Meeting</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {classes.map((classItem) => (
@@ -431,6 +468,16 @@ const Faculty_Meeting = () => {
                   />
                 </div>
               </div>
+            )}
+              </>
+            )}
+
+            {/* Invited Meetings Tab */}
+            {activeTab === 'invited-meetings' && (
+              <InvitedMeetings
+                onJoinMeeting={handleJoinMeeting}
+                refreshTrigger={meetingRefreshTrigger}
+              />
             )}
           </>
         )}

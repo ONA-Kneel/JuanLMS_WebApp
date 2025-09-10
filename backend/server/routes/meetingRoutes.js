@@ -22,6 +22,33 @@ router.get('/class/:classID', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/meetings/direct-invite - Get all direct invitation meetings
+router.get('/direct-invite', authenticateToken, async (req, res) => {
+  try {
+    console.log('[MEETINGS] User role:', req.user.role, 'User ID:', req.user._id);
+    // Only VPE and Principal can access direct invitation meetings
+    if (!['vpe', 'principal', 'vice president of education'].includes(req.user.role)) {
+      console.log('[MEETINGS] Access denied for role:', req.user.role);
+      return res.status(403).json({ error: 'Access denied. Only VPE and Principal can view direct invitation meetings.' });
+    }
+
+    const meetings = await Meeting.find({ 
+      isDirectInvite: true,
+      $or: [
+        { createdBy: req.user._id }, // Meetings created by the current user
+        { 'invitedUsers.userId': req.user._id } // Meetings where current user is invited
+      ]
+    }).populate('createdBy', 'firstName lastName email role')
+      .populate('invitedUsers.userId', 'firstName lastName email role')
+      .sort({ createdAt: -1 });
+
+    res.json(meetings);
+  } catch (err) {
+    console.error('Error fetching direct invitation meetings:', err);
+    res.status(500).json({ error: 'Failed to fetch direct invitation meetings' });
+  }
+});
+
 // POST /api/meetings - Create a new meeting
 router.post('/', authenticateToken, async (req, res) => {
   try {
@@ -45,6 +72,60 @@ router.post('/', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error creating meeting:', err);
     res.status(500).json({ error: 'Failed to create meeting' });
+  }
+});
+
+// POST /api/meetings/direct-invite - Create a meeting with direct user invitations
+router.post('/direct-invite', authenticateToken, async (req, res) => {
+  try {
+    const { classID, title, description, scheduledTime, duration, meetingType, invitedUsers } = req.body;
+    
+    // Validate required fields
+    if (!title || !meetingType) {
+      return res.status(400).json({ error: 'Missing required fields: title and meetingType' });
+    }
+
+    if (!invitedUsers || !Array.isArray(invitedUsers) || invitedUsers.length === 0) {
+      return res.status(400).json({ error: 'At least one user must be invited' });
+    }
+
+    // Validate user roles - only VPE and Principal can create direct invitation meetings
+    if (!['vpe', 'principal', 'vice president of education'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only VPE and Principal can create direct invitation meetings' });
+    }
+
+    const newMeeting = new Meeting({
+      classID: classID || 'direct-invite', // Use direct-invite as default for direct invitations
+      title,
+      description,
+      scheduledTime,
+      duration,
+      meetingType,
+      createdBy: req.user._id,
+      status: 'scheduled',
+      createdAt: new Date(),
+      invitedUsers: invitedUsers.map(user => ({
+        userId: user.userId,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        invitedAt: new Date()
+      })),
+      isDirectInvite: true // Flag to identify direct invitation meetings
+    });
+
+    await newMeeting.save();
+    
+    console.log(`[MEETINGS] Direct invitation meeting created by ${req.user.role}:`, {
+      meetingId: newMeeting._id,
+      title: newMeeting.title,
+      invitedUsers: newMeeting.invitedUsers.length
+    });
+
+    res.status(201).json(newMeeting);
+  } catch (err) {
+    console.error('Error creating direct invitation meeting:', err);
+    res.status(500).json({ error: 'Failed to create direct invitation meeting' });
   }
 });
 
@@ -118,6 +199,26 @@ router.post('/:meetingID/leave', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error leaving meeting:', err);
     res.status(500).json({ error: 'Failed to leave meeting' });
+  }
+});
+
+// GET /api/meetings/invited - Get meetings where current user is invited
+router.get('/invited', authenticateToken, async (req, res) => {
+  try {
+    console.log('[MEETINGS] Getting invited meetings for user:', req.user._id, 'role:', req.user.role);
+    
+    const meetings = await Meeting.find({ 
+      isDirectInvite: true,
+      'invitedUsers.userId': req.user._id
+    })
+    .populate('createdBy', 'firstName lastName email role')
+    .populate('invitedUsers.userId', 'firstName lastName email role')
+    .sort({ createdAt: -1 });
+
+    res.json(meetings);
+  } catch (error) {
+    console.error('[MEETINGS] Error fetching invited meetings:', error);
+    res.status(500).json({ error: 'Failed to fetch invited meetings' });
   }
 });
 

@@ -2,8 +2,7 @@ import mongoose from 'mongoose';
 
 const MeetingSchema = new mongoose.Schema({
   classID: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Class',
+    type: String, // Changed to String to support 'direct-invite' identifier
     required: true,
   },
   title: {
@@ -37,7 +36,38 @@ const MeetingSchema = new mongoose.Schema({
     enum: ['instant', 'scheduled'],
     default: 'scheduled',
   },
-
+  // New fields for direct invitations
+  invitedUsers: [{
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    email: {
+      type: String,
+      required: true,
+    },
+    name: {
+      type: String,
+      required: true,
+    },
+    role: {
+      type: String,
+      required: true,
+    },
+    invitedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    joinedAt: {
+      type: Date,
+      default: null,
+    },
+  }],
+  isDirectInvite: {
+    type: Boolean,
+    default: false,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
