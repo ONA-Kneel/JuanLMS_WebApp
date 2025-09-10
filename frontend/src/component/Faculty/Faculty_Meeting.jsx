@@ -7,7 +7,7 @@ import StreamMeetingRoom from '../Meeting/StreamMeetingRoom';
 import InvitedMeetings from '../Meeting/InvitedMeetings';
 import { Video, Users, Calendar, Plus, UserPlus } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const Faculty_Meeting = () => {
   const [academicYear, setAcademicYear] = useState(null);

@@ -5,7 +5,7 @@ import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import { Link } from "react-router-dom";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Student_Dashboard() {
   const [classes, setClasses] = useState([]);

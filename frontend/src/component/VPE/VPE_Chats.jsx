@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
 import { getProfileImageUrl, getFileUrl } from "../../utils/imageUtils";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function VPE_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
@@ -96,7 +96,7 @@ export default function VPE_Chats() {
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
 
-  const API_URL = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
 
   const storedUser = localStorage.getItem("user");
