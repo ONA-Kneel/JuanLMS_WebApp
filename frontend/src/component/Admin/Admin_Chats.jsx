@@ -9,7 +9,6 @@ import ProfileMenu from "../ProfileMenu";
 import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
-import { getProfileImageUrl } from "../../utils/imageUtils";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -61,21 +60,7 @@ export default function Admin_Chats() {
 
   // Add state for member search
   const [memberSearchTerm, setMemberSearchTerm] = useState("");
-  const [users, setUsers] = useState(() => {
-    try {
-      const cached = localStorage.getItem('users_all_admin');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
-  // Backend search results from users collection
-  const [searchedUsers, setSearchedUsers] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
-  const [hiddenGroupIds, setHiddenGroupIds] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('hiddenGroups_admin') || '[]'); } catch { return []; }
-  });
+  const [users, setUsers] = useState([]);
   
   // Add missing state variables for new chat functionality
   const [_showNewChatModal, setShowNewChatModal] = useState(false);
@@ -99,8 +84,6 @@ export default function Admin_Chats() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
-  const chatListRef = useRef(null);
-  const fetchedGroupPreviewIds = useRef(new Set());
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -110,59 +93,56 @@ export default function Admin_Chats() {
 
   const navigate = useNavigate();
 
-  // Fetch a single user by id and merge to cache/state
-  const fetchUserIfMissing = async (userId) => {
-    if (!userId) return null;
-    const existing = users.find(u => u._id === userId);
-    if (existing) return existing;
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(`${API_BASE}/users/${userId}`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.data && res.data._id) {
-        const fetched = res.data;
-        setUsers(prev => {
-          const next = [...prev.filter(u => u._id !== fetched._id), fetched];
-          try { localStorage.setItem('users_all_admin', JSON.stringify(next)); } catch {}
-          return next;
-        });
-        return fetched;
-      }
-    } catch (e) {
-      // ignore
-    }
-    return null;
-  };
-
-  // Compute last message preview for a chat (individual or group)
-  const getLastPreview = (chat) => {
-    if (!chat) return null;
-    // Prefer stored previews
-    if (lastMessages[chat._id]) return lastMessages[chat._id];
-    // Derive from cached messages
-    if (chat.type === 'group') {
-      const list = (groupMessages[chat._id] || []);
-      if (list.length === 0) return null;
-      const last = list[list.length - 1];
-      const prefix = last.senderId === currentUserId ? 'You: ' : `${last.senderName || 'Unknown'}: `;
-      const text = last.message ? last.message : (last.fileUrl ? 'File sent' : '');
-      return { prefix, text };
-    } else {
-      const list = (messages[chat._id] || []);
-      if (list.length === 0) return null;
-      const last = list[list.length - 1];
-      const prefix = last.senderId === currentUserId ? 'You: ' : `${chat.lastname}, ${chat.firstname}: `;
-      const text = last.message ? last.message : (last.fileUrl ? 'File sent' : '');
-      return { prefix, text };
-    }
-  };
-
   useEffect(() => {
     if (!currentUserId) {
       navigate("/", { replace: true });
     }
   }, [currentUserId, navigate]);
+
+  // Monotonic sequence for ordering tie-breaks (newer updates always larger)
+  const seqRef = useRef(0);
+
+  // Consistent ordering helper: newest lastMessage (with fallbacks) first
+  const sortChatList = (list) => {
+    const hasRealLastMessage = (c) => {
+      const lm = c?.lastMessage;
+      if (!lm) return false;
+      const hasContent = typeof lm.content === 'string' && lm.content.trim().length > 0;
+      const hasAttachments = Array.isArray(lm.attachments) && lm.attachments.length > 0;
+      const hasSender = !!lm.sender;
+      return hasContent || hasAttachments || hasSender;
+    };
+    
+    const getTs = (c) => {
+      if (c?.lastMessage?.tsNum) return c.lastMessage.tsNum;
+      let t = c?.lastMessage?.timestamp || c?.lastMessage?.createdAt || c?.lastMessage?.updatedAt || c?.updatedAt || c?.createdAt;
+      if (!t && c?._id && /^[a-f0-9]{24}$/.test(c._id)) {
+        t = parseInt(c._id.substring(0,8),16) * 1000;
+      }
+      if (!t) return 0;
+      if (typeof t === 'number') return t;
+      const n = Date.parse(t);
+      return isNaN(n) ? 0 : n;
+    };
+    
+    const withIndex = [...(list || [])].map((c, idx) => ({ c, idx }));
+    let sorted = withIndex.sort((a, b) => {
+      const aHas = hasRealLastMessage(a.c);
+      const bHas = hasRealLastMessage(b.c);
+      if (aHas && !bHas) return -1;
+      if (!aHas && bHas) return 1;
+      if (!aHas && !bHas) return a.idx - b.idx;
+      
+      const diff = getTs(b.c) - getTs(a.c);
+      if (diff !== 0) return diff;
+      const sa = a.c?.lastMessage?.seq || 0;
+      const sb = b.c?.lastMessage?.seq || 0;
+      if (sb !== sa) return sb - sa;
+      return 0;
+    }).map(x => x.c);
+    
+    return sorted;
+  };
 
   // Move or insert a chat to the top of recent list and persist
   const bumpChatToTop = (chatUser) => {
@@ -171,32 +151,8 @@ export default function Admin_Chats() {
       const filtered = prev.filter((c) => c._id !== chatUser._id);
       const updated = [chatUser, ...filtered];
       localStorage.setItem("recentChats_admin", JSON.stringify(updated));
-      return updated;
+      return sortChatList(updated);
     });
-  };
-
-  // Remove a chat from recent list and persist
-  const removeFromRecent = (chatId) => {
-    if (!chatId) return;
-    setRecentChats((prev) => {
-      const updated = prev.filter((c) => c._id !== chatId);
-      localStorage.setItem("recentChats_admin", JSON.stringify(updated));
-      return updated;
-    });
-    setMessages((prev) => {
-      const next = { ...prev };
-      delete next[chatId];
-      return next;
-    });
-    setLastMessages((prev) => {
-      const next = { ...prev };
-      delete next[chatId];
-      return next;
-    });
-    if (selectedChat && selectedChat._id === chatId && !selectedChat.isGroup) {
-      setSelectedChat(null);
-      localStorage.removeItem("selectedChatId_admin");
-    }
   };
 
   // ================= SOCKET.IO SETUP =================
@@ -230,26 +186,47 @@ export default function Admin_Chats() {
         // Update last message for this chat
         let chat = recentChats.find(c => c._id === incomingMessage.senderId);
         
-        // If chat not in recentChats, fetch or find the user and add them
+        // If chat not found in recentChats, find the user and add them
         if (!chat) {
-          const ensureSender = async () => {
-            const sender = users.find(u => u._id === incomingMessage.senderId) || await fetchUserIfMissing(incomingMessage.senderId);
-            if (sender && sender.firstname && sender.lastname) {
-              const newChat = {
-                _id: sender._id,
-                firstname: sender.firstname,
-                lastname: sender.lastname,
-                profilePic: sender.profilePic
-              };
-              setRecentChats(prev => {
-                const updated = [newChat, ...prev.filter(c => c._id !== newChat._id)];
-                localStorage.setItem("recentChats_admin", JSON.stringify(updated));
-                return updated;
-              });
-            }
-          };
-          // fire and forget
-          ensureSender();
+          const sender = users.find(u => u._id === incomingMessage.senderId);
+          if (sender && sender.firstname && sender.lastname) {
+            const text = incomingMessage.message 
+              ? incomingMessage.message 
+              : (incomingMessage.fileUrl ? "File sent" : "");
+            
+            const tsNum = typeof incomingMessage.createdAt === 'number' ? incomingMessage.createdAt : Date.parse(incomingMessage.createdAt);
+            
+            chat = {
+              _id: sender._id,
+              firstname: sender.firstname,
+              lastname: sender.lastname,
+              profilePic: sender.profilePic,
+              lastMessage: {
+                content: text,
+                timestamp: incomingMessage.createdAt,
+                tsNum: tsNum,
+                seq: ++seqRef.current,
+                sender: incomingMessage.senderId,
+                attachments: []
+              }
+            };
+            
+            // Add to recentChats immediately with last message info
+            setRecentChats(prev => {
+              const updated = [chat, ...prev];
+              localStorage.setItem("recentChats_admin", JSON.stringify(updated));
+              return sortChatList(updated);
+            });
+            
+            // Also set the last message for immediate display
+            setLastMessages(prev => ({
+              ...prev,
+              [chat._id]: { 
+                prefix: `${sender.lastname || "Unknown"}, ${sender.firstname || "User"}: `, 
+                text 
+              }
+            }));
+          }
         }
         
         if (chat) {
@@ -264,19 +241,46 @@ export default function Admin_Chats() {
             [chat._id]: { prefix, text }
           }));
           
-          // Bump chat to top
-          bumpChatToTop(chat);
-          
-                  // Refresh recent conversations to update sidebar
-        setTimeout(() => {
-          fetchRecentConversations();
-        }, 100);
+          // Update chat list with new last message info
+          setRecentChats(prev => {
+            const updated = prev.map(c => {
+              if (c._id === chat._id) {
+                const tsNum = typeof incomingMessage.createdAt === 'number' ? incomingMessage.createdAt : Date.parse(incomingMessage.createdAt);
+                return {
+                  ...c,
+                  lastMessage: {
+                    content: text,
+                    timestamp: incomingMessage.createdAt,
+                    tsNum: tsNum,
+                    seq: ++seqRef.current,
+                    sender: incomingMessage.senderId,
+                    attachments: []
+                  }
+                };
+              }
+              return c;
+            });
+            localStorage.setItem("recentChats_admin", JSON.stringify(updated));
+            return sortChatList(updated);
+          });
         }
         
         return newMessages;
       });
       
-      // Avoid double-appending; state already updated above
+      // Also update the messages state immediately for real-time display
+      setMessages(prev => ({
+        ...prev,
+        [incomingMessage.senderId]: [
+          ...(prev[incomingMessage.senderId] || []),
+          incomingMessage,
+        ],
+      }));
+      
+      // Force a re-render by updating the messages state
+      setTimeout(() => {
+        setMessages(prev => ({ ...prev }));
+      }, 50);
     });
 
     // Group chat message handling
@@ -324,8 +328,13 @@ export default function Admin_Chats() {
             [group._id]: { prefix, text }
           }));
 
-          // Bump group chat to top; avoid extra forced re-render
+          // Bump group chat to top and refresh sidebar
           bumpChatToTop(group);
+          
+          // Force a re-render by updating the group messages state
+          setTimeout(() => {
+            setGroupMessages(prev => ({ ...prev }));
+          }, 50);
         }
         
         return newGroupMessages;
@@ -341,17 +350,13 @@ export default function Admin_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        // If we already have cached users, don't block UI with a spinner
-        if (users.length === 0) setIsLoadingChats(true);
-        const token = localStorage.getItem("token");
-        // Use active users endpoint (non-paginated) so search sees all users
-        const res = await axios.get(`${API_BASE}/users/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        const userArray = Array.isArray(res.data) ? res.data : [];
+        setIsLoadingChats(true);
+        const res = await axios.get(`${API_BASE}/users/active`);
+        // Support both array and paginated object
+        const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
         setUsers(userArray);
-        try { localStorage.setItem('users_all_admin', JSON.stringify(userArray)); } catch {}
-        // Preserve current selection; do not clear selected chat
+        setSelectedChat(null);
+        localStorage.removeItem("selectedChatId_admin");
       } catch (err) {
         if (err.response && err.response.status === 401) {
           window.location.href = '/';
@@ -380,7 +385,23 @@ export default function Admin_Chats() {
         });
         allMessages = res.data || [];
       } catch {
-        // Disable slow per-user fallback; rely on cached recent chats and real-time updates
+        // Fallback: fetch messages for each user individually
+        console.log("API endpoint not available, using fallback method");
+        for (const user of users) {
+          if (user._id !== currentUserId) {
+            try {
+              const userRes = await axios.get(`${API_BASE}/messages/${currentUserId}/${user._id}`, {
+                headers: { "Authorization": `Bearer ${token}` }
+              });
+              if (userRes.data && userRes.data.length > 0) {
+                allMessages.push(...userRes.data);
+              }
+            } catch {
+              // Skip this user if there's an error
+              continue;
+            }
+          }
+        }
       }
       
       if (allMessages.length > 0) {
@@ -399,12 +420,7 @@ export default function Admin_Chats() {
         for (const [otherUserId, messages] of conversationMap) {
           if (messages.length > 0) {
             // Find the user object
-            let otherUser = users.find(u => u._id === otherUserId);
-            if (!otherUser) {
-              // fetch minimal user profile if missing to avoid "Unknown User"
-              // eslint-disable-next-line no-await-in-loop
-              otherUser = await fetchUserIfMissing(otherUserId);
-            }
+            const otherUser = users.find(u => u._id === otherUserId);
             if (otherUser && otherUser.firstname && otherUser.lastname && 
                 otherUser.firstname !== 'undefined' && otherUser.lastname !== 'undefined') {
               // Sort messages by date and get the latest
@@ -564,19 +580,8 @@ export default function Admin_Chats() {
         [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
       }));
 
-      // Update last message preview immediately for individual chat
-      setLastMessages(prev => ({
-        ...prev,
-        [selectedChat._id]: {
-          prefix: 'You: ',
-          text: sentMessage.message ? sentMessage.message : (sentMessage.fileUrl ? 'File sent' : '')
-        }
-      }));
-
       // Ensure selected chat is at the top of recent chats
       bumpChatToTop(selectedChat);
-
-      // Avoid delayed refresh; sidebar preview already updated
 
       setNewMessage("");
       setSelectedFile(null);
@@ -606,19 +611,6 @@ export default function Admin_Chats() {
 
   const openFilePicker = () => {
     fileInputRef.current.click();
-  };
-
-  const hideGroup = (groupId) => {
-    if (!groupId) return;
-    setHiddenGroupIds(prev => {
-      const next = Array.from(new Set([...(prev||[]), groupId]));
-      localStorage.setItem('hiddenGroups_admin', JSON.stringify(next));
-      return next;
-    });
-    // If currently selected, clear selection
-    if (selectedChat && selectedChat.isGroup && selectedChat._id === groupId) {
-      setSelectedChat(null);
-    }
   };
 
   // Handle starting a new chat with a user
@@ -675,29 +667,6 @@ export default function Admin_Chats() {
     // eslint-disable-next-line
   }, [recentChats, currentUserId]);
 
-  // Debounced backend search against users collection
-  useEffect(() => {
-    const term = (searchTerm || '').trim();
-    if (term === '') { setSearchedUsers([]); return; }
-    setIsSearching(true);
-    const handle = setTimeout(async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const res = await axios.get(`${API_BASE}/users/search`, {
-          params: { q: term },
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const arr = Array.isArray(res.data) ? res.data : [];
-        setSearchedUsers(arr);
-      } catch (e) {
-        setSearchedUsers([]);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [searchTerm]);
-
   useEffect(() => {
     async function fetchAcademicYear() {
       try {
@@ -751,74 +720,39 @@ export default function Admin_Chats() {
         });
         setUserGroups(res.data);
         
-        // Join all groups in socket for real-time updates (avoid heavy prefetch of group messages)
+        // Fetch messages for all groups to determine which ones should appear in sidebar
+        if (res.data && res.data.length > 0) {
+          const allGroupMessages = {};
+          for (const group of res.data) {
+            try {
+              const groupRes = await axios.get(`${API_BASE}/group-messages/${group._id}?userId=${currentUserId}`, {
+                headers: { "Authorization": `Bearer ${token}` }
+              });
+              if (groupRes.data && groupRes.data.length > 0) {
+                allGroupMessages[group._id] = groupRes.data;
+              }
+            } catch {
+              // Group might not have messages yet, continue
+              continue;
+            }
+          }
+          setGroupMessages(allGroupMessages);
+          
+          // Join all groups in Socket.IO for real-time updates
+          res.data.forEach(group => {
+            socket.current?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
+          });
+        }
+        
+        // Join all groups in socket
         res.data.forEach(group => {
           socket.current?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
         });
-
-        // Lazily hydrate only visible group previews first for speed
-        const hydrateRange = async (startIndex, endIndex) => {
-          const slice = res.data.slice(startIndex, endIndex).filter(g => !fetchedGroupPreviewIds.current.has(g._id));
-          if (slice.length === 0) return;
-          slice.forEach(g => fetchedGroupPreviewIds.current.add(g._id));
-          try {
-            const batch = await Promise.all(
-              slice.map(group =>
-                axios
-                  .get(`${API_BASE}/group-messages/${group._id}?userId=${currentUserId}&limit=1&sort=desc`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                  })
-                  .then(r => ({ groupId: group._id, list: Array.isArray(r.data) ? r.data : [] }))
-                  .catch(() => ({ groupId: group._id, list: [] }))
-              )
-            );
-            const previews = {};
-            batch.forEach(({ groupId, list }) => {
-              const last = list.length > 0 ? list[list.length - 1] : null;
-              if (last) {
-                const prefix = last.senderId === currentUserId ? 'You: ' : `${last.senderName || 'Unknown'}: `;
-                const text = last.message ? last.message : (last.fileUrl ? 'File sent' : '');
-                previews[groupId] = { prefix, text };
-              }
-            });
-            if (Object.keys(previews).length > 0) {
-              setLastMessages(prev => ({ ...prev, ...previews }));
-            }
-          } catch {
-            // ignore batch failures
-          }
-        };
-
-        // Initial hydrate for first items
-        hydrateRange(0, 15);
-
-        // Attach scroll listener to hydrate more as user scrolls
-        const el = chatListRef.current;
-        if (el) {
-          let t = null;
-          const onScroll = () => {
-            if (t) cancelAnimationFrame(t);
-            t = requestAnimationFrame(() => {
-              const itemApproxHeight = 64; // px estimate
-              const start = Math.max(0, Math.floor(el.scrollTop / itemApproxHeight) - 5);
-              const end = start + 25;
-              hydrateRange(start, end);
-            });
-          };
-          el.addEventListener('scroll', onScroll);
-          // cleanup
-          return () => {
-            el.removeEventListener('scroll', onScroll);
-          };
-        }
       } catch (err) {
         console.error("Error fetching user groups:", err);
       }
     };
-    const cleanup = fetchUserGroups();
-    return () => {
-      if (typeof cleanup === 'function') cleanup();
-    };
+    fetchUserGroups();
   }, [currentUserId]);
 
   // Fetch group messages when group is selected
@@ -866,7 +800,7 @@ export default function Admin_Chats() {
     const fetchUsers = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get(`${API_BASE}/users`, {
+        const res = await axios.get(`${API_BASE}/users/active`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
@@ -1046,16 +980,6 @@ export default function Admin_Chats() {
         [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
       }));
 
-      // Update last message preview for group immediately
-      setLastMessages(prev => ({
-        ...prev,
-        [selectedChat._id]: {
-          prefix: 'You: ',
-          text: sentMessage.message ? sentMessage.message : (sentMessage.fileUrl ? 'File sent' : '')
-        }
-      }));
-
-        // Avoid delayed refresh; sidebar preview already updated
 
         setNewMessage("");
         setSelectedFile(null);
@@ -1072,8 +996,10 @@ export default function Admin_Chats() {
 
 
   // Merge recentChats and groups with messages (actual conversations)
-  // Show all groups (except hidden) immediately for faster perceived load
-  const groupsWithMessages = userGroups.filter(group => !hiddenGroupIds.includes(group._id));
+  const groupsWithMessages = userGroups.filter(group => {
+    const groupMsgs = groupMessages[group._id] || [];
+    return groupMsgs.length > 0;
+  });
   
   const unifiedChats = [
     ...recentChats.map(chat => ({ ...chat, type: 'individual' })),
@@ -1108,17 +1034,21 @@ export default function Admin_Chats() {
     ...unifiedChats.filter(chat => {
       if (chat.type === 'individual') {
         return (
-          (chat.firstname || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (chat.lastname || '').toLowerCase().includes(searchTerm.toLowerCase())
+          chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
         );
       } else {
-        return (chat.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+        return chat.name?.toLowerCase().includes(searchTerm.toLowerCase());
       }
     }),
-    // Then show backend user results not already in recent chats
-    ...searchedUsers
+    // Then show users not in recent chats that match
+    ...users
       .filter(user => user._id !== currentUserId)
       .filter(user => !recentChats.some(chat => chat._id === user._id))
+      .filter(user =>
+        user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
 
@@ -1150,14 +1080,13 @@ export default function Admin_Chats() {
           {/* LEFT PANEL */}
           <div className="w-full md:w-1/3 p-4 overflow-hidden flex flex-col h-full">
             {/* Header and Plus Icon */}
-            <div className="flex items-center justify-between mb-4 relative">
+            <div className="flex items-center justify-between mb-4">
               <input
                 type="text"
                 placeholder="Search users or groups..."
                 className="flex-1 p-2 border rounded-lg text-sm"
                 value={searchTerm}
-                onFocus={() => setShowSearchDropdown(true)}
-                onChange={(e) => { setSearchTerm(e.target.value); setShowSearchDropdown(true); }}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
               <div className="relative ml-2">
                 <button
@@ -1184,66 +1113,20 @@ export default function Admin_Chats() {
                   </div>
                 )}
               </div>
-              {showSearchDropdown && searchTerm.trim() !== '' && (
-                <div className="absolute left-0 top-10 w-[calc(100%-56px)] bg-white border rounded-lg shadow-lg z-20 max-h-80 overflow-y-auto">
-                  {isSearching && (
-                    <div className="p-3 text-sm text-gray-500">Searching...</div>
-                  )}
-                  {!isSearching && (
-                    <>
-                      {/* Users results */}
-                      {searchedUsers.filter(u => u._id !== currentUserId).length > 0 ? (
-                        searchedUsers.filter(u => u._id !== currentUserId).map(user => (
-                          <div
-                            key={user._id}
-                            className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                            onClick={() => { bumpChatToTop(user); setSelectedChat(user); setSearchTerm(''); setShowSearchDropdown(false); }}
-                          >
-                            <img src={getProfileImageUrl(user.profilePic, API_BASE, defaultAvatar)} alt="Profile" className="w-6 h-6 rounded-full object-cover border" onError={e => { e.target.onerror=null; e.target.src = defaultAvatar; }} />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm truncate">{user.lastname}, {user.firstname}</div>
-                              <div className="text-[11px] text-gray-500 truncate">Click to start new chat</div>
-                            </div>
-                            {/* Removed "New" badge for cleaner dropdown */}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="px-3 py-2 text-sm text-gray-500">No users found</div>
-                      )}
-                      <div className="h-px bg-gray-200 my-1" />
-                      {/* Group matches by name */}
-                      {userGroups.filter(g => (g.name || '').toLowerCase().includes(searchTerm.toLowerCase())).length > 0 ? (
-                        userGroups
-                          .filter(g => (g.name || '').toLowerCase().includes(searchTerm.toLowerCase()))
-                          .map(g => (
-                            <div key={g._id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer" onClick={() => { setSelectedChat({ ...g, isGroup: true }); setSearchTerm(''); setShowSearchDropdown(false); }}>
-                              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">G</div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm truncate">{g.name}</div>
-                                <div className="text-[11px] text-gray-500">{g.participants?.length || 0} participants</div>
-                              </div>
-                            </div>
-                          ))
-                      ) : (
-                        <div className="px-3 py-2 text-sm text-gray-500">No groups found</div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* New Chat Button */}
             {/* Removed the Start New Chat button as requested */}
 
             {/* Unified Chat List */}
-            <div ref={chatListRef} className="flex-1 overflow-y-auto space-y-2 pr-1">
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {isLoadingChats ? (
                 <div className="text-center py-10">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-900 mx-auto"></div>
                   <p className="text-gray-500 mt-2">Loading chats...</p>
                 </div>
-              ) : (
+              ) : searchTerm.trim() === '' ? (
+                // Show normal chat list when not searching
                 unifiedChats.length > 0 ? (
                   unifiedChats.map((chat) => (
                     <div
@@ -1261,23 +1144,13 @@ export default function Admin_Chats() {
                         }
                       }}
                     >
-                      {/* Remove (X) button for individual chats */}
-                      {chat.type === 'individual' && (
-                        <button
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"
-                          title="Remove from list"
-                          onClick={(e) => { e.stopPropagation(); removeFromRecent(chat._id); }}
-                        >
-                          &times;
-                        </button>
-                      )}
                       {chat.type === 'group' ? (
                         <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
                           <span className="material-icons">groups</span>
                         </div>
                       ) : (
                         <img
-                          src={getProfileImageUrl(chat.profilePic, API_BASE, defaultAvatar)}
+                          src={chat.profilePic ? `${API_BASE}/uploads/${chat.profilePic}` : defaultAvatar}
                           alt="Profile"
                           className="w-8 h-8 rounded-full object-cover border"
                           onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1287,32 +1160,90 @@ export default function Admin_Chats() {
                         <strong className="truncate text-sm">
                           {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
                         </strong>
-                        {(() => {
-                          const preview = getLastPreview(chat);
-                          return preview ? (
+                        {chat.type === 'group' ? (
+                          <span className="text-xs text-gray-500">{chat.participants?.length || 0} participants</span>
+                        ) : (
+                          lastMessages[chat._id] && (
                             <span className="text-xs text-gray-500 truncate">
-                              {preview.prefix}{preview.text}
+                              {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
                             </span>
-                          ) : null;
-                        })()}
+                          )
+                        )}
                       </div>
                       {chat.type === 'group' && (
-                        <>
-                          <span className="ml-2 text-blue-900 text-xs font-bold">Group</span>
-                          <button
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"
-                            title="Hide group"
-                            onClick={(e) => { e.stopPropagation(); hideGroup(chat._id); }}
-                          >
-                            &times;
-                          </button>
-                        </>
+                        <span className="ml-2 text-blue-900 text-xs font-bold">Group</span>
                       )}
                     </div>
                   ))
                 ) : (
                   <div className="text-gray-400 text-center mt-10 select-none">
                     No chats found
+                  </div>
+                )
+              ) : (
+                // Show search results when searching
+                searchResults.length > 0 ? (
+                  searchResults.map((item) => (
+                    <div
+                      key={item._id}
+                      className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
+                        selectedChat?._id === item._id ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                      }`}
+                      onClick={() => {
+                        if (item.isNewUser) {
+                          // Start new chat with this user
+                          handleStartNewChat(item);
+                          setSearchTerm(""); // Clear search after selecting
+                        } else if (item.type === 'group') {
+                          setSelectedChat({ ...item, isGroup: true });
+                          localStorage.setItem("selectedChatId_admin", item._id);
+                          setSearchTerm(""); // Clear search after selecting
+                        } else {
+                          setSelectedChat(item);
+                          localStorage.setItem("selectedChatId_admin", item._id);
+                          setSearchTerm(""); // Clear search after selecting
+                        }
+                      }}
+                    >
+                      {item.type === 'group' ? (
+                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                          <span className="material-icons">groups</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={item.profilePic ? `${API_BASE}/uploads/${item.profilePic}` : defaultAvatar}
+                          alt="Profile"
+                          className="w-8 h-8 rounded-full object-cover border"
+                          onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
+                        />
+                      )}
+                      <div className="flex flex-col min-w-0 ml-2">
+                        <strong className="truncate text-sm">
+                          {item.type === 'group' ? item.name : `${item.lastname}, ${item.firstname}`}
+                        </strong>
+                        {item.isNewUser ? (
+                          <span className="text-xs text-blue-600">Click to start new chat</span>
+                        ) : item.type === 'group' ? (
+                          <span className="text-xs text-gray-500">{item.participants?.length || 0} participants</span>
+                        ) : (
+                          lastMessages[item._id] && (
+                            <span className="text-xs text-gray-500 truncate">
+                              {lastMessages[item._id].prefix}{lastMessages[item._id].text}
+                            </span>
+                          )
+                        )}
+                      </div>
+                      {item.type === 'group' && (
+                        <span className="ml-2 text-blue-900 text-xs font-bold">Group</span>
+                      )}
+                      {item.isNewUser && (
+                        <span className="ml-2 text-green-600 text-xs font-bold">New</span>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-gray-400 text-center mt-10 select-none">
+                    No users or groups found
                   </div>
                 )
               )}
@@ -1344,7 +1275,7 @@ export default function Admin_Chats() {
                     ) : (
                       <>
                         <img
-                          src={getProfileImageUrl(selectedChat.profilePic, API_BASE, defaultAvatar)}
+                          src={selectedChat.profilePic ? `${API_BASE}/uploads/${selectedChat.profilePic}` : defaultAvatar}
                           alt="Profile"
                           className="w-10 h-10 rounded-full object-cover border"
                           onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
@@ -1628,7 +1559,7 @@ export default function Admin_Chats() {
                   if (!user) return null;
                   return (
                     <li key={userId} className="flex items-center gap-2 py-2">
-                      <img src={getProfileImageUrl(user.profilePic, API_BASE, defaultAvatar)} alt="Profile" className="w-8 h-8 rounded-full object-cover border" />
+                      <img src={user.profilePic ? `${API_BASE}/uploads/${user.profilePic}` : defaultAvatar} alt="Profile" className="w-8 h-8 rounded-full object-cover border" />
                       <span>{user.lastname}, {user.firstname}</span>
                       {selectedChat.createdBy === user._id && (
                         <span className="text-xs text-blue-600 ml-2">(Creator)</span>
