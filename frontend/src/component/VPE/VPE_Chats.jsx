@@ -110,51 +110,6 @@ export default function VPE_Chats() {
     }
   }, [currentUserId, navigate]);
 
-  // Monotonic sequence for ordering tie-breaks (newer updates always larger)
-  const seqRef = useRef(0);
-
-  // Consistent ordering helper: newest lastMessage (with fallbacks) first
-  const sortChatList = (list) => {
-    const hasRealLastMessage = (c) => {
-      const lm = c?.lastMessage;
-      if (!lm) return false;
-      const hasContent = typeof lm.content === 'string' && lm.content.trim().length > 0;
-      const hasAttachments = Array.isArray(lm.attachments) && lm.attachments.length > 0;
-      const hasSender = !!lm.sender;
-      return hasContent || hasAttachments || hasSender;
-    };
-    
-    const getTs = (c) => {
-      if (c?.lastMessage?.tsNum) return c.lastMessage.tsNum;
-      let t = c?.lastMessage?.timestamp || c?.lastMessage?.createdAt || c?.lastMessage?.updatedAt || c?.updatedAt || c?.createdAt;
-      if (!t && c?._id && /^[a-f0-9]{24}$/.test(c._id)) {
-        t = parseInt(c._id.substring(0,8),16) * 1000;
-      }
-      if (!t) return 0;
-      if (typeof t === 'number') return t;
-      const n = Date.parse(t);
-      return isNaN(n) ? 0 : n;
-    };
-    
-    const withIndex = [...(list || [])].map((c, idx) => ({ c, idx }));
-    let sorted = withIndex.sort((a, b) => {
-      const aHas = hasRealLastMessage(a.c);
-      const bHas = hasRealLastMessage(b.c);
-      if (aHas && !bHas) return -1;
-      if (!aHas && bHas) return 1;
-      if (!aHas && !bHas) return a.idx - b.idx;
-      
-      const diff = getTs(b.c) - getTs(a.c);
-      if (diff !== 0) return diff;
-      const sa = a.c?.lastMessage?.seq || 0;
-      const sb = b.c?.lastMessage?.seq || 0;
-      if (sb !== sa) return sb - sa;
-      return 0;
-    }).map(x => x.c);
-    
-    return sorted;
-  };
-
   // Helper function to bump chat to top of recent chats
   const bumpChatToTop = (chatUser) => {
     if (!chatUser || !chatUser._id) return;
@@ -165,7 +120,7 @@ export default function VPE_Chats() {
         // Add new chat to the top
         const updated = [chatUser, ...prev];
         localStorage.setItem("recentChats_vpe", JSON.stringify(updated));
-        return sortChatList(updated);
+        return updated;
       } else if (existingIndex > 0) {
         // Move existing chat to the top
         const updated = [
@@ -174,7 +129,7 @@ export default function VPE_Chats() {
           ...prev.slice(existingIndex + 1)
         ];
         localStorage.setItem("recentChats_vpe", JSON.stringify(updated));
-        return sortChatList(updated);
+        return updated;
       }
       return prev;
     });
@@ -215,42 +170,18 @@ export default function VPE_Chats() {
         if (!chat) {
           const sender = users.find(u => u._id === incomingMessage.senderId);
           if (sender && sender.firstname && sender.lastname) {
-            const text = incomingMessage.message 
-              ? incomingMessage.message 
-              : (incomingMessage.fileUrl ? "File sent" : "");
-            
-            const tsNum = typeof incomingMessage.createdAt === 'number' ? incomingMessage.createdAt : Date.parse(incomingMessage.createdAt);
-            
             chat = {
               _id: sender._id,
               firstname: sender.firstname,
               lastname: sender.lastname,
-              profilePic: sender.profilePic,
-              lastMessage: {
-                content: text,
-                timestamp: incomingMessage.createdAt,
-                tsNum: tsNum,
-                seq: ++seqRef.current,
-                sender: incomingMessage.senderId,
-                attachments: []
-              }
+              profilePic: sender.profilePic
             };
-            
-            // Add to recentChats immediately with last message info
+            // Add to recentChats
             setRecentChats(prev => {
               const updated = [chat, ...prev];
               localStorage.setItem("recentChats_VPE", JSON.stringify(updated));
-              return sortChatList(updated);
+              return updated;
             });
-            
-            // Also set the last message for immediate display
-            setLastMessages(prev => ({
-              ...prev,
-              [chat._id]: { 
-                prefix: `${sender.lastname || "Unknown"}, ${sender.firstname || "User"}: `, 
-                text 
-              }
-            }));
           }
         }
         
@@ -271,29 +202,13 @@ export default function VPE_Chats() {
             [chat._id]: { prefix, text }
           }));
           
-          // Update chat list with new last message info
-          setRecentChats(prev => {
-            const updated = prev.map(c => {
-              if (c._id === chat._id) {
-                const tsNum = typeof incomingMessage.createdAt === 'number' ? incomingMessage.createdAt : Date.parse(incomingMessage.createdAt);
-                return {
-                  ...c,
-                  lastMessage: {
-                    content: text,
-                    timestamp: incomingMessage.createdAt,
-                    tsNum: tsNum,
-                    seq: ++seqRef.current,
-                    sender: incomingMessage.senderId,
-                    attachments: []
-                  }
-                };
-              }
-              return c;
-            });
-            localStorage.setItem("recentChats_VPE", JSON.stringify(updated));
-            return sortChatList(updated);
-          });
+          // Bump chat to top
+          bumpChatToTop(chat);
           
+                  // Refresh recent conversations to update sidebar
+        setTimeout(() => {
+          fetchRecentConversations();
+        }, 100);
         }
         
         return newMessages;
@@ -756,6 +671,10 @@ export default function VPE_Chats() {
         // Bump group chat to top of recent
         bumpChatToTop(selectedChat);
 
+        // Refresh recent conversations to update sidebar
+        setTimeout(() => {
+          fetchRecentConversations();
+        }, 100);
 
         setNewMessage("");
         setSelectedFile(null);
@@ -807,6 +726,10 @@ export default function VPE_Chats() {
         // Bump individual chat to top of recent
         bumpChatToTop(selectedChat);
 
+        // Refresh recent conversations to update sidebar
+        setTimeout(() => {
+          fetchRecentConversations();
+        }, 100);
 
         setNewMessage("");
         setSelectedFile(null);
