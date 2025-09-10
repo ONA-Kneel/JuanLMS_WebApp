@@ -24,6 +24,39 @@ const JWT_SECRET = process.env.JWT_SECRET || "yourSuperSecretKey123"; // 👈 us
 
 // ------------------ CRUD ROUTES ------------------
 
+// Get all users for meeting invitations (VPE and Principal only)
+userRoutes.get('/users/all', authenticateToken, async (req, res) => {
+  try {
+    console.log('[USERS] User role:', req.user.role, 'User ID:', req.user._id);
+    // Only VPE and Principal can access this endpoint
+    if (!['vpe', 'principal', 'vice president of education'].includes(req.user.role)) {
+      console.log('[USERS] Access denied for role:', req.user.role);
+      return res.status(403).json({ error: 'Access denied. Only VPE and Principal can view all users.' });
+    }
+
+    const users = await User.find({ 
+      isArchived: { $ne: true },
+      status: { $ne: 'inactive' }
+    }).select('-password'); // Exclude password field
+
+    const decryptedUsers = users.map(user => ({
+      _id: user._id,
+      firstName: user.getDecryptedFirstname ? user.getDecryptedFirstname() : user.firstname,
+      lastName: user.getDecryptedLastname ? user.getDecryptedLastname() : user.lastname,
+      email: user.getDecryptedEmail ? user.getDecryptedEmail() : user.email,
+      role: user.role,
+      status: user.status,
+      isArchived: user.isArchived,
+      createdAt: user.createdAt
+    }));
+
+    res.json(decryptedUsers);
+  } catch (err) {
+    console.error('Failed to fetch all users:', err);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
 // Get all active (non-archived) students
 userRoutes.get('/users/students', authenticateToken, async (req, res) => {
   try {
