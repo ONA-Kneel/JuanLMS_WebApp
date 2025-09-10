@@ -30,17 +30,27 @@ class EmailService {
    */
   async sendOTP(personalEmail, firstName, otp, purpose = 'verification', zohoEmail = null) {
     try {
+      console.log('📧 [EMAIL SERVICE] Starting OTP send process...');
+      console.log('📧 [EMAIL SERVICE] To:', personalEmail);
+      console.log('📧 [EMAIL SERVICE] From: juanlms.sjddefi@sjdefilms.com');
+      console.log('📧 [EMAIL SERVICE] Purpose:', purpose);
+      console.log('📧 [EMAIL SERVICE] OTP:', otp);
+
       const subject = this.getOTPSubject(purpose);
       const content = this.getOTPContent(firstName, otp, purpose, zohoEmail);
 
       const sendSmtpEmail = {
-        to: [{ email: personalEmail, name: firstName || '' }],
+        to: [{ email: personalEmail, name: firstName || 'User' }],
         sender: { email: 'juanlms.sjddefi@sjdefilms.com', name: 'JuanLMS Support' },
         subject: subject,
         textContent: content
       };
 
+      console.log('📧 [EMAIL SERVICE] Sending email via Brevo...');
       const result = await this.apiInstance.sendTransacEmail(sendSmtpEmail);
+      
+      console.log('✅ [EMAIL SERVICE] Email sent successfully!');
+      console.log('📧 [EMAIL SERVICE] Result:', result);
       
       return {
         success: true,
@@ -48,11 +58,16 @@ class EmailService {
         data: result
       };
     } catch (error) {
-      console.error('Error sending OTP via Brevo:', error);
+      console.error('❌ [EMAIL SERVICE] Error sending OTP via Brevo:');
+      console.error('❌ [EMAIL SERVICE] Error message:', error.message);
+      console.error('❌ [EMAIL SERVICE] Error response:', error.response?.data);
+      console.error('❌ [EMAIL SERVICE] Full error:', error);
+      
       return {
         success: false,
         message: 'Failed to send OTP',
-        error: error.message
+        error: error.message,
+        details: error.response?.data
       };
     }
   }

@@ -2,7 +2,12 @@ import crypto from "crypto";
 import dotenv from "dotenv";
 dotenv.config();
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-secret-key-32-chars-long!!'; // 32 bytes
+// Ensure the encryption key is exactly 32 bytes for AES-256
+let ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-secret-key-32-chars-long!!';
+if (ENCRYPTION_KEY.length !== 32) {
+  // Pad or truncate to exactly 32 characters
+  ENCRYPTION_KEY = ENCRYPTION_KEY.padEnd(32, '0').substring(0, 32);
+}
 const IV_LENGTH = 16; // For AES, this is always 16
 
 export function encrypt(text) {

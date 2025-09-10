@@ -596,13 +596,18 @@ userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
     );
     // Send OTP via Brevo to Zoho Mail address
     try {
+        // Decrypt the email address before sending
+        const { decrypt } = await import('../utils/encryption.js');
+        const decryptedEmail = decrypt(user.email);
+        console.log('Decrypted email for password change OTP:', decryptedEmail);
+        
         const emailService = await import('../services/emailService.js');
         await emailService.default.sendOTP(
-            user.email, // Send to Zoho Mail address instead of personal email
+            decryptedEmail, // Send to decrypted Zoho Mail address
             user.firstname,
             otp,
             'password_change',
-            user.email
+            decryptedEmail
         );
     } catch (emailErr) {
         console.error('Error sending OTP email to Zoho Mail via Brevo:', emailErr);
@@ -691,15 +696,20 @@ userRoutes.post('/forgot-password', async (req, res) => {
         console.log('About to send OTP to Zoho Mail via EmailService...');
 
         try {
+            // Decrypt the email address before sending
+            const { decrypt } = await import('../utils/encryption.js');
+            const decryptedEmail = decrypt(user.email);
+            console.log('Decrypted email for OTP:', decryptedEmail);
+            
             const emailService = await import('../services/emailService.js');
             const result = await emailService.default.sendOTP(
-                user.email, // Send to Zoho Mail address instead of personal email
+                decryptedEmail, // Send to decrypted Zoho Mail address
                 user.firstname,
                 otp,
                 'password_reset',
-                user.email
+                decryptedEmail
             );
-            console.log('OTP email sent to Zoho Mail:', user.email, 'Result:', result);
+            console.log('OTP email sent to Zoho Mail:', decryptedEmail, 'Result:', result);
         } catch (emailErr) {
             console.error('Error sending OTP email to Zoho Mail via Brevo:', emailErr);
         }
@@ -1129,6 +1139,48 @@ userRoutes.post('/test-welcome-email', async (req, res) => {
         });
     } catch (error) {
         console.error('Error sending test welcome email:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Test endpoint to send OTP email
+userRoutes.post('/test-otp-email', async (req, res) => {
+    try {
+        const { email, firstName, otp, purpose } = req.body;
+        
+        if (!email || !firstName || !otp) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "Missing required fields: email, firstName, otp" 
+            });
+        }
+
+        console.log('🧪 [TEST] Sending OTP to:', email);
+        console.log('🧪 [TEST] OTP:', otp);
+        console.log('🧪 [TEST] Purpose:', purpose || 'password_reset');
+
+        // Import and use the email service
+        const emailService = await import('../services/emailService.js');
+        
+        // Send OTP email via Brevo
+        const result = await emailService.default.sendOTP(
+            email,
+            firstName,
+            otp,
+            purpose || 'password_reset',
+            email
+        );
+
+        res.json({
+            success: true,
+            message: `OTP email sent to ${email}`,
+            result: result
+        });
+    } catch (error) {
+        console.error('Error sending test OTP email:', error);
         res.status(500).json({
             success: false,
             error: error.message
