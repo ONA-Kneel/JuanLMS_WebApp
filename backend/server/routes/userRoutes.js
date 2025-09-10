@@ -665,22 +665,16 @@ userRoutes.post('/forgot-password', async (req, res) => {
     const genericMsg = 'If your email is registered, a reset link or OTP has been sent to your Zoho Mail address.';
 
     try {
-        // Find user by personalemailHash
+        // Find user by emailHash (deterministic hash for searching)
+        const crypto = await import('crypto');
         const emailHash = crypto.createHash('sha256').update(email.toLowerCase()).digest('hex');
-        const user = await db.collection('users').findOne({ personalemailHash: emailHash });
+        console.log('Searching for emailHash:', emailHash);
+        const user = await db.collection('users').findOne({ emailHash: emailHash });
         console.log('User found:', user);
-        if (!user || !user.personalemail) {
-            console.log('User not found or missing personalemail');
+        if (!user) {
+            console.log('User not found with email:', email);
             // Explicitly inform user that the email is not registered
-            return res.status(404).json({ message: 'This email is not registered. Please check that it\'s correct.' });
-        }
-        // Decrypt personal email
-        const decryptedPersonalEmail = user.getDecryptedPersonalEmail
-          ? user.getDecryptedPersonalEmail()
-          : (typeof user.personalemail === 'string' ? decrypt(user.personalemail) : '');
-        if (!decryptedPersonalEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(decryptedPersonalEmail)) {
-          console.error('Invalid or missing personal email for user:', user);
-          return res.json({ message: genericMsg });
+            return res.status(404).json({ message: 'This Zoho Mail address is not registered. Please check that it\'s correct.' });
         }
         // --- Generate OTP and expiry ---
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -753,18 +747,19 @@ userRoutes.get('/test-email', async (req, res) => {
 // Reset Password (OTP verification and password update)
 userRoutes.post('/reset-password', async (req, res) => {
     const db = database.getDb();
-    const { personalemail, otp, newPassword } = req.body;
+    const { email, otp, newPassword } = req.body;
 
-    if (!personalemail || !otp || !newPassword) {
+    if (!email || !otp || !newPassword) {
         return res.status(400).json({ message: 'All fields are required.' });
     }
     if (newPassword.length < 8) {
         return res.status(400).json({ message: 'Password must be at least 8 characters.' });
     }
 
-    // Find user by personalemailHash
-    const emailHash = crypto.createHash('sha256').update(personalemail.toLowerCase()).digest('hex');
-    const user = await db.collection('users').findOne({ personalemailHash: emailHash });
+    // Find user by emailHash (deterministic hash for searching)
+    const crypto = await import('crypto');
+    const emailHash = crypto.createHash('sha256').update(email.toLowerCase()).digest('hex');
+    const user = await db.collection('users').findOne({ emailHash: emailHash });
     if (!user) return res.status(404).json({ message: 'User not found.' });
 
     // --- OTP validation ---
@@ -790,13 +785,14 @@ userRoutes.post('/reset-password', async (req, res) => {
 // Validate OTP only (for password reset flow)
 userRoutes.post('/validate-otp', async (req, res) => {
     const db = database.getDb();
-    const { personalemail, otp } = req.body;
-    if (!personalemail || !otp) {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
         return res.status(400).json({ message: 'All fields are required.' });
     }
-    // Find user by personalemailHash
-    const emailHash = crypto.createHash('sha256').update(personalemail.toLowerCase()).digest('hex');
-    const user = await db.collection('users').findOne({ personalemailHash: emailHash });
+    // Find user by emailHash (deterministic hash for searching)
+    const crypto = await import('crypto');
+    const emailHash = crypto.createHash('sha256').update(email.toLowerCase()).digest('hex');
+    const user = await db.collection('users').findOne({ emailHash: emailHash });
     if (!user) return res.status(404).json({ message: 'User not found.' });
     // --- OTP validation ---
     if (

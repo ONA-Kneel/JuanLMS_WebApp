@@ -107,7 +107,7 @@ export default function ForgotPassword() {
     setMessage('');
     try {
       await axios.post(`${API_BASE}/validate-otp`, {
-        personalemail: email,
+        email: email,
         otp,
       });
       setMessage('OTP validated. Please enter your new password.');
@@ -153,7 +153,7 @@ export default function ForgotPassword() {
     }
     try {
       const response = await axios.post(`${API_BASE}/reset-password`, {
-        personalemail: email,
+        email: email,
         otp,
         newPassword,
       });
@@ -180,16 +180,16 @@ export default function ForgotPassword() {
         {step === 1 && (
           <form onSubmit={handleRequestOTP} className="space-y-4">
             <div>
-              <label className="block text-base mb-2">Enter your registered personal email</label>
+              <label className="block text-base mb-2">Enter your Zoho Mail address</label>
               <input
                 type="email"
                 required
                 className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900"
-                placeholder="your.personal@gmail.com"
+                placeholder="role.firstname.lastname@sjdefilms.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
               />
-              <p className="text-xs text-gray-500 mt-1">Note: OTP will be sent to your Zoho Mail address</p>
+              <p className="text-xs text-gray-500 mt-1">Note: OTP will be sent to this Zoho Mail address</p>
             </div>
             <button
               type="submit"
