@@ -11,10 +11,6 @@ export default function Faculty_Dashboard() {
   const [loading, setLoading] = useState(true);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [debugMode, setDebugMode] = useState(false);
-  const [userInfo, setUserInfo] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; }
-  });
   const [showSuggestPw, setShowSuggestPw] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const [showChangePwModal, setShowChangePwModal] = useState(false);
@@ -27,7 +23,6 @@ export default function Faculty_Dashboard() {
   useEffect(() => {
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
-      setUserInfo(user);
       const attempts = user?.changePassAttempts || 0;
       const suppressed = user?.changePassModal === true;
       setShowSuggestPw(attempts === 0 && !suppressed);
@@ -48,9 +43,8 @@ export default function Faculty_Dashboard() {
       });
       const updated = { ...me, changePassModal: true };
       localStorage.setItem('user', JSON.stringify(updated));
-      setUserInfo(updated);
       setShowSuggestPw(false);
-    } catch (e) {
+    } catch {
       // Fallback: still hide locally
       setShowSuggestPw(false);
     }
@@ -248,32 +242,10 @@ export default function Faculty_Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            {/* Debug mode toggle */}
-            <button
-              onClick={() => setDebugMode(!debugMode)}
-              className={`px-3 py-2 text-sm rounded ${
-                debugMode 
-                  ? 'bg-red-600 text-white hover:bg-red-700' 
-                  : 'bg-gray-600 text-white hover:bg-gray-700'
-              }`}
-            >
-              {debugMode ? 'Debug ON' : 'Debug OFF'}
-            </button>
             <ProfileMenu />
           </div>
         </div>
 
-        {/* Debug info */}
-        {debugMode && (
-          <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
-            <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
-            <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
-            <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
-            <p className="text-sm text-yellow-700">Classes Found: {classes.length}</p>
-            <p className="text-sm text-yellow-700">Current Faculty ID: {currentFacultyID}</p>
-            <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
-          </div>
-        )}
 
 
         {/* Announcements (no KPI cards here) */}

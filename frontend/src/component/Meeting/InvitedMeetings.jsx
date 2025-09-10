@@ -192,3 +192,4 @@ const InvitedMeetings = ({ onJoinMeeting, refreshTrigger = 0 }) => {
 };
 
 export default InvitedMeetings;
+

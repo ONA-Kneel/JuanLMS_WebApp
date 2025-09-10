@@ -145,9 +145,20 @@ userRoutes.get("/users/search", authenticateToken, async (req, res) => {
             });
         }
 
+        // School ID search - fetch all users and filter by decrypted School ID
+        let schoolIdCandidates = [];
+        if (query && !query.includes('@') && !query.includes('.')) {
+            // Only search by School ID if it doesn't look like an email
+            const pool = await User.find({ isArchived: { $ne: true } }).limit(1000);
+            schoolIdCandidates = pool.filter(u => {
+                const dec = u.getDecryptedSchoolID ? u.getDecryptedSchoolID() : u.schoolID;
+                return (dec || '').toLowerCase().includes(query.toLowerCase());
+            });
+        }
+
         // Merge unique by _id
         const mapById = new Map();
-        [...nameCandidates, ...emailCandidates].forEach(u => mapById.set(String(u._id), u));
+        [...nameCandidates, ...emailCandidates, ...schoolIdCandidates].forEach(u => mapById.set(String(u._id), u));
         const merged = Array.from(mapById.values());
 
         const decryptedUsers = merged.map(user => ({

@@ -517,7 +517,50 @@ export default function FacultyCreateClass() {
     }
   };
 
-  // Update batch upload logic
+  // Download template function
+  const handleDownloadTemplate = () => {
+    // Create template data with headers and sample rows
+    const templateData = [
+      {
+        'School ID': '2024-001',
+        'Full Name': 'Dela Cruz, Juan Miguel',
+        'Email': 'juan.delacruz@example.com'
+      },
+      {
+        'School ID': '2024-002', 
+        'Full Name': 'Santos, Maria Elena',
+        'Email': 'maria.santos@example.com'
+      },
+      {
+        'School ID': '2024-003',
+        'Full Name': 'Garcia, Jose Rizal',
+        'Email': 'jose.garcia@example.com'
+      }
+    ];
+
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+
+    // Set column widths
+    worksheet['!cols'] = [
+      { wch: 15 }, // School ID
+      { wch: 30 }, // Full Name
+      { wch: 35 }  // Email
+    ];
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Student Template');
+
+    // Generate filename with current date
+    const currentDate = new Date().toISOString().split('T')[0];
+    const filename = `Student_Bulk_Upload_Template_${currentDate}.xlsx`;
+
+    // Download the file
+    XLSX.writeFile(workbook, filename);
+  };
+
+  // Update batch upload logic to search by School ID
   const handleBatchUpload = async (e) => {
     setBatchLoading(true);
     setBatchMessage('');
@@ -544,18 +587,44 @@ export default function FacultyCreateClass() {
 
       let added = 0;
       let skipped = 0;
+      let notFound = 0;
       let skippedNames = [];
+      let notFoundNames = [];
+
       for (const row of json) {
+        // Try to get School ID first, then fallback to email for backward compatibility
+        const schoolID = (row['School ID'] || row['schoolID'] || row['SchoolID'] || "").trim();
         const email = (row.Email || row["email"] || row["School Email"] || row["school email"] || "").trim();
-        if (!email) {
+        
+        if (!schoolID && !email) {
           continue;
         }
+
         try {
-          const res = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(email)}`, {
+          // Search by School ID first (preferred method)
+          let searchQuery = schoolID || email;
+          const res = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(searchQuery)}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
           const users = await res.json();
-          const found = users[0];
+          
+          // Find the user - prioritize exact School ID match if available
+          let found = null;
+          if (schoolID) {
+            // Look for exact School ID match first
+            found = users.find(user => user.schoolID && user.schoolID.toLowerCase() === schoolID.toLowerCase());
+            // If no exact match, look for partial match
+            if (!found) {
+              found = users.find(user => user.schoolID && user.schoolID.toLowerCase().includes(schoolID.toLowerCase()));
+            }
+          }
+          if (!found && email) {
+            found = users.find(user => user.email && user.email.toLowerCase() === email.toLowerCase());
+          }
+          if (!found && users.length > 0) {
+            found = users[0]; // fallback to first result
+          }
+
           if (found && !selectedStudents.some(s => s._id === found._id)) {
             const assigned = await isStudentAssignedToSection(found._id);
             if (assigned) {
@@ -563,17 +632,26 @@ export default function FacultyCreateClass() {
               added++;
             } else {
               skipped++;
-              skippedNames.push(`${found.lastname}, ${found.firstname}`);
+              skippedNames.push(`${found.lastname}, ${found.firstname} (${found.schoolID || found.email})`);
             }
+          } else if (!found) {
+            notFound++;
+            notFoundNames.push(schoolID || email);
           }
-        } catch {
-          // skip on error
+        } catch (error) {
+          console.error('Error processing student:', schoolID || email, error);
+          notFound++;
+          notFoundNames.push(schoolID || email);
         }
       }
+      
       setBatchLoading(false);
       let msg = added > 0 ? `${added} member(s) added from Excel.` : '';
       if (skipped > 0) {
         msg += ` ${skipped} not added (not assigned to this section): ${skippedNames.join(', ')}`;
+      }
+      if (notFound > 0) {
+        msg += ` ${notFound} not found in system: ${notFoundNames.join(', ')}`;
       }
       setBatchMessage(msg);
     };
@@ -687,23 +765,6 @@ export default function FacultyCreateClass() {
           </div>
         </div>
 
-                 {/* Debug Information - Remove this in production */}
-         {import.meta.env.DEV && (
-           <div className="mt-6 ml-5 p-4 bg-gray-100 rounded border">
-             <h4 className="font-bold mb-2">Debug Info:</h4>
-             <div className="text-sm space-y-1">
-               <p><strong>Faculty Assignments:</strong> {facultyAssignments.length}</p>
-               <p><strong>Filtered Assignments:</strong> {filteredAssignments.length}</p>
-               <p><strong>Existing Classes:</strong> {existingClasses.length}</p>
-               <p><strong>Available Grade Levels:</strong> {filteredAssignments.map(a => a.gradeLevel).filter((v, i, a) => a.indexOf(v) === i).join(', ')}</p>
-               <p><strong>Available Subjects:</strong> {subjects.join(', ')}</p>
-               <p><strong>Available Sections:</strong> {sections.join(', ')}</p>
-               <p><strong>Selected Grade Level:</strong> {selectedGradeLevel}</p>
-               <p><strong>Selected Subject:</strong> {selectedSubject}</p>
-               <p><strong>Selected Section:</strong> {selectedSection}</p>
-             </div>
-           </div>
-         )}
 
         <h3 className="text-4xl font-bold mt-10 mb-7">Members</h3>
           {/* Batch Upload Input - restyled to match Bulk Assign Students UI */}
@@ -712,7 +773,8 @@ export default function FacultyCreateClass() {
           
             <div className="border rounded-lg p-4 bg-white mb-4 w-full ">
               <div className="font-bold mb-2">Bulk Assign Students</div>
-              <div className="text-sm text-gray-600 mb-2">Upload Excel File</div>
+              <div className="text-sm text-gray-600 mb-2">Upload Excel File with School ID, Full Name, and Email columns</div>
+              <div className="text-xs text-blue-600 mb-2">💡 Download the template to see the correct format. The system will search for students using School ID first.</div>
               <div className="flex items-center gap-4 mb-2">
                 <input
                   type="file"
@@ -723,7 +785,7 @@ export default function FacultyCreateClass() {
                 <button
                   type="button"
                   className="bg-blue-900 hover:bg-blue-800 text-white font-semibold rounded px-4 py-2 text-sm"
-                  onClick={() => window.open('/path/to/template.xlsx', '_blank')}
+                  onClick={handleDownloadTemplate}
                 >
                   Download Template
                 </button>

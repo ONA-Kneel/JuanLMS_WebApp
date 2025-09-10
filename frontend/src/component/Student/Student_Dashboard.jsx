@@ -10,17 +10,8 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.
 export default function Student_Dashboard() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [classProgress, setClassProgress] = useState({});
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [debugMode, setDebugMode] = useState(false); // Temporary debug mode
-
-  // KPIs
-  const [pendingCount, setPendingCount] = useState(0);
-  const [dueTodayCount, setDueTodayCount] = useState(0);
-
-  // Announcements (inline box)
-  const [announcements, setAnnouncements] = useState([]);
 
   // Change password suggest modal
   const [showSuggestPw, setShowSuggestPw] = useState(false);
@@ -58,16 +49,6 @@ export default function Student_Dashboard() {
 
   const currentUserID = localStorage.getItem("userID");
 
-  /* ------------------------------ helpers ------------------------------ */
-  const DISMISSED_KEY = "student_dashboard_dismissed_announcements";
-  const getDismissed = () => {
-    try { return JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]"); }
-    catch { return []; }
-  };
-  const addDismissed = (id) => {
-    const next = Array.from(new Set([...(getDismissed() || []), id]));
-    localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
-  };
 
   /* ----------------------- load academic year/term ---------------------- */
   useEffect(() => {
@@ -173,47 +154,6 @@ export default function Student_Dashboard() {
         console.log("Student Dashboard - Filtered classes (my-classes):", filtered);
         setClasses(filtered);
 
-        // keep progress logic
-        const progressMap = {};
-        for (const cls of filtered) {
-          const classId = cls.classID; // lessons and members use classID, not _id
-          console.log("Student Dashboard - Fetching lessons for class:", classId);
-          
-          // Fetch lessons for this class
-          const lessonRes = await fetch(`${API_BASE}/lessons?classID=${classId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          const lessons = await lessonRes.json();
-          let totalPages = 0;
-          let totalRead = 0;
-          for (const lesson of lessons) {
-            if (lesson.files && lesson.files.length > 0) {
-              for (const file of lesson.files) {
-                // Fetch progress for this file
-                try {
-                  const progRes = await fetch(`${API_BASE}/lessons/lesson-progress?lessonId=${lesson._id}&fileUrl=${encodeURIComponent(file.fileUrl)}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                  });
-                  const prog = await progRes.json();
-                  if (prog && prog.totalPages) {
-                    totalPages += prog.totalPages;
-                    totalRead += Math.min(prog.lastPage, prog.totalPages);
-                  } else if (file.totalPages) {
-                    totalPages += file.totalPages;
-                  }
-                } catch { /* ignore progress fetch errors */ }
-              }
-            }
-            progressMap[cls.classID] =
-              totalPages > 0 ? Math.round((totalRead / totalPages) * 100) : 0;
-          }
-          let percent = 0;
-          if (totalPages > 0) {
-            percent = Math.round((totalRead / totalPages) * 100);
-          }
-          progressMap[classId] = percent;
-        }
-        setClassProgress(progressMap);
       } catch (err) {
         console.error("Failed to fetch classes", err);
       } finally {
@@ -225,70 +165,8 @@ export default function Student_Dashboard() {
     if (academicYear && currentTerm) {
       fetchClasses();
     }
-  }, [currentUserID, academicYear, currentTerm, debugMode]);
+  }, [currentUserID, academicYear, currentTerm]);
 
-  /* -------------------------- assignment metrics ------------------------- */
-  useEffect(() => {
-    (async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${API_BASE}/assignments`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return;
-        const assignments = await res.json();
-        const today = new Date().toISOString().split("T")[0];
-
-        const dueToday = assignments.filter((a) => {
-          const d = new Date(a.dueDate).toISOString().split("T")[0];
-          return a.posted === true && d === today;
-        });
-        const pending = assignments.filter(
-          (a) => a.posted === true && !a.answered
-        );
-
-        setDueTodayCount(dueToday.length);
-        setPendingCount(pending.length);
-      } catch (err) {
-        console.error("Failed to fetch assignments KPIs", err);
-      }
-    })();
-  }, []);
-
-  /* ----------------------------- announcements ---------------------------- */
-  useEffect(() => {
-    (async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) return;
-
-        const res = await fetch(`${API_BASE}/api/general-announcements`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return;
-
-        const all = await res.json();
-        const dismissed = new Set(getDismissed());
-
-        // Show only if creator is Principal OR any "vice ... education"
-        const filtered = (all || []).filter((a) => {
-          const role = (a?.createdBy?.role || "").toLowerCase();
-          const fromPrincipal = role.includes("principal");
-          const fromVPE = role.includes("vice") && role.includes("education");
-          return (fromPrincipal || fromVPE) && !dismissed.has(a._id);
-        });
-
-        setAnnouncements(filtered);
-      } catch (err) {
-        console.error("Failed to fetch announcements", err);
-      }
-    })();
-  }, []);
-
-  const dismissAnnouncement = (id) => {
-    addDismissed(id);
-    setAnnouncements((prev) => prev.filter((a) => a._id !== id));
-  };
 
   /* -------------------------------- render -------------------------------- */
   return (
@@ -354,25 +232,13 @@ export default function Student_Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            {/* Debug mode toggle */}
-            <button
-              onClick={() => setDebugMode(!debugMode)}
-              className={`px-3 py-2 text-sm rounded ${
-                debugMode 
-                  ? 'bg-red-600 text-white hover:bg-red-700' 
-                  : 'bg-gray-600 text-white hover:bg-gray-700'
-              }`}
-            >
-              {debugMode ? 'Debug ON' : 'Debug OFF'}
-            </button>
-          <ProfileMenu />
+            <ProfileMenu />
           </div>
         </div>
 
         {/* Recent Classes Section */}
         <h3 className="text-lg md:text-4xl font-bold mb-3">
           Recent Classes
-          {debugMode && <span className="text-sm text-red-600 ml-2">(Debug Mode - Showing All Classes)</span>}
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {loading ? (
@@ -380,11 +246,6 @@ export default function Student_Dashboard() {
           ) : classes.length === 0 ? (
             <div className="col-span-full text-center">
               <p className="text-gray-500 mb-2">No classes found.</p>
-              {debugMode && (
-                <p className="text-sm text-gray-400">
-                  Debug: Check console for detailed filtering information
-                </p>
-              )}
             </div>
           ) : (
             classes.map((cls) => (
