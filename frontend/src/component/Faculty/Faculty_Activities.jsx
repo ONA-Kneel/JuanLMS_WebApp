@@ -138,16 +138,16 @@ export default function Faculty_Activities() {
           try {
             // Fetch assignments for this class
             const activityRes = await fetch(`${API_BASE}/assignments?classID=${facultyClass.classID}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        
             // Fetch quizzes for this class
             const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${facultyClass.classID}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            
-            if (activityRes.ok) {
-              const activityData = await activityRes.json();
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        
+        if (activityRes.ok) {
+          const activityData = await activityRes.json();
               if (Array.isArray(activityData)) {
                 allActivities.push(...activityData);
               }
@@ -181,14 +181,14 @@ export default function Faculty_Activities() {
         console.log('[Faculty_Activities] Filtered activities by quarter:', filteredActivities);
         console.log('[Faculty_Activities] Raw quiz data:', allQuizzes);
         console.log('[Faculty_Activities] Filtered quizzes by quarter:', filteredQuizzes);
-        
-        setActivities(filteredActivities);
-        setQuizzes(filteredQuizzes);
-        
-        // Fetch submissions for ready to grade
-        await fetchReadyToGradeItems(filteredActivities, filteredQuizzes, token);
-        // Fetch graded items
-        await fetchGradedItems(filteredActivities, filteredQuizzes, token);
+          
+          setActivities(filteredActivities);
+          setQuizzes(filteredQuizzes);
+          
+          // Fetch submissions for ready to grade
+          await fetchReadyToGradeItems(filteredActivities, filteredQuizzes, token);
+          // Fetch graded items
+          await fetchGradedItems(filteredActivities, filteredQuizzes, token);
         
       } catch (err) {
         console.error("Failed to fetch activities or quizzes", err);

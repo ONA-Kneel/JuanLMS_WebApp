@@ -16,7 +16,14 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.
 export default function Faculty_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState(() => {
+    try {
+      const cached = localStorage.getItem('users_all_faculty');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
@@ -60,7 +67,13 @@ export default function Faculty_Chats() {
   const [isGroupChat, setIsGroupChat] = useState(false);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
 
-  // Member search state is not used in this view
+  // Add state for member search
+  const [memberSearchTerm, setMemberSearchTerm] = useState('');
+  
+  // Backend search results from users collection
+  const [searchedUsers, setSearchedUsers] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   
   // Add state for leave group confirmation
   const [showLeaveGroupModal, setShowLeaveGroupModal] = useState(false);
@@ -87,6 +100,8 @@ export default function Faculty_Chats() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const socket = useRef(null);
+  const chatListRef = useRef(null);
+  const fetchedGroupPreviewIds = useRef(new Set());
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -325,13 +340,12 @@ export default function Faculty_Chats() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        setIsLoadingChats(true);
-        const res = await axios.get(`${API_BASE}/users`);
-        // Support both array and paginated object
-        const userArray = Array.isArray(res.data) ? res.data : res.data.users || [];
+        if (users.length === 0) setIsLoadingChats(true);
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_BASE}/users/active`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const userArray = Array.isArray(res.data) ? res.data : [];
         setUsers(userArray);
-        setSelectedChat(null);
-        localStorage.removeItem("selectedChatId_faculty");
+        try { localStorage.setItem('users_all_faculty', JSON.stringify(userArray)); } catch {}
       } catch (err) {
         if (err.response && err.response.status === 401) {
           window.location.href = '/';
@@ -490,50 +504,49 @@ export default function Faculty_Chats() {
           headers: { "Authorization": `Bearer ${token}` }
         });
         setGroups(res.data);
-        
-        // Fetch messages for all groups to determine which ones should appear in sidebar
-        if (res.data && res.data.length > 0) {
-          const allGroupMessages = {};
-          for (const group of res.data) {
-            try {
-              const groupRes = await axios.get(`${API_BASE}/group-messages/${group._id}?userId=${currentUserId}`, {
-                headers: { "Authorization": `Bearer ${token}` }
-              });
-              if (groupRes.data && groupRes.data.length > 0) {
-                allGroupMessages[group._id] = groupRes.data;
+        // Join all groups in Socket.IO
+        res.data.forEach(group => {
+          socket.current?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
+        });
+
+        // Lazy hydrate previews
+        const hydrateRange = async (startIndex, endIndex) => {
+          const slice = res.data.slice(startIndex, endIndex).filter(g => !fetchedGroupPreviewIds.current.has(g._id));
+          if (slice.length === 0) return;
+          slice.forEach(g => fetchedGroupPreviewIds.current.add(g._id));
+          try {
+            const batch = await Promise.all(
+              slice.map(group =>
+                axios.get(`${API_BASE}/group-messages/${group._id}?userId=${currentUserId}&limit=1&sort=desc`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                }).then(r => ({ groupId: group._id, list: Array.isArray(r.data) ? r.data : [] })).catch(() => ({ groupId: group._id, list: [] }))
+              )
+            );
+            const previews = {};
+            batch.forEach(({ groupId, list }) => {
+              const last = list.length > 0 ? list[list.length - 1] : null;
+              if (last) {
+                const prefix = last.senderId === currentUserId ? 'You: ' : `${last.senderName || 'Unknown'}: `;
+                const text = last.message ? last.message : (last.fileUrl ? 'File sent' : '');
+                previews[groupId] = { prefix, text };
               }
-            } catch {
-              // Group might not have messages yet, continue
-              continue;
-            }
-          }
-          setGroupMessages(allGroupMessages);
-          
-          // Join all groups in Socket.IO for real-time updates
-          if (socket.current?.connected) {
-            res.data.forEach(group => {
-              console.log("[FRONTEND] Joining group:", group._id);
-              socket.current.emit("joinGroup", { userId: currentUserId, groupId: group._id });
             });
-          } else {
-            console.log("[FRONTEND] Socket not connected yet, will join groups when connected");
-            // Store groups to join when socket connects
-            setGroups(res.data);
-            return; // Exit early, groups will be joined when socket connects
+            if (Object.keys(previews).length > 0) setLastMessages(prev => ({ ...prev, ...previews }));
+          } catch {
+            // ignore errors
           }
-          
-          // Debug: Check if socket is connected
-          console.log("[FRONTEND] Socket connected:", socket.current?.connected);
-          console.log("[FRONTEND] Socket ID:", socket.current?.id);
-          
-          // Also set groups state for the connect event handler
-          setGroups(res.data);
+        };
+        hydrateRange(0, 15);
+        const el = chatListRef.current; if (el) {
+          let t=null; const onScroll=()=>{ if (t) cancelAnimationFrame(t); t=requestAnimationFrame(()=>{ const h=64; const start=Math.max(0, Math.floor(el.scrollTop/h)-5); const end=start+25; hydrateRange(start,end); }); };
+          el.addEventListener('scroll', onScroll); return () => el.removeEventListener('scroll', onScroll);
         }
       } catch (err) {
         console.error("Error fetching groups:", err);
       }
     };
-    fetchGroups();
+    const cleanup = fetchGroups();
+    return () => { if (typeof cleanup === 'function') cleanup(); };
   }, [currentUserId]);
 
   // ================= FETCH MESSAGES =================
@@ -541,7 +554,10 @@ export default function Faculty_Chats() {
     const fetchMessages = async () => {
       if (!selectedChat) return;
       try {
-        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         setMessages((prev) => {
           const newMessages = { ...prev, [selectedChat._id]: res.data };
           
@@ -791,6 +807,30 @@ export default function Faculty_Chats() {
     }
   };
 
+  // Remove a chat from recent list and persist
+  const removeFromRecent = (chatId) => {
+    if (!chatId) return;
+    setRecentChats((prev) => {
+      const updated = prev.filter((c) => c._id !== chatId);
+      localStorage.setItem("recentChats_faculty", JSON.stringify(updated));
+      return updated;
+    });
+    setMessages((prev) => {
+      const next = { ...prev };
+      delete next[chatId];
+      return next;
+    });
+    setLastMessages((prev) => {
+      const next = { ...prev };
+      delete next[chatId];
+      return next;
+    });
+    if (selectedChat && selectedChat._id === chatId && !selectedChat.isGroup) {
+      setSelectedChat(null);
+      localStorage.removeItem("selectedChatId_faculty");
+    }
+  };
+
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -838,11 +878,17 @@ export default function Faculty_Chats() {
       setShowCreateGroupModal(false);
       setNewGroupName("");
       setSelectedGroupMembers([]);
+      setMemberSearchTerm("");
 
       // Join the group in socket
       socket.current?.emit("joinGroup", { userId: currentUserId, groupId: newGroup._id });
     } catch (err) {
-      console.error("Error creating group:", err);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Creation Failed',
+        message: err?.response?.data?.error || 'Error creating group'
+      });
     }
   };
 
@@ -1035,6 +1081,29 @@ export default function Faculty_Chats() {
     // eslint-disable-next-line
   }, [recentChats, currentUserId]);
 
+  // Debounced backend search against users collection
+  useEffect(() => {
+    const term = (searchTerm || '').trim();
+    if (term === '') { setSearchedUsers([]); return; }
+    setIsSearching(true);
+    const handle = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_BASE}/users/search`, {
+          params: { q: term },
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const arr = Array.isArray(res.data) ? res.data : [];
+        setSearchedUsers(arr);
+      } catch {
+        setSearchedUsers([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [searchTerm]);
+
   useEffect(() => {
     async function fetchAcademicYear() {
       try {
@@ -1113,33 +1182,27 @@ export default function Faculty_Chats() {
     return bTime - aTime;
   });
   // Enhanced search: include all groups you belong to (even with no messages)
-  const additionalGroupSearchResults = groups
-    .filter(g => !unifiedChats.some(uc => uc._id === g._id)) // Filter out already included groups
-    .filter(g => g.name?.toLowerCase().includes(searchTerm.toLowerCase()))
-    .map(g => ({ ...g, type: 'group' }));
+  // const additionalGroupSearchResults = groups
+  //   .filter(g => !unifiedChats.some(uc => uc._id === g._id)) // Filter out already included groups
+  //   .filter(g => g.name?.toLowerCase().includes(searchTerm.toLowerCase()))
+  //   .map(g => ({ ...g, type: 'group' }));
 
   const searchResults = searchTerm.trim() === '' ? [] : [
-    // First show existing chats/groups that match
+    // First show existing chats/groups that match (active conversations)
     ...unifiedChats.filter(chat => {
       if (chat.type === 'individual') {
         return (
-          chat.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          chat.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
+          (chat.firstname || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (chat.lastname || '').toLowerCase().includes(searchTerm.toLowerCase())
         );
       } else {
-        return chat.name?.toLowerCase().includes(searchTerm.toLowerCase());
+        return (chat.name || '').toLowerCase().includes(searchTerm.toLowerCase());
       }
     }),
-    // Then show other groups you're in without messages yet
-    ...additionalGroupSearchResults,
-    // Then show users not in recent chats that match
-    ...users
+    // Then show backend user results not already in recent chats
+    ...searchedUsers
       .filter(user => user._id !== currentUserId)
       .filter(user => !recentChats.some(chat => chat._id === user._id))
-      .filter(user =>
-        user.firstname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.lastname?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
 
@@ -1168,16 +1231,16 @@ export default function Faculty_Chats() {
           {/* LEFT PANEL */}
           <div className="w-full md:w-1/3 p-4 overflow-hidden flex flex-col h-full">
             {/* Header and Plus Icon */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 relative">
               <input
                 type="text"
                 placeholder="Search users or groups..."
                 className="flex-1 p-2 border rounded-lg text-sm"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onFocus={() => setShowSearchDropdown(true)}
+                onChange={(e) => { setSearchTerm(e.target.value); setShowSearchDropdown(true); }}
               />
-              <div className="flex items-center gap-2 ml-2">
-
+              <div className="relative ml-2">
                 <button
                   className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-900 text-white hover:bg-blue-800 focus:outline-none"
                   onClick={() => setShowGroupMenu((prev) => !prev)}
@@ -1202,9 +1265,55 @@ export default function Faculty_Chats() {
                   </div>
                 )}
               </div>
+              {showSearchDropdown && searchTerm.trim() !== '' && (
+                <div className="absolute left-0 top-10 w-[calc(100%-56px)] bg-white border rounded-lg shadow-lg z-20 max-h-80 overflow-y-auto">
+                  {isSearching && (
+                    <div className="p-3 text-sm text-gray-500">Searching...</div>
+                  )}
+                  {!isSearching && (
+                    <>
+                      {/* Users results */}
+                      {searchedUsers.filter(u => u._id !== currentUserId).length > 0 ? (
+                        searchedUsers.filter(u => u._id !== currentUserId).map(user => (
+                          <div
+                            key={user._id}
+                            className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                            onClick={() => { bumpChatToTop(user); setSelectedChat(user); setSearchTerm(''); setShowSearchDropdown(false); }}
+                          >
+                            <img src={getProfileImageUrl(user.profilePic, API_BASE, defaultAvatar)} alt="Profile" className="w-6 h-6 rounded-full object-cover border" onError={e => { e.target.onerror=null; e.target.src = defaultAvatar; }} />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm truncate">{user.lastname}, {user.firstname}</div>
+                              <div className="text-[11px] text-gray-500 truncate">Click to start new chat</div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-gray-500">No users found</div>
+                      )}
+                      <div className="h-px bg-gray-200 my-1" />
+                      {/* Group matches by name */}
+                      {groups.filter(g => (g.name || '').toLowerCase().includes(searchTerm.toLowerCase())).length > 0 ? (
+                        groups
+                          .filter(g => (g.name || '').toLowerCase().includes(searchTerm.toLowerCase()))
+                          .map(g => (
+                            <div key={g._id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer" onClick={() => { setSelectedChat({ ...g, isGroup: true }); setSearchTerm(''); setShowSearchDropdown(false); }}>
+                              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">G</div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm truncate">{g.name}</div>
+                                <div className="text-[11px] text-gray-500">{g.participants?.length || 0} participants</div>
+                              </div>
+                            </div>
+                          ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-gray-500">No groups found</div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
             {/* Unified Chat List */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+            <div ref={chatListRef} className="flex-1 overflow-y-auto space-y-2 pr-1">
               {isLoadingChats ? (
                 <div className="text-center py-10">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-900 mx-auto"></div>
@@ -1231,6 +1340,16 @@ export default function Faculty_Chats() {
                         }
                       }}
                     >
+                      {/* Remove (X) button for individual chats */}
+                      {chat.type === 'individual' && (
+                        <button
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"
+                          title="Remove from list"
+                          onClick={(e) => { e.stopPropagation(); removeFromRecent(chat._id); }}
+                        >
+                          &times;
+                        </button>
+                      )}
                       {chat.type === 'group' ? (
                         <div className="w-8 h-8 rounded-full bg-blue-900 text-white flex items-center justify-center text-xs font-bold">
                           <span className="material-icons">groups</span>
@@ -1247,20 +1366,10 @@ export default function Faculty_Chats() {
                         <strong className="truncate text-sm">
                           {chat.type === 'group' ? chat.name : `${chat.lastname}, ${chat.firstname}`}
                         </strong>
-                        {chat.type === 'group' ? (
-                          <span className="text-xs text-gray-500 truncate">
                             {lastMessages[chat._id] && (
                               <span className="text-xs text-gray-500 truncate">
                                 {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
                               </span>
-                            )}
-                          </span>
-                        ) : (
-                          lastMessages[chat._id] && (
-                            <span className="text-xs text-gray-500 truncate">
-                              {lastMessages[chat._id].prefix}{lastMessages[chat._id].text}
-                            </span>
-                          )
                         )}
                       </div>
                       {chat.type === 'group' && (
@@ -1602,57 +1711,91 @@ export default function Faculty_Chats() {
                     placeholder="Enter group name"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Select Members
-                  </label>
-                  <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-2">
-                    {users
-                      .filter((user) => user._id !== currentUserId)
-                      .map((user) => (
-                        <label
-                          key={user._id}
-                          className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer"
-                        >
+                {/* Member search box */}
                           <input
-                            type="checkbox"
-                            checked={selectedGroupMembers.some((m) => m._id === user._id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedGroupMembers([...selectedGroupMembers, user]);
-                              } else {
-                                setSelectedGroupMembers(
-                                  selectedGroupMembers.filter((m) => m._id !== user._id)
-                                );
-                              }
-                            }}
-                          />
-                          <img
-                            src={getProfileImageUrl(user.profilePic, API_BASE, defaultAvatar)}
-                            alt="Profile"
-                            className="w-6 h-6 rounded-full object-cover border"
-                            onError={e => { e.target.onerror = null; e.target.src = defaultAvatar; }}
-                          />
-                          <span className="text-sm">
+                  type="text"
+                  placeholder="Search users by name..."
+                  className="w-full p-2 border rounded-lg mb-2"
+                  value={memberSearchTerm}
+                  onChange={e => setMemberSearchTerm(e.target.value)}
+                />
+                {/* Selected members chips/list */}
+                {selectedGroupMembers.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {selectedGroupMembers.map(userId => {
+                      const user = users.find(u => u._id === userId);
+                      if (!user) return null;
+                      return (
+                        <span key={userId} className="flex items-center bg-blue-100 text-blue-900 px-2 py-1 rounded-full text-xs">
                             {user.lastname}, {user.firstname}
+                          <button
+                            className="ml-1 text-red-500 hover:text-red-700"
+                            onClick={() => setSelectedGroupMembers(prev => prev.filter(id => id !== userId))}
+                            title="Remove"
+                          >
+                            ×
+                          </button>
                           </span>
-                        </label>
-                      ))}
+                      );
+                    })}
                   </div>
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <button
-                    onClick={() => setShowCreateGroupModal(false)}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                  >
-                    Cancel
-                  </button>
+                )}
+                {/* Filtered user list: only show if search term is entered */}
+                {memberSearchTerm.trim() !== "" && (
+                  <div className="max-h-40 overflow-y-auto mb-4 border border-gray-200 rounded-lg">
+                    {users
+                      .filter(user => user._id !== currentUserId)
+                      .filter(user =>
+                        user.firstname?.toLowerCase().includes(memberSearchTerm.toLowerCase()) ||
+                        user.lastname?.toLowerCase().includes(memberSearchTerm.toLowerCase())
+                      )
+                      .filter(user => !selectedGroupMembers.includes(user._id))
+                      .length === 0 ? (
+                      <div className="text-gray-400 text-center p-2 text-xs">No users found</div>
+                    ) : (
+                      users
+                        .filter(user => user._id !== currentUserId)
+                        .filter(user =>
+                          user.firstname?.toLowerCase().includes(memberSearchTerm.toLowerCase()) ||
+                          user.lastname?.toLowerCase().includes(memberSearchTerm.toLowerCase())
+                        )
+                        .filter(user => !selectedGroupMembers.includes(user._id))
+                        .map(user => (
+                          <div
+                            key={user._id}
+                            className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer"
+                            onClick={() => {
+                              setSelectedGroupMembers(prev => [...prev, user._id]);
+                              setMemberSearchTerm("");
+                            }}
+                          >
+                            <span className="text-sm">{user.lastname}, {user.firstname}</span>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                )}
+                <div className="flex gap-2">
                   <button
                     onClick={handleCreateGroup}
                     disabled={!newGroupName.trim() || selectedGroupMembers.length === 0}
-                    className="px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className={newGroupName.trim() && selectedGroupMembers.length > 0
+                      ? "flex-1 py-2 rounded-lg text-sm bg-blue-900 text-white"
+                      : "flex-1 py-2 rounded-lg text-sm bg-gray-400 text-white cursor-not-allowed"
+                    }
                   >
                     Create Group
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowCreateGroupModal(false);
+                      setNewGroupName("");
+                      setSelectedGroupMembers([]);
+                      setMemberSearchTerm("");
+                    }}
+                    className="flex-1 py-2 rounded-lg text-sm bg-gray-300 text-gray-700"
+                  >
+                    Cancel
                   </button>
                 </div>
               </div>
