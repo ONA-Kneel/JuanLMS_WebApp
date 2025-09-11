@@ -35,7 +35,8 @@ export default function Principal_Dashboard() {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       const attempts = user?.changePassAttempts || 0;
       const suppressed = user?.changePassModal === true;
-      setShowSuggestPw(attempts === 0 && !suppressed);
+      // Temporarily disabled - setShowSuggestPw(attempts === 0 && !suppressed);
+      setShowSuggestPw(false);
     } catch {
       setShowSuggestPw(false);
     }
