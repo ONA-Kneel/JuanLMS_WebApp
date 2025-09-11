@@ -15,7 +15,6 @@ export default function Principal_Grades() {
   const [subjects, setSubjects] = useState([]);
   const [grades, setGrades] = useState({});
   const [students, setStudents] = useState([]);
-  const [debugMode, setDebugMode] = useState(false);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -592,108 +591,10 @@ export default function Principal_Grades() {
             </p>
           </div>
                       <div className="flex items-center gap-4">
-              {/* Debug toggle for development */}
-              <button
-                onClick={() => setDebugMode(!debugMode)}
-                className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-              >
-                {debugMode ? "Hide Debug" : "Show Debug"}
-              </button>
-              
-                             {/* Manual refresh button for debugging */}
-               {selectedClass !== null && (
-                 <button
-                   onClick={() => {
-                     console.log('🔄 Manual refresh triggered');
-                     if (selectedClass !== null) {
-                       fetchStudents();
-                     }
-                   }}
-                   className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                   title="Refresh students and grades data"
-                 >
-                   🔄 Refresh
-                 </button>
-               )}
-               
-               {/* Debug grades button */}
-               {selectedClass !== null && (
-                 <button
-                   onClick={async () => {
-                     console.log('🔍 Debug grades triggered');
-                     if (selectedClass !== null && academicYear && currentTerm) {
-                       const token = localStorage.getItem("token");
-                       const selectedClassObj = classes[selectedClass];
-                       
-                       try {
-                         const response = await fetch(`${API_BASE}/api/semestral-grades/class/${selectedClassObj.classID}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
-                           headers: { Authorization: `Bearer ${token}` }
-                         });
-                         
-                         if (response.ok) {
-                           const data = await response.json();
-                           console.log('🔍 Raw database response:', data);
-                           
-                           if (data.success && data.grades && data.grades.length > 0) {
-                             console.log('🔍 First grade record structure:', data.grades[0]);
-                             if (data.grades[0].grades) {
-                               console.log('🔍 Nested grades object:', data.grades[0].grades);
-                               console.log('🔍 Available grade fields:', Object.keys(data.grades[0].grades));
-                             }
-                           }
-                         }
-                       } catch (error) {
-                         console.error('❌ Debug grades error:', error);
-                       }
-                     }
-                   }}
-                   className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
-                   title="Debug grades structure from database"
-                 >
-                   🔍 Debug Grades
-                 </button>
-               )}
-              
               <ProfileMenu/>
             </div>
         </div>
 
-        {/* Debug info */}
-        {debugMode && (
-          <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
-            <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
-            <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
-            <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
-            <p className="text-sm text-yellow-700">Classes Found: {classes.length}</p>
-            <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
-            <p className="text-sm text-yellow-700">Loading State: {loading ? 'Yes' : 'No'}</p>
-            <p className="text-sm text-yellow-700">Selected Class: {selectedClass !== null ? classes[selectedClass]?.className : 'None'}</p>
-            <p className="text-sm text-yellow-700">Students Count: {students.length}</p>
-            <p className="text-sm text-yellow-700">Grades State: {Object.keys(grades).length} students have grades</p>
-            
-                     {/* Show detailed grades info */}
-         {Object.keys(grades).length > 0 && (
-           <div className="mt-3 p-3 bg-yellow-200 rounded">
-             <h5 className="font-semibold text-yellow-800 mb-2">Current Grades State:</h5>
-             {Object.entries(grades).map(([studentId, gradeData]) => {
-               const student = students.find(s => s._id === studentId);
-               return (
-                 <div key={studentId} className="text-xs text-yellow-700 mb-2 p-2 bg-yellow-300 rounded">
-                   <strong>{student?.name || studentId}:</strong> {JSON.stringify(gradeData)}
-                   <br/>
-                   <span className="text-yellow-600">
-                     Q1: {gradeData.quarter1 || 'N/A'} | 
-                     Q2: {gradeData.quarter2 || 'N/A'} | 
-                     Final: {gradeData.semesterFinal || 'N/A'} | 
-                     Locked: {gradeData.isLocked ? 'Yes' : 'No'}
-                   </span>
-                 </div>
-               );
-             })}
-           </div>
-         )}
-          </div>
-        )}
 
         {/* Class Selection */}
         <div className="mb-6">

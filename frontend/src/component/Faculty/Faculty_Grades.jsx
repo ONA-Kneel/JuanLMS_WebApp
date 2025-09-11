@@ -99,7 +99,6 @@ export default function Faculty_Grades() {
   const [studentGrades, setStudentGrades] = useState({});
   const [showIndividualManagement, setShowIndividualManagement] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [debugMode, setDebugMode] = useState(false);
   const [userEditedQuarterlyExam, setUserEditedQuarterlyExam] = useState(() => {
     // Try to restore the flag from localStorage
     try {

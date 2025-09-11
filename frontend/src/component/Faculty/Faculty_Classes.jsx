@@ -15,7 +15,6 @@ export default function Faculty_Classes() {
   const [loading, setLoading] = useState(true);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [debugMode, setDebugMode] = useState(false);
 
   const currentFacultyID = localStorage.getItem("userID");
 
@@ -137,28 +136,10 @@ export default function Faculty_Classes() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            {/* Debug toggle for development */}
-            <button
-              onClick={() => setDebugMode(!debugMode)}
-              className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-            >
-              {debugMode ? "Hide Debug" : "Show Debug"}
-            </button>
             <ProfileMenu />
           </div>
         </div>
 
-        {/* Debug info */}
-        {debugMode && (
-          <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
-            <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
-            <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
-            <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
-            <p className="text-sm text-yellow-700">Classes Found: {classes.length}</p>
-            <p className="text-sm text-yellow-700">Current Faculty ID: {currentFacultyID}</p>
-            <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
-          </div>
-        )}
         {/* Create Class Button */}
         <div className="flex flex-col items-start mb-8">
           <button

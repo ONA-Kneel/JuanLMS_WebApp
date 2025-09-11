@@ -30,7 +30,6 @@ export default function Student_Activities() {
   const [showClassFilterDropdown, setShowClassFilterDropdown] = useState(false);
   const classFilterRef = useRef();
   const [studentClasses, setStudentClasses] = useState([]);
-  const [debugMode, setDebugMode] = useState(false);
 
   // Quarter context (shared with faculty)
   const { globalQuarter, globalTerm, globalAcademicYear, isLoading: quarterLoading } = useQuarter();
@@ -671,15 +670,6 @@ export default function Student_Activities() {
               </p>
             </div>
             <div className="flex items-center gap-4">
-              {/* Debug toggle for development */}
-              {import.meta.env.DEV && (
-                <button
-                  onClick={() => setDebugMode(!debugMode)}
-                  className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-                >
-                  {debugMode ? "Hide Debug" : "Show Debug"}
-                </button>
-              )}
               <ProfileMenu/>
             </div>
           </div>
@@ -695,17 +685,6 @@ export default function Student_Activities() {
             </p>
           </div>
 
-          {/* Debug info */}
-          {debugMode && (
-            <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
-              <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
-              <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
-              <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
-              <p className="text-sm text-yellow-700">Assignments: {assignments.length}</p>
-              <p className="text-sm text-yellow-700">Quizzes: {quizzes.length}</p>
-              <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
-            </div>
-          )}
 
           {/* Tabs */}
           <ul className="flex flex-wrap border-b border-gray-700 text-xl sm:text-2xl font-medium text-gray-400">

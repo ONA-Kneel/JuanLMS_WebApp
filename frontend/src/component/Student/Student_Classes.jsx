@@ -15,7 +15,6 @@ export default function Student_Classes() {
   const [loading, setLoading] = useState(true);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [debugMode, setDebugMode] = useState(false);
 
   const currentUserID = localStorage.getItem("userID");
   const token = localStorage.getItem("token");
@@ -159,29 +158,10 @@ export default function Student_Classes() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            {/* Debug toggle for development */}
-            {import.meta.env.DEV && (
-              <button
-                onClick={() => setDebugMode(!debugMode)}
-                className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-              >
-                {debugMode ? "Hide Debug" : "Show Debug"}
-              </button>
-            )}
             <ProfileMenu />
           </div>
         </div>
 
-        {/* Debug info */}
-        {debugMode && (
-          <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded">
-            <h4 className="font-bold text-yellow-800 mb-2">Debug Info:</h4>
-            <p className="text-sm text-yellow-700">Academic Year: {JSON.stringify(academicYear)}</p>
-            <p className="text-sm text-yellow-700">Current Term: {JSON.stringify(currentTerm)}</p>
-            <p className="text-sm text-yellow-700">Classes Found: {classes.length}</p>
-            <p className="text-sm text-yellow-700">API Base: {API_BASE}</p>
-          </div>
-        )}
 
         {/* Registered Classes */}
         <h3 className="text-2xl font-semibold mb-4">Registered Classes</h3>
@@ -193,12 +173,6 @@ export default function Student_Classes() {
           ) : classes.length === 0 ? (
             <div className="col-span-full text-center py-8">
               <p className="text-gray-600">No registered classes found for the current term.</p>
-              {debugMode && (
-                <p className="text-sm text-gray-500 mt-2">
-                  Academic Year: {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Not loaded'} | 
-                  Term: {currentTerm ? currentTerm.termName : 'Not loaded'}
-                </p>
-              )}
             </div>
           ) : (
             classes.map(cls => (

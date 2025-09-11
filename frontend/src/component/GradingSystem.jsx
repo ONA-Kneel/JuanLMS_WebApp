@@ -34,7 +34,6 @@ export default function GradingSystem({ onStageTemporaryGrades }) {
   const [validationMessage, setValidationMessage] = useState('');
   const [validationType, setValidationType] = useState('error');
   const [successMessage, setSuccessMessage] = useState('');
-  const [debugMode, setDebugMode] = useState(false);
   const [showConfirmUpload, setShowConfirmUpload] = useState(false);
   const [confirmUploadMessage, setConfirmUploadMessage] = useState('');
   const [pendingValidatedFile, setPendingValidatedFile] = useState(null);

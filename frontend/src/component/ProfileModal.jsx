@@ -339,12 +339,12 @@ export default function ProfileModal({
   // --- Role Descriptions ---
   const roleDescriptions = {
     // Handle both singular and plural forms
-    student: "Student | (To implement soon)",
-    students: "Student | (To implement soon)",
-    faculty: "Faculty | (To implement soon)",
-    principal: "Dean | (To implement soon)",
-    admin: "Administrator | (To implement soon)",
-    "vice president of education": "Vice President of Education | (To implement soon)",
+    student: "Student",
+    students: "Student",
+    faculty: "Faculty",
+    principal: "Principal",
+    admin: "Administrator",
+    "vice president of education": "Vice President of Education",
     parent: "Parent | Guardian",
   };
 
