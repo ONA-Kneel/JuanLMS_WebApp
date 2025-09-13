@@ -76,49 +76,135 @@ export default function ClassContent({ selected, isFaculty = false }) {
   });
 
   // Export functions
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (!gradesData || !members.students) return;
-    
-    // Create CSV content
-    const headers = ['Student Name', 'Student ID', ...gradesData.map(activity => activity.title)];
-    const csvContent = [
-      headers.join(','),
-      ...members.students.map(student => {
-        const row = [
-          `"${student.lastname}, ${student.firstname}"`,
-          `"${student.schoolID || student.userID || 'N/A'}"`,
-          ...gradesData.map(activity => {
-            const submission = activity.submissions?.find(sub => 
-              sub.studentId?._id === student._id || 
-              sub.studentId === student._id ||
-              sub.student?._id === student._id ||
-              sub.student === student._id
-            );
-            
-            if (submission) {
-              if (activity.type === 'assignment') {
-                return submission.grade !== undefined && submission.grade !== null 
-                  ? `"${submission.grade}/${activity.points || 0}"` 
-                  : '"Submitted"';
-              } else if (activity.type === 'quiz') {
-                return submission.score !== undefined && submission.score !== null 
-                  ? `"${submission.score}/${activity.points || 0}"` 
-                  : '"Submitted"';
-              }
-            }
-            return '"-"';
-          })
-        ];
-        return row.join(',');
-      })
-    ].join('\n');
 
-    // Download CSV
+    // Fetch class details for header information
+    const token = localStorage.getItem('token');
+    let classDetails = {};
+    let facultyName = 'Unknown Faculty';
+    
+    try {
+      const res = await fetch(`${API_BASE}/classes/faculty-classes`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const classesData = await res.json();
+        classDetails = classesData.find(cls => cls.classID === classId) || {};
+        
+        // Fetch faculty information
+        if (classDetails.facultyID) {
+          try {
+            const facultyRes = await fetch(`${API_BASE}/users/${classDetails.facultyID}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (facultyRes.ok) {
+              const facultyData = await facultyRes.json();
+              facultyName = `${facultyData.firstname || ''} ${facultyData.lastname || ''}`.trim() || 'Unknown Faculty';
+            }
+          } catch (error) {
+            console.error('Failed to fetch faculty details:', error);
+          }
+        }
+        
+        // Try to get grade level from faculty assignments
+        try {
+          const assignmentRes = await fetch(`${API_BASE}/api/faculty-assignments`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (assignmentRes.ok) {
+            const assignmentsData = await assignmentRes.json();
+            const classAssignment = assignmentsData.find(assignment => 
+              assignment.facultyId === classDetails.facultyID && 
+              assignment.sectionName === classDetails.section
+            );
+            if (classAssignment && classAssignment.gradeLevel) {
+              classDetails.gradeLevel = classAssignment.gradeLevel;
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch faculty assignments:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch class details:', error);
+    }
+
+    // Get class information
+    const className = classDetails?.className || classDetails?.name || classWithMembers?.className || 'Unknown Class';
+    const gradeLevel = classDetails?.gradeLevel || classDetails?.grade || classWithMembers?.gradeLevel || 'Unknown Grade';
+    const section = classDetails?.section || classWithMembers?.section || 'Unknown Section';
+    const subject = classDetails?.classDesc || classDetails?.subject || classDetails?.subjectName || classWithMembers?.subject || 'Unknown Subject';
+
+    // Create CSV content with header information
+    const headerInfo = [
+      ['San Juan De Dios Educational Foundation Inc.'],
+      ['Breakdown of Grades'],
+      [`Date: ${new Date().toLocaleDateString()}`],
+      [''],
+      ['Class Information:'],
+      [`Name of Subject: ${subject}`],
+      [`Faculty Name: ${facultyName}`],
+      [`Grade: ${gradeLevel}`],
+      [`Section: ${section}`],
+      [`Strand: ${subject}`],
+      [''],
+      ['Grades:']
+    ];
+
+    // Create table headers
+    const tableHeaders = ['Student Name', 'Student ID', ...gradesData.map(activity => `${activity.title} (${activity.points} pts)`)];
+    
+    // Add student data with proper score formatting
+    const studentRows = [];
+    members.students.forEach(student => {
+      const row = [
+        `"${student.lastname}, ${student.firstname}"`,
+        `"${student.schoolID || student.userID || 'N/A'}"`,
+        ...gradesData.map(activity => {
+          const submission = activity.submissions?.find(sub => 
+            sub.studentId?._id === student._id || 
+            sub.studentId === student._id ||
+            sub.student?._id === student._id ||
+            sub.student === student._id
+          );
+          
+          if (submission) {
+            if (activity.type === 'assignment') {
+              return submission.grade !== undefined && submission.grade !== null 
+                ? `"Score: ${submission.grade}/${activity.points || 0}"` 
+                : '"Submitted"';
+            } else if (activity.type === 'quiz') {
+              return submission.score !== undefined && submission.score !== null 
+                ? `"Score: ${submission.score}/${activity.points || 0}"` 
+                : '"Submitted"';
+            }
+          }
+          return '"-"';
+        })
+      ];
+      studentRows.push(row.join(','));
+    });
+
+    // Combine all content
+    const allRows = [
+      ...headerInfo.map(row => `"${row[0]}"`),
+      tableHeaders.join(','),
+      ...studentRows,
+      [''],
+      [`"Generated on ${new Date().toLocaleString()}"`],
+      ['"San Juan De Dios Educational Foundation Inc."']
+    ];
+
+    // Convert to CSV
+    const csvContent = allRows.join('\n');
+
+    // Download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `grades_${classId}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `grades_${className.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
