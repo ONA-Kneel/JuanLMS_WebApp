@@ -86,6 +86,13 @@ export default function ClassContent({ selected, isFaculty = false }) {
     content: ''
   });
 
+  // Duplicate modal state
+  const [duplicateModal, setDuplicateModal] = useState({
+    isOpen: false,
+    assignment: null,
+    type: null
+  });
+
   // Loading state for member operations
   const [membersSaving, setMembersSaving] = useState(false);
   const [removingStudentId, setRemovingStudentId] = useState(null);
@@ -1200,18 +1207,36 @@ export default function ClassContent({ selected, isFaculty = false }) {
                   </button>
                 </div>
                 {showDropdown && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white border rounded shadow-lg z-10">
+                  <div className="absolute right-0 mt-2 w-56 bg-white border rounded shadow-lg z-10">
+                    <div className="px-4 py-2 border-b border-gray-200">
+                      <span className="text-sm font-medium text-gray-700">Written Works</span>
+                    </div>
                     <button
                       className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
-                      onClick={() => { setShowDropdown(false); navigate('/create-assignment'); }}
+                      onClick={() => { setShowDropdown(false); navigate(`/create-assignment?classId=${classId}`); }}
                     >
-                      <span className="material-icons">Assignment</span> 
+                      Assignment
                     </button>
                     <button
                       className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
-                      onClick={() => { setShowDropdown(false); navigate('/create-quiz'); }}
+                      onClick={() => { setShowDropdown(false); navigate(`/create-quiz?classId=${classId}`); }}
                     >
-                      <span className="material-icons">Quiz</span>
+                      Quiz
+                    </button>
+                    <div className="px-4 py-2 border-b border-gray-200 mt-2">
+                      <span className="text-sm font-medium text-gray-700">Performance Task</span>
+                    </div>
+                    <button
+                      className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
+                      onClick={() => { setShowDropdown(false); navigate(`/create-assignment?classId=${classId}&type=performance`); }}
+                    >
+                      Assignment
+                    </button>
+                    <button
+                      className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
+                      onClick={() => { setShowDropdown(false); navigate(`/create-quiz?classId=${classId}&type=performance`); }}
+                    >
+                      Quiz
                     </button>
                   </div>
                 )}
@@ -1254,7 +1279,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                         {unposted.map(item => (
                   <div
                     key={item._id}
-                            className={`p-4 rounded-xl border shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative bg-gray-100 border-gray-300 opacity-75`}
+                            className={`p-4 rounded-xl border shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative bg-gray-100 border-gray-300 opacity-75 mb-2`}
                     onClick={() => {
                       if (item.type === 'quiz') {
                         if (isFaculty) {
@@ -1270,6 +1295,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                                 <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{item.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
+                                <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.assignmentType === 'performance' ? 'bg-orange-200 text-orange-800' : 'bg-blue-200 text-blue-800'}`}>{item.assignmentType === 'performance' ? 'Performance Task' : 'Written Works'}</span>
                                 <span className="inline-block px-2 py-1 rounded text-xs font-bold bg-gray-500 text-white">Not Posted Yet</span>
                       </div>
                               <span className="text-lg font-bold text-gray-600">{item.title}</span>
@@ -1292,6 +1318,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                   onUpdate={(updatedAssignment) => setAssignments(assignments => assignments.map(a => a._id === updatedAssignment._id ? updatedAssignment : a))}
                                   setValidationModal={setValidationModal}
                                   setConfirmationModal={setConfirmationModal}
+                                  setDuplicateModal={setDuplicateModal}
                                 />
                         </div>
                       )}
@@ -1310,7 +1337,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                         {groupedByDate[dateKey].map(item => (
                           <div
                             key={item._id}
-                            className={`p-4 rounded-xl border shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative bg-white border-blue-200 hover:bg-blue-50`}
+                            className={`p-4 rounded-xl border shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative bg-white border-blue-200 hover:bg-blue-50 mb-2`}
                             onClick={() => {
                               if (item.type === 'quiz') {
                                 if (isFaculty) {
@@ -1326,6 +1353,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{item.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
+                                <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.assignmentType === 'performance' ? 'bg-orange-200 text-orange-800' : 'bg-blue-200 text-blue-800'}`}>{item.assignmentType === 'performance' ? 'Performance Task' : 'Written Works'}</span>
                               </div>
                               <span className="text-lg font-bold text-blue-900">{item.title}</span>
                               <div className="text-sm mt-1 text-gray-700">{item.instructions}</div>
@@ -1344,6 +1372,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                   onUpdate={(updatedAssignment) => setAssignments(assignments => assignments.map(a => a._id === updatedAssignment._id ? updatedAssignment : a))}
                         setValidationModal={setValidationModal}
                         setConfirmationModal={setConfirmationModal}
+                        setDuplicateModal={setDuplicateModal}
                       />
                       </div>
                     )}
@@ -2310,12 +2339,131 @@ export default function ClassContent({ selected, isFaculty = false }) {
           </div>
         </div>
       )}
+
+      {/* Duplicate Modal */}
+      {duplicateModal.isOpen && (
+        <DuplicateClassModal
+          isOpen={duplicateModal.isOpen}
+          onClose={() => setDuplicateModal({ isOpen: false, assignment: null, type: null })}
+          assignment={duplicateModal.assignment}
+          type={duplicateModal.type}
+          navigate={navigate}
+        />
+      )}
+    </div>
+  );
+}
+
+// Duplicate Class Modal Component
+function DuplicateClassModal({ isOpen, onClose, assignment, type, navigate }) {
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [availableClasses, setAvailableClasses] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchAvailableClasses();
+    }
+  }, [isOpen]);
+
+  const fetchAvailableClasses = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/classes/faculty-classes`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Filter out the current class and only show active classes
+        const filtered = data.filter(cls => 
+          cls.isArchived !== true && 
+          cls.classID !== assignment?.classID
+        );
+        setAvailableClasses(filtered);
+      }
+    } catch (err) {
+      console.error('Failed to fetch classes:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDuplicate = () => {
+    if (!selectedClassId) return;
+    
+    const duplicateUrl = type === 'quiz' 
+      ? `/create-quiz?duplicate=${assignment._id}&classId=${selectedClassId}`
+      : `/create-assignment?duplicate=${assignment._id}&classId=${selectedClassId}`;
+    
+    navigate(duplicateUrl);
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white p-6 rounded-xl shadow-xl max-w-md w-full border-2 border-blue-200">
+        <h3 className="text-xl font-bold mb-4 text-blue-900">
+          Duplicate {type === 'quiz' ? 'Quiz' : 'Assignment'}
+        </h3>
+        
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 mb-2">
+            Select the class where you want to duplicate "{assignment?.title}":
+          </p>
+          
+          {loading ? (
+            <div className="text-center py-4">
+              <p className="text-gray-500">Loading classes...</p>
+            </div>
+          ) : (
+            <select
+              value={selectedClassId}
+              onChange={(e) => setSelectedClassId(e.target.value)}
+              className="w-full border rounded px-3 py-2 text-sm"
+            >
+              <option value="">Select a class...</option>
+              {availableClasses.map(cls => (
+                <option key={cls.classID} value={cls.classID}>
+                  {cls.className} ({cls.classCode})
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {availableClasses.length === 0 && !loading && (
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+            <p className="text-sm text-yellow-800">
+              No other classes available for duplication.
+            </p>
+          </div>
+        )}
+
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onClose}
+            className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleDuplicate}
+            disabled={!selectedClassId || loading}
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Duplicate
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 // Add Menu component at the bottom of the file
-function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmationModal }) {
+function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmationModal, setDuplicateModal }) {
   const isPosted = () => {
     if (!assignment.postAt) return false; // Changed to false for unposted items
     const now = new Date();
@@ -2507,6 +2655,21 @@ function Menu({ assignment, onDelete, onUpdate, setValidationModal, setConfirmat
             }}
           >
             Edit
+          </button>
+          <button
+            className="w-full text-left px-4 py-2 hover:bg-gray-100 text-green-600"
+            onClick={e => {
+              e.stopPropagation();
+              setOpen(false);
+              // Show duplicate modal instead of direct navigation
+              setDuplicateModal({
+                isOpen: true,
+                assignment: assignment,
+                type: assignment.type
+              });
+            }}
+          >
+            Duplicate
           </button>
           {!isPosted() && (
             <button

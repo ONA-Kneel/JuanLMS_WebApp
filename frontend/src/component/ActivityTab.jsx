@@ -7,7 +7,9 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.
 export default function ActivityTab({ onAssignmentCreated }) {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const classId = searchParams.get('classId');
     const editAssignmentId = searchParams.get('edit');
+    const duplicateAssignmentId = searchParams.get('duplicate');
     const activityType = searchParams.get('type') || 'written'; // Default to 'written' if not specified
     
     // Get quarter parameters from URL
@@ -36,7 +38,10 @@ export default function ActivityTab({ onAssignmentCreated }) {
     const [postAt, setPostAt] = useState("");
     const FAR_FUTURE_DATE = "2099-12-31T23:59";
     const [isEditMode, setIsEditMode] = useState(false);
+    const [isDuplicateMode, setIsDuplicateMode] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [showStudentModal, setShowStudentModal] = useState(false);
+    const [tempClassStudentMap, setTempClassStudentMap] = useState({});
     
     // Add academic year and term states
     const [academicYear, setAcademicYear] = useState(null);
@@ -115,6 +120,19 @@ export default function ActivityTab({ onAssignmentCreated }) {
                     );
                     
                     setAvailableClasses(filteredClasses);
+                    
+                    // Auto-select class from URL if classId is provided
+                    if (classId && filteredClasses.length > 0) {
+                        console.log('Looking for classId:', classId);
+                        console.log('Available classes:', filteredClasses.map(c => ({ classID: c.classID, className: c.className })));
+                        const foundClass = filteredClasses.find(cls => cls.classID === classId);
+                        if (foundClass) {
+                            console.log('Found class:', foundClass);
+                            setSelectedClassIDs([foundClass.classID]);
+                        } else {
+                            console.log('Class not found with classId:', classId);
+                        }
+                    }
                 } else {
                     setAvailableClasses([]);
                 }
@@ -124,7 +142,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
         }
         
         fetchAvailableClasses();
-    }, [academicYear, currentTerm]);
+    }, [academicYear, currentTerm, classId]);
 
     // Load assignment data if in edit mode
     useEffect(() => {
@@ -206,6 +224,73 @@ export default function ActivityTab({ onAssignmentCreated }) {
                 .finally(() => setLoading(false));
         }
     }, [editAssignmentId]);
+
+    // Handle duplicate assignment
+    useEffect(() => {
+        if (duplicateAssignmentId) {
+            setIsDuplicateMode(true);
+            setLoading(true);
+            const token = localStorage.getItem('token');
+            
+            fetch(`${API_BASE}/assignments/${duplicateAssignmentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+                .then(async res => {
+                    if (!res.ok) {
+                        const errorData = await res.json();
+                        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    // Pre-fill form with original assignment data
+                    setTitle(data.title ? `${data.title} (Copy)` : "");
+                    setDescription(data.instructions || data.description || "");
+                    const points = data.points || 100;
+                    setActivityPoints(points);
+                    setAttachmentLink(data.attachmentLink || "");
+                    
+                    // Set due date if it exists
+                    if (data.dueDate) {
+                        const dueDateLocal = new Date(data.dueDate);
+                        const year = dueDateLocal.getFullYear();
+                        const month = String(dueDateLocal.getMonth() + 1).padStart(2, '0');
+                        const day = String(dueDateLocal.getDate()).padStart(2, '0');
+                        const hours = String(dueDateLocal.getHours()).padStart(2, '0');
+                        const minutes = String(dueDateLocal.getMinutes()).padStart(2, '0');
+                        setDueDate(`${year}-${month}-${day}T${hours}:${minutes}`);
+                    }
+                    
+                    // Don't copy post date for duplicates - let it be posted immediately
+                    setSchedulePost(false);
+                    setPostAt("");
+                    
+                    // Set class ID from URL parameter (the target class for duplication)
+                    if (classId) {
+                        setSelectedClassIDs([classId]);
+                    }
+                })
+                .catch(err => {
+                    let errorMessage = 'Failed to load assignment data for duplication. Please try again.';
+                    
+                    if (err.message.includes('404')) {
+                        errorMessage = 'Original assignment not found. It may have been deleted.';
+                    } else if (err.message.includes('403')) {
+                        errorMessage = 'You do not have permission to duplicate this assignment.';
+                    } else if (err.message.includes('401')) {
+                        errorMessage = 'Your session has expired. Please log in again.';
+                    }
+                    
+                    setValidationModal({
+                        isOpen: true,
+                        type: 'error',
+                        title: 'Duplicate Failed',
+                        message: errorMessage
+                    });
+                })
+                .finally(() => setLoading(false));
+        }
+    }, [duplicateAssignmentId, classId]);
 
     // Fetch students for each selected class
     useEffect(() => {
@@ -322,6 +407,48 @@ export default function ActivityTab({ onAssignmentCreated }) {
 
     const handleStudentTypeChange = (classID, value) => {
         setClassStudentMap(prev => ({
+            ...prev,
+            [classID]: { ...prev[classID], selected: value === 'all' ? 'all' : [] }
+        }));
+    };
+
+    const handleOpenStudentModal = () => {
+        // Copy current state to temp state
+        setTempClassStudentMap(JSON.parse(JSON.stringify(classStudentMap)));
+        setShowStudentModal(true);
+    };
+
+    const handleCloseStudentModal = () => {
+        // Discard changes and close modal
+        setShowStudentModal(false);
+    };
+
+    const handleSaveStudentModal = () => {
+        // Save changes and close modal
+        setClassStudentMap(JSON.parse(JSON.stringify(tempClassStudentMap)));
+        setShowStudentModal(false);
+    };
+
+    const handleTempStudentSelection = (classID, typeOrId) => {
+        setTempClassStudentMap(prev => {
+            const entry = prev[classID] || { students: [], selected: 'all' };
+            if (typeOrId === 'all') {
+                return { ...prev, [classID]: { ...entry, selected: 'all' } };
+            } else {
+                // Toggle student ID
+                let selected = Array.isArray(entry.selected) ? [...entry.selected] : [];
+                if (selected.includes(typeOrId)) {
+                    selected = selected.filter(id => id !== typeOrId);
+                } else {
+                    selected.push(typeOrId);
+                }
+                return { ...prev, [classID]: { ...entry, selected } };
+            }
+        });
+    };
+
+    const handleTempStudentTypeChange = (classID, value) => {
+        setTempClassStudentMap(prev => ({
             ...prev,
             [classID]: { ...prev[classID], selected: value === 'all' ? 'all' : [] }
         }));
@@ -539,7 +666,9 @@ export default function ActivityTab({ onAssignmentCreated }) {
         <div className="flex flex-row min-h-screen bg-gray-50 font-poppinsr">
             {/* Main Content */}
             <div className="flex-1 p-10">
-                <h1 className="text-2xl font-bold mb-8 font-poppins">{isEditMode ? 'Edit Assignment' : 'Create an Assignment'}</h1>
+                <h1 className="text-2xl font-bold mb-8 font-poppins">
+                    {isEditMode ? 'Edit Assignment' : isDuplicateMode ? 'Duplicate Assignment' : 'Create an Assignment'}
+                </h1>
                 
                 {/* Quarter Indicator */}
                 <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -635,7 +764,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
                         <div className="bg-white p-8 rounded-xl shadow-xl max-w-md w-full text-center">
                             <h3 className="text-xl font-bold mb-4 text-green-600">
-                                {isEditMode ? 'Assignment Updated!' : 'Activity/Quiz Created!'}
+                                {isEditMode ? 'Assignment Updated!' : isDuplicateMode ? 'Assignment Duplicated!' : 'Activity/Quiz Created!'}
                             </h3>
                             <button
                                 className="mt-4 bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded w-full"
@@ -825,72 +954,72 @@ export default function ActivityTab({ onAssignmentCreated }) {
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium mb-1 font-poppins">Class(es)</label>
-                    <div className="flex flex-col gap-2">
-                        {availableClasses.map(cls => (
-                            <label key={cls._id} className="flex items-start gap-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    className="mt-1"
-                                    value={cls.classID}
-                                    checked={selectedClassIDs.includes(cls.classID)}
-                                    onChange={e => {
-                                        if (e.target.checked) {
-                                            setSelectedClassIDs(ids => [...ids, cls.classID]);
-                                        } else {
-                                            setSelectedClassIDs(ids => ids.filter(id => id !== cls.classID));
-                                        }
-                                    }}
-                                />
-                                <span>
-                                    <span className="font-semibold font-poppinsr">{cls.className || cls.name}</span>
-                                    <br />
-                                    <span className="text-xs text-gray-700 font-poppinsr">{cls.section || cls.classCode || 'N/A'}</span>
-                                </span>
-                            </label>
-                        ))}
-                    </div>
-                    {/* For each selected class, show student selection at the bottom of the class section */}
-                    <div className="flex flex-col gap-4 mt-4">
-                    <label className="block text-sm font-medium mb-1 font-poppins">For</label>
-                        {selectedClassIDs.map(classID => {
-                            const entry = classStudentMap[classID];
-                            const cls = availableClasses.find(c => c.classID === classID);
-                            if (!entry || !cls) return null;
-                            return (
-                                <div key={classID} className="p-2 border rounded bg-gray-50">
-                                    <div className="font-semibold font-poppinsr mb-1">
-                                        {cls.className || cls.name} <span className="text-xs text-gray-700 font-poppinsr">({cls.section || cls.classCode || 'N/A'})</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="font-semibold font-poppinsr">Assign to:</span>
-                                        <select
-                                            className="border rounded px-2 py-1 font-poppinsr"
-                                            value={entry.selected === 'all' ? 'all' : 'specific'}
-                                            onChange={e => handleStudentTypeChange(classID, e.target.value)}
-                                        >
-                                            <option value="all">All students</option>
-                                            <option value="specific">Specific students</option>
-                                        </select>
-                                    </div>
-                                    {entry.selected !== 'all' && (
-                                        <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-                                            {entry.students.map(stu => (
-                                                <label key={stu.userID || stu._id} className="flex items-center gap-2 cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={Array.isArray(entry.selected) && entry.selected.includes(stu.userID || stu._id)}
-                                                        onChange={() => handleStudentSelection(classID, stu.userID || stu._id)}
-                                                    />
-                                                    <span>{stu.firstname} {stu.lastname}</span>
-                                                </label>
-                                            ))}
+                    <label className="block text-sm font-medium mb-1 font-poppins">Class</label>
+                    {selectedClassIDs.length > 0 && availableClasses.length > 0 ? (
+                        <div className="p-3 border rounded bg-gray-50">
+                            {selectedClassIDs.map(classID => {
+                                const cls = availableClasses.find(c => c.classID === classID);
+                                const entry = classStudentMap[classID];
+                                if (!cls) return null;
+                                return (
+                                    <div key={classID} className="mb-3">
+                                        <div className="font-semibold font-poppinsr">
+                                            {cls.className || cls.name}
                                         </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+                                        <div className="text-xs text-gray-700 font-poppinsr mb-2">
+                                            {cls.section || cls.classCode || 'N/A'}
+                                        </div>
+                                        
+                                        {/* Student Selection Status */}
+                                        {entry && (
+                                            <div className="mb-2">
+                                                {entry.selected === 'all' ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
+                                                            All Students
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-xs text-gray-600 font-medium">Selected Students:</span>
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {entry.selected && Array.isArray(entry.selected) && entry.selected.length > 0 ? (
+                                                                entry.selected.map(studentId => {
+                                                                    const student = entry.students.find(s => (s.userID || s._id) === studentId);
+                                                                    return student ? (
+                                                                        <span 
+                                                                            key={studentId}
+                                                                            className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium"
+                                                                        >
+                                                                            {student.firstname} {student.lastname}
+                                                                        </span>
+                                                                    ) : null;
+                                                                })
+                                                            ) : (
+                                                                <span className="text-xs text-gray-500 italic">No students selected</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        
+                                        <button
+                                            type="button"
+                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-poppins text-sm"
+                                            onClick={handleOpenStudentModal}
+                                        >
+                                            {entry ? 'Edit Students' : 'Select Students'}
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="p-3 border rounded bg-gray-100 text-gray-500 text-center">
+                            No class selected
+                        </div>
+                    )}
                 </div>
                 {/* Schedule Post Toggle and DateTime Picker */}
                 <div className="mb-4 flex flex-col gap-2">
@@ -909,6 +1038,67 @@ export default function ActivityTab({ onAssignmentCreated }) {
                     )}
                 </div>
             </div>
+            {/* Student Selection Modal */}
+            {showStudentModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                        <h3 className="text-lg font-semibold mb-4 text-blue-900">Select Students</h3>
+                        {selectedClassIDs.map(classID => {
+                            const entry = tempClassStudentMap[classID] || classStudentMap[classID];
+                            const cls = availableClasses.find(c => c.classID === classID);
+                            if (!entry || !cls) return null;
+                            return (
+                                <div key={classID} className="mb-6 p-4 border rounded bg-gray-50">
+                                    <div className="font-semibold font-poppinsr mb-3">
+                                        {cls.className || cls.name} <span className="text-xs text-gray-700 font-poppinsr">({cls.section || cls.classCode || 'N/A'})</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <span className="font-semibold font-poppinsr">Assign to:</span>
+                                        <select
+                                            className="border rounded px-2 py-1 font-poppinsr"
+                                            value={entry.selected === 'all' ? 'all' : 'specific'}
+                                            onChange={e => handleTempStudentTypeChange(classID, e.target.value)}
+                                        >
+                                            <option value="all">All students</option>
+                                            <option value="specific">Specific students</option>
+                                        </select>
+                                    </div>
+                                    {entry.selected !== 'all' && (
+                                        <div className="max-h-60 overflow-y-auto">
+                                            <div className="grid grid-cols-1 gap-2">
+                                                {entry.students.map(stu => (
+                                                    <label key={stu.userID || stu._id} className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-100 rounded">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={Array.isArray(entry.selected) && entry.selected.includes(stu.userID || stu._id)}
+                                                            onChange={() => handleTempStudentSelection(classID, stu.userID || stu._id)}
+                                                        />
+                                                        <span className="text-base font-medium">{stu.firstname} {stu.lastname}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                        <div className="flex gap-2 justify-end mt-4">
+                            <button 
+                                className="bg-gray-300 text-gray-800 px-4 py-2 rounded" 
+                                onClick={handleCloseStudentModal}
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" 
+                                onClick={handleSaveStudentModal}
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Validation Modal */}
             <ValidationModal
                 isOpen={validationModal.isOpen}

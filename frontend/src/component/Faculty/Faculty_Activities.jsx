@@ -533,7 +533,7 @@ export default function Faculty_Activities() {
                   </div>
                 </div>
 
-                <div ref={dropdownRef}>
+                {/* <div ref={dropdownRef}>
                   <button
                     className="bg-blue-900 text-white text-sm px-4 py-2 rounded hover:bg-blue-950 flex items-center gap-2"
                     onClick={() => setShowDropdown((prev) => !prev)}
@@ -589,7 +589,7 @@ export default function Faculty_Activities() {
                       </button>
                     </div>
                   )}
-                </div>
+                </div> */}
               </div>
 
               {(() => {
@@ -661,7 +661,7 @@ export default function Faculty_Activities() {
                       return (
                       <div
                         key={`${item.type}-${item._id || item.id}-${item.classInfo?.classCode || 'unknown'}`}
-                        className="bg-[#00418B] p-4 rounded-xl shadow-lg mb-4 hover:bg-[#002d5a] cursor-pointer transition-colors"
+                        className="bg-[#00418B] p-4 rounded-xl shadow-lg mb-6 hover:bg-[#002d5a] cursor-pointer transition-colors"
                         onClick={() => {
                           if (item.type === 'assignment') {
                             navigate(`/assignment/${item._id || item.id}`);
@@ -887,7 +887,7 @@ export default function Faculty_Activities() {
                       {groupedByDate[dateKey].map((item) => (
                         <div
                           key={`${item.type}-${item._id || item.id}-${item.classInfo?.classCode || 'unknown'}`}
-                          className="bg-[#1e40af] p-4 rounded-xl shadow-lg mb-4 hover:bg-[#1e3a8a] cursor-pointer transition-colors"
+                          className="bg-[#1e40af] p-4 rounded-xl shadow-lg mb-6 hover:bg-[#1e3a8a] cursor-pointer transition-colors"
                           onClick={() => {
                             if (item.type === 'assignment') {
                               navigate(`/assignment/${item._id || item.id}`);
@@ -1183,7 +1183,7 @@ export default function Faculty_Activities() {
                         const classNames = Object.keys(totalsByClassRender).sort((a, b) => a.localeCompare(b));
                         if (classNames.length === 0) return null;
                         return (
-                          <div className="mb-4 overflow-x-auto">
+                          <div className="mb-4 overflow-x-auto ">
                             <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
                               <thead className="bg-gray-50">
                                 <tr>
