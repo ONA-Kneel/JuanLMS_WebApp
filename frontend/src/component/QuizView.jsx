@@ -5,6 +5,91 @@ import ValidationModal from './ValidationModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
+// Image Component with Fallback URLs
+function QuestionImage({ imageUrl, alt, className, style, onClick }) {
+  const [currentUrl, setCurrentUrl] = useState(() => {
+    // Construct the proper URL based on the imageUrl format
+    if (!imageUrl) return null;
+    
+    console.log('Processing image URL:', imageUrl);
+    
+    // If it's already a full URL, check if it's a Cloudinary URL or local URL
+    if (imageUrl.startsWith('http')) {
+      // Check if it's a Cloudinary URL
+      if (imageUrl.includes('cloudinary.com')) {
+        console.log('Using Cloudinary URL:', imageUrl);
+        return imageUrl;
+      }
+      
+      // Check if it's a local URL with a Cloudinary public ID pattern
+      if (imageUrl.includes('/uploads/quiz-images/juanlms/quiz-images/')) {
+        const publicId = imageUrl.split('/uploads/quiz-images/juanlms/quiz-images/')[1];
+        if (publicId && !publicId.includes('.') && /^[a-zA-Z0-9]+$/.test(publicId)) {
+          const cloudinaryUrl = `https://res.cloudinary.com/drfoswtsk/image/upload/v1/juanlms/quiz-images/${publicId}`;
+          console.log('Detected Cloudinary public ID in local URL, constructing Cloudinary URL:', cloudinaryUrl);
+          return cloudinaryUrl;
+        }
+      }
+      
+      console.log('Using local server URL:', imageUrl);
+      return imageUrl;
+    }
+    
+    // If it looks like a Cloudinary public ID (no slashes, no extensions, alphanumeric)
+    if (!imageUrl.includes('/') && !imageUrl.includes('.') && /^[a-zA-Z0-9]+$/.test(imageUrl)) {
+      const cloudinaryUrl = `https://res.cloudinary.com/drfoswtsk/image/upload/v1/juanlms/quiz-images/${imageUrl}`;
+      console.log('Constructed Cloudinary URL:', cloudinaryUrl);
+      return cloudinaryUrl;
+    }
+    
+    // If it's a relative path, construct local server URL
+    if (imageUrl.startsWith('/')) {
+      const localUrl = `${API_BASE}${imageUrl}`;
+      console.log('Constructed local URL:', localUrl);
+      return localUrl;
+    }
+    
+    // Default: treat as local file
+    const defaultUrl = `${API_BASE}/uploads/quiz-images/${imageUrl}`;
+    console.log('Using default local URL:', defaultUrl);
+    return defaultUrl;
+  });
+  const [attempts, setAttempts] = useState(0);
+  
+  const extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+  
+  const handleError = () => {
+    console.log('Image failed to load:', currentUrl);
+    
+    if (attempts < extensions.length) {
+      // Try next extension
+      const baseUrl = currentUrl.replace(/\.[^/.]+$/, ''); // Remove existing extension
+      const newUrl = baseUrl + extensions[attempts];
+      console.log('Trying extension:', extensions[attempts], 'New URL:', newUrl);
+      setCurrentUrl(newUrl);
+      setAttempts(prev => prev + 1);
+    } else {
+      // All attempts failed, hide the image
+      console.log('All attempts failed, hiding image');
+      setCurrentUrl(null);
+    }
+  };
+  
+  if (!currentUrl) return null;
+  
+  return (
+    <img 
+      src={currentUrl}
+      alt={alt}
+      className={className}
+      style={style}
+      onClick={onClick}
+      onError={handleError}
+      onLoad={() => console.log('Image loaded successfully:', currentUrl)}
+    />
+  );
+}
+
 export default function QuizView() {
   const { quizId } = useParams();
   const [quiz, setQuiz] = useState(null);
@@ -575,8 +660,8 @@ export default function QuizView() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            <img
-              src={lightboxImage}
+            <QuestionImage
+              imageUrl={lightboxImage}
               alt="Question"
               className="max-w-full max-h-full object-contain rounded shadow-2xl"
             />
@@ -598,8 +683,8 @@ export default function QuizView() {
               onClick={() => setLightboxImage(q.image)}
               className="focus:outline-none"
             >
-              <img
-                src={q.image}
+              <QuestionImage
+                imageUrl={q.image}
                 alt="Question"
                 className="max-h-64 rounded border transition-transform duration-200 group-hover:scale-105 group-hover:brightness-90 cursor-zoom-in"
               />

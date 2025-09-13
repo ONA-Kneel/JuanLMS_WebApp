@@ -508,20 +508,138 @@ export default function AssignmentDetailPage() {
                 <button className={`pb-2 px-4 ${activeTab === 'graded' ? 'border-b-2 border-blue-900 font-bold' : ''}`} onClick={() => setActiveTab('graded')}>Graded</button>
               </div>
               {activeTab === 'assignment' && (
-                <div>
-                  <h2 className="text-lg font-semibold mb-1">Instructions</h2>
-                  <div className="text-gray-800 whitespace-pre-line mb-4">{assignment.instructions}</div>
-                  {assignment.description && (
-                    <div className="mb-4">
-                      <h2 className="text-lg font-semibold mb-1">Description</h2>
-                      <div className="text-gray-700 whitespace-pre-line">{assignment.description}</div>
+                <div className="space-y-6">
+                  {/* Assignment Overview */}
+                  <div className="bg-white border rounded-lg p-6 shadow-sm">
+                    <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
+                      <span>📋</span>
+                      Assignment Overview
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Title</label>
+                        <p className="text-lg font-semibold text-gray-900">{assignment.title}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Points</label>
+                        <p className="text-lg font-semibold text-blue-600">{assignment.points || 'Not specified'}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Due Date</label>
+                        <p className="text-lg font-semibold text-gray-900">
+                          {assignment.dueDate ? new Date(assignment.dueDate).toLocaleString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) : 'No due date set'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Assignment Type</label>
+                        <p className="text-lg font-semibold text-gray-900">
+                          <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                            assignment.assignmentType === 'performance' 
+                              ? 'bg-orange-100 text-orange-800' 
+                              : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {assignment.assignmentType === 'performance' ? 'Performance Task' : 'Written Works'}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Instructions */}
+                  <div className="bg-white border rounded-lg p-6 shadow-sm">
+                    <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
+                      <span>📝</span>
+                      Instructions
+                    </h2>
+                    <div className="text-gray-800 whitespace-pre-line bg-gray-50 p-4 rounded-lg">
+                      {assignment.instructions || 'No instructions provided'}
+                    </div>
+                  </div>
+
+
+                  {/* File Upload Requirements */}
+                  {assignment.fileUploadRequired && (
+                    <div className="bg-white border rounded-lg p-6 shadow-sm">
+                      <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
+                        <span>📎</span>
+                        File Upload Requirements
+                      </h2>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Allowed File Types</label>
+                          <p className="text-gray-900 font-medium">{assignment.allowedFileTypes || 'Any file type'}</p>
+                        </div>
+                        {assignment.fileInstructions && (
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">File Instructions</label>
+                            <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{assignment.fileInstructions}</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
-                  {assignment.fileUploadRequired && (
-                    <div className="mb-4">
-                      <h2 className="text-lg font-semibold mb-1">File Upload Required</h2>
-                      <div className="text-gray-700">Allowed file types: {assignment.allowedFileTypes}</div>
-                      {assignment.fileInstructions && <div className="text-gray-700 mt-1">{assignment.fileInstructions}</div>}
+
+                  {/* Assignment Settings */}
+                  <div className="bg-white border rounded-lg p-6 shadow-sm">
+                    <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
+                      <span>⚙️</span>
+                      Assignment Settings
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Created Date</label>
+                        <p className="text-gray-900">
+                          {assignment.createdAt ? new Date(assignment.createdAt).toLocaleString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) : 'Unknown'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Status</label>
+                        <p className="text-gray-900">
+                          <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                            assignment.postAt && new Date(assignment.postAt) <= new Date()
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {assignment.postAt && new Date(assignment.postAt) <= new Date() ? 'Posted' : 'Not Posted'}
+                          </span>
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Class</label>
+                        <p className="text-gray-900">{assignment.className || assignment.classInfo?.className || assignment.assignedTo?.[0]?.className || 'Unknown Class'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Attachment Link */}
+                  {assignment.attachmentLink && (
+                    <div className="bg-white border rounded-lg p-6 shadow-sm">
+                      <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
+                        <span>🔗</span>
+                        Attachment Link
+                      </h2>
+                      <a 
+                        href={assignment.attachmentLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline break-all"
+                      >
+                        {assignment.attachmentLink}
+                      </a>
                     </div>
                   )}
                 </div>

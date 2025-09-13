@@ -18,6 +18,272 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://juanlms-webapp-server.onrender.com';
 
+// Image Component with Fallback URLs
+function QuestionImage({ imageUrl, alt, className, style }) {
+  const [currentUrl, setCurrentUrl] = useState(() => {
+    // Construct the proper URL based on the imageUrl format
+    if (!imageUrl) return null;
+    
+    console.log('Processing image URL:', imageUrl);
+    
+    // If it's already a full URL, check if it's a Cloudinary URL or local URL
+    if (imageUrl.startsWith('http')) {
+      // Check if it's a Cloudinary URL
+      if (imageUrl.includes('cloudinary.com')) {
+        console.log('Using Cloudinary URL:', imageUrl);
+        return imageUrl;
+      }
+      
+      // Check if it's a local URL with a Cloudinary public ID pattern
+      if (imageUrl.includes('/uploads/quiz-images/juanlms/quiz-images/')) {
+        const publicId = imageUrl.split('/uploads/quiz-images/juanlms/quiz-images/')[1];
+        if (publicId && !publicId.includes('.') && /^[a-zA-Z0-9]+$/.test(publicId)) {
+          const cloudinaryUrl = `https://res.cloudinary.com/drfoswtsk/image/upload/v1/juanlms/quiz-images/${publicId}`;
+          console.log('Detected Cloudinary public ID in local URL, constructing Cloudinary URL:', cloudinaryUrl);
+          return cloudinaryUrl;
+        }
+      }
+      
+      console.log('Using local server URL:', imageUrl);
+      return imageUrl;
+    }
+    
+    // If it looks like a Cloudinary public ID (no slashes, no extensions, alphanumeric)
+    if (!imageUrl.includes('/') && !imageUrl.includes('.') && /^[a-zA-Z0-9]+$/.test(imageUrl)) {
+      const cloudinaryUrl = `https://res.cloudinary.com/drfoswtsk/image/upload/v1/juanlms/quiz-images/${imageUrl}`;
+      console.log('Constructed Cloudinary URL:', cloudinaryUrl);
+      return cloudinaryUrl;
+    }
+    
+    // If it's a relative path, construct local server URL
+    if (imageUrl.startsWith('/')) {
+      const localUrl = `${API_BASE}${imageUrl}`;
+      console.log('Constructed local URL:', localUrl);
+      return localUrl;
+    }
+    
+    // Default: treat as local file
+    const defaultUrl = `${API_BASE}/uploads/quiz-images/${imageUrl}`;
+    console.log('Using default local URL:', defaultUrl);
+    return defaultUrl;
+  });
+  const [attempts, setAttempts] = useState(0);
+  
+  const extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+  
+  const handleError = () => {
+    console.log('Image failed to load:', currentUrl);
+    
+    if (attempts < extensions.length) {
+      // Try next extension
+      const baseUrl = currentUrl.replace(/\.[^/.]+$/, ''); // Remove existing extension
+      const newUrl = baseUrl + extensions[attempts];
+      console.log('Trying extension:', extensions[attempts], 'New URL:', newUrl);
+      setCurrentUrl(newUrl);
+      setAttempts(prev => prev + 1);
+    } else {
+      // All attempts failed, hide the image
+      console.log('All attempts failed, hiding image');
+      setCurrentUrl(null);
+    }
+  };
+  
+  if (!currentUrl) return null;
+  
+  return (
+    <img 
+      src={currentUrl}
+      alt={alt}
+      className={className}
+      style={style}
+      onError={handleError}
+      onLoad={() => console.log('Image loaded successfully:', currentUrl)}
+    />
+  );
+}
+
+// Quiz Questions Pagination Component
+function QuizQuestionsPagination({ questions }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const questionsPerPage = 5; // Show 5 questions per page
+  
+  const totalPages = Math.ceil(questions.length / questionsPerPage);
+  const startIndex = (currentPage - 1) * questionsPerPage;
+  const endIndex = startIndex + questionsPerPage;
+  const currentQuestions = questions.slice(startIndex, endIndex);
+  
+  const goToPage = (page) => {
+    setCurrentPage(page);
+  };
+  
+  const goToPrevious = () => {
+    setCurrentPage(prev => Math.max(prev - 1, 1));
+  };
+  
+  const goToNext = () => {
+    setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  };
+  
+  return (
+    <div>
+      {/* Questions Display */}
+      <div className="space-y-4">
+        {currentQuestions.map((question, index) => {
+          const globalIndex = startIndex + index;
+          return (
+            <div key={globalIndex} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <span className="bg-blue-100 text-blue-800 text-sm font-bold px-2 py-1 rounded-full min-w-[2rem] text-center">
+                  {globalIndex + 1}
+                </span>
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900 mb-2">{question.question}</div>
+                  {question.image && (
+                    <div className="mb-3">
+                      <QuestionImage
+                        imageUrl={question.image}
+                        alt={`Question ${globalIndex + 1}`}
+                        className="max-w-full h-auto rounded-lg border"
+                        style={{ maxHeight: '300px' }}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {question.type === 'multiple' && question.choices && question.choices.map((choice, optIndex) => {
+                      // Handle both single correct answer and multiple correct answers
+                      const isCorrect = Array.isArray(question.correctAnswers) 
+                        ? question.correctAnswers.includes(optIndex)
+                        : optIndex === question.correctAnswer;
+                      
+                      return (
+                        <div key={optIndex} className="flex items-center gap-2">
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                            isCorrect 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {String.fromCharCode(65 + optIndex)}
+                          </span>
+                          <span className={`text-sm ${
+                            isCorrect 
+                              ? 'text-green-800 font-medium' 
+                              : 'text-gray-700'
+                          }`}>
+                            {choice}
+                          </span>
+                          {isCorrect && (
+                            <span className="text-green-600 text-xs font-medium">✓ Correct Answer</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                    
+                    {question.type === 'truefalse' && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                            question.correctAnswer === true 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            T
+                          </span>
+                          <span className={`text-sm ${
+                            question.correctAnswer === true 
+                              ? 'text-green-800 font-medium' 
+                              : 'text-gray-700'
+                          }`}>
+                            True
+                          </span>
+                          {question.correctAnswer === true && (
+                            <span className="text-green-600 text-xs font-medium">✓ Correct Answer</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                            question.correctAnswer === false 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            F
+                          </span>
+                          <span className={`text-sm ${
+                            question.correctAnswer === false 
+                              ? 'text-green-800 font-medium' 
+                              : 'text-gray-700'
+                          }`}>
+                            False
+                          </span>
+                          {question.correctAnswer === false && (
+                            <span className="text-green-600 text-xs font-medium">✓ Correct Answer</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {question.type === 'identification' && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <div className="text-sm text-green-800 font-medium">Correct Answer:</div>
+                        <div className="text-sm text-green-700 mt-1">{question.correctAnswer || 'No correct answer specified'}</div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-2 text-xs text-gray-500">
+                    Points: {question.points || 1}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+          <div className="text-sm text-gray-700">
+            Showing {startIndex + 1} to {Math.min(endIndex, questions.length)} of {questions.length} questions
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={goToPrevious}
+              disabled={currentPage === 1}
+              className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            
+            {/* Page Numbers */}
+            <div className="flex gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <button
+                  key={page}
+                  onClick={() => goToPage(page)}
+                  className={`px-3 py-1 text-sm border rounded ${
+                    currentPage === page
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+            
+            <button
+              onClick={goToNext}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function calculateStats(responses, quiz) {
   const scores = responses.map(r => typeof r.score === 'number' ? r.score : 0);
   const total = quiz?.questions?.reduce((sum, q) => sum + (q.points || 1), 0) || 1;
@@ -231,6 +497,60 @@ export default function QuizResponses() {
       fetch(`${API_BASE}/api/quizzes/${quizId}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(res => res.json()),
       fetch(`${API_BASE}/api/quizzes/${quizId}/responses`, { headers: { 'Authorization': `Bearer ${token}` } }).then(res => res.json())
     ]).then(async ([quizData, respData]) => {
+      // Always try to fetch class information if we have a classID
+      console.log('🚀 QUIZ DATA FETCHED - STARTING CLASS FETCHING DEBUG');
+      console.log('=== CLASS FETCHING DEBUG ===');
+      console.log('Quiz data received:', quizData);
+      console.log('assignedTo:', quizData?.assignedTo);
+      console.log('First assigned item:', quizData?.assignedTo?.[0]);
+      console.log('classID:', quizData?.assignedTo?.[0]?.classID);
+      
+      if (quizData && quizData.assignedTo && quizData.assignedTo[0] && quizData.assignedTo[0].classID) {
+        const classID = quizData.assignedTo[0].classID;
+        console.log('✅ Attempting to fetch class information for classID:', classID);
+        
+        try {
+          // Try the faculty-classes endpoint first
+          const classRes = await fetch(`${API_BASE}/classes/faculty-classes`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          console.log('Class API response status:', classRes.status);
+          
+          if (classRes.ok) {
+            const allClasses = await classRes.json();
+            console.log('✅ Fetched all classes:', allClasses);
+            console.log('Looking for classID:', classID);
+            
+            // Find the specific class by classID
+            const classData = allClasses.find(cls => cls.classID === classID);
+            console.log('Search result:', classData);
+            
+            if (classData) {
+              console.log('✅ Found class data:', classData);
+              const className = classData.className || classData.name;
+              quizData.className = className;
+              console.log('✅ Updated quiz data with className:', className);
+            } else {
+              console.log('❌ Class not found in faculty-classes for classID:', classID);
+              console.log('Available classIDs:', allClasses.map(cls => cls.classID));
+            }
+          } else {
+            console.log('❌ Class API response not ok:', classRes.status, classRes.statusText);
+          }
+        } catch (error) {
+          console.log('❌ Failed to fetch class information:', error);
+        }
+      } else {
+        console.log('❌ Class fetching conditions not met:', {
+          hasQuizData: !!quizData,
+          hasAssignedTo: !!quizData?.assignedTo,
+          hasFirstAssigned: !!quizData?.assignedTo?.[0],
+          hasClassID: !!quizData?.assignedTo?.[0]?.classID
+        });
+      }
+      
+      console.log('=== END CLASS FETCHING DEBUG ===');
+      
       setQuiz(quizData);
       let responsesArray = Array.isArray(respData) ? respData : [];
       
@@ -331,13 +651,158 @@ export default function QuizResponses() {
         </div>
         {/* Assignment Tab */}
         {tab === 'assignment' && (
-          <div className="w-full">
-            <div className="mb-6">
-              <div className="font-bold text-lg mb-1">Instructions</div>
-              <div className="mb-4 text-gray-700">{quiz?.instructions || quiz?.description}</div>
-              <div className="font-bold text-lg mb-1">Description</div>
-              <div className="mb-4 text-gray-700">{quiz?.description}</div>
+          <div className="w-full space-y-6">
+            {/* Quiz Overview */}
+            <div className="bg-white border rounded-lg p-6 shadow-sm">
+              <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
+                <span>📋</span>
+                Quiz Overview
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Title</label>
+                  <p className="text-lg font-semibold text-gray-900">{quiz?.title}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Total Points</label>
+                  <p className="text-lg font-semibold text-blue-600">{stats.total}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Due Date</label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {quiz?.dueDate ? new Date(quiz.dueDate).toLocaleString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    }) : 'No due date set'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Quiz Type</label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                      quiz?.assignmentType === 'performance' 
+                        ? 'bg-orange-100 text-orange-800' 
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {quiz?.assignmentType === 'performance' ? 'Performance Task' : 'Written Works'}
+                    </span>
+                  </p>
+                </div>
+              </div>
             </div>
+
+            {/* Instructions */}
+            <div className="bg-white border rounded-lg p-6 shadow-sm">
+              <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
+                <span>📝</span>
+                Instructions
+              </h2>
+              <div className="text-gray-800 whitespace-pre-line bg-gray-50 p-4 rounded-lg">
+                {quiz?.instructions || quiz?.description || 'No instructions provided'}
+              </div>
+            </div>
+
+
+            {/* Quiz Questions */}
+            {quiz?.questions && quiz.questions.length > 0 && (
+              <div className="bg-white border rounded-lg p-6 shadow-sm">
+                <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
+                  <span>❓</span>
+                  Quiz Questions ({quiz.questions.length} questions)
+                </h2>
+                <QuizQuestionsPagination questions={quiz.questions} />
+              </div>
+            )}
+
+            {/* Quiz Settings */}
+            <div className="bg-white border rounded-lg p-6 shadow-sm">
+              <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
+                <span>⚙️</span>
+                Quiz Settings
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Time Limit</label>
+                  <p className="text-gray-900">
+                    {quiz?.timing?.timeLimit ? `${quiz.timing.timeLimit} minutes` : 'No time limit'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Question Shuffling</label>
+                  <p className="text-gray-900">
+                    <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                      quiz?.questionBehaviour?.shuffle || quiz?.shuffleQuestions
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {quiz?.questionBehaviour?.shuffle || quiz?.shuffleQuestions ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Created Date</label>
+                  <p className="text-gray-900">
+                    {quiz?.createdAt ? new Date(quiz.createdAt).toLocaleString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    }) : 'Unknown'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Status</label>
+                  <p className="text-gray-900">
+                    <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                      quiz?.postAt && new Date(quiz.postAt) <= new Date()
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {quiz?.postAt && new Date(quiz.postAt) <= new Date() ? 'Posted' : 'Not Posted'}
+                    </span>
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Class</label>
+                  <p className="text-gray-900">
+                    {(() => {
+                      const className = quiz?.className || quiz?.classInfo?.className || quiz?.assignedTo?.[0]?.className || 'Unknown Class';
+                      console.log('Quiz class data:', {
+                        className: quiz?.className,
+                        classInfo: quiz?.classInfo,
+                        assignedTo: quiz?.assignedTo,
+                        finalClassName: className
+                      });
+                      return className;
+                    })()}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Attachment Link */}
+            {quiz?.attachmentLink && (
+              <div className="bg-white border rounded-lg p-6 shadow-sm">
+                <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
+                  <span>🔗</span>
+                  Attachment Link
+                </h2>
+                <a 
+                  href={quiz.attachmentLink} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 underline break-all"
+                >
+                  {quiz.attachmentLink}
+                </a>
+              </div>
+            )}
           </div>
         )}
         {/* To Grade Tab (default) */}
@@ -594,22 +1059,47 @@ export default function QuizResponses() {
                     {quiz.questions.map((q, idx) => {
                       const ans = filteredResponses[selectedIdx]?.answers.find(a => (a.questionId === (q._id || idx) || (a.questionId?._id === (q._id || idx))));
                       const timeSpent = Array.isArray(filteredResponses[selectedIdx]?.questionTimes) ? filteredResponses[selectedIdx]?.questionTimes[idx] : null;
+                      
+                      // Debug logging
+                      console.log(`Question ${idx + 1}:`, {
+                        question: q.question,
+                        type: q.type,
+                        answer: ans,
+                        allAnswers: filteredResponses[selectedIdx]?.answers
+                      });
                       return (
                         <li key={q._id || idx} className="mb-3 flex justify-between items-start">
                           <div>
                             <div className="font-bold">{q.question}</div>
-                            {q.image && <img src={q.image} alt="Question" className="max-h-32 mb-2" />}
+                            {q.image && (
+                              <div className="mb-2">
+                                <QuestionImage
+                                  imageUrl={q.image}
+                                  alt="Question"
+                                  className="max-h-32 rounded border"
+                                />
+                              </div>
+                            )}
                             <div className="ml-2">
                               <span className="italic">Student Answer: </span>
-                              {q.type === 'multiple' && Array.isArray(ans?.answer) && (
-                                <ul className="list-disc ml-4">
-                                  {ans.answer.map(i => <li key={i}>{q.choices[i]}</li>)}
-                                </ul>
+                              {q.type === 'multiple' && (
+                                <div>
+                                  {Array.isArray(ans?.answer) ? (
+                                    <ul className="list-disc ml-4">
+                                      {ans.answer.map((i, idx) => <li key={idx}>{q.choices && q.choices[i] ? q.choices[i] : `Choice ${i}`}</li>)}
+                                    </ul>
+                                  ) : (
+                                    <span>{ans?.answer !== null && ans?.answer !== undefined ? (q.choices && q.choices[ans.answer] ? q.choices[ans.answer] : `Choice ${ans.answer}`) : 'No answer'}</span>
+                                  )}
+                                </div>
                               )}
                               {q.type === 'truefalse' && (
                                 <span>{ans?.answer === true ? 'True' : ans?.answer === false ? 'False' : 'No answer'}</span>
                               )}
                               {q.type === 'identification' && (
+                                <span>{ans?.answer || 'No answer'}</span>
+                              )}
+                              {!q.type && (
                                 <span>{ans?.answer || 'No answer'}</span>
                               )}
                             </div>
