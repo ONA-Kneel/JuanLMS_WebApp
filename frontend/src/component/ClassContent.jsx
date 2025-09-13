@@ -40,6 +40,11 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState(null);
 
+  // Grades state
+  const [gradesData, setGradesData] = useState([]);
+  const [gradesLoading, setGradesLoading] = useState(false);
+  const [gradesError, setGradesError] = useState(null);
+
   // Restore lesson upload state and handler
   const [showLessonForm, setShowLessonForm] = useState(false);
   const [lessonTitle, setLessonTitle] = useState("");
@@ -69,6 +74,351 @@ export default function ClassContent({ selected, isFaculty = false }) {
     title: '',
     message: ''
   });
+
+  // Export functions
+  const exportToExcel = () => {
+    if (!gradesData || !members.students) return;
+    
+    // Create CSV content
+    const headers = ['Student Name', 'Student ID', ...gradesData.map(activity => activity.title)];
+    const csvContent = [
+      headers.join(','),
+      ...members.students.map(student => {
+        const row = [
+          `"${student.lastname}, ${student.firstname}"`,
+          `"${student.schoolID || student.userID || 'N/A'}"`,
+          ...gradesData.map(activity => {
+            const submission = activity.submissions?.find(sub => 
+              sub.studentId?._id === student._id || 
+              sub.studentId === student._id ||
+              sub.student?._id === student._id ||
+              sub.student === student._id
+            );
+            
+            if (submission) {
+              if (activity.type === 'assignment') {
+                return submission.grade !== undefined && submission.grade !== null 
+                  ? `"${submission.grade}/${activity.points || 0}"` 
+                  : '"Submitted"';
+              } else if (activity.type === 'quiz') {
+                return submission.score !== undefined && submission.score !== null 
+                  ? `"${submission.score}/${activity.points || 0}"` 
+                  : '"Submitted"';
+              }
+            }
+            return '"-"';
+          })
+        ];
+        return row.join(',');
+      })
+    ].join('\n');
+
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `grades_${classId}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportToPDF = async () => {
+    if (!gradesData || !members.students) return;
+    
+    // Fetch class details from faculty-classes endpoint
+    const token = localStorage.getItem('token');
+    let classDetails = {};
+    let facultyName = 'Unknown Faculty';
+    
+    try {
+      const res = await fetch(`${API_BASE}/classes/faculty-classes`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const classesData = await res.json();
+        // Find the current class by classID
+        classDetails = classesData.find(cls => cls.classID === classId) || {};
+        
+        // Fetch faculty information if we have facultyID
+        if (classDetails.facultyID) {
+          try {
+            const facultyRes = await fetch(`${API_BASE}/users/${classDetails.facultyID}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (facultyRes.ok) {
+              const facultyData = await facultyRes.json();
+              facultyName = `${facultyData.firstname || ''} ${facultyData.lastname || ''}`.trim() || 'Unknown Faculty';
+            }
+          } catch (error) {
+            console.error('Failed to fetch faculty details:', error);
+          }
+        }
+        
+        // Try to get grade level from faculty assignments
+        try {
+          const assignmentRes = await fetch(`${API_BASE}/api/faculty-assignments`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (assignmentRes.ok) {
+            const assignmentsData = await assignmentRes.json();
+            console.log('Faculty assignments data:', assignmentsData);
+            console.log('Looking for facultyId:', classDetails.facultyID, 'section:', classDetails.section);
+            
+            // Find assignment for this class
+            const classAssignment = assignmentsData.find(assignment => {
+              console.log('Checking assignment:', {
+                assignmentFacultyId: assignment.facultyId,
+                assignmentSectionName: assignment.sectionName,
+                classFacultyId: classDetails.facultyID,
+                classSection: classDetails.section,
+                matches: assignment.facultyId === classDetails.facultyID && assignment.sectionName === classDetails.section
+              });
+              return assignment.facultyId === classDetails.facultyID && assignment.sectionName === classDetails.section;
+            });
+            
+            console.log('Found class assignment:', classAssignment);
+            if (classAssignment && classAssignment.gradeLevel) {
+              classDetails.gradeLevel = classAssignment.gradeLevel;
+              console.log('Set grade level to:', classAssignment.gradeLevel);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch faculty assignments:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch class details:', error);
+    }
+    
+    // Create a new window for PDF generation
+    const printWindow = window.open('', '_blank');
+    
+    // Get class information with fallbacks
+    const className = classDetails?.className || classDetails?.name || classWithMembers?.className || 'Unknown Class';
+    const gradeLevel = classDetails?.gradeLevel || classDetails?.grade || classWithMembers?.gradeLevel || 'Unknown Grade';
+    const section = classDetails?.section || classWithMembers?.section || 'Unknown Section';
+    const subject = classDetails?.classDesc || classDetails?.subject || classDetails?.subjectName || classWithMembers?.subject || 'Unknown Subject';
+    
+    console.log('Final PDF values:', {
+      className,
+      facultyName,
+      gradeLevel,
+      section,
+      subject,
+      classDetails,
+      classWithMembers
+    });
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Breakdown of Grades - ${className}</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 1in;
+          }
+          body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+          }
+          .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+          }
+          .logo {
+            width: 80px;
+            height: 80px;
+            margin-right: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+          }
+          .institution-info {
+            flex: 1;
+          }
+          .institution-name {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 0;
+            line-height: 1.2;
+          }
+          .report-info {
+            text-align: right;
+            margin-left: auto;
+          }
+          .report-title {
+            font-weight: bold;
+            margin: 0;
+            font-size: 14px;
+          }
+          .report-date {
+            margin: 5px 0 0 0;
+            font-size: 12px;
+          }
+          .class-info {
+            margin: 20px 0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+          }
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+          }
+          .info-label {
+            font-weight: bold;
+          }
+          .info-value {
+            flex: 1;
+            text-align: right;
+          }
+          .grades-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+          }
+          .grades-table th,
+          .grades-table td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+          }
+          .grades-table th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+          }
+          .student-name {
+            text-align: left;
+            font-weight: bold;
+          }
+          .student-id {
+            text-align: left;
+            font-size: 10px;
+            color: #666;
+          }
+          .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+                 <div class="logo">
+                   <img src="/src/assets/logo/SJDD Logo.svg" alt="SJDD Logo" style="width: 80px; height: 80px; object-fit: contain;" />
+                 </div>
+          <div class="institution-info">
+            <h1 class="institution-name">San Juan De Dios<br>Educational<br>Foundation Inc.</h1>
+          </div>
+          <div class="report-info">
+            <p class="report-title">Breakdown of Grades</p>
+            <p class="report-date">Date: ${new Date().toLocaleDateString()}</p>
+          </div>
+        </div>
+        
+        <div class="class-info">
+          <div class="info-row">
+            <span class="info-label">Name of Subject:</span>
+            <span class="info-value">${subject}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Faculty Name:</span>
+            <span class="info-value">${facultyName}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Grade:</span>
+            <span class="info-value">${gradeLevel}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Section:</span>
+            <span class="info-value">${section}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Strand:</span>
+            <span class="info-value">${className}</span>
+          </div>
+        </div>
+        
+        <table class="grades-table">
+          <thead>
+            <tr>
+              <th>Student Name</th>
+              <th>Student ID</th>
+              ${gradesData.map(activity => `<th>${activity.title}<br>(${activity.points || 0} pts)</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${members.students.map(student => {
+              const submissions = gradesData.map(activity => {
+                const submission = activity.submissions?.find(sub => 
+                  sub.studentId?._id === student._id || 
+                  sub.studentId === student._id ||
+                  sub.student?._id === student._id ||
+                  sub.student === student._id
+                );
+                
+                if (submission) {
+                  if (activity.type === 'assignment') {
+                    return submission.grade !== undefined && submission.grade !== null 
+                      ? `${submission.grade}/${activity.points || 0}` 
+                      : 'Submitted';
+                  } else if (activity.type === 'quiz') {
+                    return submission.score !== undefined && submission.score !== null 
+                      ? `${submission.score}/${activity.points || 0}` 
+                      : 'Submitted';
+                  }
+                }
+                return '-';
+              });
+              
+              return `
+                <tr>
+                  <td class="student-name">${student.lastname}, ${student.firstname}</td>
+                  <td class="student-id">${student.schoolID || student.userID || 'N/A'}</td>
+                  ${submissions.map(score => `<td>${score}</td>`).join('')}
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+        
+        <div class="footer">
+          <p>Generated on ${new Date().toLocaleString()}</p>
+          <p>San Juan De Dios Educational Foundation Inc.</p>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    // Wait for content to load then print
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+    };
+  };
   
   // Confirmation modal state
   const [confirmationModal, setConfirmationModal] = useState({
@@ -411,6 +761,15 @@ export default function ClassContent({ selected, isFaculty = false }) {
                  // Store the students directly since they're already populated with full data
                  setMembers({ faculty: membersData.faculty || [], students: studentsOnly });
                  
+                 // Store class information for export
+                 setClassWithMembers({
+                   className: membersData.className || membersData.name,
+                   facultyName: membersData.facultyName || (membersData.faculty && membersData.faculty[0]?.name),
+                   gradeLevel: membersData.gradeLevel || membersData.grade,
+                   section: membersData.section,
+                   subject: membersData.subject || membersData.subjectName
+                 });
+                 
                  // Extract the member IDs that the backend is actually storing (MongoDB _id values)
                  // These are what we need to use for future operations
                  const memberIds = studentsOnly.map(s => String(s._id)).filter(Boolean);
@@ -481,6 +840,77 @@ export default function ClassContent({ selected, isFaculty = false }) {
       fetchEnrolledStudentIds();
   }
 }, [selected, classId, isFaculty]);
+
+  // Fetch grades data when grades tab is selected
+  useEffect(() => {
+    if (selected === "grades" && classId) {
+      setGradesLoading(true);
+      setGradesError(null);
+      const token = localStorage.getItem('token');
+      
+      const fetchGradesData = async () => {
+        try {
+          // Fetch all assignments and quizzes for this class
+          const [assignmentsRes, quizzesRes] = await Promise.all([
+            fetch(`${API_BASE}/assignments?classID=${classId}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }),
+            fetch(`${API_BASE}/api/quizzes?classID=${classId}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            })
+          ]);
+
+          const [assignmentsData, quizzesData] = await Promise.all([
+            assignmentsRes.ok ? assignmentsRes.json() : [],
+            quizzesRes.ok ? quizzesRes.json() : []
+          ]);
+
+          // Combine assignments and quizzes, filtering only posted ones
+          const allActivities = [
+            ...assignmentsData.filter(isAssignmentPosted).map(a => ({ ...a, type: 'assignment' })),
+            ...quizzesData.filter(isAssignmentPosted).map(q => ({ ...q, type: 'quiz' }))
+          ];
+
+          // Fetch student submissions for each activity
+          const gradesWithSubmissions = await Promise.all(
+            allActivities.map(async (activity) => {
+              try {
+                let submissions = [];
+                if (activity.type === 'assignment') {
+                  const res = await fetch(`${API_BASE}/assignments/${activity._id}/submissions`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  if (res.ok) {
+                    submissions = await res.json();
+                  }
+                } else if (activity.type === 'quiz') {
+                  const res = await fetch(`${API_BASE}/api/quizzes/${activity._id}/responses`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  if (res.ok) {
+                    submissions = await res.json();
+                  }
+                }
+                return { ...activity, submissions };
+              } catch (error) {
+                console.error(`Failed to fetch submissions for ${activity.type} ${activity._id}:`, error);
+                return { ...activity, submissions: [] };
+              }
+            })
+          );
+
+          setGradesData(gradesWithSubmissions);
+        } catch (error) {
+          console.error('Failed to fetch grades data:', error);
+          setGradesError('Failed to load grades data');
+        } finally {
+          setGradesLoading(false);
+        }
+      };
+
+      fetchGradesData();
+    }
+  }, [selected, classId]);
 
      // Filter students by section when class section or allStudents changes
    useEffect(() => {
@@ -1615,6 +2045,177 @@ export default function ClassContent({ selected, isFaculty = false }) {
         </>
       )}
 
+      {/* --- GRADES TAB --- */}
+      {selected === "grades" && (
+        <div>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">Grades</h2>
+            <div className="flex gap-2">
+              <button 
+                onClick={exportToExcel}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export to Excel
+              </button>
+              <button 
+                onClick={exportToPDF}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                Export to PDF
+              </button>
+            </div>
+          </div>
+
+          {gradesLoading ? (
+            <div className="text-center py-8">
+              <div className="text-blue-700">Loading grades...</div>
+            </div>
+          ) : gradesError ? (
+            <div className="text-center py-8">
+              <div className="text-red-600">{gradesError}</div>
+            </div>
+          ) : (
+            <div className="bg-white border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                {/* Header */}
+                <div className="bg-gray-50 border-b">
+                  <div className="flex min-w-max">
+                    <div className="w-48 p-4 border-r border-gray-200 flex-shrink-0">
+                      <div className="text-sm font-medium text-gray-900">Students</div>
+                    </div>
+                    {gradesData.map((activity, index) => (
+                      <div key={activity._id} className={`w-32 p-4 text-center flex-shrink-0 ${index < gradesData.length - 1 ? 'border-r border-gray-200' : ''}`}>
+                        <div className="text-sm font-medium text-gray-900">{activity.title}</div>
+                        <div className="text-xs text-gray-700">{activity.points || 0} points</div>
+                        <div className="text-xs text-gray-600 mt-1">Grade | View | Due</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Student rows */}
+                <div className="divide-y divide-gray-200">
+                  {members.students.map((student) => (
+                    <div key={student._id} className="hover:bg-gray-50">
+                      <div className="flex min-w-max">
+                        {/* Student info */}
+                        <div className="w-48 p-4 border-r border-gray-200 flex items-center gap-3 flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-medium overflow-hidden">
+                            {student.profilePicture ? (
+                              <img 
+                                src={student.profilePicture} 
+                                alt={`${student.firstname} ${student.lastname}`}
+                                className="w-full h-full object-cover rounded-full"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <div className={`w-full h-full flex items-center justify-center text-sm font-medium ${student.profilePicture ? 'hidden' : 'flex'}`}>
+                              {student.firstname?.[0]}{student.lastname?.[0]}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {student.lastname}, {student.firstname}
+                            </div>
+                            <div className="text-sm text-gray-500">{student.schoolID || student.userID || 'N/A'}</div>
+                          </div>
+                        </div>
+
+                        {/* Grades for each activity */}
+                        {gradesData.map((activity, index) => {
+                          const submission = activity.submissions?.find(sub => 
+                            sub.studentId?._id === student._id || 
+                            sub.studentId === student._id ||
+                            sub.student?._id === student._id ||
+                            sub.student === student._id
+                          );
+                          
+                          let gradeDisplay = '-';
+                          let statusClass = 'text-gray-900';
+                          let viewStatus = '';
+                          let dueDateStatus = '';
+                          
+                          // Determine view status based on submission/score
+                          if (submission) {
+                            // If they have a submission, they must have viewed it
+                            viewStatus = 'Submitted';
+                          } else {
+                            // Check if student has viewed the activity (but not submitted)
+                            const hasViewed = activity.views && activity.views.includes(student._id);
+                            viewStatus = hasViewed ? 'Viewed' : 'Not Viewed';
+                          }
+                          
+                          // Check due date status
+                          if (activity.dueDate) {
+                            const dueDate = new Date(activity.dueDate);
+                            const now = new Date();
+                            const isOverdue = now > dueDate;
+                            dueDateStatus = isOverdue ? 'Overdue' : 'On Time';
+                          }
+                          
+                          if (submission) {
+                            if (activity.type === 'assignment') {
+                              if (submission.grade !== undefined && submission.grade !== null) {
+                                gradeDisplay = `${submission.grade}/${activity.points || 0}`;
+                                statusClass = 'text-blue-900 font-medium';
+                              } else if (submission.submittedAt) {
+                                gradeDisplay = 'Submitted';
+                                statusClass = 'text-blue-600';
+                              }
+                            } else if (activity.type === 'quiz') {
+                              if (submission.score !== undefined && submission.score !== null) {
+                                gradeDisplay = `${submission.score}/${activity.points || 0}`;
+                                statusClass = 'text-green-600 font-medium';
+                              } else if (submission.submittedAt) {
+                                gradeDisplay = 'Submitted';
+                                statusClass = 'text-blue-600';
+                              }
+                            }
+                          }
+
+                          return (
+                            <div key={activity._id} className={`w-32 p-4 text-center flex-shrink-0 ${index < gradesData.length - 1 ? 'border-r border-gray-200' : ''}`}>
+                              <div className={`text-sm ${statusClass} font-medium`}>
+                                {gradeDisplay}
+                              </div>
+                              <div className="text-xs text-gray-700 mt-1">
+                                {viewStatus}
+                              </div>
+                              {activity.dueDate && (
+                                <div className={`text-xs mt-1 ${
+                                  dueDateStatus === 'Overdue' ? 'text-red-600' : 'text-green-600'
+                                }`}>
+                                  {dueDateStatus}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {members.students.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  No students found in this class.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* --- MEMBERS TAB --- */}
       {selected === "members" && (
         <div>
@@ -1672,12 +2273,26 @@ export default function ClassContent({ selected, isFaculty = false }) {
                         {members.students.map(student => (
                           <div key={student._id || student.userID} className="flex items-center justify-between bg-white p-4 rounded-lg border border-blue-200 shadow-sm hover:shadow-md transition-all duration-200">
                             <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-lg">
-                                👤
+                              <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-lg overflow-hidden">
+                                {student.profilePicture ? (
+                                  <img 
+                                    src={student.profilePicture} 
+                                    alt={`${student.firstname} ${student.lastname}`}
+                                    className="w-full h-full object-cover rounded-full"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                  />
+                                ) : null}
+                                <div className={`w-full h-full flex items-center justify-center text-lg ${student.profilePicture ? 'hidden' : 'flex'}`}>
+                                  {student.firstname?.[0]}{student.lastname?.[0]}
+                                </div>
                               </div>
                               <div>
                                 <div className="font-semibold text-gray-900 mb-1">{student.firstname} {student.lastname}</div>
-                                <div className="text-sm text-gray-600">{student.email || student.schoolID}</div>
+                                <div className="text-sm text-gray-600">{student.email}</div>
+                                <div className="text-sm text-blue-600 font-medium">ID: {student.schoolID || student.userID || 'N/A'}</div>
                               </div>
                             </div>
                             <button
@@ -2126,10 +2741,26 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     {members.students.map(s => (
                       <div key={s.userID || s._id} className="flex items-center justify-between bg-gray-50 p-3 rounded border">
                         <div className="flex items-center gap-3">
-                          <span className="text-blue-700">👤</span>
+                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-medium overflow-hidden">
+                            {s.profilePicture ? (
+                              <img 
+                                src={s.profilePicture} 
+                                alt={`${s.firstname} ${s.lastname}`}
+                                className="w-full h-full object-cover rounded-full"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <div className={`w-full h-full flex items-center justify-center text-sm font-medium ${s.profilePicture ? 'hidden' : 'flex'}`}>
+                              {s.firstname?.[0]}{s.lastname?.[0]}
+                            </div>
+                          </div>
                           <div>
                             <div className="font-medium">{s.firstname} {s.lastname}</div>
-                            <div className="text-sm text-gray-600">{s.email || s.schoolID}</div>
+                            <div className="text-sm text-gray-600">{s.email}</div>
+                            <div className="text-sm text-blue-600 font-medium">ID: {s.schoolID || s.userID || 'N/A'}</div>
                           </div>
                         </div>
                       </div>

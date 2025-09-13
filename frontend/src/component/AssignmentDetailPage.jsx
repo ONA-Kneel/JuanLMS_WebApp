@@ -83,7 +83,27 @@ export default function AssignmentDetailPage() {
         }
         return res.json();
       })
-      .then(data => {
+      .then(async (data) => {
+        // Try to fetch class information if we have a classID but no className
+        if (data && data.classID && !data.className) {
+          try {
+            const classRes = await fetch(`${API_BASE}/classes/faculty-classes`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (classRes.ok) {
+              const allClasses = await classRes.json();
+              const classData = allClasses.find(cls => cls.classID === data.classID);
+              
+              if (classData) {
+                data.className = classData.className || classData.name;
+              }
+            }
+          } catch (error) {
+            console.error('Failed to fetch class information:', error);
+          }
+        }
+        
         setAssignment(data);
       })
       .catch(err => {
@@ -512,7 +532,9 @@ export default function AssignmentDetailPage() {
                   {/* Assignment Overview */}
                   <div className="bg-white border rounded-lg p-6 shadow-sm">
                     <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
-                      <span>📋</span>
+                      <svg className="w-6 h-6 text-blue-900" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                      </svg>
                       Assignment Overview
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -555,7 +577,9 @@ export default function AssignmentDetailPage() {
                   {/* Instructions */}
                   <div className="bg-white border rounded-lg p-6 shadow-sm">
                     <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
-                      <span>📝</span>
+                      <svg className="w-6 h-6 text-blue-900" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                      </svg>
                       Instructions
                     </h2>
                     <div className="text-gray-800 whitespace-pre-line bg-gray-50 p-4 rounded-lg">
@@ -568,7 +592,9 @@ export default function AssignmentDetailPage() {
                   {assignment.fileUploadRequired && (
                     <div className="bg-white border rounded-lg p-6 shadow-sm">
                       <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
-                        <span>📎</span>
+                        <svg className="w-6 h-6 text-blue-900" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
                         File Upload Requirements
                       </h2>
                       <div className="space-y-3">
@@ -589,7 +615,9 @@ export default function AssignmentDetailPage() {
                   {/* Assignment Settings */}
                   <div className="bg-white border rounded-lg p-6 shadow-sm">
                     <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
-                      <span>⚙️</span>
+                      <svg className="w-6 h-6 text-blue-900" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                      </svg>
                       Assignment Settings
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -629,7 +657,9 @@ export default function AssignmentDetailPage() {
                   {assignment.attachmentLink && (
                     <div className="bg-white border rounded-lg p-6 shadow-sm">
                       <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
-                        <span>🔗</span>
+                        <svg className="w-6 h-6 text-blue-900" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
+                        </svg>
                         Attachment Link
                       </h2>
                       <a 
@@ -648,15 +678,6 @@ export default function AssignmentDetailPage() {
                 <div>
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-lg font-semibold">Submissions</h2>
-                    {activeTab === 'toGrade' && (
-                      <button
-                        onClick={handleMarkAllAsGraded}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2"
-                      >
-                        <span>✓</span>
-                        Mark All as Graded
-                      </button>
-                    )}
                   </div>
                   
                   {/* Search Filter */}
@@ -717,10 +738,13 @@ export default function AssignmentDetailPage() {
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="p-3 border">Name</th>
-                          <th className="p-3 border">Submission</th>
                           <th className="p-3 border">Status</th>
-                          <th className="p-3 border">Grade</th>
-                          <th className="p-3 border">Feedback</th>
+                          {activeTab === 'graded' && (
+                            <>
+                              <th className="p-3 border">Grade</th>
+                              <th className="p-3 border">Feedback</th>
+                            </>
+                          )}
                           <th className="p-3 border">Action</th>
                         </tr>
                       </thead>
@@ -769,19 +793,13 @@ export default function AssignmentDetailPage() {
                             return (
                               <tr key={member._id}>
                                 <td className="p-3 border">{member.lastname}, {member.firstname}</td>
-                                <td className="p-3 border">
-                                  <div className="text-xs">
-                                    <div>{submissionDetails}</div>
-                                    {member.submission && member.submission.context && (
-                                      <div className="text-blue-600 mt-1 max-w-xs truncate" title={member.submission.context}>
-                                        Context: {member.submission.context.substring(0, 50)}...
-                                      </div>
-                                    )}
-                                  </div>
-                                </td>
                                 <td className="p-3 border">{status}</td>
-                                <td className="p-3 border">{member.submission && member.submission.grade !== undefined ? member.submission.grade : "-"}</td>
-                                <td className="p-3 border">{member.submission && member.submission.feedback ? member.submission.feedback : "-"}</td>
+                                {activeTab === 'graded' && (
+                                  <>
+                                    <td className="p-3 border">{member.submission && member.submission.grade !== undefined ? member.submission.grade : "-"}</td>
+                                    <td className="p-3 border">{member.submission && member.submission.feedback ? member.submission.feedback : "-"}</td>
+                                  </>
+                                )}
                                 <td className="p-3 border">
                                   <button
                                     className="bg-green-700 text-white px-2 py-1 rounded"

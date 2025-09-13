@@ -328,7 +328,23 @@ export default function QuizResponses() {
   });
   const [showFilters, setShowFilters] = useState(false);
 
-  // Function to apply all filters
+  // Real-time search filtering
+  useEffect(() => {
+    let filtered = [...responses];
+    
+    // Search filter (real-time)
+    if (filters.searchTerm.trim()) {
+      filtered = filtered.filter(resp => 
+        resp.studentId?.firstname?.toLowerCase().includes(filters.searchTerm.toLowerCase()) || 
+        resp.studentId?.lastname?.toLowerCase().includes(filters.searchTerm.toLowerCase())
+      );
+    }
+    
+    setFilteredResponses(filtered);
+    setSelectedIdx(0);
+  }, [filters.searchTerm, responses]);
+
+  // Function to apply all filters (for other filters like status, grade range, etc.)
   const applyFilters = () => {
     let filtered = [...responses];
     
@@ -646,7 +662,6 @@ export default function QuizResponses() {
         <div className="flex gap-8 border-b border-gray-300 mb-6 mt-4 w-full">
           <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'assignment' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('assignment')}>Details</button>
           <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'toGrade' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('toGrade')}>Submissions</button>
-          <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'status' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('status')}>Status</button>
           <button className={`pb-2 px-2 text-lg font-semibold ${tab === 'insights' ? 'border-b-2 border-blue-800 text-blue-900' : 'text-gray-600'}`} onClick={() => setTab('insights')}>Insights</button>
         </div>
         {/* Assignment Tab */}
@@ -655,7 +670,9 @@ export default function QuizResponses() {
             {/* Quiz Overview */}
             <div className="bg-white border rounded-lg p-6 shadow-sm">
               <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
-                <span>📋</span>
+                <svg className="w-6 h-6 text-blue-900" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                </svg>
                 Quiz Overview
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -698,7 +715,9 @@ export default function QuizResponses() {
             {/* Instructions */}
             <div className="bg-white border rounded-lg p-6 shadow-sm">
               <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
-                <span>📝</span>
+                <svg className="w-6 h-6 text-blue-900" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                </svg>
                 Instructions
               </h2>
               <div className="text-gray-800 whitespace-pre-line bg-gray-50 p-4 rounded-lg">
@@ -711,7 +730,9 @@ export default function QuizResponses() {
             {quiz?.questions && quiz.questions.length > 0 && (
               <div className="bg-white border rounded-lg p-6 shadow-sm">
                 <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
-                  <span>❓</span>
+                  <svg className="w-6 h-6 text-blue-900" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                  </svg>
                   Quiz Questions ({quiz.questions.length} questions)
                 </h2>
                 <QuizQuestionsPagination questions={quiz.questions} />
@@ -721,7 +742,9 @@ export default function QuizResponses() {
             {/* Quiz Settings */}
             <div className="bg-white border rounded-lg p-6 shadow-sm">
               <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
-                <span>⚙️</span>
+                <svg className="w-6 h-6 text-blue-900" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                </svg>
                 Quiz Settings
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -790,7 +813,9 @@ export default function QuizResponses() {
             {quiz?.attachmentLink && (
               <div className="bg-white border rounded-lg p-6 shadow-sm">
                 <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
-                  <span>🔗</span>
+                  <svg className="w-6 h-6 text-blue-900" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
+                  </svg>
                   Attachment Link
                 </h2>
                 <a 
@@ -978,13 +1003,6 @@ export default function QuizResponses() {
                     <span> {selectedIdx + 1} of {filteredResponses.length} </span>
                     <button disabled={selectedIdx === filteredResponses.length - 1} onClick={() => setSelectedIdx(i => i + 1)} className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50">&gt;</button>
                   </div>
-                  <button
-                    onClick={handleMarkAllAsGraded}
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2"
-                  >
-                    <span>✓</span>
-                    Mark All as Graded
-                  </button>
                 </div>
                 <div className="mb-2 text-2xl font-bold text-blue-900">
                   {filteredResponses[selectedIdx]?.studentId?.firstname && filteredResponses[selectedIdx]?.studentId?.lastname 
@@ -1122,110 +1140,6 @@ export default function QuizResponses() {
         )}
         {tab === 'toGrade' && responses.length === 0 && (
           <div className="text-gray-600">No responses yet.</div>
-        )}
-        {/* Status Tab */}
-        {tab === 'status' && (
-          <div className="w-full">
-            <h2 className="text-lg font-semibold mb-4">Student Quiz Status</h2>
-            
-            {/* Quiz Completion Summary */}
-            <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-                <span className="font-semibold text-blue-800">Quiz Completion Summary</span>
-              </div>
-              <div className="flex gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 bg-green-500 rounded-full"></span>
-                  <span className="text-green-700">
-                    Graded: {responses.filter(r => r.graded).length}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 bg-yellow-500 rounded-full"></span>
-                  <span className="text-yellow-700">
-                    Not Graded: {responses.filter(r => !r.graded).length}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
-                  <span className="text-blue-700">
-                    Total Responses: {responses.length}
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="p-3 border">Name</th>
-                    <th className="p-3 border">Status</th>
-                    <th className="p-3 border">Score</th>
-                    {/* Removed Feedback column */}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Array.isArray(members) && members.length > 0 ? (
-                    members
-                      .filter(student => {
-                        const assignedIDs = quiz?.assignedTo?.[0]?.studentIDs || [];
-                        return assignedIDs.includes(student._id) || assignedIDs.includes(student.userID);
-                      })
-                      .map(student => {
-                        const response = responses.find(r => {
-                          // Match by _id (most reliable)
-                          if (r.studentId?._id && student._id && r.studentId._id.toString() === student._id.toString()) {
-                            return true;
-                          }
-                          // Match by direct studentId reference
-                          if (r.studentId && typeof r.studentId === 'string' && r.studentId === student._id.toString()) {
-                            return true;
-                          }
-                          // Match by userID only if both are defined and not undefined
-                          if (r.studentId?.userID && student.userID && r.studentId.userID === student.userID) {
-                            return true;
-                          }
-                          return false;
-                        });
-                        let status = "Not Yet Viewed";
-                        if (response) {
-                          if (response.graded) {
-                            status = "Graded";
-                          } else {
-                            status = "Submitted";
-                          }
-                        } else if (quiz?.views && quiz.views.map(String).includes(String(student._id))) {
-                          status = "Viewed";
-                        }
-                        return (
-                          <tr key={student._id}>
-                            <td className="p-3 border">{student.lastname}, {student.firstname}</td>
-                            <td className={`p-3 border ${
-                              status === "Graded" ? "bg-green-100 text-green-800 font-semibold" : 
-                              status === "Submitted" ? "bg-blue-100 text-blue-800" : 
-                              status === "Viewed" ? "bg-yellow-100 text-yellow-800" : 
-                              "bg-gray-100 text-gray-800"
-                            }`}>
-                              {status}
-                            </td>
-                            <td className="p-3 border">{response && typeof response.score === 'number' ? response.score : "-"}</td>
-                            {/* Removed Feedback cell */}
-                          </tr>
-                        );
-                      })
-                  ) : (
-                    <tr>
-                      <td className="p-3 border text-center" colSpan={3}>No students found.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         )}
         {/* Insights Tab */}
         {tab === 'insights' && (

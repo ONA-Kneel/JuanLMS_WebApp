@@ -87,6 +87,7 @@ export default function Faculty_ClassWorkspace() {
         { label: "Home Page", key: "home" },
         { label: "Classwork", key: "classwork" },
         { label: "Class Materials", key: "materials" },
+        { label: "Grades", key: "grades" },
         { label: "Members", key: "members" },
     ];
 
