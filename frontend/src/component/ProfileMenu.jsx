@@ -138,7 +138,7 @@ export default function ProfileMenu() {
           {/* Notification Bell Button */}
           <button
             onClick={() => setShowNotificationCenter(!showNotificationCenter)}
-            className="relative  p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+            className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
           >
             <Bell size={27} />
             {unreadCount > 0 && (
@@ -185,6 +185,7 @@ export default function ProfileMenu() {
           onNotificationClick={handleNotificationClick}
         />
       )}
+
 
       {/* Toast Container - Add this to your main App.jsx or here */}
       <ToastContainer

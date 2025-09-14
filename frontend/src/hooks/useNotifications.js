@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import pushNotificationService from '../services/pushNotificationService';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -97,6 +98,29 @@ export const useNotifications = () => {
     } else {
       toast.info(message, toastConfig);
     }
+
+    // Also show push notification if supported and enabled
+    showPushNotification(notification);
+  };
+
+  // Show push notification
+  const showPushNotification = (notification) => {
+    if (pushNotificationService.isNotificationSupported()) {
+      const pushOptions = {
+        body: notification.message,
+        icon: '/juanlms.svg',
+        badge: '/juanlms.svg',
+        tag: `juanlms-${notification.type}-${notification._id || notification.id}`,
+        requireInteraction: notification.priority === 'urgent',
+        data: {
+          notificationId: notification._id || notification.id,
+          type: notification.type,
+          url: window.location.origin
+        }
+      };
+
+      pushNotificationService.showLocalNotification(notification.title, pushOptions);
+    }
   };
 
 
@@ -136,8 +160,18 @@ export const useNotifications = () => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  // Initialize push notifications
+  const initializePushNotifications = async () => {
+    try {
+      await pushNotificationService.initialize();
+    } catch (error) {
+      console.error('Failed to initialize push notifications:', error);
+    }
+  };
+
   useEffect(() => {
     fetchNotifications();
+    initializePushNotifications();
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -149,6 +183,7 @@ export const useNotifications = () => {
     setShowNotificationCenter,
     markAsRead,
     markAllAsRead,
-    fetchNotifications
+    fetchNotifications,
+    showPushNotification
   };
 };

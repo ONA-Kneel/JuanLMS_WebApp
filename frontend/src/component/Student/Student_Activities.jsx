@@ -10,6 +10,7 @@ import { useQuarter } from "../../context/QuarterContext.jsx";
 const API_BASE = import.meta.env.DEV ? "https://juanlms-webapp-server.onrender.com" : (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com");
 
 export default function Student_Activities() {
+  console.log('Student_Activities component is rendering...');
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("upcoming");
   const [assignments, setAssignments] = useState([]);
@@ -46,7 +47,13 @@ export default function Student_Activities() {
   useEffect(() => {
     async function fetchAcademicYear() {
       try {
+        console.log('Fetching academic year...');
         const token = localStorage.getItem("token");
+        if (!token) {
+          console.error('No token found in localStorage');
+          setError('Authentication required');
+          return;
+        }
         const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
@@ -622,6 +629,20 @@ export default function Student_Activities() {
         <Student_Navbar />
 
         <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+          
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+              <strong>Error:</strong> {error}
+            </div>
+          )}
+          
+          {/* Loading Display */}
+          {loading && (
+            <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4">
+              <strong>Loading...</strong> Fetching activities...
+            </div>
+          )}
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
             <div>
@@ -850,11 +871,9 @@ export default function Student_Activities() {
                   return (
                     <div className="text-center py-8">
                       <p className="text-gray-600">No activities found.</p>
-                      {debugMode && (
-                        <p className="text-sm text-gray-500 mt-2">
-                          Status: {activeTab} | Filter: {filter} | Total Activities: {assignments.length + quizzes.length}
-                        </p>
-                      )}
+                      <p className="text-sm text-gray-500 mt-2">
+                        Status: {activeTab} | Filter: {filter} | Total Activities: {assignments.length + quizzes.length}
+                      </p>
                     </div>
                   );
                 }

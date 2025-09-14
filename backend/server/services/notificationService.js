@@ -1,6 +1,8 @@
 import Notification from '../models/Notification.js';
 import Class from '../models/Class.js';
 import User from '../models/User.js';
+import PushSubscription from '../models/PushSubscription.js';
+import webpush from 'web-push';
 
 // Create notifications for all students in a class
 export const createClassNotifications = async (classID, notificationData) => {
@@ -61,8 +63,13 @@ export const createClassNotifications = async (classID, notificationData) => {
     }
 
     if (notifications.length > 0) {
-      await Notification.insertMany(notifications);
+      const savedNotifications = await Notification.insertMany(notifications);
       console.log(`Created ${notifications.length} notifications for class ${classID}`);
+      
+      // Send push notifications for each saved notification
+      for (const notification of savedNotifications) {
+        await sendPushNotification(notification);
+      }
     } else {
       console.log(`No notifications created for class ${classID}`);
     }
@@ -171,9 +178,83 @@ export const createMessageNotification = async (senderId, receiverId, message) =
       priority: 'normal'
     });
 
-    await notification.save();
+    const savedNotification = await notification.save();
     console.log(`Created message notification for ${receiver.firstname} ${receiver.lastname} from ${senderName}`);
+    
+    // Send push notification
+    await sendPushNotification(savedNotification);
   } catch (error) {
     console.error('Error creating message notification:', error);
+  }
+};
+
+// Send push notification to user
+const sendPushNotification = async (notification) => {
+  try {
+    // Get all active push subscriptions for the user
+    const subscriptions = await PushSubscription.find({ 
+      userId: notification.recipientId, 
+      isActive: true 
+    });
+
+    if (subscriptions.length === 0) {
+      console.log(`No active push subscriptions found for user ${notification.recipientId}`);
+      return;
+    }
+
+    // Configure VAPID keys
+    const vapidKeys = {
+      publicKey: process.env.VAPID_PUBLIC_KEY || 'BK32H_uCiym7qRQl36JfVI4FRu6ZuazrdYohqZ5-rm5Ff2sfX0YHw_ubekDj9vVBwWiTSnq1pWoldWQJ1yw3c4Y',
+      privateKey: process.env.VAPID_PRIVATE_KEY || 'rr-Ry2WxXgZ9kYawhaIYG9N-2043_-9s0QjQFzENUN8'
+    };
+
+    webpush.setVapidDetails(
+      'mailto:your-email@example.com',
+      vapidKeys.publicKey,
+      vapidKeys.privateKey
+    );
+
+    const payload = JSON.stringify({
+      title: notification.title,
+      body: notification.message,
+      icon: '/juanlms.svg',
+      badge: '/juanlms.svg',
+      tag: `juanlms-${notification.type}-${notification._id}`,
+      requireInteraction: notification.priority === 'urgent',
+      data: {
+        notificationId: notification._id,
+        type: notification.type,
+        url: process.env.FRONTEND_URL || 'http://localhost:3000'
+      }
+    });
+
+    // Send to all active subscriptions
+    for (const subscription of subscriptions) {
+      try {
+        const pushSubscription = {
+          endpoint: subscription.endpoint,
+          keys: subscription.keys
+        };
+
+        await webpush.sendNotification(pushSubscription, payload);
+        
+        // Update last used timestamp
+        subscription.lastUsed = new Date();
+        await subscription.save();
+        
+        console.log(`Push notification sent successfully to ${subscription.endpoint}`);
+      } catch (error) {
+        console.error('Error sending push notification:', error);
+        
+        // If the subscription is invalid, deactivate it
+        if (error.statusCode === 410 || error.statusCode === 404) {
+          subscription.isActive = false;
+          await subscription.save();
+          console.log(`Deactivated invalid subscription: ${subscription.endpoint}`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error in sendPushNotification:', error);
   }
 }; 
