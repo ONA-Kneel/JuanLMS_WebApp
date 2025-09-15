@@ -1,12 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Chart, ArcElement, Tooltip, Legend, PieController } from 'chart.js';
+Chart.register(ArcElement, Tooltip, Legend, PieController);
 import * as XLSX from "xlsx";
 import VPE_Navbar from "./VPE_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-// PDF generation function
-const downloadAsPDF = (content, filename) => {
+// PDF generation function with pie chart (Assignments vs Quizzes)
+const downloadAsPDF = (content, filename, chartData) => {
   // Create a new window with the content
   const printWindow = window.open('', '_blank');
+  const headingKeyword = 'Faculty Performance and Activity Levels';
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
@@ -25,6 +28,18 @@ const downloadAsPDF = (content, filename) => {
           padding-bottom: 10px; 
           margin-bottom: 20px;
         }
+        .chart-section {
+          margin: 20px 0;
+          padding: 16px;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          background: #fafafa;
+        }
+        .chart-title {
+          font-weight: bold;
+          margin-bottom: 8px;
+          text-align: center;
+        }
         .content { 
           white-space: pre-wrap; 
           font-size: 14px;
@@ -34,17 +49,61 @@ const downloadAsPDF = (content, filename) => {
           .no-print { display: none; }
         }
       </style>
+      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     </head>
     <body>
       <div class="header">
         <h1>${filename}</h1>
         <p>Generated on: ${new Date().toLocaleDateString()}</p>
       </div>
-      <div class="content">${content}</div>
+      <div id="contentBefore" class="content"></div>
+      <div class="chart-section" id="chartContainer" style="display:none;">
+        <div class="chart-title">Distribution of Activities</div>
+        <canvas id="activityPieChart" width="220" height="220" style="max-width:220px; max-height:220px; margin: 0 auto; display:block;"></canvas>
+      </div>
+      <div id="contentAfter" class="content"></div>
       <div class="no-print">
         <button onclick="window.print()">Print / Save as PDF</button>
         <button onclick="window.close()">Close</button>
       </div>
+      <script>
+        (function(){
+          const rawContent = ${JSON.stringify(content)};
+          const keyword = ${JSON.stringify(headingKeyword)};
+          const idx = rawContent.indexOf(keyword);
+          let before = rawContent;
+          let after = '';
+          if (idx !== -1) {
+            const headingEnd = idx + keyword.length;
+            before = rawContent.slice(0, headingEnd);
+            after = rawContent.slice(headingEnd);
+            document.getElementById('chartContainer').style.display = 'block';
+          }
+          document.getElementById('contentBefore').textContent = before;
+          document.getElementById('contentAfter').textContent = after;
+
+          const values = [${(chartData && chartData.assignmentsCount) || 0}, ${(chartData && chartData.quizzesCount) || 0}];
+          const hasData = (values[0] + values[1]) > 0;
+          if (hasData && window.Chart) {
+            const ctx = document.getElementById('activityPieChart');
+            new window.Chart(ctx, {
+              type: 'pie',
+              data: {
+                labels: ['Assignments','Quizzes'],
+                datasets: [{
+                  data: values,
+                  backgroundColor: ['#3b82f6', '#8b5cf6'],
+                  borderColor: '#ffffff',
+                  borderWidth: 2
+                }]
+              },
+              options: { plugins: { legend: { position: 'bottom' } } }
+            });
+          } else {
+            document.getElementById('chartContainer').style.display = 'none';
+          }
+        })();
+      </script>
     </body>
     </html>
   `);
@@ -57,7 +116,6 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.
 export default function VPE_FacultyReport() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   // Filter states
@@ -74,8 +132,6 @@ export default function VPE_FacultyReport() {
   // Faculty activities data
   const [facultyActivities, setFacultyActivities] = useState([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
-  const [allAssignments, setAllAssignments] = useState([]);
-  const [allQuizzes, setAllQuizzes] = useState([]);
 
   // Student activity audit states
   const [auditData, setAuditData] = useState([]);
@@ -87,6 +143,8 @@ export default function VPE_FacultyReport() {
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const chartCanvasRef = useRef(null);
+  const chartInstanceRef = useRef(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -552,7 +610,6 @@ export default function VPE_FacultyReport() {
   const uniqueStrands = [...new Set(facultyActivities.map(a => a.strandName).filter(Boolean))].sort();
   const uniqueSections = [...new Set(facultyActivities.map(a => a.sectionName).filter(Boolean))].sort();
   const uniqueCourses = [...new Set(facultyActivities.map(a => a.subject).filter(Boolean))].sort();
-  const uniqueFaculty = [...new Set(facultyActivities.map(a => a.facultyName).filter(Boolean))].sort();
 
   // AI Analysis function
   const createAIAnalysis = async () => {
@@ -599,11 +656,34 @@ export default function VPE_FacultyReport() {
   };
 
   // Calculate summary statistics
-  const totalActivities = filteredActivities.length;
   const assignmentsCount = filteredActivities.filter(a => a._kind === 'assignment').length;
   const quizzesCount = filteredActivities.filter(a => a._kind === 'quiz').length;
-  const postedCount = filteredActivities.filter(a => a.postAt && new Date(a.postAt) <= new Date()).length;
-  const pendingCount = filteredActivities.filter(a => !a.postAt || new Date(a.postAt) > new Date()).length;
+  // Render inline chart in modal when visible
+  useEffect(() => {
+    if (!showAnalysisModal) return;
+    const canvas = chartCanvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext('2d');
+    if (chartInstanceRef.current) {
+      chartInstanceRef.current.destroy();
+    }
+    if (assignmentsCount + quizzesCount === 0) return;
+    chartInstanceRef.current = new Chart(context, {
+      type: 'pie',
+      data: {
+        labels: ['Assignments', 'Quizzes'],
+        datasets: [{
+          data: [assignmentsCount, quizzesCount],
+          backgroundColor: ['#3b82f6', '#8b5cf6'],
+          borderColor: '#ffffff',
+          borderWidth: 2
+        }]
+      },
+      options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
+    });
+    return () => { if (chartInstanceRef.current) chartInstanceRef.current.destroy(); };
+  }, [showAnalysisModal, assignmentsCount, quizzesCount]);
+  
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -1143,7 +1223,13 @@ export default function VPE_FacultyReport() {
             </div>
             
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-              {aiAnalysis ? (
+              {aiAnalysis ? (() => {
+                const headingKeyword = 'Faculty Performance and Activity Levels';
+                const idx = aiAnalysis.indexOf(headingKeyword);
+                const headEnd = idx === -1 ? -1 : idx + headingKeyword.length;
+                const before = idx === -1 ? aiAnalysis : aiAnalysis.slice(0, headEnd);
+                const after = idx === -1 ? '' : aiAnalysis.slice(headEnd);
+                return (
                 <div className="prose max-w-none">
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg mb-6 border-l-4 border-blue-500">
                     <h4 className="text-lg font-semibold text-blue-800 mb-2">Analysis Summary</h4>
@@ -1152,12 +1238,16 @@ export default function VPE_FacultyReport() {
                       and recommendations for improving academic outcomes.
                     </p>
                   </div>
-                  
-                  <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                    {aiAnalysis}
-                  </div>
+                  <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">{before}</div>
+                  {idx !== -1 && (
+                    <div className="flex items-center justify-center py-3">
+                      <canvas ref={chartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                    </div>
+                  )}
+                  <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">{after}</div>
                 </div>
-              ) : (
+                );
+              })() : (
                 <div className="text-center py-8">
                   <div className="text-red-600">No analysis data available</div>
                 </div>
@@ -1183,7 +1273,11 @@ export default function VPE_FacultyReport() {
                     Copy to Clipboard
                   </button>
                   <button
-                    onClick={() => downloadAsPDF(aiAnalysis, `AI_Analysis_${selectedSchoolYear}_${selectedTerm}`)}
+                    onClick={() => downloadAsPDF(
+                      aiAnalysis,
+                      `AI_Analysis_${selectedSchoolYear}_${selectedTerm}`,
+                      { assignmentsCount, quizzesCount }
+                    )}
                     className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
                   >
                     Download as PDF
