@@ -68,7 +68,13 @@ const downloadAsPDF = (content, filename, chartData) => {
       </div>
       <script>
         (function(){
-          const rawContent = ${JSON.stringify(content)};
+          const encode = (s) => s
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;')
+            .replace(/'/g,'&#39;');
+          const rawContent = encode(${JSON.stringify(content)});
           const keyword = ${JSON.stringify(headingKeyword)};
           const idx = rawContent.indexOf(keyword);
           let before = rawContent;
@@ -154,6 +160,71 @@ export default function Principal_FacultyReport() {
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const chartCanvasRef = useRef(null);
   const chartInstanceRef = useRef(null);
+
+  // Convert simple markdown-like text to safe HTML (no raw # or *)
+  const formatAnalysisToHtml = useCallback((input) => {
+    if (!input) return '';
+    // Escape HTML first
+    const escapeHtml = (s) => s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    const lines = escapeHtml(input).split(/\r?\n/);
+    const html = [];
+    let inUl = false;
+    let inOl = false;
+    const closeLists = () => {
+      if (inUl) { html.push('</ul>'); inUl = false; }
+      if (inOl) { html.push('</ol>'); inOl = false; }
+    };
+
+    for (let raw of lines) {
+      let line = raw.trimEnd();
+      if (!line.trim()) { closeLists(); html.push('<p style="margin: 0 0 8px 0;">&nbsp;</p>'); continue; }
+
+      // Horizontal rule
+      if (/^[-*_]{3,}$/.test(line)) { closeLists(); html.push('<hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0;"/>'); continue; }
+
+      // Headings (# to h levels, but render uniformly professional)
+      const hMatch = line.match(/^(#{1,6})\s*(.+)$/);
+      if (hMatch) {
+        closeLists();
+        const text = hMatch[2];
+        html.push(`<h4 style="font-size:16px;font-weight:700;margin:14px 0 8px;">${text}</h4>`);
+        continue;
+      }
+
+      // Numbered list
+      const olMatch = line.match(/^\d+\.\s+(.+)$/);
+      if (olMatch) {
+        if (!inOl) { closeLists(); html.push('<ol style="margin:6px 0 8px 20px;">'); inOl = true; }
+        html.push(`<li style="margin:2px 0;">${olMatch[1]}</li>`);
+        continue;
+      }
+
+      // Bulleted list
+      const ulMatch = line.match(/^[-•]\s+(.+)$/);
+      if (ulMatch) {
+        if (!inUl) { closeLists(); html.push('<ul style="margin:6px 0 8px 20px;">'); inUl = true; }
+        html.push(`<li style="margin:2px 0;">${ulMatch[1]}</li>`);
+        continue;
+      }
+
+      // Inline bold and italics from **text** and *text*
+      let paragraph = line
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code style="background:#f3f4f6;padding:0 4px;border-radius:4px;">$1</code>');
+
+      closeLists();
+      html.push(`<p style="margin: 0 0 8px 0;">${paragraph}</p>`);
+    }
+    closeLists();
+    return html.join('');
+  }, []);
 
   // Helper: normalize possible Mongo ObjectId representations to plain string
   const toObjectIdString = (value) => {
@@ -1242,13 +1313,13 @@ export default function Principal_FacultyReport() {
                       and recommendations for improving academic outcomes.
                     </p>
                   </div>
-                  <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">{before}</div>
+                  <div className="text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(before) }} />
                   {idx !== -1 && (
                     <div className="flex items-center justify-center py-3">
                       <canvas ref={chartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
                     </div>
                   )}
-                  <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">{after}</div>
+                  <div className="text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(after) }} />
                 </div>
                 );
               })() : (
