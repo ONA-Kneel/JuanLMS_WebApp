@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 
 export default function Admin_AcademicSettings() {
@@ -71,7 +71,7 @@ export default function Admin_AcademicSettings() {
   });
 
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [searchTerms, setSearchTerms] = useState({ start: '', end: '' });
+  const [searchTerm, setSearchTerm] = useState('');
   
   // State for validation results modal (commented out for now)
   // const [validationModalOpen, setValidationModalOpen] = useState(false);
@@ -145,7 +145,7 @@ export default function Admin_AcademicSettings() {
       });
       const data = await res.json();
       if (res.ok) {
-        const activeYears = data.filter(year => year.status !== 'archived');
+        const activeYears = data.filter(year => year.status === 'active');
         setSchoolYears(activeYears);
         computeArchivedCountsForYears(activeYears);
       } else {
@@ -1075,9 +1075,14 @@ export default function Admin_AcademicSettings() {
                     </span>
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                  <input type="text" placeholder="Search Start Year" className="w-full sm:w-1/2 p-2 border rounded px-2 py-1 text-sm" value={searchTerms.start} onChange={e => setSearchTerms(prev => ({ ...prev, start: e.target.value }))} />
-                  <input type="text" placeholder="Search End Year" className="w-full sm:w-1/2 p-2 border rounded px-2 py-1 text-sm" value={searchTerms.end} onChange={e => setSearchTerms(prev => ({ ...prev, end: e.target.value }))} />
+                <div className="mb-4">
+                  <input 
+                    type="text" 
+                    placeholder="Search by year (e.g., 2024, 2023-2024)" 
+                    className="w-full p-2 border rounded px-2 py-1 text-sm" 
+                    value={searchTerm} 
+                    onChange={e => setSearchTerm(e.target.value)} 
+                  />
                 </div>
                 <div className="bg-white p-4 rounded-xl shadow mb-4">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2 gap-2">
@@ -1106,24 +1111,20 @@ export default function Admin_AcademicSettings() {
                         <th className="p-3 border">Archived Terms</th>
                         <th className="p-3 border">Actions</th>
                       </tr>
-                      <tr className="bg-white text-left">
-                        <th className="p-2 border-b">
-                          <input type="text" placeholder="Search Start Year" className="w-full border rounded px-2 py-1 text-sm" value={searchTerms.start} onChange={e => setSearchTerms(prev => ({ ...prev, start: e.target.value }))} />
-                        </th>
-                        <th className="p-2 border-b">
-                          <input type="text" placeholder="Search End Year" className="w-full border rounded px-2 py-1 text-sm" value={searchTerms.end} onChange={e => setSearchTerms(prev => ({ ...prev, end: e.target.value }))} />
-                        </th>
-                        <th className="p-2 border-b"></th>
-                        <th className="p-2 border-b"></th>
-                      </tr>
                     </thead>
                     <tbody>
                       {schoolYears
-                        .filter(year => year.status !== 'archived')
-                        .filter(year =>
-                          (searchTerms.start === '' || year.schoolYearStart.toString().includes(searchTerms.start)) &&
-                          (searchTerms.end === '' || year.schoolYearEnd.toString().includes(searchTerms.end))
-                        )
+                        .filter(year => year.status === 'active')
+                        .filter(year => {
+                          if (searchTerm === '') return true;
+                          const searchLower = searchTerm.toLowerCase();
+                          const startYear = year.schoolYearStart.toString();
+                          const endYear = year.schoolYearEnd.toString();
+                          const fullYear = `${startYear}-${endYear}`;
+                          return startYear.includes(searchLower) || 
+                                 endYear.includes(searchLower) || 
+                                 fullYear.includes(searchLower);
+                        })
                         .length === 0 ? (
                         <tr>
                           <td colSpan="5" className="p-3 border text-center text-gray-500">
@@ -1132,11 +1133,17 @@ export default function Admin_AcademicSettings() {
                         </tr>
                       ) : (
                         schoolYears
-                          .filter(year => year.status !== 'archived')
-                          .filter(year =>
-                            (searchTerms.start === '' || year.schoolYearStart.toString().includes(searchTerms.start)) &&
-                            (searchTerms.end === '' || year.schoolYearEnd.toString().includes(searchTerms.end))
-                          )
+                          .filter(year => year.status === 'active')
+                          .filter(year => {
+                            if (searchTerm === '') return true;
+                            const searchLower = searchTerm.toLowerCase();
+                            const startYear = year.schoolYearStart.toString();
+                            const endYear = year.schoolYearEnd.toString();
+                            const fullYear = `${startYear}-${endYear}`;
+                            return startYear.includes(searchLower) || 
+                                   endYear.includes(searchLower) || 
+                                   fullYear.includes(searchLower);
+                          })
                           .map((year) => (
                             <tr key={year._id} className="hover:bg-gray-50 transition">
                               <td className="p-3 border">{year.schoolYearStart}</td>
@@ -1160,53 +1167,16 @@ export default function Admin_AcademicSettings() {
                               </td>
                               <td className="p-3 border">
                                 <div className="inline-flex space-x-2">
-                                  {year.status === 'active' ? (
-                                    <>
-                                      <button
-                                        onClick={() => { handleEdit(year); setShowCreateModal(true); }}
-                                        className="p-1 rounded hover:bg-yellow-100 group relative"
-                                        title="Edit"
-                                      >
-                                        {/* Heroicons Pencil Square (black) */}
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
-                                        </svg>
-                                      </button>
-                                      <button
-                                        onClick={() => handleDelete(year)}
-                                        className="p-1 rounded hover:bg-red-100 group relative"
-                                        title="Archive"
-                                      >
-                                        {/* Heroicons Trash (red) */}
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                        </svg>
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <button
-                                        disabled
-                                        className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
-                                        title="Cannot edit inactive school year"
-                                      >
-                                        {/* Heroicons Pencil Square (gray) */}
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
-                                        </svg>
-                                      </button>
-                                      <button
-                                        onClick={() => handleDelete(year)}
-                                        className="p-1 rounded hover:bg-red-100 group relative"
-                                        title="Delete"
-                                      >
-                                        {/* Heroicons Trash (red) */}
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                        </svg>
-                                      </button>
-                                    </>
-                                  )}
+                                  <button
+                                    onClick={() => handleDelete(year)}
+                                    className="p-1 rounded hover:bg-red-100 group relative"
+                                    title={year.status === 'active' ? 'Archive' : 'Delete'}
+                                  >
+                                    {/* Heroicons Trash (red) */}
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                    </svg>
+                                  </button>
                                   <button
                                     onClick={() => handleView(year)}
                                     className="p-1 rounded hover:bg-blue-100 group relative"
