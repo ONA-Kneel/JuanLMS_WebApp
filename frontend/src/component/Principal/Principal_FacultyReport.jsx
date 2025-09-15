@@ -9,7 +9,7 @@ import ProfileMenu from "../ProfileMenu";
 const downloadAsPDF = (content, filename, chartData) => {
   // Create a new window with the content
   const printWindow = window.open('', '_blank');
-  const heading = '#### 1. **Faculty Performance and Activity Levels**';
+  const headingKeyword = 'Faculty Performance and Activity Levels';
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
@@ -69,12 +69,12 @@ const downloadAsPDF = (content, filename, chartData) => {
       <script>
         (function(){
           const rawContent = ${JSON.stringify(content)};
-          const heading = ${JSON.stringify(heading)};
-          const idx = rawContent.indexOf(heading);
+          const keyword = ${JSON.stringify(headingKeyword)};
+          const idx = rawContent.indexOf(keyword);
           let before = rawContent;
           let after = '';
           if (idx !== -1) {
-            const headingEnd = idx + heading.length;
+            const headingEnd = idx + keyword.length;
             before = rawContent.slice(0, headingEnd);
             after = rawContent.slice(headingEnd);
             document.getElementById('chartContainer').style.display = 'block';
@@ -1228,9 +1228,9 @@ export default function Principal_FacultyReport() {
             
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
               {aiAnalysis ? (() => {
-                const headingText = '#### 1. **Faculty Performance and Activity Levels**';
-                const idx = aiAnalysis.indexOf(headingText);
-                const headEnd = idx === -1 ? -1 : idx + headingText.length;
+                const headingKeyword = 'Faculty Performance and Activity Levels';
+                const idx = aiAnalysis.indexOf(headingKeyword);
+                const headEnd = idx === -1 ? -1 : idx + headingKeyword.length;
                 const before = idx === -1 ? aiAnalysis : aiAnalysis.slice(0, headEnd);
                 const after = idx === -1 ? '' : aiAnalysis.slice(headEnd);
                 return (
