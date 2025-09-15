@@ -5,6 +5,19 @@ import ProfileMenu from "../ProfileMenu";
 
 // PDF generation function with pie chart (Assignments vs Quizzes)
 const downloadAsPDF = (content, filename, chartData) => {
+  // Inject a small chart under the specified header when possible
+  const headerMarker = '#### 1. **Faculty Performance and Activity Levels**';
+  let htmlContent = content;
+  if (typeof content === 'string' && content.includes(headerMarker)) {
+    const idx = content.indexOf(headerMarker);
+    const lineEnd = content.indexOf('\n', idx) + 1;
+    const before = content.slice(0, lineEnd);
+    const after = content.slice(lineEnd);
+    htmlContent = `${before}\n<div class="chart-section" style="text-align:center;"><div class="chart-title">Activity Distribution</div><canvas id="activityPieChart" width="200" height="200"></canvas></div>\n${after}`;
+  } else {
+    htmlContent = `<div class="chart-section" style="text-align:center;"><div class="chart-title">Activity Distribution</div><canvas id="activityPieChart" width="200" height="200"></canvas></div>\n${content}`;
+  }
+
   // Create a new window with the content
   const printWindow = window.open('', '_blank');
   printWindow.document.write(`
@@ -53,11 +66,7 @@ const downloadAsPDF = (content, filename, chartData) => {
         <h1>${filename}</h1>
         <p>Generated on: ${new Date().toLocaleDateString()}</p>
       </div>
-      <div class="chart-section">
-        <div class="chart-title">Distribution of Activities</div>
-        <canvas id="activityPieChart" width="400" height="400"></canvas>
-      </div>
-      <div class="content">${content}</div>
+      <div class="content">${htmlContent}</div>
       <div class="no-print">
         <button onclick="window.print()">Print / Save as PDF</button>
         <button onclick="window.close()">Close</button>
@@ -82,7 +91,7 @@ const downloadAsPDF = (content, filename, chartData) => {
                 }]
               },
               options: {
-                responsive: true,
+                responsive: false,
                 plugins: {
                   legend: { position: 'bottom' }
                 }
