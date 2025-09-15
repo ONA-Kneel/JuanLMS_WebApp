@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Chart, ArcElement, Tooltip, Legend } from 'chart.js';
-Chart.register(ArcElement, Tooltip, Legend);
+import { Chart, ArcElement, Tooltip, Legend, PieController } from 'chart.js';
+Chart.register(ArcElement, Tooltip, Legend, PieController);
 import * as XLSX from "xlsx";
 import Principal_Navbar from "./Principal_Navbar";
 import ProfileMenu from "../ProfileMenu";
