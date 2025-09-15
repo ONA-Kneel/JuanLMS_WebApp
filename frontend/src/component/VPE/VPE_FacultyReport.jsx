@@ -1,25 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Chart, ArcElement, Tooltip, Legend } from 'chart.js';
+Chart.register(ArcElement, Tooltip, Legend);
 import * as XLSX from "xlsx";
 import VPE_Navbar from "./VPE_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
 // PDF generation function with pie chart (Assignments vs Quizzes)
 const downloadAsPDF = (content, filename, chartData) => {
-  // Inject a small chart under the specified header when possible
-  const headerMarker = '#### 1. **Faculty Performance and Activity Levels**';
-  let htmlContent = content;
-  if (typeof content === 'string' && content.includes(headerMarker)) {
-    const idx = content.indexOf(headerMarker);
-    const lineEnd = content.indexOf('\n', idx) + 1;
-    const before = content.slice(0, lineEnd);
-    const after = content.slice(lineEnd);
-    htmlContent = `${before}\n<div class="chart-section" style="text-align:center;"><div class="chart-title">Activity Distribution</div><canvas id="activityPieChart" width="200" height="200"></canvas></div>\n${after}`;
-  } else {
-    htmlContent = `<div class="chart-section" style="text-align:center;"><div class="chart-title">Activity Distribution</div><canvas id="activityPieChart" width="200" height="200"></canvas></div>\n${content}`;
-  }
-
   // Create a new window with the content
   const printWindow = window.open('', '_blank');
+  const heading = '#### 1. **Faculty Performance and Activity Levels**';
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
@@ -66,37 +56,51 @@ const downloadAsPDF = (content, filename, chartData) => {
         <h1>${filename}</h1>
         <p>Generated on: ${new Date().toLocaleDateString()}</p>
       </div>
-      <div class="content">${htmlContent}</div>
+      <div id="contentBefore" class="content"></div>
+      <div class="chart-section" id="chartContainer" style="display:none;">
+        <div class="chart-title">Distribution of Activities</div>
+        <canvas id="activityPieChart" width="220" height="220" style="max-width:220px; max-height:220px; margin: 0 auto; display:block;"></canvas>
+      </div>
+      <div id="contentAfter" class="content"></div>
       <div class="no-print">
         <button onclick="window.print()">Print / Save as PDF</button>
         <button onclick="window.close()">Close</button>
       </div>
       <script>
         (function(){
-          const data = {
-            labels: ["Assignments", "Quizzes"],
-            values: [${(chartData && chartData.assignmentsCount) || 0}, ${(chartData && chartData.quizzesCount) || 0}]
-          };
-          const ctx = document.getElementById('activityPieChart');
-          if (ctx && window.Chart) {
+          const rawContent = ${JSON.stringify(content)};
+          const heading = ${JSON.stringify(heading)};
+          const idx = rawContent.indexOf(heading);
+          let before = rawContent;
+          let after = '';
+          if (idx !== -1) {
+            const headingEnd = idx + heading.length;
+            before = rawContent.slice(0, headingEnd);
+            after = rawContent.slice(headingEnd);
+            document.getElementById('chartContainer').style.display = 'block';
+          }
+          document.getElementById('contentBefore').textContent = before;
+          document.getElementById('contentAfter').textContent = after;
+
+          const values = [${(chartData && chartData.assignmentsCount) || 0}, ${(chartData && chartData.quizzesCount) || 0}];
+          const hasData = (values[0] + values[1]) > 0;
+          if (hasData && window.Chart) {
+            const ctx = document.getElementById('activityPieChart');
             new window.Chart(ctx, {
               type: 'pie',
               data: {
-                labels: data.labels,
+                labels: ['Assignments','Quizzes'],
                 datasets: [{
-                  data: data.values,
+                  data: values,
                   backgroundColor: ['#3b82f6', '#8b5cf6'],
                   borderColor: '#ffffff',
                   borderWidth: 2
                 }]
               },
-              options: {
-                responsive: false,
-                plugins: {
-                  legend: { position: 'bottom' }
-                }
-              }
+              options: { plugins: { legend: { position: 'bottom' } } }
             });
+          } else {
+            document.getElementById('chartContainer').style.display = 'none';
           }
         })();
       </script>
@@ -139,6 +143,8 @@ export default function VPE_FacultyReport() {
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const chartCanvasRef = useRef(null);
+  const chartInstanceRef = useRef(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -652,6 +658,31 @@ export default function VPE_FacultyReport() {
   // Calculate summary statistics
   const assignmentsCount = filteredActivities.filter(a => a._kind === 'assignment').length;
   const quizzesCount = filteredActivities.filter(a => a._kind === 'quiz').length;
+  // Render inline chart in modal when visible
+  useEffect(() => {
+    if (!showAnalysisModal) return;
+    const canvas = chartCanvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext('2d');
+    if (chartInstanceRef.current) {
+      chartInstanceRef.current.destroy();
+    }
+    if (assignmentsCount + quizzesCount === 0) return;
+    chartInstanceRef.current = new Chart(context, {
+      type: 'pie',
+      data: {
+        labels: ['Assignments', 'Quizzes'],
+        datasets: [{
+          data: [assignmentsCount, quizzesCount],
+          backgroundColor: ['#3b82f6', '#8b5cf6'],
+          borderColor: '#ffffff',
+          borderWidth: 2
+        }]
+      },
+      options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
+    });
+    return () => { if (chartInstanceRef.current) chartInstanceRef.current.destroy(); };
+  }, [showAnalysisModal, assignmentsCount, quizzesCount]);
   
 
   return (
@@ -1192,7 +1223,13 @@ export default function VPE_FacultyReport() {
             </div>
             
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-              {aiAnalysis ? (
+              {aiAnalysis ? (() => {
+                const headingText = '#### 1. **Faculty Performance and Activity Levels**';
+                const idx = aiAnalysis.indexOf(headingText);
+                const headEnd = idx === -1 ? -1 : idx + headingText.length;
+                const before = idx === -1 ? aiAnalysis : aiAnalysis.slice(0, headEnd);
+                const after = idx === -1 ? '' : aiAnalysis.slice(headEnd);
+                return (
                 <div className="prose max-w-none">
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg mb-6 border-l-4 border-blue-500">
                     <h4 className="text-lg font-semibold text-blue-800 mb-2">Analysis Summary</h4>
@@ -1201,12 +1238,16 @@ export default function VPE_FacultyReport() {
                       and recommendations for improving academic outcomes.
                     </p>
                   </div>
-                  
-                  <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                    {aiAnalysis}
-                  </div>
+                  <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">{before}</div>
+                  {idx !== -1 && (
+                    <div className="flex items-center justify-center py-3">
+                      <canvas ref={chartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                    </div>
+                  )}
+                  <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">{after}</div>
                 </div>
-              ) : (
+                );
+              })() : (
                 <div className="text-center py-8">
                   <div className="text-red-600">No analysis data available</div>
                 </div>
