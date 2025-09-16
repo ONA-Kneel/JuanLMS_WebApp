@@ -109,7 +109,7 @@ const downloadAsPDF = (content, filename, chartData) => {
                 labels: ['Assignments','Quizzes'],
                 datasets: [{
                   data: values,
-                  backgroundColor: ['#3b82f6', '#8b5cf6'],
+                  backgroundColor: ['#f59e0b', '#3b82f6'],
                   borderColor: '#ffffff',
                   borderWidth: 2
                 }]
@@ -759,7 +759,7 @@ export default function Principal_FacultyReport() {
         labels: ['Assignments', 'Quizzes'],
         datasets: [{
           data: [assignmentsCount, quizzesCount],
-          backgroundColor: ['#3b82f6', '#8b5cf6'],
+          backgroundColor: ['#f59e0b', '#3b82f6'],
           borderColor: '#ffffff',
           borderWidth: 2
         }]
