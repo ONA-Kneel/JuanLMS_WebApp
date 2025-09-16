@@ -9,7 +9,7 @@ import ProfileMenu from "../ProfileMenu";
 const downloadAsPDF = (content, filename, chartData) => {
   // Create a new window with the content
   const printWindow = window.open('', '_blank');
-  const headingKeyword = 'Faculty Performance and Activity Levels';
+  // Note: Heading variants are defined inline where used to avoid unused var
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
@@ -75,12 +75,17 @@ const downloadAsPDF = (content, filename, chartData) => {
             .replace(/"/g,'&quot;')
             .replace(/'/g,'&#39;');
           const rawContent = encode(${JSON.stringify(content)});
-          const keyword = ${JSON.stringify(headingKeyword)};
-          const idx = rawContent.indexOf(keyword);
+          const keywords = ${JSON.stringify([
+            'Faculty Performance & Activity Levels Analysis',
+            'Faculty Performance & Activity Levels',
+            'Faculty Performance and Activity Levels'
+          ])};
+          let idx = -1; let used = '';
+          for (const k of keywords) { const i = rawContent.indexOf(k); if (i !== -1) { idx = i; used = k; break; } }
           let before = rawContent;
           let after = '';
           if (idx !== -1) {
-            const headingEnd = idx + keyword.length;
+            const headingEnd = idx + used.length;
             before = rawContent.slice(0, headingEnd);
             after = rawContent.slice(headingEnd);
             document.getElementById('chartContainer').style.display = 'block';
@@ -1270,9 +1275,14 @@ export default function VPE_FacultyReport() {
             
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
               {aiAnalysis ? (() => {
-                const headingKeyword = 'Faculty Performance and Activity Levels';
-                const idx = aiAnalysis.indexOf(headingKeyword);
-                const headEnd = idx === -1 ? -1 : idx + headingKeyword.length;
+                const variants = [
+                  'Faculty Performance & Activity Levels Analysis',
+                  'Faculty Performance & Activity Levels',
+                  'Faculty Performance and Activity Levels'
+                ];
+                let idx = -1; let used = '';
+                for (const v of variants) { const i = aiAnalysis.indexOf(v); if (i !== -1) { idx = i; used = v; break; } }
+                const headEnd = idx === -1 ? -1 : idx + used.length;
                 const before = idx === -1 ? aiAnalysis : aiAnalysis.slice(0, headEnd);
                 const after = idx === -1 ? '' : aiAnalysis.slice(headEnd);
                 return (
