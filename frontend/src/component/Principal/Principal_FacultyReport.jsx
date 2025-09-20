@@ -262,6 +262,13 @@ export default function Principal_FacultyReport() {
   const [loadingAudit, setLoadingAudit] = useState(false);
   const [auditError, setAuditError] = useState(null);
 
+  // Faculty last logins states
+  const [facultyLastLogins, setFacultyLastLogins] = useState([]);
+  const [loadingFacultyLogins, setLoadingFacultyLogins] = useState(false);
+  const [facultyLoginsError, setFacultyLoginsError] = useState(null);
+  const [facultyLoginsPage, setFacultyLoginsPage] = useState(1);
+  const FACULTY_LOGINS_PER_PAGE = 7;
+
   // AI Analytics states
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
@@ -772,6 +779,7 @@ export default function Principal_FacultyReport() {
           console.log('[DEBUG] Server health check:', testRes.status);
           if (testRes.ok) {
             fetchAuditData();
+            fetchFacultyLastLogins();
           } else {
             console.error('[DEBUG] Server health check failed');
             setAuditError('Server is not accessible');
@@ -784,6 +792,36 @@ export default function Principal_FacultyReport() {
       testServer();
     }
   }, [currentTerm, fetchAuditData]);
+
+  // Fetch faculty last logins
+  const fetchFacultyLastLogins = useCallback(async () => {
+    try {
+      setLoadingFacultyLogins(true);
+      setFacultyLoginsError(null);
+      
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/audit-logs/faculty-last-logins`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data && Array.isArray(data.facultyLogins)) {
+          setFacultyLastLogins(data.facultyLogins);
+        } else {
+          setFacultyLastLogins([]);
+        }
+      } else {
+        const errorData = await response.json();
+        setFacultyLoginsError(errorData.error || 'Failed to fetch faculty login data');
+      }
+    } catch (err) {
+      console.error("Failed to fetch faculty last logins:", err);
+      setFacultyLoginsError('Network error while fetching faculty login data');
+    } finally {
+      setLoadingFacultyLogins(false);
+    }
+  }, []);
 
   // Extract unique values for filter dropdowns
   const uniqueTracks = [...new Set(facultyActivities.map(a => a.trackName).filter(Boolean))].sort();
@@ -842,6 +880,52 @@ export default function Principal_FacultyReport() {
   const quizzesCount = filteredActivities.filter(a => a._kind === 'quiz').length;
   const postedCount = filteredActivities.filter(a => a.postAt && new Date(a.postAt) <= new Date()).length;
   const pendingCount = filteredActivities.filter(a => !a.postAt || new Date(a.postAt) > new Date()).length;
+
+  // Helper functions for faculty last logins
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleString('en-US', {
+      year: 'numeric', month: 'long', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+  };
+
+  // Helper for row color based on days since last login
+  const getRowColor = (lastLogin) => {
+    if (!lastLogin) return '';
+    const now = new Date();
+    const loginDate = new Date(lastLogin);
+    const diffDays = Math.floor((now - loginDate) / (1000 * 60 * 60 * 24));
+    if (diffDays >= 3) return 'bg-red-100';
+    if (diffDays === 2) return 'bg-yellow-100';
+    if (diffDays <= 1) return 'bg-green-100';
+    return '';
+  };
+
+  // Sort faculty logins: reds first, then yellow, then green, then by most recent lastLogin
+  const sortedFacultyLogins = [...facultyLastLogins].sort((a, b) => {
+    const getPriority = (log) => {
+      if (!log.lastLogin) return 3;
+      const now = new Date();
+      const loginDate = new Date(log.lastLogin);
+      const diffDays = Math.floor((now - loginDate) / (1000 * 60 * 60 * 24));
+      if (diffDays >= 3) return 0; // red
+      if (diffDays === 2) return 1; // yellow
+      if (diffDays <= 1) return 2; // green
+      return 3;
+    };
+    const pa = getPriority(a);
+    const pb = getPriority(b);
+    if (pa !== pb) return pa - pb;
+    // If same priority, sort by most recent lastLogin (descending)
+    return new Date(b.lastLogin) - new Date(a.lastLogin);
+  });
+
+  // Pagination logic for faculty logins
+  const totalFacultyLoginsPages = Math.ceil(sortedFacultyLogins.length / FACULTY_LOGINS_PER_PAGE);
+  const paginatedFacultyLogins = sortedFacultyLogins.slice(
+    (facultyLoginsPage - 1) * FACULTY_LOGINS_PER_PAGE,
+    facultyLoginsPage * FACULTY_LOGINS_PER_PAGE
+  );
 
   // Render inline chart in modal when visible
   useEffect(() => {
@@ -1188,13 +1272,22 @@ export default function Principal_FacultyReport() {
 
               // Get unique sections and activities from audit data
               const sections = ["All Sections", ...new Set(auditData.map(item => item.sectionName))];
+              
+              // Create unique activities by using a Map to deduplicate by activityId
+              const uniqueActivitiesMap = new Map();
+              auditData.forEach(item => {
+                if (!uniqueActivitiesMap.has(item.activityId)) {
+                  uniqueActivitiesMap.set(item.activityId, {
+                    id: item.activityId,
+                    title: item.activityTitle,
+                    sectionName: item.sectionName
+                  });
+                }
+              });
+              
               const activities = [
                 { id: "all", title: "All Activities", sectionName: "*" },
-                ...auditData.map(item => ({
-                  id: item.activityId,
-                  title: item.activityTitle,
-                  sectionName: item.sectionName
-                }))
+                ...Array.from(uniqueActivitiesMap.values())
               ];
 
               // Filter audit data based on selections
@@ -1467,6 +1560,108 @@ export default function Principal_FacultyReport() {
 
             return <AuditUI />;
           })()}
+        </div>
+
+        {/* Faculty Last Logins Section */}
+        <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+            <h3 className="text-xl font-semibold text-gray-800">Faculty Last Logins</h3>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={fetchFacultyLastLogins} 
+                disabled={loadingFacultyLogins}
+                type="button" 
+                className="px-4 py-2 rounded bg-gray-600 text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loadingFacultyLogins ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
+          </div>
+
+          {loadingFacultyLogins ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#010a51] mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading faculty login data...</p>
+            </div>
+          ) : facultyLoginsError ? (
+            <div className="text-center py-8">
+              <div className="text-red-600 mb-4">Error: {facultyLoginsError}</div>
+              <button 
+                onClick={fetchFacultyLastLogins}
+                className="px-4 py-2 bg-[#010a51] text-white rounded hover:bg-[#1a237e]"
+              >
+                Retry
+              </button>
+            </div>
+          ) : facultyLastLogins.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-600">No faculty login data found.</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-left">
+                      <th className="p-3 border-b font-semibold text-gray-700">Faculty Name</th>
+                      <th className="p-3 border-b font-semibold text-gray-700">Role</th>
+                      <th className="p-3 border-b font-semibold text-gray-700">Last Login</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedFacultyLogins.map((log, idx) => (
+                      <tr key={log._id} className={getRowColor(log.lastLogin)}>
+                        <td className="p-3 border-b text-gray-900 whitespace-nowrap">{log.userName}</td>
+                        <td className="p-3 border-b text-gray-700 whitespace-nowrap">{log.userRole}</td>
+                        <td className="p-3 border-b text-gray-500 whitespace-nowrap">{formatDate(log.lastLogin)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Pagination controls */}
+              {totalFacultyLoginsPages > 1 && (
+                <div className="flex justify-center items-center gap-2 mt-4">
+                  <button
+                    className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    onClick={() => setFacultyLoginsPage((p) => Math.max(1, p - 1))}
+                    disabled={facultyLoginsPage === 1}
+                  >
+                    Previous
+                  </button>
+                  
+                  <span className="text-sm text-gray-700">
+                    Page {facultyLoginsPage} of {totalFacultyLoginsPages}
+                  </span>
+                  
+                  <button
+                    className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    onClick={() => setFacultyLoginsPage((p) => Math.min(totalFacultyLoginsPages, p + 1))}
+                    disabled={facultyLoginsPage === totalFacultyLoginsPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+
+              {/* Legend */}
+              <div className="mt-4 flex flex-wrap gap-4 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-100 border border-red-200 rounded"></div>
+                  <span>3+ days inactive</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-yellow-100 border border-yellow-200 rounded"></div>
+                  <span>2 days inactive</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-100 border border-green-200 rounded"></div>
+                  <span>Active (≤1 day)</span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

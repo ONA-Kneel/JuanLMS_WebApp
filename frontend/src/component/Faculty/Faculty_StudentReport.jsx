@@ -53,7 +53,7 @@ export default function Faculty_StudentReport() {
   const [auditData, setAuditData] = useState([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
   const [auditError, setAuditError] = useState(null);
-  
+
   // Export loading states
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
@@ -572,9 +572,9 @@ export default function Faculty_StudentReport() {
               auditData.forEach(item => {
                 if (!uniqueActivitiesMap.has(item.activityId)) {
                   uniqueActivitiesMap.set(item.activityId, {
-                    id: item.activityId,
-                    title: item.activityTitle,
-                    sectionName: item.sectionName
+                  id: item.activityId,
+                  title: item.activityTitle,
+                  sectionName: item.sectionName
                   });
                 }
               });
@@ -601,7 +601,7 @@ export default function Faculty_StudentReport() {
                   setExportingExcel(true);
                   
                   // Create workbook
-                  const wb = XLSX.utils.book_new();
+                const wb = XLSX.utils.book_new();
                   
                   // Create header information
                   const headerData = [

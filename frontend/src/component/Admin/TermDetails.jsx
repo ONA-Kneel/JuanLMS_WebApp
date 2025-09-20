@@ -5044,7 +5044,7 @@ Validation issues (${skippedCount} items):
                     onClick={() => {
                       // Extract all term data into separate sheets
                       const wb = XLSX.utils.book_new();
-                      
+
                       // Add San Juan de Dios header to all sheets
                       const addHeaderToSheet = (ws, sheetName) => {
                         const headerData = [

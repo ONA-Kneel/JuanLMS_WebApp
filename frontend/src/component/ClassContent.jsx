@@ -44,7 +44,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [gradesData, setGradesData] = useState([]);
   const [gradesLoading, setGradesLoading] = useState(false);
   const [gradesError, setGradesError] = useState(null);
-  
+
   // Export loading states
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
@@ -82,11 +82,11 @@ export default function ClassContent({ selected, isFaculty = false }) {
   // Export functions
   const exportToExcel = async () => {
     if (!gradesData || !members.students || exportingExcel) return;
-    
+
     setExportingExcel(true);
     
     try {
-      // Fetch class details for header information
+    // Fetch class details for header information
     const token = localStorage.getItem('token');
     let classDetails = {};
     let facultyName = 'Unknown Faculty';
@@ -261,7 +261,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
     setExportingPDF(true);
     
     try {
-      // Fetch class details from faculty-classes endpoint
+    // Fetch class details from faculty-classes endpoint
     const token = localStorage.getItem('token');
     let classDetails = {};
     let facultyName = 'Unknown Faculty';
@@ -494,7 +494,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       <body>
         <div class="header">
           <div class="logo-section">
-            <div class="logo">
+                 <div class="logo">
               <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
             </div>
                  </div>
@@ -2260,10 +2260,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
                   </>
                 ) : (
                   <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Export to Excel
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export to Excel
                   </>
                 )}
               </button>
@@ -2286,10 +2286,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
                   </>
                 ) : (
                   <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                    Export to PDF
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                Export to PDF
                   </>
                 )}
               </button>
