@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -48,7 +48,7 @@ const validateFacultySchoolIDFormat = (schoolID) => {
   return facultySchoolIDPattern.test(trimmedID);
 };
 
-export default function TermDetails() {
+export default function TermDetails({ termData: propTermData, quarterData }) {
   const { termId } = useParams();
   const navigate = useNavigate();
   const importFileInputRef = useRef(null); // Initialize useRef for the file input
@@ -268,7 +268,16 @@ export default function TermDetails() {
 
   // In a real application, you would fetch term details here using termId
   useEffect(() => {
-    // Example fetch (replace with actual API call)
+    // If termData is provided as props (from quarter view), use it directly
+    if (propTermData) {
+      console.log('Term details loaded from props:', propTermData);
+      setTermDetails(propTermData);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    // Otherwise, fetch from API using termId from URL params
     const fetchTerm = async () => {
       try {
         setLoading(true);
@@ -296,8 +305,10 @@ export default function TermDetails() {
       }
     };
 
-    fetchTerm();
-  }, [termId]);
+    if (termId) {
+      fetchTerm();
+    }
+  }, [termId, propTermData]);
 
   // Fetch tracks when term details are loaded
   useEffect(() => {
@@ -500,7 +511,8 @@ export default function TermDetails() {
         body: JSON.stringify({
           trackName: trackFormData.trackName.trim(),
           schoolYear: termDetails.schoolYear,
-          termName: termDetails.termName
+          termName: termDetails.termName,
+          quarterName: quarterData ? quarterData.quarterName : undefined
         })
       });
 
@@ -516,11 +528,11 @@ export default function TermDetails() {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-              action: 'Track Added',
-              details: `Added Track "${newTrack.trackName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
-              userRole: 'admin'
-            })
+              body: JSON.stringify({
+                action: 'Track Added',
+                details: `Added Track "${newTrack.trackName}" for ${termDetails.schoolYear} ${termDetails.termName}${quarterData ? ` (${quarterData.quarterName})` : ''}`,
+                userRole: 'admin'
+              })
           }).catch(() => {});
         } catch {}
         window.alert('Track added successfully!');
@@ -4990,7 +5002,7 @@ Validation issues (${skippedCount} items):
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">
-              {termDetails.termName} ({termDetails.schoolYear})
+              {quarterData ? quarterData.quarterName : termDetails.termName} ({termDetails.schoolYear})
             </h2>
             <p className="text-base md:text-lg">
               {new Date().toLocaleDateString("en-US", {
