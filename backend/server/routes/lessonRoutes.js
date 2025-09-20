@@ -12,6 +12,7 @@ import database from '../connect.cjs';
 import { ObjectId } from 'mongodb';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import LessonProgress from '../models/LessonProgress.js';
+import { getIO } from '../server.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -98,6 +99,16 @@ router.post('/', authenticateToken, upload.array('files', 5), async (req, res) =
       ipAddress: req.ip || req.connection.remoteAddress,
       timestamp: new Date()
     });
+
+    // Emit real-time update to all users in the class
+    const io = getIO();
+    if (io) {
+      io.to(`class_${classID}`).emit('newLesson', {
+        lesson,
+        classID,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     res.status(201).json({ success: true, lesson });
   } catch (err) {

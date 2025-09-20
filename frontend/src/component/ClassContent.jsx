@@ -6,6 +6,7 @@ import QuizTab from "./ActivityTab";
 import { MoreVertical } from "lucide-react";
 import ValidationModal from './ValidationModal';
 import { getFileUrl } from "../utils/imageUtils";
+import { useSocket } from "../contexts/SocketContext";
 // import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
@@ -15,6 +16,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
   // --- ROUTER PARAMS ---
   const { classId } = useParams();
   const navigate = useNavigate();
+  
+  // --- SOCKET ---
+  const { socket, isConnected, joinClass, leaveClass } = useSocket();
 
   // Backend lessons state
   const [backendLessons, setBackendLessons] = useState([]);
@@ -29,6 +33,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
   const [assignmentError, setAssignmentError] = useState(null);
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
+  
+  // Real-time update indicators
+  const [realtimeUpdate, setRealtimeUpdate] = useState(null);
 
   // --- PROGRESS STATE ---
   // { [lessonId_fileUrl]: { lastPage, totalPages } }
@@ -729,6 +736,96 @@ export default function ClassContent({ selected, isFaculty = false }) {
     
     return false;
   };
+
+  // Join class room for real-time updates
+  useEffect(() => {
+    if (classId && isConnected && socket) {
+      joinClass(classId);
+      
+      return () => {
+        leaveClass(classId);
+      };
+    }
+  }, [classId, isConnected, joinClass, leaveClass, socket]);
+
+  // Real-time event listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    // Listen for new announcements
+    const handleNewAnnouncement = (data) => {
+      if (data.classID === classId) {
+        setAnnouncements(prev => [data.announcement, ...prev]);
+        setRealtimeUpdate({ type: 'announcement', message: 'New announcement received!' });
+        setTimeout(() => setRealtimeUpdate(null), 3000);
+      }
+    };
+
+    // Listen for announcement updates
+    const handleAnnouncementUpdated = (data) => {
+      if (data.classID === classId) {
+        setAnnouncements(prev => 
+          prev.map(announcement => 
+            announcement._id === data.announcement._id ? data.announcement : announcement
+          )
+        );
+      }
+    };
+
+    // Listen for announcement deletions
+    const handleAnnouncementDeleted = (data) => {
+      if (data.classID === classId) {
+        setAnnouncements(prev => 
+          prev.filter(announcement => announcement._id !== data.announcementId)
+        );
+      }
+    };
+
+    // Listen for new assignments
+    const handleNewAssignment = (data) => {
+      if (data.classID === classId) {
+        setAssignments(prev => [data.assignment, ...prev]);
+        setRealtimeUpdate({ type: 'assignment', message: 'New assignment received!' });
+        setTimeout(() => setRealtimeUpdate(null), 3000);
+      }
+    };
+
+    // Listen for new lessons/materials
+    const handleNewLesson = (data) => {
+      if (data.classID === classId) {
+        setBackendLessons(prev => [data.lesson, ...prev]);
+        setRealtimeUpdate({ type: 'lesson', message: 'New class material received!' });
+        setTimeout(() => setRealtimeUpdate(null), 3000);
+      }
+    };
+
+    // Listen for new quizzes
+    const handleNewQuiz = (data) => {
+      if (data.classID === classId) {
+        setAssignments(prev => [data.quiz, ...prev]);
+        setRealtimeUpdate({ type: 'quiz', message: 'New quiz received!' });
+        setTimeout(() => setRealtimeUpdate(null), 3000);
+      }
+    };
+
+    // Register event listeners
+    socket.on('newAnnouncement', handleNewAnnouncement);
+    socket.on('announcementUpdated', handleAnnouncementUpdated);
+    socket.on('announcementDeleted', handleAnnouncementDeleted);
+    socket.on('newAssignment', handleNewAssignment);
+    socket.on('newLesson', handleNewLesson);
+    socket.on('newQuiz', handleNewQuiz);
+
+    // Cleanup event listeners
+    return () => {
+      socket.off('newAnnouncement', handleNewAnnouncement);
+      socket.off('announcementUpdated', handleAnnouncementUpdated);
+      socket.off('announcementDeleted', handleAnnouncementDeleted);
+      socket.off('newAssignment', handleNewAssignment);
+      socket.off('newLesson', handleNewLesson);
+      socket.off('newQuiz', handleNewQuiz);
+    };
+  }, [socket, classId]);
 
   // Fetch enrolled student IDs for this class
   const fetchEnrolledStudentIds = async () => {
@@ -1717,6 +1814,23 @@ export default function ClassContent({ selected, isFaculty = false }) {
 
   return (
     <div className="bg-white rounded-2xl shadow p-6 md:p-8 ">
+      {/* Real-time update indicator */}
+      {realtimeUpdate && (
+        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-pulse">
+          <div className="w-2 h-2 bg-white rounded-full animate-ping"></div>
+          <span className="text-sm font-medium">{realtimeUpdate.message}</span>
+        </div>
+      )}
+      
+      {/* Connection status indicator */}
+      {!isConnected && (
+        <div className="fixed top-4 left-4 z-50 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+          <div className="w-2 h-2 bg-white rounded-full"></div>
+          <span className="text-sm font-medium">Connecting to real-time updates...</span>
+        </div>
+      )}
+      
+      
       {/* --- HOME TAB: Announcements --- */}
       {selected === "home" && (
         <>

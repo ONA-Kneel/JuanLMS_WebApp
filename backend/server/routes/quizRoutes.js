@@ -11,6 +11,7 @@ import QuizResponse from '../models/QuizResponse.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import seedrandom from 'seedrandom';
 import { createQuizNotification } from '../services/notificationService.js';
+import { getIO } from '../server.js';
 
 const router = express.Router();
 
@@ -126,10 +127,30 @@ router.post('/', authenticateToken, async (req, res) => {
     // Create notifications for students in the class(es)
     if (quiz.classID) {
       await createQuizNotification(quiz.classID, quiz);
+      
+      // Emit real-time update to all users in the class
+      const io = getIO();
+      if (io) {
+        io.to(`class_${quiz.classID}`).emit('newQuiz', {
+          quiz,
+          classID: quiz.classID,
+          timestamp: new Date().toISOString()
+        });
+      }
     } else if (quiz.assignedTo && Array.isArray(quiz.assignedTo)) {
+      const io = getIO();
       for (const assignment of quiz.assignedTo) {
         if (assignment.classID) {
           await createQuizNotification(assignment.classID, quiz);
+          
+          // Emit real-time update to all users in the class
+          if (io) {
+            io.to(`class_${assignment.classID}`).emit('newQuiz', {
+              quiz,
+              classID: assignment.classID,
+              timestamp: new Date().toISOString()
+            });
+          }
         }
       }
     }

@@ -11,6 +11,7 @@ import Class from '../models/Class.js';
 import FacultyAssignment from '../models/FacultyAssignment.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import { createAssignmentNotification } from '../services/notificationService.js';
+import { getIO } from '../server.js';
 
 const router = express.Router();
 
@@ -320,6 +321,16 @@ router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('at
         
         // Create notifications for students in this class
         await createAssignmentNotification(cid, assignment);
+        
+        // Emit real-time update to all users in the class
+        const io = getIO();
+        if (io) {
+          io.to(`class_${cid}`).emit('newAssignment', {
+            assignment,
+            classID: cid,
+            timestamp: new Date().toISOString()
+          });
+        }
       }
       return res.status(201).json(assignments);
     } else if (classID) {
@@ -349,6 +360,16 @@ router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('at
       
       // Create notifications for students in this class
       await createAssignmentNotification(classID, assignment);
+      
+      // Emit real-time update to all users in the class
+      const io = getIO();
+      if (io) {
+        io.to(`class_${classID}`).emit('newAssignment', {
+          assignment,
+          classID,
+          timestamp: new Date().toISOString()
+        });
+      }
       
       return res.status(201).json([assignment]);
     } else {

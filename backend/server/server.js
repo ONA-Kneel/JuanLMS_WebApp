@@ -62,6 +62,23 @@ const io = new Server(server, {
   allowEIO3: true
 });
 
+// Socket.IO authentication middleware
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  const userId = socket.handshake.auth.userId;
+  
+  if (!token || !userId) {
+    return next(new Error('Authentication error'));
+  }
+  
+  socket.userId = userId;
+  socket.token = token;
+  next();
+});
+
+// Export io instance for use in routes
+export const getIO = () => io;
+
 const PORT = process.env.PORT || 5000;
 
 // Socket.io connection handling
@@ -83,6 +100,16 @@ io.on("connection", (socket) => {
         }
         console.log("Active Users: ", activeUsers);
         io.emit("getUsers", activeUsers);
+    });
+
+    // Join class room for real-time updates
+    socket.on("joinClass", (classId) => {
+        socket.join(`class_${classId}`);
+    });
+
+    // Leave class room
+    socket.on("leaveClass", (classId) => {
+        socket.leave(`class_${classId}`);
     });
 
     socket.on("sendMessage", ({ chatId, senderId, receiverId, message, timestamp }) => {
@@ -336,6 +363,7 @@ app.get('/user-counts', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
 });
+
 
 // ✅ Routes
 app.use('/', userRoutes);

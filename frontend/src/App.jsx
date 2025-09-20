@@ -6,6 +6,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { setupCrossTabSessionListener, debouncedRedirectToDashboard, updateUserActivity } from './utils/sessionUtils';
 import { QuarterProvider } from './context/QuarterContext.jsx';
+import { SocketProvider } from './contexts/SocketContext.jsx';
 // For Logging in into different user and accounts
 import Login from './component/Login';
 import ForgotPassword from './component/ForgotPassword';
@@ -241,8 +242,9 @@ function App() {
   };
 
   return (
-    <QuarterProvider>
-      <Router>
+    <SocketProvider>
+      <QuarterProvider>
+        <Router>
         <Routes>
         {/* Login into different User Accounts */}
         <Route path="/" element={<Login />} />
@@ -354,8 +356,9 @@ function App() {
           </div>
         </div>
       )}
-      </Router>
-    </QuarterProvider>
+        </Router>
+      </QuarterProvider>
+    </SocketProvider>
   );
 }
 
