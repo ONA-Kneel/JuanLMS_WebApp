@@ -46,3 +46,5 @@ pushSubscriptionSchema.index({ isActive: 1 });
 const PushSubscription = mongoose.model('PushSubscription', pushSubscriptionSchema);
 
 export default PushSubscription;
+
+

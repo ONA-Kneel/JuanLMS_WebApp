@@ -20,17 +20,70 @@ const downloadAsPDF = (content, filename, chartData) => {
     <head>
       <title>${filename}</title>
       <style>
+        @page {
+          size: A4;
+          margin: 0.5in;
+        }
         body { 
           font-family: Arial, sans-serif; 
           line-height: 1.6; 
-          margin: 20px; 
+          margin: 0; 
+          padding: 0;
           color: #333;
+          background: white;
         }
-        .header { 
-          text-align: center; 
-          border-bottom: 2px solid #333; 
-          padding-bottom: 10px; 
-          margin-bottom: 20px;
+        .header {
+          display: flex;
+          align-items: center;
+          margin-bottom: 30px;
+          border-bottom: 2px solid #333;
+          padding-bottom: 20px;
+        }
+        .logo {
+          width: 80px;
+          height: 80px;
+          margin-right: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .logo img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+        .institution-info {
+          flex: 1;
+          text-align: center;
+        }
+        .institution-name {
+          font-size: 18px;
+          text-align: center;
+          font-weight: bold;
+          margin: 0;
+        }
+        .institution-address {
+          font-size: 16px;
+          text-align: center;
+          margin: 0;
+        }
+        .institution-accreditation {
+          font-size: 13px;
+          text-align: center;
+          margin: 0;
+        }
+        .report-info {
+          text-align: right;
+          margin-left: auto;
+        }
+        .report-title {
+          font-weight: bold;
+          margin: 0;
+          font-size: 14px;
+        }
+        .report-date {
+          margin: 5px 0 0 0;
+          font-size: 12px;
         }
         .chart-section {
           margin: 20px 0;
@@ -48,6 +101,31 @@ const downloadAsPDF = (content, filename, chartData) => {
           white-space: pre-wrap; 
           font-size: 14px;
         }
+        .footer {
+          margin-top: 30px;
+          border-top: 1px solid #333;
+          padding-top: 15px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 10px;
+          color: #333;
+        }
+        .footer-left {
+          text-align: left;
+        }
+        .footer-right {
+          text-align: right;
+        }
+        .footer-logo {
+          width: 30px;
+          height: 30px;
+        }
+        .footer-logo img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
         @media print {
           body { margin: 0; }
           .no-print { display: none; }
@@ -57,8 +135,20 @@ const downloadAsPDF = (content, filename, chartData) => {
     </head>
     <body>
       <div class="header">
-        <h1>${filename}</h1>
-        <p>Generated on: ${new Date().toLocaleDateString()}</p>
+        <div class="logo-section">
+          <div class="logo">
+            <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
+          </div>
+        </div>
+        <div class="institution-info">
+          <h1 class="institution-name">SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.</h1>
+          <p class="institution-address">2772-2774 Roxas Boulevard, Pasay City 1300 Philippines</p>
+          <p class="institution-accreditation">PAASCU Accredited - COLLEGE</p>
+        </div>
+      </div>
+      <div class="report-info">
+        <p class="report-title">${filename}</p>
+        <p class="report-date">Generated on: ${new Date().toLocaleDateString()}</p>
       </div>
       <div id="contentBefore" class="content"></div>
       <div class="chart-section" id="chartContainer" style="display:none;">
@@ -66,6 +156,16 @@ const downloadAsPDF = (content, filename, chartData) => {
         <canvas id="activityPieChart" width="220" height="220" style="max-width:220px; max-height:220px; margin: 0 auto; display:block;"></canvas>
       </div>
       <div id="contentAfter" class="content"></div>
+      <div class="footer">
+        <div class="footer-left">
+          <p>Hospital Tel. Nos: 831-9731/36;831-5641/49 www.sanjuandedios.org College Tel.Nos.: 551-2756; 551-2763 www.sjdefi.edu.ph</p>
+        </div>
+        <div class="footer-right">
+          <div class="footer-logo"> 
+            <img src="/src/assets/logo/images.png" alt="San Juan de Dios Hospital Seal" />
+          </div>
+        </div>
+      </div>
       <div class="no-print">
         <button onclick="window.print()">Print / Save as PDF</button>
         <button onclick="window.close()">Close</button>
@@ -1110,20 +1210,102 @@ export default function Principal_FacultyReport() {
               const missedCount = filteredRows.filter(item => item.status === "missed").length;
 
               const exportToExcel = () => {
-                const exportRows = filteredRows.map(item => ({
-                  "Student Name": item.studentName,
-                  Section: item.sectionName,
-                  Activity: item.activityTitle,
-                  Faculty: item.facultyName || "Current User",
-                  "Activity Type": item.activityType,
-                  "Due Date": item.dueDate ? new Date(item.dueDate).toLocaleDateString("en-US") : "-",
-                  Status: item.status.replace("_", " "),
-                  "Last Viewed": item.lastViewedAt ? new Date(item.lastViewedAt).toLocaleString() : "-",
-                }));
-                const ws = XLSX.utils.json_to_sheet(exportRows);
+                // Create workbook
                 const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Audit");
-                XLSX.writeFile(wb, "StudentActivityAudit.xlsx");
+                
+                // Create header information
+                const headerData = [
+                  ["SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC."],
+                  ["2772-2774 Roxas Boulevard, Pasay City 1300 Philippines"],
+                  ["PAASCU Accredited - COLLEGE"],
+                  [""], // Empty row
+                  ["FACULTY PERFORMANCE & ACTIVITY LEVELS ANALYSIS"],
+                  [`Generated on: ${new Date().toLocaleDateString()}`],
+                  [""], // Empty row
+                  ["REPORT DETAILS:"],
+                  [`Academic Year: ${academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "N/A"}`],
+                  [`Term: ${currentTerm ? currentTerm.termName : "N/A"}`],
+                  [`Total Records: ${filteredRows.length}`],
+                  [`Filters Applied:`],
+                  [`  - Section: ${selectedSection}`],
+                  [`  - Activity: ${selectedActivityId === "all" ? "All Activities" : activities.find(a => a.id === selectedActivityId)?.title || "All"}`],
+                  [`  - Status: ${statusFilter === "all" ? "All" : statusFilter.replace("_", " ")}`],
+                  [`  - Search: ${studentSearch || "None"}`],
+                  [""], // Empty row
+                  ["FACULTY ACTIVITY AUDIT DATA:"],
+                  [""], // Empty row
+                ];
+                
+                // Create data rows with headers
+                const dataHeaders = [
+                  "Student Name",
+                  "Section", 
+                  "Activity",
+                  "Faculty",
+                  "Activity Type",
+                  "Due Date",
+                  "Status",
+                  "Last Viewed"
+                ];
+                
+                const dataRows = filteredRows.map(item => [
+                  item.studentName,
+                  item.sectionName,
+                  item.activityTitle,
+                  item.facultyName || "Current User",
+                  item.activityType,
+                  item.dueDate ? new Date(item.dueDate).toLocaleDateString("en-US") : "-",
+                  item.status.replace("_", " "),
+                  item.lastViewedAt ? new Date(item.lastViewedAt).toLocaleString() : "-"
+                ]);
+                
+                // Combine header, data headers, and data rows
+                const allData = [
+                  ...headerData,
+                  dataHeaders,
+                  ...dataRows,
+                  [""], // Empty row
+                  ["FOOTER INFORMATION:"],
+                  ["Hospital Tel. Nos: 831-9731/36;831-5641/49 www.sanjuandedios.org"],
+                  ["College Tel.Nos.: 551-2756; 551-2763 www.sjdefi.edu.ph"],
+                  [`Report generated by JuanLMS System - ${new Date().toLocaleString()}`]
+                ];
+                
+                // Create worksheet
+                const ws = XLSX.utils.aoa_to_sheet(allData);
+                
+                // Set column widths for better formatting
+                const colWidths = [
+                  { wch: 25 }, // Student Name
+                  { wch: 15 }, // Section
+                  { wch: 30 }, // Activity
+                  { wch: 20 }, // Faculty
+                  { wch: 15 }, // Activity Type
+                  { wch: 12 }, // Due Date
+                  { wch: 15 }, // Status
+                  { wch: 20 }  // Last Viewed
+                ];
+                ws['!cols'] = colWidths;
+                
+                // Style the header rows (merge cells for institution name)
+                const mergeRanges = [
+                  { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }, // Institution name
+                  { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } }, // Address
+                  { s: { r: 2, c: 0 }, e: { r: 2, c: 7 } }, // Accreditation
+                  { s: { r: 4, c: 0 }, e: { r: 4, c: 7 } }, // Report title
+                  { s: { r: 5, c: 0 }, e: { r: 5, c: 7 } }, // Generated date
+                ];
+                ws['!merges'] = mergeRanges;
+                
+                // Add worksheet to workbook
+                XLSX.utils.book_append_sheet(wb, ws, "Faculty Performance Analysis");
+                
+                // Generate filename with timestamp
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                const filename = `FacultyPerformanceAnalysis_${timestamp}.xlsx`;
+                
+                // Write file
+                XLSX.writeFile(wb, filename);
               };
 
               if (loadingAudit) {

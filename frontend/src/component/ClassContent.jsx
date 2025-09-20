@@ -44,6 +44,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [gradesData, setGradesData] = useState([]);
   const [gradesLoading, setGradesLoading] = useState(false);
   const [gradesError, setGradesError] = useState(null);
+  
+  // Export loading states
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   // Restore lesson upload state and handler
   const [showLessonForm, setShowLessonForm] = useState(false);
@@ -77,9 +81,12 @@ export default function ClassContent({ selected, isFaculty = false }) {
 
   // Export functions
   const exportToExcel = async () => {
-    if (!gradesData || !members.students) return;
-
-    // Fetch class details for header information
+    if (!gradesData || !members.students || exportingExcel) return;
+    
+    setExportingExcel(true);
+    
+    try {
+      // Fetch class details for header information
     const token = localStorage.getItem('token');
     let classDetails = {};
     let facultyName = 'Unknown Faculty';
@@ -136,31 +143,43 @@ export default function ClassContent({ selected, isFaculty = false }) {
     const section = classDetails?.section || classWithMembers?.section || 'Unknown Section';
     const subject = classDetails?.classDesc || classDetails?.subject || classDetails?.subjectName || classWithMembers?.subject || 'Unknown Subject';
 
-    // Create CSV content with header information
-    const headerInfo = [
-      ['San Juan De Dios Educational Foundation Inc.'],
-      ['Breakdown of Grades'],
-      [`Date: ${new Date().toLocaleDateString()}`],
-      [''],
-      ['Class Information:'],
-      [`Name of Subject: ${subject}`],
-      [`Faculty Name: ${facultyName}`],
-      [`Grade: ${gradeLevel}`],
+    // Create Excel workbook with proper header structure
+    const wb = XLSX.utils.book_new();
+    
+    // Create header information
+    const headerData = [
+      ["SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC."],
+      ["2772-2774 Roxas Boulevard, Pasay City 1300 Philippines"],
+      ["PAASCU Accredited - COLLEGE"],
+      [""], // Empty row
+      ["GRADE BREAKDOWN REPORT"],
+      [`Generated on: ${new Date().toLocaleDateString()}`],
+      [""], // Empty row
+      ["CLASS INFORMATION:"],
+      [`Subject: ${subject}`],
+      [`Faculty: ${facultyName}`],
+      [`Grade Level: ${gradeLevel}`],
       [`Section: ${section}`],
-      [`Strand: ${subject}`],
-      [''],
-      ['Grades:']
+      [`Total Students: ${members.students.length}`],
+      [`Total Activities: ${gradesData.length}`],
+      [""], // Empty row
+      ["GRADE BREAKDOWN DATA:"],
+      [""], // Empty row
     ];
 
     // Create table headers
-    const tableHeaders = ['Student Name', 'Student ID', ...gradesData.map(activity => `${activity.title} (${activity.points} pts)`)];
+    const dataHeaders = [
+      "Student Name",
+      "Student ID", 
+      ...gradesData.map(activity => `${activity.title} (${activity.points} pts)`)
+    ];
     
     // Add student data with proper score formatting
-    const studentRows = [];
+    const dataRows = [];
     members.students.forEach(student => {
       const row = [
-        `"${student.lastname}, ${student.firstname}"`,
-        `"${student.schoolID || student.userID || 'N/A'}"`,
+        `${student.lastname}, ${student.firstname}`,
+        student.schoolID || student.userID || 'N/A',
         ...gradesData.map(activity => {
           const submission = activity.submissions?.find(sub => 
             sub.studentId?._id === student._id || 
@@ -172,49 +191,77 @@ export default function ClassContent({ selected, isFaculty = false }) {
           if (submission) {
             if (activity.type === 'assignment') {
               return submission.grade !== undefined && submission.grade !== null 
-                ? `"Score: ${submission.grade}/${activity.points || 0}"` 
-                : '"Submitted"';
+                ? `Score: ${submission.grade}/${activity.points || 0}` 
+                : 'Submitted';
             } else if (activity.type === 'quiz') {
               return submission.score !== undefined && submission.score !== null 
-                ? `"Score: ${submission.score}/${activity.points || 0}"` 
-                : '"Submitted"';
+                ? `Score: ${submission.score}/${activity.points || 0}` 
+                : 'Submitted';
             }
           }
-          return '"-"';
+          return '-';
         })
       ];
-      studentRows.push(row.join(','));
+      dataRows.push(row);
     });
 
-    // Combine all content
-    const allRows = [
-      ...headerInfo.map(row => `"${row[0]}"`),
-      tableHeaders.join(','),
-      ...studentRows,
-      [''],
-      [`"Generated on ${new Date().toLocaleString()}"`],
-      ['"San Juan De Dios Educational Foundation Inc."']
+    // Combine header, data headers, and data rows
+    const allData = [
+      ...headerData,
+      dataHeaders,
+      ...dataRows,
+      [""], // Empty row
+      ["FOOTER INFORMATION:"],
+      ["Hospital Tel. Nos: 831-9731/36;831-5641/49 www.sanjuandedios.org"],
+      ["College Tel.Nos.: 551-2756; 551-2763 www.sjdefi.edu.ph"],
+      [`Report generated by JuanLMS System - ${new Date().toLocaleString()}`]
     ];
 
-    // Convert to CSV
-    const csvContent = allRows.join('\n');
-
-    // Download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `grades_${className.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Create worksheet
+    const ws = XLSX.utils.aoa_to_sheet(allData);
+    
+    // Set column widths for better formatting
+    const colWidths = [
+      { wch: 25 }, // Student Name
+      { wch: 15 }, // Student ID
+      ...gradesData.map(() => ({ wch: 20 })) // Activity columns
+    ];
+    ws['!cols'] = colWidths;
+    
+    // Style the header rows (merge cells for institution name)
+    const mergeRanges = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: dataHeaders.length - 1 } }, // Institution name
+      { s: { r: 1, c: 0 }, e: { r: 1, c: dataHeaders.length - 1 } }, // Address
+      { s: { r: 2, c: 0 }, e: { r: 2, c: dataHeaders.length - 1 } }, // Accreditation
+      { s: { r: 4, c: 0 }, e: { r: 4, c: dataHeaders.length - 1 } }, // Report title
+      { s: { r: 5, c: 0 }, e: { r: 5, c: dataHeaders.length - 1 } }, // Generated date
+    ];
+    ws['!merges'] = mergeRanges;
+    
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, "Grade Breakdown");
+    
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    const filename = `GradeBreakdown_${className.replace(/\s+/g, '_')}_${timestamp}.xlsx`;
+    
+    // Write file
+    XLSX.writeFile(wb, filename);
+    
+    setExportingExcel(false);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      setExportingExcel(false);
+    }
   };
 
   const exportToPDF = async () => {
-    if (!gradesData || !members.students) return;
+    if (!gradesData || !members.students || exportingPDF) return;
     
-    // Fetch class details from faculty-classes endpoint
+    setExportingPDF(true);
+    
+    try {
+      // Fetch class details from faculty-classes endpoint
     const token = localStorage.getItem('token');
     let classDetails = {};
     let facultyName = 'Unknown Faculty';
@@ -335,13 +382,30 @@ export default function ClassContent({ selected, isFaculty = false }) {
           }
           .institution-info {
             flex: 1;
+            text-align: center;
+            
           }
           .institution-name {
             font-size: 18px;
+            text-align: center;
             font-weight: bold;
             margin: 0;
-            line-height: 1.2;
+
           }
+          .institution-address {
+            font-size: 16px;
+            text-align: center;
+            margin: 0;
+
+          }
+          
+          .institution-accreditation {
+            font-size: 13px;
+            text-align: center;
+            margin: 0;
+
+          }
+            
           .report-info {
             text-align: right;
             margin-left: auto;
@@ -400,27 +464,54 @@ export default function ClassContent({ selected, isFaculty = false }) {
           }
           .footer {
             margin-top: 30px;
-            text-align: center;
+            border-top: 1px solid #333;
+            padding-top: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             font-size: 10px;
-            color: #666;
+            color: #333;
           }
+          .footer-left {
+            text-align: left;
+          }
+          .footer-right {
+            text-align: right;
+          }
+          .footer-logo {
+            width: 30px;
+            height: 30px;
+            
+          }
+          .footer-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+          }
+
         </style>
       </head>
       <body>
         <div class="header">
-                 <div class="logo">
-                   <img src="/src/assets/logo/SJDD Logo.svg" alt="SJDD Logo" style="width: 80px; height: 80px; object-fit: contain;" />
+          <div class="logo-section">
+            <div class="logo">
+              <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
+            </div>
                  </div>
           <div class="institution-info">
-            <h1 class="institution-name">San Juan De Dios<br>Educational<br>Foundation Inc.</h1>
+            <h1 class="institution-name">SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.</h1>
+            <p class="institution-address">2772-2774 Roxas Boulevard, Pasay City 1300 Philippines</p>
+            <p class="institution-accreditation">PAASCU Accredited - COLLEGE</p>
+          </div>
+          
           </div>
           <div class="report-info">
             <p class="report-title">Breakdown of Grades</p>
             <p class="report-date">Date: ${new Date().toLocaleDateString()}</p>
-          </div>
         </div>
         
         <div class="class-info">
+        
           <div class="info-row">
             <span class="info-label">Name of Subject:</span>
             <span class="info-value">${subject}</span>
@@ -487,8 +578,16 @@ export default function ClassContent({ selected, isFaculty = false }) {
         </table>
         
         <div class="footer">
-          <p>Generated on ${new Date().toLocaleString()}</p>
-          <p>San Juan De Dios Educational Foundation Inc.</p>
+          <div class="footer-left">
+            <p>Hospital Tel. Nos: 831-9731/36;831-5641/49 www.sanjuandedios.org College Tel.Nos.: 551-2756; 551-2763 www.sjdefi.edu.ph</p>
+          </div>
+          <div class="footer-right">
+            <div class="footer-logo"> 
+              <img src="/src/assets/logo/images.png" alt="San Juan de Dios Hospital Seal  " />
+            </div>
+                
+              
+          </div>
         </div>
       </body>
       </html>
@@ -502,8 +601,13 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setTimeout(() => {
         printWindow.print();
         printWindow.close();
+        setExportingPDF(false);
       }, 500);
     };
+    } catch (error) {
+      console.error('Error exporting to PDF:', error);
+      setExportingPDF(false);
+    }
   };
   
   // Confirmation modal state
@@ -2139,21 +2243,55 @@ export default function ClassContent({ selected, isFaculty = false }) {
             <div className="flex gap-2">
               <button 
                 onClick={exportToExcel}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                disabled={exportingExcel || exportingPDF}
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  exportingExcel || exportingPDF 
+                    ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Export to Excel
+                {exportingExcel ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Export to Excel
+                  </>
+                )}
               </button>
               <button 
                 onClick={exportToPDF}
-                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                disabled={exportingExcel || exportingPDF}
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  exportingExcel || exportingPDF 
+                    ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-                Export to PDF
+                {exportingPDF ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    Export to PDF
+                  </>
+                )}
               </button>
             </div>
           </div>

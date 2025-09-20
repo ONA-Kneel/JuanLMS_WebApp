@@ -268,3 +268,5 @@ const NotificationSettings = ({ isOpen, onClose }) => {
 };
 
 export default NotificationSettings;
+
+

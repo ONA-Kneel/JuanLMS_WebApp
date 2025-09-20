@@ -54,9 +54,12 @@ const server = createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"],
-    credentials: true
-  }
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true
 });
 
 const PORT = process.env.PORT || 5000;
@@ -66,7 +69,9 @@ let activeUsers = [];
 let userGroups = {}; // Track which groups each user is in
 
 io.on("connection", (socket) => {
-    console.log("User connected:", socket.id);
+    console.log("✅ User connected:", socket.id);
+    console.log("✅ Socket transport:", socket.conn.transport.name);
+    console.log("✅ Socket ready state:", socket.conn.readyState);
     
     socket.on("addUser", (userId) => {
         socket.userId = userId; // Store userId on socket for later use
@@ -80,15 +85,31 @@ io.on("connection", (socket) => {
         io.emit("getUsers", activeUsers);
     });
 
-    socket.on("sendMessage", ({ senderId, receiverId, text, fileUrl }) => {
+    socket.on("sendMessage", ({ chatId, senderId, receiverId, message, timestamp }) => {
+        console.log("Received sendMessage:", { chatId, senderId, receiverId, message, timestamp });
+        
+        // Find the receiver in active users
         const receiver = activeUsers.find(user => user.userId === receiverId);
         if (receiver) {
-            io.to(receiver.socketId).emit("getMessage", {
+            console.log("Sending message to receiver:", receiver.userId);
+            io.to(receiver.socketId).emit("receiveMessage", {
                 senderId,
-                text,
-                fileUrl
+                receiverId,
+                message,
+                timestamp: timestamp || new Date().toISOString(),
+                createdAt: new Date().toISOString()
             });
+        } else {
+            console.log("Receiver not found in active users:", receiverId);
         }
+        
+        // Also emit to the sender for confirmation (optional)
+        io.to(socket.id).emit("messageSent", {
+            senderId,
+            receiverId,
+            message,
+            timestamp: timestamp || new Date().toISOString()
+        });
     });
 
     // Join a group chat room
@@ -114,14 +135,20 @@ io.on("connection", (socket) => {
 
     // Send message to group chat
     socket.on("sendGroupMessage", ({ senderId, groupId, text, fileUrl, senderName }) => {
-        // Broadcast to all users in the group (except sender)
-        socket.to(groupId).emit("getGroupMessage", {
+        console.log("Received sendGroupMessage:", { senderId, groupId, text, fileUrl, senderName });
+        
+        // Broadcast to all users in the group (including sender for consistency)
+        io.to(groupId).emit("receiveGroupMessage", {
             senderId,
             groupId,
-            text,
+            message: text,
             fileUrl,
-            senderName
+            senderName,
+            createdAt: new Date().toISOString(),
+            timestamp: new Date().toISOString()
         });
+        
+        console.log("Broadcasted group message to room:", groupId);
     });
 
     // Handle group creation
@@ -138,6 +165,18 @@ io.on("connection", (socket) => {
         // Emit groupCreated event to the creator
         socket.emit("groupCreated", groupData);
         console.log(`Group created: ${groupData._id}`);
+    });
+
+    // Handle joinChat for direct messaging
+    socket.on("joinChat", (chatId) => {
+        socket.join(chatId);
+        console.log(`User ${socket.userId} joined chat room: ${chatId}`);
+    });
+
+    // Handle test events from mobile app
+    socket.on("test", (data) => {
+        console.log("Received test event:", data);
+        socket.emit("testResponse", { message: "Test response from server", timestamp: new Date().toISOString() });
     });
 
     socket.on("disconnect", () => {

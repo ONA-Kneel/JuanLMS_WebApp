@@ -5044,6 +5044,45 @@ Validation issues (${skippedCount} items):
                     onClick={() => {
                       // Extract all term data into separate sheets
                       const wb = XLSX.utils.book_new();
+                      
+                      // Add San Juan de Dios header to all sheets
+                      const addHeaderToSheet = (ws, sheetName) => {
+                        const headerData = [
+                          ["SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC."],
+                          ["2772-2774 Roxas Boulevard, Pasay City 1300 Philippines"],
+                          ["PAASCU Accredited - COLLEGE"],
+                          [""], // Empty row
+                          [`${sheetName.toUpperCase()} REPORT`],
+                          [`Generated on: ${new Date().toLocaleDateString()}`],
+                          [`Academic Year: ${termDetails.schoolYear}`],
+                          [`Term: ${termDetails.termName}`],
+                          [""], // Empty row
+                        ];
+                        
+                        // Get existing data
+                        const existingData = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                        
+                        // Combine header with existing data
+                        const allData = [...headerData, ...existingData];
+                        
+                        // Create new worksheet with header
+                        const newWs = XLSX.utils.aoa_to_sheet(allData);
+                        
+                        // Set column widths
+                        newWs['!cols'] = ws['!cols'] || [];
+                        
+                        // Merge cells for header
+                        const mergeRanges = [
+                          { s: { r: 0, c: 0 }, e: { r: 0, c: (ws['!cols']?.length || 10) - 1 } }, // Institution name
+                          { s: { r: 1, c: 0 }, e: { r: 1, c: (ws['!cols']?.length || 10) - 1 } }, // Address
+                          { s: { r: 2, c: 0 }, e: { r: 2, c: (ws['!cols']?.length || 10) - 1 } }, // Accreditation
+                          { s: { r: 4, c: 0 }, e: { r: 4, c: (ws['!cols']?.length || 10) - 1 } }, // Report title
+                          { s: { r: 5, c: 0 }, e: { r: 5, c: (ws['!cols']?.length || 10) - 1 } }, // Generated date
+                        ];
+                        newWs['!merges'] = mergeRanges;
+                        
+                        return newWs;
+                      };
 
                       // Extract Tracks
                       const activeTracks = tracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
@@ -5058,7 +5097,8 @@ Validation issues (${skippedCount} items):
                         ])
                       ];
                       const tracksWs = XLSX.utils.aoa_to_sheet(tracksData);
-                      XLSX.utils.book_append_sheet(wb, tracksWs, 'Tracks');
+                      const tracksWsWithHeader = addHeaderToSheet(tracksWs, 'Tracks');
+                      XLSX.utils.book_append_sheet(wb, tracksWsWithHeader, 'Tracks');
 
                       // Extract Strands
                       const activeStrands = strands.filter(s => s.status === 'active' && tracks.find(t => t.trackName === s.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active'));
@@ -5072,7 +5112,8 @@ Validation issues (${skippedCount} items):
                         ])
                       ];
                       const strandsWs = XLSX.utils.aoa_to_sheet(strandsData);
-                      XLSX.utils.book_append_sheet(wb, strandsWs, 'Strands');
+                      const strandsWsWithHeader = addHeaderToSheet(strandsWs, 'Strands');
+                      XLSX.utils.book_append_sheet(wb, strandsWsWithHeader, 'Strands');
 
                       // Extract Sections
                       const activeSections = sections.filter(sec => sec.status === 'active' && tracks.find(t => t.trackName === sec.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active'));
@@ -5088,7 +5129,8 @@ Validation issues (${skippedCount} items):
                         ])
                       ];
                       const sectionsWs = XLSX.utils.aoa_to_sheet(sectionsData);
-                      XLSX.utils.book_append_sheet(wb, sectionsWs, 'Sections');
+                      const sectionsWsWithHeader = addHeaderToSheet(sectionsWs, 'Sections');
+                      XLSX.utils.book_append_sheet(wb, sectionsWsWithHeader, 'Sections');
 
                       // Extract Subjects
                       const activeSubjects = subjects.filter(sub => sub.status === 'active' && sub.schoolYear === termDetails.schoolYear && sub.termName === termDetails.termName);
@@ -5104,7 +5146,8 @@ Validation issues (${skippedCount} items):
                         ])
                       ];
                       const subjectsWs = XLSX.utils.aoa_to_sheet(subjectsData);
-                      XLSX.utils.book_append_sheet(wb, subjectsWs, 'Subjects');
+                      const subjectsWsWithHeader = addHeaderToSheet(subjectsWs, 'Subjects');
+                      XLSX.utils.book_append_sheet(wb, subjectsWsWithHeader, 'Subjects');
 
                       // Extract Faculty Assignments
                       const currentFacultyAssignments = facultyAssignments.filter(fa => fa.status === 'active');
@@ -5123,7 +5166,8 @@ Validation issues (${skippedCount} items):
                         ])
                       ];
                       const facultyWs = XLSX.utils.aoa_to_sheet(facultyAssignmentData);
-                      XLSX.utils.book_append_sheet(wb, facultyWs, 'Faculty Assignments');
+                      const facultyWsWithHeader = addHeaderToSheet(facultyWs, 'Faculty Assignments');
+                      XLSX.utils.book_append_sheet(wb, facultyWsWithHeader, 'Faculty Assignments');
 
                       // Extract Student Assignments
                       const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
@@ -5141,7 +5185,8 @@ Validation issues (${skippedCount} items):
                         ])
                       ];
                       const studentWs = XLSX.utils.aoa_to_sheet(studentAssignmentData);
-                      XLSX.utils.book_append_sheet(wb, studentWs, 'Student Assignments');
+                      const studentWsWithHeader = addHeaderToSheet(studentWs, 'Student Assignments');
+                      XLSX.utils.book_append_sheet(wb, studentWsWithHeader, 'Student Assignments');
 
                       // Save the workbook
                       XLSX.writeFile(wb, `${termDetails.schoolYear}_${termDetails.termName}_data.xlsx`);

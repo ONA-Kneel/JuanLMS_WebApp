@@ -53,6 +53,10 @@ export default function Faculty_StudentReport() {
   const [auditData, setAuditData] = useState([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
   const [auditError, setAuditError] = useState(null);
+  
+  // Export loading states
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -562,13 +566,22 @@ export default function Faculty_StudentReport() {
 
               // Get unique sections and activities from audit data
               const sections = ["All Sections", ...new Set(auditData.map(item => item.sectionName))];
+              
+              // Create unique activities by using a Map to deduplicate by activityId
+              const uniqueActivitiesMap = new Map();
+              auditData.forEach(item => {
+                if (!uniqueActivitiesMap.has(item.activityId)) {
+                  uniqueActivitiesMap.set(item.activityId, {
+                    id: item.activityId,
+                    title: item.activityTitle,
+                    sectionName: item.sectionName
+                  });
+                }
+              });
+              
               const activities = [
                 { id: "all", title: "All Activities", sectionName: "*" },
-                ...auditData.map(item => ({
-                  id: item.activityId,
-                  title: item.activityTitle,
-                  sectionName: item.sectionName
-                }))
+                ...Array.from(uniqueActivitiesMap.values())
               ];
 
               // Filter audit data based on selections
@@ -583,21 +596,365 @@ export default function Faculty_StudentReport() {
               const notViewedCount = filteredRows.filter(item => item.status === "not_viewed").length;
               const missedCount = filteredRows.filter(item => item.status === "missed").length;
 
-              const exportToExcel = () => {
-                const exportRows = filteredRows.map(item => ({
-                  "Student Name": item.studentName,
-                  Section: item.sectionName,
-                  Activity: item.activityTitle,
-                  "Activity Type": item.activityType,
-                  "Due Date": item.dueDate ? new Date(item.dueDate).toLocaleDateString("en-US") : "-",
-                  Status: item.status.replace("_", " "),
-                  "Last Viewed": item.lastViewedAt ? new Date(item.lastViewedAt).toLocaleString() : "-",
-                  "Submitted At": item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "-",
-                }));
-                const ws = XLSX.utils.json_to_sheet(exportRows);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Audit");
-                XLSX.writeFile(wb, "StudentActivityAudit.xlsx");
+              const exportToExcel = async () => {
+                try {
+                  setExportingExcel(true);
+                  
+                  // Create workbook
+                  const wb = XLSX.utils.book_new();
+                  
+                  // Create header information
+                  const headerData = [
+                    ["SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC."],
+                    ["2772-2774 Roxas Boulevard, Pasay City 1300 Philippines"],
+                    ["PAASCU Accredited - COLLEGE"],
+                    [""], // Empty row
+                    ["STUDENT ACTIVITY AUDIT REPORT"],
+                    [`Generated on: ${new Date().toLocaleDateString()}`],
+                    [""], // Empty row
+                    ["REPORT DETAILS:"],
+                    [`Academic Year: ${academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "N/A"}`],
+                    [`Term: ${currentTerm ? currentTerm.termName : "N/A"}`],
+                    [`Total Records: ${filteredRows.length}`],
+                    [`Filters Applied:`],
+                    [`  - Section: ${selectedSection}`],
+                    [`  - Activity: ${selectedActivityId === "all" ? "All Activities" : activities.find(a => a.id === selectedActivityId)?.title || "All"}`],
+                    [`  - Status: ${statusFilter === "all" ? "All" : statusFilter.replace("_", " ")}`],
+                    [`  - Search: ${studentSearch || "None"}`],
+                    [""], // Empty row
+                    ["ACTIVITY AUDIT DATA:"],
+                    [""], // Empty row
+                  ];
+                  
+                  // Create data rows with headers
+                  const dataHeaders = [
+                    "Student Name",
+                    "Section", 
+                    "Activity",
+                    "Activity Type",
+                    "Due Date",
+                    "Status",
+                    "Last Viewed",
+                    "Submitted At"
+                  ];
+                  
+                  const dataRows = filteredRows.map(item => [
+                    item.studentName,
+                    item.sectionName,
+                    item.activityTitle,
+                    item.activityType,
+                    item.dueDate ? new Date(item.dueDate).toLocaleDateString("en-US") : "-",
+                    item.status.replace("_", " "),
+                    item.lastViewedAt ? new Date(item.lastViewedAt).toLocaleString() : "-",
+                    item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "-"
+                  ]);
+                  
+                  // Combine header, data headers, and data rows
+                  const allData = [
+                    ...headerData,
+                    dataHeaders,
+                    ...dataRows,
+                    [""], // Empty row
+                    ["FOOTER INFORMATION:"],
+                    ["Hospital Tel. Nos: 831-9731/36;831-5641/49 www.sanjuandedios.org"],
+                    ["College Tel.Nos.: 551-2756; 551-2763 www.sjdefi.edu.ph"],
+                    [`Report generated by JuanLMS System - ${new Date().toLocaleString()}`]
+                  ];
+                  
+                  // Create worksheet
+                  const ws = XLSX.utils.aoa_to_sheet(allData);
+                  
+                  // Set column widths for better formatting
+                  const colWidths = [
+                    { wch: 25 }, // Student Name
+                    { wch: 15 }, // Section
+                    { wch: 30 }, // Activity
+                    { wch: 15 }, // Activity Type
+                    { wch: 12 }, // Due Date
+                    { wch: 15 }, // Status
+                    { wch: 20 }, // Last Viewed
+                    { wch: 20 }  // Submitted At
+                  ];
+                  ws['!cols'] = colWidths;
+                  
+                  // Style the header rows (merge cells for institution name)
+                  const mergeRanges = [
+                    { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }, // Institution name
+                    { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } }, // Address
+                    { s: { r: 2, c: 0 }, e: { r: 2, c: 7 } }, // Accreditation
+                    { s: { r: 4, c: 0 }, e: { r: 4, c: 7 } }, // Report title
+                    { s: { r: 5, c: 0 }, e: { r: 5, c: 7 } }, // Generated date
+                  ];
+                  ws['!merges'] = mergeRanges;
+                  
+                  // Add worksheet to workbook
+                  XLSX.utils.book_append_sheet(wb, ws, "Student Activity Audit");
+                  
+                  // Generate filename with timestamp
+                  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                  const filename = `StudentActivityAudit_${timestamp}.xlsx`;
+                  
+                  // Write file
+                  XLSX.writeFile(wb, filename);
+                  
+                } catch (error) {
+                  console.error("Error exporting to Excel:", error);
+                  alert("Failed to export to Excel. Please try again.");
+                } finally {
+                  setExportingExcel(false);
+                }
+              };
+
+              const exportToPDF = async () => {
+                try {
+                  setExportingPDF(true);
+                  
+                  // Create HTML content for PDF
+                  const htmlContent = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                      <title>Student Activity Audit Report</title>
+                      <style>
+                        @page {
+                          size: A4;
+                          margin: 0.5in;
+                        }
+                        body { 
+                          font-family: Arial, sans-serif; 
+                          line-height: 1.6; 
+                          margin: 0; 
+                          padding: 0;
+                          color: #333;
+                          background: white;
+                        }
+                        .header {
+                          display: flex;
+                          align-items: center;
+                          margin-bottom: 30px;
+                          border-bottom: 2px solid #333;
+                          padding-bottom: 20px;
+                        }
+                        .logo {
+                          width: 80px;
+                          height: 80px;
+                          margin-right: 20px;
+                          display: flex;
+                          align-items: center;
+                          justify-content: center;
+                        }
+                        .logo img {
+                          width: 100%;
+                          height: 100%;
+                          object-fit: contain;
+                        }
+                        .institution-info {
+                          flex: 1;
+                          text-align: center;
+                        }
+                        .institution-name {
+                          font-size: 18px;
+                          text-align: center;
+                          font-weight: bold;
+                          margin: 0;
+                        }
+                        .institution-address {
+                          font-size: 16px;
+                          text-align: center;
+                          margin: 0;
+                        }
+                        .institution-accreditation {
+                          font-size: 13px;
+                          text-align: center;
+                          margin: 0;
+                        }
+                        .report-info {
+                          text-align: right;
+                          margin-left: auto;
+                        }
+                        .report-title {
+                          font-weight: bold;
+                          margin: 0;
+                          font-size: 14px;
+                        }
+                        .report-date {
+                          margin: 5px 0 0 0;
+                          font-size: 12px;
+                        }
+                        .content { 
+                          
+                          font-size: 14px;
+                        }
+                        .footer {
+                          margin-top: 30px;
+                          border-top: 1px solid #333;
+                          padding-top: 15px;
+                          display: flex;
+                          justify-content: space-between;
+                          align-items: center;
+                          font-size: 10px;
+                          color: #333;
+                        }
+                        .footer-left {
+                          text-align: left;
+                        }
+                        .footer-right {
+                          text-align: right;
+                        }
+                        .footer-logo {
+                          width: 30px;
+                          height: 30px;
+                        }
+                        .footer-logo img {
+                          width: 100%;
+                          height: 100%;
+                          object-fit: contain;
+                        }
+                        table {
+                          width: 100%;
+                          border-collapse: collapse;
+                          margin: 20px 0;
+                          font-size: 12px;
+                        }
+                        th, td {
+                          border: 1px solid #333;
+                          padding: 8px;
+                          text-align: left;
+                        }
+                        th {
+                          background-color: #f5f5f5;
+                          font-weight: bold;
+                        }
+                        .status-not_viewed {
+                          background-color: #fee2e2;
+                          color: #dc2626;
+                          padding: 2px 6px;
+                          border-radius: 4px;
+                          font-size: 10px;
+                        }
+                        .status-missed {
+                          background-color: #fef3c7;
+                          color: #d97706;
+                          padding: 2px 6px;
+                          border-radius: 4px;
+                          font-size: 10px;
+                        }
+                        .status-viewed {
+                          background-color: #d1fae5;
+                          color: #059669;
+                          padding: 2px 6px;
+                          border-radius: 4px;
+                          font-size: 10px;
+                        }
+                        .activity-assignment {
+                          background-color: #dbeafe;
+                          color: #1d4ed8;
+                          padding: 2px 6px;
+                          border-radius: 4px;
+                          font-size: 10px;
+                        }
+                        .activity-quiz {
+                          background-color: #e9d5ff;
+                          color: #7c3aed;
+                          padding: 2px 6px;
+                          border-radius: 4px;
+                          font-size: 10px;
+                        }
+                        @media print {
+                          body { margin: 0; }
+                          .no-print { display: none; }
+                        }
+                      </style>
+                    </head>
+                    <body>
+                      <div class="header">
+                        <div class="logo-section">
+                          <div class="logo">
+                            <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
+                          </div>
+                        </div>
+                        <div class="institution-info">
+                          <h1 class="institution-name">SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.</h1>
+                          <p class="institution-address">2772-2774 Roxas Boulevard, Pasay City 1300 Philippines</p>
+                          <p class="institution-accreditation">PAASCU Accredited - COLLEGE</p>
+                        </div>
+                      </div>
+                      <div class="report-info">
+                        <p class="report-title">Student Activity Audit Report</p>
+                        <p class="report-date">Generated on: ${new Date().toLocaleDateString()}</p>
+                      </div>
+                      
+                      <div class="content">
+                        <h2>Activity Visibility & Submission Audit</h2>
+                        <p><strong>Academic Year:</strong> ${academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "N/A"}</p>
+                        <p><strong>Term:</strong> ${currentTerm ? currentTerm.termName : "N/A"}</p>
+                        <p><strong>Total Records:</strong> ${filteredRows.length}</p>
+                        <p><strong>Filters Applied:</strong> Section: ${selectedSection}, Activity: ${selectedActivityId === "all" ? "All Activities" : activities.find(a => a.id === selectedActivityId)?.title || "All"}, Status: ${statusFilter === "all" ? "All" : statusFilter.replace("_", " ")}, Search: ${studentSearch || "None"}</p>
+                        
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Student Name</th>
+                              <th>Section</th>
+                              <th>Activity</th>
+                              <th>Type</th>
+                              <th>Due Date</th>
+                              <th>Status</th>
+                              <th>Last Viewed</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${filteredRows.map(item => `
+                              <tr>
+                                <td>${item.studentName}</td>
+                                <td>${item.sectionName}</td>
+                                <td>${item.activityTitle}</td>
+                                <td><span class="activity-${item.activityType}">${item.activityType}</span></td>
+                                <td>${item.dueDate ? new Date(item.dueDate).toLocaleDateString("en-US") : '-'}</td>
+                                <td><span class="status-${item.status}">${item.status.replace('_', ' ')}</span></td>
+                                <td>${item.lastViewedAt ? new Date(item.lastViewedAt).toLocaleString() : '-'}</td>
+                              </tr>
+                            `).join('')}
+                          </tbody>
+                        </table>
+                      </div>
+                      
+                      <div class="footer">
+                        <div class="footer-left">
+                          <p>Hospital Tel. Nos: 831-9731/36;831-5641/49 www.sanjuandedios.org College Tel.Nos.: 551-2756; 551-2763 www.sjdefi.edu.ph</p>
+                        </div>
+                        <div class="footer-right">
+                          <div class="footer-logo"> 
+                            <img src="/src/assets/logo/images.png" alt="San Juan de Dios Hospital Seal" />
+                          </div>
+                        </div>
+                      </div>
+                      <div class="no-print">
+                        <button onclick="window.print()">Print / Save as PDF</button>
+                        <button onclick="window.close()">Close</button>
+                      </div>
+                    </body>
+                    </html>
+                  `;
+                  
+                  // Open print window
+                  const printWindow = window.open('', '_blank');
+                  printWindow.document.write(htmlContent);
+                  printWindow.document.close();
+                  
+                  // Wait for images to load before printing
+                  printWindow.onload = () => {
+                    setTimeout(() => {
+                      printWindow.print();
+                    }, 500);
+                  };
+                  
+                } catch (error) {
+                  console.error("Error exporting to PDF:", error);
+                  alert("Failed to export to PDF. Please try again.");
+                } finally {
+                  setExportingPDF(false);
+                }
               };
 
               if (loadingAudit) {
@@ -645,7 +1002,58 @@ export default function Faculty_StudentReport() {
                       >
                         {loadingAudit ? 'Refreshing...' : 'Refresh'}
                       </button>
-                      <button onClick={exportToExcel} type="button" className="px-4 py-2 rounded bg-[#010a51] text-white hover:bg-[#1a237e]">Export</button>
+                      <button
+                        onClick={exportToExcel}
+                        disabled={exportingExcel || exportingPDF}
+                        className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                          exportingExcel || exportingPDF
+                            ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
+                      >
+                        {exportingExcel ? (
+                          <>
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Exporting...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Export to Excel
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={exportToPDF}
+                        disabled={exportingExcel || exportingPDF}
+                        className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                          exportingExcel || exportingPDF
+                            ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
+                      >
+                        {exportingPDF ? (
+                          <>
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Exporting...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            Export to PDF
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
 
