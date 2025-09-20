@@ -7,7 +7,8 @@ const NotificationCenter = ({
   onMarkAsRead, 
   onMarkAllAsRead, 
   onClose,
-  onNotificationClick 
+  onNotificationClick,
+  onFetchNotifications
 }) => {
   const [activeTab, setActiveTab] = useState('announcements');
   const [acknowledgedAnnouncements, setAcknowledgedAnnouncements] = useState([]);
@@ -81,6 +82,13 @@ const NotificationCenter = ({
     }
   }, [activeTab]);
 
+  // Trigger real-time notification fetch when panel opens
+  useEffect(() => {
+    if (onFetchNotifications) {
+      onFetchNotifications();
+    }
+  }, [onFetchNotifications]);
+
   // Format date for announcements
   const formatAnnouncementDate = (dateString) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -99,7 +107,14 @@ const NotificationCenter = ({
       <div className="fixed top-16 right-4 w-96 bg-white shadow-xl rounded-lg border border-gray-200 z-50 max-h-96 overflow-hidden">
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
+              {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                  {unreadCount} new
+                </span>
+              )}
+            </div>
             {unreadCount > 0 && (
               <button
                 onClick={onMarkAllAsRead}

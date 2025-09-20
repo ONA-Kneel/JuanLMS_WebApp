@@ -3,6 +3,7 @@ import Class from '../models/Class.js';
 import User from '../models/User.js';
 import PushSubscription from '../models/PushSubscription.js';
 import webpush from 'web-push';
+import { getIO } from '../server.js';
 
 // Create notifications for all students in a class
 export const createClassNotifications = async (classID, notificationData) => {
@@ -66,9 +67,18 @@ export const createClassNotifications = async (classID, notificationData) => {
       const savedNotifications = await Notification.insertMany(notifications);
       console.log(`Created ${notifications.length} notifications for class ${classID}`);
       
-      // Send push notifications for each saved notification
+      // Send push notifications and emit real-time events for each saved notification
       for (const notification of savedNotifications) {
         await sendPushNotification(notification);
+        
+        // Emit real-time notification to the specific user
+        const io = getIO();
+        if (io) {
+          io.to(`user_${notification.recipientId}`).emit('newNotification', {
+            notification,
+            timestamp: new Date().toISOString()
+          });
+        }
       }
     } else {
       console.log(`No notifications created for class ${classID}`);
@@ -183,6 +193,15 @@ export const createMessageNotification = async (senderId, receiverId, message) =
     
     // Send push notification
     await sendPushNotification(savedNotification);
+    
+    // Emit real-time notification to the specific user
+    const io = getIO();
+    if (io) {
+      io.to(`user_${savedNotification.recipientId}`).emit('newNotification', {
+        notification: savedNotification,
+        timestamp: new Date().toISOString()
+      });
+    }
   } catch (error) {
     console.error('Error creating message notification:', error);
   }

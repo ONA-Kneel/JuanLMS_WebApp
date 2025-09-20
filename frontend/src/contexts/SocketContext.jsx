@@ -63,11 +63,25 @@ export const SocketProvider = ({ children }) => {
     }
   };
 
+  const joinUserRoom = (userId) => {
+    if (socket && isConnected) {
+      socket.emit('joinUserRoom', userId);
+    }
+  };
+
+  const leaveUserRoom = (userId) => {
+    if (socket && isConnected) {
+      socket.emit('leaveUserRoom', userId);
+    }
+  };
+
   const value = {
     socket,
     isConnected,
     joinClass,
-    leaveClass
+    leaveClass,
+    joinUserRoom,
+    leaveUserRoom
   };
 
   return (

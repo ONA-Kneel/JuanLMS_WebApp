@@ -1,6 +1,7 @@
 import express from 'express';
 import Notification from '../models/Notification.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import { getIO } from '../server.js';
 
 const router = express.Router();
 
@@ -15,6 +16,16 @@ router.get('/:userId', authenticateToken, async (req, res) => {
       .limit(50);
     
     console.log(`Found ${notifications.length} notifications for user ${userId}`);
+    
+    // Emit real-time notification fetch event
+    const io = getIO();
+    if (io) {
+      io.to(`user_${userId}`).emit('notificationsFetched', {
+        notifications,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     res.json(notifications);
   } catch (error) {
     console.error('Error fetching notifications:', error);

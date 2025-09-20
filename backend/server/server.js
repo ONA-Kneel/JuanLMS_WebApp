@@ -112,6 +112,16 @@ io.on("connection", (socket) => {
         socket.leave(`class_${classId}`);
     });
 
+    // Join user room for personal notifications
+    socket.on("joinUserRoom", (userId) => {
+        socket.join(`user_${userId}`);
+    });
+
+    // Leave user room
+    socket.on("leaveUserRoom", (userId) => {
+        socket.leave(`user_${userId}`);
+    });
+
     socket.on("sendMessage", ({ chatId, senderId, receiverId, message, timestamp }) => {
         console.log("Received sendMessage:", { chatId, senderId, receiverId, message, timestamp });
         

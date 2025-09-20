@@ -3,12 +3,14 @@ import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import pushNotificationService from '../services/pushNotificationService';
+import { useSocket } from '../contexts/SocketContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState([]);
   const [showNotificationCenter, setShowNotificationCenter] = useState(false);
+  const { socket, isConnected, joinUserRoom, leaveUserRoom } = useSocket();
 
   // Fetch notifications from backend
   const fetchNotifications = async () => {
@@ -168,6 +170,42 @@ export const useNotifications = () => {
       console.error('Failed to initialize push notifications:', error);
     }
   };
+
+  // Join user room for real-time notifications
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('user'));
+    if (user && user._id && isConnected) {
+      joinUserRoom(user._id);
+      
+      return () => {
+        leaveUserRoom(user._id);
+      };
+    }
+  }, [isConnected, joinUserRoom, leaveUserRoom]);
+
+  // Set up real-time notification listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    // Listen for new notifications
+    const handleNewNotification = (data) => {
+      setNotifications(prev => [data.notification, ...prev]);
+      showToast(data.notification);
+    };
+
+    // Listen for notification fetch events (when panel opens)
+    const handleNotificationsFetched = (data) => {
+      setNotifications(data.notifications);
+    };
+
+    socket.on('newNotification', handleNewNotification);
+    socket.on('notificationsFetched', handleNotificationsFetched);
+
+    return () => {
+      socket.off('newNotification', handleNewNotification);
+      socket.off('notificationsFetched', handleNotificationsFetched);
+    };
+  }, [socket]);
 
   useEffect(() => {
     fetchNotifications();

@@ -28,7 +28,8 @@ export default function ProfileMenu() {
     showNotificationCenter,
     setShowNotificationCenter,
     markAsRead,
-    markAllAsRead
+    markAllAsRead,
+    fetchNotifications
   } = useNotifications();
 
   // Handle notification clicks
@@ -183,6 +184,7 @@ export default function ProfileMenu() {
           onMarkAllAsRead={markAllAsRead}
           onClose={() => setShowNotificationCenter(false)}
           onNotificationClick={handleNotificationClick}
+          onFetchNotifications={fetchNotifications}
         />
       )}
 
