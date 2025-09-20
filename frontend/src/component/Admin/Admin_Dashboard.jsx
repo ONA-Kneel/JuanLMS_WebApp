@@ -463,7 +463,7 @@ export default function Admin_Dashboard() {
 
 
             {/* Last Logins Preview moved here */}
-            <div className="bg-white rounded-xl shadow p-4 mb-4">
+            {/* <div className="bg-white rounded-xl shadow p-4 mb-4">
               <h4 className="text-md font-bold mb-2">Last Logins Preview</h4>
               {lastLoginsLoading ? (
                 <div className="text-gray-500 text-sm">Loading...</div>
@@ -490,9 +490,9 @@ export default function Admin_Dashboard() {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </table> */}
                   {/* Pagination controls */}
-                  {totalLastLoginsPages > 1 && (
+                  {/* {totalLastLoginsPages > 1 && (
                     <div className="flex justify-center items-center gap-2 mt-2">
                       <button
                         className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs"
@@ -513,7 +513,7 @@ export default function Admin_Dashboard() {
                   )}
                 </>
               )}
-            </div>
+            </div> */}
           </div>
 
           <div className="w-full md:w-96 flex flex-col gap-6">
