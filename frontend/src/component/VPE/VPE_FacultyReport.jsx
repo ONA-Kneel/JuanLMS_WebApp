@@ -264,6 +264,9 @@ export default function VPE_FacultyReport() {
   const chartCanvasRef = useRef(null);
   const chartInstanceRef = useRef(null);
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState('activities');
+
   // Convert simple markdown-like text to safe HTML (no raw # or *)
   const formatAnalysisToHtml = useCallback((input) => {
     if (!input) return '';
@@ -458,9 +461,9 @@ export default function VPE_FacultyReport() {
     }
   }, [currentTerm, academicYear]);
 
-  // Fetch all assignments and quizzes directly from collections
+  // Fetch activities for specific term and academic year only
   useEffect(() => {
-    async function fetchAllActivities() {
+    async function fetchActivitiesForTerm() {
       if (!selectedTerm || !selectedSchoolYear) return;
       
       setLoadingActivities(true);
@@ -478,28 +481,36 @@ export default function VPE_FacultyReport() {
           console.warn("Server health check failed:", err);
         }
         
-        // Fetch all classes first; the per-class endpoints return data
-        console.log("Fetching classes from:", `${API_BASE}/classes`);
+        // Fetch only classes for the specific term and school year
+        console.log("Fetching classes for term:", selectedTerm, "and year:", selectedSchoolYear);
         const classesRes = await fetch(`${API_BASE}/classes`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
-        const classes = classesRes.ok ? await classesRes.json() : [];
-        console.log("Total classes:", Array.isArray(classes) ? classes.length : 0);
+        const allClasses = classesRes.ok ? await classesRes.json() : [];
+        
+        // Filter classes by term and school year
+        const classes = (allClasses || []).filter(cls => {
+          if (cls?.isArchived) return false;
+          // Check if class belongs to the selected term and school year
+          const classYear = cls.schoolYear || cls.academicYear;
+          const classTerm = cls.termName || cls.term;
+          return classYear === selectedSchoolYear && classTerm === selectedTerm;
+        });
+        console.log("Filtered classes for term/year:", classes.length);
 
-        // Fetch faculty assignments to enrich metadata (faculty name, track, strand, subject)
-        console.log("Fetching faculty assignments from:", `${API_BASE}/api/faculty-assignments`);
+        // Fetch faculty assignments for the specific term and school year only
+        console.log("Fetching faculty assignments for term:", selectedTerm, "and year:", selectedSchoolYear);
         const facAssignRes = await fetch(`${API_BASE}/api/faculty-assignments`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         const allFacultyAssignments = facAssignRes.ok ? await facAssignRes.json() : [];
-        // Filter by selected term and school year if present
+        // Filter by selected term and school year
         const facultyAssignments = (allFacultyAssignments || []).filter(a => {
-          const matchesYear = selectedSchoolYear ? a.schoolYear === selectedSchoolYear : true;
-          const matchesTerm = selectedTerm ? a.termName === selectedTerm : true;
+          const matchesYear = a.schoolYear === selectedSchoolYear;
+          const matchesTerm = a.termName === selectedTerm;
           return matchesYear && matchesTerm && a.status !== 'archived';
         });
-        console.log("Faculty assignments loaded:", facultyAssignments.length);
-        console.log("Sample faculty assignment:", facultyAssignments[0]);
+        console.log("Faculty assignments for term/year:", facultyAssignments.length);
 
         const enrichedActivities = [];
         for (const cls of (classes || [])) {
@@ -617,7 +628,7 @@ export default function VPE_FacultyReport() {
       }
     }
     
-    fetchAllActivities();
+    fetchActivitiesForTerm();
   }, [selectedTerm, selectedSchoolYear]);
 
   // Clear all filters
@@ -964,14 +975,55 @@ export default function VPE_FacultyReport() {
         </div>
 
         {/* Main Content Area */}
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div >
+          {/* Tab Navigation */}
+          <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-300">
+            <button
+              onClick={() => setActiveTab('activities')}
+              className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
+                activeTab === 'activities'
+                  ? "bg-white text-blue-900 border border-gray-300 border-b-0"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
+              }`}
+            >
+              Faculty Activities
+            </button>
+            <button
+              onClick={() => setActiveTab('student-audit')}
+              className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
+                activeTab === 'student-audit'
+                  ? "bg-white text-blue-900 border border-gray-300 border-b-0"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
+              }`}
+            >
+              Student Activity Audit
+            </button>
+            <button
+              onClick={() => setActiveTab('faculty-logins')}
+              className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
+                activeTab === 'faculty-logins'
+                  ? "bg-white text-blue-900 border border-gray-300 border-b-0"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
+              }`}
+            >
+              Faculty Last Logins
+            </button>
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-6 bg-white rounded-lg shadow-md">
+            {activeTab === 'activities' && (
+              <div>
           {/* Header Row */}
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
             <h3 className="text-xl font-semibold text-gray-800">Faculty Activity Audit Log</h3>
             
-            <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+            
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
               {/* School Year Filter */}
-              <select
+              {/* <select
                 value={selectedSchoolYear}
                 onChange={(e) => { 
                   setSelectedSchoolYear(e.target.value); 
@@ -989,10 +1041,10 @@ export default function VPE_FacultyReport() {
                     {year.schoolYearStart}-{year.schoolYearEnd}
                   </option>
                 ))}
-              </select>
+              </select> */}
 
               {/* Term Filter */}
-              <select
+              {/* <select
                 value={selectedTerm}
                 onChange={(e) => { 
                   setSelectedTerm(e.target.value); 
@@ -1016,7 +1068,7 @@ export default function VPE_FacultyReport() {
                       {term.termName}
                     </option>
                   ))}
-              </select>
+              </select> */}
 
               {/* Faculty Name Search */}
               <input
@@ -1082,7 +1134,6 @@ export default function VPE_FacultyReport() {
                 Clear Filters
               </button>
             </div>
-          </div>
 
 
           {/* Faculty Activities Table */}
@@ -1221,9 +1272,10 @@ export default function VPE_FacultyReport() {
             )}
           </div>
         </div>
+            )}
 
-        {/* Student Activity Audit Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+            {activeTab === 'student-audit' && (
+              <div>
           {/* Header Row */}
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
             <h3 className="text-xl font-semibold text-gray-800">Student Activity Audit</h3>
@@ -1405,15 +1457,15 @@ export default function VPE_FacultyReport() {
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
                     <h3 className="text-lg font-semibold">Activity Visibility & Submission Audit</h3>
                     <div className="flex items-center gap-2">
-                      <button 
+                      {/* <button 
                         onClick={fetchAuditData} 
                         disabled={loadingAudit}
                         type="button" 
                         className="px-4 py-2 rounded bg-gray-600 text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {loadingAudit ? 'Refreshing...' : 'Refresh'}
-                      </button>
-                      <button onClick={exportToExcel} type="button" className="px-4 py-2 rounded bg-[#010a51] text-white hover:bg-[#1a237e]">Export</button>
+                      </button> */}
+                      {/* <button onClick={exportToExcel} type="button" className="px-4 py-2 rounded bg-[#010a51] text-white hover:bg-[#1a237e]">Export</button> */}
                     </div>
                   </div>
 
@@ -1527,23 +1579,24 @@ export default function VPE_FacultyReport() {
 
             return <AuditUI />;
           })()}
-        </div>
+              </div>
+            )}
 
-        {/* Faculty Last Logins Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-            <h3 className="text-xl font-semibold text-gray-800">Faculty Last Logins</h3>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={fetchFacultyLastLogins} 
-                disabled={loadingFacultyLogins}
-                type="button" 
-                className="px-4 py-2 rounded bg-gray-600 text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loadingFacultyLogins ? 'Refreshing...' : 'Refresh'}
-              </button>
-            </div>
-          </div>
+            {activeTab === 'faculty-logins' && (
+              <div>
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+                  <h3 className="text-xl font-semibold text-gray-800">Faculty Last Logins</h3>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={fetchFacultyLastLogins} 
+                      disabled={loadingFacultyLogins}
+                      type="button" 
+                      className="px-4 py-2 rounded bg-gray-600 text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loadingFacultyLogins ? 'Refreshing...' : 'Refresh'}
+                    </button>
+                  </div>
+                </div>
 
           {loadingFacultyLogins ? (
             <div className="text-center py-8">
@@ -1576,7 +1629,7 @@ export default function VPE_FacultyReport() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedFacultyLogins.map((log, idx) => (
+                    {paginatedFacultyLogins.map((log) => (
                       <tr key={log._id} className={getRowColor(log.lastLogin)}>
                         <td className="p-3 border-b text-gray-900 whitespace-nowrap">{log.userName}</td>
                         <td className="p-3 border-b text-gray-700 whitespace-nowrap">{log.userRole}</td>
@@ -1629,6 +1682,9 @@ export default function VPE_FacultyReport() {
               </div>
             </>
           )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
