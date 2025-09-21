@@ -20,7 +20,7 @@ export const SocketProvider = ({ children }) => {
     const userId = localStorage.getItem('userID');
     
     if (token && userId) {
-      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
       
       const newSocket = io(API_BASE, {
         auth: {
