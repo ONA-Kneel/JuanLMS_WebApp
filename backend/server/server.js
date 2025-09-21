@@ -6,7 +6,6 @@ import express from "express";
 import cors from "cors";
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import jwt from 'jsonwebtoken';
 import messageRoutes from "./routes/messages.js";
 import groupChatRoutes from "./routes/groupChats.js";
 import groupMessageRoutes from "./routes/groupMessages.js";
@@ -69,41 +68,12 @@ io.use((socket, next) => {
   const userId = socket.handshake.auth.userId;
   
   if (!token || !userId) {
-    return next(new Error('Authentication error: Missing token or userId'));
+    return next(new Error('Authentication error'));
   }
   
-  try {
-    const secret = process.env.JWT_SECRET || 'yourSuperSecretKey123';
-    
-    // Verify the JWT token
-    const decoded = jwt.verify(token, secret);
-    
-    // Check if token is expired
-    if (decoded.exp && decoded.exp < Date.now() / 1000) {
-      return next(new Error('Authentication error: Token expired'));
-    }
-    
-    // Verify the userId matches the token
-    if (decoded._id !== userId && decoded.id !== userId) {
-      return next(new Error('Authentication error: Invalid user ID'));
-    }
-    
-    // Store user info on socket
-    socket.userId = userId;
-    socket.token = token;
-    socket.user = decoded;
-    
-    next();
-  } catch (error) {
-    console.error('Socket authentication error:', error.message);
-    if (error.name === 'JsonWebTokenError') {
-      return next(new Error('Authentication error: Invalid token'));
-    }
-    if (error.name === 'TokenExpiredError') {
-      return next(new Error('Authentication error: Token expired'));
-    }
-    return next(new Error('Authentication error: Token validation failed'));
-  }
+  socket.userId = userId;
+  socket.token = token;
+  next();
 });
 
 // Export io instance for use in routes

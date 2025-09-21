@@ -7,8 +7,6 @@ import 'react-toastify/dist/ReactToastify.css';
 import { setupCrossTabSessionListener, debouncedRedirectToDashboard, updateUserActivity } from './utils/sessionUtils';
 import { QuarterProvider } from './context/QuarterContext.jsx';
 import { SocketProvider } from './contexts/SocketContext.jsx';
-import SessionExpiredModal from './component/SessionExpiredModal.jsx';
-import tokenService from './services/tokenService.js';
 // For Logging in into different user and accounts
 import Login from './component/Login';
 import ForgotPassword from './component/ForgotPassword';
@@ -187,53 +185,16 @@ function App() {
   useEffect(() => {
     const interceptorId = axios.interceptors.response.use(
       (response) => response,
-      async (error) => {
+      (error) => {
         const status = error?.response?.status;
         const message = (error?.response?.data?.message || '').toLowerCase();
-        
         if (status === 401 && (message.includes('token expired') || message.includes('invalid token') || message.includes('no valid token'))) {
-          // Try to refresh token first
-          try {
-            console.log('[APP] 401 error detected, attempting token refresh...');
-            await tokenService.refreshToken();
-            console.log('[APP] Token refreshed successfully, retrying request...');
-            
-            // Retry the original request with new token
-            const newToken = localStorage.getItem('token');
-            if (newToken && error.config) {
-              error.config.headers.Authorization = `Bearer ${newToken}`;
-              return axios.request(error.config);
-            }
-          } catch (refreshError) {
-            console.error('[APP] Token refresh failed:', refreshError);
-            setIsSessionExpired(true);
-          }
+          setIsSessionExpired(true);
         }
         return Promise.reject(error);
       }
     );
     return () => axios.interceptors.response.eject(interceptorId);
-  }, []);
-
-  // Listen for session expiration events
-  useEffect(() => {
-    const handleSessionExpired = () => {
-      console.log('[APP] Session expired event received');
-      setIsSessionExpired(true);
-    };
-
-    const handleTokenRefreshed = () => {
-      console.log('[APP] Token refreshed event received');
-      setIsSessionExpired(false);
-    };
-
-    window.addEventListener('sessionExpired', handleSessionExpired);
-    window.addEventListener('tokenRefreshed', handleTokenRefreshed);
-
-    return () => {
-      window.removeEventListener('sessionExpired', handleSessionExpired);
-      window.removeEventListener('tokenRefreshed', handleTokenRefreshed);
-    };
   }, []);
 
   const handleLogout = () => {
@@ -386,10 +347,15 @@ function App() {
         toastClassName="custom-toast"
         bodyClassName="custom-toast-body"
       />
-      <SessionExpiredModal 
-        isOpen={isSessionExpired} 
-        onClose={() => setIsSessionExpired(false)} 
-      />
+      {isSessionExpired && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[10000]">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+            <h3 className="text-xl font-semibold mb-2 text-red-600">Session expired</h3>
+            <p className="mb-4">Your session has ended. Please log in again to continue.</p>
+            <button onClick={handleLogout} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full">Log out</button>
+          </div>
+        </div>
+      )}
         </Router>
       </QuarterProvider>
     </SocketProvider>

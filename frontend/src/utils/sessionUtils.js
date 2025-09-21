@@ -241,18 +241,6 @@ export const isCurrentTokenExpired = () => {
   }
 };
 
-// Enhanced fetch wrapper that uses token service for automatic refresh
-export const fetchWithTokenRefresh = async (url, options = {}) => {
-  try {
-    // Import token service dynamically to avoid circular dependencies
-    const { default: tokenService } = await import('../services/tokenService.js');
-    return await tokenService.fetchWithTokenRefresh(url, options);
-  } catch (error) {
-    console.error('Fetch with token refresh failed:', error);
-    throw error;
-  }
-};
-
 // Force session expiration (useful for testing or manual logout)
 export const forceSessionExpiration = () => {
   window.dispatchEvent(new CustomEvent('sessionExpired'));
