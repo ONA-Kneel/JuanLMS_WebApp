@@ -959,6 +959,84 @@ userRoutes.post('/users/:id/validate-otp', async (req, res) => {
     return res.json({ message: 'OTP is valid.' });
 });
 
+// ------------------ JWT TOKEN REFRESH ROUTE ------------------
+
+// Refresh token route: issues new JWT if current token is valid but about to expire
+userRoutes.post('/refresh-token', async (req, res) => {
+    try {
+        const { token } = req.body;
+        
+        if (!token) {
+            return res.status(401).json({ success: false, message: "No token provided" });
+        }
+
+        // Verify the current token (even if expired, we can still decode it)
+        const secret = process.env.JWT_SECRET || "yourSuperSecretKey123";
+        let decoded;
+        
+        try {
+            decoded = jwt.verify(token, secret);
+        } catch (error) {
+            if (error.name === 'TokenExpiredError') {
+                // Token is expired, but we can still decode it to get user info
+                decoded = jwt.decode(token);
+                if (!decoded) {
+                    return res.status(401).json({ success: false, message: "Invalid token" });
+                }
+            } else {
+                return res.status(401).json({ success: false, message: "Invalid token" });
+            }
+        }
+
+        // Find user by ID from token
+        const user = await User.findById(decoded._id || decoded.id);
+        if (!user) {
+            return res.status(401).json({ success: false, message: "User not found" });
+        }
+
+        // Check if user is archived
+        if (user.isArchived) {
+            return res.status(403).json({ success: false, message: "Account is archived. Please contact admin." });
+        }
+
+        // Generate new token with same payload
+        const newToken = jwt.sign({
+            id: user._id,
+            name: `${user.firstname} ${user.lastname}`,
+            email: decoded.email || user.email,
+            schoolID: user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID,
+            role: user.role,
+            _id: user._id,
+            profilePic: user.profilePic || null,
+            userID: user.userID
+        }, secret, { expiresIn: '1d' });
+
+        console.log('[TOKEN REFRESH] New token issued for user:', user._id);
+
+        res.json({
+            success: true,
+            message: "Token refreshed successfully",
+            token: newToken,
+            user: {
+                _id: user._id,
+                name: `${user.firstname} ${user.lastname}`,
+                email: decoded.email || user.email,
+                role: user.role,
+                profilePic: user.profilePic || null,
+                userID: user.userID
+            }
+        });
+
+    } catch (error) {
+        console.error('Token refresh error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Token refresh failed",
+            error: error.message 
+        });
+    }
+});
+
 // ------------------ JWT LOGIN ROUTE ------------------
 
 // Login route: issues JWT on success, logs audit trail

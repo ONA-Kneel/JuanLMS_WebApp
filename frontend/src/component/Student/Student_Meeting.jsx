@@ -350,9 +350,9 @@ export default function Student_Meeting() {
             isHost={false}
             credentials={{
               apiKey: 'mmhfdzb5evj2',
-              token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Byb250by5nZXRzdHJlYW0uaW8iLCJzdWIiOiJ1c2VyL1dvb2xseV9QYXRjaCIsInVzZXJfaWQiOiJXb29sbHlfUGF0Y2giLCJ2YWxpZGl0eV9pbl9zZWNvbmRzIjo2MDQ4MDAsImlhdCI6MTc1NzM0MDk5OCwiZXhwIjoxNzU3OTQ1Nzk4fQ.nsL1ALmGwSTl8QUawile5zJdsCjGPW8lOkDy5vRWm2I',
-              userId: 'Woolly_Patch',
-              callId: '9IH1mIBCkfbdP9y4q34W2',
+              token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Byb250by5nZXRzdHJlYW0uaW8iLCJzdWIiOiJ1c2VyL0NhcmVmdWxfU2l0dWF0aW9uIiwidXNlcl9pZCI6IkNhcmVmdWxfU2l0dWF0aW9uIiwidmFsaWRpdHlfaW5fc2Vjb25kcyI6NjA0ODAwLCJpYXQiOjE3NTg0NDA4NTcsImV4cCI6MTc1OTA0NTY1N30.I6uso5qAOqzczKlS4ABUXFxnYk66YbmDtLn381H5uSg',
+              userId: 'Careful_Situation',
+              callId: 'wX9L0thNrL9Df9zTOk6Qk',
             }}
           />
         )}
