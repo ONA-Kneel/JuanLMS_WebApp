@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import Principal_Navbar from "./Principal_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import { useReactToPrint } from 'react-to-print';
+import html2pdf from 'html2pdf.js';
 import AIAnalysisPrintable from "../Shared/AIAnalysisPrintable";
 
 // PDF generation function with pie chart (Assignments vs Quizzes)
@@ -285,10 +286,18 @@ export default function Principal_FacultyReport() {
   const trackChartInstanceRef = useRef(null);
   const strandChartInstanceRef = useRef(null);
   const printableRef = useRef(null);
-  const handlePrint = useReactToPrint({
-    content: () => printableRef.current,
-    documentTitle: `AI_Analysis_${selectedSchoolYear || ''}_${selectedTerm || ''}`,
-  });
+  const handleDownloadPdf = async () => {
+    if (!printableRef.current) return;
+    await new Promise(r => setTimeout(r, 50));
+    const opt = {
+      margin:       0.5,
+      filename:     `AI_Analysis_${selectedSchoolYear || ''}_${selectedTerm || ''}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+    await html2pdf().from(printableRef.current).set(opt).save();
+  };
 
   // Tab state
   const [activeTab, setActiveTab] = useState('activities');
@@ -1900,7 +1909,7 @@ export default function Principal_FacultyReport() {
                     Copy to Clipboard
                   </button>
                   <button
-                    onClick={handlePrint}
+                    onClick={handleDownloadPdf}
                     className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
                   >
                     Download as PDF
