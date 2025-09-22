@@ -10,7 +10,7 @@ import { useQuarter } from "../../context/QuarterContext.jsx";
  * Basic structure for grade management
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 // Modal Component
 const Modal = ({ isOpen, onClose, title, children, type = 'info' }) => {
@@ -84,6 +84,8 @@ export default function Faculty_Grades() {
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
   const [students, setStudents] = useState([]);
+  const [grades, setGrades] = useState({});
+  const [subjectInfo, setSubjectInfo] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
   const [_currentFacultyID, setCurrentFacultyID] = useState(null);
 
@@ -109,11 +111,14 @@ export default function Faculty_Grades() {
         }
 
         // Fetch academic year
+        let academicYearData = null;
+        let currentTermData = null;
+        
         const academicYearResponse = await fetch(`${API_BASE}/api/schoolyears/active`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (academicYearResponse.ok) {
-          const academicYearData = await academicYearResponse.json();
+          academicYearData = await academicYearResponse.json();
           setAcademicYear(academicYearData);
           
           // Fetch active term after academic year is set (using same approach as Faculty_Dashboard)
@@ -124,20 +129,33 @@ export default function Faculty_Grades() {
           if (termResponse.ok) {
             const terms = await termResponse.json();
             const activeTerm = terms.find((t) => t.status === "active");
-            setCurrentTerm(activeTerm || null);
+            currentTermData = activeTerm || null;
+            setCurrentTerm(currentTermData);
           } else {
             console.error('Error fetching terms:', termResponse.status, termResponse.statusText);
             setCurrentTerm(null);
           }
         }
 
-        // Fetch classes
-        const classesResponse = await fetch(`${API_BASE}/api/classes/faculty-classes`, {
+        // Fetch classes and filter them immediately
+        const classesResponse = await fetch(`${API_BASE}/classes/my-classes`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (classesResponse.ok) {
           const classesData = await classesResponse.json();
-          setClasses(classesData);
+          // Filter classes immediately if we have academic year and term
+          if (academicYearData && currentTermData) {
+            const filtered = classesData.filter(
+              (cls) =>
+                cls.isArchived !== true &&
+                cls.academicYear ===
+                  `${academicYearData.schoolYearStart}-${academicYearData.schoolYearEnd}` &&
+                cls.termName === currentTermData.termName
+            );
+            setClasses(filtered);
+          } else {
+            setClasses(classesData);
+          }
         }
 
       } catch (error) {
@@ -151,19 +169,21 @@ export default function Faculty_Grades() {
     initializeData();
   }, []); // Remove academicYear dependency to prevent infinite loop
 
+
   const fetchSubjects = async () => {
-    if (!selectedClass) return;
+    if (!selectedClass || !currentTerm) return;
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/api/subjects/class/${selectedClass}`, {
+      
+      // Get subjects for the current term
+      const response = await fetch(`${API_BASE}/api/subjects/termId/${currentTerm._id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.ok) {
-        const subjectsData = await response.json();
+        await response.json();
         // Subjects data fetched but not stored in state since not used in current UI
-        console.log('Subjects fetched:', subjectsData);
       }
     } catch (error) {
       console.error('Error fetching subjects:', error);
@@ -176,13 +196,26 @@ export default function Faculty_Grades() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/api/students/class/${selectedClass}`, {
+      
+      // Get the class data to find the classID
+      const selectedClassData = classes.find(c => c._id === selectedClass);
+      if (!selectedClassData) {
+        console.error('Selected class data not found');
+        return;
+      }
+      
+      const response = await fetch(`${API_BASE}/classes/${selectedClassData.classID}/members`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.ok) {
-        const studentsData = await response.json();
+        const membersData = await response.json();
+        // The API returns { faculty: [...], students: [...] }
+        const studentsData = membersData.students || [];
+        console.log('Students data:', studentsData);
         setStudents(studentsData);
+      } else {
+        console.error('Error fetching students:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Error fetching students:', error);
@@ -197,6 +230,7 @@ export default function Faculty_Grades() {
     setSelectedSection(null);
     setStudents([]);
     
+    
     if (classId) {
       fetchSubjects();
     }
@@ -206,10 +240,114 @@ export default function Faculty_Grades() {
     const section = e.target.value;
     setSelectedSection(section);
     setStudents([]);
+    setGrades({});
     
     if (section) {
       fetchStudents();
     }
+  };
+
+  const handleGradeChange = (studentId, gradeType, value) => {
+    setGrades(prev => ({
+      ...prev,
+      [studentId]: {
+        ...prev[studentId],
+        [gradeType]: value
+      }
+    }));
+  };
+
+  // Function to determine track and percentages based on subject
+  const getSubjectTrackAndPercentages = (className) => {
+    const subjectName = className?.toLowerCase() || '';
+    
+    // Check if it's a research, work immersion, performance, or exhibit subject
+    const isSpecialSubject = subjectName.includes('research') || 
+                           subjectName.includes('work immersion') || 
+                           subjectName.includes('performance') || 
+                           subjectName.includes('exhibit') ||
+                           subjectName.includes('practicum');
+    
+    // Check if it's TVL/Arts & Design/Sports track
+    const isTVLTrack = subjectName.includes('tvl') || 
+                      subjectName.includes('arts') || 
+                      subjectName.includes('design') || 
+                      subjectName.includes('sports') ||
+                      subjectName.includes('culinary') ||
+                      subjectName.includes('automotive') ||
+                      subjectName.includes('electronics') ||
+                      subjectName.includes('welding') ||
+                      subjectName.includes('drafting');
+    
+    if (isTVLTrack) {
+      if (isSpecialSubject) {
+        return {
+          track: 'TVL/Arts & Design/Sports - Special',
+          percentages: {
+            quarterly: 20,
+            performance: 60,
+            written: 20
+          }
+        };
+      } else {
+        return {
+          track: 'TVL/Arts & Design/Sports - Regular',
+          percentages: {
+            quarterly: 25,
+            performance: 40,
+            written: 35
+          }
+        };
+      }
+    } else {
+      // Academic Track
+      if (isSpecialSubject) {
+        return {
+          track: 'Academic - Special',
+          percentages: {
+            quarterly: 30,
+            performance: 45,
+            written: 25
+          }
+        };
+      } else {
+        return {
+          track: 'Academic - Regular',
+          percentages: {
+            quarterly: 25,
+            performance: 50,
+            written: 25
+          }
+        };
+      }
+    }
+  };
+
+  // Function to calculate final grade based on Weight Scores (WS)
+  const calculateFinalGrade = (studentGrades, className) => {
+    const trackInfo = getSubjectTrackAndPercentages(className);
+    const { quarterly } = trackInfo.percentages;
+    
+    const writtenHPS = parseFloat(studentGrades.writtenWorksHPS) || 0;
+    const writtenRAW = parseFloat(studentGrades.writtenWorksRAW) || 0;
+    const performanceHPS = parseFloat(studentGrades.performanceTasksHPS) || 0;
+    const performanceRAW = parseFloat(studentGrades.performanceTasksRAW) || 0;
+    const quarterlyScore = parseFloat(studentGrades.quarterlyExam) || 0;
+    
+    // Calculate Weight Scores (WS) for Written Works and Performance Tasks
+    const writtenPS = writtenHPS > 0 ? (writtenRAW / writtenHPS) * 100 : 0;
+    const writtenWS = writtenPS * trackInfo.percentages.written / 100;
+    
+    const performancePS = performanceHPS > 0 ? (performanceRAW / performanceHPS) * 100 : 0;
+    const performanceWS = performancePS * trackInfo.percentages.performance / 100;
+    
+    // Calculate Initial Grade (Sum of WS components)
+    const initialGrade = writtenWS + performanceWS;
+    
+    // Add Quarterly Exam score (already weighted)
+    const finalGrade = initialGrade + (quarterlyScore * quarterly / 100);
+    
+    return Math.round(finalGrade * 100) / 100; // Round to 2 decimal places
   };
 
   if (loading) {
@@ -287,21 +425,49 @@ export default function Faculty_Grades() {
                 disabled={!selectedClass}
               >
                 <option value="">Select Section</option>
-                {selectedClass && classes.find(c => c._id === selectedClass)?.sections?.map((section, index) => (
-                  <option key={index} value={section}>
-                    {section}
+                {selectedClass && classes.find(c => c._id === selectedClass)?.section && (
+                  <option value={classes.find(c => c._id === selectedClass).section}>
+                    {classes.find(c => c._id === selectedClass).section}
                   </option>
-                ))}
+                )}
               </select>
             </div>
           </div>
         </div>
 
-        {/* Students List */}
+        {/* Grades Table */}
         {selectedClass && selectedSection && (
           <div className="bg-white rounded-lg shadow-md p-6">
+            {/* Class Information Header */}
+            <div className="mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="font-semibold">Track:</span> {(() => {
+                    const selectedClassData = classes.find(c => c._id === selectedClass);
+                    const trackInfo = getSubjectTrackAndPercentages(selectedClassData?.className);
+                    return trackInfo.track;
+                  })()}
+                </div>
+                <div>
+                  <span className="font-semibold">Semester:</span> {currentTerm?.termName || 'N/A'}
+                </div>
+                <div>
+                  <span className="font-semibold">School Year:</span> {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'N/A'}
+                </div>
+                <div>
+                  <span className="font-semibold">Subject Code:</span> {classes.find(c => c._id === selectedClass)?.classCode || 'N/A'}
+                </div>
+                <div>
+                  <span className="font-semibold">Class Code:</span> {classes.find(c => c._id === selectedClass)?.classCode || 'N/A'}
+                </div>
+                <div>
+                  <span className="font-semibold">Quarter:</span> Q1
+                </div>
+              </div>
+            </div>
+
             <h2 className="text-xl font-semibold text-gray-700 mb-4">
-              Students in {classes.find(c => c._id === selectedClass)?.className} - {selectedSection}
+              Grades for {classes.find(c => c._id === selectedClass)?.className} - {selectedSection}
             </h2>
             
             {loading ? (
@@ -311,20 +477,189 @@ export default function Faculty_Grades() {
               </div>
             ) : students.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="min-w-full border border-gray-300">
+                <table className="min-w-full border border-gray-300 text-sm">
                   <thead>
                     <tr className="bg-gray-50">
-                      <th className="border border-gray-300 px-4 py-2 text-left">Student ID</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left">Name</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left">Email</th>
+                      <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Student No.</th>
+                      <th className="border border-gray-300 px-2 py-2 text-left font-semibold">STUDENT'S NAME</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold" colSpan="4">
+                        WRITTEN WORKS {(() => {
+                          const selectedClassData = classes.find(c => c._id === selectedClass);
+                          const trackInfo = getSubjectTrackAndPercentages(selectedClassData?.className);
+                          return trackInfo.percentages.written;
+                        })()}%
+                      </th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold" colSpan="4">
+                        PERFORMANCE TASKS {(() => {
+                          const selectedClassData = classes.find(c => c._id === selectedClass);
+                          const trackInfo = getSubjectTrackAndPercentages(selectedClassData?.className);
+                          return trackInfo.percentages.performance;
+                        })()}%
+                      </th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">
+                        QUARTERLY EXAM {(() => {
+                          const selectedClassData = classes.find(c => c._id === selectedClass);
+                          const trackInfo = getSubjectTrackAndPercentages(selectedClassData?.className);
+                          return trackInfo.percentages.quarterly;
+                        })()}%
+                      </th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">FINAL GRADE</th>
+                    </tr>
+                    <tr className="bg-gray-50">
+                      <th className="border border-gray-300 px-2 py-2"></th>
+                      <th className="border border-gray-300 px-2 py-2"></th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">HPS</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">RAW</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">PS</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">WS</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">HPS</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">RAW</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">PS</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">WS</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">SCORE</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">INITIAL</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">FINAL</th>
                     </tr>
                   </thead>
                   <tbody>
                     {students.map((student) => (
                       <tr key={student._id} className="hover:bg-gray-50">
-                        <td className="border border-gray-300 px-4 py-2">{student.schoolID}</td>
-                        <td className="border border-gray-300 px-4 py-2">{student.name}</td>
-                        <td className="border border-gray-300 px-4 py-2">{student.email}</td>
+                        <td className="border border-gray-300 px-2 py-2">{student.schoolID}</td>
+                        <td className="border border-gray-300 px-2 py-2">
+                          {student.lastname}, {student.firstname} {student.middlename || ''}
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2">
+                          <input
+                            type="number"
+                            className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value={grades[student._id]?.writtenWorksHPS || ''}
+                            onChange={(e) => handleGradeChange(student._id, 'writtenWorksHPS', e.target.value)}
+                            placeholder="0"
+                          />
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2">
+                          <input
+                            type="number"
+                            className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value={grades[student._id]?.writtenWorksRAW || ''}
+                            onChange={(e) => handleGradeChange(student._id, 'writtenWorksRAW', e.target.value)}
+                            placeholder="0"
+                          />
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-gray-100">
+                          {(() => {
+                            const studentGrade = grades[student._id];
+                            if (studentGrade?.writtenWorksHPS && studentGrade?.writtenWorksRAW) {
+                              const hps = parseFloat(studentGrade.writtenWorksHPS);
+                              const raw = parseFloat(studentGrade.writtenWorksRAW);
+                              return hps > 0 ? Math.round((raw / hps) * 100 * 100) / 100 : '';
+                            }
+                            return '';
+                          })()}
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-gray-100">
+                          {(() => {
+                            const selectedClassData = classes.find(c => c._id === selectedClass);
+                            const trackInfo = getSubjectTrackAndPercentages(selectedClassData?.className);
+                            const studentGrade = grades[student._id];
+                            if (studentGrade?.writtenWorksHPS && studentGrade?.writtenWorksRAW) {
+                              const hps = parseFloat(studentGrade.writtenWorksHPS);
+                              const raw = parseFloat(studentGrade.writtenWorksRAW);
+                              const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                              const ws = ps * trackInfo.percentages.written / 100;
+                              return Math.round(ws * 100) / 100;
+                            }
+                            return '';
+                          })()}
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2">
+                          <input
+                            type="number"
+                            className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value={grades[student._id]?.performanceTasksHPS || ''}
+                            onChange={(e) => handleGradeChange(student._id, 'performanceTasksHPS', e.target.value)}
+                            placeholder="0"
+                          />
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2">
+                          <input
+                            type="number"
+                            className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value={grades[student._id]?.performanceTasksRAW || ''}
+                            onChange={(e) => handleGradeChange(student._id, 'performanceTasksRAW', e.target.value)}
+                            placeholder="0"
+                          />
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-gray-100">
+                          {(() => {
+                            const studentGrade = grades[student._id];
+                            if (studentGrade?.performanceTasksHPS && studentGrade?.performanceTasksRAW) {
+                              const hps = parseFloat(studentGrade.performanceTasksHPS);
+                              const raw = parseFloat(studentGrade.performanceTasksRAW);
+                              return hps > 0 ? Math.round((raw / hps) * 100 * 100) / 100 : '';
+                            }
+                            return '';
+                          })()}
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-gray-100">
+                          {(() => {
+                            const selectedClassData = classes.find(c => c._id === selectedClass);
+                            const trackInfo = getSubjectTrackAndPercentages(selectedClassData?.className);
+                            const studentGrade = grades[student._id];
+                            if (studentGrade?.performanceTasksHPS && studentGrade?.performanceTasksRAW) {
+                              const hps = parseFloat(studentGrade.performanceTasksHPS);
+                              const raw = parseFloat(studentGrade.performanceTasksRAW);
+                              const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                              const ws = ps * trackInfo.percentages.performance / 100;
+                              return Math.round(ws * 100) / 100;
+                            }
+                            return '';
+                          })()}
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2">
+                          <input
+                            type="number"
+                            className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value={grades[student._id]?.quarterlyExam || ''}
+                            onChange={(e) => handleGradeChange(student._id, 'quarterlyExam', e.target.value)}
+                            placeholder="0"
+                          />
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-gray-100">
+                          {(() => {
+                            const selectedClassData = classes.find(c => c._id === selectedClass);
+                            const trackInfo = getSubjectTrackAndPercentages(selectedClassData?.className);
+                            const studentGrade = grades[student._id];
+                            if (studentGrade?.writtenWorksHPS && studentGrade?.writtenWorksRAW && 
+                                studentGrade?.performanceTasksHPS && studentGrade?.performanceTasksRAW) {
+                              const writtenHPS = parseFloat(studentGrade.writtenWorksHPS);
+                              const writtenRAW = parseFloat(studentGrade.writtenWorksRAW);
+                              const performanceHPS = parseFloat(studentGrade.performanceTasksHPS);
+                              const performanceRAW = parseFloat(studentGrade.performanceTasksRAW);
+                              
+                              const writtenPS = writtenHPS > 0 ? (writtenRAW / writtenHPS) * 100 : 0;
+                              const writtenWS = writtenPS * trackInfo.percentages.written / 100;
+                              
+                              const performancePS = performanceHPS > 0 ? (performanceRAW / performanceHPS) * 100 : 0;
+                              const performanceWS = performancePS * trackInfo.percentages.performance / 100;
+                              
+                              const initialGrade = writtenWS + performanceWS;
+                              return Math.round(initialGrade * 100) / 100;
+                            }
+                            return '';
+                          })()}
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-gray-100">
+                          {(() => {
+                            const selectedClassData = classes.find(c => c._id === selectedClass);
+                            const studentGrade = grades[student._id];
+                            if (studentGrade) {
+                              const finalGrade = calculateFinalGrade(studentGrade, selectedClassData?.className);
+                              return finalGrade > 0 ? finalGrade : '';
+                            }
+                            return '';
+                          })()}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
