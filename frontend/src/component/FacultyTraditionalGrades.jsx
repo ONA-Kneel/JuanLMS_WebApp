@@ -12,8 +12,6 @@ const FacultyTraditionalGrades = () => {
   const [selectedSubject, setSelectedSubject] = useState('');
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [validationModal, setValidationModal] = useState({
@@ -24,20 +22,38 @@ const FacultyTraditionalGrades = () => {
   });
 
   useEffect(() => {
-    fetchAcademicYear();
+    const initializeData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        
+        // Fetch academic year
+        const academicYearResponse = await axios.get('/api/schoolyears/active', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setAcademicYear(academicYearResponse.data);
+        
+        // Fetch active term after academic year is set (using same approach as Faculty_Dashboard)
+        const schoolYearName = `${academicYearResponse.data.schoolYearStart}-${academicYearResponse.data.schoolYearEnd}`;
+        const termResponse = await axios.get(`/api/terms/schoolyear/${schoolYearName}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const terms = termResponse.data;
+        const activeTerm = terms.find((t) => t.status === "active");
+        setCurrentTerm(activeTerm || null);
+        
+        // Fetch faculty classes
+        const classesResponse = await axios.get('/api/classes/faculty-classes', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setClasses(classesResponse.data);
+        
+      } catch (error) {
+        console.error('Error initializing data:', error);
+      }
+    };
+
+    initializeData();
   }, []);
-
-  useEffect(() => {
-    if (academicYear) {
-      fetchActiveTerm();
-    }
-  }, [academicYear]);
-
-  useEffect(() => {
-    if (academicYear && currentTerm) {
-      fetchFacultyClasses();
-    }
-  }, [academicYear, currentTerm]);
 
   useEffect(() => {
     if (selectedClass) {
@@ -51,110 +67,16 @@ const FacultyTraditionalGrades = () => {
     }
   }, [selectedClass, selectedSubject]);
 
-  const fetchAcademicYear = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/api/schoolyears/active', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (response.data) {
-        setAcademicYear(response.data);
-      }
-    } catch (error) {
-      // Error fetching academic year
-    }
-  };
-
-  const fetchActiveTerm = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-      const response = await axios.get(`/api/terms/schoolyear/${schoolYearName}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (response.data) {
-        const active = response.data.find(term => term.status === 'active');
-        setCurrentTerm(active || null);
-      }
-    } catch (error) {
-      // Error fetching active term
-    }
-  };
-
-  const fetchFacultyClasses = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const currentFacultyID = localStorage.getItem("userID");
-      
-      const response = await axios.get('/classes', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (response.data) {
-        // Filter classes for current faculty in current term
-        const filteredClasses = response.data.filter(cls => 
-          cls.facultyID === currentFacultyID && 
-          cls.isArchived !== true &&
-          cls.academicYear === `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` &&
-          cls.termName === currentTerm.termName
-        );
-        setClasses(filteredClasses);
-      }
-    } catch (error) {
-      // Error fetching faculty classes
-      setValidationModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Load Failed',
-        message: 'Failed to fetch classes. Please try again later.'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchSubjects = async () => {
     try {
       const token = localStorage.getItem('token');
-      const selectedClassObj = classes[selectedClass];
-      
-      // Fetch subjects for the selected class
-      const response = await axios.get(`/api/classes/${selectedClassObj.classID}/subjects`, {
+      const response = await axios.get(`/api/subjects/class/${selectedClass}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      if (response.data && response.data.subjects) {
-        setSubjects(response.data.subjects);
-      } else {
-        // If no subjects endpoint, create default subjects based on class
-        const defaultSubjects = [
-          {
-            _id: 'subject_1',
-            subjectCode: selectedClassObj.className,
-            subjectDescription: selectedClassObj.className,
-            trackName: selectedClassObj.trackName || 'STEM',
-            gradeLevel: selectedClassObj.gradeLevel || '12'
-          }
-        ];
-        setSubjects(defaultSubjects);
-      }
+      setSubjects(response.data);
     } catch (error) {
-      // Error fetching subjects
-      // Create default subject if API fails
-      const selectedClassObj = classes[selectedClass];
-      const defaultSubjects = [
-        {
-          _id: 'subject_1',
-          subjectCode: selectedClassObj.className,
-          subjectDescription: selectedClassObj.className,
-          trackName: selectedClassObj.trackName || 'STEM',
-          gradeLevel: selectedClassObj.gradeLevel || '12'
-        }
-      ];
-      setSubjects(defaultSubjects);
+      console.error('Error fetching subjects:', error);
     }
   };
 
@@ -162,460 +84,165 @@ const FacultyTraditionalGrades = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const selectedClassObj = classes[selectedClass];
-      
-      // Try multiple endpoints to get students
-      let studentsData = [];
-      
-      try {
-        // Try class members endpoint first
-        const response = await axios.get(`/classes/${selectedClassObj.classID}/members`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (response.data && response.data.students) {
-          studentsData = response.data.students;
-        }
-      } catch (error) {
-        // Class members endpoint failed, trying alternatives
-      }
-      
-      // If no students found, try alternative endpoints
-      if (studentsData.length === 0) {
-        try {
-          const altResponse = await axios.get(`/api/students/class/${selectedClassObj.classCode || selectedClassObj.classID}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          
-          if (altResponse.data) {
-            studentsData = altResponse.data;
-          }
-        } catch (altError) {
-          // Alternative endpoint also failed
-        }
-      }
-      
-      // Transform students data to include grades structure
-      const transformedStudents = studentsData.map(student => ({
-        _id: student._id || student.userID || student.studentID,
-        name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
-        schoolID: student.schoolID || student.userID || student.studentID,
-        grades: {
-          [selectedSubject]: {
-            prelims: '',
-            midterms: '',
-            final: '',
-            finalGrade: '',
-            remarks: ''
-          }
-        }
-      }));
-      
-      setStudents(transformedStudents);
-    } catch (error) {
-      // Error fetching students
-      setValidationModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Load Failed',
-        message: 'Failed to fetch students. Please try again later.'
-      });
-      setStudents([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleClassChange = (e) => {
-    const classIndex = e.target.value;
-    setSelectedClass(classIndex);
-    setSelectedSubject('');
-    setStudents([]);
-  };
-
-  const handleSubjectChange = (e) => {
-    const subjectId = e.target.value;
-    setSelectedSubject(subjectId);
-    
-    // Update students to include grades for the new subject
-    if (students.length > 0) {
-      const updatedStudents = students.map(student => ({
-        ...student,
-        grades: {
-          ...student.grades,
-          [subjectId]: {
-            prelims: student.grades[subjectId]?.prelims || '',
-            midterms: student.grades[subjectId]?.midterms || '',
-            final: student.grades[subjectId]?.final || '',
-            finalGrade: student.grades[subjectId]?.finalGrade || '',
-            remarks: student.grades[subjectId]?.remarks || ''
-          }
-        }
-      }));
-      setStudents(updatedStudents);
-    }
-  };
-
-  const downloadTemplate = async () => {
-    if (!selectedClass || !selectedSubject) {
-      toast.warning('Please select both class and subject first');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      
-      // Create CSV content matching the Google Sheets layout
-      const selectedClassObj = classes[selectedClass];
-      const selectedSubjectObj = subjects.find(s => s._id === selectedSubject);
-      
-      let csvContent = 'Subject,Student Name,School ID,Prelims,Midterms,Final,Final Grade,Remarks\n';
-      
-      students.forEach(student => {
-        const grades = student.grades[selectedSubject] || {};
-        csvContent += `${selectedSubjectObj.subjectCode},${student.name},${student.schoolID},${grades.prelims || ''},${grades.midterms || ''},${grades.final || ''},${grades.finalGrade || ''},${grades.remarks || ''}\n`;
-      });
-      
-      // Create and download CSV file
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${selectedClassObj.className}_${selectedSubjectObj.subjectCode}_TraditionalGrades.csv`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      
-      toast.success('Template downloaded successfully');
-    } catch (error) {
-      // Error downloading template
-      setValidationModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Download Failed',
-        message: 'Failed to download template. Please try again later.'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleFileSelect = (e) => {
-    setSelectedFile(e.target.files[0]);
-  };
-
-  const uploadGrades = async () => {
-    if (!selectedFile) {
-      toast.warning('Please select a file to upload');
-      return;
-    }
-
-    if (!selectedClass || !selectedSubject) {
-      toast.warning('Please select both class and subject first');
-      return;
-    }
-
-    try {
-      setUploading(true);
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('classId', classes[selectedClass].classID);
-      formData.append('subjectId', selectedSubject);
-
-      const response = await axios.post('/api/traditional-grades/faculty/upload', formData, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
-      if (response.data.success) {
-        toast.success(response.data.message);
-        setSelectedFile(null);
-        document.getElementById('file-input').value = '';
-        
-        // Refresh students list to show updated grades
-        fetchStudents();
-      } else {
-        setValidationModal({
-          isOpen: true,
-          type: 'error',
-          title: 'Upload Failed',
-          message: response.data.message || 'Failed to upload grades. Please check your file and try again.'
-        });
-      }
-    } catch (error) {
-      // Error uploading grades
-      setValidationModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Upload Failed',
-        message: error.response?.data?.message || 'Failed to upload grades. Please check your file and try again.'
-      });
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const updateGrade = async (studentId, field, value) => {
-    try {
-      // Update local state first for immediate UI feedback
-      const updatedStudents = students.map(student => {
-        if (student._id === studentId) {
-          const updatedGrades = {
-            ...student.grades[selectedSubject],
-            [field]: value
-          };
-          
-          // Calculate final grade if all three grades are present
-          if (updatedGrades.prelims && updatedGrades.midterms && updatedGrades.final) {
-            const prelims = parseFloat(updatedGrades.prelims) || 0;
-            const midterms = parseFloat(updatedGrades.midterms) || 0;
-            const final = parseFloat(updatedGrades.final) || 0;
-            
-            const finalGrade = (prelims * 0.3) + (midterms * 0.3) + (final * 0.4);
-            updatedGrades.finalGrade = finalGrade.toFixed(2);
-            updatedGrades.remarks = finalGrade >= 75 ? 'PASSED' : 'FAILED';
-          }
-          
-          return {
-            ...student,
-            grades: {
-              ...student.grades,
-              [selectedSubject]: updatedGrades
-            }
-          };
-        }
-        return student;
-      });
-      
-      setStudents(updatedStudents);
-      
-      // Send update to backend
-      const token = localStorage.getItem('token');
-      await axios.put(`/api/traditional-grades/faculty/update`, {
-        studentId,
-        subjectId: selectedSubject,
-        field,
-        value,
-        classId: classes[selectedClass].classID
-      }, {
+      const response = await axios.get(`/api/students/class/${selectedClass}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-
-      toast.success('Grade updated successfully');
+      setStudents(response.data);
     } catch (error) {
-      // Error updating grade
-      setValidationModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Update Failed',
-        message: 'Failed to update grade. Please try again later.'
-      });
+      console.error('Error fetching students:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const calculateFinalGrade = (prelims, midterms, final) => {
-    if (!prelims || !midterms || !final) return '';
-    
-    const prelimsNum = parseFloat(prelims) || 0;
-    const midtermsNum = parseFloat(midterms) || 0;
-    const finalNum = parseFloat(final) || 0;
-    
-    const finalGrade = (prelimsNum * 0.3) + (midtermsNum * 0.3) + (finalNum * 0.4);
-    return finalGrade.toFixed(2);
+  const showValidationModal = (type, title, message) => {
+    setValidationModal({
+      isOpen: true,
+      type,
+      title,
+      message
+    });
   };
 
-  const getRemark = (finalGrade) => {
-    if (!finalGrade) return '';
-    const grade = parseFloat(finalGrade);
-    if (grade >= 75) return 'PASSED';
-    return 'FAILED';
+  const closeValidationModal = () => {
+    setValidationModal({
+      isOpen: false,
+      type: 'error',
+      title: '',
+      message: ''
+    });
   };
 
   return (
     <div className="faculty-traditional-grades">
-      <div className="grades-header">
-        <h2>Grading Table Management</h2>
-        <p>Manage student grades with prelims (30%), midterms (30%), and finals (40%)</p>
-      </div>
-
-      {/* Academic Period Display */}
-      <div className="academic-period">
-        <div className="period-info">
-          <div className="info-item">
-            <label>Academic Year:</label>
-            <span>{academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Loading...'}</span>
-          </div>
-          <div className="info-item">
-            <label>Term:</label>
-            <span>{currentTerm ? currentTerm.termName : 'Loading...'}</span>
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold text-gray-800 mb-8">Faculty Traditional Grades</h1>
+        
+        {/* Selection Controls */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h2 className="text-xl font-semibold text-gray-700 mb-4">Select Class and Subject</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Academic Year
+              </label>
+              <input
+                type="text"
+                value={academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Term
+              </label>
+              <input
+                type="text"
+                value={currentTerm ? currentTerm.termName : ''}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Class
+              </label>
+              <select
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select Class</option>
+                {classes.map((cls) => (
+                  <option key={cls._id} value={cls._id}>
+                    {cls.className}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Subject
+              </label>
+              <select
+                value={selectedSubject}
+                onChange={(e) => setSelectedSubject(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={!selectedClass}
+              >
+                <option value="">Select Subject</option>
+                {subjects.map((subject) => (
+                  <option key={subject._id} value={subject._id}>
+                    {subject.subjectCode} - {subject.subjectName}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Class and Subject Selection */}
-      <div className="selection-section">
-        <div className="form-group">
-          <label htmlFor="class-select">Select Class & Section:</label>
-          <select
-            id="class-select"
-            value={selectedClass}
-            onChange={handleClassChange}
-            disabled={loading}
-          >
-            <option value="">Choose a class...</option>
-            {classes.map((cls, index) => (
-              <option key={cls.classID} value={index}>
-                {cls.className} - {cls.sectionName || 'No Section'} ({cls.trackName || 'N/A'} | {cls.strandName || 'N/A'} | {cls.gradeLevel || 'N/A'})
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Students List */}
+        {selectedClass && selectedSubject && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-700 mb-4">
+              Students in {subjects.find(s => s._id === selectedSubject)?.subjectCode}
+            </h2>
+            
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-2 text-gray-600">Loading students...</p>
+              </div>
+            ) : students.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full border border-gray-300">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="border border-gray-300 px-4 py-2 text-left">Student ID</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left">Name</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left">Email</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map((student) => (
+                      <tr key={student._id} className="hover:bg-gray-50">
+                        <td className="border border-gray-300 px-4 py-2">{student.schoolID}</td>
+                        <td className="border border-gray-300 px-4 py-2">{student.name}</td>
+                        <td className="border border-gray-300 px-4 py-2">{student.email}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-600">
+                <p>No students found for this class and subject.</p>
+              </div>
+            )}
+          </div>
+        )}
 
-        {selectedClass && (
-          <div className="form-group">
-            <label htmlFor="subject-select">Select Subject:</label>
-            <select
-              id="subject-select"
-              value={selectedSubject}
-              onChange={handleSubjectChange}
-              disabled={loading}
-            >
-              <option value="">Choose a subject...</option>
-              {subjects.map((subject) => (
-                <option key={subject._id} value={subject._id}>
-                  {subject.subjectCode} - {subject.subjectDescription}
-                </option>
-              ))}
-            </select>
+        {/* Placeholder for future grade functionality */}
+        {selectedClass && selectedSubject && students.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+            <h2 className="text-xl font-semibold text-gray-700 mb-4">Grade Management</h2>
+            <div className="text-center py-8 text-gray-600">
+              <p>Grade management functionality will be implemented here.</p>
+              <p className="text-sm mt-2">Selected: {students.length} students in {subjects.find(s => s._id === selectedSubject)?.subjectCode}</p>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Template Actions */}
-      {selectedClass && selectedSubject && (
-        <div className="template-actions">
-          <button 
-            onClick={downloadTemplate}
-            disabled={loading}
-            className="btn btn-primary"
-          >
-            {loading ? 'Downloading...' : 'Download CSV Template'}
-          </button>
-          
-          <div className="upload-section">
-            <input
-              id="file-input"
-              type="file"
-              accept=".csv,.xlsx,.xls"
-              onChange={handleFileSelect}
-              className="file-input"
-            />
-            <button
-              onClick={uploadGrades}
-              disabled={!selectedFile || uploading}
-              className="btn btn-success"
-            >
-              {uploading ? 'Uploading...' : 'Upload Grades'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Grades Table */}
-      {selectedClass && selectedSubject && students.length > 0 && (
-        <div className="grades-table-container">
-          <h3>Student Grades - {subjects.find(s => s._id === selectedSubject)?.subjectCode}</h3>
-          <div className="table-responsive">
-            <table className="grades-table">
-              <thead>
-                <tr>
-                  <th>Student Name</th>
-                  <th>School ID</th>
-                  <th>Prelims (30%)</th>
-                  <th>Midterms (30%)</th>
-                  <th>Final (40%)</th>
-                  <th>Final Grade</th>
-                  <th>Remarks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((student) => {
-                  const grades = student.grades[selectedSubject] || {};
-                  return (
-                    <tr key={student._id}>
-                      <td>{student.name}</td>
-                      <td>{student.schoolID}</td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          placeholder="Grade"
-                          className="grade-input"
-                          value={grades.prelims || ''}
-                          onChange={(e) => updateGrade(student._id, 'prelims', e.target.value)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          placeholder="Grade"
-                          className="grade-input"
-                          value={grades.midterms || ''}
-                          onChange={(e) => updateGrade(student._id, 'midterms', e.target.value)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          placeholder="Grade"
-                          className="grade-input"
-                          value={grades.final || ''}
-                          onChange={(e) => updateGrade(student._id, 'final', e.target.value)}
-                        />
-                      </td>
-                      <td className="final-grade">
-                        {grades.finalGrade || ''}
-                      </td>
-                      <td className="remarks">
-                        {grades.remarks || ''}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {selectedClass && selectedSubject && students.length === 0 && (
-        <div className="no-data">
-          <p>No students found in this class/subject combination.</p>
-        </div>
-      )}
-
-      {(!selectedClass || !selectedSubject) && (
-        <div className="no-data">
-          <p>Please select both a class and subject to view grades.</p>
-        </div>
-      )}
-      
       {/* Validation Modal */}
       <ValidationModal
         isOpen={validationModal.isOpen}
-        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+        onClose={closeValidationModal}
         type={validationModal.type}
         title={validationModal.title}
         message={validationModal.message}
