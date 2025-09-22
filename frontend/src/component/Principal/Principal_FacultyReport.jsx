@@ -7,7 +7,7 @@ import ProfileMenu from "../ProfileMenu";
 
 // PDF generation function with pie chart (Assignments vs Quizzes)
 const downloadAsPDF = (content, filename, chartData) => {
-  // Create a new window with the content
+  // Create a new window with the content, then auto-generate and download a PDF via html2pdf.js
   const printWindow = window.open('', '_blank');
   const headingVariants = [
     'Faculty Performance & Activity Levels Analysis',
@@ -132,6 +132,7 @@ const downloadAsPDF = (content, filename, chartData) => {
         }
       </style>
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     </head>
     <body>
       <div class="header">
@@ -166,10 +167,7 @@ const downloadAsPDF = (content, filename, chartData) => {
           </div>
         </div>
       </div>
-      <div class="no-print">
-        <button onclick="window.print()">Print / Save as PDF</button>
-        <button onclick="window.close()">Close</button>
-      </div>
+      <div class="no-print" style="display:none"></div>
       <script>
         (function(){
           const encode = (s) => s
@@ -219,6 +217,28 @@ const downloadAsPDF = (content, filename, chartData) => {
           } else {
             document.getElementById('chartContainer').style.display = 'none';
           }
+
+          // After layout and charts are ready, generate and download the PDF automatically
+          const doDownload = () => {
+            if (!window.html2pdf) { setTimeout(doDownload, 200); return; }
+            const safeName = encodeURIComponent(${JSON.stringify(filename)});
+            const opt = {
+              margin: 0.5,
+              filename: safeName + '.pdf',
+              image: { type: 'jpeg', quality: 0.98 },
+              html2canvas: { scale: 2, useCORS: true, allowTaint: true },
+              jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+            };
+            window.html2pdf().set(opt).from(document.body).save().then(() => {
+              window.close();
+            }).catch(() => {
+              // Fallback: open print dialog if direct save fails
+              window.print();
+              setTimeout(() => window.close(), 500);
+            });
+          };
+          // Give charts a moment to render before capturing
+          setTimeout(doDownload, 600);
         })();
       </script>
     </body>
