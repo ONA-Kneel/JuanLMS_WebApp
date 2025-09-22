@@ -88,6 +88,10 @@ export default function Faculty_Grades() {
   const [subjectInfo, setSubjectInfo] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
   const [_currentFacultyID, setCurrentFacultyID] = useState(null);
+  const [assignments, setAssignments] = useState([]);
+  const [quizzes, setQuizzes] = useState([]);
+  const [studentScores, setStudentScores] = useState({});
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const showModal = (title, message, type = 'info') => {
     setModal({ isOpen: true, title, message, type });
@@ -169,6 +173,21 @@ export default function Faculty_Grades() {
     initializeData();
   }, []); // Remove academicYear dependency to prevent infinite loop
 
+  // Auto-refresh grades every 30 seconds when a class is selected
+  useEffect(() => {
+    if (!selectedClass || !selectedSection) return;
+
+    const interval = setInterval(async () => {
+      const selectedClassData = classes.find(c => c._id === selectedClass);
+      if (selectedClassData) {
+        console.log('Auto-refreshing grades data...');
+        await fetchAssignmentsAndQuizzes(selectedClassData);
+      }
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [selectedClass, selectedSection, classes]);
+
 
   const fetchSubjects = async () => {
     if (!selectedClass || !currentTerm) return;
@@ -214,6 +233,9 @@ export default function Faculty_Grades() {
         const studentsData = membersData.students || [];
         console.log('Students data:', studentsData);
         setStudents(studentsData);
+        
+        // Fetch assignments and quizzes after students are loaded
+        await fetchAssignmentsAndQuizzes(selectedClassData);
       } else {
         console.error('Error fetching students:', response.status, response.statusText);
       }
@@ -222,6 +244,208 @@ export default function Faculty_Grades() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchAssignmentsAndQuizzes = async (selectedClassData) => {
+    try {
+      const token = localStorage.getItem('token');
+      let assignmentsData = [];
+      let quizzesData = [];
+
+      // Fetch assignments
+      const assignmentsResponse = await fetch(`${API_BASE}/assignments?classID=${selectedClassData.classID}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (assignmentsResponse.ok) {
+        assignmentsData = await assignmentsResponse.json();
+        console.log('Assignments fetched:', assignmentsData);
+        setAssignments(assignmentsData);
+      } else {
+        console.error('Failed to fetch assignments:', assignmentsResponse.status, assignmentsResponse.statusText);
+      }
+
+      // Fetch quizzes
+      const quizzesResponse = await fetch(`${API_BASE}/api/quizzes?classID=${selectedClassData.classID}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (quizzesResponse.ok) {
+        quizzesData = await quizzesResponse.json();
+        console.log('Quizzes fetched:', quizzesData);
+        setQuizzes(quizzesData);
+      } else {
+        console.error('Failed to fetch quizzes:', quizzesResponse.status, quizzesResponse.statusText);
+      }
+
+      // Fetch student scores using the data we already fetched
+      await fetchStudentScores(assignmentsData, quizzesData);
+      
+    } catch (error) {
+      console.error('Error fetching assignments and quizzes:', error);
+    }
+  };
+
+  const fetchStudentScores = async (assignmentsData = [], quizzesData = []) => {
+    try {
+      const token = localStorage.getItem('token');
+      const assignmentScores = {};
+
+      console.log('Processing assignments:', assignmentsData.length);
+      console.log('Processing quizzes:', quizzesData.length);
+
+      // Process assignments
+      for (const assignment of assignmentsData) {
+        console.log(`Processing assignment: ${assignment.title}, postAt: ${assignment.postAt}`);
+        
+        // Only process assignments that are posted (postAt is in the past)
+        const isFuturePost = new Date(assignment.postAt) > new Date();
+        console.log(`Assignment ${assignment.title}: isFuturePost=${isFuturePost}`);
+        
+        if (isFuturePost) {
+          console.log(`Skipping assignment ${assignment.title} - postAt is in the future`);
+          continue;
+        }
+
+        console.log(`Processing assignment ${assignment.title} - postAt is in the past`);
+        
+        try {
+          const response = await fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (response.ok) {
+            const submissions = await response.json();
+            console.log(`Assignment ${assignment._id} submissions:`, submissions);
+            
+            submissions.forEach(submission => {
+              console.log('Assignment submission structure:', submission);
+              const studentId = submission.studentId?._id || submission.studentId || submission.student?._id || submission.student;
+              console.log('Extracted studentId from assignment:', studentId);
+              
+              if (!assignmentScores[studentId]) {
+                assignmentScores[studentId] = { assignments: [], quizzes: [] };
+                console.log('Created new student entry for assignment:', studentId);
+              }
+              
+              const scoreData = {
+                score: submission.score || submission.totalScore || submission.grade || 0,
+                totalScore: assignment.points || 100
+              };
+              console.log('Adding assignment score:', scoreData);
+              assignmentScores[studentId].assignments.push(scoreData);
+            });
+          } else {
+            console.error(`Failed to fetch submissions for assignment ${assignment._id}:`, response.status);
+          }
+        } catch (error) {
+          console.error(`Failed to fetch submissions for assignment ${assignment._id}:`, error);
+        }
+      }
+
+      // Process quizzes
+      for (const quiz of quizzesData) {
+        console.log(`Processing quiz: ${quiz.title}, postAt: ${quiz.postAt}`);
+        
+        // Only process quizzes that are posted (postAt is in the past)
+        const isFuturePost = new Date(quiz.postAt) > new Date();
+        console.log(`Quiz ${quiz.title}: isFuturePost=${isFuturePost}`);
+        
+        if (isFuturePost) {
+          console.log(`Skipping quiz ${quiz.title} - postAt is in the future`);
+          continue;
+        }
+
+        console.log(`Processing quiz ${quiz.title} - postAt is in the past`);
+        
+        try {
+          const response = await fetch(`${API_BASE}/api/quizzes/${quiz._id}/responses`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (response.ok) {
+            const responses = await response.json();
+            console.log(`Quiz ${quiz._id} responses:`, responses);
+            
+            responses.forEach(quizResponse => {
+              console.log('Quiz response structure:', quizResponse);
+              const studentId = quizResponse.studentId?._id || quizResponse.studentId || quizResponse.student?._id || quizResponse.student;
+              console.log('Extracted studentId from quiz:', studentId);
+              
+              if (!assignmentScores[studentId]) {
+                assignmentScores[studentId] = { assignments: [], quizzes: [] };
+                console.log('Created new student entry for quiz:', studentId);
+              }
+              
+              const scoreData = {
+                score: quizResponse.score || quizResponse.totalScore || quizResponse.grade || 0,
+                totalScore: quiz.points || 100
+              };
+              console.log('Adding quiz score:', scoreData);
+              assignmentScores[studentId].quizzes.push(scoreData);
+            });
+          } else {
+            console.error(`Failed to fetch responses for quiz ${quiz._id}:`, response.status);
+          }
+        } catch (error) {
+          console.error(`Failed to fetch responses for quiz ${quiz._id}:`, error);
+        }
+      }
+
+      console.log('Final student scores object:', assignmentScores);
+      console.log('Student scores keys:', Object.keys(assignmentScores));
+      console.log('Total students with scores:', Object.keys(assignmentScores).length);
+      
+      if (Object.keys(assignmentScores).length === 0) {
+        console.log('⚠️ No student scores found! This could mean:');
+        console.log('1. All assignments/quizzes are still "upcoming" (not posted yet)');
+        console.log('2. No students have submitted responses yet');
+        console.log('3. The assignment/quiz IDs are incorrect');
+      }
+
+      setStudentScores(assignmentScores);
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.error('Error fetching student scores:', error);
+    }
+  };
+
+  const calculateRawScoresAndHPS = (studentId) => {
+    const studentScore = studentScores[studentId];
+    if (!studentScore) {
+      return {
+        writtenWorksRAW: 0,
+        writtenWorksHPS: 0,
+        performanceTasksRAW: 0,
+        performanceTasksHPS: 0
+      };
+    }
+
+    // Calculate RAW scores for this student
+    const writtenWorksRAW = studentScore.assignments.reduce((sum, assignment) => sum + assignment.score, 0);
+    const performanceTasksRAW = studentScore.quizzes.reduce((sum, quiz) => sum + quiz.score, 0);
+
+    // Calculate HPS from all activities (should be the same for all students)
+    const writtenWorksHPS = assignments
+      .filter(assignment => {
+        const isFuturePost = new Date(assignment.postAt) > new Date();
+        return !isFuturePost;
+      })
+      .reduce((sum, assignment) => sum + (assignment.points || 100), 0);
+
+    const performanceTasksHPS = quizzes
+      .filter(quiz => {
+        const isFuturePost = new Date(quiz.postAt) > new Date();
+        return !isFuturePost;
+      })
+      .reduce((sum, quiz) => sum + (quiz.points || 100), 0);
+
+    return {
+      writtenWorksRAW,
+      writtenWorksHPS,
+      performanceTasksRAW,
+      performanceTasksHPS
+    };
   };
 
   const handleClassChange = (e) => {
@@ -323,28 +547,19 @@ export default function Faculty_Grades() {
     }
   };
 
-  // Function to calculate final grade based on Weight Scores (WS)
-  const calculateFinalGrade = (studentGrades, className) => {
+  // Function to calculate final grade based on automatic RAW scores and HPS
+  const calculateFinalGrade = (studentId, className, quarterlyScore = 0) => {
     const trackInfo = getSubjectTrackAndPercentages(className);
     const { quarterly } = trackInfo.percentages;
+    const scores = calculateRawScoresAndHPS(studentId);
     
-    const writtenHPS = parseFloat(studentGrades.writtenWorksHPS) || 0;
-    const writtenRAW = parseFloat(studentGrades.writtenWorksRAW) || 0;
-    const performanceHPS = parseFloat(studentGrades.performanceTasksHPS) || 0;
-    const performanceRAW = parseFloat(studentGrades.performanceTasksRAW) || 0;
-    const quarterlyScore = parseFloat(studentGrades.quarterlyExam) || 0;
-    
-    // Calculate Weight Scores (WS) for Written Works and Performance Tasks
-    const writtenPS = writtenHPS > 0 ? (writtenRAW / writtenHPS) * 100 : 0;
+    const writtenPS = scores.writtenWorksHPS > 0 ? (scores.writtenWorksRAW / scores.writtenWorksHPS) * 100 : 0;
     const writtenWS = writtenPS * trackInfo.percentages.written / 100;
     
-    const performancePS = performanceHPS > 0 ? (performanceRAW / performanceHPS) * 100 : 0;
+    const performancePS = scores.performanceTasksHPS > 0 ? (scores.performanceTasksRAW / scores.performanceTasksHPS) * 100 : 0;
     const performanceWS = performancePS * trackInfo.percentages.performance / 100;
     
-    // Calculate Initial Grade (Sum of WS components)
     const initialGrade = writtenWS + performanceWS;
-    
-    // Add Quarterly Exam score (already weighted)
     const finalGrade = initialGrade + (quarterlyScore * quarterly / 100);
     
     return Math.round(finalGrade * 100) / 100; // Round to 2 decimal places
@@ -433,6 +648,28 @@ export default function Faculty_Grades() {
               </select>
             </div>
           </div>
+          
+          {selectedClass && selectedSection && (
+            <div className="mt-4 flex items-center gap-4">
+              <button
+                onClick={async () => {
+                  const selectedClassData = classes.find(c => c._id === selectedClass);
+                  if (selectedClassData) {
+                    await fetchAssignmentsAndQuizzes(selectedClassData);
+                    showModal('Success', 'System data refreshed successfully!', 'success');
+                  }
+                }}
+                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors"
+              >
+                🔄 Refresh System Data
+              </button>
+              {lastUpdated && (
+                <div className="text-sm text-gray-600">
+                  Last updated: {lastUpdated.toLocaleTimeString()}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Grades Table */}
@@ -528,31 +765,23 @@ export default function Faculty_Grades() {
                         <td className="border border-gray-300 px-2 py-2">
                           {student.lastname}, {student.firstname} {student.middlename || ''}
                         </td>
-                        <td className="border border-gray-300 px-2 py-2">
-                          <input
-                            type="number"
-                            className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            value={grades[student._id]?.writtenWorksHPS || ''}
-                            onChange={(e) => handleGradeChange(student._id, 'writtenWorksHPS', e.target.value)}
-                            placeholder="0"
-                          />
+                        <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-blue-50">
+                          {(() => {
+                            const scores = calculateRawScoresAndHPS(student._id);
+                            return scores.writtenWorksHPS;
+                          })()}
                         </td>
-                        <td className="border border-gray-300 px-2 py-2">
-                          <input
-                            type="number"
-                            className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            value={grades[student._id]?.writtenWorksRAW || ''}
-                            onChange={(e) => handleGradeChange(student._id, 'writtenWorksRAW', e.target.value)}
-                            placeholder="0"
-                          />
+                        <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-blue-50">
+                          {(() => {
+                            const scores = calculateRawScoresAndHPS(student._id);
+                            return scores.writtenWorksRAW;
+                          })()}
                         </td>
                         <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-gray-100">
                           {(() => {
-                            const studentGrade = grades[student._id];
-                            if (studentGrade?.writtenWorksHPS && studentGrade?.writtenWorksRAW) {
-                              const hps = parseFloat(studentGrade.writtenWorksHPS);
-                              const raw = parseFloat(studentGrade.writtenWorksRAW);
-                              return hps > 0 ? Math.round((raw / hps) * 100 * 100) / 100 : '';
+                            const scores = calculateRawScoresAndHPS(student._id);
+                            if (scores.writtenWorksHPS > 0) {
+                              return Math.round((scores.writtenWorksRAW / scores.writtenWorksHPS) * 100 * 100) / 100;
                             }
                             return '';
                           })()}
@@ -561,42 +790,32 @@ export default function Faculty_Grades() {
                           {(() => {
                             const selectedClassData = classes.find(c => c._id === selectedClass);
                             const trackInfo = getSubjectTrackAndPercentages(selectedClassData?.className);
-                            const studentGrade = grades[student._id];
-                            if (studentGrade?.writtenWorksHPS && studentGrade?.writtenWorksRAW) {
-                              const hps = parseFloat(studentGrade.writtenWorksHPS);
-                              const raw = parseFloat(studentGrade.writtenWorksRAW);
-                              const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                            const scores = calculateRawScoresAndHPS(student._id);
+                            if (scores.writtenWorksHPS > 0) {
+                              const ps = (scores.writtenWorksRAW / scores.writtenWorksHPS) * 100;
                               const ws = ps * trackInfo.percentages.written / 100;
                               return Math.round(ws * 100) / 100;
                             }
                             return '';
                           })()}
                         </td>
-                        <td className="border border-gray-300 px-2 py-2">
-                          <input
-                            type="number"
-                            className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            value={grades[student._id]?.performanceTasksHPS || ''}
-                            onChange={(e) => handleGradeChange(student._id, 'performanceTasksHPS', e.target.value)}
-                            placeholder="0"
-                          />
+                        <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-purple-50">
+                          {(() => {
+                            const scores = calculateRawScoresAndHPS(student._id);
+                            return scores.performanceTasksHPS;
+                          })()}
                         </td>
-                        <td className="border border-gray-300 px-2 py-2">
-                          <input
-                            type="number"
-                            className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            value={grades[student._id]?.performanceTasksRAW || ''}
-                            onChange={(e) => handleGradeChange(student._id, 'performanceTasksRAW', e.target.value)}
-                            placeholder="0"
-                          />
+                        <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-purple-50">
+                          {(() => {
+                            const scores = calculateRawScoresAndHPS(student._id);
+                            return scores.performanceTasksRAW;
+                          })()}
                         </td>
                         <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-gray-100">
                           {(() => {
-                            const studentGrade = grades[student._id];
-                            if (studentGrade?.performanceTasksHPS && studentGrade?.performanceTasksRAW) {
-                              const hps = parseFloat(studentGrade.performanceTasksHPS);
-                              const raw = parseFloat(studentGrade.performanceTasksRAW);
-                              return hps > 0 ? Math.round((raw / hps) * 100 * 100) / 100 : '';
+                            const scores = calculateRawScoresAndHPS(student._id);
+                            if (scores.performanceTasksHPS > 0) {
+                              return Math.round((scores.performanceTasksRAW / scores.performanceTasksHPS) * 100 * 100) / 100;
                             }
                             return '';
                           })()}
@@ -605,11 +824,9 @@ export default function Faculty_Grades() {
                           {(() => {
                             const selectedClassData = classes.find(c => c._id === selectedClass);
                             const trackInfo = getSubjectTrackAndPercentages(selectedClassData?.className);
-                            const studentGrade = grades[student._id];
-                            if (studentGrade?.performanceTasksHPS && studentGrade?.performanceTasksRAW) {
-                              const hps = parseFloat(studentGrade.performanceTasksHPS);
-                              const raw = parseFloat(studentGrade.performanceTasksRAW);
-                              const ps = hps > 0 ? (raw / hps) * 100 : 0;
+                            const scores = calculateRawScoresAndHPS(student._id);
+                            if (scores.performanceTasksHPS > 0) {
+                              const ps = (scores.performanceTasksRAW / scores.performanceTasksHPS) * 100;
                               const ws = ps * trackInfo.percentages.performance / 100;
                               return Math.round(ws * 100) / 100;
                             }
@@ -629,18 +846,13 @@ export default function Faculty_Grades() {
                           {(() => {
                             const selectedClassData = classes.find(c => c._id === selectedClass);
                             const trackInfo = getSubjectTrackAndPercentages(selectedClassData?.className);
-                            const studentGrade = grades[student._id];
-                            if (studentGrade?.writtenWorksHPS && studentGrade?.writtenWorksRAW && 
-                                studentGrade?.performanceTasksHPS && studentGrade?.performanceTasksRAW) {
-                              const writtenHPS = parseFloat(studentGrade.writtenWorksHPS);
-                              const writtenRAW = parseFloat(studentGrade.writtenWorksRAW);
-                              const performanceHPS = parseFloat(studentGrade.performanceTasksHPS);
-                              const performanceRAW = parseFloat(studentGrade.performanceTasksRAW);
-                              
-                              const writtenPS = writtenHPS > 0 ? (writtenRAW / writtenHPS) * 100 : 0;
+                            const scores = calculateRawScoresAndHPS(student._id);
+                            
+                            if (scores.writtenWorksHPS > 0 && scores.performanceTasksHPS > 0) {
+                              const writtenPS = (scores.writtenWorksRAW / scores.writtenWorksHPS) * 100;
                               const writtenWS = writtenPS * trackInfo.percentages.written / 100;
                               
-                              const performancePS = performanceHPS > 0 ? (performanceRAW / performanceHPS) * 100 : 0;
+                              const performancePS = (scores.performanceTasksRAW / scores.performanceTasksHPS) * 100;
                               const performanceWS = performancePS * trackInfo.percentages.performance / 100;
                               
                               const initialGrade = writtenWS + performanceWS;
@@ -653,8 +865,9 @@ export default function Faculty_Grades() {
                           {(() => {
                             const selectedClassData = classes.find(c => c._id === selectedClass);
                             const studentGrade = grades[student._id];
-                            if (studentGrade) {
-                              const finalGrade = calculateFinalGrade(studentGrade, selectedClassData?.className);
+                            const quarterlyScore = parseFloat(studentGrade?.quarterlyExam) || 0;
+                            if (selectedClassData && quarterlyScore > 0) {
+                              const finalGrade = calculateFinalGrade(student._id, selectedClassData.className, quarterlyScore);
                               return finalGrade > 0 ? finalGrade : '';
                             }
                             return '';
