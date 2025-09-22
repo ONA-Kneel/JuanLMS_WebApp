@@ -4,12 +4,16 @@ import fs from 'fs';
 import path from 'path';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import mongoose from 'mongoose';
+import PostedGrades from '../models/PostedGrades.js';
+import GradingData from '../models/GradingData.js';
+import QuarterlyGrades from '../models/QuarterlyGrades.js';
 
 const router = express.Router();
 
 // In-memory storage for grades (replace with proper database in production)
 const gradesStorage = new Map();
 const quarterlyGradesStorage = new Map();
+const postedGradesStorage = new Map();
 
 // Storage configuration
 const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
@@ -186,21 +190,45 @@ router.post('/save', authenticateToken, async (req, res) => {
       updatedAt: new Date()
     };
 
-    // Store grades in memory (replace with proper database in production)
-    const storageKey = `${classId}_${section}_${quarter}_${req.user._id}`;
-    gradesStorage.set(storageKey, gradeRecord);
-    
-    console.log('✅ Saving grades to storage:', {
-      classId,
-      section,
-      totalStudents: grades.length,
-      storageKey
-    });
+    // Save to database
+    try {
+      const gradingData = new GradingData({
+        facultyId: req.user._id,
+        assignmentId: new mongoose.Types.ObjectId(), // Create a unique assignment ID for this grade record
+        sectionName: section,
+        trackName: grades.length > 0 ? grades[0].trackInfo?.track || 'Academic' : 'Academic',
+        strandName: 'General', // Default strand
+        gradeLevel: 'Grade 12', // Default grade level
+        schoolYear: academicYear,
+        termName: termName,
+        grades: grades.map(grade => ({
+          studentId: grade.studentId,
+          studentName: grade.studentName,
+          grade: grade.finalGrade,
+          feedback: `Quarterly grade for ${quarter}`,
+          submittedAt: new Date()
+        })),
+        excelFileName: `${className}_${section}_${quarter}_${new Date().toISOString()}.json`,
+        uploadedAt: new Date(),
+        status: 'processed'
+      });
 
-    // TODO: Save to MongoDB using a proper GradeRecord model
-    // Example:
-    // const GradeRecord = require('../models/GradeRecord');
-    // const savedRecord = await GradeRecord.create(gradeRecord);
+      const savedRecord = await gradingData.save();
+      
+      console.log('✅ Grades saved to database:', {
+        classId,
+        section,
+        totalStudents: grades.length,
+        databaseId: savedRecord._id
+      });
+    } catch (dbError) {
+      console.error('❌ Error saving grades to database:', dbError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to save grades to database',
+        error: dbError.message
+      });
+    }
 
     res.json({
       success: true,
@@ -238,35 +266,87 @@ router.get('/load', authenticateToken, async (req, res) => {
       });
     }
 
-    // Load grades from memory storage
-    const storageKey = `${classId}_${section}_${quarter}_${req.user._id}`;
-    const savedGrades = gradesStorage.get(storageKey);
-    
-    if (savedGrades) {
-      console.log('✅ Found saved grades for:', { classId, section, totalStudents: savedGrades.grades.length });
-      res.json({
-        success: true,
-        message: 'Grades loaded successfully',
-        data: savedGrades
-      });
-    } else {
-      console.log('❌ No saved grades found for:', { classId, section });
-      res.json({
-        success: true,
-        message: 'No saved grades found',
-        data: null
+    // Load grades from database
+    try {
+      const savedGrades = await GradingData.findOne({
+        facultyId: req.user._id,
+        sectionName: section,
+        schoolYear: req.query.schoolYear || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
+        termName: req.query.termName || 'Term 1'
+      }).sort({ uploadedAt: -1 }); // Get the most recent grade record
+      
+      if (savedGrades) {
+        console.log('✅ Found saved grades in database for:', { 
+          classId, 
+          section, 
+          totalStudents: savedGrades.grades.length,
+          databaseId: savedGrades._id
+        });
+        
+        // Transform the database record to match the expected format
+        const transformedGrades = {
+          _id: savedGrades._id,
+          classId: classId,
+          className: savedGrades.excelFileName.split('_')[0] || 'Unknown Class',
+          section: savedGrades.sectionName,
+          academicYear: savedGrades.schoolYear,
+          termName: savedGrades.termName,
+          quarter: quarter,
+          facultyId: savedGrades.facultyId,
+          grades: savedGrades.grades.map(grade => ({
+            studentId: grade.studentId,
+            studentName: grade.studentName,
+            schoolID: grade.studentId, // Use studentId as schoolID fallback
+            writtenWorks: {
+              raw: 0,
+              hps: 0,
+              ps: 0,
+              ws: 0
+            },
+            performanceTasks: {
+              raw: 0,
+              hps: 0,
+              ps: 0,
+              ws: 0
+            },
+            quarterlyExam: 0,
+            initialGrade: 0,
+            finalGrade: grade.grade,
+            trackInfo: {
+              track: savedGrades.trackName,
+              percentages: {
+                quarterly: 25,
+                performance: 50,
+                written: 25
+              }
+            }
+          })),
+          savedAt: savedGrades.uploadedAt.toISOString(),
+          createdAt: savedGrades.createdAt,
+          updatedAt: savedGrades.updatedAt
+        };
+        
+        res.json({
+          success: true,
+          message: 'Grades loaded successfully',
+          data: transformedGrades
+        });
+      } else {
+        console.log('❌ No saved grades found in database for:', { classId, section });
+        res.json({
+          success: true,
+          message: 'No saved grades found',
+          data: null
+        });
+      }
+    } catch (dbError) {
+      console.error('❌ Error loading grades from database:', dbError);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to load grades from database',
+        error: dbError.message
       });
     }
-
-    // TODO: Implement actual database query
-    // Example:
-    // const GradeRecord = require('../models/GradeRecord');
-    // const savedGrades = await GradeRecord.findOne({
-    //   classId,
-    //   section,
-    //   quarter,
-    //   facultyId: req.user._id
-    // });
 
   } catch (error) {
     console.error('Error loading grades:', error);
@@ -299,32 +379,74 @@ router.post('/save-quarterly', authenticateToken, async (req, res) => {
       });
     }
 
-    // Create storage key for quarterly grades
-    const storageKey = `${classId}_${section}_${quarter}_${req.user._id}`;
-    
-    // Get existing quarterly grades or create new object
-    let quarterlyGrades = quarterlyGradesStorage.get(storageKey) || {};
-    
-    // Update the specific student's quarterly grade
-    quarterlyGrades[studentId] = {
-      studentId,
-      quarterlyGrade: parseFloat(quarterlyGrade),
-      academicYear,
-      termName,
-      savedAt: new Date().toISOString()
-    };
-    
-    // Save back to storage
-    quarterlyGradesStorage.set(storageKey, quarterlyGrades);
-    
-    console.log('✅ Saving quarterly grade to storage:', {
-      classId,
-      section,
-      quarter,
-      studentId,
-      quarterlyGrade,
-      storageKey
-    });
+    // Save to database
+    try {
+      // Find existing quarterly grades record for this class, section, and quarter
+      let quarterlyGradesRecord = await QuarterlyGrades.findOne({
+        classId: classId,
+        section: section,
+        quarter: quarter,
+        facultyId: req.user._id
+      });
+
+      if (quarterlyGradesRecord) {
+        // Update existing record
+        const existingStudentIndex = quarterlyGradesRecord.grades.findIndex(
+          grade => grade.studentId.toString() === studentId
+        );
+
+        if (existingStudentIndex >= 0) {
+          // Update existing student's grade
+          quarterlyGradesRecord.grades[existingStudentIndex].quarterlyGrade = parseFloat(quarterlyGrade);
+          quarterlyGradesRecord.grades[existingStudentIndex].savedAt = new Date();
+        } else {
+          // Add new student's grade
+          quarterlyGradesRecord.grades.push({
+            studentId,
+            quarterlyGrade: parseFloat(quarterlyGrade),
+            academicYear,
+            termName,
+            savedAt: new Date()
+          });
+        }
+      } else {
+        // Create new record
+        quarterlyGradesRecord = new QuarterlyGrades({
+          classId,
+          className: req.body.className || 'Unknown Class',
+          section,
+          academicYear,
+          termName,
+          quarter,
+          facultyId: req.user._id,
+          grades: [{
+            studentId,
+            quarterlyGrade: parseFloat(quarterlyGrade),
+            academicYear,
+            termName,
+            savedAt: new Date()
+          }]
+        });
+      }
+
+      const savedRecord = await quarterlyGradesRecord.save();
+      
+      console.log('✅ Quarterly grade saved to database:', {
+        classId,
+        section,
+        quarter,
+        studentId,
+        quarterlyGrade,
+        databaseId: savedRecord._id
+      });
+    } catch (dbError) {
+      console.error('❌ Error saving quarterly grade to database:', dbError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to save quarterly grade to database',
+        error: dbError.message
+      });
+    }
 
     res.json({
       success: true,
@@ -358,43 +480,54 @@ router.get('/load-quarterly', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get all quarterly grades for this class and section
-    const quarterlyGradesData = [];
-    
-    // Check all quarters (Q1, Q2, Q3, Q4)
-    const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
-    
-    quarters.forEach(quarter => {
-      const storageKey = `${classId}_${section}_${quarter}_${req.user._id}`;
-      const quarterlyGrades = quarterlyGradesStorage.get(storageKey);
+    // Load quarterly grades from database
+    try {
+      const quarterlyGradesRecords = await QuarterlyGrades.find({
+        classId: classId,
+        section: section,
+        facultyId: req.user._id
+      }).sort({ quarter: 1 });
+
+      const quarterlyGradesData = [];
       
-      if (quarterlyGrades) {
-        Object.values(quarterlyGrades).forEach(grade => {
+      quarterlyGradesRecords.forEach(record => {
+        record.grades.forEach(grade => {
           quarterlyGradesData.push({
             studentId: grade.studentId,
-            quarter: quarter,
+            quarter: record.quarter,
             quarterlyGrade: grade.quarterlyGrade,
             academicYear: grade.academicYear,
             termName: grade.termName,
             savedAt: grade.savedAt
           });
         });
-      }
-    });
-    
-    if (quarterlyGradesData.length > 0) {
-      console.log('✅ Found quarterly grades for:', { classId, section, totalGrades: quarterlyGradesData.length });
-      res.json({
-        success: true,
-        message: 'Quarterly grades loaded successfully',
-        data: quarterlyGradesData
       });
-    } else {
-      console.log('❌ No quarterly grades found for:', { classId, section });
-      res.json({
-        success: true,
-        message: 'No quarterly grades found',
-        data: []
+      
+      if (quarterlyGradesData.length > 0) {
+        console.log('✅ Found quarterly grades in database for:', { 
+          classId, 
+          section, 
+          totalGrades: quarterlyGradesData.length 
+        });
+        res.json({
+          success: true,
+          message: 'Quarterly grades loaded successfully',
+          data: quarterlyGradesData
+        });
+      } else {
+        console.log('❌ No quarterly grades found in database for:', { classId, section });
+        res.json({
+          success: true,
+          message: 'No quarterly grades found',
+          data: []
+        });
+      }
+    } catch (dbError) {
+      console.error('❌ Error loading quarterly grades from database:', dbError);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to load quarterly grades from database',
+        error: dbError.message
       });
     }
 
@@ -403,6 +536,327 @@ router.get('/load-quarterly', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Internal server error'
+    });
+  }
+});
+
+// Post grades to students endpoint
+router.post('/post', authenticateToken, async (req, res) => {
+  try {
+    const {
+      classId,
+      className,
+      section,
+      academicYear,
+      termName,
+      quarter,
+      grades,
+      postedAt
+    } = req.body;
+
+    // Validate required fields
+    if (!classId || !className || !section || !grades || !Array.isArray(grades)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: classId, className, section, grades'
+      });
+    }
+
+    // Create a unique identifier for this posted grade record
+    const postedGradeRecordId = new mongoose.Types.ObjectId();
+
+    // Prepare posted grade record
+    const postedGradeRecord = {
+      _id: postedGradeRecordId,
+      classId,
+      className,
+      section,
+      academicYear,
+      termName,
+      quarter,
+      facultyId: req.user._id, // From authenticated user
+      grades: grades.map(grade => ({
+        studentId: grade.studentId,
+        studentName: grade.studentName,
+        schoolID: grade.schoolID,
+        writtenWorks: {
+          raw: grade.writtenWorksRAW,
+          hps: grade.writtenWorksHPS,
+          ps: grade.writtenWorksPS,
+          ws: grade.writtenWorksWS
+        },
+        performanceTasks: {
+          raw: grade.performanceTasksRAW,
+          hps: grade.performanceTasksHPS,
+          ps: grade.performanceTasksPS,
+          ws: grade.performanceTasksWS
+        },
+        quarterlyExam: grade.quarterlyExam,
+        initialGrade: grade.initialGrade,
+        finalGrade: grade.finalGrade,
+        trackInfo: grade.trackInfo
+      })),
+      postedAt: postedAt || new Date().toISOString(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Store posted grades in memory (replace with proper database in production)
+    const storageKey = `${classId}_${section}_${quarter}_${req.user._id}_posted`;
+    postedGradesStorage.set(storageKey, postedGradeRecord);
+    
+    console.log('✅ Posted grades to students:', {
+      classId,
+      section,
+      quarter,
+      totalStudents: grades.length,
+      storageKey
+    });
+
+    res.json({
+      success: true,
+      message: 'Grades posted to students successfully',
+      data: {
+        recordId: postedGradeRecordId,
+        classId,
+        className,
+        section,
+        quarter,
+        totalStudents: grades.length,
+        postedAt: postedGradeRecord.postedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Error posting grades to students:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to post grades to students',
+      error: error.message
+    });
+  }
+});
+
+// Post quarterly grades to students endpoint
+router.post('/post-quarterly', authenticateToken, async (req, res) => {
+  try {
+    const {
+      classId,
+      className,
+      section,
+      academicYear,
+      termName,
+      quarter,
+      grades,
+      postedAt
+    } = req.body;
+
+    // Validate required fields
+    if (!classId || !className || !section || !quarter || !grades || !Array.isArray(grades)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: classId, className, section, quarter, grades'
+      });
+    }
+
+    // Create a unique identifier for this posted quarterly grade record
+    const postedQuarterlyGradeRecordId = new mongoose.Types.ObjectId();
+
+    // Prepare posted quarterly grade record
+    const postedQuarterlyGradeRecord = {
+      _id: postedQuarterlyGradeRecordId,
+      classId,
+      className,
+      section,
+      academicYear,
+      termName,
+      quarter,
+      facultyId: req.user._id, // From authenticated user
+      grades: grades.map(grade => ({
+        studentId: grade.studentId,
+        studentName: grade.studentName,
+        schoolID: grade.schoolID,
+        quarterlyGrade: grade.quarterlyGrade,
+        termFinalGrade: grade.termFinalGrade,
+        remarks: grade.remarks,
+        trackInfo: grade.trackInfo
+      })),
+      postedAt: postedAt || new Date().toISOString(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Save to database
+    try {
+      const postedGrades = new PostedGrades({
+        classId,
+        className,
+        section,
+        academicYear,
+        termName,
+        quarter,
+        facultyId: req.user._id,
+        grades: grades.map(grade => ({
+          studentId: grade.studentId,
+          studentName: grade.studentName,
+          schoolID: grade.schoolID,
+          quarterlyGrade: grade.quarterlyGrade,
+          termFinalGrade: grade.termFinalGrade,
+          remarks: grade.remarks
+        })),
+        trackInfo: grades.length > 0 ? grades[0].trackInfo : null,
+        postedAt: new Date()
+      });
+
+      const savedGrades = await postedGrades.save();
+      
+      console.log('✅ Posted quarterly grades saved to database:', {
+        classId,
+        section,
+        quarter,
+        totalStudents: grades.length,
+        databaseId: savedGrades._id
+      });
+    } catch (dbError) {
+      console.error('❌ Error saving to database:', dbError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to save grades to database',
+        error: dbError.message
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Quarterly grades posted to students successfully',
+      data: {
+        recordId: postedQuarterlyGradeRecordId,
+        classId,
+        className,
+        section,
+        quarter,
+        totalStudents: grades.length,
+        postedAt: postedQuarterlyGradeRecord.postedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Error posting quarterly grades to students:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to post quarterly grades to students',
+      error: error.message
+    });
+  }
+});
+
+// Get posted grades for a specific student
+router.get('/student-posted-grades', authenticateToken, async (req, res) => {
+  try {
+    const { studentId, classId, section } = req.query;
+
+    // Validate required fields
+    if (!studentId || !classId || !section) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: studentId, classId, section'
+      });
+    }
+
+    console.log('🔍 Fetching posted grades for student:', { studentId, classId, section });
+
+    // Search through database for posted quarterly grades for this student
+    const studentGrades = [];
+    
+    try {
+      // Find all posted grades for this class and section
+      const postedGradesRecords = await PostedGrades.find({
+        classId: classId,
+        section: section
+      }).sort({ quarter: 1, postedAt: -1 });
+
+      console.log(`🔍 Found ${postedGradesRecords.length} posted grade records for class ${classId}, section ${section}`);
+
+      for (const postedGradesRecord of postedGradesRecords) {
+        console.log(`🔍 Checking quarter ${postedGradesRecord.quarter}:`, {
+          totalStudents: postedGradesRecord.grades.length,
+          studentIds: postedGradesRecord.grades.map(g => g.studentId.toString())
+        });
+
+        // Find the specific student's grades
+        const studentGrade = postedGradesRecord.grades.find(grade => 
+          grade.studentId.toString() === studentId
+        );
+
+        if (studentGrade) {
+          studentGrades.push({
+            quarter: postedGradesRecord.quarter,
+            quarterlyGrade: studentGrade.quarterlyGrade,
+            termFinalGrade: studentGrade.termFinalGrade,
+            remarks: studentGrade.remarks,
+            postedAt: postedGradesRecord.postedAt
+          });
+          console.log(`✅ Found grades for student ${studentId} in ${postedGradesRecord.quarter}:`, studentGrade);
+        } else {
+          console.log(`⚠️ Student ${studentId} not found in ${postedGradesRecord.quarter} grades`);
+        }
+      }
+    } catch (dbError) {
+      console.error('❌ Error fetching from database:', dbError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch grades from database',
+        error: dbError.message
+      });
+    }
+    
+    if (studentGrades.length > 0) {
+      console.log('✅ Found posted grades for student:', studentGrades);
+      
+      // Transform the grades into the format expected by frontend
+      const transformedGrades = {
+        studentId: studentId,
+        grades: {}
+      };
+      
+      studentGrades.forEach(grade => {
+        transformedGrades.grades[grade.quarter] = {
+          quarterlyGrade: grade.quarterlyGrade,
+          termFinalGrade: grade.termFinalGrade,
+          remarks: grade.remarks
+        };
+      });
+      
+      res.json({
+        success: true,
+        message: 'Posted grades found',
+        data: {
+          studentId,
+          classId,
+          section,
+          grades: [transformedGrades] // Wrap in array as expected by frontend
+        }
+      });
+    } else {
+      console.log('❌ No posted grades found for student:', { studentId, classId, section });
+      res.json({
+        success: true,
+        message: 'No posted grades found',
+        data: {
+          studentId,
+          classId,
+          section,
+          grades: []
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('Error fetching student posted grades:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch student posted grades',
+      error: error.message
     });
   }
 });

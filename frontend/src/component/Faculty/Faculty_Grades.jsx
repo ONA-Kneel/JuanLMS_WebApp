@@ -88,6 +88,7 @@ export default function Faculty_Grades() {
   const [grades, setGrades] = useState({});
   const [quarterlyGrades, setQuarterlyGrades] = useState({}); // Store quarterly grades for each quarter
   const [quarterData, setQuarterData] = useState({}); // Store separate data for each quarter
+  const [posting, setPosting] = useState(false); // For posting grades to students
   const [_subjectInfo, _setSubjectInfo] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
   const [_currentFacultyID, setCurrentFacultyID] = useState(null);
@@ -635,6 +636,89 @@ export default function Faculty_Grades() {
       }
     } catch (error) {
       console.error('❌ Error loading quarterly grades from database:', error);
+    }
+  };
+
+  const postQuarterlyGradesToStudents = async (quarter) => {
+    if (!selectedClass || !selectedSection) {
+      showModal('Error', 'Please select a class and section first', 'error');
+      return;
+    }
+
+    try {
+      setPosting(true);
+      const token = localStorage.getItem('token');
+      const selectedClassData = classes.find(c => c._id === selectedClass);
+      
+      if (!selectedClassData) {
+        showModal('Error', 'Class data not found', 'error');
+        return;
+      }
+
+      // Prepare quarterly grades data for posting
+      const gradesData = {
+        classId: selectedClassData.classID,
+        className: selectedClassData.className,
+        section: selectedSection,
+        academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : null,
+        termName: currentTerm?.termName || null,
+        quarter: quarter,
+        grades: students.map(student => {
+          const quarterlyGrade = quarterlyGrades[student._id]?.[quarter];
+          const termFinalGrade = (() => {
+            if (quarter === 'Q2') {
+              const q1Grade = quarterlyGrades[student._id]?.Q1;
+              const q2Grade = quarterlyGrades[student._id]?.Q2;
+              if (q1Grade && q2Grade) {
+                const q1 = parseFloat(q1Grade);
+                const q2 = parseFloat(q2Grade);
+                const semesterFinal = (q1 + q2) / 2;
+                return Math.round(semesterFinal * 100) / 100;
+              }
+            }
+            return null;
+          })();
+          
+          return {
+            studentId: student._id,
+            studentName: `${student.lastname}, ${student.firstname} ${student.middlename || ''}`,
+            schoolID: student.schoolID || student.userID || student._id,
+            quarterlyGrade: quarterlyGrade || 0,
+            termFinalGrade: termFinalGrade,
+            remarks: termFinalGrade ? (termFinalGrade >= 75 ? 'PASSED' : 'REPEAT') : null,
+            trackInfo: getSubjectTrackAndPercentages(selectedClassData.className),
+            postedAt: new Date().toISOString()
+          };
+        }),
+        postedAt: new Date().toISOString()
+      };
+
+      // Post grades to students
+      const response = await fetch(`${API_BASE}/api/grades/post-quarterly`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(gradesData)
+      });
+
+      if (response.ok) {
+        const postResponse = await response.json();
+        console.log(`✅ ${quarter} grades posted to students successfully`);
+        const message = quarter === 'Q2' 
+          ? `${quarter} grades and Term Final Grade posted to students! Students can now view their grades.`
+          : `${quarter} grades posted to students! Students can now view their grades.`;
+        showModal('Success', message, 'success');
+      } else {
+        const errorData = await response.json();
+        showModal('Error', errorData.message || 'Failed to post grades to students', 'error');
+      }
+    } catch (error) {
+      console.error('❌ Error posting grades to students:', error);
+      showModal('Error', 'Failed to post grades to students. Please try again.', 'error');
+    } finally {
+      setPosting(false);
     }
   };
 
@@ -1299,7 +1383,25 @@ export default function Faculty_Grades() {
         {/* Grade Management - Quarter Summary */}
         {selectedClass && selectedSection && students.length > 0 && (
           <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-            <h2 className="text-xl font-semibold text-gray-700 mb-4">Grade Management</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-700">Grade Management</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => postQuarterlyGradesToStudents('Q1')}
+                  disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
+                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {posting ? 'Posting...' : '📤 Post Q1 Grades'}
+                </button>
+                <button
+                  onClick={() => postQuarterlyGradesToStudents('Q2')}
+                  disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
+                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {posting ? 'Posting...' : '📤 Post Q2 Grades + Term Final'}
+                </button>
+              </div>
+            </div>
             
             <div className="overflow-x-auto">
               <table className="min-w-full border border-gray-300 text-sm">
