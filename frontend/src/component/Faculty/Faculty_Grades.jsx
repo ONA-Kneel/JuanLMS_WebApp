@@ -897,7 +897,7 @@ export default function Faculty_Grades() {
                           return trackInfo.percentages.quarterly;
                         })()}%
                       </th>
-                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">FINAL/QUARTERLY GRADE</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">QUARTERLY GRADE</th>
                     </tr>
                     <tr className="bg-gray-50">
                       <th className="border border-gray-300 px-2 py-2"></th>
@@ -912,7 +912,7 @@ export default function Faculty_Grades() {
                       <th className="border border-gray-300 px-2 py-2 text-center font-semibold">WS</th>
                       <th className="border border-gray-300 px-2 py-2 text-center font-semibold">SCORE</th>
                       <th className="border border-gray-300 px-2 py-2 text-center font-semibold">INITIAL</th>
-                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">FINAL</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">QUARTERLY GRADE</th>
                     </tr>
                   </thead>
                   <tbody>
