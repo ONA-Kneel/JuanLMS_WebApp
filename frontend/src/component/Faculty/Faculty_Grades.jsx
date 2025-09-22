@@ -600,13 +600,20 @@ export default function Faculty_Grades() {
       const token = localStorage.getItem('token');
       const selectedClassData = classes.find(c => c._id === selectedClass);
       
+      console.log('🔄 Loading quarterly grades for:', {
+        classId: selectedClassData?.classID,
+        section: selectedSection
+      });
+      
       const response = await fetch(`${API_BASE}/api/grades/load-quarterly?classId=${selectedClassData.classID}&section=${selectedSection}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (response.ok) {
         const result = await response.json();
-        if (result.success && result.data) {
+        console.log('📥 Quarterly grades response:', result);
+        
+        if (result.success && result.data && result.data.length > 0) {
           console.log('✅ Loaded quarterly grades from database:', result.data);
           
           // Update the quarterlyGrades state with data from database
@@ -620,7 +627,11 @@ export default function Faculty_Grades() {
           
           setQuarterlyGrades(loadedQuarterlyGrades);
           console.log('✅ Set quarterly grades state:', loadedQuarterlyGrades);
+        } else {
+          console.log('⚠️ No quarterly grades found in database');
         }
+      } else {
+        console.error('❌ Failed to load quarterly grades:', response.status);
       }
     } catch (error) {
       console.error('❌ Error loading quarterly grades from database:', error);
@@ -746,6 +757,7 @@ export default function Faculty_Grades() {
 
       if (response.ok) {
         const savedGradesData = await response.json();
+        console.log('📥 Regular grades response:', savedGradesData);
         
         if (savedGradesData.success && savedGradesData.data && savedGradesData.data.grades) {
           // Convert saved grades back to local state format
@@ -756,8 +768,12 @@ export default function Faculty_Grades() {
             };
           });
           setGrades(loadedGrades);
-          console.log('✅ Loaded saved grades successfully');
+          console.log('✅ Loaded saved grades successfully:', loadedGrades);
+        } else {
+          console.log('⚠️ No regular grades found in database');
         }
+      } else {
+        console.error('❌ Failed to load regular grades:', response.status);
       }
     } catch (error) {
       console.error('❌ Error loading saved grades:', error);
@@ -1338,10 +1354,9 @@ export default function Faculty_Grades() {
                           if (firstGrade && secondGrade) {
                             const q1 = parseFloat(firstGrade);
                             const q2 = parseFloat(secondGrade);
-                            const rawSemesterFinal = (q1 + q2) / 2;
-                            // Apply transmutation table - minimum grade is 60
-                            const transmutedSemesterFinal = transmuteGrade(rawSemesterFinal);
-                            return transmutedSemesterFinal;
+                            const semesterFinal = (q1 + q2) / 2;
+                            // Don't apply transmutation again - grades are already transmuted
+                            return Math.round(semesterFinal * 100) / 100;
                           }
                           return '0.00';
                         })()}
@@ -1355,10 +1370,9 @@ export default function Faculty_Grades() {
                           if (firstGrade && secondGrade) {
                             const q1 = parseFloat(firstGrade);
                             const q2 = parseFloat(secondGrade);
-                            const rawSemesterFinal = (q1 + q2) / 2;
-                            // Apply transmutation table - minimum grade is 60
-                            const transmutedSemesterFinal = transmuteGrade(rawSemesterFinal);
-                            return transmutedSemesterFinal >= 75 ? 'PASSED' : 'REPEAT';
+                            const semesterFinal = (q1 + q2) / 2;
+                            // Don't apply transmutation again - grades are already transmuted
+                            return semesterFinal >= 75 ? 'PASSED' : 'REPEAT';
                           }
                           return 'REPEAT';
                         })()}
