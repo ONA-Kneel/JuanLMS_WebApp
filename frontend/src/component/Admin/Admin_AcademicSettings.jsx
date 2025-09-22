@@ -156,9 +156,9 @@ export default function Admin_AcademicSettings() {
       });
       const data = await res.json();
       if (res.ok) {
-        const activeYears = data.filter(year => year.status === 'active');
-        setSchoolYears(activeYears);
-        computeArchivedCountsForYears(activeYears);
+        // Store all school years (active and inactive)
+        setSchoolYears(data);
+        computeArchivedCountsForYears(data);
       } else {
         setErrorMessage("Failed to fetch school years");
         setShowErrorModal(true);
@@ -984,6 +984,12 @@ export default function Admin_AcademicSettings() {
       return;
     }
 
+    // Require the existing term to be archived before adding a second term
+    if (terms.length >= 1 && terms.some(t => t.status !== 'archived')) {
+      setTermError('Archive the previous term before adding a new one.');
+      return;
+    }
+
     // Prevent adding terms to inactive school years
     if (selectedYear && selectedYear.status !== 'active') {
       setTermError('Cannot add terms to inactive school years. Please activate the school year first.');
@@ -1098,15 +1104,31 @@ export default function Admin_AcademicSettings() {
       return;
     }
 
-    // Check if quarter already exists for this school year and term
+    // Check if a non-archived quarter already exists for this school year and term
     const existingQuarter = quarters.find(q => 
       q.quarterName === quarterFormData.quarterName && 
-      q.termName === quarterFormData.termName
+      q.termName === quarterFormData.termName &&
+      q.status !== 'archived'
     );
     
     if (existingQuarter) {
       setQuarterError(`${quarterFormData.quarterName} already exists for ${quarterFormData.termName}`);
       return;
+    }
+
+    // Rule: cannot add another quarter unless the first quarter in that term is archived.
+    // If the first quarter is not present in current state (e.g., API hides archived), allow creation.
+    const firstQuarterName = quarterFormData.termName === 'Term 1' ? 'Quarter 1' : 'Quarter 3';
+    if (quarterFormData.quarterName !== firstQuarterName) {
+      const nonArchivedFirstQuarterExists = quarters.some(q =>
+        q.termName === quarterFormData.termName &&
+        q.quarterName === firstQuarterName &&
+        q.status !== 'archived'
+      );
+      if (nonArchivedFirstQuarterExists) {
+        setQuarterError('Archive the first quarter of this term before adding another quarter.');
+        return;
+      }
     }
 
     // Validate quarter dates are within school year bounds
@@ -1425,7 +1447,6 @@ export default function Admin_AcademicSettings() {
                     </thead>
                     <tbody>
                       {schoolYears
-                        .filter(year => year.status === 'active')
                         .filter(year => {
                           if (searchTerm === '') return true;
                           const searchLower = searchTerm.toLowerCase();
@@ -1444,7 +1465,6 @@ export default function Admin_AcademicSettings() {
                         </tr>
                       ) : (
                         schoolYears
-                          .filter(year => year.status === 'active')
                           .filter(year => {
                             if (searchTerm === '') return true;
                             const searchLower = searchTerm.toLowerCase();
@@ -1526,10 +1546,16 @@ export default function Admin_AcademicSettings() {
                           <button
                             onClick={() => setShowAddTermModal(true)}
                             className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2 ${
-                              terms.length >= 2 ? 'opacity-50 cursor-not-allowed' : ''
+                              (terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status !== 'archived'))) ? 'opacity-50 cursor-not-allowed' : ''
                             }`}
-                            disabled={terms.length >= 2}
-                            title={terms.length >= 2 ? 'Maximum 2 terms allowed per school year' : 'Add New Term'}
+                            disabled={terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status !== 'archived'))}
+                            title={
+                              terms.length >= 2
+                                ? 'Maximum 2 terms allowed per school year'
+                                : (terms.length >= 1 && terms.some(t => t.status !== 'archived'))
+                                  ? 'Archive the previous term before adding a new one'
+                                  : 'Add New Term'
+                            }
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />

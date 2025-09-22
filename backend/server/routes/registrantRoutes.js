@@ -14,7 +14,7 @@ const router = express.Router();
 // POST /api/registrants/register
 router.post('/register', async (req, res) => {
   try {
-    const { firstName, middleName, lastName, personalEmail, contactNo, schoolID } = req.body;
+    const { firstName, middleName, lastName, personalEmail, contactNo, schoolID, trackName, strandName, sectionName } = req.body;
     if (!firstName || !lastName || !personalEmail || !contactNo || !schoolID) {
       return res.status(400).json({ message: 'Please fill in all required fields.' });
     }
@@ -84,6 +84,9 @@ router.post('/register', async (req, res) => {
       personalEmail,
       contactNo,
       schoolID,
+      trackName,
+      strandName,
+      sectionName
     });
     await registrant.save();
     res.status(201).json({ message: 'Registration successful.' });
@@ -96,12 +99,31 @@ router.post('/register', async (req, res) => {
 // GET /api/registrants?date=YYYY-MM-DD&status=pending
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { date, status } = req.query;
+    const { date, status, page = 1, limit = 10 } = req.query;
     let filter = {};
     if (date) filter.registrationDate = date;
     if (status && status !== 'all') filter.status = status;
-    const registrants = await Registrant.find(filter).sort({ registrationDate: -1 });
-    res.json(registrants);
+    const numericLimit = Math.max(1, parseInt(limit));
+    const numericPage = Math.max(1, parseInt(page));
+    const skip = (numericPage - 1) * numericLimit;
+
+    const [registrants, total] = await Promise.all([
+      Registrant.find(filter)
+        .sort({ registrationDate: -1 })
+        .skip(skip)
+        .limit(numericLimit),
+      Registrant.countDocuments(filter)
+    ]);
+
+    res.json({
+      data: registrants,
+      pagination: {
+        page: numericPage,
+        limit: numericLimit,
+        total,
+        totalPages: Math.ceil(total / numericLimit)
+      }
+    });
   } catch (err) {
     console.error('Server error in get endpoint:', err);
     res.status(500).json({ message: 'Server error', error: err.message });

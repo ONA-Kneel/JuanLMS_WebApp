@@ -6,6 +6,10 @@ const registrantSchema = new mongoose.Schema({
   lastName:       { type: String, required: true },
   personalEmail:  { type: String, required: true, unique: true },
   contactNo:      { type: String, required: true },
+  // Academic placement preferences captured during registration
+  trackName:      { type: String },
+  strandName:     { type: String },
+  sectionName:    { type: String },
   schoolID: {
     type: String,
     required: true,
