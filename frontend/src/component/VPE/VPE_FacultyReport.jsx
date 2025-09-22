@@ -4,8 +4,6 @@ Chart.register(ArcElement, Tooltip, Legend, PieController);
 import * as XLSX from "xlsx";
 import VPE_Navbar from "./VPE_Navbar";
 import ProfileMenu from "../ProfileMenu";
-import { useReactToPrint } from 'react-to-print';
-import AIAnalysisPrintable from "../Shared/AIAnalysisPrintable";
 
 // PDF generation function with pie chart (Assignments vs Quizzes)
 const downloadAsPDF = (content, filename, chartData) => {
@@ -271,11 +269,6 @@ export default function VPE_FacultyReport() {
   const sectionChartInstanceRef = useRef(null);
   const trackChartInstanceRef = useRef(null);
   const strandChartInstanceRef = useRef(null);
-  const printableRef = useRef(null);
-  const handlePrint = useReactToPrint({
-    content: () => printableRef.current,
-    documentTitle: `AI_Analysis_${selectedSchoolYear || ''}_${selectedTerm || ''}`,
-  });
 
   // Tab state
   const [activeTab, setActiveTab] = useState('activities');
@@ -1863,13 +1856,18 @@ export default function VPE_FacultyReport() {
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(aiAnalysis);
+                      // You could add a toast notification here
                     }}
                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                   >
                     Copy to Clipboard
                   </button>
                   <button
-                    onClick={handlePrint}
+                    onClick={() => downloadAsPDF(
+                      aiAnalysis,
+                      `AI_Analysis_${selectedSchoolYear}_${selectedTerm}`,
+                      { assignmentsCount, quizzesCount }
+                    )}
                     className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
                   >
                     Download as PDF
@@ -1901,20 +1899,6 @@ export default function VPE_FacultyReport() {
               </svg>
             </button>
           </div>
-        </div>
-      )}
-      {/* Hidden printable content */}
-      {aiAnalysis && (
-        <div className="hidden">
-          <AIAnalysisPrintable
-            ref={printableRef}
-            aiAnalysis={aiAnalysis}
-            selectedSchoolYear={selectedSchoolYear}
-            selectedTerm={selectedTerm}
-            filteredActivities={filteredActivities}
-            assignmentsCount={assignmentsCount}
-            quizzesCount={quizzesCount}
-          />
         </div>
       )}
     </div>
