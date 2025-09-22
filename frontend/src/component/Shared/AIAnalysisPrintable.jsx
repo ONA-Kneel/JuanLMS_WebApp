@@ -119,35 +119,38 @@ const AIAnalysisPrintable = forwardRef(function AIAnalysisPrintable(props, ref) 
   }, [assignmentsCount, quizzesCount, distributions]);
 
   return (
-    <div ref={ref} className="prose max-w-none">
-      <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg mb-6 border-l-4 border-blue-500">
-        <h4 className="text-lg font-semibold text-blue-800 mb-2">Analysis Summary</h4>
-        <p className="text-blue-700">This AI-powered analysis provides insights into faculty performance, student engagement, and recommendations for improving academic outcomes.</p>
+    <div ref={ref} className="prose max-w-none printable">
+      <style>{`
+        .printable * { background-image: none !important; }
+      `}</style>
+      <div style={{ backgroundColor: '#eef2ff', padding: 16, borderRadius: 8, marginBottom: 24, borderLeft: '4px solid #3b82f6' }}>
+        <h4 style={{ fontSize: 18, fontWeight: 700, color: '#1e40af', marginBottom: 8 }}>Analysis Summary</h4>
+        <p style={{ color: '#1d4ed8' }}>This AI-powered analysis provides insights into faculty performance, student engagement, and recommendations for improving academic outcomes.</p>
       </div>
       <div className="text-sm text-gray-600 mb-4">
         <span className="font-medium">Educational Analytics Report:</span> {selectedSchoolYear} {selectedTerm ? `- ${selectedTerm}` : ''}
       </div>
-      <div className="text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(splitContent.before) }} />
+      <div className="text-gray-700 leading-relaxed" style={{ color: '#374151' }} dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(splitContent.before) }} />
       <div className="flex flex-col gap-6 py-3">
         <div className="flex items-center justify-center">
           <canvas ref={mainChartRef} width={220} height={220} style={{ width: 220, height: 220 }} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="flex flex-col items-center">
-            <div className="text-sm font-medium mb-2">By Section</div>
+            <div className="text-sm font-medium mb-2" style={{ color: '#111827' }}>By Section</div>
             <canvas ref={sectionChartRef} width={180} height={180} style={{ width: 180, height: 180 }} />
           </div>
           <div className="flex flex-col items-center">
-            <div className="text-sm font-medium mb-2">By Track</div>
+            <div className="text-sm font-medium mb-2" style={{ color: '#111827' }}>By Track</div>
             <canvas ref={trackChartRef} width={180} height={180} style={{ width: 180, height: 180 }} />
           </div>
           <div className="flex flex-col items-center">
-            <div className="text-sm font-medium mb-2">By Strand</div>
+            <div className="text-sm font-medium mb-2" style={{ color: '#111827' }}>By Strand</div>
             <canvas ref={strandChartRef} width={180} height={180} style={{ width: 180, height: 180 }} />
           </div>
         </div>
       </div>
-      <div className="text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(splitContent.after) }} />
+      <div className="text-gray-700 leading-relaxed" style={{ color: '#374151' }} dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(splitContent.after) }} />
     </div>
   );
 });
