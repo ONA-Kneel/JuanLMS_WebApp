@@ -1043,13 +1043,87 @@ export default function Faculty_Grades() {
           </div>
         )}
 
-        {/* Placeholder for future grade functionality */}
+        {/* Grade Management - Quarter Summary */}
         {selectedClass && selectedSection && students.length > 0 && (
           <div className="bg-white rounded-lg shadow-md p-6 mt-6">
             <h2 className="text-xl font-semibold text-gray-700 mb-4">Grade Management</h2>
-            <div className="text-center py-8 text-gray-600">
-              <p>Grade management functionality will be implemented here.</p>
-              <p className="text-sm mt-2">Selected: {students.length} students in {classes.find(c => c._id === selectedClass)?.className} - {selectedSection}</p>
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full border border-gray-300 text-sm">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Student ID</th>
+                    <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Students</th>
+                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold" colSpan="2">Quarter</th>
+                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold">Semester Final Grade</th>
+                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold">Remarks</th>
+                  </tr>
+                  <tr className="bg-gray-50">
+                    <th className="border border-gray-300 px-2 py-2"></th>
+                    <th className="border border-gray-300 px-2 py-2"></th>
+                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold">1</th>
+                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold">2</th>
+                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold"></th>
+                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.map((student) => (
+                    <tr key={student._id} className="hover:bg-gray-50">
+                      <td className="border border-gray-300 px-2 py-2">{student.schoolID}</td>
+                      <td className="border border-gray-300 px-2 py-2">
+                        {student.lastname}, {student.firstname} {student.middlename || ''}
+                      </td>
+                      <td className="border border-gray-300 px-2 py-2 text-center">
+                        <input
+                          type="number"
+                          className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          value={grades[student._id]?.quarter1 || ''}
+                          onChange={(e) => handleGradeChange(student._id, 'quarter1', e.target.value)}
+                          placeholder="-"
+                        />
+                      </td>
+                      <td className="border border-gray-300 px-2 py-2 text-center">
+                        <input
+                          type="number"
+                          className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          value={grades[student._id]?.quarter2 || ''}
+                          onChange={(e) => handleGradeChange(student._id, 'quarter2', e.target.value)}
+                          placeholder="-"
+                        />
+                      </td>
+                      <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-gray-100">
+                        {(() => {
+                          const studentGrade = grades[student._id];
+                          if (studentGrade?.quarter1 && studentGrade?.quarter2) {
+                            const q1 = parseFloat(studentGrade.quarter1);
+                            const q2 = parseFloat(studentGrade.quarter2);
+                            const semesterFinal = (q1 + q2) / 2;
+                            return Math.round(semesterFinal * 100) / 100;
+                          }
+                          return '0.00';
+                        })()}
+                      </td>
+                      <td className="border border-gray-300 px-2 py-2 text-center font-semibold">
+                        {(() => {
+                          const studentGrade = grades[student._id];
+                          if (studentGrade?.quarter1 && studentGrade?.quarter2) {
+                            const q1 = parseFloat(studentGrade.quarter1);
+                            const q2 = parseFloat(studentGrade.quarter2);
+                            const semesterFinal = (q1 + q2) / 2;
+                            return semesterFinal >= 75 ? 'PASSED' : 'REPEAT';
+                          }
+                          return 'REPEAT';
+                        })()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="mt-4 text-sm text-gray-600">
+              <p>Selected: {students.length} students in {classes.find(c => c._id === selectedClass)?.className} - {selectedSection}</p>
             </div>
           </div>
         )}
