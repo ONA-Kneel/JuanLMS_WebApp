@@ -3,8 +3,12 @@ import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import mongoose from 'mongoose';
 
 const router = express.Router();
+
+// In-memory storage for grades (replace with proper database in production)
+const gradesStorage = new Map();
 
 // Storage configuration
 const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
@@ -116,6 +120,159 @@ router.post('/upload', authenticateToken, upload.single('excelFile'), async (req
     res.status(500).json({
       success: false,
       message: error.message || 'Error uploading grades'
+    });
+  }
+});
+
+// Save grades endpoint
+router.post('/save', authenticateToken, async (req, res) => {
+  try {
+    const {
+      classId,
+      className,
+      section,
+      academicYear,
+      termName,
+      quarter,
+      grades,
+      savedAt
+    } = req.body;
+
+    // Validate required fields
+    if (!classId || !className || !section || !grades || !Array.isArray(grades)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: classId, className, section, grades'
+      });
+    }
+
+    // Create a unique identifier for this grade record
+    const gradeRecordId = new mongoose.Types.ObjectId();
+
+    // Prepare grade record for database
+    const gradeRecord = {
+      _id: gradeRecordId,
+      classId,
+      className,
+      section,
+      academicYear,
+      termName,
+      quarter,
+      facultyId: req.user._id, // From authenticated user
+      grades: grades.map(grade => ({
+        studentId: grade.studentId,
+        studentName: grade.studentName,
+        schoolID: grade.schoolID,
+        writtenWorks: {
+          raw: grade.writtenWorksRAW,
+          hps: grade.writtenWorksHPS,
+          ps: grade.writtenWorksPS,
+          ws: grade.writtenWorksWS
+        },
+        performanceTasks: {
+          raw: grade.performanceTasksRAW,
+          hps: grade.performanceTasksHPS,
+          ps: grade.performanceTasksPS,
+          ws: grade.performanceTasksWS
+        },
+        quarterlyExam: grade.quarterlyExam,
+        initialGrade: grade.initialGrade,
+        finalGrade: grade.finalGrade,
+        trackInfo: grade.trackInfo
+      })),
+      savedAt: savedAt || new Date().toISOString(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Store grades in memory (replace with proper database in production)
+    const storageKey = `${classId}_${section}_${quarter}_${req.user._id}`;
+    gradesStorage.set(storageKey, gradeRecord);
+    
+    console.log('✅ Saving grades to storage:', {
+      classId,
+      section,
+      totalStudents: grades.length,
+      storageKey
+    });
+
+    // TODO: Save to MongoDB using a proper GradeRecord model
+    // Example:
+    // const GradeRecord = require('../models/GradeRecord');
+    // const savedRecord = await GradeRecord.create(gradeRecord);
+
+    res.json({
+      success: true,
+      message: 'Grades saved successfully',
+      data: {
+        recordId: gradeRecordId,
+        classId,
+        className,
+        section,
+        totalStudents: grades.length,
+        savedAt: gradeRecord.savedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Error saving grades:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to save grades',
+      error: error.message
+    });
+  }
+});
+
+// Load grades endpoint
+router.get('/load', authenticateToken, async (req, res) => {
+  try {
+    const { classId, section, quarter = 'Q1' } = req.query;
+
+    // Validate required fields
+    if (!classId || !section) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: classId, section'
+      });
+    }
+
+    // Load grades from memory storage
+    const storageKey = `${classId}_${section}_${quarter}_${req.user._id}`;
+    const savedGrades = gradesStorage.get(storageKey);
+    
+    if (savedGrades) {
+      console.log('✅ Found saved grades for:', { classId, section, totalStudents: savedGrades.grades.length });
+      res.json({
+        success: true,
+        message: 'Grades loaded successfully',
+        data: savedGrades
+      });
+    } else {
+      console.log('❌ No saved grades found for:', { classId, section });
+      res.json({
+        success: true,
+        message: 'No saved grades found',
+        data: null
+      });
+    }
+
+    // TODO: Implement actual database query
+    // Example:
+    // const GradeRecord = require('../models/GradeRecord');
+    // const savedGrades = await GradeRecord.findOne({
+    //   classId,
+    //   section,
+    //   quarter,
+    //   facultyId: req.user._id
+    // });
+
+  } catch (error) {
+    console.error('Error loading grades:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to load grades',
+      error: error.message
     });
   }
 });

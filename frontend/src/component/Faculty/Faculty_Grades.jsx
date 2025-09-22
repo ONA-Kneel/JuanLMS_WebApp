@@ -1,7 +1,7 @@
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileModal from "../ProfileModal";
 import ProfileMenu from "../ProfileMenu";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useQuarter } from "../../context/QuarterContext.jsx";
 
 /**
@@ -85,13 +85,14 @@ export default function Faculty_Grades() {
   const [selectedSection, setSelectedSection] = useState(null);
   const [students, setStudents] = useState([]);
   const [grades, setGrades] = useState({});
-  const [subjectInfo, setSubjectInfo] = useState(null);
+  const [_subjectInfo, _setSubjectInfo] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
   const [_currentFacultyID, setCurrentFacultyID] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [quizzes, setQuizzes] = useState([]);
   const [studentScores, setStudentScores] = useState({});
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const showModal = (title, message, type = 'info') => {
     setModal({ isOpen: true, title, message, type });
@@ -173,6 +174,46 @@ export default function Faculty_Grades() {
     initializeData();
   }, []); // Remove academicYear dependency to prevent infinite loop
 
+  const fetchAssignmentsAndQuizzes = useCallback(async (selectedClassData) => {
+    try {
+      const token = localStorage.getItem('token');
+      let assignmentsData = [];
+      let quizzesData = [];
+
+      // Fetch assignments
+      const assignmentsResponse = await fetch(`${API_BASE}/assignments?classID=${selectedClassData.classID}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (assignmentsResponse.ok) {
+        assignmentsData = await assignmentsResponse.json();
+        console.log('Assignments fetched:', assignmentsData);
+        setAssignments(assignmentsData);
+      } else {
+        console.error('Failed to fetch assignments:', assignmentsResponse.status, assignmentsResponse.statusText);
+      }
+
+      // Fetch quizzes
+      const quizzesResponse = await fetch(`${API_BASE}/api/quizzes?classID=${selectedClassData.classID}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (quizzesResponse.ok) {
+        quizzesData = await quizzesResponse.json();
+        console.log('Quizzes fetched:', quizzesData);
+        setQuizzes(quizzesData);
+      } else {
+        console.error('Failed to fetch quizzes:', quizzesResponse.status, quizzesResponse.statusText);
+      }
+
+      // Fetch student scores using the data we already fetched
+      await fetchStudentScores(assignmentsData, quizzesData);
+      
+    } catch (error) {
+      console.error('Error fetching assignments and quizzes:', error);
+    }
+  }, []);
+
   // Auto-refresh grades every 30 seconds when a class is selected
   useEffect(() => {
     if (!selectedClass || !selectedSection) return;
@@ -186,7 +227,7 @@ export default function Faculty_Grades() {
     }, 30000); // Refresh every 30 seconds
 
     return () => clearInterval(interval);
-  }, [selectedClass, selectedSection, classes]);
+  }, [selectedClass, selectedSection, classes, fetchAssignmentsAndQuizzes]);
 
 
   const fetchSubjects = async () => {
@@ -236,6 +277,11 @@ export default function Faculty_Grades() {
         
         // Fetch assignments and quizzes after students are loaded
         await fetchAssignmentsAndQuizzes(selectedClassData);
+        
+        // Load saved grades after students are loaded (with a small delay to ensure everything is ready)
+        setTimeout(async () => {
+          await loadSavedGrades();
+        }, 1000);
       } else {
         console.error('Error fetching students:', response.status, response.statusText);
       }
@@ -246,45 +292,6 @@ export default function Faculty_Grades() {
     }
   };
 
-  const fetchAssignmentsAndQuizzes = async (selectedClassData) => {
-    try {
-      const token = localStorage.getItem('token');
-      let assignmentsData = [];
-      let quizzesData = [];
-
-      // Fetch assignments
-      const assignmentsResponse = await fetch(`${API_BASE}/assignments?classID=${selectedClassData.classID}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (assignmentsResponse.ok) {
-        assignmentsData = await assignmentsResponse.json();
-        console.log('Assignments fetched:', assignmentsData);
-        setAssignments(assignmentsData);
-      } else {
-        console.error('Failed to fetch assignments:', assignmentsResponse.status, assignmentsResponse.statusText);
-      }
-
-      // Fetch quizzes
-      const quizzesResponse = await fetch(`${API_BASE}/api/quizzes?classID=${selectedClassData.classID}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (quizzesResponse.ok) {
-        quizzesData = await quizzesResponse.json();
-        console.log('Quizzes fetched:', quizzesData);
-        setQuizzes(quizzesData);
-      } else {
-        console.error('Failed to fetch quizzes:', quizzesResponse.status, quizzesResponse.statusText);
-      }
-
-      // Fetch student scores using the data we already fetched
-      await fetchStudentScores(assignmentsData, quizzesData);
-      
-    } catch (error) {
-      console.error('Error fetching assignments and quizzes:', error);
-    }
-  };
 
   const fetchStudentScores = async (assignmentsData = [], quizzesData = []) => {
     try {
@@ -471,6 +478,13 @@ export default function Faculty_Grades() {
     }
   };
 
+  // Load saved grades when class and section are selected
+  useEffect(() => {
+    if (selectedClass && selectedSection && students.length > 0) {
+      loadSavedGrades();
+    }
+  }, [selectedClass, selectedSection, students]);
+
   const handleGradeChange = (studentId, gradeType, value) => {
     setGrades(prev => ({
       ...prev,
@@ -479,6 +493,140 @@ export default function Faculty_Grades() {
         [gradeType]: value
       }
     }));
+  };
+
+  const saveGrades = async () => {
+    if (!selectedClass || !selectedSection) {
+      showModal('Error', 'Please select a class and section first', 'error');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      const selectedClassData = classes.find(c => c._id === selectedClass);
+      
+      if (!selectedClassData) {
+        showModal('Error', 'Class data not found', 'error');
+        return;
+      }
+
+      // Prepare grades data for saving
+      const gradesData = {
+        classId: selectedClassData.classID,
+        className: selectedClassData.className,
+        section: selectedSection,
+        academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : null,
+        termName: currentTerm?.termName || null,
+        quarter: 'Q1', // You can make this dynamic if needed
+        grades: Object.keys(grades).map(studentId => {
+          const student = students.find(s => s._id === studentId);
+          const studentGrade = grades[studentId];
+          const scores = calculateRawScoresAndHPS(studentId);
+          
+          return {
+            studentId: studentId,
+            studentName: student ? `${student.lastname}, ${student.firstname} ${student.middlename || ''}`.trim() : '',
+            schoolID: student?.schoolID || '',
+            writtenWorksRAW: scores.writtenWorksRAW,
+            writtenWorksHPS: scores.writtenWorksHPS,
+            writtenWorksPS: scores.writtenWorksHPS > 0 ? (scores.writtenWorksRAW / scores.writtenWorksHPS) * 100 : 0,
+            writtenWorksWS: (() => {
+              const trackInfo = getSubjectTrackAndPercentages(selectedClassData.className);
+              const ps = scores.writtenWorksHPS > 0 ? (scores.writtenWorksRAW / scores.writtenWorksHPS) * 100 : 0;
+              return ps * trackInfo.percentages.written / 100;
+            })(),
+            performanceTasksRAW: scores.performanceTasksRAW,
+            performanceTasksHPS: scores.performanceTasksHPS,
+            performanceTasksPS: scores.performanceTasksHPS > 0 ? (scores.performanceTasksRAW / scores.performanceTasksHPS) * 100 : 0,
+            performanceTasksWS: (() => {
+              const trackInfo = getSubjectTrackAndPercentages(selectedClassData.className);
+              const ps = scores.performanceTasksHPS > 0 ? (scores.performanceTasksRAW / scores.performanceTasksHPS) * 100 : 0;
+              return ps * trackInfo.percentages.performance / 100;
+            })(),
+            quarterlyExam: parseFloat(studentGrade?.quarterlyExam) || 0,
+            initialGrade: (() => {
+              const trackInfo = getSubjectTrackAndPercentages(selectedClassData.className);
+              const writtenPS = scores.writtenWorksHPS > 0 ? (scores.writtenWorksRAW / scores.writtenWorksHPS) * 100 : 0;
+              const writtenWS = writtenPS * trackInfo.percentages.written / 100;
+              const performancePS = scores.performanceTasksHPS > 0 ? (scores.performanceTasksRAW / scores.performanceTasksHPS) * 100 : 0;
+              const performanceWS = performancePS * trackInfo.percentages.performance / 100;
+              return writtenWS + performanceWS;
+            })(),
+            finalGrade: (() => {
+              const quarterlyScore = parseFloat(studentGrade?.quarterlyExam) || 0;
+              if (quarterlyScore > 0) {
+                return calculateFinalGrade(studentId, selectedClassData.className, quarterlyScore);
+              }
+              return 0;
+            })(),
+            trackInfo: getSubjectTrackAndPercentages(selectedClassData.className)
+          };
+        }),
+        savedAt: new Date().toISOString()
+      };
+
+      // Save to database
+      const response = await fetch(`${API_BASE}/api/grades/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(gradesData)
+      });
+
+      if (response.ok) {
+        const saveResponse = await response.json();
+        console.log('✅ Grades saved successfully');
+        showModal('Success', 'Grades saved successfully!', 'success');
+      } else {
+        const errorData = await response.json();
+        showModal('Error', errorData.message || 'Failed to save grades', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving grades:', error);
+      showModal('Error', 'Failed to save grades. Please try again.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const loadSavedGrades = async () => {
+    if (!selectedClass || !selectedSection) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const selectedClassData = classes.find(c => c._id === selectedClass);
+      
+      if (!selectedClassData) {
+        console.log('No selected class data found for loading grades');
+        return;
+      }
+
+      // Load saved grades from database
+      const response = await fetch(`${API_BASE}/api/grades/load?classId=${selectedClassData.classID}&section=${selectedSection}&quarter=Q1`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const savedGradesData = await response.json();
+        
+        if (savedGradesData.success && savedGradesData.data && savedGradesData.data.grades) {
+          // Convert saved grades back to local state format
+          const loadedGrades = {};
+          savedGradesData.data.grades.forEach(grade => {
+            loadedGrades[grade.studentId] = {
+              quarterlyExam: grade.quarterlyExam || ''
+            };
+          });
+          setGrades(loadedGrades);
+          console.log('✅ Loaded saved grades successfully');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error loading saved grades:', error);
+    }
   };
 
   // Function to determine track and percentages based on subject
@@ -703,9 +851,18 @@ export default function Faculty_Grades() {
               </div>
             </div>
 
-            <h2 className="text-xl font-semibold text-gray-700 mb-4">
-              Grades for {classes.find(c => c._id === selectedClass)?.className} - {selectedSection}
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-700">
+                Grades for {classes.find(c => c._id === selectedClass)?.className} - {selectedSection}
+              </h2>
+              <button
+                onClick={saveGrades}
+                disabled={saving || Object.keys(grades).length === 0}
+                className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {saving ? '💾 Saving...' : '💾 Save Grades'}
+              </button>
+            </div>
             
             {loading ? (
               <div className="text-center py-8">
@@ -740,7 +897,7 @@ export default function Faculty_Grades() {
                           return trackInfo.percentages.quarterly;
                         })()}%
                       </th>
-                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">FINAL GRADE</th>
+                      <th className="border border-gray-300 px-2 py-2 text-center font-semibold">FINAL/QUARTERLY GRADE</th>
                     </tr>
                     <tr className="bg-gray-50">
                       <th className="border border-gray-300 px-2 py-2"></th>
