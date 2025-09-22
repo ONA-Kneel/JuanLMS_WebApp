@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 
 export default function Admin_AcademicSettings() {
@@ -17,12 +17,22 @@ export default function Admin_AcademicSettings() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showViewModal, setShowViewModal] = useState(false);
   const [terms, setTerms] = useState([]);
+  const [quarters, setQuarters] = useState([]);
   const [showAddTermModal, setShowAddTermModal] = useState(false);
+  const [showAddQuarterModal, setShowAddQuarterModal] = useState(false);
   const [termFormData, setTermFormData] = useState({
     startDate: '',
     endDate: ''
   });
+  const [quarterFormData, setQuarterFormData] = useState({
+    quarterName: '',
+    termName: '',
+    startDate: '',
+    endDate: ''
+  });
+  const [availableQuarters, setAvailableQuarters] = useState([]);
   const [termError, setTermError] = useState('');
+  const [quarterError, setQuarterError] = useState('');
   const navigate = useNavigate();
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
@@ -85,10 +95,11 @@ export default function Admin_AcademicSettings() {
       fetchSchoolYears();
   }, []);
 
-  // Fetch terms when a school year is selected
+  // Fetch terms and quarters when a school year is selected
   useEffect(() => {
     if (selectedYear) {
       fetchTerms(selectedYear);
+      fetchQuarters(selectedYear);
     }
   }, [selectedYear]);
 
@@ -145,9 +156,9 @@ export default function Admin_AcademicSettings() {
       });
       const data = await res.json();
       if (res.ok) {
-        const activeYears = data.filter(year => year.status === 'active');
-        setSchoolYears(activeYears);
-        computeArchivedCountsForYears(activeYears);
+        // Store all school years (active and inactive)
+        setSchoolYears(data);
+        computeArchivedCountsForYears(data);
       } else {
         setErrorMessage("Failed to fetch school years");
         setShowErrorModal(true);
@@ -176,6 +187,27 @@ export default function Admin_AcademicSettings() {
       }
     } catch (err) {
       console.error('Error fetching terms:', err);
+    }
+  };
+
+  const fetchQuarters = async (year) => {
+    try {
+      const schoolYearName = `${year.schoolYearStart}-${year.schoolYearEnd}`;
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/quarters/schoolyear/${schoolYearName}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setQuarters(data);
+      } else {
+        const data = await res.json();
+        console.error('Failed to fetch quarters:', data.message);
+      }
+    } catch (err) {
+      console.error('Error fetching quarters:', err);
     }
   };
 
@@ -416,6 +448,16 @@ export default function Admin_AcademicSettings() {
     navigate(`/admin/academic-settings/terms/${term._id}`, { state: { term } });
   };
 
+  const handleViewQuarter = (quarter) => {
+    navigate(`/admin/academic-settings/quarters/${quarter._id}`, { 
+      state: { 
+        quarter,
+        schoolYear: selectedYear,
+        quarterName: quarter.quarterName
+      } 
+    });
+  };
+
   const handleBack = () => {
     setShowView(false);
     setSelectedYear(null);
@@ -507,100 +549,6 @@ export default function Admin_AcademicSettings() {
     }
   };
 
-  const handleAddTerm = async (e) => {
-    e.preventDefault();
-    setTermError('');
-
-    // Limit to 2 total terms per school year
-    const totalTermsCount = terms.length;
-    if (totalTermsCount >= 2) {
-      setTermError('This school year already has 2 terms. You cannot add another.');
-      return;
-    }
-
-    // Prevent adding terms to inactive school years
-    if (selectedYear && selectedYear.status !== 'active') {
-      setTermError('Cannot add terms to inactive school years. Please activate the school year first.');
-      return;
-    }
-
-    if (!termFormData.startDate || !termFormData.endDate) {
-      setTermError('Please fill in all fields');
-      return;
-    }
-
-    // Validate term dates are within school year bounds
-    if (selectedYear) {
-      const schoolYearStart = selectedYear.schoolYearStart;
-      const schoolYearEnd = selectedYear.schoolYearEnd;
-      const startDate = new Date(termFormData.startDate);
-      const endDate = new Date(termFormData.endDate);
-      const minDate = new Date(`${schoolYearStart}-01-01`);
-      const maxDate = new Date(`${schoolYearEnd}-12-31`);
-      if (startDate < minDate || startDate > maxDate || endDate < minDate || endDate > maxDate) {
-        setTermError(`Term dates must be within the school year bounds (${schoolYearStart} to ${schoolYearEnd}).`);
-        return;
-      }
-    }
-
-    if (new Date(termFormData.endDate) <= new Date(termFormData.startDate)) {
-      setTermError('End date must be after start date');
-        return;
-      }
-
-    // Check for overlapping terms in the same school year
-    const overlappingTerms = terms.filter(t => 
-      t.status !== 'archived' && // Only check active/inactive terms
-      (
-        // New term starts during an existing term
-        (new Date(t.startDate) <= new Date(termFormData.startDate) && 
-         new Date(t.endDate) > new Date(termFormData.startDate)) ||
-        // New term ends during an existing term
-        (new Date(t.startDate) < new Date(termFormData.endDate) && 
-         new Date(t.endDate) >= new Date(termFormData.endDate)) ||
-        // New term completely contains an existing term
-        (new Date(t.startDate) >= new Date(termFormData.startDate) && 
-         new Date(t.endDate) <= new Date(termFormData.endDate))
-      )
-    );
-
-    if (overlappingTerms.length > 0) {
-      const overlappingTermNames = overlappingTerms.map(t => t.termName).join(', ');
-      setTermError(`Term dates overlap with existing terms: ${overlappingTermNames}. Please choose different dates.`);
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/api/terms`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          schoolYearId: selectedYear._id,
-          startDate: termFormData.startDate,
-          endDate: termFormData.endDate
-        })
-      });
-
-             if (res.ok) {
-         const newTerm = await res.json();
-         setTerms([...terms, newTerm]);
-         setShowAddTermModal(false);
-         setTermFormData({ startDate: '', endDate: '' });
-         setSuccessMessage('Term created successfully');
-         setShowSuccessModal(true);
-         fetchTerms(selectedYear);
-       } else {
-        const data = await res.json();
-        setTermError(data.message || 'Failed to create term');
-      }
-    } catch {
-      setTermError('Error creating term');
-    }
-  };
 
   const handleToggleStatus = async (year) => {
     const newStatus = year.status === 'active' ? 'inactive' : 'active';
@@ -874,6 +822,391 @@ export default function Admin_AcademicSettings() {
     }
   };
 
+  // Quarter handler functions
+  const handleToggleQuarterStatus = async (quarter) => {
+    const newStatus = quarter.status === 'active' ? 'inactive' : 'active';
+    const action = newStatus === 'active' ? 'activate' : 'deactivate';
+    
+    // Show confirmation modal
+    setConfirmMessage(`Are you sure you want to ${action} ${quarter.quarterName}?`);
+    setConfirmAction(() => {
+      handleToggleQuarterStatusInternal(quarter, newStatus, action);
+    });
+    setShowConfirmModal(true);
+  };
+
+  const handleToggleQuarterStatusInternal = async (quarter, newStatus, action) => {
+    try {
+      console.log('Sending quarter status update:', { status: newStatus });
+      const res = await fetch(`${API_BASE}/api/quarters/${quarter._id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      
+      if (res.ok) {
+        const updatedQuarter = await res.json();
+        console.log('Quarter status updated successfully:', updatedQuarter);
+        setQuarters(quarters.map(q => q._id === quarter._id ? updatedQuarter : q));
+        
+        // Update success message to reflect that inactive quarters are now archived
+        const successMessage = newStatus === 'active' ? 
+          `${quarter.quarterName} has been activated` : 
+          `${quarter.quarterName} has been archived`;
+        setSuccessMessage(successMessage);
+        setShowSuccessModal(true);
+        
+        fetchQuarters(selectedYear);
+      } else {
+        const data = await res.json();
+        console.log('Quarter status update failed:', data);
+        setTermError(data.message || `Failed to ${action} quarter`);
+      }
+    } catch (error) {
+      console.log('Quarter status update error:', error);
+      setTermError(`Error ${action}ing quarter`);
+    }
+  };
+
+  const handleEditQuarter = (quarter) => {
+    // Prevent editing quarters of inactive school years
+    if (selectedYear && selectedYear.status !== 'active') {
+      setErrorMessage('Cannot edit quarters of inactive school years. Only status changes are allowed.');
+      setShowErrorModal(true);
+      return;
+    }
+    
+    setEditingTerm(quarter);
+    setEditTermFormData({
+      startDate: quarter.startDate.split('T')[0], // Convert to YYYY-MM-DD format
+      endDate: quarter.endDate.split('T')[0]
+    });
+    setEditTermError('');
+    setShowEditTermModal(true);
+  };
+
+  const handleActivateQuarter = async (quarter) => {
+    // Prevent activating quarters of inactive school years
+    if (selectedYear && selectedYear.status !== 'active') {
+      setErrorMessage('Cannot activate quarters of inactive school years. Please activate the school year first.');
+      setShowErrorModal(true);
+      return;
+    }
+    
+    // Show confirmation modal
+    setConfirmMessage(`Are you sure you want to activate ${quarter.quarterName}?`);
+    setConfirmAction(() => () => {
+      handleActivateQuarterInternal(quarter);
+    });
+    setShowConfirmModal(true);
+  };
+
+  const handleActivateQuarterInternal = async (quarter) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/quarters/${quarter._id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'active' })
+      });
+      if (res.ok) {
+        const updatedQuarter = await res.json();
+        setQuarters(quarters.map(q => q._id === quarter._id ? updatedQuarter : q));
+        setSuccessMessage(`${quarter.quarterName} has been activated`);
+        setShowSuccessModal(true);
+        fetchQuarters(selectedYear);
+      } else {
+        const data = await res.json();
+        setTermError(data.message || 'Failed to activate quarter');
+      }
+    } catch {
+      setTermError('Error activating quarter');
+    }
+  };
+
+  const handleArchiveQuarter = async (quarter) => {
+    // Prevent archiving quarters of inactive school years
+    if (selectedYear && selectedYear.status !== 'active') {
+      setErrorMessage('Cannot archive quarters of inactive school years. Only quarters of active school years can be archived.');
+      setShowErrorModal(true);
+      return;
+    }
+    
+    // Show confirmation modal
+    setConfirmMessage(`Are you sure you want to archive ${quarter.quarterName}?`);
+    setConfirmAction(() => () => {
+      handleArchiveQuarterInternal(quarter);
+    });
+    setShowConfirmModal(true);
+  };
+
+  const handleArchiveQuarterInternal = async (quarter) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/quarters/${quarter._id}/archive`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (res.ok) {
+        const updatedQuarter = await res.json();
+        setQuarters(quarters.map(q => q._id === quarter._id ? updatedQuarter : q));
+        setSuccessMessage(`${quarter.quarterName} has been archived`);
+        setShowSuccessModal(true);
+        fetchQuarters(selectedYear);
+      } else {
+        const data = await res.json();
+        setTermError(data.message || 'Failed to archive quarter');
+      }
+    } catch {
+      setTermError('Error archiving quarter');
+    }
+  };
+
+  // Add Term handler
+  const handleAddTerm = async (e) => {
+    e.preventDefault();
+    setTermError('');
+
+    // Limit to 2 total terms per school year
+    const totalTermsCount = terms.length;
+    if (totalTermsCount >= 2) {
+      setTermError('This school year already has 2 terms. You cannot add another.');
+      return;
+    }
+
+    // Require the existing term to be archived before adding a second term
+    if (terms.length >= 1 && terms.some(t => t.status !== 'archived')) {
+      setTermError('Archive the previous term before adding a new one.');
+      return;
+    }
+
+    // Prevent adding terms to inactive school years
+    if (selectedYear && selectedYear.status !== 'active') {
+      setTermError('Cannot add terms to inactive school years. Please activate the school year first.');
+      return;
+    }
+
+    if (!termFormData.startDate || !termFormData.endDate) {
+      setTermError('Please fill in all fields');
+      return;
+    }
+
+    // Validate term dates are within school year bounds
+    if (selectedYear) {
+      const schoolYearStart = selectedYear.schoolYearStart;
+      const schoolYearEnd = selectedYear.schoolYearEnd;
+      const startDate = new Date(termFormData.startDate);
+      const endDate = new Date(termFormData.endDate);
+      const minDate = new Date(`${schoolYearStart}-01-01`);
+      const maxDate = new Date(`${schoolYearEnd}-12-31`);
+      if (startDate < minDate || startDate > maxDate || endDate < minDate || endDate > maxDate) {
+        setTermError(`Term dates must be within the school year bounds (${schoolYearStart} to ${schoolYearEnd}).`);
+        return;
+      }
+    }
+
+    if (new Date(termFormData.endDate) <= new Date(termFormData.startDate)) {
+      setTermError('End date must be after start date');
+      return;
+    }
+
+    // Check for overlapping terms in the same school year
+    const overlappingTerms = terms.filter(t => 
+      t.status !== 'archived' && // Only check active/inactive terms
+      (
+        // New term starts during an existing term
+        (new Date(t.startDate) <= new Date(termFormData.startDate) && 
+         new Date(t.endDate) > new Date(termFormData.startDate)) ||
+        // New term ends during an existing term
+        (new Date(t.startDate) < new Date(termFormData.endDate) && 
+         new Date(t.endDate) >= new Date(termFormData.endDate)) ||
+        // New term completely contains an existing term
+        (new Date(t.startDate) >= new Date(termFormData.startDate) && 
+         new Date(t.endDate) <= new Date(termFormData.endDate))
+      )
+    );
+
+    if (overlappingTerms.length > 0) {
+      const overlappingTermNames = overlappingTerms.map(t => t.termName).join(', ');
+      setTermError(`Term dates overlap with existing terms: ${overlappingTermNames}. Please choose different dates.`);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/terms`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          schoolYearId: selectedYear._id,
+          startDate: termFormData.startDate,
+          endDate: termFormData.endDate
+        })
+      });
+
+      if (res.ok) {
+        const newTerm = await res.json();
+        setTerms([...terms, newTerm]);
+        setShowAddTermModal(false);
+        setTermFormData({ startDate: '', endDate: '' });
+        setSuccessMessage('Term created successfully');
+        setShowSuccessModal(true);
+        fetchTerms(selectedYear);
+      } else {
+        const data = await res.json();
+        setTermError(data.message || 'Failed to create term');
+      }
+    } catch {
+      setTermError('Error creating term');
+    }
+  };
+
+  // Add Quarter handler
+  const handleAddQuarter = async (e) => {
+    e.preventDefault();
+    setQuarterError('');
+
+    // Prevent adding quarters to inactive school years
+    if (selectedYear && selectedYear.status !== 'active') {
+      setQuarterError('Cannot add quarters to inactive school years. Please activate the school year first.');
+      return;
+    }
+
+    if (!quarterFormData.quarterName || !quarterFormData.termName || !quarterFormData.startDate || !quarterFormData.endDate) {
+      setQuarterError('Please fill in all fields');
+      return;
+    }
+
+    // Validate quarter belongs to correct term
+    const term1Quarters = ['Quarter 1', 'Quarter 2'];
+    const term2Quarters = ['Quarter 3', 'Quarter 4'];
+    
+    if (quarterFormData.termName === 'Term 1' && !term1Quarters.includes(quarterFormData.quarterName)) {
+      setQuarterError('Quarter 1 and Quarter 2 must belong to Term 1');
+      return;
+    }
+    
+    if (quarterFormData.termName === 'Term 2' && !term2Quarters.includes(quarterFormData.quarterName)) {
+      setQuarterError('Quarter 3 and Quarter 4 must belong to Term 2');
+      return;
+    }
+
+    // Check if a non-archived quarter already exists for this school year and term
+    const existingQuarter = quarters.find(q => 
+      q.quarterName === quarterFormData.quarterName && 
+      q.termName === quarterFormData.termName &&
+      q.status !== 'archived'
+    );
+    
+    if (existingQuarter) {
+      setQuarterError(`${quarterFormData.quarterName} already exists for ${quarterFormData.termName}`);
+      return;
+    }
+
+    // Rule: cannot add another quarter unless the first quarter in that term is archived.
+    // If the first quarter is not present in current state (e.g., API hides archived), allow creation.
+    const firstQuarterName = quarterFormData.termName === 'Term 1' ? 'Quarter 1' : 'Quarter 3';
+    if (quarterFormData.quarterName !== firstQuarterName) {
+      const nonArchivedFirstQuarterExists = quarters.some(q =>
+        q.termName === quarterFormData.termName &&
+        q.quarterName === firstQuarterName &&
+        q.status !== 'archived'
+      );
+      if (nonArchivedFirstQuarterExists) {
+        setQuarterError('Archive the first quarter of this term before adding another quarter.');
+        return;
+      }
+    }
+
+    // Validate quarter dates are within school year bounds
+    if (selectedYear) {
+      const schoolYearStart = selectedYear.schoolYearStart;
+      const schoolYearEnd = selectedYear.schoolYearEnd;
+      const startDate = new Date(quarterFormData.startDate);
+      const endDate = new Date(quarterFormData.endDate);
+      const minDate = new Date(`${schoolYearStart}-01-01`);
+      const maxDate = new Date(`${schoolYearEnd}-12-31`);
+      if (startDate < minDate || startDate > maxDate || endDate < minDate || endDate > maxDate) {
+        setQuarterError(`Quarter dates must be within the school year bounds (${schoolYearStart} to ${schoolYearEnd}).`);
+        return;
+      }
+    }
+
+    if (new Date(quarterFormData.endDate) <= new Date(quarterFormData.startDate)) {
+      setQuarterError('End date must be after start date');
+      return;
+    }
+
+    // Check for overlapping quarters in the same term
+    const overlappingQuarters = quarters.filter(q => 
+      q.termName === quarterFormData.termName &&
+      q.status !== 'archived' && // Only check active/inactive quarters
+      (
+        // New quarter starts during an existing quarter
+        (new Date(q.startDate) <= new Date(quarterFormData.startDate) && 
+         new Date(q.endDate) > new Date(quarterFormData.startDate)) ||
+        // New quarter ends during an existing quarter
+        (new Date(q.startDate) < new Date(quarterFormData.endDate) && 
+         new Date(q.endDate) >= new Date(quarterFormData.endDate)) ||
+        // New quarter completely contains an existing quarter
+        (new Date(q.startDate) >= new Date(quarterFormData.startDate) && 
+         new Date(q.endDate) <= new Date(quarterFormData.endDate))
+      )
+    );
+
+    if (overlappingQuarters.length > 0) {
+      const overlappingQuarterNames = overlappingQuarters.map(q => q.quarterName).join(', ');
+      setQuarterError(`Quarter dates overlap with existing quarters: ${overlappingQuarterNames}. Please choose different dates.`);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/quarters`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          schoolYearId: selectedYear._id,
+          quarterName: quarterFormData.quarterName,
+          termName: quarterFormData.termName,
+          startDate: quarterFormData.startDate,
+          endDate: quarterFormData.endDate
+        })
+      });
+
+      if (res.ok) {
+        const newQuarter = await res.json();
+        setQuarters([...quarters, newQuarter]);
+        setShowAddQuarterModal(false);
+        setQuarterFormData({ quarterName: '', termName: '', startDate: '', endDate: '' });
+        setSuccessMessage('Quarter created successfully');
+        setShowSuccessModal(true);
+        fetchQuarters(selectedYear);
+      } else {
+        const data = await res.json();
+        setQuarterError(data.message || 'Failed to create quarter');
+      }
+    } catch {
+      setQuarterError('Error creating quarter');
+    }
+  };
+
   // Archive (delete) a school year
   const handleDelete = async (year) => {
     // Allow deletion for both active and inactive school years, but always warn about permanence
@@ -1114,7 +1447,6 @@ export default function Admin_AcademicSettings() {
                     </thead>
                     <tbody>
                       {schoolYears
-                        .filter(year => year.status === 'active')
                         .filter(year => {
                           if (searchTerm === '') return true;
                           const searchLower = searchTerm.toLowerCase();
@@ -1133,7 +1465,6 @@ export default function Admin_AcademicSettings() {
                         </tr>
                       ) : (
                         schoolYears
-                          .filter(year => year.status === 'active')
                           .filter(year => {
                             if (searchTerm === '') return true;
                             const searchLower = searchTerm.toLowerCase();
@@ -1210,31 +1541,39 @@ export default function Admin_AcademicSettings() {
                     School Year {selectedYear.schoolYearStart}-{selectedYear.schoolYearEnd}
                   </h3>
                   <div className="flex items-center gap-4">
-                        {selectedYear.status === 'active' ? (
+                      {selectedYear.status === 'active' && (
+                        <>
                           <button
                             onClick={() => setShowAddTermModal(true)}
-                            className={`px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2 ${
-                        selectedYear.status !== 'active' || terms.length >= 2 ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                      disabled={selectedYear.status !== 'active' || terms.length >= 2}
+                            className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2 ${
+                              (terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status !== 'archived'))) ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                            disabled={terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status !== 'archived'))}
+                            title={
+                              terms.length >= 2
+                                ? 'Maximum 2 terms allowed per school year'
+                                : (terms.length >= 1 && terms.some(t => t.status !== 'archived'))
+                                  ? 'Archive the previous term before adding a new one'
+                                  : 'Add New Term'
+                            }
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                             </svg>
                             Add Term
                           </button>
-                        ) : (
                           <button
-                            disabled
-                            className="px-4 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed flex items-center gap-2"
-                            title="Cannot add terms to inactive school year"
+                            onClick={() => setShowAddQuarterModal(true)}
+                            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2"
+                            title="Add New Quarter"
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                             </svg>
-                            Add Term
+                            Add Quarter
                           </button>
-                        )}
+                        </>
+                      )}
                       <button
                       onClick={() => setShowViewModal(false)}
                       className="text-gray-500 hover:text-gray-700"
@@ -1246,13 +1585,8 @@ export default function Admin_AcademicSettings() {
                     </div>
                 </div>
 
-                {/* Terms Table */}
+                {/* Terms and Quarters Display */}
                 <div className="flex-1 overflow-y-auto p-4">
-                    {terms.length >= 2 && (
-                      <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
-                        This school year already has 2 terms. You cannot add another.
-                      </div>
-                    )}
                     {selectedYear.status !== 'active' && (
                       <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                         <div className="flex items-center">
@@ -1260,11 +1594,12 @@ export default function Admin_AcademicSettings() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           <span className="text-blue-800 text-sm">
-                            <strong>Note:</strong> This school year is inactive. All terms are automatically archived and cannot be edited.
+                            <strong>Note:</strong> This school year is inactive. All terms and quarters are automatically archived and cannot be edited.
                           </span>
                         </div>
                       </div>
                     )}
+                  
                   {/* Show archived message when school year is not active */}
                   {selectedYear.status !== 'active' && (
                     <div className="mb-4 p-3 bg-yellow-100 text-yellow-800 rounded text-center font-semibold">
@@ -1272,34 +1607,21 @@ export default function Admin_AcademicSettings() {
                     </div>
                   )}
                   
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
-                      <thead>
-                        <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border">Term Name</th>
-                        <th className="p-3 border">Start Date</th>
-                        <th className="p-3 border">End Date</th>
-                        <th className="p-3 border">Status</th>
-                          <th className="p-3 border">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                      {terms.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" className="p-3 border text-center text-gray-500">
-                            No terms found
-                            </td>
-                          </tr>
-                      ) : (
-                        terms.map((term) => (
-                          <tr key={term._id}>
-                            <td className="p-3 border">{term.termName}</td>
-                            <td className="p-3 border">
-                              {new Date(term.startDate).toLocaleDateString()}
-                            </td>
-                            <td className="p-3 border">
-                              {new Date(term.endDate).toLocaleDateString()}
-                            </td>
-                            <td className="p-3 border">
+                  {/* Terms and Quarters Sections */}
+                  {terms.map((term) => {
+                    const termQuarters = quarters.filter(q => q.termName === term.termName);
+                    return (
+                      <div key={term._id} className="mb-6 bg-white border rounded-lg overflow-hidden">
+                        {/* Term Header */}
+                        <div className="bg-gray-50 px-4 py-3 border-b">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="text-lg font-semibold text-gray-900">{term.termName}</h4>
+                              <p className="text-sm text-gray-600">
+                                {new Date(term.startDate).toLocaleDateString()} - {new Date(term.endDate).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
                               {selectedYear.status !== 'active' ? (
                                 <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
                                   archived
@@ -1315,189 +1637,156 @@ export default function Admin_AcademicSettings() {
                                   {term.status === 'archived' ? 'archived' : term.status}
                                 </button>
                               )}
-                            </td>
-                            <td className="p-3 border">
-                              <div className="inline-flex space-x-2">
-                        <button
-                                  onClick={() => handleViewTerm(term)}
-                                  className="p-1 rounded hover:bg-blue-100 group relative"
-                                  title="View"
-                                >
-                                  {/* Heroicons Eye (black) */}
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12Z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
-                                  </svg>
-                        </button>
-                      {selectedYear.status === 'active' ? (
-                        <button
-                          onClick={() => handleEditTerm(term)}
-                          className={`p-1 rounded hover:bg-yellow-100 group relative ${
-                          selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                          title="Edit"
-                        disabled={selectedYear.status !== 'active'}
-                        >
-                          {/* Heroicons Pencil Square (black) */}
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
-                          </svg>
-                        </button>
-                      ) : (
-                        <button
-                          disabled
-                          className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
-                          title="Cannot edit terms of inactive school year"
-                        >
-                          {/* Heroicons Pencil Square (gray) */}
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
-                          </svg>
-                        </button>
-                      )}
-                                  {term.status === 'archived' && selectedYear.status === 'active' ? (
-                                    <button
-                                      onClick={() => handleActivateTerm(term)}
-                                      className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
-                                      title="Activate"
-                                    >
-                                      <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    </button>
-                                  ) : selectedYear.status !== 'active' ? (
-                                    <button
-                                      disabled
-                                      className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
-                                      title="School year is archived"
-                                    >
-                                      {/* Heroicons Minus (gray) */}
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M18 12H6" />
-                                      </svg>
-                                    </button>
-                                  ) : term.status === 'active' ? (
-                                    <button
-                                      onClick={() => handleArchiveTerm(term)}
-                                      className="p-1 rounded hover:bg-red-100 group relative"
-                                      title="Archive"
-                                    >
-                                      {/* Heroicons Trash (red) */}
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                      </svg>
-                                    </button>
-                                  ) : term.status === 'inactive' ? (
-                                    <button
-                                      onClick={() => handleArchiveTerm(term)}
-                                      className="p-1 rounded hover:bg-red-100 group relative"
-                                      title="Archive"
-                                    >
-                                      {/* Heroicons Trash (red) */}
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                      </svg>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={() => handleActivateTerm(term)}
-                                      className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
-                                      title="Activate"
-                                    >
-                                      <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Quarters Table */}
+                        <div className="p-4">
+                          <table className="min-w-full bg-white text-sm">
+                            <thead>
+                              <tr className="bg-gray-100 text-left">
+                                <th className="p-3 border">Quarter Name</th>
+                                <th className="p-3 border">Start Date</th>
+                                <th className="p-3 border">End Date</th>
+                                <th className="p-3 border">Status</th>
+                                <th className="p-3 border">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {termQuarters.length === 0 ? (
+                                <tr>
+                                  <td colSpan="5" className="p-3 border text-center text-gray-500">
+                                    No quarters found for {term.termName}
+                                  </td>
+                                </tr>
+                              ) : (
+                                termQuarters.map((quarter) => (
+                                  <tr key={quarter._id}>
+                                    <td className="p-3 border font-medium">{quarter.quarterName}</td>
+                                    <td className="p-3 border">
+                                      {new Date(quarter.startDate).toLocaleDateString()}
+                                    </td>
+                                    <td className="p-3 border">
+                                      {new Date(quarter.endDate).toLocaleDateString()}
+                                    </td>
+                                    <td className="p-3 border">
+                                      {selectedYear.status !== 'active' ? (
+                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                          archived
+                                        </span>
+                                      ) : (
+                                        <button
+                                          onClick={() => handleToggleQuarterStatus(quarter)}
+                                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer hover:shadow ${
+                                            quarter.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-red-100 hover:text-red-800' : 'bg-gray-100 text-gray-800 hover:bg-green-100 hover:text-green-800'
+                                          }`}
+                                          title={`Click to ${quarter.status === 'active' ? 'deactivate' : 'activate'} ${quarter.quarterName}`}
+                                        >
+                                          {quarter.status === 'archived' ? 'archived' : quarter.status}
+                                        </button>
+                                      )}
+                                    </td>
+                                    <td className="p-3 border">
+                                      <div className="inline-flex space-x-2">
+                                        <button
+                                          onClick={() => handleViewQuarter(quarter)}
+                                          className="p-1 rounded hover:bg-blue-100 group relative"
+                                          title="View"
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12Z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+                                          </svg>
+                                        </button>
+                                        {selectedYear.status === 'active' ? (
+                                          <button
+                                            onClick={() => handleEditQuarter(quarter)}
+                                            className="p-1 rounded hover:bg-yellow-100 group relative"
+                                            title="Edit"
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                            </svg>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            disabled
+                                            className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
+                                            title="Cannot edit quarters of inactive school year"
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                            </svg>
+                                          </button>
+                                        )}
+                                        {quarter.status === 'archived' && selectedYear.status === 'active' ? (
+                                          <button
+                                            onClick={() => handleActivateQuarter(quarter)}
+                                            className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
+                                            title="Activate"
+                                          >
+                                            <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                          </button>
+                                        ) : selectedYear.status !== 'active' ? (
+                                          <button
+                                            disabled
+                                            className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
+                                            title="School year is archived"
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M18 12H6" />
+                                            </svg>
+                                          </button>
+                                        ) : quarter.status === 'active' ? (
+                                          <button
+                                            onClick={() => handleArchiveQuarter(quarter)}
+                                            className="p-1 rounded hover:bg-red-100 group relative"
+                                            title="Archive"
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                            </svg>
+                                          </button>
+                                        ) : quarter.status === 'inactive' ? (
+                                          <button
+                                            onClick={() => handleArchiveQuarter(quarter)}
+                                            className="p-1 rounded hover:bg-red-100 group relative"
+                                            title="Archive"
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                            </svg>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            onClick={() => handleActivateQuarter(quarter)}
+                                            className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
+                                            title="Activate"
+                                          >
+                                            <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
                       </div>
           )}
 
-          {/* Add Term Modal */}
-          {showAddTermModal && (
-            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg shadow-xl w-96 p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold">Add New Term</h3>
-                                    <button
-                    onClick={() => setShowAddTermModal(false)}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                                    </button>
-                                  </div>
-
-                <form onSubmit={handleAddTerm}>
-                    <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Start Date
-                    </label>
-                      <input
-                    type="date"
-                    value={termFormData.startDate}
-                    onChange={(e) => setTermFormData({ ...termFormData, startDate: e.target.value })}
-                    className={`w-full p-2 border rounded-md ${
-                      selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                    required
-                    disabled={selectedYear && selectedYear.status !== 'active'}
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    End Date
-                  </label>
-                      <input
-                    type="date"
-                    value={termFormData.endDate}
-                    onChange={(e) => setTermFormData({ ...termFormData, endDate: e.target.value })}
-                    className={`w-full p-2 border rounded-md ${
-                      selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                    required
-                    disabled={selectedYear && selectedYear.status !== 'active'}
-                  />
-                    </div>
-
-                {termError && (
-                  <div className="mb-4 text-red-500 text-sm">
-                    {termError}
-                    </div>
-                )}
-
-                <div className="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddTermModal(false)}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                  >
-                    Cancel
-                        </button>
-                    <button
-                      type="submit"
-                    className={`px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 ${
-                      selectedYear && (selectedYear.status !== 'active' || terms.length >= 2) ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                    disabled={selectedYear && (selectedYear.status !== 'active' || terms.length >= 2)}
-                    >
-                    Add Term
-                    </button>
-                  </div>
-                </form>
-              </div>
-                        </div>
-                )}
               </div>
 
           {showCreateModal && (
@@ -1636,6 +1925,234 @@ export default function Admin_AcademicSettings() {
                     Activate Selected
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Add Term Modal */}
+          {showAddTermModal && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg shadow-xl w-96 p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Add New Term</h3>
+                  <button
+                    onClick={() => {
+                      setShowAddTermModal(false);
+                      setTermFormData({ startDate: '', endDate: '' });
+                      setTermError('');
+                    }}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddTerm}>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={termFormData.startDate}
+                      onChange={(e) => setTermFormData({ ...termFormData, startDate: e.target.value })}
+                      className={`w-full p-2 border rounded-md ${
+                        selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                      required
+                      disabled={selectedYear && selectedYear.status !== 'active'}
+                    />
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={termFormData.endDate}
+                      onChange={(e) => setTermFormData({ ...termFormData, endDate: e.target.value })}
+                      className={`w-full p-2 border rounded-md ${
+                        selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                      required
+                      disabled={selectedYear && selectedYear.status !== 'active'}
+                    />
+                  </div>
+
+                  {termError && (
+                    <div className="mb-4 text-red-500 text-sm">
+                      {termError}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddTermModal(false);
+                        setTermFormData({ startDate: '', endDate: '' });
+                        setTermError('');
+                      }}
+                      className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 ${
+                        selectedYear && (selectedYear.status !== 'active' || terms.length >= 2) ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                      disabled={selectedYear && (selectedYear.status !== 'active' || terms.length >= 2)}
+                    >
+                      Add Term
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Add Quarter Modal */}
+          {showAddQuarterModal && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg shadow-xl w-96 p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Add New Quarter</h3>
+                  <button
+                    onClick={() => {
+                      setShowAddQuarterModal(false);
+                      setQuarterFormData({ quarterName: '', termName: '', startDate: '', endDate: '' });
+                      setQuarterError('');
+                    }}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddQuarter}>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Term
+                    </label>
+                    <select
+                      value={quarterFormData.termName}
+                      onChange={(e) => {
+                        const selectedTerm = e.target.value;
+                        setQuarterFormData({ ...quarterFormData, termName: selectedTerm, quarterName: '' });
+                        
+                        // Set available quarters based on selected term
+                        if (selectedTerm === 'Term 1') {
+                          setAvailableQuarters([
+                            { value: 'Quarter 1', label: 'Quarter 1' },
+                            { value: 'Quarter 2', label: 'Quarter 2' }
+                          ]);
+                        } else if (selectedTerm === 'Term 2') {
+                          setAvailableQuarters([
+                            { value: 'Quarter 3', label: 'Quarter 3' },
+                            { value: 'Quarter 4', label: 'Quarter 4' }
+                          ]);
+                        } else {
+                          setAvailableQuarters([]);
+                        }
+                      }}
+                      className="w-full p-2 border rounded-md"
+                      required
+                    >
+                      <option value="">Select Term First</option>
+                      <option value="Term 1">Term 1</option>
+                      <option value="Term 2">Term 2</option>
+                    </select>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Quarter Name
+                    </label>
+                    <select
+                      value={quarterFormData.quarterName}
+                      onChange={(e) => setQuarterFormData({ ...quarterFormData, quarterName: e.target.value })}
+                      className="w-full p-2 border rounded-md"
+                      required
+                      disabled={!quarterFormData.termName}
+                    >
+                      <option value="">
+                        {quarterFormData.termName ? 'Select Quarter' : 'Select Term First'}
+                      </option>
+                      {availableQuarters.map(quarter => (
+                        <option key={quarter.value} value={quarter.value}>
+                          {quarter.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={quarterFormData.startDate}
+                      onChange={(e) => setQuarterFormData({ ...quarterFormData, startDate: e.target.value })}
+                      className={`w-full p-2 border rounded-md ${
+                        selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                      required
+                      disabled={selectedYear && selectedYear.status !== 'active'}
+                    />
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={quarterFormData.endDate}
+                      onChange={(e) => setQuarterFormData({ ...quarterFormData, endDate: e.target.value })}
+                      className={`w-full p-2 border rounded-md ${
+                        selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                      required
+                      disabled={selectedYear && selectedYear.status !== 'active'}
+                    />
+                  </div>
+
+                  {quarterError && (
+                    <div className="mb-4 text-red-500 text-sm">
+                      {quarterError}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddQuarterModal(false);
+                        setQuarterFormData({ quarterName: '', termName: '', startDate: '', endDate: '' });
+                        setQuarterError('');
+                      }}
+                      className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className={`px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 ${
+                        selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                      disabled={selectedYear && selectedYear.status !== 'active'}
+                    >
+                      Add Quarter
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}

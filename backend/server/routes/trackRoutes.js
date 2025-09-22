@@ -48,23 +48,25 @@ router.get('/termId/:termId', async (req, res) => {
 // Create a new track
 router.post('/', async (req, res) => {
   try {
-    const { trackName, schoolYear, termName } = req.body;
+    const { trackName, schoolYear, termName, quarterName } = req.body;
 
-    // Check if track already exists in the same school year and term
+    // Check if track already exists in the same school year, term, and quarter
     const existingTrack = await Track.findOne({
       trackName,
       schoolYear,
-      termName
+      termName,
+      quarterName
     });
 
     if (existingTrack) {
-      return res.status(400).json({ message: 'Track already exists in this term' });
+      return res.status(400).json({ message: 'Track already exists in this term and quarter' });
     }
 
     const track = new Track({
       trackName,
       schoolYear,
-      termName
+      termName,
+      quarterName
     });
 
     const savedTrack = await track.save();
@@ -78,18 +80,19 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { trackName, schoolYear, termName } = req.body;
+    const { trackName, schoolYear, termName, quarterName } = req.body;
 
     // Check if the new name would create a duplicate
     const existingTrack = await Track.findOne({
       trackName,
       schoolYear,
       termName,
+      quarterName,
       _id: { $ne: id } // Exclude the current track from the check
     });
 
     if (existingTrack) {
-      return res.status(400).json({ message: 'Track name already exists in this term' });
+      return res.status(400).json({ message: 'Track name already exists in this term and quarter' });
     }
 
     // Get the original track to compare for cascading updates
@@ -100,7 +103,7 @@ router.patch('/:id', async (req, res) => {
 
     const updatedTrack = await Track.findByIdAndUpdate(
       id,
-      { trackName, schoolYear, termName },
+      { trackName, schoolYear, termName, quarterName },
       { new: true, runValidators: true }
     );
 
@@ -344,7 +347,8 @@ router.post('/bulk', async (req, res) => {
       $or: tracks.map(track => ({
         trackName: new RegExp(`^${track.trackName.trim()}$`, 'i'), // Case-insensitive match
         schoolYear: track.schoolYear,
-        termName: track.termName
+        termName: track.termName,
+        quarterName: track.quarterName
       }))
     });
 
@@ -361,6 +365,7 @@ router.post('/bulk', async (req, res) => {
         trackName: track.trackName.trim(),
         schoolYear: track.schoolYear,
         termName: track.termName,
+        quarterName: track.quarterName,
         status: 'active'
       }))
     );

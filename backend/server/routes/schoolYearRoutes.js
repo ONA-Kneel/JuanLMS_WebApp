@@ -3,6 +3,7 @@ import SchoolYear from '../models/SchoolYear.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import FacultyAssignment from '../models/FacultyAssignment.js';
 import Term from '../models/Term.js';
+import Quarter from '../models/Quarter.js';
 import Track from '../models/Track.js';
 import Strand from '../models/Strand.js';
 import Section from '../models/Section.js';
@@ -83,10 +84,91 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const savedYear = await schoolYear.save();
 
+    // Create 2 terms with 2 quarters each for the new school year
+    const schoolYearName = `${schoolYearStart}-${schoolYearStart + 1}`;
+    
+    // Calculate default dates for terms and quarters
+    const term1Start = new Date(`${schoolYearStart}-06-01`); // June 1st
+    const term1End = new Date(`${schoolYearStart}-11-30`); // November 30th
+    const term2Start = new Date(`${schoolYearStart}-12-01`); // December 1st
+    const term2End = new Date(`${schoolYearStart + 1}-05-31`); // May 31st of next year
+
+    // Create Term 1
+    const term1 = new Term({
+      termName: 'Term 1',
+      schoolYear: schoolYearName,
+      startDate: term1Start,
+      endDate: term1End,
+      status: setAsActive ? 'active' : 'inactive'
+    });
+    await term1.save();
+
+    // Create Term 2
+    const term2 = new Term({
+      termName: 'Term 2',
+      schoolYear: schoolYearName,
+      startDate: term2Start,
+      endDate: term2End,
+      status: 'inactive' // Always start as inactive
+    });
+    await term2.save();
+
+    // Create quarters for Term 1
+    const q1Start = new Date(`${schoolYearStart}-06-01`);
+    const q1End = new Date(`${schoolYearStart}-08-31`);
+    const q2Start = new Date(`${schoolYearStart}-09-01`);
+    const q2End = new Date(`${schoolYearStart}-11-30`);
+
+    const quarter1 = new Quarter({
+      quarterName: 'Quarter 1',
+      schoolYear: schoolYearName,
+      termName: 'Term 1',
+      startDate: q1Start,
+      endDate: q1End,
+      status: setAsActive ? 'active' : 'inactive'
+    });
+    await quarter1.save();
+
+    const quarter2 = new Quarter({
+      quarterName: 'Quarter 2',
+      schoolYear: schoolYearName,
+      termName: 'Term 1',
+      startDate: q2Start,
+      endDate: q2End,
+      status: 'inactive' // Always start as inactive
+    });
+    await quarter2.save();
+
+    // Create quarters for Term 2
+    const q3Start = new Date(`${schoolYearStart}-12-01`);
+    const q3End = new Date(`${schoolYearStart + 1}-02-28`);
+    const q4Start = new Date(`${schoolYearStart + 1}-03-01`);
+    const q4End = new Date(`${schoolYearStart + 1}-05-31`);
+
+    const quarter3 = new Quarter({
+      quarterName: 'Quarter 3',
+      schoolYear: schoolYearName,
+      termName: 'Term 2',
+      startDate: q3Start,
+      endDate: q3End,
+      status: 'inactive' // Always start as inactive
+    });
+    await quarter3.save();
+
+    const quarter4 = new Quarter({
+      quarterName: 'Quarter 4',
+      schoolYear: schoolYearName,
+      termName: 'Term 2',
+      startDate: q4Start,
+      endDate: q4End,
+      status: 'inactive' // Always start as inactive
+    });
+    await quarter4.save();
+
     // If creating as inactive, archive any existing terms for this school year
     if (!setAsActive) {
-      const schoolYearName = `${schoolYearStart}-${schoolYearStart + 1}`;
       await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
+      await Quarter.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
     }
 
     // Create audit log entry via existing audit route (ensures consistent storage)

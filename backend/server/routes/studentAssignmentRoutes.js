@@ -19,15 +19,10 @@ router.get('/', authenticateToken, async (req, res) => {
 
     const assignments = await StudentAssignment.find(query).populate('studentId');
 
-    // Transform data to include student names directly
-    const transformedAssignments = [];
-    assignments.forEach(assignment => {
-      if (
-        assignment.studentId &&
-        assignment.studentId.firstname &&
-        assignment.studentId.lastname
-      ) {
-        transformedAssignments.push({
+    // Transform data to include student names directly and support manual entries
+    const transformedAssignments = assignments.map(assignment => {
+      if (assignment.studentId && assignment.studentId.firstname && assignment.studentId.lastname) {
+        return {
           _id: assignment._id,
           studentId: assignment.studentId._id,
           studentName: `${assignment.studentId.firstname} ${assignment.studentId.lastname}`,
@@ -42,8 +37,21 @@ router.get('/', authenticateToken, async (req, res) => {
           middlename: assignment.studentId.middlename,
           firstname: assignment.studentId.firstname,
           lastname: assignment.studentId.lastname,
-        });
+        };
       }
+      // Manual entry (no linked user)
+      return {
+        _id: assignment._id,
+        studentId: assignment.studentId || null,
+        studentName: assignment.studentName || '',
+        gradeLevel: assignment.gradeLevel,
+        trackName: assignment.trackName,
+        strandName: assignment.strandName,
+        sectionName: assignment.sectionName,
+        termId: assignment.termId,
+        status: assignment.status,
+        schoolID: assignment.studentSchoolID || '',
+      };
     });
 
     res.status(200).json(transformedAssignments);
@@ -56,7 +64,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create a new student assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { studentId, studentName, trackName, strandName, sectionName, gradeLevel, termId } = req.body;
+    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId } = req.body;
 
     // Get term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -102,20 +110,18 @@ router.post('/', authenticateToken, async (req, res) => {
         }
       }
 
-      if (!student) {
-        console.log('All student search attempts failed');
-        return res.status(400).json({ message: `Student '${studentName}' not found` });
+      if (student) {
+        console.log('Found student:', student.firstname, student.lastname);
+        actualStudentId = student._id;
       }
-      console.log('Found student:', student.firstname, student.lastname);
-      actualStudentId = student._id;
     }
 
-    if (!actualStudentId) {
-      return res.status(400).json({ message: 'studentId or studentName is required' });
-    }
+    // For manual entries, allow creation without an existing student
 
     const assignment = new StudentAssignment({
-      studentId: actualStudentId,
+      studentId: actualStudentId || undefined,
+      studentName: !actualStudentId ? studentName : undefined,
+      studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
       trackName,
       strandName,
       sectionName,
@@ -143,7 +149,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
   const errors = [];
 
   for (const assignmentData of assignments) {
-    const { studentId, studentName, trackName, strandName, sectionName, gradeLevel, termId } = assignmentData;
+    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId } = assignmentData;
 
     try {
       const term = await Term.findById(termId);
@@ -191,22 +197,18 @@ router.post('/bulk', authenticateToken, async (req, res) => {
           }
         }
 
-        if (!student) {
-          console.log('All student search attempts failed');
-          errors.push({ assignment: assignmentData, message: `Student '${studentName}' not found` });
-          continue;
+        if (student) {
+          console.log('Found student:', student.firstname, student.lastname);
+          actualStudentId = student._id;
         }
-        console.log('Found student:', student.firstname, student.lastname);
-        actualStudentId = student._id;
       }
 
-      if (!actualStudentId) {
-        errors.push({ assignment: assignmentData, message: 'studentId or studentName is required' });
-        continue;
-      }
+      // allow manual entries when no matching student is found
 
       const newAssignment = new StudentAssignment({
-        studentId: actualStudentId,
+        studentId: actualStudentId || undefined,
+        studentName: !actualStudentId ? studentName : undefined,
+        studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
         trackName,
         strandName,
         sectionName,

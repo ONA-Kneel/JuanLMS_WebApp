@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -48,7 +48,7 @@ const validateFacultySchoolIDFormat = (schoolID) => {
   return facultySchoolIDPattern.test(trimmedID);
 };
 
-export default function TermDetails() {
+export default function TermDetails({ termData: propTermData, quarterData }) {
   const { termId } = useParams();
   const navigate = useNavigate();
   const importFileInputRef = useRef(null); // Initialize useRef for the file input
@@ -127,6 +127,7 @@ export default function TermDetails() {
   const [showFacultySuggestions, setShowFacultySuggestions] = useState(false);
   const [facultySearchResults, setFacultySearchResults] = useState([]); // Separate state for search results
   const [studentSearchTerm, setStudentSearchTerm] = useState('');
+  const [studentManualId, setStudentManualId] = useState('');
   const [showStudentSuggestions, setShowStudentSuggestions] = useState(false);
   const [studentSearchResults, setStudentSearchResults] = useState([]); // Separate state for search results
 
@@ -268,7 +269,16 @@ export default function TermDetails() {
 
   // In a real application, you would fetch term details here using termId
   useEffect(() => {
-    // Example fetch (replace with actual API call)
+    // If termData is provided as props (from quarter view), use it directly
+    if (propTermData) {
+      console.log('Term details loaded from props:', propTermData);
+      setTermDetails(propTermData);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    // Otherwise, fetch from API using termId from URL params
     const fetchTerm = async () => {
       try {
         setLoading(true);
@@ -296,8 +306,10 @@ export default function TermDetails() {
       }
     };
 
-    fetchTerm();
-  }, [termId]);
+    if (termId) {
+      fetchTerm();
+    }
+  }, [termId, propTermData]);
 
   // Fetch tracks when term details are loaded
   useEffect(() => {
@@ -500,7 +512,8 @@ export default function TermDetails() {
         body: JSON.stringify({
           trackName: trackFormData.trackName.trim(),
           schoolYear: termDetails.schoolYear,
-          termName: termDetails.termName
+          termName: termDetails.termName,
+          quarterName: quarterData ? quarterData.quarterName : undefined
         })
       });
 
@@ -516,11 +529,11 @@ export default function TermDetails() {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-              action: 'Track Added',
-              details: `Added Track "${newTrack.trackName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
-              userRole: 'admin'
-            })
+              body: JSON.stringify({
+                action: 'Track Added',
+                details: `Added Track "${newTrack.trackName}" for ${termDetails.schoolYear} ${termDetails.termName}${quarterData ? ` (${quarterData.quarterName})` : ''}`,
+                userRole: 'admin'
+              })
           }).catch(() => {});
         } catch {}
         window.alert('Track added successfully!');
@@ -916,7 +929,8 @@ export default function TermDetails() {
           strandName: selectedStrand.strandName,
           gradeLevel: sectionFormData.gradeLevel,
           schoolYear: termDetails.schoolYear,
-          termName: termDetails.termName
+          termName: termDetails.termName,
+          quarterName: quarterData ? quarterData.quarterName : undefined
         })
       });
 
@@ -934,7 +948,7 @@ export default function TermDetails() {
             },
             body: JSON.stringify({
               action: 'Section Added',
-              details: `Added Section "${newSection.sectionName}" (Grade ${newSection.gradeLevel}) under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+              details: `Added Section "${newSection.sectionName}" (Grade ${newSection.gradeLevel}) under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}${quarterData ? ` (${quarterData.quarterName})` : ''}`,
               userRole: 'admin'
             })
           }).catch(() => {});
@@ -1203,35 +1217,12 @@ export default function TermDetails() {
   const handleChangeStudentForm = async (e) => {
     const { name, value } = e.target;
 
-    if (name === "studentSearch") {
+  if (name === "studentSearch") {
       setStudentSearchTerm(value);
-      setShowStudentSuggestions(true);
       setStudentFormData(prev => ({ ...prev, studentId: '' }));
-
-      if (value.trim()) {
-        try {
-          const token = localStorage.getItem('token');
-          const res = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(value)}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            const studentUsers = data.filter(user => user.role === 'students');
-            // Also filter by school ID if the search term matches a school ID pattern
-            const filteredStudents = studentUsers.filter(student => {
-              const searchTerm = value.toLowerCase();
-              const fullName = `${student.firstname} ${student.lastname}`.toLowerCase();
-              const schoolID = (student.schoolID || '').toLowerCase();
-              return fullName.includes(searchTerm) || schoolID.includes(searchTerm);
-            });
-            setStudentSearchResults(filteredStudents);
-          }
-        } catch (err) {
-          console.error("Error searching students:", err);
-        }
-      }
+      setShowStudentSuggestions(false);
+      try { setStudentSearchResults([]); } catch {}
+      return;
     } else {
       setStudentFormData(prev => ({
         ...prev,
@@ -1329,10 +1320,10 @@ export default function TermDetails() {
   }, [faculties, tracks, strands, sections, termDetails, fetchFacultyAssignments]);
 
   useEffect(() => {
-    if (termDetails && students.length > 0 && tracks.length > 0 && strands.length > 0 && sections.length > 0) {
+    if (termDetails) {
       fetchStudentAssignments();
     }
-  }, [students, tracks, strands, sections, termDetails, fetchStudentAssignments]);
+  }, [termDetails, fetchStudentAssignments]);
 
   // Handle Add Faculty Assignment (updated to use facultySearchTerm and selected facultyId)
   const handleAddFacultyAssignment = async (e) => {
@@ -1383,6 +1374,7 @@ export default function TermDetails() {
           subjectName: facultyFormData.subjectName,
           gradeLevel: facultyFormData.gradeLevel,
           termId: termDetails._id, // Add termId to the assignment
+          quarterName: quarterData ? quarterData.quarterName : undefined
         })
       });
 
@@ -1398,7 +1390,7 @@ export default function TermDetails() {
             },
             body: JSON.stringify({
               action: 'Faculty Assignment Added',
-              details: `Assigned Faculty "${facultyToAssign.firstname} ${facultyToAssign.lastname}" to Section "${selectedSection.sectionName}" (Grade ${facultyFormData.gradeLevel}) for Subject "${facultyFormData.subjectName}" under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+              details: `Assigned Faculty "${facultyToAssign.firstname} ${facultyToAssign.lastname}" to Section "${selectedSection.sectionName}" (Grade ${facultyFormData.gradeLevel}) for Subject "${facultyFormData.subjectName}" under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}${quarterData ? ` (${quarterData.quarterName})` : ''}`,
               userRole: 'admin'
             })
           }).catch(() => {});
@@ -1627,8 +1619,10 @@ export default function TermDetails() {
     e.preventDefault();
     setStudentError('');
 
-    if (!studentFormData.studentId || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
-      setStudentError('All fields are required for student assignment.');
+    // Allow either selecting an existing student (studentId) OR typing a name manually (studentSearchTerm)
+    const hasStudent = Boolean(studentFormData.studentId) || (studentSearchTerm && studentSearchTerm.trim().length > 0);
+    if (!hasStudent || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
+      setStudentError('All fields are required for student assignment. Select a student or type a name.');
       return;
     }
 
@@ -1637,7 +1631,7 @@ export default function TermDetails() {
     const selectedStrand = strands.find(strand => strand._id === studentFormData.strandId);
     const selectedSection = sections.find(sec => sec._id === studentFormData.sectionIds[0]);
 
-    if (!studentToAssign || !selectedTrack || !selectedStrand || !selectedSection) {
+    if (!selectedTrack || !selectedStrand || !selectedSection) {
       setStudentError('Invalid selections for student assignment.');
       return;
     }
@@ -1651,14 +1645,27 @@ export default function TermDetails() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          studentId: studentToAssign._id,
-          trackName: selectedTrack.trackName,
-          strandName: selectedStrand.strandName,
-          sectionName: selectedSection.sectionName,
-          gradeLevel: studentFormData.gradeLevel, // Add gradeLevel
-          termId: termDetails._id,
-        })
+        body: JSON.stringify((() => {
+          const basePayload = {
+            trackName: selectedTrack.trackName,
+            strandName: selectedStrand.strandName,
+            sectionName: selectedSection.sectionName,
+            gradeLevel: studentFormData.gradeLevel,
+            termId: termDetails._id,
+            quarterName: quarterData ? quarterData.quarterName : undefined
+          };
+          if (studentToAssign) {
+            return { ...basePayload, studentId: studentToAssign._id };
+          }
+          // For manual entries, DO NOT send studentId (backend expects ObjectId). Send school ID and name instead.
+          const manualSchoolId = studentManualId.trim();
+          const manualName = studentSearchTerm.trim();
+          const payload = { ...basePayload, studentName: manualName };
+          if (manualSchoolId) {
+            payload.studentSchoolID = manualSchoolId;
+          }
+          return payload;
+        })())
       });
 
       if (res.ok) {
@@ -1673,7 +1680,7 @@ export default function TermDetails() {
             },
             body: JSON.stringify({
               action: 'Student Assignment Added',
-              details: `Assigned Student "${studentToAssign.firstname} ${studentToAssign.lastname}" to Section "${selectedSection.sectionName}" (Grade ${studentFormData.gradeLevel}) under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+              details: `Assigned Student "${studentToAssign ? `${studentToAssign.firstname} ${studentToAssign.lastname}` : studentSearchTerm.trim()}" to Section "${selectedSection.sectionName}" (Grade ${studentFormData.gradeLevel}) under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}${quarterData ? ` (${quarterData.quarterName})` : ''}`,
               userRole: 'admin'
             })
           }).catch(() => {});
@@ -1681,6 +1688,8 @@ export default function TermDetails() {
         window.alert('Student assigned successfully!');
         fetchStudentAssignments();
         setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+        setStudentSearchTerm('');
+        setStudentManualId('');
       } else {
         const data = await res.json();
         setStudentError(data.message || 'Failed to assign student');
@@ -3660,7 +3669,8 @@ export default function TermDetails() {
         body: JSON.stringify({
           ...subjectFormData,
           schoolYear: termDetails.schoolYear,
-          termName: termDetails.termName
+          termName: termDetails.termName,
+          quarterName: quarterData ? quarterData.quarterName : undefined
         })
       });
       if (res.ok) {
@@ -3677,7 +3687,7 @@ export default function TermDetails() {
             },
             body: JSON.stringify({
               action: 'Subject Added',
-              details: `Added Subject "${newSubject.subjectName}" (Grade ${newSubject.gradeLevel}) under Track "${newSubject.trackName}" / Strand "${newSubject.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}`,
+              details: `Added Subject "${newSubject.subjectName}" (Grade ${newSubject.gradeLevel}) under Track "${newSubject.trackName}" / Strand "${newSubject.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}${quarterData ? ` (${quarterData.quarterName})` : ''}`,
               userRole: 'admin'
             })
           }).catch(() => {});
@@ -4113,18 +4123,17 @@ export default function TermDetails() {
       const wb = XLSX.utils.book_new();
       const activeTracks = tracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
       const tracksData = [
-        ['Object ID', 'Track Name', 'School Year', 'Term Name', 'Status'],
+        ['Object ID', 'Track Name', 'Status'],
         ...activeTracks.map(track => [
           track._id,
           track.trackName,
-          track.schoolYear,
-          track.termName,
           track.status
         ])
       ];
       const ws = XLSX.utils.aoa_to_sheet(tracksData);
       XLSX.utils.book_append_sheet(wb, ws, 'Active Tracks');
-      XLSX.writeFile(wb, 'active_tracks.xlsx');
+      const exportFileName = `${termDetails.schoolYear} - ${termDetails.termName}${quarterData ? ` - ${quarterData.quarterName}` : ''} - tracks.xlsx`;
+      XLSX.writeFile(wb, exportFileName);
       // Audit log: Extract Tracks
       try {
         const token = localStorage.getItem('token');
@@ -4990,7 +4999,7 @@ Validation issues (${skippedCount} items):
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">
-              {termDetails.termName} ({termDetails.schoolYear})
+              {quarterData ? quarterData.quarterName : termDetails.termName} ({termDetails.schoolYear})
             </h2>
             <p className="text-base md:text-lg">
               {new Date().toLocaleDateString("en-US", {
@@ -6846,6 +6855,18 @@ Validation issues (${skippedCount} items):
                         className="space-y-4 mt-6"
                       >
                         <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="studentManualId" className="block text-sm font-medium text-gray-700 mb-1">Student School ID</label>
+                            <input
+                              type="text"
+                              id="studentManualId"
+                              value={studentManualId}
+                              onChange={(e) => setStudentManualId(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="YY-00000 or any ID"
+                              disabled={termDetails.status === 'archived'}
+                            />
+                          </div>
                           <div className="relative">
                             <label htmlFor="studentSearch" className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
                             <input
@@ -6854,30 +6875,11 @@ Validation issues (${skippedCount} items):
                               name="studentSearch"
                               value={studentSearchTerm}
                               onChange={handleChangeStudentForm}
-                              onFocus={() => setShowStudentSuggestions(true)}
-                              onBlur={() => setTimeout(() => setShowStudentSuggestions(false), 200)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Search Student by name or School ID..."
+                              placeholder="Type to search or enter a new name..."
                               required
                               disabled={termDetails.status === 'archived'}
                             />
-                            {showStudentSuggestions && studentSearchTerm.length > 0 && (
-                              <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
-                                {studentSearchResults.map(student => (
-                                  <li
-                                    key={student._id}
-                                    onClick={() => handleSelectStudent(student)}
-                                    className="p-2 hover:bg-gray-100 cursor-pointer"
-                                  >
-                                    <div className="font-medium">{student.firstname} {student.lastname}</div>
-                                    <div className="text-sm text-gray-500">School ID: {student.schoolID || 'N/A'}</div>
-                                  </li>
-                                ))}
-                                {students.length === 0 && (
-                                  <li className="p-2 text-gray-500">No matching students</li>
-                                )}
-                              </ul>
-                            )}
                           </div>
                           <div>
                             <label htmlFor="trackNameStudent" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
@@ -7106,7 +7108,7 @@ Validation issues (${skippedCount} items):
                           const student = students.find(s => s._id === assignment.studentId);
                           return (
                             <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
-                              <td className="p-3 border">{student?.schoolID || assignment.studentSchoolID || ''}</td>
+                              <td className="p-3 border">{student?.schoolID || assignment.studentSchoolID || assignment.schoolID || ''}</td>
                               <td className="p-3 border">{assignment.studentName || 'Unknown'}</td>
                               <td className="p-3 border">{assignment.trackName}</td>
                               <td className="p-3 border">{assignment.strandName}</td>

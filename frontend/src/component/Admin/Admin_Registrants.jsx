@@ -4,7 +4,7 @@ import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import ExportModal from './ExportModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const statusColors = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -30,8 +30,10 @@ function formatSchoolId(schoolId) {
 
 export default function Admin_Registrants() {
   const [registrants, setRegistrants] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
   const [selectedDate, setSelectedDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [studentAssignments, setStudentAssignments] = useState([]);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectionNote, setRejectionNote] = useState('Application requirements not met');
@@ -48,12 +50,13 @@ export default function Admin_Registrants() {
     setLoading(true);
     setError('');
     try {
-      const params = {};
+      const params = { page: pagination.page, limit: pagination.limit };
       if (selectedDate) params.date = selectedDate;
       if (statusFilter !== 'all') params.status = statusFilter;
       const token = localStorage.getItem("token");
       const res = await axios.get(`${API_BASE}/api/registrants`, { params, headers: { Authorization: `Bearer ${token}` } });
-      setRegistrants(res.data);
+      setRegistrants(res.data?.data || []);
+      if (res.data?.pagination) setPagination(res.data.pagination);
     } catch (err) {
       console.error('Error fetching registrants:', err);
       let errorMessage = 'Failed to fetch registrants. Please try again.';
@@ -128,7 +131,56 @@ export default function Admin_Registrants() {
 
   useEffect(() => {
     fetchRegistrants();
-  }, [selectedDate, statusFilter]);
+  }, [selectedDate, statusFilter, pagination.page, pagination.limit]);
+
+  // Fetch student assignments for the active term to validate registrants
+  useEffect(() => {
+    async function fetchStudentAssignments() {
+      if (!currentTerm) return;
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/api/student-assignments`, {
+          params: { termId: currentTerm._id },
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setStudentAssignments(res.data || []);
+      } catch (err) {
+        // Silent fail; validation column will show unknown
+        console.warn('Failed to fetch student assignments for validation');
+        setStudentAssignments([]);
+      }
+    }
+    fetchStudentAssignments();
+  }, [currentTerm]);
+
+  const normalizeName = (first, middle, last) => {
+    const parts = [first || '', middle || '', last || '']
+      .map(s => (s || '').trim())
+      .filter(Boolean);
+    return parts.join(' ').replace(/\s+/g, ' ').toLowerCase();
+  };
+
+  const validateAgainstAssignments = (r) => {
+    const registrantName = normalizeName(r.firstName, r.middleName, r.lastName);
+    const registrantSchoolId = (r.schoolID || '').trim();
+    const track = (r.trackName || '').trim().toLowerCase();
+    const strand = (r.strandName || '').trim().toLowerCase();
+    const section = (r.sectionName || '').trim().toLowerCase();
+
+    const matched = studentAssignments.find(a => {
+      const assignmentName = (a.studentName || '').trim().toLowerCase();
+      const assignmentSchoolId = (a.schoolID || a.studentSchoolID || '').trim();
+      const aTrack = (a.trackName || '').trim().toLowerCase();
+      const aStrand = (a.strandName || '').trim().toLowerCase();
+      const aSection = (a.sectionName || '').trim().toLowerCase();
+      return assignmentName === registrantName &&
+             assignmentSchoolId === registrantSchoolId &&
+             aTrack === track &&
+             aStrand === strand &&
+             aSection === section;
+    });
+    return !!matched;
+  };
 
   // Approve registrant
   const handleApprove = async (id) => {
@@ -371,7 +423,7 @@ export default function Admin_Registrants() {
         
         {/* Results Count */}
         <div className="mb-4 text-sm text-gray-600">
-          Showing {filteredRegistrants.length} of {registrants.length} registrants
+          Showing {registrants.length} of {pagination.total} registrants | Page {pagination.page} of {pagination.totalPages}
           {statusFilter !== 'all' && (
             <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded ml-2 text-xs">
               Status: {statusFilter}
@@ -392,6 +444,10 @@ export default function Admin_Registrants() {
               <thead>
                 <tr className="bg-gray-50 text-left">
                   <th className="p-3 border-b font-semibold text-gray-700">School ID</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Track</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Strand</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Section</th>
+                  <th className="p-3 border-b font-semibold text-gray-700">Validation</th>
                   <th className="p-3 border-b font-semibold text-gray-700">First Name</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Middle Name</th>
                   <th className="p-3 border-b font-semibold text-gray-700">Last Name</th>
@@ -404,6 +460,10 @@ export default function Admin_Registrants() {
                 </tr>
                 <tr className="bg-white text-left">
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search School ID" /></th>
+                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Track" /></th>
+                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Strand" /></th>
+                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Section" /></th>
+                  <th className="p-2 border-b"></th>
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search First Name" /></th>
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Middle Name" /></th>
                   <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Last Name" /></th>
@@ -427,11 +487,21 @@ export default function Admin_Registrants() {
               </thead>
               <tbody>
                 {filteredRegistrants.length === 0 ? (
-                  <tr><td colSpan={10} className="text-center p-4 text-gray-500">No registrants found.</td></tr>
+                  <tr><td colSpan={12} className="text-center p-4 text-gray-500">No registrants found.</td></tr>
                 ) : (
                   filteredRegistrants.map((r, idx) => (
                     <tr key={r._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
                       <td className="p-3 border-b align-middle">{formatSchoolId(r.schoolID)}</td>
+                      <td className="p-3 border-b align-middle">{r.trackName || '-'}</td>
+                      <td className="p-3 border-b align-middle">{r.strandName || '-'}</td>
+                      <td className="p-3 border-b align-middle">{r.sectionName || '-'}</td>
+                      <td className="p-3 border-b align-middle">
+                        {validateAgainstAssignments(r) ? (
+                          <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Account exists in Student Assignment</span>
+                        ) : (
+                          <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Account does not exist</span>
+                        )}
+                      </td>
                       <td className="p-3 border-b align-middle">{r.firstName}</td>
                       <td className="p-3 border-b align-middle">{r.middleName}</td>
                       <td className="p-3 border-b align-middle">{r.lastName}</td>
@@ -515,6 +585,11 @@ export default function Admin_Registrants() {
                 )}
               </tbody>
             </table>
+          <div className="flex justify-center items-center gap-2 mt-4">
+            <button className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50" onClick={() => setPagination(p => ({ ...p, page: Math.max(1, p.page - 1) }))} disabled={pagination.page === 1}>{'<'}</button>
+            <span className="text-sm">Page {pagination.page} of {pagination.totalPages}</span>
+            <button className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50" onClick={() => setPagination(p => ({ ...p, page: Math.min(p.totalPages, p.page + 1) }))} disabled={pagination.page >= pagination.totalPages}>{'>'}</button>
+          </div>
           </div>
         )}
         {/* Reject Modal */}
