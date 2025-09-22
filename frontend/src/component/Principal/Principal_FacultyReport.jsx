@@ -276,6 +276,12 @@ export default function Principal_FacultyReport() {
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const chartCanvasRef = useRef(null);
   const chartInstanceRef = useRef(null);
+  const sectionChartCanvasRef = useRef(null);
+  const trackChartCanvasRef = useRef(null);
+  const strandChartCanvasRef = useRef(null);
+  const sectionChartInstanceRef = useRef(null);
+  const trackChartInstanceRef = useRef(null);
+  const strandChartInstanceRef = useRef(null);
 
   // Tab state
   const [activeTab, setActiveTab] = useState('activities');
@@ -961,8 +967,87 @@ export default function Principal_FacultyReport() {
       },
       options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
     });
-    return () => { if (chartInstanceRef.current) chartInstanceRef.current.destroy(); };
-  }, [showAnalysisModal, assignmentsCount, quizzesCount]);
+    // Build distribution charts for Section, Track, Strand
+    const buildCounts = (items, key) => {
+      const map = new Map();
+      for (const it of items) {
+        const label = (it[key] || 'Unknown');
+        map.set(label, (map.get(label) || 0) + 1);
+      }
+      const labels = Array.from(map.keys());
+      const data = Array.from(map.values());
+      return { labels, data };
+    };
+    const sectionDist = buildCounts(filteredActivities, 'sectionName');
+    const trackDist = buildCounts(filteredActivities, 'trackName');
+    const strandDist = buildCounts(filteredActivities, 'strandName');
+
+    const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316','#22c55e','#6366f1','#e11d48','#14b8a6'];
+    const toColors = (n) => Array.from({ length: n }, (_, i) => palette[i % palette.length]);
+
+    const secCanvas = sectionChartCanvasRef.current;
+    const trkCanvas = trackChartCanvasRef.current;
+    const strCanvas = strandChartCanvasRef.current;
+
+    if (sectionChartInstanceRef.current) sectionChartInstanceRef.current.destroy();
+    if (trackChartInstanceRef.current) trackChartInstanceRef.current.destroy();
+    if (strandChartInstanceRef.current) strandChartInstanceRef.current.destroy();
+
+    if (secCanvas && sectionDist.data.reduce((a,b)=>a+b,0) > 0) {
+      sectionChartInstanceRef.current = new Chart(secCanvas.getContext('2d'), {
+        type: 'pie',
+        data: {
+          labels: sectionDist.labels,
+          datasets: [{
+            data: sectionDist.data,
+            backgroundColor: toColors(sectionDist.data.length),
+            borderColor: '#ffffff',
+            borderWidth: 2
+          }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
+      });
+    }
+
+    if (trkCanvas && trackDist.data.reduce((a,b)=>a+b,0) > 0) {
+      trackChartInstanceRef.current = new Chart(trkCanvas.getContext('2d'), {
+        type: 'pie',
+        data: {
+          labels: trackDist.labels,
+          datasets: [{
+            data: trackDist.data,
+            backgroundColor: toColors(trackDist.data.length),
+            borderColor: '#ffffff',
+            borderWidth: 2
+          }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
+      });
+    }
+
+    if (strCanvas && strandDist.data.reduce((a,b)=>a+b,0) > 0) {
+      strandChartInstanceRef.current = new Chart(strCanvas.getContext('2d'), {
+        type: 'pie',
+        data: {
+          labels: strandDist.labels,
+          datasets: [{
+            data: strandDist.data,
+            backgroundColor: toColors(strandDist.data.length),
+            borderColor: '#ffffff',
+            borderWidth: 2
+          }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
+      });
+    }
+
+    return () => {
+      if (chartInstanceRef.current) chartInstanceRef.current.destroy();
+      if (sectionChartInstanceRef.current) sectionChartInstanceRef.current.destroy();
+      if (trackChartInstanceRef.current) trackChartInstanceRef.current.destroy();
+      if (strandChartInstanceRef.current) strandChartInstanceRef.current.destroy();
+    };
+  }, [showAnalysisModal, assignmentsCount, quizzesCount, filteredActivities]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -1760,8 +1845,24 @@ export default function Principal_FacultyReport() {
                   </div>
                   <div className="text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(before) }} />
                   {idx !== -1 && (
-                    <div className="flex items-center justify-center py-3">
-                      <canvas ref={chartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                    <div className="flex flex-col gap-6 py-3">
+                      <div className="flex items-center justify-center">
+                        <canvas ref={chartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="flex flex-col items-center">
+                          <div className="text-sm font-medium mb-2">By Section</div>
+                          <canvas ref={sectionChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <div className="text-sm font-medium mb-2">By Track</div>
+                          <canvas ref={trackChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <div className="text-sm font-medium mb-2">By Strand</div>
+                          <canvas ref={strandChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                        </div>
+                      </div>
                     </div>
                   )}
                   <div className="text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(after) }} />
