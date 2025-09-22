@@ -83,8 +83,11 @@ export default function Faculty_Grades() {
   const [loading, setLoading] = useState(true);
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
+  const [selectedQuarter, setSelectedQuarter] = useState('Q1');
   const [students, setStudents] = useState([]);
   const [grades, setGrades] = useState({});
+  const [quarterlyGrades, setQuarterlyGrades] = useState({}); // Store quarterly grades for each quarter
+  const [quarterData, setQuarterData] = useState({}); // Store separate data for each quarter
   const [_subjectInfo, _setSubjectInfo] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
   const [_currentFacultyID, setCurrentFacultyID] = useState(null);
@@ -187,7 +190,9 @@ export default function Faculty_Grades() {
       
       if (assignmentsResponse.ok) {
         assignmentsData = await assignmentsResponse.json();
-        console.log('Assignments fetched:', assignmentsData);
+        // Filter assignments by selected quarter
+        assignmentsData = assignmentsData.filter(assignment => assignment.quarter === selectedQuarter);
+        console.log(`Assignments fetched for ${selectedQuarter}:`, assignmentsData);
         setAssignments(assignmentsData);
       } else {
         console.error('Failed to fetch assignments:', assignmentsResponse.status, assignmentsResponse.statusText);
@@ -200,7 +205,9 @@ export default function Faculty_Grades() {
       
       if (quizzesResponse.ok) {
         quizzesData = await quizzesResponse.json();
-        console.log('Quizzes fetched:', quizzesData);
+        // Filter quizzes by selected quarter
+        quizzesData = quizzesData.filter(quiz => quiz.quarter === selectedQuarter);
+        console.log(`Quizzes fetched for ${selectedQuarter}:`, quizzesData);
         setQuizzes(quizzesData);
       } else {
         console.error('Failed to fetch quizzes:', quizzesResponse.status, quizzesResponse.statusText);
@@ -212,7 +219,7 @@ export default function Faculty_Grades() {
     } catch (error) {
       console.error('Error fetching assignments and quizzes:', error);
     }
-  }, []);
+  }, [selectedQuarter]);
 
   // Auto-refresh grades every 30 seconds when a class is selected
   useEffect(() => {
@@ -227,7 +234,7 @@ export default function Faculty_Grades() {
     }, 30000); // Refresh every 30 seconds
 
     return () => clearInterval(interval);
-  }, [selectedClass, selectedSection, classes, fetchAssignmentsAndQuizzes]);
+  }, [selectedClass, selectedSection, classes, selectedQuarter, fetchAssignmentsAndQuizzes]);
 
 
   const fetchSubjects = async () => {
@@ -478,12 +485,45 @@ export default function Faculty_Grades() {
     }
   };
 
+  // Set default quarter based on term
+  useEffect(() => {
+    if (currentTerm?.termName === 'Term 1') {
+      setSelectedQuarter('Q1');
+    } else if (currentTerm?.termName === 'Term 2') {
+      setSelectedQuarter('Q3');
+    }
+  }, [currentTerm]);
+
+  // Load quarter-specific data when quarter changes
+  useEffect(() => {
+    if (selectedClass && selectedSection && selectedQuarter) {
+      loadQuarterData();
+    }
+  }, [selectedQuarter]);
+
   // Load saved grades when class and section are selected
   useEffect(() => {
     if (selectedClass && selectedSection && students.length > 0) {
       loadSavedGrades();
+      loadQuarterlyGradesFromDatabase();
     }
-  }, [selectedClass, selectedSection, students]);
+  }, [selectedClass, selectedSection, students, selectedQuarter]);
+
+  const loadQuarterData = () => {
+    // Load the data for the selected quarter
+    const quarterKey = `${selectedClass}_${selectedSection}_${selectedQuarter}`;
+    const savedData = quarterData[quarterKey] || {};
+    setGrades(savedData);
+  };
+
+  const saveQuarterData = () => {
+    // Save the current grades data for the selected quarter
+    const quarterKey = `${selectedClass}_${selectedSection}_${selectedQuarter}`;
+    setQuarterData(prev => ({
+      ...prev,
+      [quarterKey]: grades
+    }));
+  };
 
   const handleGradeChange = (studentId, gradeType, value) => {
     setGrades(prev => ({
@@ -493,6 +533,98 @@ export default function Faculty_Grades() {
         [gradeType]: value
       }
     }));
+  };
+
+  const handleQuarterlyGradeChange = (studentId, quarter, value) => {
+    setQuarterlyGrades(prev => ({
+      ...prev,
+      [studentId]: {
+        ...prev[studentId],
+        [quarter]: value
+      }
+    }));
+  };
+
+  const saveQuarterlyGrade = async (studentId) => {
+    const studentGrade = grades[studentId];
+    if (studentGrade && studentGrade.quarterlyExam) {
+      const quarterlyScore = parseFloat(studentGrade.quarterlyExam);
+      if (quarterlyScore > 0) {
+        const selectedClassData = classes.find(c => c._id === selectedClass);
+        const finalGrade = calculateFinalGrade(studentId, selectedClassData?.className, quarterlyScore);
+        
+        // Save the quarterly grade for this quarter
+        handleQuarterlyGradeChange(studentId, selectedQuarter, finalGrade);
+        console.log(`✅ Saved quarterly grade for student ${studentId}: ${finalGrade} for ${selectedQuarter}`);
+        
+        // Save to database
+        await saveQuarterlyGradeToDatabase(studentId, finalGrade);
+      }
+    }
+  };
+
+  const saveQuarterlyGradeToDatabase = async (studentId, finalGrade) => {
+    try {
+      const token = localStorage.getItem('token');
+      const selectedClassData = classes.find(c => c._id === selectedClass);
+      
+      const response = await fetch(`${API_BASE}/api/grades/save-quarterly`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          classId: selectedClassData.classID,
+          section: selectedSection,
+          quarter: selectedQuarter,
+          studentId: studentId,
+          quarterlyGrade: finalGrade,
+          academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : null,
+          termName: currentTerm?.termName || null
+        })
+      });
+
+      if (response.ok) {
+        console.log(`✅ Quarterly grade saved to database for student ${studentId}: ${finalGrade}`);
+      } else {
+        console.error('❌ Failed to save quarterly grade to database');
+      }
+    } catch (error) {
+      console.error('❌ Error saving quarterly grade to database:', error);
+    }
+  };
+
+  const loadQuarterlyGradesFromDatabase = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const selectedClassData = classes.find(c => c._id === selectedClass);
+      
+      const response = await fetch(`${API_BASE}/api/grades/load-quarterly?classId=${selectedClassData.classID}&section=${selectedSection}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          console.log('✅ Loaded quarterly grades from database:', result.data);
+          
+          // Update the quarterlyGrades state with data from database
+          const loadedQuarterlyGrades = {};
+          result.data.forEach(grade => {
+            if (!loadedQuarterlyGrades[grade.studentId]) {
+              loadedQuarterlyGrades[grade.studentId] = {};
+            }
+            loadedQuarterlyGrades[grade.studentId][grade.quarter] = grade.quarterlyGrade;
+          });
+          
+          setQuarterlyGrades(loadedQuarterlyGrades);
+          console.log('✅ Set quarterly grades state:', loadedQuarterlyGrades);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error loading quarterly grades from database:', error);
+    }
   };
 
   const saveGrades = async () => {
@@ -511,6 +643,9 @@ export default function Faculty_Grades() {
         return;
       }
 
+      // Save current quarter data before saving to backend
+      saveQuarterData();
+
       // Prepare grades data for saving
       const gradesData = {
         classId: selectedClassData.classID,
@@ -518,7 +653,7 @@ export default function Faculty_Grades() {
         section: selectedSection,
         academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : null,
         termName: currentTerm?.termName || null,
-        quarter: 'Q1', // You can make this dynamic if needed
+        quarter: selectedQuarter, // Use the selected quarter
         grades: Object.keys(grades).map(studentId => {
           const student = students.find(s => s._id === studentId);
           const studentGrade = grades[studentId];
@@ -605,7 +740,7 @@ export default function Faculty_Grades() {
       }
 
       // Load saved grades from database
-      const response = await fetch(`${API_BASE}/api/grades/load?classId=${selectedClassData.classID}&section=${selectedSection}&quarter=Q1`, {
+      const response = await fetch(`${API_BASE}/api/grades/load?classId=${selectedClassData.classID}&section=${selectedSection}&quarter=${selectedQuarter}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -696,6 +831,55 @@ export default function Faculty_Grades() {
   };
 
   // Function to calculate final grade based on automatic RAW scores and HPS
+  // Grade transmutation function based on DepEd rules
+  const transmuteGrade = (initialGrade) => {
+    const grade = parseFloat(initialGrade);
+    
+    if (grade >= 100) return 100;
+    if (grade >= 98.40 && grade <= 99.99) return 99;
+    if (grade >= 96.80 && grade <= 98.39) return 98;
+    if (grade >= 95.20 && grade <= 96.79) return 97;
+    if (grade >= 93.60 && grade <= 95.19) return 96;
+    if (grade >= 92.00 && grade <= 93.59) return 95;
+    if (grade >= 90.40 && grade <= 91.99) return 94;
+    if (grade >= 88.80 && grade <= 90.39) return 93;
+    if (grade >= 87.20 && grade <= 88.79) return 92;
+    if (grade >= 85.60 && grade <= 87.19) return 91;
+    if (grade >= 84.00 && grade <= 85.59) return 90;
+    if (grade >= 82.40 && grade <= 83.99) return 89;
+    if (grade >= 80.80 && grade <= 82.39) return 88;
+    if (grade >= 79.20 && grade <= 80.79) return 87;
+    if (grade >= 77.60 && grade <= 79.19) return 86;
+    if (grade >= 76.00 && grade <= 77.59) return 85;
+    if (grade >= 74.40 && grade <= 75.99) return 84;
+    if (grade >= 72.80 && grade <= 74.39) return 83;
+    if (grade >= 71.20 && grade <= 72.79) return 82;
+    if (grade >= 69.60 && grade <= 71.19) return 81;
+    if (grade >= 68.00 && grade <= 69.59) return 80;
+    if (grade >= 66.40 && grade <= 67.99) return 79;
+    if (grade >= 64.80 && grade <= 66.39) return 78;
+    if (grade >= 63.20 && grade <= 64.79) return 77;
+    if (grade >= 61.60 && grade <= 63.19) return 76;
+    if (grade >= 60.00 && grade <= 61.59) return 75;
+    if (grade >= 58.40 && grade <= 59.99) return 74;
+    if (grade >= 56.80 && grade <= 58.39) return 73;
+    if (grade >= 55.20 && grade <= 56.79) return 72;
+    if (grade >= 53.60 && grade <= 55.19) return 71;
+    if (grade >= 52.00 && grade <= 53.59) return 70;
+    if (grade >= 50.40 && grade <= 51.99) return 69;
+    if (grade >= 48.80 && grade <= 50.39) return 68;
+    if (grade >= 47.20 && grade <= 48.79) return 67;
+    if (grade >= 45.60 && grade <= 47.19) return 66;
+    if (grade >= 44.00 && grade <= 45.59) return 65;
+    if (grade >= 42.40 && grade <= 43.99) return 64;
+    if (grade >= 40.80 && grade <= 42.39) return 63;
+    if (grade >= 39.20 && grade <= 40.79) return 62;
+    if (grade >= 37.60 && grade <= 39.19) return 61;
+    if (grade >= 0 && grade <= 37.59) return 60; // Minimum grade is 60
+    
+    return 60; // Default minimum
+  };
+
   const calculateFinalGrade = (studentId, className, quarterlyScore = 0) => {
     const trackInfo = getSubjectTrackAndPercentages(className);
     const { quarterly } = trackInfo.percentages;
@@ -708,9 +892,12 @@ export default function Faculty_Grades() {
     const performanceWS = performancePS * trackInfo.percentages.performance / 100;
     
     const initialGrade = writtenWS + performanceWS;
-    const finalGrade = initialGrade + (quarterlyScore * quarterly / 100);
+    const rawFinalGrade = initialGrade + (quarterlyScore * quarterly / 100);
     
-    return Math.round(finalGrade * 100) / 100; // Round to 2 decimal places
+    // Apply transmutation table - minimum grade is 60
+    const transmutedGrade = transmuteGrade(rawFinalGrade);
+    
+    return transmutedGrade;
   };
 
   if (loading) {
@@ -758,7 +945,7 @@ export default function Faculty_Grades() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-semibold text-gray-700 mb-4">Select Class and Section</h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Class
@@ -792,6 +979,37 @@ export default function Faculty_Grades() {
                   <option value={classes.find(c => c._id === selectedClass).section}>
                     {classes.find(c => c._id === selectedClass).section}
                   </option>
+                )}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Quarter
+              </label>
+              <select
+                value={selectedQuarter}
+                onChange={(e) => setSelectedQuarter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={!selectedClass || !selectedSection}
+              >
+                {currentTerm?.termName === 'Term 1' ? (
+                  <>
+                    <option value="Q1">Quarter 1</option>
+                    <option value="Q2">Quarter 2</option>
+                  </>
+                ) : currentTerm?.termName === 'Term 2' ? (
+                  <>
+                    <option value="Q3">Quarter 3</option>
+                    <option value="Q4">Quarter 4</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="Q1">Quarter 1</option>
+                    <option value="Q2">Quarter 2</option>
+                    <option value="Q3">Quarter 3</option>
+                    <option value="Q4">Quarter 4</option>
+                  </>
                 )}
               </select>
             </div>
@@ -846,22 +1064,41 @@ export default function Faculty_Grades() {
                   <span className="font-semibold">Class Code:</span> {classes.find(c => c._id === selectedClass)?.classCode || 'N/A'}
                 </div>
                 <div>
-                  <span className="font-semibold">Quarter:</span> Q1
+                  <span className="font-semibold">Quarter:</span> {selectedQuarter}
                 </div>
               </div>
             </div>
 
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-700">
-                Grades for {classes.find(c => c._id === selectedClass)?.className} - {selectedSection}
+                Grades for {classes.find(c => c._id === selectedClass)?.className} - {selectedSection} ({selectedQuarter})
               </h2>
+              <div className="flex gap-2">
               <button
-                onClick={saveGrades}
-                disabled={saving || Object.keys(grades).length === 0}
-                className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                onClick={() => {
+                  console.log(' Calculating final grades for', selectedQuarter);
+                  let savedCount = 0;
+                  students.forEach(student => {
+                    if (grades[student._id]?.quarterlyExam) {
+                      saveQuarterlyGrade(student._id);
+                      savedCount++;
+                    }
+                  });
+                  console.log(`Calculated final grades for ${savedCount} students`);
+                  showModal('Success', `Final grades calculated and saved for ${savedCount} students in ${selectedQuarter}!`, 'success');
+                }}
+                className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
               >
-                {saving ? '💾 Saving...' : '💾 Save Grades'}
+                Transfer Quarterly Grades to Grade Management
               </button>
+                <button
+                  onClick={saveGrades}
+                  disabled={saving || Object.keys(grades).length === 0}
+                  className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {saving ? 'Saving...' : 'Save Grades'}
+                </button>
+              </div>
             </div>
             
             {loading ? (
@@ -1055,14 +1292,18 @@ export default function Faculty_Grades() {
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Student ID</th>
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Students</th>
                     <th className="border border-gray-300 px-2 py-2 text-center font-semibold" colSpan="2">Quarter</th>
-                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold">Semester Final Grade</th>
+                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold">Term Final Grade</th>
                     <th className="border border-gray-300 px-2 py-2 text-center font-semibold">Remarks</th>
                   </tr>
                   <tr className="bg-gray-50">
                     <th className="border border-gray-300 px-2 py-2"></th>
                     <th className="border border-gray-300 px-2 py-2"></th>
-                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold">1</th>
-                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold">2</th>
+                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold">
+                      {currentTerm?.termName === 'Term 1' ? '1' : '3'}
+                    </th>
+                    <th className="border border-gray-300 px-2 py-2 text-center font-semibold">
+                      {currentTerm?.termName === 'Term 1' ? '2' : '4'}
+                    </th>
                     <th className="border border-gray-300 px-2 py-2 text-center font-semibold"></th>
                     <th className="border border-gray-300 px-2 py-2 text-center font-semibold"></th>
                   </tr>
@@ -1075,43 +1316,49 @@ export default function Faculty_Grades() {
                         {student.lastname}, {student.firstname} {student.middlename || ''}
                       </td>
                       <td className="border border-gray-300 px-2 py-2 text-center">
-                        <input
-                          type="number"
-                          className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          value={grades[student._id]?.quarter1 || ''}
-                          onChange={(e) => handleGradeChange(student._id, 'quarter1', e.target.value)}
-                          placeholder="-"
-                        />
+                        {(() => {
+                          const quarterKey = currentTerm?.termName === 'Term 1' ? 'Q1' : 'Q3';
+                          const quarterlyGrade = quarterlyGrades[student._id]?.[quarterKey];
+                          return quarterlyGrade ? quarterlyGrade : '-';
+                        })()}
                       </td>
                       <td className="border border-gray-300 px-2 py-2 text-center">
-                        <input
-                          type="number"
-                          className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          value={grades[student._id]?.quarter2 || ''}
-                          onChange={(e) => handleGradeChange(student._id, 'quarter2', e.target.value)}
-                          placeholder="-"
-                        />
+                        {(() => {
+                          const quarterKey = currentTerm?.termName === 'Term 1' ? 'Q2' : 'Q4';
+                          const quarterlyGrade = quarterlyGrades[student._id]?.[quarterKey];
+                          return quarterlyGrade ? quarterlyGrade : '-';
+                        })()}
                       </td>
                       <td className="border border-gray-300 px-2 py-2 text-center font-semibold bg-gray-100">
                         {(() => {
-                          const studentGrade = grades[student._id];
-                          if (studentGrade?.quarter1 && studentGrade?.quarter2) {
-                            const q1 = parseFloat(studentGrade.quarter1);
-                            const q2 = parseFloat(studentGrade.quarter2);
-                            const semesterFinal = (q1 + q2) / 2;
-                            return Math.round(semesterFinal * 100) / 100;
+                          const firstQuarter = currentTerm?.termName === 'Term 1' ? 'Q1' : 'Q3';
+                          const secondQuarter = currentTerm?.termName === 'Term 1' ? 'Q2' : 'Q4';
+                          const firstGrade = quarterlyGrades[student._id]?.[firstQuarter];
+                          const secondGrade = quarterlyGrades[student._id]?.[secondQuarter];
+                          if (firstGrade && secondGrade) {
+                            const q1 = parseFloat(firstGrade);
+                            const q2 = parseFloat(secondGrade);
+                            const rawSemesterFinal = (q1 + q2) / 2;
+                            // Apply transmutation table - minimum grade is 60
+                            const transmutedSemesterFinal = transmuteGrade(rawSemesterFinal);
+                            return transmutedSemesterFinal;
                           }
                           return '0.00';
                         })()}
                       </td>
                       <td className="border border-gray-300 px-2 py-2 text-center font-semibold">
                         {(() => {
-                          const studentGrade = grades[student._id];
-                          if (studentGrade?.quarter1 && studentGrade?.quarter2) {
-                            const q1 = parseFloat(studentGrade.quarter1);
-                            const q2 = parseFloat(studentGrade.quarter2);
-                            const semesterFinal = (q1 + q2) / 2;
-                            return semesterFinal >= 75 ? 'PASSED' : 'REPEAT';
+                          const firstQuarter = currentTerm?.termName === 'Term 1' ? 'Q1' : 'Q3';
+                          const secondQuarter = currentTerm?.termName === 'Term 1' ? 'Q2' : 'Q4';
+                          const firstGrade = quarterlyGrades[student._id]?.[firstQuarter];
+                          const secondGrade = quarterlyGrades[student._id]?.[secondQuarter];
+                          if (firstGrade && secondGrade) {
+                            const q1 = parseFloat(firstGrade);
+                            const q2 = parseFloat(secondGrade);
+                            const rawSemesterFinal = (q1 + q2) / 2;
+                            // Apply transmutation table - minimum grade is 60
+                            const transmutedSemesterFinal = transmuteGrade(rawSemesterFinal);
+                            return transmutedSemesterFinal >= 75 ? 'PASSED' : 'REPEAT';
                           }
                           return 'REPEAT';
                         })()}

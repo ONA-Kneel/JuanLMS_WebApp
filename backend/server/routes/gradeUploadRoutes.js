@@ -9,6 +9,7 @@ const router = express.Router();
 
 // In-memory storage for grades (replace with proper database in production)
 const gradesStorage = new Map();
+const quarterlyGradesStorage = new Map();
 
 // Storage configuration
 const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
@@ -273,6 +274,135 @@ router.get('/load', authenticateToken, async (req, res) => {
       success: false,
       message: 'Failed to load grades',
       error: error.message
+    });
+  }
+});
+
+// Save quarterly grade endpoint
+router.post('/save-quarterly', authenticateToken, async (req, res) => {
+  try {
+    const {
+      classId,
+      section,
+      quarter,
+      studentId,
+      quarterlyGrade,
+      academicYear,
+      termName
+    } = req.body;
+
+    // Validate required fields
+    if (!classId || !section || !quarter || !studentId || quarterlyGrade === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: classId, section, quarter, studentId, quarterlyGrade'
+      });
+    }
+
+    // Create storage key for quarterly grades
+    const storageKey = `${classId}_${section}_${quarter}_${req.user._id}`;
+    
+    // Get existing quarterly grades or create new object
+    let quarterlyGrades = quarterlyGradesStorage.get(storageKey) || {};
+    
+    // Update the specific student's quarterly grade
+    quarterlyGrades[studentId] = {
+      studentId,
+      quarterlyGrade: parseFloat(quarterlyGrade),
+      academicYear,
+      termName,
+      savedAt: new Date().toISOString()
+    };
+    
+    // Save back to storage
+    quarterlyGradesStorage.set(storageKey, quarterlyGrades);
+    
+    console.log('✅ Saving quarterly grade to storage:', {
+      classId,
+      section,
+      quarter,
+      studentId,
+      quarterlyGrade,
+      storageKey
+    });
+
+    res.json({
+      success: true,
+      message: 'Quarterly grade saved successfully',
+      data: {
+        studentId,
+        quarterlyGrade: parseFloat(quarterlyGrade),
+        quarter
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in save quarterly grade endpoint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Load quarterly grades endpoint
+router.get('/load-quarterly', authenticateToken, async (req, res) => {
+  try {
+    const { classId, section } = req.query;
+
+    // Validate required fields
+    if (!classId || !section) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: classId, section'
+      });
+    }
+
+    // Get all quarterly grades for this class and section
+    const quarterlyGradesData = [];
+    
+    // Check all quarters (Q1, Q2, Q3, Q4)
+    const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+    
+    quarters.forEach(quarter => {
+      const storageKey = `${classId}_${section}_${quarter}_${req.user._id}`;
+      const quarterlyGrades = quarterlyGradesStorage.get(storageKey);
+      
+      if (quarterlyGrades) {
+        Object.values(quarterlyGrades).forEach(grade => {
+          quarterlyGradesData.push({
+            studentId: grade.studentId,
+            quarter: quarter,
+            quarterlyGrade: grade.quarterlyGrade,
+            academicYear: grade.academicYear,
+            termName: grade.termName,
+            savedAt: grade.savedAt
+          });
+        });
+      }
+    });
+    
+    if (quarterlyGradesData.length > 0) {
+      console.log('✅ Found quarterly grades for:', { classId, section, totalGrades: quarterlyGradesData.length });
+      res.json({
+        success: true,
+        message: 'Quarterly grades loaded successfully',
+        data: quarterlyGradesData
+      });
+    } else {
+      console.log('❌ No quarterly grades found for:', { classId, section });
+      res.json({
+        success: true,
+        message: 'No quarterly grades found',
+        data: []
+      });
+    }
+
+  } catch (error) {
+    console.error('Error in load quarterly grades endpoint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
     });
   }
 });
