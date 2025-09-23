@@ -732,13 +732,25 @@ export default function Faculty_Grades() {
         grades: students.map(student => {
           const quarterlyGrade = quarterlyGrades[student._id]?.[quarter];
           const termFinalGrade = (() => {
-            if (quarter === 'Q2') {
+            // For Term 1: Q2 calculates term final from Q1 + Q2
+            if (quarter === 'Q2' && currentTerm?.termName === 'Term 1') {
               const q1Grade = quarterlyGrades[student._id]?.Q1;
               const q2Grade = quarterlyGrades[student._id]?.Q2;
               if (q1Grade && q2Grade) {
                 const q1 = parseFloat(q1Grade);
                 const q2 = parseFloat(q2Grade);
                 const semesterFinal = (q1 + q2) / 2;
+                return Math.round(semesterFinal * 100) / 100;
+              }
+            }
+            // For Term 2: Q4 calculates term final from Q3 + Q4
+            if (quarter === 'Q4' && currentTerm?.termName === 'Term 2') {
+              const q3Grade = quarterlyGrades[student._id]?.Q3;
+              const q4Grade = quarterlyGrades[student._id]?.Q4;
+              if (q3Grade && q4Grade) {
+                const q3 = parseFloat(q3Grade);
+                const q4 = parseFloat(q4Grade);
+                const semesterFinal = (q3 + q4) / 2;
                 return Math.round(semesterFinal * 100) / 100;
               }
             }
@@ -772,7 +784,7 @@ export default function Faculty_Grades() {
       if (response.ok) {
         const _postResponse = await response.json();
         console.log(`✅ ${quarter} grades posted to students successfully`);
-        const message = quarter === 'Q2' 
+        const message = (quarter === 'Q2' && currentTerm?.termName === 'Term 1') || (quarter === 'Q4' && currentTerm?.termName === 'Term 2')
           ? `${quarter} grades and Term Final Grade posted to students! Students can now view their grades.`
           : `${quarter} grades posted to students! Students can now view their grades.`;
         showModal('Success', message, 'success');
@@ -1459,20 +1471,58 @@ export default function Faculty_Grades() {
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-700">Grade Management</h2>
               <div className="flex gap-2">
-                <button
-                  onClick={() => postQuarterlyGradesToStudents('Q1')}
-                  disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
-                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {posting ? 'Posting...' : '📤 Post Q1 Grades'}
-                </button>
-                <button
-                  onClick={() => postQuarterlyGradesToStudents('Q2')}
-                  disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
-                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {posting ? 'Posting...' : '📤 Post Q2 Grades + Term Final'}
-                </button>
+                {currentTerm?.termName === 'Term 1' ? (
+                  <>
+                    <button
+                      onClick={() => postQuarterlyGradesToStudents('Q1')}
+                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
+                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {posting ? 'Posting...' : '📤 Post Q1 Grades'}
+                    </button>
+                    <button
+                      onClick={() => postQuarterlyGradesToStudents('Q2')}
+                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
+                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {posting ? 'Posting...' : '📤 Post Q2 Grades + Term Final'}
+                    </button>
+                  </>
+                ) : currentTerm?.termName === 'Term 2' ? (
+                  <>
+                    <button
+                      onClick={() => postQuarterlyGradesToStudents('Q3')}
+                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
+                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {posting ? 'Posting...' : '📤 Post Q3 Grades'}
+                    </button>
+                    <button
+                      onClick={() => postQuarterlyGradesToStudents('Q4')}
+                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
+                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {posting ? 'Posting...' : '📤 Post Q4 Grades + Term Final'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => postQuarterlyGradesToStudents('Q1')}
+                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
+                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {posting ? 'Posting...' : '📤 Post Q1 Grades'}
+                    </button>
+                    <button
+                      onClick={() => postQuarterlyGradesToStudents('Q2')}
+                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
+                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {posting ? 'Posting...' : '📤 Post Q2 Grades + Term Final'}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             

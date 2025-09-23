@@ -810,7 +810,13 @@ router.get('/student-posted-grades', authenticateToken, async (req, res) => {
       });
     }
 
-    console.log('🔍 Fetching posted grades for student:', { studentId, classId, section });
+    console.log('🔍 Fetching posted grades for student:', { 
+      studentId, 
+      classId, 
+      section,
+      studentIdType: typeof studentId,
+      studentIdValue: studentId
+    });
 
     // Search through database for posted quarterly grades for this student
     const studentGrades = [];
@@ -831,9 +837,12 @@ router.get('/student-posted-grades', authenticateToken, async (req, res) => {
         });
 
         // Find the specific student's grades
-        const studentGrade = postedGradesRecord.grades.find(grade => 
-          grade.studentId.toString() === studentId
-        );
+        const studentGrade = postedGradesRecord.grades.find(grade => {
+          const gradeStudentId = grade.studentId.toString();
+          const queryStudentId = studentId.toString();
+          console.log(`🔍 Comparing student IDs: ${gradeStudentId} === ${queryStudentId}`);
+          return gradeStudentId === queryStudentId;
+        });
 
         if (studentGrade) {
           studentGrades.push({

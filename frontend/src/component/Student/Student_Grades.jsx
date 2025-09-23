@@ -231,10 +231,18 @@ export default function Student_Grades() {
                         classId: subject.classId,
                         subjectCode: subject.subjectCode,
                         subjectDescription: subject.subjectDescription,
-                        quarter1: studentGrades.grades?.Q1?.quarterlyGrade || '',
-                        quarter2: studentGrades.grades?.Q2?.quarterlyGrade || '',
-                        termFinalGrade: studentGrades.grades?.Q2?.termFinalGrade || '',
-                        remarks: studentGrades.grades?.Q2?.remarks || ''
+                        quarter1: term.termName === 'Term 1' 
+                          ? (studentGrades.grades?.Q1?.quarterlyGrade || '')
+                          : (studentGrades.grades?.Q3?.quarterlyGrade || ''),
+                        quarter2: term.termName === 'Term 1' 
+                          ? (studentGrades.grades?.Q2?.quarterlyGrade || '')
+                          : (studentGrades.grades?.Q4?.quarterlyGrade || ''),
+                        termFinalGrade: term.termName === 'Term 1' 
+                          ? (studentGrades.grades?.Q2?.termFinalGrade || '')
+                          : (studentGrades.grades?.Q4?.termFinalGrade || ''),
+                        remarks: term.termName === 'Term 1' 
+                          ? (studentGrades.grades?.Q2?.remarks || '')
+                          : (studentGrades.grades?.Q4?.remarks || '')
                       };
                     } else {
                       console.log(`⚠️ No student grades found in response for ${subject.subjectDescription}`);
@@ -263,7 +271,18 @@ export default function Student_Grades() {
             });
             
             const gradesResults = await Promise.all(gradesPromises);
-            const validGrades = gradesResults.filter(grade => grade.quarter1 || grade.quarter2);
+            const validGrades = gradesResults.filter(grade => {
+              // For Term 1, look for Q1 or Q2 grades
+              if (term.termName === 'Term 1') {
+                return grade.quarter1 || grade.quarter2;
+              }
+              // For Term 2, look for Q3 or Q4 grades (mapped to quarter1 and quarter2)
+              if (term.termName === 'Term 2') {
+                return grade.quarter1 || grade.quarter2;
+              }
+              // Default fallback
+              return grade.quarter1 || grade.quarter2;
+            });
             
             if (validGrades.length > 0) {
               allGradesByTerm[term.termName] = validGrades;
@@ -360,8 +379,8 @@ export default function Student_Grades() {
           </div>
         </div>
 
-        {/* Grades Tables for Each Term */}
-        {Object.keys(gradesByTerm).map((termName) => {
+        {/* Grades Tables for Each Term - Show current term even if no grades */}
+        {(Object.keys(gradesByTerm).length > 0 ? Object.keys(gradesByTerm) : [currentTerm?.termName]).filter(Boolean).map((termName) => {
           const termGrades = gradesByTerm[termName];
           const isTerm1 = termName === 'Term 1';
           const quarterLabels = isTerm1 ? { q1: '1st Quarter', q2: '2nd Quarter' } : { q1: '3rd Quarter', q2: '4th Quarter' };
@@ -387,7 +406,7 @@ export default function Student_Grades() {
                   <tbody>
                     {studentSubjects.map((subject, index) => {
                       // Get grades for this subject if available
-                      const subjectGrades = termGrades.find(g => g.classId === subject.classId);
+                      const subjectGrades = termGrades?.find(g => g.classId === subject.classId);
                       const quarter1 = subjectGrades?.quarter1 || '';
                       const quarter2 = subjectGrades?.quarter2 || '';
                       const termFinalGrade = subjectGrades?.termFinalGrade || '';
@@ -427,7 +446,7 @@ export default function Student_Grades() {
                       </td>
                       <td className="p-3 border border-gray-300 text-center bg-blue-100 font-semibold">
                         {(() => {
-                          const termFinalGrades = termGrades
+                          const termFinalGrades = (termGrades || [])
                             .map(g => g.termFinalGrade)
                             .filter(grade => grade && grade !== '' && !isNaN(parseFloat(grade)))
                             .map(grade => parseFloat(grade));
@@ -441,7 +460,7 @@ export default function Student_Grades() {
                       </td>
                       <td className="p-3 border border-gray-300 text-center bg-blue-100 font-semibold">
                         {(() => {
-                          const termFinalGrades = termGrades
+                          const termFinalGrades = (termGrades || [])
                             .map(g => g.termFinalGrade)
                             .filter(grade => grade && grade !== '' && !isNaN(parseFloat(grade)))
                             .map(grade => parseFloat(grade));
@@ -467,6 +486,27 @@ export default function Student_Grades() {
             <p className="text-gray-600 text-lg">
               No subjects found for the current term. Please contact your administrator if you believe this is an error.
             </p>
+          </div>
+        )}
+
+        {/* No Grades Message - Show when there are subjects but no grades */}
+        {studentSubjects.length > 0 && Object.keys(gradesByTerm).length === 0 && !loading && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-yellow-800">
+                  No grades posted yet.
+                </p>
+                <p className="text-sm text-yellow-700 mt-1">
+                  Your faculty will post grades once they are ready. Check back later.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -508,7 +548,7 @@ export default function Student_Grades() {
           </div>
         )}
 
-        {studentSubjects.length > 0 && Object.keys(gradesByTerm).length === 0 && !loading && (
+        {studentSubjects.length === 0 && !loading && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">

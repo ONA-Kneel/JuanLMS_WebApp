@@ -357,10 +357,29 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
 // --- GET / - Get all classes ---
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const classes = await Class.find();
+    const { schoolYear, termName } = req.query;
+    
+    // Build filter object
+    let filter = { isArchived: { $ne: true } };
+    
+    // Add schoolYear filter if provided
+    if (schoolYear) {
+      filter.academicYear = schoolYear;
+    }
+    
+    // Add termName filter if provided
+    if (termName) {
+      filter.termName = termName;
+    }
+    
+    console.log('🔍 Classes filter:', filter);
+    
+    const classes = await Class.find(filter);
+    console.log(`✅ Found ${classes.length} classes matching filter`);
+    
     res.json(classes);
   } catch (err) {
-    console.error(err);
+    console.error('❌ Error fetching classes:', err);
     res.status(500).json({ error: 'Failed to fetch classes' });
   }
 });

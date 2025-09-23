@@ -99,9 +99,15 @@ export default function Student_Classes() {
             return false;
           }
           
-          // For local testing, be more lenient with academic year and term filtering
+          // For local testing, be more lenient with academic year but still filter by term
           if (import.meta.env.DEV) {
-            console.log(`Student Classes - DEV MODE: Including class ${cls.className || cls.classCode} (academicYear: ${cls.academicYear}, termName: ${cls.termName})`);
+            console.log(`Student Classes - DEV MODE: Checking class ${cls.className || cls.classCode} (academicYear: ${cls.academicYear}, termName: ${cls.termName})`);
+            // Still filter by term even in DEV mode
+            if (cls.termName && cls.termName !== currentTerm.termName) {
+              console.log(`Student Classes - DEV MODE: Filtering out class ${cls.className || cls.classCode} - wrong term (${cls.termName} vs ${currentTerm.termName})`);
+              return false;
+            }
+            console.log(`Student Classes - DEV MODE: Including class ${cls.className || cls.classCode} - correct term`);
             return true;
           }
           
