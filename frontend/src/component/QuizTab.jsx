@@ -101,6 +101,9 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
     const termNameFromUrl = searchParams.get('termName');
     const academicYearFromUrl = searchParams.get('academicYear');
     
+    // Quarter display state
+    const [currentQuarter, setCurrentQuarter] = useState(null);
+    
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [questions, setQuestions] = useState([]);
@@ -468,6 +471,36 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
         fetchAvailableClasses();
     }, [academicYear, currentTerm, classId]);
 
+    // Fetch current active quarter when academic year and term are available
+    useEffect(() => {
+        async function fetchCurrentQuarter() {
+            if (!academicYear || !currentTerm) return;
+            
+            try {
+                const token = localStorage.getItem('token');
+                const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+                const response = await fetch(`${API_BASE}/api/quarters/schoolyear/${schoolYearName}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const quarters = await response.json();
+                    // Find the active quarter for current term
+                    const activeQuarter = quarters.find(q => 
+                        q.termName === currentTerm.termName && 
+                        q.status === 'active'
+                    );
+                    if (activeQuarter) {
+                        setCurrentQuarter(activeQuarter);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching current quarter:', error);
+            }
+        }
+        
+        fetchCurrentQuarter();
+    }, [academicYear, currentTerm]);
+
     // Fetch students for each selected class
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -821,9 +854,9 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             },
             createdBy: userId,
             // Add quarter parameters
-            quarter: quarterFromUrl || 'Q1',
-            termName: termNameFromUrl || 'Term 1',
-            academicYear: academicYearFromUrl || '2024-2025',
+            quarter: currentQuarter?.quarterName || quarterFromUrl || 'Q1',
+            termName: currentTerm?.termName || termNameFromUrl || 'Term 1',
+            academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : academicYearFromUrl || '2024-2025',
             questionBehaviour: {
                 shuffle: shuffleQuestions === "Yes"
             },
@@ -986,9 +1019,16 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                 {/* Quarter Indicator */}
                 <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <p className="text-sm font-medium text-blue-800">
-                        Creating quiz for: <span className="font-semibold">{quarterFromUrl || 'Q1'} - {termNameFromUrl || 'Term 1'}</span>
-                        <span className="text-blue-600 ml-2">({academicYearFromUrl || '2024-2025'})</span>
+                        Creating quiz for: <span className="font-semibold">
+                            {currentQuarter ? currentQuarter.quarterName : 'Loading...'} - {currentTerm?.termName || 'Loading...'}
+                        </span>
+                        <span className="text-blue-600 ml-2">({academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Loading...'})</span>
                     </p>
+                    {currentQuarter && (
+                        <p className="text-xs text-blue-600 mt-1">
+                            Quarter Period: {new Date(currentQuarter.startDate).toLocaleDateString()} - {new Date(currentQuarter.endDate).toLocaleDateString()}
+                        </p>
+                    )}
                 </div>
                 
                 <div className="bg-white rounded-xl shadow p-8 mb-8">

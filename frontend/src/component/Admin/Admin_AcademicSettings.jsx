@@ -202,6 +202,41 @@ export default function Admin_AcademicSettings() {
       if (res.ok) {
         const data = await res.json();
         setQuarters(data);
+        
+        // Validate and fix multiple active quarters automatically
+        const activeQuarters = data.filter(q => q.status === 'active');
+        if (activeQuarters.length > 1) {
+          console.warn(`🚨 SYSTEM VALIDATION: Found ${activeQuarters.length} active quarters. Only one quarter should be active at a time. Auto-correcting...`);
+          
+          // Keep only the most recently updated active quarter, deactivate the rest
+          const sortedActiveQuarters = activeQuarters.sort((a, b) => 
+            new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
+          );
+          const quartersToDeactivate = sortedActiveQuarters.slice(1);
+          
+          for (const quarter of quartersToDeactivate) {
+            try {
+              await fetch(`${API_BASE}/api/quarters/${quarter._id}`, {
+                method: 'PATCH',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ status: 'inactive' })
+              });
+              console.log(`✅ Auto-corrected: Deactivated ${quarter.quarterName} (${quarter.termName})`);
+            } catch (error) {
+              console.error(`❌ Error auto-correcting ${quarter.quarterName}:`, error);
+            }
+          }
+          
+          // Show system correction message
+          setSuccessMessage(`🔧 SYSTEM CORRECTION: Found ${activeQuarters.length} active quarters. Kept ${sortedActiveQuarters[0].quarterName} active and auto-deactivated ${quartersToDeactivate.length} others. Only one quarter can be active at a time.`);
+          setShowSuccessModal(true);
+          
+          // Refresh quarters after auto-correction
+          setTimeout(() => fetchQuarters(year), 1000);
+        }
       } else {
         const data = await res.json();
         console.error('Failed to fetch quarters:', data.message);
@@ -735,6 +770,31 @@ export default function Admin_AcademicSettings() {
       return;
     }
 
+    // If editing a quarter, also check for overlapping quarters across ALL terms
+    if (editingTerm && editingTerm.quarterName) {
+      const overlappingQuarters = quarters.filter(q => 
+        q._id !== editingTerm._id && // Exclude current quarter being edited
+        q.status !== 'archived' && // Only check active/inactive quarters
+        (
+          // New quarter starts during an existing quarter
+          (new Date(q.startDate) <= new Date(editTermFormData.startDate) && 
+           new Date(q.endDate) > new Date(editTermFormData.startDate)) ||
+          // New quarter ends during an existing quarter
+          (new Date(q.startDate) < new Date(editTermFormData.endDate) && 
+           new Date(q.endDate) >= new Date(editTermFormData.endDate)) ||
+          // New quarter completely contains an existing quarter
+          (new Date(q.startDate) >= new Date(editTermFormData.startDate) && 
+           new Date(q.endDate) <= new Date(editTermFormData.endDate))
+        )
+      );
+
+      if (overlappingQuarters.length > 0) {
+        const overlappingQuarterNames = overlappingQuarters.map(q => q.quarterName).join(', ');
+        setEditTermError(`Quarter dates overlap with existing quarters: ${overlappingQuarterNames}. Please choose different dates.`);
+        return;
+      }
+    }
+
     try {
       console.log('Sending term update:', {
         startDate: editTermFormData.startDate,
@@ -838,6 +898,31 @@ export default function Admin_AcademicSettings() {
   const handleToggleQuarterStatusInternal = async (quarter, newStatus, action) => {
     try {
       console.log('Sending quarter status update:', { status: newStatus });
+      
+      // If activating a quarter, first deactivate other quarters across ALL terms
+      if (newStatus === 'active') {
+        const otherQuarters = quarters.filter(q => 
+          q._id !== quarter._id && 
+          q.status !== 'archived'
+        );
+        
+        // Deactivate other quarters
+        for (const otherQuarter of otherQuarters) {
+          try {
+            await fetch(`${API_BASE}/api/quarters/${otherQuarter._id}`, {
+              method: 'PATCH',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              },
+              body: JSON.stringify({ status: 'inactive' })
+            });
+          } catch (error) {
+            console.error(`Error deactivating quarter ${otherQuarter.quarterName}:`, error);
+          }
+        }
+      }
+      
       const res = await fetch(`${API_BASE}/api/quarters/${quarter._id}`, {
         method: 'PATCH',
         headers: { 
@@ -852,10 +937,10 @@ export default function Admin_AcademicSettings() {
         console.log('Quarter status updated successfully:', updatedQuarter);
         setQuarters(quarters.map(q => q._id === quarter._id ? updatedQuarter : q));
         
-        // Update success message to reflect that inactive quarters are now archived
+        // Update success message to reflect the action and auto-deactivation
         const successMessage = newStatus === 'active' ? 
-          `${quarter.quarterName} has been activated` : 
-          `${quarter.quarterName} has been archived`;
+          `${quarter.quarterName} has been activated. All other quarters across all terms have been set to inactive.` : 
+          `${quarter.quarterName} has been deactivated`;
         setSuccessMessage(successMessage);
         setShowSuccessModal(true);
         
@@ -897,7 +982,7 @@ export default function Admin_AcademicSettings() {
     }
     
     // Show confirmation modal
-    setConfirmMessage(`Are you sure you want to activate ${quarter.quarterName}?`);
+    setConfirmMessage(`Are you sure you want to activate ${quarter.quarterName}? This will automatically set all other quarters across all terms to inactive.`);
     setConfirmAction(() => () => {
       handleActivateQuarterInternal(quarter);
     });
@@ -907,6 +992,30 @@ export default function Admin_AcademicSettings() {
   const handleActivateQuarterInternal = async (quarter) => {
     try {
       const token = localStorage.getItem('token');
+      
+      // First, deactivate all other quarters across ALL terms
+      const otherQuarters = quarters.filter(q => 
+        q._id !== quarter._id && 
+        q.status !== 'archived'
+      );
+      
+      // Deactivate other quarters
+      for (const otherQuarter of otherQuarters) {
+        try {
+          await fetch(`${API_BASE}/api/quarters/${otherQuarter._id}`, {
+            method: 'PATCH',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ status: 'inactive' })
+          });
+        } catch (error) {
+          console.error(`Error deactivating quarter ${otherQuarter.quarterName}:`, error);
+        }
+      }
+      
+      // Then activate the selected quarter
       const res = await fetch(`${API_BASE}/api/quarters/${quarter._id}`, {
         method: 'PATCH',
         headers: { 
@@ -915,10 +1024,11 @@ export default function Admin_AcademicSettings() {
         },
         body: JSON.stringify({ status: 'active' })
       });
+      
       if (res.ok) {
         const updatedQuarter = await res.json();
         setQuarters(quarters.map(q => q._id === quarter._id ? updatedQuarter : q));
-        setSuccessMessage(`${quarter.quarterName} has been activated`);
+        setSuccessMessage(`${quarter.quarterName} has been activated. All other quarters across all terms have been set to inactive.`);
         setShowSuccessModal(true);
         fetchQuarters(selectedYear);
       } else {
@@ -930,21 +1040,32 @@ export default function Admin_AcademicSettings() {
     }
   };
 
+  // Validation function to ensure only one quarter is active at a time
+  const validateSingleActiveQuarter = async (quartersData) => {
+    const activeQuarters = quartersData.filter(q => q.status === 'active');
+    if (activeQuarters.length > 1) {
+      console.warn(`🚨 VALIDATION FAILED: ${activeQuarters.length} quarters are active. Only one should be active.`);
+      return false;
+    }
+    return true;
+  };
+
   const handleArchiveQuarter = async (quarter) => {
-    // Prevent archiving quarters of inactive school years
+    // Prevent deactivating quarters of inactive school years
     if (selectedYear && selectedYear.status !== 'active') {
-      setErrorMessage('Cannot archive quarters of inactive school years. Only quarters of active school years can be archived.');
+      setErrorMessage('Cannot deactivate quarters of inactive school years. Only quarters of active school years can be deactivated.');
       setShowErrorModal(true);
       return;
     }
     
     // Show confirmation modal
-    setConfirmMessage(`Are you sure you want to archive ${quarter.quarterName}?`);
+    setConfirmMessage(`Are you sure you want to deactivate ${quarter.quarterName}?`);
     setConfirmAction(() => () => {
       handleArchiveQuarterInternal(quarter);
     });
     setShowConfirmModal(true);
   };
+
 
   const handleArchiveQuarterInternal = async (quarter) => {
     try {
@@ -960,15 +1081,15 @@ export default function Admin_AcademicSettings() {
       if (res.ok) {
         const updatedQuarter = await res.json();
         setQuarters(quarters.map(q => q._id === quarter._id ? updatedQuarter : q));
-        setSuccessMessage(`${quarter.quarterName} has been archived`);
+        setSuccessMessage(`${quarter.quarterName} has been deactivated`);
         setShowSuccessModal(true);
         fetchQuarters(selectedYear);
       } else {
         const data = await res.json();
-        setTermError(data.message || 'Failed to archive quarter');
+        setTermError(data.message || 'Failed to deactivate quarter');
       }
     } catch {
-      setTermError('Error archiving quarter');
+      setTermError('Error deactivating quarter');
     }
   };
 
@@ -1116,20 +1237,8 @@ export default function Admin_AcademicSettings() {
       return;
     }
 
-    // Rule: cannot add another quarter unless the first quarter in that term is archived.
-    // If the first quarter is not present in current state (e.g., API hides archived), allow creation.
-    const firstQuarterName = quarterFormData.termName === 'Term 1' ? 'Quarter 1' : 'Quarter 3';
-    if (quarterFormData.quarterName !== firstQuarterName) {
-      const nonArchivedFirstQuarterExists = quarters.some(q =>
-        q.termName === quarterFormData.termName &&
-        q.quarterName === firstQuarterName &&
-        q.status !== 'archived'
-      );
-      if (nonArchivedFirstQuarterExists) {
-        setQuarterError('Archive the first quarter of this term before adding another quarter.');
-        return;
-      }
-    }
+    // Allow adding quarters even if first quarter is active, but new quarters will be set as inactive
+    // This allows admins to prepare quarters in advance
 
     // Validate quarter dates are within school year bounds
     if (selectedYear) {
@@ -1150,9 +1259,8 @@ export default function Admin_AcademicSettings() {
       return;
     }
 
-    // Check for overlapping quarters in the same term
+    // Check for overlapping quarters across ALL terms
     const overlappingQuarters = quarters.filter(q => 
-      q.termName === quarterFormData.termName &&
       q.status !== 'archived' && // Only check active/inactive quarters
       (
         // New quarter starts during an existing quarter
@@ -1186,7 +1294,8 @@ export default function Admin_AcademicSettings() {
           quarterName: quarterFormData.quarterName,
           termName: quarterFormData.termName,
           startDate: quarterFormData.startDate,
-          endDate: quarterFormData.endDate
+          endDate: quarterFormData.endDate,
+          status: 'inactive' // Always create new quarters as inactive
         })
       });
 
@@ -1195,7 +1304,7 @@ export default function Admin_AcademicSettings() {
         setQuarters([...quarters, newQuarter]);
         setShowAddQuarterModal(false);
         setQuarterFormData({ quarterName: '', termName: '', startDate: '', endDate: '' });
-        setSuccessMessage('Quarter created successfully');
+        setSuccessMessage(`✅ ${quarterFormData.quarterName} created successfully as inactive. You can now edit the details and activate it when ready. Only one quarter can be active at a time.`);
         setShowSuccessModal(true);
         fetchQuarters(selectedYear);
       } else {
@@ -1683,7 +1792,7 @@ export default function Admin_AcademicSettings() {
                                           }`}
                                           title={`Click to ${quarter.status === 'active' ? 'deactivate' : 'activate'} ${quarter.quarterName}`}
                                         >
-                                          {quarter.status === 'archived' ? 'archived' : quarter.status}
+                                          {quarter.status === 'archived' ? 'inactive' : quarter.status}
                                         </button>
                                       )}
                                     </td>
@@ -1700,6 +1809,17 @@ export default function Admin_AcademicSettings() {
                                           </svg>
                                         </button>
                                         {selectedYear.status === 'active' ? (
+                                          quarter.status === 'active' ? (
+                                            <button
+                                              disabled
+                                              className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
+                                              title="Cannot edit active quarter dates"
+                                            >
+                                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                              </svg>
+                                            </button>
+                                          ) : (
                                           <button
                                             onClick={() => handleEditQuarter(quarter)}
                                             className="p-1 rounded hover:bg-yellow-100 group relative"
@@ -1709,6 +1829,7 @@ export default function Admin_AcademicSettings() {
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                                             </svg>
                                           </button>
+                                          )
                                         ) : (
                                           <button
                                             disabled
@@ -1744,7 +1865,7 @@ export default function Admin_AcademicSettings() {
                                           <button
                                             onClick={() => handleArchiveQuarter(quarter)}
                                             className="p-1 rounded hover:bg-red-100 group relative"
-                                            title="Archive"
+                                            title="Deactivate"
                                           >
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
@@ -1754,7 +1875,7 @@ export default function Admin_AcademicSettings() {
                                           <button
                                             onClick={() => handleArchiveQuarter(quarter)}
                                             className="p-1 rounded hover:bg-red-100 group relative"
-                                            title="Archive"
+                                            title="Deactivate"
                                           >
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
@@ -2036,6 +2157,14 @@ export default function Admin_AcademicSettings() {
                 </div>
 
                 <form onSubmit={handleAddQuarter}>
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <strong>Note:</strong> New quarters are created as inactive by default. You can edit the details and activate them when ready.
+            </p>
+            <p className="text-sm text-blue-700 mt-1">
+              <strong>Important:</strong> Only one quarter can be active at a time across all terms. Activating a quarter will automatically deactivate all other quarters.
+            </p>
+          </div>
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Term

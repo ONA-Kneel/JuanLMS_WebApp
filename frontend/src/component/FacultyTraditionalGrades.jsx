@@ -85,10 +85,10 @@ const FacultyTraditionalGrades = () => {
       setLoading(true);
       const token = localStorage.getItem('token');
       const response = await axios.get(`/api/students/class/${selectedClass}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+          headers: { Authorization: `Bearer ${token}` }
+        });
       setStudents(response.data);
-    } catch (error) {
+      } catch (error) {
       console.error('Error fetching students:', error);
     } finally {
       setLoading(false);
@@ -96,8 +96,8 @@ const FacultyTraditionalGrades = () => {
   };
 
   const showValidationModal = (type, title, message) => {
-    setValidationModal({
-      isOpen: true,
+      setValidationModal({
+        isOpen: true,
       type,
       title,
       message
@@ -105,9 +105,9 @@ const FacultyTraditionalGrades = () => {
   };
 
   const closeValidationModal = () => {
-    setValidationModal({
+        setValidationModal({
       isOpen: false,
-      type: 'error',
+          type: 'error',
       title: '',
       message: ''
     });
@@ -133,8 +133,8 @@ const FacultyTraditionalGrades = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled
               />
-            </div>
-            
+      </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Term
@@ -145,14 +145,14 @@ const FacultyTraditionalGrades = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled
               />
-            </div>
-            
+      </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Class
               </label>
-              <select
-                value={selectedClass}
+          <select
+            value={selectedClass}
                 onChange={(e) => setSelectedClass(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
@@ -160,34 +160,34 @@ const FacultyTraditionalGrades = () => {
                 {classes.map((cls) => (
                   <option key={cls._id} value={cls._id}>
                     {cls.className}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
+              </option>
+            ))}
+          </select>
+        </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Subject
               </label>
-              <select
-                value={selectedSubject}
+            <select
+              value={selectedSubject}
                 onChange={(e) => setSelectedSubject(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled={!selectedClass}
-              >
+            >
                 <option value="">Select Subject</option>
-                {subjects.map((subject) => (
-                  <option key={subject._id} value={subject._id}>
+              {subjects.map((subject) => (
+                <option key={subject._id} value={subject._id}>
                     {subject.subjectCode} - {subject.subjectName}
-                  </option>
-                ))}
-              </select>
-            </div>
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
+          </div>
+      </div>
 
         {/* Students List */}
-        {selectedClass && selectedSubject && (
+      {selectedClass && selectedSubject && (
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold text-gray-700 mb-4">
               Students in {subjects.find(s => s._id === selectedSubject)?.subjectCode}
@@ -197,35 +197,35 @@ const FacultyTraditionalGrades = () => {
               <div className="text-center py-8">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 <p className="mt-2 text-gray-600">Loading students...</p>
-              </div>
+          </div>
             ) : students.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full border border-gray-300">
-                  <thead>
+              <thead>
                     <tr className="bg-gray-50">
                       <th className="border border-gray-300 px-4 py-2 text-left">Student ID</th>
                       <th className="border border-gray-300 px-4 py-2 text-left">Name</th>
                       <th className="border border-gray-300 px-4 py-2 text-left">Email</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                </tr>
+              </thead>
+              <tbody>
                     {students.map((student) => (
                       <tr key={student._id} className="hover:bg-gray-50">
                         <td className="border border-gray-300 px-4 py-2">{student.schoolID}</td>
                         <td className="border border-gray-300 px-4 py-2">{student.name}</td>
                         <td className="border border-gray-300 px-4 py-2">{student.email}</td>
-                      </tr>
+                    </tr>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+              </tbody>
+            </table>
+          </div>
             ) : (
               <div className="text-center py-8 text-gray-600">
                 <p>No students found for this class and subject.</p>
-              </div>
-            )}
-          </div>
-        )}
+        </div>
+      )}
+        </div>
+      )}
 
         {/* Placeholder for future grade functionality */}
         {selectedClass && selectedSubject && students.length > 0 && (
@@ -235,10 +235,10 @@ const FacultyTraditionalGrades = () => {
               <p>Grade management functionality will be implemented here.</p>
               <p className="text-sm mt-2">Selected: {students.length} students in {subjects.find(s => s._id === selectedSubject)?.subjectCode}</p>
             </div>
-          </div>
-        )}
+        </div>
+      )}
       </div>
-
+      
       {/* Validation Modal */}
       <ValidationModal
         isOpen={validationModal.isOpen}

@@ -103,14 +103,14 @@ export default function Student_Grades() {
         // Only try to fetch classes if we have a valid student ID
         if (studentID && studentID !== 'undefined' && studentID !== 'null') {
           // Fetch all classes and filter for current term
-          const classesResponse = await fetch(`${API_BASE}/classes/my-classes`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+            const classesResponse = await fetch(`${API_BASE}/classes/my-classes`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
           
           console.log('📚 Classes response status:', classesResponse.status);
-          
-          if (classesResponse.ok) {
-            const classesData = await classesResponse.json();
+            
+            if (classesResponse.ok) {
+              const classesData = await classesResponse.json();
             console.log('📚 All classes fetched:', classesData);
             console.log('📚 Number of classes:', classesData.length);
             
@@ -131,21 +131,21 @@ export default function Student_Grades() {
               console.log('⚠️ No classes found with strict filtering, showing all classes for debugging');
               classesToUse = classesData;
             }
-            
-            // Transform classes to subjects format
+              
+              // Transform classes to subjects format
             const subjects = classesToUse.map(cls => ({
               classId: cls.classID,
-              subjectCode: cls.classCode || 'N/A',
-              subjectDescription: cls.className || 'N/A',
+                subjectCode: cls.classCode || 'N/A',
+                subjectDescription: cls.className || 'N/A',
               section: cls.section || 'N/A',
-              quarter1: '', // Will be populated when grades are available
-              quarter2: '',
+                quarter1: '', // Will be populated when grades are available
+                quarter2: '',
               termFinalGrade: ''
-            }));
-            
-            setStudentSubjects(subjects);
+              }));
+              
+              setStudentSubjects(subjects);
             console.log('📚 Transformed subjects:', subjects);
-          } else {
+            } else {
             const errorText = await classesResponse.text();
             console.error('❌ Failed to fetch classes:', classesResponse.status, errorText);
             setStudentSubjects([]);
@@ -176,10 +176,10 @@ export default function Student_Grades() {
         
         // Get student ID from JWT token if not available
         if (!studentID || studentID === 'undefined' || studentID === 'null') {
-          try {
-            const tokenRaw = localStorage.getItem('token');
-            if (tokenRaw) {
-              const payload = JSON.parse(atob(tokenRaw.split('.')[1] || '')) || {};
+        try {
+          const tokenRaw = localStorage.getItem('token');
+          if (tokenRaw) {
+            const payload = JSON.parse(atob(tokenRaw.split('.')[1] || '')) || {};
               // Try multiple possible fields for user ID
               studentID = payload.userID || payload.userId || payload.sub || payload._id;
             }
@@ -199,13 +199,13 @@ export default function Student_Grades() {
               console.log(`🔍 Fetching grades from: ${apiUrl}`);
               
               const response = await fetch(apiUrl, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
+          headers: { Authorization: `Bearer ${token}` }
+        });
               
               console.log(`📡 Response status for ${subject.subjectDescription}:`, response.status);
-              
-              if (response.ok) {
-                const data = await response.json();
+        
+        if (response.ok) {
+          const data = await response.json();
                 console.log(`📥 Response data for ${subject.subjectDescription}:`, data);
                 
                 if (data.success && data.data && data.data.grades && data.data.grades.length > 0) {
@@ -229,8 +229,8 @@ export default function Student_Grades() {
                   }
                 } else {
                   console.log(`⚠️ No grades in response for ${subject.subjectDescription}:`, data);
-                }
-              } else {
+          }
+        } else {
                 const errorText = await response.text();
                 console.log(`❌ API error for ${subject.subjectDescription}:`, response.status, errorText);
               }
@@ -258,8 +258,8 @@ export default function Student_Grades() {
           setGradesLoaded(validGrades.length);
         } else {
           console.log('⚠️ No valid student ID for grades fetch');
-          setGrades([]);
-          setGradesLoaded(0);
+        setGrades([]);
+        setGradesLoaded(0);
         }
         
       } catch (error) {
