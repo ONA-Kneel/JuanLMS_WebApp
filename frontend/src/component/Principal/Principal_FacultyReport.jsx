@@ -902,7 +902,6 @@ export default function Principal_FacultyReport() {
         sectionFilter: null,
         trackFilter: null,
         strandFilter: null,
-        reportType
       };
 
       if (reportType === 'strand') {
@@ -1037,20 +1036,18 @@ export default function Principal_FacultyReport() {
         options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
       });
     } else if (rType === 'section') {
-      // Main pie: activities by teacher for the section
+      // Show distribution by activity status within the section
       const section = analysisMeta?.filters?.section || modalSection || selectedSection;
       const inSection = filteredActivities.filter(a => a.sectionName === section);
-      const byTeacher = new Map();
-      for (const it of inSection) {
-        const t = it.facultyName || 'Unknown Faculty';
-        byTeacher.set(t, (byTeacher.get(t) || 0) + 1);
-      }
-      const labels = Array.from(byTeacher.keys());
-      const data = Array.from(byTeacher.values());
-      if (data.reduce((a,b)=>a+b,0) === 0) return;
+      const posted = inSection.filter(a => a.postAt && new Date(a.postAt) <= new Date()).length;
+      const pending = inSection.filter(a => !a.postAt || new Date(a.postAt) > new Date()).length;
+      if (posted + pending === 0) return;
       chartInstanceRef.current = new Chart(context, {
         type: 'pie',
-        data: { labels, datasets: [{ data, backgroundColor: labels.map((_,i)=>['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316'][i%8]), borderColor: '#ffffff', borderWidth: 2 }] },
+        data: {
+          labels: ['Posted', 'Pending'],
+          datasets: [{ data: [posted, pending], backgroundColor: ['#10b981','#f59e0b'], borderColor: '#ffffff', borderWidth: 2 }]
+        },
         options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
       });
     }

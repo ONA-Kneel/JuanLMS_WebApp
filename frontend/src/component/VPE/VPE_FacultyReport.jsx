@@ -255,7 +255,7 @@ export default function VPE_FacultyReport() {
   const [selectedStrand, setSelectedStrand] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
   const [selectedCourse, setSelectedCourse] = useState("");
-  const [SCHOOL_YEARS, setSCHOOL_YEARS] = useState([]);
+  const [schoolYears, setSchoolYears] = useState([]);
   const [terms, setTerms] = useState([]);
   const [selectedSchoolYear, setSelectedSchoolYear] = useState("");
   const [selectedTerm, setSelectedTerm] = useState("");
@@ -419,7 +419,7 @@ export default function VPE_FacultyReport() {
         if (yearRes.ok) {
           const years = await yearRes.json();
           const activeYears = years.filter(year => year.status !== 'archived');
-          setSCHOOL_YEARS(activeYears);
+          setSchoolYears(activeYears);
           
           // Auto-select the active school year
           activeYear = activeYears.find(year => year.status === 'active');
@@ -806,7 +806,7 @@ export default function VPE_FacultyReport() {
       };
       testServer();
     }
-  }, [currentTerm, fetchAuditData, fetchFacultyLastLogins]);
+  }, [currentTerm, fetchAuditData]);
 
   // Fetch faculty last logins
   const fetchFacultyLastLogins = useCallback(async () => {
@@ -872,7 +872,6 @@ export default function VPE_FacultyReport() {
         sectionFilter: null,
         trackFilter: null,
         strandFilter: null,
-        reportType
       };
 
       if (reportType === 'strand') {
@@ -1003,20 +1002,18 @@ export default function VPE_FacultyReport() {
         options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
       });
     } else if (rType === 'section') {
-      // Main pie: activities by teacher for the section
+      // Show distribution by activity status within the section
       const section = analysisMeta?.filters?.section || modalSection || selectedSection;
       const inSection = filteredActivities.filter(a => a.sectionName === section);
-      const byTeacher = new Map();
-      for (const it of inSection) {
-        const t = it.facultyName || 'Unknown Faculty';
-        byTeacher.set(t, (byTeacher.get(t) || 0) + 1);
-      }
-      const labels = Array.from(byTeacher.keys());
-      const data = Array.from(byTeacher.values());
-      if (data.reduce((a,b)=>a+b,0) === 0) return;
+      const posted = inSection.filter(a => a.postAt && new Date(a.postAt) <= new Date()).length;
+      const pending = inSection.filter(a => !a.postAt || new Date(a.postAt) > new Date()).length;
+      if (posted + pending === 0) return;
       chartInstanceRef.current = new Chart(context, {
         type: 'pie',
-        data: { labels, datasets: [{ data, backgroundColor: labels.map((_,i)=>['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316'][i%8]), borderColor: '#ffffff', borderWidth: 2 }] },
+        data: {
+          labels: ['Posted', 'Pending'],
+          datasets: [{ data: [posted, pending], backgroundColor: ['#10b981','#f59e0b'], borderColor: '#ffffff', borderWidth: 2 }]
+        },
         options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
       });
     }
@@ -1217,7 +1214,7 @@ export default function VPE_FacultyReport() {
                 className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
                 <option value="">All School Years</option>
-                {SCHOOL_YEARS.map(year => (
+                {schoolYears.map(year => (
                   <option key={year._id} value={`${year.schoolYearStart}-${year.schoolYearEnd}`}>
                     {year.schoolYearStart}-{year.schoolYearEnd}
                   </option>
@@ -1502,7 +1499,7 @@ export default function VPE_FacultyReport() {
               const notViewedCount = filteredRows.filter(item => item.status === "not_viewed").length;
               const missedCount = filteredRows.filter(item => item.status === "missed").length;
 
-              const _EXPORT_TO_EXCEL = () => {
+              const exportToExcel = () => {
                 // Create workbook
                 const wb = XLSX.utils.book_new();
                 
@@ -1646,7 +1643,7 @@ export default function VPE_FacultyReport() {
                       >
                         {loadingAudit ? 'Refreshing...' : 'Refresh'}
                       </button> */}
-                      {/* <button onClick={_EXPORT_TO_EXCEL} type="button" className="px-4 py-2 rounded bg-[#010a51] text-white hover:bg-[#1a237e]">Export</button> */}
+                      {/* <button onClick={exportToExcel} type="button" className="px-4 py-2 rounded bg-[#010a51] text-white hover:bg-[#1a237e]">Export</button> */}
                     </div>
                   </div>
 
