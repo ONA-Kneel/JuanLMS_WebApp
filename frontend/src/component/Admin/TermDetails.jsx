@@ -2040,6 +2040,636 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
   };
 
+  // Generate comprehensive PDF report with all term and quarter details
+  const generateComprehensivePDFReport = async () => {
+    try {
+      console.log('Generating comprehensive PDF report...');
+      
+      // Create a comprehensive HTML report
+      const reportHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>JUANLMS Comprehensive Report</title>
+          <style>
+            @page {
+              size: A4;
+              margin: 1in;
+            }
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 0;
+            }
+            .header {
+              display: flex;
+              align-items: center;
+              margin-bottom: 30px;
+              border-bottom: 2px solid #333;
+              padding-bottom: 20px;
+            }
+            .logo {
+              width: 80px;
+              height: 80px;
+              margin-right: 20px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .logo img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            .institution-info {
+              flex: 1;
+              text-align: center;
+            }
+            .institution-name {
+              font-size: 18px;
+              text-align: center;
+              font-weight: bold;
+              margin: 0;
+            }
+            .institution-address {
+              font-size: 16px;
+              text-align: center;
+              margin: 0;
+            }
+            .institution-accreditation {
+              font-size: 13px;
+              text-align: center;
+              margin: 0;
+            }
+            .report-info {
+              text-align: right;
+              margin-left: auto;
+            }
+            .report-title {
+              font-weight: bold;
+              margin: 0;
+              font-size: 14px;
+            }
+            .report-date {
+              margin: 5px 0 0 0;
+              font-size: 12px;
+            }
+            .section { margin: 30px 0; page-break-inside: avoid; }
+            .section h3 { color: #00418B; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #00418B; color: white; }
+            .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+            .stat-card { background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #00418B; }
+            .footer {
+              margin-top: 30px;
+              border-top: 1px solid #333;
+              padding-top: 15px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              font-size: 10px;
+              color: #333;
+            }
+            .footer-left {
+              text-align: left;
+            }
+            .footer-right {
+              text-align: right;
+            }
+            .footer-logo {
+              width: 30px;
+              height: 30px;
+            }
+            .footer-logo img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            @media print {
+              body { margin: 0; }
+              .section { page-break-inside: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo-section">
+              <div class="logo">
+                <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
+              </div>
+            </div>
+            <div class="institution-info">
+              <h1 class="institution-name">SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.</h1>
+              <p class="institution-address">2772-2774 Roxas Boulevard, Pasay City 1300 Philippines</p>
+              <p class="institution-accreditation">PAASCU Accredited - COLLEGE</p>
+            </div>
+            
+          </div>
+
+          <div class="section">
+          <div class="report-info">
+              <p class="report-title">Comprehensive Academic Report</p>
+              <p class="report-date">Date: ${new Date().toLocaleDateString()}</p>
+            </div>
+            <h3>TERM OVERVIEW</h3>
+            <div class="stats">
+              <div class="stat-card">
+                <strong>Term Name:</strong><br>${termDetails.termName}
+              </div>
+              <div class="stat-card">
+                <strong>School Year:</strong><br>${termDetails.schoolYear}
+              </div>
+              <div class="stat-card">
+                <strong>Status:</strong><br>${termDetails.status}
+              </div>
+              <div class="stat-card">
+                <strong>Created:</strong><br>${new Date(termDetails.createdAt).toLocaleDateString()}
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>SUMMARY STATISTICS</h3>
+            <div class="stats">
+              <div class="stat-card">
+                <strong>Total Tracks:</strong><br>${tracks.filter(t => t.status === 'active').length}
+              </div>
+              <div class="stat-card">
+                <strong>Total Strands:</strong><br>${strands.filter(s => s.status === 'active').length}
+              </div>
+              <div class="stat-card">
+                <strong>Total Sections:</strong><br>${sections.filter(s => s.status === 'active').length}
+              </div>
+              <div class="stat-card">
+                <strong>Total Subjects:</strong><br>${subjects.filter(s => s.status === 'active').length}
+              </div>
+              <div class="stat-card">
+                <strong>Faculty Assignments:</strong><br>${facultyAssignments.filter(fa => fa.status === 'active').length}
+              </div>
+              <div class="stat-card">
+                <strong>Student Assignments:</strong><br>${studentAssignments.filter(sa => sa.status === 'active').length}
+              </div>
+              <div class="stat-card">
+                <strong>Active Students:</strong><br>${studentAssignments.filter(sa => sa.status === 'active' && isStudentApproved(sa)).length}
+              </div>
+              <div class="stat-card">
+                <strong>Pending Approval:</strong><br>${studentAssignments.filter(sa => sa.status === 'active' && !isStudentApproved(sa)).length}
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>TRACKS</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Track Name</th>
+                  <th>Status</th>
+                  <th>School Year</th>
+                  <th>Term Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tracks.filter(t => t.status === 'active').map(track => `
+                  <tr>
+                    <td>${track.trackName}</td>
+                    <td>${track.status}</td>
+                    <td>${track.schoolYear}</td>
+                    <td>${track.termName}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <h3>STRANDS</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Strand Name</th>
+                  <th>Track Name</th>
+                  <th>Status</th>
+                  <th>School Year</th>
+                  <th>Term Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${strands.filter(s => s.status === 'active').map(strand => `
+                  <tr>
+                    <td>${strand.strandName}</td>
+                    <td>${strand.trackName}</td>
+                    <td>${strand.status}</td>
+                    <td>${strand.schoolYear}</td>
+                    <td>${strand.termName}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <h3>SECTIONS</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Section Name</th>
+                  <th>Track Name</th>
+                  <th>Strand Name</th>
+                  <th>Grade Level</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sections.filter(s => s.status === 'active').map(section => `
+                  <tr>
+                    <td>${section.sectionName}</td>
+                    <td>${section.trackName}</td>
+                    <td>${section.strandName}</td>
+                    <td>${section.gradeLevel}</td>
+                    <td>${section.status}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <h3>SUBJECTS</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Subject Name</th>
+                  <th>Subject Code</th>
+                  <th>Track Name</th>
+                  <th>Strand Name</th>
+                  <th>Grade Level</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${subjects.filter(s => s.status === 'active').map(subject => `
+                  <tr>
+                    <td>${subject.subjectName}</td>
+                    <td>${subject.subjectCode}</td>
+                    <td>${subject.trackName}</td>
+                    <td>${subject.strandName}</td>
+                    <td>${subject.gradeLevel}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <h3>FACULTY ASSIGNMENTS</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Faculty Name</th>
+                  <th>Faculty School ID</th>
+                  <th>Subject Name</th>
+                  <th>Track Name</th>
+                  <th>Strand Name</th>
+                  <th>Section Name</th>
+                  <th>Grade Level</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${facultyAssignments.filter(fa => fa.status === 'active').map(assignment => {
+                  const faculty = faculties.find(f => f._id === assignment.facultyId);
+                  return `
+                    <tr>
+                      <td>${faculty ? `${faculty.firstname} ${faculty.lastname}` : 'Unknown'}</td>
+                      <td>${faculty?.schoolID || ''}</td>
+                      <td>${assignment.subjectName}</td>
+                      <td>${assignment.trackName}</td>
+                      <td>${assignment.strandName}</td>
+                      <td>${assignment.sectionName}</td>
+                      <td>${assignment.gradeLevel}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <h3>STUDENT ASSIGNMENTS</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Student Name</th>
+                  <th>Student School ID</th>
+                  <th>Track Name</th>
+                  <th>Strand Name</th>
+                  <th>Section Name</th>
+                  <th>Grade Level</th>
+                  <th>Approval Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${studentAssignments.filter(sa => sa.status === 'active').map(assignment => {
+                  const student = students.find(s => s._id === assignment.studentId);
+                  const schoolId = student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '';
+                  const approvalStatus = isStudentApproved(assignment) ? 'Approved' : 'Pending Approval';
+                  
+                  return `
+                    <tr>
+                      <td>${assignment.studentName || 'Unknown'}</td>
+                      <td>${schoolId}</td>
+                      <td>${assignment.trackName}</td>
+                      <td>${assignment.strandName}</td>
+                      <td>${assignment.sectionName}</td>
+                      <td>${assignment.gradeLevel}</td>
+                      <td>${approvalStatus}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+
+
+          <div class="footer">
+            <div class="footer-left">
+              <p>Hospital Tel. Nos: 831-9731/36;831-5641/49 www.sanjuandedios.org College Tel.Nos.: 551-2756; 551-2763 www.sjdefi.edu.ph</p>
+            </div>
+            <div class="footer-right">
+              <div class="footer-logo"> 
+                <img src="/src/assets/logo/images.png" alt="San Juan de Dios Hospital Seal" />
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Open the report in a new window for printing
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(reportHTML);
+      printWindow.document.close();
+      
+      // Wait for content to load, then trigger print
+      printWindow.onload = function() {
+        printWindow.print();
+      };
+      
+      console.log('Comprehensive PDF report generated successfully!');
+      
+      
+    } catch (error) {
+      console.error('Error generating comprehensive PDF report:', error);
+      window.alert('Error generating comprehensive PDF report. Please try again.');
+    }
+  };
+
+  // Generate comprehensive report with all term and quarter details
+  const generateComprehensiveReport = async () => {
+    try {
+      console.log('Generating comprehensive report...');
+      
+      // Create a new workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Helper function to add header and footer to worksheets
+      const addHeaderFooter = (ws, title, data) => {
+        // Add header
+        const headerRow = [
+          ['JUANLMS - Learning Management System'],
+          ['Comprehensive Academic Report'],
+          [`${termDetails.schoolYear} - ${termDetails.termName}`],
+          [`Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`],
+          [''],
+          [title],
+          ['']
+        ];
+        
+        // Combine header with data
+        const fullData = [...headerRow, ...data];
+        
+        // Add footer
+        const footerRow = [
+          [''],
+          ['Report generated by JUANLMS System'],
+          [`© ${new Date().getFullYear()} JuanLMS. All rights reserved.`]
+        ];
+        
+        return [...fullData, ...footerRow];
+      };
+      
+      // 1. TERM OVERVIEW SHEET
+      const termOverviewData = [
+        ['TERM OVERVIEW'],
+        [''],
+        ['Term Name', termDetails.termName],
+        ['School Year', termDetails.schoolYear],
+        ['Status', termDetails.status],
+        ['Created At', new Date(termDetails.createdAt).toLocaleDateString()],
+        ['Updated At', new Date(termDetails.updatedAt).toLocaleDateString()],
+        [''],
+        ['SUMMARY STATISTICS'],
+        [''],
+        ['Total Tracks', tracks.filter(t => t.status === 'active').length],
+        ['Total Strands', strands.filter(s => s.status === 'active').length],
+        ['Total Sections', sections.filter(s => s.status === 'active').length],
+        ['Total Subjects', subjects.filter(s => s.status === 'active').length],
+        ['Total Faculty Assignments', facultyAssignments.filter(fa => fa.status === 'active').length],
+        ['Total Student Assignments', studentAssignments.filter(sa => sa.status === 'active').length],
+        ['Active Students', studentAssignments.filter(sa => sa.status === 'active' && isStudentApproved(sa)).length],
+        ['Pending Approval Students', studentAssignments.filter(sa => sa.status === 'active' && !isStudentApproved(sa)).length]
+      ];
+      
+      const termOverviewWs = XLSX.utils.aoa_to_sheet(addHeaderFooter([], 'TERM OVERVIEW', termOverviewData));
+      XLSX.utils.book_append_sheet(wb, termOverviewWs, 'Term Overview');
+      
+      // 2. TRACKS SHEET
+      const tracksData = [
+        ['Track Name', 'Status', 'School Year', 'Term Name', 'Created At']
+      ].concat(
+        tracks.filter(t => t.status === 'active').map(track => [
+          track.trackName,
+          track.status,
+          track.schoolYear,
+          track.termName,
+          new Date(track.createdAt).toLocaleDateString()
+        ])
+      );
+      
+      const tracksWs = XLSX.utils.aoa_to_sheet(addHeaderFooter([], 'TRACKS', tracksData));
+      XLSX.utils.book_append_sheet(wb, tracksWs, 'Tracks');
+      
+      // 3. STRANDS SHEET
+      const strandsData = [
+        ['Strand Name', 'Track Name', 'Status', 'School Year', 'Term Name', 'Created At']
+      ].concat(
+        strands.filter(s => s.status === 'active').map(strand => [
+          strand.strandName,
+          strand.trackName,
+          strand.status,
+          strand.schoolYear,
+          strand.termName,
+          new Date(strand.createdAt).toLocaleDateString()
+        ])
+      );
+      
+      const strandsWs = XLSX.utils.aoa_to_sheet(addHeaderFooter([], 'STRANDS', strandsData));
+      XLSX.utils.book_append_sheet(wb, strandsWs, 'Strands');
+      
+      // 4. SECTIONS SHEET
+      const sectionsData = [
+        ['Section Name', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Created At']
+      ].concat(
+        sections.filter(s => s.status === 'active').map(section => [
+          section.sectionName,
+          section.trackName,
+          section.strandName,
+          section.gradeLevel,
+          section.status,
+          section.schoolYear,
+          section.termName,
+          new Date(section.createdAt).toLocaleDateString()
+        ])
+      );
+      
+      const sectionsWs = XLSX.utils.aoa_to_sheet(addHeaderFooter([], 'SECTIONS', sectionsData));
+      XLSX.utils.book_append_sheet(wb, sectionsWs, 'Sections');
+      
+      // 5. SUBJECTS SHEET
+      const subjectsData = [
+        ['Subject Name', 'Subject Code', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Created At']
+      ].concat(
+        subjects.filter(s => s.status === 'active').map(subject => [
+          subject.subjectName,
+          subject.subjectCode,
+          subject.trackName,
+          subject.strandName,
+          subject.gradeLevel,
+          subject.status,
+          subject.schoolYear,
+          subject.termName,
+          new Date(subject.createdAt).toLocaleDateString()
+        ])
+      );
+      
+      const subjectsWs = XLSX.utils.aoa_to_sheet(addHeaderFooter([], 'SUBJECTS', subjectsData));
+      XLSX.utils.book_append_sheet(wb, subjectsWs, 'Subjects');
+      
+      // 6. FACULTY ASSIGNMENTS SHEET
+      const facultyAssignmentsData = [
+        ['Faculty Name', 'Faculty School ID', 'Subject Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Created At']
+      ].concat(
+        facultyAssignments.filter(fa => fa.status === 'active').map(assignment => {
+          const faculty = faculties.find(f => f._id === assignment.facultyId);
+          return [
+            faculty ? `${faculty.firstname} ${faculty.lastname}` : 'Unknown',
+            faculty?.schoolID || '',
+            assignment.subjectName,
+            assignment.trackName,
+            assignment.strandName,
+            assignment.sectionName,
+            assignment.gradeLevel,
+            assignment.status,
+            assignment.schoolYear,
+            assignment.termName,
+            new Date(assignment.createdAt).toLocaleDateString()
+          ];
+        })
+      );
+      
+      const facultyAssignmentsWs = XLSX.utils.aoa_to_sheet(addHeaderFooter([], 'FACULTY ASSIGNMENTS', facultyAssignmentsData));
+      XLSX.utils.book_append_sheet(wb, facultyAssignmentsWs, 'Faculty Assignments');
+      
+      // 7. STUDENT ASSIGNMENTS SHEET
+      const studentAssignmentsData = [
+        ['Student Name', 'Student School ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'Approval Status', 'School Year', 'Term Name', 'Created At']
+      ].concat(
+        studentAssignments.filter(sa => sa.status === 'active').map(assignment => {
+          const student = students.find(s => s._id === assignment.studentId);
+          const schoolId = student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '';
+          const approvalStatus = isStudentApproved(assignment) ? 'Approved' : 'Pending Approval';
+          
+          return [
+            assignment.studentName || 'Unknown',
+            schoolId,
+            assignment.trackName,
+            assignment.strandName,
+            assignment.sectionName,
+            assignment.gradeLevel,
+            assignment.status,
+            approvalStatus,
+            assignment.schoolYear,
+            assignment.termName,
+            new Date(assignment.createdAt).toLocaleDateString()
+          ];
+        })
+      );
+      
+      const studentAssignmentsWs = XLSX.utils.aoa_to_sheet(addHeaderFooter([], 'STUDENT ASSIGNMENTS', studentAssignmentsData));
+      XLSX.utils.book_append_sheet(wb, studentAssignmentsWs, 'Student Assignments');
+      
+      // 8. REGISTRANTS SHEET
+      const registrantsData = [
+        ['First Name', 'Middle Name', 'Last Name', 'School ID', 'Track Name', 'Strand Name', 'Section Name', 'Personal Email', 'Contact No.', 'Status', 'Date', 'Created At']
+      ].concat(
+        registrants.map(registrant => [
+          registrant.firstName,
+          registrant.middleName || '',
+          registrant.lastName,
+          registrant.schoolID,
+          registrant.trackName || '',
+          registrant.strandName || '',
+          registrant.sectionName || '',
+          registrant.personalEmail,
+          registrant.contactNo,
+          registrant.status,
+          registrant.date,
+          new Date(registrant.createdAt).toLocaleDateString()
+        ])
+      );
+      
+      const registrantsWs = XLSX.utils.aoa_to_sheet(addHeaderFooter([], 'REGISTRANTS', registrantsData));
+      XLSX.utils.book_append_sheet(wb, registrantsWs, 'Registrants');
+      
+      // 9. SUMMARY STATISTICS SHEET
+      const summaryData = [
+        ['CATEGORY', 'TOTAL', 'ACTIVE', 'ARCHIVED', 'PENDING'],
+        ['Tracks', tracks.length, tracks.filter(t => t.status === 'active').length, tracks.filter(t => t.status === 'archived').length, 0],
+        ['Strands', strands.length, strands.filter(s => s.status === 'active').length, strands.filter(s => s.status === 'archived').length, 0],
+        ['Sections', sections.length, sections.filter(s => s.status === 'active').length, sections.filter(s => s.status === 'archived').length, 0],
+        ['Subjects', subjects.length, subjects.filter(s => s.status === 'active').length, subjects.filter(s => s.status === 'archived').length, 0],
+        ['Faculty Assignments', facultyAssignments.length, facultyAssignments.filter(fa => fa.status === 'active').length, facultyAssignments.filter(fa => fa.status === 'archived').length, 0],
+        ['Student Assignments', studentAssignments.length, studentAssignments.filter(sa => sa.status === 'active').length, studentAssignments.filter(sa => sa.status === 'archived').length, 0],
+        [''],
+        ['STUDENT APPROVAL STATUS'],
+        ['Approved Students', studentAssignments.filter(sa => sa.status === 'active' && isStudentApproved(sa)).length],
+        ['Pending Approval Students', studentAssignments.filter(sa => sa.status === 'active' && !isStudentApproved(sa)).length],
+        [''],
+        ['REGISTRANT STATUS'],
+        ['Approved Registrants', registrants.filter(r => r.status === 'approved').length],
+        ['Pending Registrants', registrants.filter(r => r.status === 'pending').length],
+        ['Rejected Registrants', registrants.filter(r => r.status === 'rejected').length]
+      ];
+      
+      const summaryWs = XLSX.utils.aoa_to_sheet(addHeaderFooter([], 'SUMMARY STATISTICS', summaryData));
+      XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary Statistics');
+      
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+      const filename = `JUANLMS_Comprehensive_Report_${termDetails.schoolYear}_${termDetails.termName}_${timestamp}.xlsx`;
+      
+      // Save the file
+      XLSX.writeFile(wb, filename);
+      
+      console.log('Comprehensive report generated successfully!');
+      window.alert('Comprehensive report generated successfully!');
+      
+    } catch (error) {
+      console.error('Error generating comprehensive report:', error);
+      window.alert('Error generating comprehensive report. Please try again.');
+    }
+  };
+
   // Add these new functions for Excel handling
   const downloadTemplate = async () => {
     try {
@@ -5427,9 +6057,9 @@ Validation issues (${skippedCount} items):
                         }).catch(() => {});
                       } catch {}
                     }}
-                    className="bg-yellow-400 text-white py-2 px-4 rounded-md hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2"
+                    className="bg-blue-900 text-white py-2 px-4 rounded-md hover:bg-blue-950 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2"
                   >
-                    Export Term Data
+                    Export Term Data for Bulk Upload
                   </button>
                   {/* Hidden file input for import */}
                   <input
@@ -5441,9 +6071,15 @@ Validation issues (${skippedCount} items):
                   />
                   <button
                     onClick={() => importFileInputRef.current.click()} // Trigger file input click
-                    className="bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                    className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
                   >
                     Import Term Data
+                  </button>
+                  <button
+                    onClick={generateComprehensivePDFReport}
+                    className="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  >
+                    Export PDF Report
                   </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
