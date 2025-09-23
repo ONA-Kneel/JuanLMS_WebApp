@@ -15,7 +15,7 @@ router.post("/create-analysis", authenticateToken, async (req, res) => {
       });
     }
 
-    const { schoolYear, termName, sectionFilter, trackFilter, strandFilter } = req.body;
+    const { schoolYear, termName, sectionFilter, trackFilter, strandFilter, reportType: clientReportType } = req.body;
 
     if (!schoolYear || !termName) {
       return res.status(400).json({ 
@@ -205,8 +205,6 @@ router.post("/create-analysis", authenticateToken, async (req, res) => {
       }
     };
 
-    console.log(`[AI ANALYTICS] Analysis data prepared:`, JSON.stringify(analysisData, null, 2));
-
     // Apply filters if provided
     if (sectionFilter && sectionFilter !== 'All Sections') {
       analysisData.sections = [sectionFilter];
@@ -223,8 +221,8 @@ router.post("/create-analysis", authenticateToken, async (req, res) => {
       analysisData.facultyAssignments = facultyAssignments.filter(fa => fa.strandName === strandFilter).length;
     }
 
-    // Create the prompt for DeepSeek AI
-    const workloadLines = analysisData.workloadByFaculty.map(w => `- ${w.facultyName}${w.sections && w.sections.length ? ` (Sections: ${w.sections.join(', ')})` : ''}: ${w.totalActivities} activities`).join('\n');
+    // Determine report type (year/strand/section)
+    const inferredReportType = clientReportType || (sectionFilter ? 'section' : (strandFilter ? 'strand' : 'year'));
 
     // Build a faculty directory section with names and sections; never include raw IDs
     const facultyDirectoryLines = [...new Set(
@@ -237,48 +235,26 @@ router.post("/create-analysis", authenticateToken, async (req, res) => {
       })
       .join('\n');
 
-    const prompt = `As an educational analytics expert, please analyze the following data from ${schoolYear} - ${termName} and provide insights on:
+    const audienceLine = req.user.role === 'vice president of education'
+      ? 'Audience: Vice President of Education (program-level insights, faculty workload trends, and strategic recommendations).'
+      : 'Audience: Principal (school-wide outcomes, section performance, and actionable recommendations).';
 
-SCHOOL YEAR: ${schoolYear}
-TERM: ${termName}
+    // Tailor instructions based on report type
+    let focusBlock = '';
+    if (inferredReportType === 'year') {
+      focusBlock = `REPORT SCOPE: Whole active academic year (no specific strand/section filter).\n
+Please provide balanced program/school-wide insights suitable for leadership review.`;
+    } else if (inferredReportType === 'strand') {
+      focusBlock = `REPORT SCOPE: Specific STRAND${strandFilter ? ` — ${strandFilter}` : ''}.\n
+Focus on this strand: key trends, workload/participation patterns, and specific improvements for the strand (curriculum pacing, activity design, faculty coordination).`;
+    } else if (inferredReportType === 'section') {
+      focusBlock = `REPORT SCOPE: Specific SECTION${sectionFilter ? ` — ${sectionFilter}` : ''}.\n
+Focus on this section: how students are doing (engagement signals, timeliness), strengths and weaknesses, targeted interventions and follow‑ups.`;
+    }
 
-FACULTY DIRECTORY (Names and Sections):
-${facultyDirectoryLines || '- No faculty listed'}
+    const workloadLines = analysisData.workloadByFaculty.map(w => `- ${w.facultyName}${w.sections && w.sections.length ? ` (Sections: ${w.sections.join(', ')})` : ''}: ${w.totalActivities} activities`).join('\n');
 
-FACULTY ACTIVITIES:
-- Total faculty assignments: ${analysisData.facultyAssignments}
-- Sections: ${analysisData.sections.join(', ') || 'None found'}
-- Tracks: ${analysisData.tracks.join(', ') || 'None found'}
-- Strands: ${analysisData.strands.join(', ') || 'None found'}
-- Faculty members: ${analysisData.facultyNames.join(', ') || 'None found'}
-- Workload by faculty:\n${workloadLines || '- No creators found'}
-
-ACTIVITY SUMMARY:
-- Total activities created: ${analysisData.activitySummary.totalActivities}
-- Assignments: ${analysisData.activitySummary.assignmentsCount}
-- Quizzes: ${analysisData.activitySummary.quizzesCount}
-- Posted activities: ${analysisData.activitySummary.postedActivities}
-- Pending activities: ${analysisData.activitySummary.pendingActivities}
-
-STUDENT ENGAGEMENT:
-- Total student interactions: ${analysisData.studentEngagement.totalStudents}
-- Login count: ${analysisData.studentEngagement.loginCount}
-- Logout count: ${analysisData.studentEngagement.logoutCount}
-- Other actions: ${analysisData.studentEngagement.otherActions}
-
-SYSTEM OVERVIEW:
-- Total classes: ${analysisData.classes}
-- Total audit logs: ${analysisData.auditLogs}
-
-Please provide:
-1. A comprehensive summary of faculty performance and activity levels (use names above, avoid IDs)
-2. Analysis of student engagement patterns
-3. Identification of areas where sections can improve study time and participation
-4. Recommendations for faculty to enhance student engagement
-5. Suggestions for improving assignment and quiz effectiveness
-6. Overall academic performance insights
-
-Format your response in a clear, structured manner suitable for educational leadership review.`;
+    const prompt = `As an educational analytics expert, prepare a role-aware report.\n${audienceLine}\n${focusBlock}\n\nSCHOOL YEAR: ${schoolYear}\nTERM: ${termName}\n\nFACULTY DIRECTORY (Names and Sections):\n${facultyDirectoryLines || '- No faculty listed'}\n\nFACULTY ACTIVITIES:\n- Total faculty assignments: ${analysisData.facultyAssignments}\n- Sections: ${analysisData.sections.join(', ') || 'None found'}\n- Tracks: ${analysisData.tracks.join(', ') || 'None found'}\n- Strands: ${analysisData.strands.join(', ') || 'None found'}\n- Faculty members: ${analysisData.facultyNames.join(', ') || 'None found'}\n- Workload by faculty:\n${workloadLines || '- No creators found'}\n\nACTIVITY SUMMARY (Assignments + Quizzes):\n- Total: ${analysisData.activitySummary.totalActivities}\n- Assignments: ${analysisData.activitySummary.assignmentsCount}\n- Quizzes: ${analysisData.activitySummary.quizzesCount}\n- Posted: ${analysisData.activitySummary.postedActivities}\n- Pending: ${analysisData.activitySummary.pendingActivities}\n\nSTUDENT ENGAGEMENT SIGNALS (from audit logs):\n- Interactions total: ${analysisData.studentEngagement.totalStudents}\n- Logins: ${analysisData.studentEngagement.loginCount}\n- Logouts: ${analysisData.studentEngagement.logoutCount}\n- Other actions: ${analysisData.studentEngagement.otherActions}\n\nSYSTEM OVERVIEW:\n- Total classes: ${analysisData.classes}\n- Total audit logs: ${analysisData.auditLogs}\n\nPlease provide:\n1) Executive summary tailored to the audience and report scope.\n2) Key findings for the scope (${inferredReportType}).\n3) For STRAND scope: what is seen in the strand and concrete improvements.\n4) For SECTION scope: how the students are doing, strengths and weaknesses, targeted interventions.\n5) Faculty recommendations to enhance engagement and activity effectiveness.\n6) Risks and next steps.\nFormat clearly for leadership review.`;
 
     console.log(`[AI ANALYTICS] Sending prompt to DeepSeek AI...`);
 
@@ -356,6 +332,7 @@ Format your response in a clear, structured manner suitable for educational lead
       sectionFilter: sectionFilter || null,
       trackFilter: trackFilter || null,
       strandFilter: strandFilter || null,
+      reportType: inferredReportType,
       analysisData,
       aiAnalysis: analysis,
       createdBy: req.user._id,
@@ -373,6 +350,7 @@ Format your response in a clear, structured manner suitable for educational lead
       metadata: {
         schoolYear,
         termName,
+        reportType: inferredReportType,
         filters: {
           section: sectionFilter,
           track: trackFilter,

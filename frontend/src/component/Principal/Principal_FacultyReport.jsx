@@ -302,6 +302,7 @@ export default function Principal_FacultyReport() {
   const sectionChartInstanceRef = useRef(null);
   const trackChartInstanceRef = useRef(null);
   const strandChartInstanceRef = useRef(null);
+  const [analysisMeta, setAnalysisMeta] = useState(null);
 
   // Tab state
   const [activeTab, setActiveTab] = useState('activities');
@@ -925,6 +926,7 @@ export default function Principal_FacultyReport() {
 
       const data = await response.json();
       setAiAnalysis(data.analysis);
+      setAnalysisMeta(data.metadata || null);
       setShowAnalysisModal(true);
     } catch (error) {
       console.error("AI Analysis Error:", error);
@@ -996,38 +998,61 @@ export default function Principal_FacultyReport() {
     if (chartInstanceRef.current) {
       chartInstanceRef.current.destroy();
     }
-    if (assignmentsCount + quizzesCount === 0) return;
-    chartInstanceRef.current = new Chart(context, {
-      type: 'pie',
-      data: {
-        labels: ['Assignments', 'Quizzes'],
-        datasets: [{
-          data: [assignmentsCount, quizzesCount],
-          backgroundColor: ['#f59e0b', '#3b82f6'],
-          borderColor: '#ffffff',
-          borderWidth: 2
-        }]
-      },
-      options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
-    });
-    // Build distribution charts for Section, Track, Strand
-    const buildCounts = (items, key) => {
-      const map = new Map();
-      for (const it of items) {
-        const label = (it[key] || 'Unknown');
-        map.set(label, (map.get(label) || 0) + 1);
+
+    // Determine report type
+    const rType = analysisMeta?.reportType || (modalStrand ? 'strand' : (modalSection ? 'section' : 'year'));
+
+    // Base counts
+    const totalAssign = assignmentsCount;
+    const totalQuiz = quizzesCount;
+
+    if (rType === 'year') {
+      if (totalAssign + totalQuiz === 0) return;
+      chartInstanceRef.current = new Chart(context, {
+        type: 'pie',
+        data: {
+          labels: ['Assignments', 'Quizzes'],
+          datasets: [{ data: [totalAssign, totalQuiz], backgroundColor: ['#f59e0b', '#3b82f6'], borderColor: '#ffffff', borderWidth: 2 }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
+      });
+    } else if (rType === 'strand') {
+      // Show distribution by section within the strand
+      const inStrand = filteredActivities.filter(a => a.strandName === (analysisMeta?.filters?.strand || modalStrand || selectedStrand));
+      const bySection = new Map();
+      for (const it of inStrand) {
+        const key = it.sectionName || 'Unknown';
+        bySection.set(key, (bySection.get(key) || 0) + 1);
       }
-      const labels = Array.from(map.keys());
-      const data = Array.from(map.values());
-      return { labels, data };
-    };
-    const sectionDist = buildCounts(filteredActivities, 'sectionName');
-    const trackDist = buildCounts(filteredActivities, 'trackName');
-    const strandDist = buildCounts(filteredActivities, 'strandName');
+      const labels = Array.from(bySection.keys());
+      const data = Array.from(bySection.values());
+      if (data.reduce((a,b)=>a+b,0) === 0) return;
+      chartInstanceRef.current = new Chart(context, {
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{ data, backgroundColor: labels.map((_,i)=>['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316'][i%8]), borderColor: '#ffffff', borderWidth: 2 }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
+      });
+    } else if (rType === 'section') {
+      // Show distribution by activity status within the section
+      const section = analysisMeta?.filters?.section || modalSection || selectedSection;
+      const inSection = filteredActivities.filter(a => a.sectionName === section);
+      const posted = inSection.filter(a => a.postAt && new Date(a.postAt) <= new Date()).length;
+      const pending = inSection.filter(a => !a.postAt || new Date(a.postAt) > new Date()).length;
+      if (posted + pending === 0) return;
+      chartInstanceRef.current = new Chart(context, {
+        type: 'pie',
+        data: {
+          labels: ['Posted', 'Pending'],
+          datasets: [{ data: [posted, pending], backgroundColor: ['#10b981','#f59e0b'], borderColor: '#ffffff', borderWidth: 2 }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
+      });
+    }
 
-    const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316','#22c55e','#6366f1','#e11d48','#14b8a6'];
-    const toColors = (n) => Array.from({ length: n }, (_, i) => palette[i % palette.length]);
-
+    // Secondary pies based on report type
     const secCanvas = sectionChartCanvasRef.current;
     const trkCanvas = trackChartCanvasRef.current;
     const strCanvas = strandChartCanvasRef.current;
@@ -1036,52 +1061,72 @@ export default function Principal_FacultyReport() {
     if (trackChartInstanceRef.current) trackChartInstanceRef.current.destroy();
     if (strandChartInstanceRef.current) strandChartInstanceRef.current.destroy();
 
-    if (secCanvas && sectionDist.data.reduce((a,b)=>a+b,0) > 0) {
-      sectionChartInstanceRef.current = new Chart(secCanvas.getContext('2d'), {
-        type: 'pie',
-        data: {
-          labels: sectionDist.labels,
-          datasets: [{
-            data: sectionDist.data,
-            backgroundColor: toColors(sectionDist.data.length),
-            borderColor: '#ffffff',
-            borderWidth: 2
-          }]
-        },
-        options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
-      });
-    }
+    const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316','#22c55e','#6366f1'];
+    const toColors = (n) => Array.from({ length: n }, (_, i) => palette[i % palette.length]);
 
-    if (trkCanvas && trackDist.data.reduce((a,b)=>a+b,0) > 0) {
-      trackChartInstanceRef.current = new Chart(trkCanvas.getContext('2d'), {
-        type: 'pie',
-        data: {
-          labels: trackDist.labels,
-          datasets: [{
-            data: trackDist.data,
-            backgroundColor: toColors(trackDist.data.length),
-            borderColor: '#ffffff',
-            borderWidth: 2
-          }]
-        },
-        options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
-      });
-    }
-
-    if (strCanvas && strandDist.data.reduce((a,b)=>a+b,0) > 0) {
-      strandChartInstanceRef.current = new Chart(strCanvas.getContext('2d'), {
-        type: 'pie',
-        data: {
-          labels: strandDist.labels,
-          datasets: [{
-            data: strandDist.data,
-            backgroundColor: toColors(strandDist.data.length),
-            borderColor: '#ffffff',
-            borderWidth: 2
-          }]
-        },
-        options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
-      });
+    if (rType === 'year') {
+      const buildCounts = (items, key) => {
+        const map = new Map();
+        for (const it of items) { const k = it[key] || 'Unknown'; map.set(k, (map.get(k)||0)+1); }
+        return { labels: Array.from(map.keys()), data: Array.from(map.values()) };
+      };
+      const sectionDist = buildCounts(filteredActivities, 'sectionName');
+      const trackDist = buildCounts(filteredActivities, 'trackName');
+      const strandDist = buildCounts(filteredActivities, 'strandName');
+      if (secCanvas && sectionDist.data.reduce((a,b)=>a+b,0) > 0) {
+        sectionChartInstanceRef.current = new Chart(secCanvas.getContext('2d'), { type: 'pie', data: { labels: sectionDist.labels, datasets: [{ data: sectionDist.data, backgroundColor: toColors(sectionDist.data.length), borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+      }
+      if (trkCanvas && trackDist.data.reduce((a,b)=>a+b,0) > 0) {
+        trackChartInstanceRef.current = new Chart(trkCanvas.getContext('2d'), { type: 'pie', data: { labels: trackDist.labels, datasets: [{ data: trackDist.data, backgroundColor: toColors(trackDist.data.length), borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+      }
+      if (strCanvas && strandDist.data.reduce((a,b)=>a+b,0) > 0) {
+        strandChartInstanceRef.current = new Chart(strCanvas.getContext('2d'), { type: 'pie', data: { labels: strandDist.labels, datasets: [{ data: strandDist.data, backgroundColor: toColors(strandDist.data.length), borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+      }
+    } else if (rType === 'strand') {
+      const strandVal = analysisMeta?.filters?.strand || modalStrand || selectedStrand;
+      const inStrand = filteredActivities.filter(a => a.strandName === strandVal);
+      const bySection = new Map();
+      let aCount = 0, qCount = 0;
+      for (const it of inStrand) {
+        const sec = it.sectionName || 'Unknown';
+        bySection.set(sec, (bySection.get(sec)||0) + 1);
+        if (it._kind === 'assignment') aCount++; else if (it._kind === 'quiz') qCount++;
+      }
+      if (sectionChartCanvasRef.current) {
+        const labels = Array.from(bySection.keys()); const data = Array.from(bySection.values());
+        if (data.reduce((a,b)=>a+b,0) > 0) {
+          sectionChartInstanceRef.current = new Chart(sectionChartCanvasRef.current.getContext('2d'), { type: 'pie', data: { labels, datasets: [{ data, backgroundColor: toColors(data.length), borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+        }
+      }
+      if (trackChartCanvasRef.current && (aCount+qCount)>0) {
+        trackChartInstanceRef.current = new Chart(trackChartCanvasRef.current.getContext('2d'), { type: 'pie', data: { labels: ['Assignments','Quizzes'], datasets: [{ data: [aCount,qCount], backgroundColor: ['#f59e0b','#3b82f6'], borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+      }
+    } else if (rType === 'section') {
+      const sectionVal = analysisMeta?.filters?.section || modalSection || selectedSection;
+      const inSection = filteredActivities.filter(a => a.sectionName === sectionVal);
+      const byCourse = new Map();
+      let posted = 0, pending = 0;
+      for (const it of inSection) {
+        const course = it.subject || 'Unknown';
+        byCourse.set(course, (byCourse.get(course)||0) + 1);
+        if (it.postAt && new Date(it.postAt) <= new Date()) posted++; else pending++;
+      }
+      if (sectionChartCanvasRef.current) {
+        const labels = Array.from(byCourse.keys()); const data = Array.from(byCourse.values());
+        if (data.reduce((a,b)=>a+b,0) > 0) {
+          sectionChartInstanceRef.current = new Chart(sectionChartCanvasRef.current.getContext('2d'), { type: 'pie', data: { labels, datasets: [{ data, backgroundColor: toColors(data.length), borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+        }
+      }
+      if (trackChartCanvasRef.current && (posted+pending)>0) {
+        trackChartInstanceRef.current = new Chart(trackChartCanvasRef.current.getContext('2d'), { type: 'pie', data: { labels: ['Posted','Pending'], datasets: [{ data: [posted,pending], backgroundColor: ['#10b981','#f59e0b'], borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+      }
+      if (strandChartCanvasRef.current) {
+        const aCount = inSection.filter(a => a._kind==='assignment').length;
+        const qCount = inSection.filter(a => a._kind==='quiz').length;
+        if (aCount+qCount>0) {
+          strandChartInstanceRef.current = new Chart(strandChartCanvasRef.current.getContext('2d'), { type: 'pie', data: { labels: ['Assignments','Quizzes'], datasets: [{ data: [aCount,qCount], backgroundColor: ['#f59e0b','#3b82f6'], borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+        }
+      }
     }
 
     return () => {
@@ -1090,7 +1135,7 @@ export default function Principal_FacultyReport() {
       if (trackChartInstanceRef.current) trackChartInstanceRef.current.destroy();
       if (strandChartInstanceRef.current) strandChartInstanceRef.current.destroy();
     };
-  }, [showAnalysisModal, assignmentsCount, quizzesCount, filteredActivities]);
+  }, [showAnalysisModal, assignmentsCount, quizzesCount, filteredActivities, analysisMeta, modalStrand, modalSection, selectedStrand, selectedSection]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
