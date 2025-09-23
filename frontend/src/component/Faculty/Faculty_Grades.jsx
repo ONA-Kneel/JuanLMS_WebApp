@@ -191,8 +191,16 @@ export default function Faculty_Grades() {
       
       if (assignmentsResponse.ok) {
         assignmentsData = await assignmentsResponse.json();
-        // Filter assignments by selected quarter
-        assignmentsData = assignmentsData.filter(assignment => assignment.quarter === selectedQuarter);
+        // Filter assignments by selected quarter (handle both Q1/Q2 and Quarter 1/Quarter 2 formats)
+        assignmentsData = assignmentsData.filter(assignment => {
+          const assignmentQuarter = assignment.quarter;
+          const normalizedAssignmentQuarter = assignmentQuarter === 'Quarter 1' ? 'Q1' :
+                                           assignmentQuarter === 'Quarter 2' ? 'Q2' :
+                                           assignmentQuarter === 'Quarter 3' ? 'Q3' :
+                                           assignmentQuarter === 'Quarter 4' ? 'Q4' :
+                                           assignmentQuarter;
+          return normalizedAssignmentQuarter === selectedQuarter;
+        });
         console.log(`Assignments fetched for ${selectedQuarter}:`, assignmentsData);
         setAssignments(assignmentsData);
       } else {
@@ -206,8 +214,16 @@ export default function Faculty_Grades() {
       
       if (quizzesResponse.ok) {
         quizzesData = await quizzesResponse.json();
-        // Filter quizzes by selected quarter
-        quizzesData = quizzesData.filter(quiz => quiz.quarter === selectedQuarter);
+        // Filter quizzes by selected quarter (handle both Q1/Q2 and Quarter 1/Quarter 2 formats)
+        quizzesData = quizzesData.filter(quiz => {
+          const quizQuarter = quiz.quarter;
+          const normalizedQuizQuarter = quizQuarter === 'Quarter 1' ? 'Q1' :
+                                      quizQuarter === 'Quarter 2' ? 'Q2' :
+                                      quizQuarter === 'Quarter 3' ? 'Q3' :
+                                      quizQuarter === 'Quarter 4' ? 'Q4' :
+                                      quizQuarter;
+          return normalizedQuizQuarter === selectedQuarter;
+        });
         console.log(`Quizzes fetched for ${selectedQuarter}:`, quizzesData);
         setQuizzes(quizzesData);
       } else {
@@ -339,7 +355,7 @@ export default function Faculty_Grades() {
               console.log('Extracted studentId from assignment:', studentId);
               
               if (!assignmentScores[studentId]) {
-                assignmentScores[studentId] = { assignments: [], quizzes: [] };
+                assignmentScores[studentId] = { writtenWorks: [], performanceTasks: [] };
                 console.log('Created new student entry for assignment:', studentId);
               }
               
@@ -348,7 +364,13 @@ export default function Faculty_Grades() {
                 totalScore: assignment.points || 100
               };
               console.log('Adding assignment score:', scoreData);
-              assignmentScores[studentId].assignments.push(scoreData);
+              
+              // Categorize by activityType
+              if (assignment.activityType === 'performance') {
+                assignmentScores[studentId].performanceTasks.push(scoreData);
+              } else {
+                assignmentScores[studentId].writtenWorks.push(scoreData);
+              }
             });
           } else {
             console.error(`Failed to fetch submissions for assignment ${assignment._id}:`, response.status);
@@ -388,7 +410,7 @@ export default function Faculty_Grades() {
               console.log('Extracted studentId from quiz:', studentId);
               
               if (!assignmentScores[studentId]) {
-                assignmentScores[studentId] = { assignments: [], quizzes: [] };
+                assignmentScores[studentId] = { writtenWorks: [], performanceTasks: [] };
                 console.log('Created new student entry for quiz:', studentId);
               }
               
@@ -397,7 +419,13 @@ export default function Faculty_Grades() {
                 totalScore: quiz.points || 100
               };
               console.log('Adding quiz score:', scoreData);
-              assignmentScores[studentId].quizzes.push(scoreData);
+              
+              // Categorize by activityType
+              if (quiz.activityType === 'performance') {
+                assignmentScores[studentId].performanceTasks.push(scoreData);
+              } else {
+                assignmentScores[studentId].writtenWorks.push(scoreData);
+              }
             });
           } else {
             console.error(`Failed to fetch responses for quiz ${quiz._id}:`, response.status);
@@ -437,23 +465,25 @@ export default function Faculty_Grades() {
     }
 
     // Calculate RAW scores for this student
-    const writtenWorksRAW = studentScore.assignments.reduce((sum, assignment) => sum + assignment.score, 0);
-    const performanceTasksRAW = studentScore.quizzes.reduce((sum, quiz) => sum + quiz.score, 0);
+    const writtenWorksRAW = studentScore.writtenWorks.reduce((sum, activity) => sum + activity.score, 0);
+    const performanceTasksRAW = studentScore.performanceTasks.reduce((sum, activity) => sum + activity.score, 0);
 
     // Calculate HPS from all activities (should be the same for all students)
-    const writtenWorksHPS = assignments
-      .filter(assignment => {
-        const isFuturePost = new Date(assignment.postAt) > new Date();
-        return !isFuturePost;
+    // Written Works: assignments and quizzes with activityType === 'written'
+    const writtenWorksHPS = [...assignments, ...quizzes]
+      .filter(activity => {
+        const isFuturePost = new Date(activity.postAt) > new Date();
+        return !isFuturePost && activity.activityType === 'written';
       })
-      .reduce((sum, assignment) => sum + (assignment.points || 100), 0);
+      .reduce((sum, activity) => sum + (activity.points || 100), 0);
 
-    const performanceTasksHPS = quizzes
-      .filter(quiz => {
-        const isFuturePost = new Date(quiz.postAt) > new Date();
-        return !isFuturePost;
+    // Performance Tasks: assignments and quizzes with activityType === 'performance'
+    const performanceTasksHPS = [...assignments, ...quizzes]
+      .filter(activity => {
+        const isFuturePost = new Date(activity.postAt) > new Date();
+        return !isFuturePost && activity.activityType === 'performance';
       })
-      .reduce((sum, quiz) => sum + (quiz.points || 100), 0);
+      .reduce((sum, activity) => sum + (activity.points || 100), 0);
 
     return {
       writtenWorksRAW,
@@ -704,7 +734,7 @@ export default function Faculty_Grades() {
       });
 
       if (response.ok) {
-        const postResponse = await response.json();
+        const _postResponse = await response.json();
         console.log(`✅ ${quarter} grades posted to students successfully`);
         const message = quarter === 'Q2' 
           ? `${quarter} grades and Term Final Grade posted to students! Students can now view their grades.`
@@ -807,7 +837,7 @@ export default function Faculty_Grades() {
       });
 
       if (response.ok) {
-        const saveResponse = await response.json();
+        const _saveResponse = await response.json();
         console.log('✅ Grades saved successfully');
         showModal('Success', 'Grades saved successfully!', 'success');
       } else {

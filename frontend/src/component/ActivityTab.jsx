@@ -70,8 +70,8 @@ export default function ActivityTab({ onAssignmentCreated }) {
                     const year = await yearRes.json();
                     setAcademicYear(year);
                 }
-            } catch (err) {
-                // Failed to fetch academic year
+            } catch (error) {
+                console.error('Error fetching academic year:', error);
             }
         }
         fetchAcademicYear();
@@ -139,7 +139,8 @@ export default function ActivityTab({ onAssignmentCreated }) {
                 } else {
                     setAvailableClasses([]);
                 }
-            } catch (err) {
+            } catch (error) {
+                console.error('Error fetching classes:', error);
                 setAvailableClasses([]);
             }
         }
@@ -166,7 +167,16 @@ export default function ActivityTab({ onAssignmentCreated }) {
                         q.status === 'active'
                     );
                     if (activeQuarter) {
-                        setCurrentQuarter(activeQuarter);
+                        // Normalize quarter name to handle both formats
+                        const normalizedQuarter = {
+                            ...activeQuarter,
+                            quarterName: activeQuarter.quarterName === 'Q1' ? 'Quarter 1' :
+                                        activeQuarter.quarterName === 'Q2' ? 'Quarter 2' :
+                                        activeQuarter.quarterName === 'Q3' ? 'Quarter 3' :
+                                        activeQuarter.quarterName === 'Q4' ? 'Quarter 4' :
+                                        activeQuarter.quarterName
+                        };
+                        setCurrentQuarter(normalizedQuarter);
                     }
                 }
             } catch (error) {
@@ -353,8 +363,8 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                     const alt = await altRes.json();
                                     if (Array.isArray(alt)) students = alt;
                                 }
-                            } catch (err) {
-                                // Alternative member fetch failed
+                            } catch (error) {
+                                console.error('Alternative member fetch failed:', error);
                             }
                         }
 
@@ -391,8 +401,8 @@ export default function ActivityTab({ onAssignmentCreated }) {
                                         }
                                     }
                                 }
-                            } catch (err) {
-                                // Fallback class fetch failed
+                            } catch (error) {
+                                console.error('Fallback class fetch failed:', error);
                             }
                         }
 
@@ -420,7 +430,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
         });
     }, [selectedClassIDs]);
 
-    const handleStudentSelection = (classID, typeOrId) => {
+    const _handleStudentSelection = (classID, typeOrId) => {
         setClassStudentMap(prev => {
             const entry = prev[classID] || { students: [], selected: 'all' };
             if (typeOrId === 'all') {
@@ -438,7 +448,7 @@ export default function ActivityTab({ onAssignmentCreated }) {
         });
     };
 
-    const handleStudentTypeChange = (classID, value) => {
+    const _handleStudentTypeChange = (classID, value) => {
         setClassStudentMap(prev => ({
             ...prev,
             [classID]: { ...prev[classID], selected: value === 'all' ? 'all' : [] }
@@ -549,8 +559,15 @@ export default function ActivityTab({ onAssignmentCreated }) {
             points: activityPoints,
             // attachmentDrive removed
             attachmentLink,
-            // Add quarter parameters
-            quarter: currentQuarter?.quarterName || quarterFromUrl || 'Q1',
+            // Add quarter parameters (convert to short format for backend)
+            quarter: (() => {
+                const quarterName = currentQuarter?.quarterName || quarterFromUrl || 'Quarter 1';
+                return quarterName === 'Quarter 1' ? 'Q1' :
+                       quarterName === 'Quarter 2' ? 'Q2' :
+                       quarterName === 'Quarter 3' ? 'Q3' :
+                       quarterName === 'Quarter 4' ? 'Q4' :
+                       quarterName;
+            })(),
             termName: currentTerm?.termName || termNameFromUrl || 'Term 1',
             academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : academicYearFromUrl || '2024-2025',
         };
@@ -667,8 +684,8 @@ export default function ActivityTab({ onAssignmentCreated }) {
                     message: errorMessage
                 });
             }
-        } catch (err) {
-            // Network error
+        } catch (error) {
+            console.error('Network error:', error);
             setValidationModal({
                 isOpen: true,
                 type: 'error',

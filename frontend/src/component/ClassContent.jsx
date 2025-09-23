@@ -2029,7 +2029,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                                 <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{item.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
-                                <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.assignmentType === 'performance' ? 'bg-orange-200 text-orange-800' : 'bg-blue-200 text-blue-800'}`}>{item.assignmentType === 'performance' ? 'Performance Task' : 'Written Works'}</span>
+                                <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.activityType === 'performance' ? 'bg-orange-200 text-orange-800' : 'bg-blue-200 text-blue-800'}`}>{item.activityType === 'performance' ? 'Performance Task' : 'Written Works'}</span>
                                 <span className="inline-block px-2 py-1 rounded text-xs font-bold bg-gray-500 text-white">Not Posted Yet</span>
                       </div>
                               <span className="text-lg font-bold text-gray-600">{item.title}</span>
@@ -2087,7 +2087,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.type === 'quiz' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}`}>{item.type === 'quiz' ? 'Quiz' : 'Assignment'}</span>
-                                <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.assignmentType === 'performance' ? 'bg-orange-200 text-orange-800' : 'bg-blue-200 text-blue-800'}`}>{item.assignmentType === 'performance' ? 'Performance Task' : 'Written Works'}</span>
+                                <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${item.activityType === 'performance' ? 'bg-orange-200 text-orange-800' : 'bg-blue-200 text-blue-800'}`}>{item.activityType === 'performance' ? 'Performance Task' : 'Written Works'}</span>
                               </div>
                               <span className="text-lg font-bold text-blue-900">{item.title}</span>
                               <div className="text-sm mt-1 text-gray-700">{item.instructions}</div>

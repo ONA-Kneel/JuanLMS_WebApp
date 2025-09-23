@@ -490,7 +490,16 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                         q.status === 'active'
                     );
                     if (activeQuarter) {
-                        setCurrentQuarter(activeQuarter);
+                        // Normalize quarter name to handle both formats
+                        const normalizedQuarter = {
+                            ...activeQuarter,
+                            quarterName: activeQuarter.quarterName === 'Q1' ? 'Quarter 1' :
+                                        activeQuarter.quarterName === 'Q2' ? 'Quarter 2' :
+                                        activeQuarter.quarterName === 'Q3' ? 'Quarter 3' :
+                                        activeQuarter.quarterName === 'Q4' ? 'Quarter 4' :
+                                        activeQuarter.quarterName
+                        };
+                        setCurrentQuarter(normalizedQuarter);
                     }
                 }
             } catch (error) {
@@ -853,8 +862,15 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                 timeLimitEnabled: timingLimitEnabled
             },
             createdBy: userId,
-            // Add quarter parameters
-            quarter: currentQuarter?.quarterName || quarterFromUrl || 'Q1',
+            // Add quarter parameters (convert to short format for backend)
+            quarter: (() => {
+                const quarterName = currentQuarter?.quarterName || quarterFromUrl || 'Quarter 1';
+                return quarterName === 'Quarter 1' ? 'Q1' :
+                       quarterName === 'Quarter 2' ? 'Q2' :
+                       quarterName === 'Quarter 3' ? 'Q3' :
+                       quarterName === 'Quarter 4' ? 'Q4' :
+                       quarterName;
+            })(),
             termName: currentTerm?.termName || termNameFromUrl || 'Term 1',
             academicYear: academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : academicYearFromUrl || '2024-2025',
             questionBehaviour: {
