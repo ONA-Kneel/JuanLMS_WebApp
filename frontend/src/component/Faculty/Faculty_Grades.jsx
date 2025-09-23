@@ -658,6 +658,22 @@ export default function Faculty_Grades() {
           
           setQuarterlyGrades(loadedQuarterlyGrades);
           console.log('✅ Set quarterly grades state:', loadedQuarterlyGrades);
+
+          // Also update the main grades state with quarterly exam scores if they exist
+          const updatedGrades = { ...grades };
+          result.data.forEach(grade => {
+            if (grade.quarter === selectedQuarter) {
+              if (!updatedGrades[grade.studentId]) {
+                updatedGrades[grade.studentId] = {};
+              }
+              // Don't overwrite existing quarterlyExam if it's already set
+              if (!updatedGrades[grade.studentId].quarterlyExam) {
+                updatedGrades[grade.studentId].quarterlyExam = grade.quarterlyGrade.toString();
+              }
+            }
+          });
+          setGrades(updatedGrades);
+          console.log('✅ Updated grades state with quarterly exam scores:', updatedGrades);
         } else {
           console.log('⚠️ No quarterly grades found in database');
         }
@@ -889,6 +905,10 @@ export default function Faculty_Grades() {
       } else {
         console.error('❌ Failed to load regular grades:', response.status);
       }
+
+      // Also load quarterly grades from the quarterly grades system
+      await loadQuarterlyGradesFromDatabase();
+      
     } catch (error) {
       console.error('❌ Error loading saved grades:', error);
     }
