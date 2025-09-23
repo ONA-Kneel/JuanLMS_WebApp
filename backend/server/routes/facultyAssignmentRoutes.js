@@ -7,62 +7,7 @@ import Term from '../models/Term.js';
 // Validation function to check for faculty assignment conflicts
 const validateFacultyAssignment = async (facultyId, subjectName, sectionName, schoolYear, termName, excludeAssignmentId = null) => {
   try {
-    console.log(`[BACKEND] Validating faculty assignment:`, {
-      facultyId,
-      subjectName,
-      sectionName,
-      schoolYear,
-      termName,
-      excludeAssignmentId
-    });
-
-    // First check for exact duplicate (same faculty, same subject-section)
-    const exactDuplicate = await FacultyAssignment.findOne({
-      facultyId: facultyId,
-      subjectName: subjectName,
-      sectionName: sectionName,
-      schoolYear: schoolYear,
-      termName: termName,
-      status: 'active',
-      ...(excludeAssignmentId && { _id: { $ne: excludeAssignmentId } }) // Exclude current assignment when updating
-    });
-
-    console.log(`[BACKEND] Exact duplicate check result:`, exactDuplicate);
-
-    // Also show all existing assignments for debugging
-    const allExistingAssignments = await FacultyAssignment.find({
-      schoolYear: schoolYear,
-      termName: termName,
-      status: 'active'
-    });
-    console.log(`[BACKEND] All existing assignments in system:`, allExistingAssignments.map(assign => ({
-      facultyId: assign.facultyId,
-      subjectName: assign.subjectName,
-      sectionName: assign.sectionName,
-      combo: `${assign.facultyId}-${assign.subjectName}-${assign.sectionName}`
-    })));
-
-    // Check for ANY existing assignment with the same faculty, subject, and section (regardless of term)
-    const anyExistingAssignment = await FacultyAssignment.findOne({
-      facultyId: facultyId,
-      subjectName: subjectName,
-      sectionName: sectionName,
-      status: 'active'
-    });
-    console.log(`[BACKEND] Any existing assignment with same faculty-subject-section:`, anyExistingAssignment);
-
-    if (exactDuplicate) {
-      console.log(`[BACKEND] Found exact duplicate:`, exactDuplicate);
-      return {
-        isValid: false,
-        conflict: {
-          type: 'duplicate',
-          message: 'This faculty assignment already exists'
-        }
-      };
-    }
-
-    // Then check if the same subject-section combination is already assigned to a different faculty
+    // Check if the same subject-section combination is already assigned to a different faculty
     const existingAssignment = await FacultyAssignment.findOne({
       subjectName: subjectName,
       sectionName: sectionName,
@@ -73,14 +18,10 @@ const validateFacultyAssignment = async (facultyId, subjectName, sectionName, sc
       ...(excludeAssignmentId && { _id: { $ne: excludeAssignmentId } }) // Exclude current assignment when updating
     }).populate('facultyId', 'firstname lastname');
 
-    console.log(`[BACKEND] Conflict check result:`, existingAssignment);
-
     if (existingAssignment) {
-      console.log(`[BACKEND] Found conflict:`, existingAssignment);
       return {
         isValid: false,
         conflict: {
-          type: 'conflict',
           facultyId: existingAssignment.facultyId._id,
           facultyName: `${existingAssignment.facultyId.firstname} ${existingAssignment.facultyId.lastname}`,
           subjectName: existingAssignment.subjectName,
@@ -222,17 +163,10 @@ router.post('/', authenticateToken, async (req, res) => {
     );
 
     if (!validation.isValid) {
-      if (validation.conflict.type === 'duplicate') {
-        return res.status(400).json({ 
-          message: validation.conflict.message,
-          conflict: validation.conflict
-        });
-      } else if (validation.conflict.type === 'conflict') {
       return res.status(400).json({ 
         message: `Subject "${subjectName}" in Section "${sectionName}" is already assigned to ${validation.conflict.facultyName}`,
         conflict: validation.conflict
       });
-      }
     }
 
     const assignment = new FacultyAssignment({
@@ -248,32 +182,7 @@ router.post('/', authenticateToken, async (req, res) => {
       quarterName
     });
 
-    console.log(`[BACKEND] Attempting to save assignment:`, {
-      facultyId: actualFacultyId,
-      trackName,
-      strandName,
-      sectionName,
-      subjectName,
-      gradeLevel,
-      termId,
-      schoolYear: term.schoolYear,
-      termName: term.termName
-    });
-
-    let newAssignment;
-    try {
-      newAssignment = await assignment.save();
-      console.log(`[BACKEND] Successfully saved assignment:`, newAssignment);
-    } catch (saveError) {
-      console.log(`[BACKEND] Save error details:`, {
-        code: saveError.code,
-        name: saveError.name,
-        message: saveError.message,
-        keyPattern: saveError.keyPattern,
-        keyValue: saveError.keyValue
-      });
-      throw saveError;
-    }
+    const newAssignment = await assignment.save();
     // Exclude hidden fields from response
     const response = newAssignment.toObject();
     delete response.schoolYear;
@@ -363,16 +272,9 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         );
 
         if (!validation.isValid) {
-          let errorMessage;
-          if (validation.conflict.type === 'duplicate') {
-            errorMessage = validation.conflict.message;
-          } else if (validation.conflict.type === 'conflict') {
-            errorMessage = `Subject "${subjectName}" in Section "${sectionName}" is already assigned to ${validation.conflict.facultyName}`;
-          }
-          
           errors.push({ 
             assignment: assignmentData, 
-            message: errorMessage,
+            message: `Subject "${subjectName}" in Section "${sectionName}" is already assigned to ${validation.conflict.facultyName}`,
             conflict: validation.conflict
           });
           continue;

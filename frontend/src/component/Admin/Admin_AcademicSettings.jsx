@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 
 export default function Admin_AcademicSettings() {
@@ -29,7 +30,6 @@ export default function Admin_AcademicSettings() {
     startDate: '',
     endDate: ''
   });
-  const [selectedTermForQuarter, setSelectedTermForQuarter] = useState(null);
   const [availableQuarters, setAvailableQuarters] = useState([]);
   const [termError, setTermError] = useState('');
   const [quarterError, setQuarterError] = useState('');
@@ -599,7 +599,6 @@ export default function Admin_AcademicSettings() {
     }
 
     setAvailableQuarters(defaultAvailable);
-    setSelectedTermForQuarter(chosenTerm);
     setQuarterFormData({
       quarterName: defaultQuarterName,
       termName: defaultTermName,
@@ -705,7 +704,6 @@ export default function Admin_AcademicSettings() {
          setSuccessMessage(`${term.termName} has been activated`);
          setShowSuccessModal(true);
          fetchTerms(selectedYear);
-         fetchQuarters(selectedYear); // Refresh quarters to reflect backend changes
          refreshArchivedCountForYear(selectedYear);
        } else {
         const data = await res.json();
@@ -779,7 +777,6 @@ export default function Admin_AcademicSettings() {
            // If deactivating, refresh terms to show archived status
            if (selectedYear && selectedYear._id === year._id) {
              fetchTerms(selectedYear);
-             fetchQuarters(selectedYear); // Refresh quarters to reflect backend changes
            }
            fetchSchoolYears();
            setSuccessMessage(`School year set as ${newStatus}`);
@@ -1087,7 +1084,7 @@ export default function Admin_AcademicSettings() {
         setShowSuccessModal(true);
         
         fetchTerms(selectedYear);
-        fetchQuarters(selectedYear); // Refresh quarters to reflect backend changes
+        fetchQuarters(selectedYear);
         refreshArchivedCountForYear(selectedYear);
       } else {
         const data = await res.json();
@@ -1496,9 +1493,9 @@ export default function Admin_AcademicSettings() {
       return;
     }
 
-    // Require the existing term to be inactive before adding a second term
-    if (terms.length >= 1 && terms.some(t => t.status !== 'inactive' && t.status !== 'archived')) {
-      setTermError('Inactivate the previous term before adding a new one.');
+    // Require the existing term to be archived before adding a second term
+    if (terms.length >= 1 && terms.some(t => t.status !== 'inactive')) {
+      setTermError('Archive the previous term before adding a new one.');
       return;
     }
 
@@ -2162,14 +2159,14 @@ export default function Admin_AcademicSettings() {
                           <button
                             onClick={() => setShowAddTermModal(true)}
                             className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2 ${
-                              (terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status !== 'inactive' && t.status !== 'archived'))) ? 'opacity-50 cursor-not-allowed' : ''
+                              (terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status === 'active'))) ? 'opacity-50 cursor-not-allowed' : ''
                             }`}
-                            disabled={terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status !== 'inactive' && t.status !== 'archived'))}
+                            disabled={terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status === 'active'))}
                             title={
                               terms.length >= 2
                                 ? 'Maximum 2 terms allowed per school year'
-                                : (terms.length >= 1 && terms.some(t => t.status !== 'inactive' && t.status !== 'archived'))
-                                  ? 'Inactivate the previous term before adding a new one'
+                                : (terms.length >= 1 && terms.some(t => t.status === 'active'))
+                                  ? 'Deactivate the previous active term before adding a new one'
                                   : 'Add New Term'
                             }
                           >
@@ -2181,16 +2178,10 @@ export default function Admin_AcademicSettings() {
                           <button
                             onClick={openAddQuarterModal}
                             className={`px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2 ${
-                              (quarters.filter(q => q.status !== 'archived').length >= 4 || terms.length === 0) ? 'opacity-50 cursor-not-allowed' : ''
+                              (quarters.filter(q => q.status !== 'archived').length >= 4) ? 'opacity-50 cursor-not-allowed' : ''
                             }`}
-                            disabled={quarters.filter(q => q.status !== 'archived').length >= 4 || terms.length === 0}
-                            title={
-                              terms.length === 0 
-                                ? 'No terms available. Create a term first.' 
-                                : (quarters.filter(q => q.status !== 'archived').length >= 4) 
-                                  ? 'Maximum of 4 quarters per school year reached' 
-                                  : 'Add New Quarter'
-                            }
+                            disabled={quarters.filter(q => q.status !== 'archived').length >= 4}
+                            title={(quarters.filter(q => q.status !== 'archived').length >= 4) ? 'Maximum of 4 quarters per school year reached' : 'Add New Quarter'}
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -2705,7 +2696,6 @@ export default function Admin_AcademicSettings() {
                     onClick={() => {
                       setShowAddQuarterModal(false);
                       setQuarterFormData({ quarterName: '', termName: '', startDate: '', endDate: '' });
-                      setSelectedTermForQuarter(null);
                       setQuarterError('');
                     }}
                     className="text-gray-500 hover:text-gray-700"
@@ -2780,19 +2770,12 @@ export default function Admin_AcademicSettings() {
                       type="date"
                       value={quarterFormData.startDate}
                       onChange={(e) => setQuarterFormData({ ...quarterFormData, startDate: e.target.value })}
-                      min={selectedTermForQuarter ? selectedTermForQuarter.startDate.split('T')[0] : ''}
-                      max={selectedTermForQuarter ? selectedTermForQuarter.endDate.split('T')[0] : ''}
                       className={`w-full p-2 border rounded-md ${
                         selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       required
                       disabled={selectedYear && selectedYear.status !== 'active'}
                     />
-                    {selectedTermForQuarter && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Must be between {new Date(selectedTermForQuarter.startDate).toLocaleDateString()} and {new Date(selectedTermForQuarter.endDate).toLocaleDateString()}
-                      </p>
-                    )}
                   </div>
 
                   <div className="mb-4">
@@ -2803,19 +2786,12 @@ export default function Admin_AcademicSettings() {
                       type="date"
                       value={quarterFormData.endDate}
                       onChange={(e) => setQuarterFormData({ ...quarterFormData, endDate: e.target.value })}
-                      min={selectedTermForQuarter ? selectedTermForQuarter.startDate.split('T')[0] : ''}
-                      max={selectedTermForQuarter ? selectedTermForQuarter.endDate.split('T')[0] : ''}
                       className={`w-full p-2 border rounded-md ${
                         selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       required
                       disabled={selectedYear && selectedYear.status !== 'active'}
                     />
-                    {selectedTermForQuarter && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Must be between {new Date(selectedTermForQuarter.startDate).toLocaleDateString()} and {new Date(selectedTermForQuarter.endDate).toLocaleDateString()}
-                      </p>
-                    )}
                   </div>
 
                   {quarterError && (
@@ -2830,7 +2806,6 @@ export default function Admin_AcademicSettings() {
                       onClick={() => {
                         setShowAddQuarterModal(false);
                         setQuarterFormData({ quarterName: '', termName: '', startDate: '', endDate: '' });
-                        setSelectedTermForQuarter(null);
                         setQuarterError('');
                       }}
                       className="px-4 py-2 text-gray-600 hover:text-gray-800"
@@ -3110,10 +3085,7 @@ export default function Admin_AcademicSettings() {
                 <p className="text-gray-700 mb-6">{confirmMessage}</p>
                 <div className="flex justify-end gap-3">
                   <button
-                    onClick={() => {
-                      setShowConfirmModal(false);
-                      setConfirmAction(null); // Clear the action to prevent execution
-                    }}
+                    onClick={() => setShowConfirmModal(false)}
                     className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
                   >
                     Cancel
@@ -3122,7 +3094,6 @@ export default function Admin_AcademicSettings() {
                     onClick={() => {
                       if (confirmAction) confirmAction();
                       setShowConfirmModal(false);
-                      setConfirmAction(null); // Clear the action after execution
                     }}
                     className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                   >

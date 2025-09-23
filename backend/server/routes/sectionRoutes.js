@@ -64,26 +64,6 @@ router.get('/termId/:termId', async (req, res) => {
   }
 });
 
-// Helper function to generate section code
-const generateSectionCode = (sectionName) => {
-  // Extract first letter of each word and make it uppercase
-  const words = sectionName.split(' ').filter(word => word.length > 0);
-  let code = '';
-  
-  for (const word of words) {
-    if (word.length > 0) {
-      code += word.charAt(0).toUpperCase();
-    }
-  }
-  
-  // If code is too short, add more characters
-  if (code.length < 2) {
-    code += sectionName.charAt(1).toUpperCase();
-  }
-  
-  return code;
-};
-
 // Create a new section
 router.post('/', async (req, res) => {
   const { sectionName, trackName, strandName, gradeLevel, schoolYear, termName, quarterName } = req.body;
@@ -122,19 +102,8 @@ router.post('/', async (req, res) => {
       return res.status(409).json({ message: 'Section already exists in this track, strand, school year, and term.' });
     }
 
-    // Generate unique section code
-    let sectionCode = generateSectionCode(sectionName);
-    let counter = 1;
-    
-    // Ensure section code is unique
-    while (await Section.findOne({ sectionCode })) {
-      sectionCode = generateSectionCode(sectionName) + counter.toString();
-      counter++;
-    }
-
     const newSection = new Section({ 
       sectionName, 
-      sectionCode,
       trackName, 
       strandName, 
       gradeLevel,
@@ -198,19 +167,6 @@ router.patch('/:id', async (req, res) => {
     section.gradeLevel = gradeLevel;
     section.schoolYear = currentTerm.schoolYear;
     section.termName = currentTerm.termName;
-    
-    // Regenerate section code if section name changed
-    if (originalSectionName !== sectionName) {
-      let sectionCode = generateSectionCode(sectionName);
-      let counter = 1;
-      
-      // Ensure section code is unique
-      while (await Section.findOne({ sectionCode, _id: { $ne: id } })) {
-        sectionCode = generateSectionCode(sectionName) + counter.toString();
-        counter++;
-      }
-      section.sectionCode = sectionCode;
-    }
 
     await section.save();
 
@@ -373,36 +329,6 @@ router.delete('/:id', async (req, res) => {
     
     console.log(`Successfully deleted section and all connected data`);
     res.status(200).json({ message: 'Section and all connected data deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Update existing sections to have section codes (migration endpoint)
-router.post('/migrate-section-codes', async (req, res) => {
-  try {
-    const sections = await Section.find({ sectionCode: { $exists: false } });
-    let updatedCount = 0;
-    
-    for (const section of sections) {
-      let sectionCode = generateSectionCode(section.sectionName);
-      let counter = 1;
-      
-      // Ensure section code is unique
-      while (await Section.findOne({ sectionCode, _id: { $ne: section._id } })) {
-        sectionCode = generateSectionCode(section.sectionName) + counter.toString();
-        counter++;
-      }
-      
-      section.sectionCode = sectionCode;
-      await section.save();
-      updatedCount++;
-    }
-    
-    res.json({ 
-      message: `Updated ${updatedCount} sections with section codes`,
-      updatedCount 
-    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
