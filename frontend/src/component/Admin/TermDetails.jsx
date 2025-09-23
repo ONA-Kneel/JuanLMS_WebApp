@@ -123,6 +123,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [editingStudentAssignment, setEditingStudentAssignment] = useState(null);
   const [students, setStudents] = useState([]); // To store student users for dropdown
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
+  const [registrants, setRegistrants] = useState([]);
 
   // Add state for search functionality for Faculty and Students
   const [facultySearchTerm, setFacultySearchTerm] = useState('');
@@ -1401,6 +1402,27 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
   }, [termDetails]);
 
+  // Fetch registrants to check approval status
+  const fetchRegistrants = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      // Fetch ALL registrants without pagination
+      const res = await fetch(`${API_BASE}/api/registrants?limit=1000`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Fetched registrants:', data.data || []);
+        console.log('Total registrants fetched:', (data.data || []).length);
+        setRegistrants(data.data || []);
+      } else {
+        console.error('Failed to fetch registrants');
+      }
+    } catch (err) {
+      console.error('Error fetching registrants:', err);
+    }
+  }, []);
+
   useEffect(() => {
     if (termDetails && faculties.length > 0 && tracks.length > 0 && strands.length > 0 && sections.length > 0) {
       fetchFacultyAssignments();
@@ -1410,8 +1432,49 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   useEffect(() => {
     if (termDetails) {
       fetchStudentAssignments();
+      fetchRegistrants();
     }
-  }, [termDetails, fetchStudentAssignments]);
+  }, [termDetails, fetchStudentAssignments, fetchRegistrants]);
+
+  // Check if a student is approved in registrations
+  const isStudentApproved = (assignment) => {
+    // Use the same logic as the table display to get the school ID
+    const student = students.find(s => s._id === assignment.studentId);
+    const assignmentSchoolId = (student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '').trim();
+    
+    console.log('=== APPROVAL CHECK DEBUG ===');
+    console.log('Assignment:', assignment);
+    console.log('Student found:', student);
+    console.log('Assignment school ID:', assignmentSchoolId);
+    console.log('Available registrants:', registrants);
+    
+    if (!assignmentSchoolId) {
+      console.log('No school ID found for assignment');
+      return false;
+    }
+    
+    const isApproved = registrants.some(registrant => {
+      // Clean and normalize school IDs for comparison
+      const registrantSchoolId = (registrant.schoolID || '').trim();
+      
+      console.log('Comparing:', {
+        registrantSchoolId,
+        assignmentSchoolId,
+        registrantStatus: registrant.status,
+        registrantName: `${registrant.firstName} ${registrant.lastName}`,
+        assignmentName: assignment.studentName,
+        match: registrantSchoolId === assignmentSchoolId
+      });
+      
+      // Check if school IDs match exactly
+      return registrant.status === 'approved' && 
+             registrantSchoolId === assignmentSchoolId;
+    });
+    
+    console.log('Final approval result:', isApproved);
+    console.log('=== END APPROVAL CHECK ===');
+    return isApproved;
+  };
 
   // Handle Add Faculty Assignment (updated to use facultySearchTerm and selected facultyId)
   const handleAddFacultyAssignment = async (e) => {
@@ -3494,25 +3557,25 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         continue; // Skip all other validations for this row
       }
 
-      // 2. Check if student exists and is active (search by school ID and verify name matches)
-      // For enrollment data, allow creating new students if they don't exist
+      // 2. For enrollment data, allow freely adding students without checking if they exist in the system
+      // This allows adding students from enrollment even if they don't have accounts yet
       if (isValid) {
         const studentFound = activeStudentsMap.get(studentSchoolIDInput);
         console.log(`Student with School ID "${studentSchoolIDInput}" found:`, studentFound);
-        if (!studentFound) {
-          // For enrollment data, we allow creating new students
-          console.log(`Student with School ID "${studentSchoolIDInput}" not found - will be created as new student`);
-          studentId = null; // Will be created during upload
-        } else {
-          // Verify that the name matches the school ID
+        if (studentFound) {
+          // If student exists, verify that the name matches the school ID
           const expectedName = `${studentFound.firstname} ${studentFound.lastname}`.toLowerCase();
           const providedName = studentNameInput.toLowerCase();
           if (expectedName !== providedName) {
-            isValid = false;
-            message = `Name "${studentNameInput}" does not match School ID "${studentSchoolIDInput}". Expected: "${studentFound.firstname} ${studentFound.lastname}"`;
-        } else {
-          studentId = studentFound._id;
+            console.log(`Name mismatch for existing student - will create new entry for "${studentNameInput}"`);
+            studentId = null; // Will be created as new student
+          } else {
+            studentId = studentFound._id;
           }
+        } else {
+          // Student doesn't exist in system - this is allowed for enrollment data
+          console.log(`Student with School ID "${studentSchoolIDInput}" not found - will be created as new student`);
+          studentId = null; // Will be created during upload
         }
       }
 
@@ -5457,7 +5520,7 @@ Validation issues (${skippedCount} items):
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('students')}>
                     <img src={studentIcon} alt="Student Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
-                      studentAssignments.filter(sa => sa.status === 'active').length
+                      studentAssignments.filter(sa => sa.status === 'active' && isStudentApproved(sa)).length
                     }</span>
                     <span className="text-gray-600 mt-2">Active Students</span>
                     <button
@@ -7403,8 +7466,10 @@ Validation issues (${skippedCount} items):
                               <td className="p-3 border">
                                 {assignment.status === 'archived' ? (
                                   <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
-                                ) : (
+                                ) : isStudentApproved(assignment) ? (
                                   <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Active</span>
+                                ) : (
+                                  <span className="px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800">Pending Approval</span>
                                 )}
                               </td>
                               <td className="p-3 border">
@@ -8222,35 +8287,38 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
       continue;
     }
 
-    // Check if student exists (search by school ID and verify name matches)
+    // For enrollment data, allow freely adding students without checking if they exist in the system
+    // This allows adding students from enrollment even if they don't have accounts yet
     const student = activeStudents.find(s => s.schoolID === assignment.studentSchoolID && s.role === 'students');
-    if (!student) {
-      results.push({ valid: false, message: `Student with School ID '${assignment.studentSchoolID}' not found` });
-      continue;
-    }
-
-    // Verify that the name matches the school ID
-    const expectedName = `${student.firstname} ${student.lastname}`.toLowerCase();
-    const providedName = assignment.studentName.toLowerCase();
-    if (expectedName !== providedName) {
-      results.push({ valid: false, message: `Name "${assignment.studentName}" does not match School ID "${assignment.studentSchoolID}". Expected: "${student.firstname} ${student.lastname}"` });
-      continue;
+    if (student) {
+      // If student exists, verify that the name matches the school ID
+      const expectedName = `${student.firstname} ${student.lastname}`.toLowerCase();
+      const providedName = assignment.studentName.toLowerCase();
+      if (expectedName !== providedName) {
+        console.log(`Name mismatch for existing student - will create new entry for "${assignment.studentName}"`);
+      }
+    } else {
+      // Student doesn't exist in system - this is allowed for enrollment data
+      console.log(`Student with School ID '${assignment.studentSchoolID}' not found - will be created as new student`);
     }
 
     // Don't check if track/strand/section exist since they'll be created during import
 
-    // Check for duplicate assignment
-    const exists = activeAssignments.some(ea =>
-      ea.studentId === student._id &&
-      ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
-      ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
-      ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
-    );
-    if (exists) {
-      results.push({ valid: false, message: 'Assignment already exists' });
-    } else {
-      results.push({ valid: true, studentId: student._id });
+    // Check for duplicate assignment (only if student exists)
+    if (student) {
+      const exists = activeAssignments.some(ea =>
+        ea.studentId === student._id &&
+        ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
+        ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
+        ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
+      );
+      if (exists) {
+        results.push({ valid: false, message: 'Assignment already exists' });
+        continue;
+      }
     }
+    
+    results.push({ valid: true, studentId: student ? student._id : null });
   }
   return results;
 };
