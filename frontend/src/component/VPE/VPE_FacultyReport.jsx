@@ -987,8 +987,8 @@ export default function VPE_FacultyReport() {
       // Show distribution by section within the strand
       const inStrand = filteredActivities.filter(a => a.strandName === (analysisMeta?.filters?.strand || modalStrand || selectedStrand));
       const bySection = new Map();
-      for (const item of inStrand) {
-        const key = item.sectionName || 'Unknown';
+      for (const it of inStrand) {
+        const key = it.sectionName || 'Unknown';
         bySection.set(key, (bySection.get(key) || 0) + 1);
       }
       const labels = Array.from(bySection.keys());
@@ -1007,8 +1007,8 @@ export default function VPE_FacultyReport() {
       const section = analysisMeta?.filters?.section || modalSection || selectedSection;
       const inSection = filteredActivities.filter(a => a.sectionName === section);
       const byTeacher = new Map();
-      for (const item of inSection) {
-        const t = item.facultyName || 'Unknown Faculty';
+      for (const it of inSection) {
+        const t = it.facultyName || 'Unknown Faculty';
         byTeacher.set(t, (byTeacher.get(t) || 0) + 1);
       }
       const labels = Array.from(byTeacher.keys());
@@ -1037,7 +1037,7 @@ export default function VPE_FacultyReport() {
       // Section distribution, Track distribution, Strand distribution
       const buildCounts = (items, key) => {
         const map = new Map();
-        for (const item of items) { const k = item[key] || 'Unknown'; map.set(k, (map.get(k)||0)+1); }
+        for (const it of items) { const k = it[key] || 'Unknown'; map.set(k, (map.get(k)||0)+1); }
         return { labels: Array.from(map.keys()), data: Array.from(map.values()) };
       };
       const sectionDist = buildCounts(filteredActivities, 'sectionName');
@@ -1058,10 +1058,10 @@ export default function VPE_FacultyReport() {
       const inStrand = filteredActivities.filter(a => a.strandName === strandVal);
       const bySection = new Map();
       let aCount = 0, qCount = 0;
-      for (const item of inStrand) {
-        const sec = item.sectionName || 'Unknown';
+      for (const it of inStrand) {
+        const sec = it.sectionName || 'Unknown';
         bySection.set(sec, (bySection.get(sec)||0) + 1);
-        if (item._kind === 'assignment') aCount++; else if (item._kind === 'quiz') qCount++;
+        if (it._kind === 'assignment') aCount++; else if (it._kind === 'quiz') qCount++;
       }
       if (sectionChartCanvasRef.current) {
         const labels = Array.from(bySection.keys()); const data = Array.from(bySection.values());
@@ -1079,10 +1079,10 @@ export default function VPE_FacultyReport() {
       const inSection = filteredActivities.filter(a => a.sectionName === sectionVal);
       const byCourse = new Map();
       let posted = 0, pending = 0;
-      for (const item of inSection) {
-        const course = item.subject || 'Unknown';
+      for (const it of inSection) {
+        const course = it.subject || 'Unknown';
         byCourse.set(course, (byCourse.get(course)||0) + 1);
-        if (item.postAt && new Date(item.postAt) <= new Date()) posted++; else pending++;
+        if (it.postAt && new Date(it.postAt) <= new Date()) posted++; else pending++;
       }
       if (sectionChartCanvasRef.current) {
         const labels = Array.from(byCourse.keys()); const data = Array.from(byCourse.values());
