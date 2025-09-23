@@ -3,17 +3,12 @@ import { useNavigate } from "react-router-dom";
 
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
-import QuarterSelector from "../QuarterSelector";
-import { useQuarter } from "../../context/QuarterContext.jsx";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Faculty_Activities() {
   const [activeTab, setActiveTab] = useState("activities-quiz");
   const navigate = useNavigate();
-  
-  // Get quarter context
-  const { globalQuarter, globalTerm, globalAcademicYear, isLoading: quarterLoading } = useQuarter();
   
   const tabs = [
     { id: "activities-quiz", label: "Activities/Quiz" },
@@ -164,17 +159,9 @@ export default function Faculty_Activities() {
           }
         }
         
-        // Filter activities by quarter (client-side filtering)
-        const filteredActivities = allActivities.filter(activity => {
-          // Check if activity matches the selected quarter
-          return activity.quarter === globalQuarter;
-        });
-        
-        // Filter quizzes by quarter (client-side filtering)
-        const filteredQuizzes = allQuizzes.filter(quiz => {
-          // Check if quiz matches the selected quarter
-          return quiz.quarter === globalQuarter;
-        });
+        // Use all activities and quizzes without quarter filtering
+        const filteredActivities = allActivities;
+        const filteredQuizzes = allQuizzes;
         
         // Debug logging
         console.log('[Faculty_Activities] Raw activity data:', allActivities);
@@ -195,12 +182,12 @@ export default function Faculty_Activities() {
       }
   };
 
-  // Refetch activities when quarter changes
+  // Refetch activities when faculty classes change
   useEffect(() => {
-    if (globalQuarter && facultyClasses.length > 0) {
+    if (facultyClasses.length > 0) {
       fetchActivitiesAndQuizzes();
     }
-  }, [globalQuarter, facultyClasses]);
+  }, [facultyClasses]);
 
   // Run only after faculty classes are resolved for the term
   useEffect(() => {
@@ -398,18 +385,6 @@ export default function Faculty_Activities() {
           <ProfileMenu />
         </div>
 
-        {/* Quarter Selector */}
-        <div className="mb-6">
-          <QuarterSelector />
-        </div>
-
-        {/* Current Quarter Display */}
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-          <p className="text-sm font-medium text-blue-800">
-            Showing activities for: <span className="font-semibold">{globalQuarter} - {globalTerm}</span>
-            <span className="text-blue-600 ml-2">({quarterLoading ? "Loading..." : globalAcademicYear})</span>
-          </p>
-        </div>
 
         <ul className="flex flex-wrap border-b border-gray-700 text-xl sm:text-2xl font-medium text-gray-400">
           {tabs.map((tab) => (

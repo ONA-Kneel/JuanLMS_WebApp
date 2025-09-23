@@ -3,8 +3,6 @@ import { useNavigate } from "react-router-dom";
 
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
-import QuarterSelector from "../QuarterSelector";
-import { useQuarter } from "../../context/QuarterContext.jsx";
 
 // Force localhost for local testing
 const API_BASE = import.meta.env.DEV ? "https://juanlms-webapp-server.onrender.com" : (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com");
@@ -31,9 +29,6 @@ export default function Student_Activities() {
   const [showClassFilterDropdown, setShowClassFilterDropdown] = useState(false);
   const classFilterRef = useRef();
   const [studentClasses, setStudentClasses] = useState([]);
-
-  // Quarter context (shared with faculty)
-  const { globalQuarter, globalTerm, globalAcademicYear, isLoading: quarterLoading } = useQuarter();
 
   // Students cannot export grades; removed export helper
 
@@ -362,7 +357,7 @@ export default function Student_Activities() {
     if (academicYear && currentTerm) {
       fetchActivities();
     }
-  }, [academicYear, currentTerm, globalQuarter, globalTerm, globalAcademicYear]);
+  }, [academicYear, currentTerm]);
 
   // Click outside to close dropdowns
   useEffect(() => {
@@ -695,16 +690,6 @@ export default function Student_Activities() {
             </div>
           </div>
 
-          {/* Quarter Selector and current selection banner */}
-          <div className="mb-6">
-            <QuarterSelector />
-          </div>
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-            <p className="text-sm font-medium text-blue-800">
-              Showing activities for: <span className="font-semibold">{globalQuarter} - {globalTerm}</span>
-              <span className="text-blue-600 ml-2">({quarterLoading ? "Loading..." : globalAcademicYear})</span>
-            </p>
-          </div>
 
 
           {/* Tabs */}
