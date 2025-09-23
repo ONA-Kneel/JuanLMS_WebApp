@@ -7,6 +7,7 @@ import Section from '../models/Section.js';
 import Subject from '../models/Subject.js';
 import Track from '../models/Track.js';
 import Strand from '../models/Strand.js';
+import Quarter from '../models/Quarter.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -236,6 +237,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 
     // Handle status updates
     if (req.body.status === 'active') {
+      const { activeQuarterName } = req.body;
       // Archive other terms in the same school year only
       await Term.updateMany(
         { _id: { $ne: term._id }, schoolYear: term.schoolYear },
@@ -276,6 +278,51 @@ router.patch('/:id', authenticateToken, async (req, res) => {
           { $set: { status: 'active' } }
         )
       ]);
+
+      // Ensure a quarter is active when a term is active
+      // Fetch non-archived quarters for this term, ordered by start date
+      const quartersForTerm = await Quarter.find({
+        schoolYear: term.schoolYear,
+        termName: term.termName,
+        status: { $ne: 'archived' }
+      }).sort({ startDate: 1 });
+
+      if (!quartersForTerm || quartersForTerm.length === 0) {
+        // No quarters defined; cannot keep term active without an active quarter
+        // Revert term to inactive and inform the client
+        term.status = 'inactive';
+        await term.save();
+        return res.status(409).json({
+          message: 'Cannot activate term without at least one quarter. Please create quarters first.'
+        });
+      }
+
+      // Require explicit quarter selection when activating a term
+      if (!activeQuarterName) {
+        term.status = 'inactive';
+        await term.save();
+        return res.status(400).json({ message: 'activeQuarterName is required when activating a term.' });
+      }
+
+      // Inactivate any active quarters from other terms of the same school year
+      await Quarter.updateMany(
+        { schoolYear: term.schoolYear, termName: { $ne: term.termName }, status: 'active' },
+        { $set: { status: 'inactive' } }
+      );
+
+      const chosen = quartersForTerm.find(q => q.quarterName === activeQuarterName);
+      if (!chosen) {
+        term.status = 'inactive';
+        await term.save();
+        return res.status(404).json({ message: `Quarter ${activeQuarterName} not found for ${term.termName}.` });
+      }
+
+      // Ensure only chosen quarter is active within the term
+      await Quarter.updateMany(
+        { schoolYear: term.schoolYear, termName: term.termName, _id: { $ne: chosen._id } },
+        { $set: { status: 'inactive' } }
+      );
+      await Quarter.findByIdAndUpdate(chosen._id, { status: 'active' });
       
       console.log(`Successfully reactivated all entities for term: ${term.termName}`);
 
@@ -352,28 +399,14 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       }
       
     } else if (req.body.status === 'inactive') {
-      // Deactivate term (set status to inactive). We do NOT delete; we leave related data as-is or optionally archive.
-      term.status = 'inactive';
-
-      // Audit: Term deactivated
-      try {
-        const token = req.headers.authorization?.split(' ')[1];
-        const url = `${req.protocol}://${req.get('host')}/audit-log`;
-        await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            action: 'Term Deactivated',
-            details: `Deactivated ${term.termName} for School Year ${term.schoolYear}`,
-            userRole: req.user?.role || 'system'
-          })
+      // Prevent turning an active term into inactive directly. Admins must activate a different term instead.
+      if (term.status === 'active') {
+        return res.status(403).json({
+          message: 'Cannot set an active term to inactive. Activate another term instead.'
         });
-      } catch (auditErr) {
-        console.warn('[Audit] Failed to log term deactivation:', auditErr);
       }
+      // Allow setting an already inactive/archived term to inactive (idempotent)
+      term.status = 'inactive';
     } else if (req.body.status) {
       term.status = req.body.status;
     }

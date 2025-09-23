@@ -32,6 +32,10 @@ const quarterSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Ensure we never create duplicate quarters for the same school year and term
+// Uniqueness on (schoolYear, termName, quarterName)
+quarterSchema.index({ schoolYear: 1, termName: 1, quarterName: 1 }, { unique: true });
+
 // Validate that endDate is after startDate
 quarterSchema.pre('save', function(next) {
   if (this.endDate <= this.startDate) {

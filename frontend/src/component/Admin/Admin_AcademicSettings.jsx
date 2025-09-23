@@ -44,6 +44,13 @@ export default function Admin_AcademicSettings() {
   const [promptTerms, setPromptTerms] = useState([]);
   const [promptSchoolYear, setPromptSchoolYear] = useState(null);
   const [selectedPromptTerm, setSelectedPromptTerm] = useState("");
+  const [selectedPromptTermName, setSelectedPromptTermName] = useState("");
+  const [promptQuarters, setPromptQuarters] = useState([]);
+  const [selectedPromptQuarterName, setSelectedPromptQuarterName] = useState("");
+  // Term-activation (within SY view) quarter chooser
+  const [showActivateTermQuarterPrompt, setShowActivateTermQuarterPrompt] = useState(false);
+  const [pendingTermToActivate, setPendingTermToActivate] = useState(null);
+  const [pendingTermQuarterName, setPendingTermQuarterName] = useState("");
   
   // Status toggle confirmation modal state
   const [showStatusToggleModal, setShowStatusToggleModal] = useState(false);
@@ -259,7 +266,14 @@ export default function Admin_AcademicSettings() {
             });
             if (res.ok) {
               const list = await res.json();
-              const count = list.filter(t => t.status === 'archived').length;
+              // Validation: when a School Year is inactive, any non-active term
+              // (archived or inactive) should be counted as archived in the UI.
+              // When a School Year is active, only explicitly archived terms count.
+              // For inactive School Years, archival count should reflect all terms
+              // being considered archived for display purposes
+              const count = y.status === 'inactive'
+                ? list.length
+                : list.filter(t => t.status === 'archived').length;
               return [name, count];
             }
           } catch (error) {
@@ -285,7 +299,9 @@ export default function Admin_AcademicSettings() {
       });
       if (res.ok) {
         const list = await res.json();
-        const count = list.filter(t => t.status === 'archived').length;
+        const count = year.status === 'inactive'
+          ? list.length
+          : list.filter(t => t.status === 'archived').length;
         setArchivedCounts(prev => ({ ...prev, [name]: count }));
       }
     } catch (error) {
@@ -301,7 +317,7 @@ export default function Admin_AcademicSettings() {
       }));
     };
 
-    const createSchoolYear = async (startYear, setAsActive) => {
+  const createSchoolYear = async (startYear, setAsActive, activeTermName, activeQuarterName) => {
     try {
       console.info('[AcademicSettings] createSchoolYear(): start', { startYear, setAsActive });
       const token = localStorage.getItem('token');
@@ -313,13 +329,15 @@ export default function Admin_AcademicSettings() {
         },
         body: JSON.stringify({
           schoolYearStart: startYear,
-          setAsActive
+          setAsActive,
+          ...(setAsActive && activeTermName ? { activeTermName } : {}),
+          ...(setAsActive && activeQuarterName ? { activeQuarterName } : {})
         })
       });
 
       if (res.ok) {
-        const data = await res.json();
-        console.info('[AcademicSettings] createSchoolYear(): success', { id: data?._id, start: data?.schoolYearStart, end: data?.schoolYearEnd, status: data?.status });
+        await res.json();
+        console.info('[AcademicSettings] createSchoolYear(): success');
 
         // Audit logging handled by backend; no client-side POST to avoid duplicates
         setSuccessMessage("School year created successfully");
@@ -586,7 +604,13 @@ export default function Admin_AcademicSettings() {
 
 
   const handleToggleStatus = async (year) => {
-    const newStatus = year.status === 'active' ? 'inactive' : 'active';
+    // Block turning active year to inactive from UI
+    const newStatus = year.status === 'active' ? 'active' : 'active';
+    if (year.status === 'active') {
+      setErrorMessage('You cannot set the active school year to inactive. Activate another year instead.');
+      setShowErrorModal(true);
+      return;
+    }
     
     // Set pending status toggle and show confirmation modal
     setPendingStatusToggle({ year, newStatus });
@@ -615,6 +639,23 @@ export default function Admin_AcademicSettings() {
           if (data.terms && data.terms.length > 0) {
             setPromptTerms(data.terms);
             setPromptSchoolYear(data.schoolYear);
+            // Default to first term name
+            const defaultTerm = data.terms[0];
+            setSelectedPromptTerm(defaultTerm._id);
+            setSelectedPromptTermName(defaultTerm.termName);
+            // Fetch quarters for this SY and preselect earliest for the default term
+            try {
+              const qRes = await fetch(`${API_BASE}/api/quarters/schoolyear-id/${data.schoolYear._id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+              });
+              if (qRes.ok) {
+                const qList = await qRes.json();
+                const termQs = (qList || []).filter(q => q.termName === defaultTerm.termName)
+                  .sort((a,b)=> new Date(a.startDate)-new Date(b.startDate));
+                setPromptQuarters(termQs);
+                if (termQs.length > 0) setSelectedPromptQuarterName(termQs[0].quarterName);
+              }
+            } catch (e) { console.warn('Failed to load quarters for prompt:', e?.message || e); }
             setShowTermActivationPrompt(true);
             setShowStatusToggleModal(false);
             setPendingStatusToggle(null);
@@ -647,31 +688,38 @@ export default function Admin_AcademicSettings() {
     setPendingStatusToggle(null);
   };
 
-  // Handler for activating a term from the prompt
+  // Handler for activating a term + quarter from the prompt (activates SY with selection)
   const handleActivatePromptTerm = async () => {
-    if (!selectedPromptTerm) return;
+    if (!promptSchoolYear || !selectedPromptTermName) return;
     try {
       const token = localStorage.getItem('token');
-      await fetch(`${API_BASE}/api/terms/${selectedPromptTerm}`, {
+      const res = await fetch(`${API_BASE}/api/schoolyears/${promptSchoolYear._id}`, {
         method: 'PATCH',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ status: 'active' })
+        body: JSON.stringify({
+          status: 'active',
+          activeTermName: selectedPromptTermName,
+          activeQuarterName: selectedPromptQuarterName || undefined
+        })
       });
-             setShowTermActivationPrompt(false);
-       setPromptTerms([]);
-       setPromptSchoolYear(null);
-       setSelectedPromptTerm("");
-       fetchSchoolYears();
-       setSuccessMessage('Term activated successfully.');
-       setShowSuccessModal(true);
-     } catch (error) {
-       console.error('Error activating term:', error);
-       setErrorMessage('Failed to activate term.');
-       setShowErrorModal(true);
-     }
+      if (!res.ok) throw new Error('Bad response');
+      setShowTermActivationPrompt(false);
+      setPromptTerms([]);
+      setPromptSchoolYear(null);
+      setSelectedPromptTerm("");
+      setSelectedPromptTermName("");
+      setSelectedPromptQuarterName("");
+      fetchSchoolYears();
+      setSuccessMessage('Activated school year with selected term and quarter.');
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error('Error activating selection:', error);
+      setErrorMessage('Failed to activate with selected term and quarter.');
+      setShowErrorModal(true);
+    }
   };
 
   // Handler for keeping all terms inactive
@@ -680,6 +728,8 @@ export default function Admin_AcademicSettings() {
     setPromptTerms([]);
     setPromptSchoolYear(null);
     setSelectedPromptTerm("");
+    setSelectedPromptTermName("");
+    setSelectedPromptQuarterName("");
     fetchSchoolYears();
     setSuccessMessage('School year activated. All terms remain inactive.');
     setShowSuccessModal(true);
@@ -834,18 +884,42 @@ export default function Admin_AcademicSettings() {
   };
 
   const handleToggleTermStatus = async (term) => {
-    const newStatus = term.status === 'active' ? 'inactive' : 'active';
-    const action = newStatus === 'active' ? 'activate' : 'deactivate';
-    
-         // Show confirmation modal
-     setConfirmMessage(`Are you sure you want to ${action} ${term.termName}?`);
-     setConfirmAction(() => {
-       handleToggleTermStatusInternal(term, newStatus, action);
-     });
-     setShowConfirmModal(true);
-   };
+    // If the term is already active, we don't allow deactivation here
+    if (term.status === 'active') {
+      setErrorMessage('Cannot deactivate the active term. Activate another term instead.');
+      setShowErrorModal(true);
+      return;
+    }
+    // Show quarter selection prompt for activation
+    try {
+      const token = localStorage.getItem('token');
+      // fetch quarters for this school year and filter by term name
+      const res = await fetch(`${API_BASE}/api/quarters/schoolyear/${selectedYear.schoolYearStart}-${selectedYear.schoolYearEnd}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const list = await res.json();
+        const qs = (list || []).filter(q => q.termName === term.termName).sort((a,b)=> new Date(a.startDate)-new Date(b.startDate));
+        if (!qs || qs.length === 0) {
+          setErrorMessage('This term has no quarters. Create quarters first.');
+          setShowErrorModal(true);
+          return;
+        }
+        setPendingTermToActivate(term);
+        setPendingTermQuarterName(qs[0].quarterName);
+        setPromptQuarters(qs);
+        setShowActivateTermQuarterPrompt(true);
+      } else {
+        setErrorMessage('Failed to load quarters for this term.');
+        setShowErrorModal(true);
+      }
+    } catch (e) {
+      setErrorMessage('Failed to load quarters for this term.');
+      setShowErrorModal(true);
+    }
+  };
 
-   const handleToggleTermStatusInternal = async (term, newStatus, action) => {
+  const handleToggleTermStatusInternal = async (term, newStatus, action, activeQuarterName) => {
      try {
       console.log('Sending status update:', { status: newStatus });
       const res = await fetch(`${API_BASE}/api/terms/${term._id}`, {
@@ -854,7 +928,7 @@ export default function Admin_AcademicSettings() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ status: newStatus, ...(activeQuarterName ? { activeQuarterName } : {}) })
       });
       
       if (res.ok) {
@@ -1718,7 +1792,20 @@ export default function Admin_AcademicSettings() {
                   
                   {/* Terms and Quarters Sections */}
                   {terms.map((term) => {
-                    const termQuarters = quarters.filter(q => q.termName === term.termName);
+                    // Dedupe quarters client-side by (termName, quarterName)
+                    const termQuartersRaw = quarters.filter(q => q.termName === term.termName);
+                    const termQuartersMap = new Map();
+                    for (const q of termQuartersRaw) {
+                      const key = `${q.termName}::${q.quarterName}`;
+                      const existing = termQuartersMap.get(key);
+                      // Prefer the most recently updated record if duplicates exist
+                      if (!existing || new Date(q.updatedAt || 0) > new Date(existing?.updatedAt || 0)) {
+                        termQuartersMap.set(key, q);
+                      }
+                    }
+                    const termQuarters = Array.from(termQuartersMap.values()).sort((a,b)=>
+                      new Date(a.startDate) - new Date(b.startDate)
+                    );
                     return (
                       <div key={term._id} className="mb-6 bg-white border rounded-lg overflow-hidden">
                         {/* Term Header */}
@@ -1736,15 +1823,19 @@ export default function Admin_AcademicSettings() {
                                   archived
                                 </span>
                               ) : (
-                                <button
-                                  onClick={() => handleToggleTermStatus(term)}
-                                  className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer hover:shadow ${
-                                    term.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-red-100 hover:text-red-800' : 'bg-gray-100 text-gray-800 hover:bg-green-100 hover:text-green-800'
-                                  }`}
-                                  title={`Click to ${term.status === 'active' ? 'deactivate' : 'activate'} ${term.termName}`}
-                                >
-                                  {term.status === 'archived' ? 'archived' : term.status}
-                                </button>
+                                term.status === 'active' ? (
+                                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800" title="Active term">
+                                    active
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => handleToggleTermStatus(term)}
+                                    className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer hover:shadow bg-gray-100 text-gray-800 hover:bg-green-100 hover:text-green-800"
+                                    title={`Click to activate ${term.termName}`}
+                                  >
+                                    {term.status === 'archived' ? 'archived' : term.status}
+                                  </button>
+                                )
                               )}
                             </div>
                           </div>
@@ -2016,21 +2107,47 @@ export default function Admin_AcademicSettings() {
             <div className="fixed inset-0 backdrop-blur-sm bg-white/10 flex items-center justify-center z-50">
               <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
                 <h2 className="text-xl font-semibold mb-4">Activate Terms for School Year {promptSchoolYear.schoolYearStart}-{promptSchoolYear.schoolYearEnd}</h2>
-                <p className="text-gray-700 mb-6">
-                  The following terms are currently inactive for this school year. Do you want to activate them?
-                </p>
-                <div className="grid gap-2 mb-4">
-                  {promptTerms.map(term => (
-                    <div key={term._id} className="flex items-center justify-between bg-gray-100 p-2 rounded-md">
-                      <span>{term.termName}</span>
-                      <button
-                        onClick={() => setSelectedPromptTerm(term._id)}
-                        className="px-3 py-1 bg-emerald-600 text-white rounded-md text-xs hover:bg-emerald-700"
-                      >
-                        Activate
-                      </button>
-                    </div>
-                  ))}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Choose Term</label>
+                  <select
+                    className="w-full border rounded p-2"
+                    value={selectedPromptTerm}
+                    onChange={async (e) => {
+                      const termId = e.target.value;
+                      setSelectedPromptTerm(termId);
+                      const term = promptTerms.find(t => t._id === termId);
+                      setSelectedPromptTermName(term?.termName || "");
+                      // Load quarters for this term
+                      try {
+                        const qRes = await fetch(`${API_BASE}/api/quarters/schoolyear-id/${promptSchoolYear._id}`, {
+                          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                        });
+                        if (qRes.ok) {
+                          const qList = await qRes.json();
+                          const termQs = (qList || []).filter(q => q.termName === term?.termName)
+                            .sort((a,b)=> new Date(a.startDate)-new Date(b.startDate));
+                          setPromptQuarters(termQs);
+                          setSelectedPromptQuarterName(termQs[0]?.quarterName || "");
+                        }
+                      } catch (e) { console.warn('Failed to load quarters for chosen term:', e?.message || e); }
+                    }}
+                  >
+                    {promptTerms.map(term => (
+                      <option key={term._id} value={term._id}>{term.termName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Choose Quarter</label>
+                  <select
+                    className="w-full border rounded p-2"
+                    value={selectedPromptQuarterName}
+                    onChange={(e)=> setSelectedPromptQuarterName(e.target.value)}
+                  >
+                    {promptQuarters.map(q => (
+                      <option key={q._id} value={q.quarterName}>{q.quarterName}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flex justify-end gap-3">
                   <button
@@ -2132,6 +2249,49 @@ export default function Admin_AcademicSettings() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* Activate Term → Choose Quarter Prompt */}
+          {showActivateTermQuarterPrompt && pendingTermToActivate && (
+            <div className="fixed inset-0 backdrop-blur-sm bg-white/10 flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+                <h2 className="text-xl font-semibold mb-4">Activate {pendingTermToActivate.termName}</h2>
+                <p className="text-gray-700 mb-4">Choose the quarter to activate for this term.</p>
+                <select
+                  className="w-full border rounded p-2 mb-6"
+                  value={pendingTermQuarterName}
+                  onChange={(e)=> setPendingTermQuarterName(e.target.value)}
+                >
+                  {promptQuarters.map(q => (
+                    <option key={q._id} value={q.quarterName}>{q.quarterName}</option>
+                  ))}
+                </select>
+                <div className="flex justify-end gap-3">
+                  <button
+                    className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
+                    onClick={()=>{
+                      setShowActivateTermQuarterPrompt(false);
+                      setPendingTermToActivate(null);
+                      setPendingTermQuarterName("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                    onClick={()=>{
+                      const term = pendingTermToActivate;
+                      setShowActivateTermQuarterPrompt(false);
+                      handleToggleTermStatusInternal(term, 'active', 'activate', pendingTermQuarterName);
+                      setPendingTermToActivate(null);
+                      setPendingTermQuarterName('');
+                    }}
+                  >
+                    Activate
+                  </button>
+                </div>
               </div>
             </div>
           )}

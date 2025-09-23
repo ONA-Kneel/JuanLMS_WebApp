@@ -58,7 +58,7 @@ router.get('/', async (req, res) => {
 
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { schoolYearStart, setAsActive } = req.body;
+    const { schoolYearStart, setAsActive, activeTermName, activeQuarterName } = req.body;
 
     // Basic validation
     if (!schoolYearStart || schoolYearStart < 1900 || schoolYearStart > 2100) {
@@ -71,15 +71,19 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'A school year with this start already exists.' });
     }
 
-    // Deactivate all existing school years if setAsActive is true
-    if (setAsActive) {
+    // Ensure at least one active School Year always exists
+    const hasActive = await SchoolYear.exists({ status: 'active' });
+    const effectiveSetAsActive = setAsActive || !hasActive; // force active if none exists
+
+    // Deactivate all existing school years if creating as active
+    if (effectiveSetAsActive) {
       await SchoolYear.updateMany({ status: 'active' }, { status: 'inactive' });
     }
 
     const schoolYear = new SchoolYear({
       schoolYearStart,
       schoolYearEnd: schoolYearStart + 1,
-      status: setAsActive ? 'active' : 'inactive'
+      status: effectiveSetAsActive ? 'active' : 'inactive'
     });
 
     const savedYear = await schoolYear.save();
@@ -99,7 +103,7 @@ router.post('/', authenticateToken, async (req, res) => {
       schoolYear: schoolYearName,
       startDate: term1Start,
       endDate: term1End,
-      status: setAsActive ? 'active' : 'inactive'
+      status: effectiveSetAsActive && activeTermName === 'Term 1' ? 'active' : effectiveSetAsActive && !activeTermName ? 'active' : 'inactive'
     });
     await term1.save();
 
@@ -119,17 +123,20 @@ router.post('/', authenticateToken, async (req, res) => {
     const q2Start = new Date(`${schoolYearStart}-09-01`);
     const q2End = new Date(`${schoolYearStart}-11-30`);
 
-    const quarter1 = new Quarter({
+    // Create quarters for Term 1 (guard against duplicates)
+    const existingQ1 = await Quarter.findOne({ schoolYear: schoolYearName, termName: 'Term 1', quarterName: 'Quarter 1' });
+    const quarter1 = existingQ1 || new Quarter({
       quarterName: 'Quarter 1',
       schoolYear: schoolYearName,
       termName: 'Term 1',
       startDate: q1Start,
       endDate: q1End,
-      status: setAsActive ? 'active' : 'inactive'
+      status: effectiveSetAsActive && (activeTermName ? activeTermName === 'Term 1' : true) && (activeQuarterName ? activeQuarterName === 'Quarter 1' : true) ? 'active' : 'inactive'
     });
-    await quarter1.save();
+    if (!existingQ1) await quarter1.save();
 
-    const quarter2 = new Quarter({
+    const existingQ2 = await Quarter.findOne({ schoolYear: schoolYearName, termName: 'Term 1', quarterName: 'Quarter 2' });
+    const quarter2 = existingQ2 || new Quarter({
       quarterName: 'Quarter 2',
       schoolYear: schoolYearName,
       termName: 'Term 1',
@@ -137,7 +144,7 @@ router.post('/', authenticateToken, async (req, res) => {
       endDate: q2End,
       status: 'inactive' // Always start as inactive
     });
-    await quarter2.save();
+    if (!existingQ2) await quarter2.save();
 
     // Create quarters for Term 2
     const q3Start = new Date(`${schoolYearStart}-12-01`);
@@ -145,7 +152,9 @@ router.post('/', authenticateToken, async (req, res) => {
     const q4Start = new Date(`${schoolYearStart + 1}-03-01`);
     const q4End = new Date(`${schoolYearStart + 1}-05-31`);
 
-    const quarter3 = new Quarter({
+    // Create quarters for Term 2 (guard against duplicates)
+    const existingQ3 = await Quarter.findOne({ schoolYear: schoolYearName, termName: 'Term 2', quarterName: 'Quarter 3' });
+    const quarter3 = existingQ3 || new Quarter({
       quarterName: 'Quarter 3',
       schoolYear: schoolYearName,
       termName: 'Term 2',
@@ -153,9 +162,10 @@ router.post('/', authenticateToken, async (req, res) => {
       endDate: q3End,
       status: 'inactive' // Always start as inactive
     });
-    await quarter3.save();
+    if (!existingQ3) await quarter3.save();
 
-    const quarter4 = new Quarter({
+    const existingQ4 = await Quarter.findOne({ schoolYear: schoolYearName, termName: 'Term 2', quarterName: 'Quarter 4' });
+    const quarter4 = existingQ4 || new Quarter({
       quarterName: 'Quarter 4',
       schoolYear: schoolYearName,
       termName: 'Term 2',
@@ -163,12 +173,50 @@ router.post('/', authenticateToken, async (req, res) => {
       endDate: q4End,
       status: 'inactive' // Always start as inactive
     });
-    await quarter4.save();
+    if (!existingQ4) await quarter4.save();
 
     // If creating as inactive, archive any existing terms for this school year
-    if (!setAsActive) {
+    if (!effectiveSetAsActive) {
       await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
       await Quarter.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
+    }
+
+    // If created as active and an explicit term/quarter was provided, normalize states
+    if (effectiveSetAsActive) {
+      const selectedTerm = activeTermName || 'Term 1';
+      // Ensure selected term is active, others archived
+      await Term.updateMany(
+        { schoolYear: schoolYearName, termName: { $ne: selectedTerm } },
+        { status: 'archived' }
+      );
+      await Term.updateMany(
+        { schoolYear: schoolYearName, termName: selectedTerm },
+        { status: 'active' }
+      );
+
+      // Quarter normalization: inactivate quarters not selected within term; ensure exactly one active
+      if (activeQuarterName) {
+        await Quarter.updateMany(
+          { schoolYear: schoolYearName, termName: selectedTerm, quarterName: { $ne: activeQuarterName } },
+          { status: 'inactive' }
+        );
+        await Quarter.updateMany(
+          { schoolYear: schoolYearName, termName: selectedTerm, quarterName: activeQuarterName },
+          { status: 'active' }
+        );
+      } else {
+        // Default to earliest quarter in the selected term
+        const qs = await Quarter.find({ schoolYear: schoolYearName, termName: selectedTerm, status: { $ne: 'archived' } }).sort({ startDate: 1 });
+        if (qs && qs.length > 0) {
+          await Quarter.updateMany({ _id: { $in: qs.map(q => q._id) } }, { status: 'inactive' });
+          await Quarter.findByIdAndUpdate(qs[0]._id, { status: 'active' });
+        }
+      }
+      // Inactivate any active quarters from other terms
+      await Quarter.updateMany(
+        { schoolYear: schoolYearName, termName: { $ne: selectedTerm }, status: 'active' },
+        { status: 'inactive' }
+      );
     }
 
     // Create audit log entry via existing audit route (ensures consistent storage)
@@ -199,7 +247,10 @@ router.post('/', authenticateToken, async (req, res) => {
       console.error('[Audit] Failed to create audit log for school year creation (via route):', logErr);
     }
 
-    res.status(201).json(savedYear);
+    // Also return the created terms and quarters for UI initialization
+    const termsOut = await Term.find({ schoolYear: schoolYearName });
+    const quartersOut = await Quarter.find({ schoolYear: schoolYearName });
+    res.status(201).json({ schoolYear: savedYear, terms: termsOut, quarters: quartersOut });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -261,12 +312,50 @@ router.patch('/:id', authenticateToken, async (req, res) => {
           { _id: { $ne: req.params.id }, status: 'active' },
           { status: 'inactive' }
         );
-        // Do not activate any terms automatically
-        // Instead, return the list of terms for this school year in the response
+        // Optionally activate a specific term and quarter when a school year becomes active
         schoolYear.status = req.body.status;
         const updatedSchoolYear = await schoolYear.save();
         const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
+        const { activeTermName, activeQuarterName } = req.body;
+
+        if (activeTermName) {
+          // Archive other terms, activate chosen term
+          await Term.updateMany(
+            { schoolYear: schoolYearName, termName: { $ne: activeTermName } },
+            { status: 'archived' }
+          );
+          await Term.updateMany(
+            { schoolYear: schoolYearName, termName: activeTermName },
+            { status: 'active' }
+          );
+
+          // Quarter normalization
+          if (activeQuarterName) {
+            await Quarter.updateMany(
+              { schoolYear: schoolYearName, termName: activeTermName, quarterName: { $ne: activeQuarterName } },
+              { status: 'inactive' }
+            );
+            await Quarter.updateMany(
+              { schoolYear: schoolYearName, termName: activeTermName, quarterName: activeQuarterName },
+              { status: 'active' }
+            );
+          } else {
+            const qs = await Quarter.find({ schoolYear: schoolYearName, termName: activeTermName, status: { $ne: 'archived' } }).sort({ startDate: 1 });
+            if (qs && qs.length > 0) {
+              await Quarter.updateMany({ _id: { $in: qs.map(q => q._id) } }, { status: 'inactive' });
+              await Quarter.findByIdAndUpdate(qs[0]._id, { status: 'active' });
+            }
+          }
+
+          // Inactivate any active quarters from other terms of same SY
+          await Quarter.updateMany(
+            { schoolYear: schoolYearName, termName: { $ne: activeTermName }, status: 'active' },
+            { status: 'inactive' }
+          );
+        }
+
         const terms = await Term.find({ schoolYear: schoolYearName });
+        const quarters = await Quarter.find({ schoolYear: schoolYearName });
 
         // Audit logs: one entry per deactivated previous active year, then activated new year
         try {
@@ -319,9 +408,15 @@ router.patch('/:id', authenticateToken, async (req, res) => {
         } catch (auditErr) {
           console.warn('[Audit] Failed to log activation/deactivation:', auditErr);
         }
-        return res.json({ schoolYear: updatedSchoolYear, terms });
+        return res.json({ schoolYear: updatedSchoolYear, terms, quarters });
       }
-      
+      // Prevent turning an active school year to inactive; one active must always exist
+      if (req.body.status === 'inactive' && schoolYear.status === 'active') {
+        return res.status(403).json({
+          message: 'Cannot set the active school year to inactive. Activate another school year instead.'
+        });
+      }
+
       schoolYear.status = req.body.status;
 
       // Archive all terms and related entities for this school year if archiving or inactivating
@@ -482,6 +577,11 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const schoolYear = await SchoolYear.findById(id);
     if (!schoolYear) {
       return res.status(404).json({ message: 'School year not found' });
+    }
+
+    // Do not allow deleting the active school year
+    if (schoolYear.status === 'active') {
+      return res.status(403).json({ message: 'Cannot delete the active school year. Activate another school year first.' });
     }
 
     // If cascade confirmation is not provided, check dependencies first
