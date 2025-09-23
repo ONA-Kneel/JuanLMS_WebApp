@@ -59,7 +59,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
   // State for Tracks management
   const [trackFormData, setTrackFormData] = useState({
-    trackName: ''
+    trackName: '',
+    trackType: ''
   });
   const [tracks, setTracks] = useState([]);
   const [trackError, setTrackError] = useState('');
@@ -70,7 +71,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   // State for Strands management
   const [strandFormData, setStrandFormData] = useState({
     trackId: '',
-    strandName: ''
+    strandName: '',
+    strandType: ''
   });
   const [strands, setStrands] = useState([]);
   const [strandError, setStrandError] = useState('');
@@ -500,8 +502,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     if (termDetails.status === 'archived') return;
     setTrackError('');
 
-    if (!trackFormData.trackName.trim()) {
-      setTrackError('Track Name cannot be empty.');
+    if (!trackFormData.trackType) {
+      setTrackError('Please select a track type.');
+      return;
+    }
+    
+    if (trackFormData.trackType === 'custom' && !trackFormData.trackName.trim()) {
+      setTrackError('Custom track name cannot be empty.');
       return;
     }
 
@@ -510,7 +517,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          trackName: trackFormData.trackName.trim(),
+          trackName: trackFormData.trackType === 'custom' ? trackFormData.trackName.trim() : trackFormData.trackType,
           schoolYear: termDetails.schoolYear,
           termName: termDetails.termName,
           quarterName: quarterData ? quarterData.quarterName : undefined
@@ -537,7 +544,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           }).catch(() => {});
         } catch {}
         window.alert('Track added successfully!');
-        setTrackFormData({ trackName: '' }); // Clear form
+        setTrackFormData({ trackName: '', trackType: '' }); // Clear form
         setShowTrackModal(false); // Close modal
       } else {
         const data = await res.json();
@@ -552,7 +559,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     setIsEditMode(true);
     setEditingTrack(track);
     setTrackFormData({
-      trackName: track.trackName
+      trackName: track.trackName,
+      trackType: track.trackName === 'Academic Track' || track.trackName === 'TVL Track' ? track.trackName : 'custom'
     });
     setShowTrackModal(true);
   };
@@ -561,8 +569,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     if (termDetails.status === 'archived') return;
     setTrackError('');
 
-    if (!trackFormData.trackName.trim()) {
-      setTrackError('Track Name cannot be empty.');
+    if (!trackFormData.trackType) {
+      setTrackError('Please select a track type.');
+      return;
+    }
+    
+    if (trackFormData.trackType === 'custom' && !trackFormData.trackName.trim()) {
+      setTrackError('Custom track name cannot be empty.');
       return;
     }
 
@@ -572,7 +585,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            trackName: trackFormData.trackName.trim(),
+            trackName: trackFormData.trackType === 'custom' ? trackFormData.trackName.trim() : trackFormData.trackType,
             schoolYear: termDetails.schoolYear,
             termName: termDetails.termName
           })
@@ -604,7 +617,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           window.alert('Track updated successfully!');
           setIsEditMode(false);
           setEditingTrack(null);
-          setTrackFormData({ trackName: '' });
+          setTrackFormData({ trackName: '', trackType: '' });
           setShowTrackModal(false); // Close modal
         } else {
           const data = await res.json();
@@ -699,8 +712,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     if (termDetails.status === 'archived') return;
     setStrandError('');
 
-    if (!strandFormData.trackId || !strandFormData.strandName.trim()) {
-      setStrandError('Track Name and Strand Name cannot be empty.');
+    if (!strandFormData.trackId || !strandFormData.strandType) {
+      setStrandError('Track Name and Strand Type cannot be empty.');
+      return;
+    }
+    
+    if (strandFormData.strandType === 'custom' && !strandFormData.strandName.trim()) {
+      setStrandError('Custom strand name cannot be empty.');
       return;
     }
 
@@ -715,7 +733,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          strandName: strandFormData.strandName.trim(),
+          strandName: strandFormData.strandType === 'custom' ? strandFormData.strandName.trim() : strandFormData.strandType,
           trackName: selectedTrack.trackName,
           schoolYear: termDetails.schoolYear,
           termName: termDetails.termName
@@ -742,7 +760,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           }).catch(() => {});
         } catch {}
         window.alert('Strand added successfully!');
-        setStrandFormData({ trackId: '', strandName: '' }); // Clear form
+        setStrandFormData({ trackId: '', strandName: '', strandType: '' }); // Clear form
         setIsStrandModalOpen(false); // Close modal
       } else {
         const data = await res.json();
@@ -756,7 +774,18 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleEditStrand = (strand) => {
     setIsStrandEditMode(true);
     setEditingStrand(strand);
-    setStrandFormData({ trackId: strand.trackId, strandName: strand.strandName });
+    setStrandFormData({ 
+      trackId: strand.trackId, 
+      strandName: strand.strandName,
+      strandType: strand.strandName === 'Accountancy, Business and Management (ABM)' || 
+                  strand.strandName === 'General Academic Strand (GAS)' || 
+                  strand.strandName === 'Humanities and Social Sciences (HUMSS)' || 
+                  strand.strandName === 'Science, Technology, Engineering, and Mathematics (STEM)' ||
+                  strand.strandName === 'Housekeeping' || 
+                  strand.strandName === 'Cookery' || 
+                  strand.strandName === 'Food and Beverage Services' || 
+                  strand.strandName === 'Bread and Pastry Production' ? strand.strandName : 'custom'
+    });
     setIsStrandModalOpen(true);
   };
   const handleUpdateStrand = async (e) => {
@@ -764,8 +793,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     if (termDetails.status === 'archived') return;
     setStrandError('');
 
-    if (!strandFormData.trackId || !strandFormData.strandName.trim()) {
-      setStrandError('Track Name and Strand Name cannot be empty.');
+    if (!strandFormData.trackId || !strandFormData.strandType) {
+      setStrandError('Track Name and Strand Type cannot be empty.');
+      return;
+    }
+    
+    if (strandFormData.strandType === 'custom' && !strandFormData.strandName.trim()) {
+      setStrandError('Custom strand name cannot be empty.');
       return;
     }
 
@@ -781,7 +815,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            strandName: strandFormData.strandName.trim(),
+            strandName: strandFormData.strandType === 'custom' ? strandFormData.strandName.trim() : strandFormData.strandType,
             trackName: selectedTrack.trackName,
             schoolYear: termDetails.schoolYear,
             termName: termDetails.termName
@@ -814,7 +848,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           window.alert('Strand updated successfully!');
           setIsStrandEditMode(false);
           setEditingStrand(null);
-          setStrandFormData({ trackId: '', strandName: '' });
+          setStrandFormData({ trackId: '', strandName: '', strandType: '' });
           setIsStrandModalOpen(false); // Close modal
         } else {
           const data = await res.json();
@@ -5388,7 +5422,7 @@ Validation issues (${skippedCount} items):
                         setShowTrackModal(false);
                         setIsEditMode(false);
                         setEditingTrack(null);
-                        setTrackFormData({ trackName: '' });
+                        setTrackFormData({ trackName: '', trackType: '' });
                       }}
          >
            ×
@@ -5402,18 +5436,45 @@ Validation issues (${skippedCount} items):
                         }} className="space-y-4 mt-6">
                   <div className="flex flex-col md:flex-row md:space-x-4 md:space-y-0 mb-4">
                     <div className="flex-1">
-                      <label htmlFor="trackName" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
-                      <input
-                        type="text"
-                        id="trackName"
-                        name="trackName"
-                        value={trackFormData.trackName}
-                        onChange={e => setTrackFormData({ ...trackFormData, trackName: e.target.value })}
+                      <label htmlFor="trackType" className="block text-sm font-medium text-gray-700 mb-1">Track Type</label>
+                      <select
+                        id="trackType"
+                        name="trackType"
+                        value={trackFormData.trackType}
+                        onChange={e => {
+                          const selectedType = e.target.value;
+                          setTrackFormData({ 
+                            ...trackFormData, 
+                            trackType: selectedType,
+                            trackName: selectedType === 'custom' ? '' : selectedType
+                          });
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
                         disabled={termDetails.status === 'archived'}
-                      />
+                      >
+                        <option value="">Select Track Type</option>
+                        <option value="Academic Track">Academic Track</option>
+                        <option value="TVL Track">TVL Track</option>
+                        <option value="custom">Custom Track</option>
+                      </select>
                     </div>
+                    {trackFormData.trackType === 'custom' && (
+                      <div className="flex-1">
+                        <label htmlFor="trackName" className="block text-sm font-medium text-gray-700 mb-1">Custom Track Name</label>
+                        <input
+                          type="text"
+                          id="trackName"
+                          name="trackName"
+                          value={trackFormData.trackName}
+                          onChange={e => setTrackFormData({ ...trackFormData, trackName: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Enter custom track name"
+                          required
+                          disabled={termDetails.status === 'archived'}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <button
@@ -5429,7 +5490,7 @@ Validation issues (${skippedCount} items):
                         onClick={() => {
                           setIsEditMode(false);
                           setEditingTrack(null);
-                          setTrackFormData({ trackName: '' });
+                          setTrackFormData({ trackName: '', trackType: '' });
                         }}
                         className="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
                         disabled={termDetails.status === 'archived'}
@@ -5461,7 +5522,7 @@ Validation issues (${skippedCount} items):
                         setShowTrackModal(true);
                         setIsEditMode(false);
                         setEditingTrack(null);
-                        setTrackFormData({ trackName: '' });
+                        setTrackFormData({ trackName: '', trackType: '' });
                       }}
                     >
                       Add New Track
@@ -5542,7 +5603,7 @@ Validation issues (${skippedCount} items):
                           setIsStrandModalOpen(false);
                           setIsStrandEditMode(false);
                           setEditingStrand(null);
-                          setStrandFormData({ trackId: '', strandName: '' });
+                          setStrandFormData({ trackId: '', strandName: '', strandType: '' });
                         }}
                       >
                         &times;
@@ -5559,7 +5620,7 @@ Validation issues (${skippedCount} items):
                             setIsStrandModalOpen(false);
                             setIsStrandEditMode(false);
                             setEditingStrand(null);
-                            setStrandFormData({ trackId: '', strandName: '' });
+                            setStrandFormData({ trackId: '', strandName: '', strandType: '' });
                           }
                         }}
                         className="space-y-4"
@@ -5571,7 +5632,16 @@ Validation issues (${skippedCount} items):
                         id="trackName"
                         name="trackId"
                         value={strandFormData.trackId}
-                        onChange={e => setStrandFormData({ ...strandFormData, trackId: e.target.value })}
+                        onChange={e => {
+                          const selectedTrackId = e.target.value;
+                          const selectedTrack = tracks.find(track => track._id === selectedTrackId);
+                          setStrandFormData({ 
+                            ...strandFormData, 
+                            trackId: selectedTrackId,
+                            strandType: '', // Reset strand type when track changes
+                            strandName: '' // Reset strand name when track changes
+                          });
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
                         disabled={termDetails.status === 'archived'}
@@ -5585,18 +5655,93 @@ Validation issues (${skippedCount} items):
                       </select>
                     </div>
                     <div className="flex-1">
-                      <label htmlFor="strandName" className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
-                      <input
-                        type="text"
-                        id="strandName"
-                        name="strandName"
-                        value={strandFormData.strandName}
-                        onChange={e => setStrandFormData({ ...strandFormData, strandName: e.target.value })}
+                      <label htmlFor="strandType" className="block text-sm font-medium text-gray-700 mb-1">Strand Type</label>
+                      <select
+                        id="strandType"
+                        name="strandType"
+                        value={strandFormData.strandType}
+                        onChange={e => {
+                          const selectedType = e.target.value;
+                          setStrandFormData({ 
+                            ...strandFormData, 
+                            strandType: selectedType,
+                            strandName: selectedType === 'custom' ? '' : selectedType
+                          });
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
-                        disabled={termDetails.status === 'archived'}
-                      />
+                        disabled={!strandFormData.trackId || termDetails.status === 'archived'}
+                      >
+                        <option value="">Select Strand Type</option>
+                        {(() => {
+                          const selectedTrack = tracks.find(track => track._id === strandFormData.trackId);
+                          if (!selectedTrack) {
+                            return <option value="">Please select a track first</option>;
+                          }
+                          
+                          if (selectedTrack.trackName === 'Academic Track') {
+                            return (
+                              <>
+                                <optgroup label="Academic Track Strands">
+                                  <option value="Accountancy, Business and Management (ABM)">Accountancy, Business and Management (ABM)</option>
+                                  <option value="General Academic Strand (GAS)">General Academic Strand (GAS)</option>
+                                  <option value="Humanities and Social Sciences (HUMSS)">Humanities and Social Sciences (HUMSS)</option>
+                                  <option value="Science, Technology, Engineering, and Mathematics (STEM)">Science, Technology, Engineering, and Mathematics (STEM)</option>
+                                </optgroup>
+                                <option value="custom">Custom Strand</option>
+                              </>
+                            );
+                          } else if (selectedTrack.trackName === 'TVL Track') {
+                            return (
+                              <>
+                                <optgroup label="TVL Track Strands">
+                                  <option value="Housekeeping">Housekeeping</option>
+                                  <option value="Cookery">Cookery</option>
+                                  <option value="Food and Beverage Services">Food and Beverage Services</option>
+                                  <option value="Bread and Pastry Production">Bread and Pastry Production</option>
+                                </optgroup>
+                                <option value="custom">Custom Strand</option>
+                              </>
+                            );
+                          } else {
+                            // For custom tracks, show all options
+                            return (
+                              <>
+                                <optgroup label="Academic Track Strands">
+                                  <option value="Accountancy, Business and Management (ABM)">Accountancy, Business and Management (ABM)</option>
+                                  <option value="General Academic Strand (GAS)">General Academic Strand (GAS)</option>
+                                  <option value="Humanities and Social Sciences (HUMSS)">Humanities and Social Sciences (HUMSS)</option>
+                                  <option value="Science, Technology, Engineering, and Mathematics (STEM)">Science, Technology, Engineering, and Mathematics (STEM)</option>
+                                </optgroup>
+                                <optgroup label="TVL Track Strands">
+                                  <option value="Housekeeping">Housekeeping</option>
+                                  <option value="Cookery">Cookery</option>
+                                  <option value="Food and Beverage Services">Food and Beverage Services</option>
+                                  <option value="Bread and Pastry Production">Bread and Pastry Production</option>
+                                </optgroup>
+                                <option value="custom">Custom Strand</option>
+                              </>
+                            );
+                          }
+                        })()}
+                      </select>
                     </div>
+                    {strandFormData.strandType === 'custom' && (
+                      <div className="flex-1">
+                        <label htmlFor="strandName" className="block text-sm font-medium text-gray-700 mb-1">Custom Strand Name</label>
+                        <input
+                          type="text"
+                          id="strandName"
+                          name="strandName"
+                          value={strandFormData.strandName}
+                          onChange={e => setStrandFormData({ ...strandFormData, strandName: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Enter custom strand name"
+                          required
+                          disabled={termDetails.status === 'archived'}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <button
@@ -5612,7 +5757,7 @@ Validation issues (${skippedCount} items):
                         onClick={() => {
                           setIsStrandEditMode(false);
                           setEditingStrand(null);
-                          setStrandFormData({ trackId: '', strandName: '' });
+                          setStrandFormData({ trackId: '', strandName: '', strandType: '' });
                                 setIsStrandModalOpen(false);
                         }}
                         className="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
@@ -5639,7 +5784,7 @@ Validation issues (${skippedCount} items):
                       setIsStrandModalOpen(true);
                       setIsStrandEditMode(false);
                       setEditingStrand(null);
-                      setStrandFormData({ trackId: '', strandName: '' });
+                      setStrandFormData({ trackId: '', strandName: '', strandType: '' });
                     }}
                     disabled={termDetails.status === 'archived'}
                   >
