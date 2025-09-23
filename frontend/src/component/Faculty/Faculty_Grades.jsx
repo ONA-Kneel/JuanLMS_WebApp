@@ -97,6 +97,8 @@ export default function Faculty_Grades() {
   const [studentScores, setStudentScores] = useState({});
   const [lastUpdated, setLastUpdated] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [quarterStatus, setQuarterStatus] = useState({}); // Store quarter status for each quarter
+  const [confirmRepost, setConfirmRepost] = useState({ isOpen: false, quarter: null, callback: null });
 
   const showModal = (title, message, type = 'info') => {
     setModal({ isOpen: true, title, message, type });
@@ -105,6 +107,65 @@ export default function Faculty_Grades() {
   const closeModal = () => {
     setModal({ isOpen: false, title: '', message: '', type: 'info' });
   };
+
+  // Check if grades have already been posted for a quarter
+  const checkIfGradesPosted = async (quarter) => {
+    try {
+      const token = localStorage.getItem('token');
+      const selectedClassData = classes.find(c => c._id === selectedClass);
+      
+      if (!selectedClassData) return false;
+
+      const response = await fetch(`${API_BASE}/api/grades/check-posted?classId=${selectedClassData.classID}&section=${selectedSection}&quarter=${quarter}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        return result.posted || false;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error checking if grades are posted:', error);
+      return false;
+    }
+  };
+
+  // Fetch quarter status for the current academic year
+  const fetchQuarterStatus = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!academicYear) return;
+
+      const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+      const response = await fetch(`${API_BASE}/api/quarters/schoolyear/${schoolYearName}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const quarters = await response.json();
+        const statusMap = {};
+        
+        quarters.forEach(quarter => {
+          // Map quarter names to status
+          if (quarter.quarterName === 'Quarter 1') {
+            statusMap['Q1'] = quarter.status;
+          } else if (quarter.quarterName === 'Quarter 2') {
+            statusMap['Q2'] = quarter.status;
+          } else if (quarter.quarterName === 'Quarter 3') {
+            statusMap['Q3'] = quarter.status;
+          } else if (quarter.quarterName === 'Quarter 4') {
+            statusMap['Q4'] = quarter.status;
+          }
+        });
+        
+        setQuarterStatus(statusMap);
+        console.log('Quarter status fetched:', statusMap);
+      }
+    } catch (error) {
+      console.error('Error fetching quarter status:', error);
+    }
+  }, [academicYear]);
 
   useEffect(() => {
     const initializeData = async () => {
@@ -167,6 +228,8 @@ export default function Faculty_Grades() {
           }
         }
 
+        // Quarter status will be fetched by separate useEffect when academicYear state is set
+
       } catch (error) {
         console.error('Error initializing data:', error);
         showModal('Error', 'Failed to load initial data', 'error');
@@ -176,7 +239,15 @@ export default function Faculty_Grades() {
     };
 
     initializeData();
-  }, []); // Remove academicYear dependency to prevent infinite loop
+  }, []); // Remove fetchQuarterStatus dependency to prevent infinite loop
+
+  // Fetch quarter status when academic year changes (only once)
+  useEffect(() => {
+    if (academicYear) {
+      fetchQuarterStatus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [academicYear]); // Intentionally exclude fetchQuarterStatus to prevent infinite loop
 
   const fetchAssignmentsAndQuizzes = useCallback(async (selectedClassData) => {
     try {
@@ -711,6 +782,23 @@ export default function Faculty_Grades() {
       return;
     }
 
+    // Check if grades have already been posted for this quarter
+    const alreadyPosted = await checkIfGradesPosted(quarter);
+    if (alreadyPosted) {
+      // Show confirmation dialog
+      setConfirmRepost({
+        isOpen: true,
+        quarter: quarter,
+        callback: () => executePostGrades(quarter)
+      });
+      return;
+    }
+
+    // If not posted before, proceed directly
+    await executePostGrades(quarter);
+  };
+
+  const executePostGrades = async (quarter) => {
     try {
       setPosting(true);
       const token = localStorage.getItem('token');
@@ -1205,7 +1293,8 @@ export default function Faculty_Grades() {
                   const selectedClassData = classes.find(c => c._id === selectedClass);
                   if (selectedClassData) {
                     await fetchAssignmentsAndQuizzes(selectedClassData);
-                    showModal('Success', 'System data refreshed successfully!', 'success');
+                    await fetchQuarterStatus(); // Also refresh quarter status
+                    showModal('Success', 'System data and quarter status refreshed successfully!', 'success');
                   }
                 }}
                 className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors"
@@ -1469,21 +1558,76 @@ export default function Faculty_Grades() {
         {selectedClass && selectedSection && students.length > 0 && (
           <div className="bg-white rounded-lg shadow-md p-6 mt-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-gray-700">Grade Management</h2>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-700">Grade Management</h2>
+                <div className="text-sm text-gray-600 mt-1">
+                  Quarter Status: 
+                  {currentTerm?.termName === 'Term 1' ? (
+                    <>
+                      <span className={`ml-2 px-2 py-1 rounded text-xs ${
+                        quarterStatus['Q1'] === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        Q1: {quarterStatus['Q1'] || 'Loading...'}
+                      </span>
+                      <span className={`ml-2 px-2 py-1 rounded text-xs ${
+                        quarterStatus['Q2'] === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        Q2: {quarterStatus['Q2'] || 'Loading...'}
+                      </span>
+                    </>
+                  ) : currentTerm?.termName === 'Term 2' ? (
+                    <>
+                      <span className={`ml-2 px-2 py-1 rounded text-xs ${
+                        quarterStatus['Q3'] === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        Q3: {quarterStatus['Q3'] || 'Loading...'}
+                      </span>
+                      <span className={`ml-2 px-2 py-1 rounded text-xs ${
+                        quarterStatus['Q4'] === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        Q4: {quarterStatus['Q4'] || 'Loading...'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className={`ml-2 px-2 py-1 rounded text-xs ${
+                        quarterStatus['Q1'] === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        Q1: {quarterStatus['Q1'] || 'Loading...'}
+                      </span>
+                      <span className={`ml-2 px-2 py-1 rounded text-xs ${
+                        quarterStatus['Q2'] === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        Q2: {quarterStatus['Q2'] || 'Loading...'}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
               <div className="flex gap-2">
                 {currentTerm?.termName === 'Term 1' ? (
                   <>
                     <button
                       onClick={() => postQuarterlyGradesToStudents('Q1')}
-                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
-                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0 || quarterStatus['Q1'] !== 'active'}
+                      className={`px-4 py-2 rounded transition-colors ${
+                        quarterStatus['Q1'] === 'active' 
+                          ? 'bg-green-600 text-white hover:bg-green-700' 
+                          : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      } disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                      title={quarterStatus['Q1'] !== 'active' ? 'Q1 is inactive - cannot post grades' : 'Post Q1 grades to students'}
                     >
                       {posting ? 'Posting...' : '📤 Post Q1 Grades'}
                     </button>
                     <button
                       onClick={() => postQuarterlyGradesToStudents('Q2')}
-                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0 || quarterStatus['Q2'] !== 'active'}
+                      className={`px-4 py-2 rounded transition-colors ${
+                        quarterStatus['Q2'] === 'active' 
+                          ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                          : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      } disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                      title={quarterStatus['Q2'] !== 'active' ? 'Q2 is inactive - cannot post grades' : 'Post Q2 grades + Term Final to students'}
                     >
                       {posting ? 'Posting...' : '📤 Post Q2 Grades + Term Final'}
                     </button>
@@ -1492,15 +1636,25 @@ export default function Faculty_Grades() {
                   <>
                     <button
                       onClick={() => postQuarterlyGradesToStudents('Q3')}
-                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
-                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0 || quarterStatus['Q3'] !== 'active'}
+                      className={`px-4 py-2 rounded transition-colors ${
+                        quarterStatus['Q3'] === 'active' 
+                          ? 'bg-green-600 text-white hover:bg-green-700' 
+                          : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      } disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                      title={quarterStatus['Q3'] !== 'active' ? 'Q3 is inactive - cannot post grades' : 'Post Q3 grades to students'}
                     >
                       {posting ? 'Posting...' : '📤 Post Q3 Grades'}
                     </button>
                     <button
                       onClick={() => postQuarterlyGradesToStudents('Q4')}
-                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0 || quarterStatus['Q4'] !== 'active'}
+                      className={`px-4 py-2 rounded transition-colors ${
+                        quarterStatus['Q4'] === 'active' 
+                          ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                          : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      } disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                      title={quarterStatus['Q4'] !== 'active' ? 'Q4 is inactive - cannot post grades' : 'Post Q4 grades + Term Final to students'}
                     >
                       {posting ? 'Posting...' : '📤 Post Q4 Grades + Term Final'}
                     </button>
@@ -1509,15 +1663,25 @@ export default function Faculty_Grades() {
                   <>
                     <button
                       onClick={() => postQuarterlyGradesToStudents('Q1')}
-                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
-                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0 || quarterStatus['Q1'] !== 'active'}
+                      className={`px-4 py-2 rounded transition-colors ${
+                        quarterStatus['Q1'] === 'active' 
+                          ? 'bg-green-600 text-white hover:bg-green-700' 
+                          : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      } disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                      title={quarterStatus['Q1'] !== 'active' ? 'Q1 is inactive - cannot post grades' : 'Post Q1 grades to students'}
                     >
                       {posting ? 'Posting...' : '📤 Post Q1 Grades'}
                     </button>
                     <button
                       onClick={() => postQuarterlyGradesToStudents('Q2')}
-                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0}
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      disabled={posting || !quarterlyGrades || Object.keys(quarterlyGrades).length === 0 || quarterStatus['Q2'] !== 'active'}
+                      className={`px-4 py-2 rounded transition-colors ${
+                        quarterStatus['Q2'] === 'active' 
+                          ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                          : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      } disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                      title={quarterStatus['Q2'] !== 'active' ? 'Q2 is inactive - cannot post grades' : 'Post Q2 grades + Term Final to students'}
                     >
                       {posting ? 'Posting...' : '📤 Post Q2 Grades + Term Final'}
                     </button>
@@ -1623,6 +1787,43 @@ export default function Faculty_Grades() {
         type={modal.type}
       >
         <p>{modal.message}</p>
+      </Modal>
+
+      {/* Confirmation Modal for Reposting */}
+      <Modal
+        isOpen={confirmRepost.isOpen}
+        onClose={() => setConfirmRepost({ isOpen: false, quarter: null, callback: null })}
+        title="Confirm Reposting Grades"
+        type="warning"
+      >
+        <div className="space-y-4">
+          <p>
+            Grades for <strong>{confirmRepost.quarter}</strong> have already been posted to students. 
+            Are you sure you want to post them again?
+          </p>
+          <p className="text-sm text-gray-600">
+            This will send another notification to students and may cause confusion.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setConfirmRepost({ isOpen: false, quarter: null, callback: null })}
+              className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (confirmRepost.callback) {
+                  confirmRepost.callback();
+                }
+                setConfirmRepost({ isOpen: false, quarter: null, callback: null });
+              }}
+              className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
+            >
+              Yes, Post Again
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
