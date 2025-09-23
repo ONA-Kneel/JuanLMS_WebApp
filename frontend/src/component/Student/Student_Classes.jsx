@@ -6,8 +6,7 @@ import ProfileMenu from "../ProfileMenu";
 import Student_Navbar from "./Student_Navbar";
 import { getFileUrl } from "../../utils/imageUtils";
 
-// Force localhost for local testing
-const API_BASE = import.meta.env.DEV ? "https://juanlms-webapp-server.onrender.com" : (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com");
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Student_Classes() {
   const navigate = useNavigate();
@@ -99,17 +98,6 @@ export default function Student_Classes() {
             return false;
           }
           
-          // For local testing, be more lenient with academic year but still filter by term
-          if (import.meta.env.DEV) {
-            console.log(`Student Classes - DEV MODE: Checking class ${cls.className || cls.classCode} (academicYear: ${cls.academicYear}, termName: ${cls.termName})`);
-            // Still filter by term even in DEV mode
-            if (cls.termName && cls.termName !== currentTerm.termName) {
-              console.log(`Student Classes - DEV MODE: Filtering out class ${cls.className || cls.classCode} - wrong term (${cls.termName} vs ${currentTerm.termName})`);
-              return false;
-            }
-            console.log(`Student Classes - DEV MODE: Including class ${cls.className || cls.classCode} - correct term`);
-            return true;
-          }
           
           // Filter by academic year (tolerate missing academicYear)
           if (cls.academicYear && cls.academicYear !== `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`) {

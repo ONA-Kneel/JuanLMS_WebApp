@@ -131,13 +131,13 @@ export default function Faculty_Activities() {
         
         for (const facultyClass of facultyClasses) {
           try {
-            // Fetch assignments for this class
-            const activityRes = await fetch(`${API_BASE}/assignments?classID=${facultyClass.classID}`, {
+            // Fetch assignments for this class (get all quarters for the term)
+            const activityRes = await fetch(`${API_BASE}/assignments?classID=${facultyClass.classID}&termName=${encodeURIComponent(currentTerm.termName)}&academicYear=${encodeURIComponent(`${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         
-            // Fetch quizzes for this class
-            const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${facultyClass.classID}`, {
+            // Fetch quizzes for this class (get all quarters for the term)
+            const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${facultyClass.classID}&termName=${encodeURIComponent(currentTerm.termName)}&academicYear=${encodeURIComponent(`${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`)}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
         

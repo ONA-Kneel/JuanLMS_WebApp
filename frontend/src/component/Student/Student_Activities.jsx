@@ -4,8 +4,7 @@ import { useNavigate } from "react-router-dom";
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-// Force localhost for local testing
-const API_BASE = import.meta.env.DEV ? "https://juanlms-webapp-server.onrender.com" : (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com");
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Student_Activities() {
   console.log('Student_Activities component is rendering...');
@@ -133,11 +132,6 @@ export default function Student_Activities() {
             return false;
           }
           
-          // For local testing, be more lenient with academic year and term filtering
-          if (import.meta.env.DEV) {
-            console.log(`DEV MODE: Including class ${cls.className || cls.classCode} (academicYear: ${cls.academicYear}, termName: ${cls.termName})`);
-            return true;
-          }
           
           // Filter by academic year (tolerate missing academicYear)
           if (cls.academicYear && cls.academicYear !== `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`) {
@@ -169,8 +163,8 @@ export default function Student_Activities() {
           console.log('Fetching activities for class:', classCode, cls.className);
           
           try {
-            // Fetch assignments for this class
-            const assignmentRes = await fetch(`${API_BASE}/assignments?classID=${classCode}&quarter=${encodeURIComponent(globalQuarter)}&termName=${encodeURIComponent(globalTerm)}&academicYear=${encodeURIComponent(globalAcademicYear)}`, {
+            // Fetch assignments for this class (get all quarters for the term)
+            const assignmentRes = await fetch(`${API_BASE}/assignments?classID=${classCode}&termName=${encodeURIComponent(currentTerm.termName)}&academicYear=${encodeURIComponent(`${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`)}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -214,8 +208,8 @@ export default function Student_Activities() {
               }
             }
             
-            // Fetch quizzes for this class
-            const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${classCode}&quarter=${encodeURIComponent(globalQuarter)}&termName=${encodeURIComponent(globalTerm)}&academicYear=${encodeURIComponent(globalAcademicYear)}`, {
+            // Fetch quizzes for this class (get all quarters for the term)
+            const quizRes = await fetch(`${API_BASE}/api/quizzes?classID=${classCode}&termName=${encodeURIComponent(currentTerm.termName)}&academicYear=${encodeURIComponent(`${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`)}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -390,15 +384,27 @@ export default function Student_Activities() {
     switch (status) {
       case 'upcoming':
         return allActivities.filter(activity => {
-          if (!activity.dueDate) return true; // No due date = upcoming
+          // If already completed/graded, don't show in upcoming
+          if (hasStudentCompleted(activity)) return false;
+          
+          // If no due date and not completed, show in upcoming
+          if (!activity.dueDate) return true;
+          
+          // If has due date, check if it's in the future
           const dueDate = new Date(activity.dueDate);
-          return dueDate > now && !hasStudentCompleted(activity);
+          return dueDate > now;
         });
       case 'past-due':
         return allActivities.filter(activity => {
-          if (!activity.dueDate) return false; // No due date = not past due
+          // If already completed/graded, don't show in past-due
+          if (hasStudentCompleted(activity)) return false;
+          
+          // If no due date, don't show in past-due
+          if (!activity.dueDate) return false;
+          
+          // If has due date, check if it's in the past
           const dueDate = new Date(activity.dueDate);
-          return dueDate < now && !hasStudentCompleted(activity);
+          return dueDate < now;
         });
       case 'completed':
         return allActivities.filter(activity => hasStudentCompleted(activity));
@@ -407,21 +413,25 @@ export default function Student_Activities() {
     }
   };
 
-  // Check if student has completed an activity (same logic as before)
+  // Check if student has completed an activity (must be graded to be considered completed)
   const hasStudentCompleted = (activity) => {
     if (activity.type === 'assignment') {
       return submissions.some(sub => {
         const assignmentId = sub.assignment?._id || sub.assignment;
         const activityId = activity._id;
         
-        return String(assignmentId) === String(activityId);
+        // Check if submission exists AND is graded
+        return String(assignmentId) === String(activityId) && 
+               (sub.status === 'graded' || sub.graded === true);
       });
     } else if (activity.type === 'quiz') {
       return quizResponses.some(resp => {
         const quizId = resp.quiz?._id || resp.quiz || resp.quizId;
         const activityId = activity._id;
         
-        return String(quizId) === String(activityId);
+        // Check if response exists AND is graded
+        return String(quizId) === String(activityId) && 
+               (resp.graded === true || resp.status === 'graded');
       });
     }
     return false;
