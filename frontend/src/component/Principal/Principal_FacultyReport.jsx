@@ -9,7 +9,7 @@ import ProfileMenu from "../ProfileMenu";
 const downloadAsPDF = (content, filename, chartData) => {
   // Create a new window with the content, then auto-generate and download a PDF via html2pdf.js
   const printWindow = window.open('', '_blank');
-  const headingVariants = [
+  const HEADING_VARIANTS = [
     'Faculty Performance & Activity Levels Analysis',
     'Faculty Performance & Activity Levels',
     'Faculty Performance and Activity Levels'
@@ -253,7 +253,6 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.
 export default function Principal_FacultyReport() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   // Filter states
@@ -270,8 +269,6 @@ export default function Principal_FacultyReport() {
   // Faculty activities data
   const [facultyActivities, setFacultyActivities] = useState([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
-  const [allAssignments, setAllAssignments] = useState([]);
-  const [allQuizzes, setAllQuizzes] = useState([]);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -835,7 +832,7 @@ export default function Principal_FacultyReport() {
       };
       testServer();
     }
-  }, [currentTerm, fetchAuditData]);
+  }, [currentTerm, fetchAuditData, fetchFacultyLastLogins]);
 
   // Fetch faculty last logins
   const fetchFacultyLastLogins = useCallback(async () => {
@@ -872,7 +869,6 @@ export default function Principal_FacultyReport() {
   const uniqueStrands = [...new Set(facultyActivities.map(a => a.strandName).filter(Boolean))].sort();
   const uniqueSections = [...new Set(facultyActivities.map(a => a.sectionName).filter(Boolean))].sort();
   const uniqueCourses = [...new Set(facultyActivities.map(a => a.subject).filter(Boolean))].sort();
-  const uniqueFaculty = [...new Set(facultyActivities.map(a => a.facultyName).filter(Boolean))].sort();
 
   // AI Analysis function
   const createAIAnalysis = async () => {
@@ -938,11 +934,8 @@ export default function Principal_FacultyReport() {
   };
 
   // Calculate summary statistics
-  const totalActivities = filteredActivities.length;
   const assignmentsCount = filteredActivities.filter(a => a._kind === 'assignment').length;
   const quizzesCount = filteredActivities.filter(a => a._kind === 'quiz').length;
-  const postedCount = filteredActivities.filter(a => a.postAt && new Date(a.postAt) <= new Date()).length;
-  const pendingCount = filteredActivities.filter(a => !a.postAt || new Date(a.postAt) > new Date()).length;
 
   // Helper functions for faculty last logins
   const formatDate = (dateString) => {
@@ -1021,8 +1014,8 @@ export default function Principal_FacultyReport() {
       // Show distribution by section within the strand
       const inStrand = filteredActivities.filter(a => a.strandName === (analysisMeta?.filters?.strand || modalStrand || selectedStrand));
       const bySection = new Map();
-      for (const it of inStrand) {
-        const key = it.sectionName || 'Unknown';
+      for (const item of inStrand) {
+        const key = item.sectionName || 'Unknown';
         bySection.set(key, (bySection.get(key) || 0) + 1);
       }
       const labels = Array.from(bySection.keys());
@@ -1041,8 +1034,8 @@ export default function Principal_FacultyReport() {
       const section = analysisMeta?.filters?.section || modalSection || selectedSection;
       const inSection = filteredActivities.filter(a => a.sectionName === section);
       const byTeacher = new Map();
-      for (const it of inSection) {
-        const t = it.facultyName || 'Unknown Faculty';
+      for (const item of inSection) {
+        const t = item.facultyName || 'Unknown Faculty';
         byTeacher.set(t, (byTeacher.get(t) || 0) + 1);
       }
       const labels = Array.from(byTeacher.keys());
@@ -1070,7 +1063,7 @@ export default function Principal_FacultyReport() {
     if (rType === 'year') {
       const buildCounts = (items, key) => {
         const map = new Map();
-        for (const it of items) { const k = it[key] || 'Unknown'; map.set(k, (map.get(k)||0)+1); }
+        for (const item of items) { const k = item[key] || 'Unknown'; map.set(k, (map.get(k)||0)+1); }
         return { labels: Array.from(map.keys()), data: Array.from(map.values()) };
       };
       const sectionDist = buildCounts(filteredActivities, 'sectionName');
@@ -1090,10 +1083,10 @@ export default function Principal_FacultyReport() {
       const inStrand = filteredActivities.filter(a => a.strandName === strandVal);
       const bySection = new Map();
       let aCount = 0, qCount = 0;
-      for (const it of inStrand) {
-        const sec = it.sectionName || 'Unknown';
+      for (const item of inStrand) {
+        const sec = item.sectionName || 'Unknown';
         bySection.set(sec, (bySection.get(sec)||0) + 1);
-        if (it._kind === 'assignment') aCount++; else if (it._kind === 'quiz') qCount++;
+        if (item._kind === 'assignment') aCount++; else if (item._kind === 'quiz') qCount++;
       }
       if (sectionChartCanvasRef.current) {
         const labels = Array.from(bySection.keys()); const data = Array.from(bySection.values());
@@ -1109,10 +1102,10 @@ export default function Principal_FacultyReport() {
       const inSection = filteredActivities.filter(a => a.sectionName === sectionVal);
       const byCourse = new Map();
       let posted = 0, pending = 0;
-      for (const it of inSection) {
-        const course = it.subject || 'Unknown';
+      for (const item of inSection) {
+        const course = item.subject || 'Unknown';
         byCourse.set(course, (byCourse.get(course)||0) + 1);
-        if (it.postAt && new Date(it.postAt) <= new Date()) posted++; else pending++;
+        if (item.postAt && new Date(item.postAt) <= new Date()) posted++; else pending++;
       }
       if (sectionChartCanvasRef.current) {
         const labels = Array.from(byCourse.keys()); const data = Array.from(byCourse.values());
@@ -1836,7 +1829,7 @@ export default function Principal_FacultyReport() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedFacultyLogins.map((log, idx) => (
+                    {paginatedFacultyLogins.map((log) => (
                       <tr key={log._id} className={getRowColor(log.lastLogin)}>
                         <td className="p-3 border-b text-gray-900 whitespace-nowrap">{log.userName}</td>
                         <td className="p-3 border-b text-gray-700 whitespace-nowrap">{log.userRole}</td>
