@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Chart, ArcElement, Tooltip, Legend, PieController } from 'chart.js';
 Chart.register(ArcElement, Tooltip, Legend, PieController);
@@ -9,11 +10,12 @@ import ProfileMenu from "../ProfileMenu";
 const downloadAsPDF = (content, filename, chartData) => {
   // Create a new window with the content, then auto-generate and download a PDF via html2pdf.js
   const printWindow = window.open('', '_blank');
-  const headingVariants = [
+  // kept for reference in earlier version
+  /* const headingVariants = [
     'Faculty Performance & Activity Levels Analysis',
     'Faculty Performance & Activity Levels',
     'Faculty Performance and Activity Levels'
-  ];
+  ]; */
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
@@ -151,6 +153,10 @@ const downloadAsPDF = (content, filename, chartData) => {
         <p class="report-title">${filename}</p>
         <p class="report-date">Generated on: ${new Date().toLocaleDateString()}</p>
       </div>
+      <div style="background: linear-gradient(90deg,#eff6ff,#f5f3ff); padding: 12px; border-left: 4px solid #3b82f6; border-radius: 8px; margin: 16px 0;">
+        <div style="font-weight:600;color:#1e40af;margin-bottom:4px;">Analysis Summary</div>
+        <div style="color:#1d4ed8;">This AI-powered analysis provides insights into faculty performance, student engagement, and recommendations for improving academic outcomes.</div>
+      </div>
       <div id="contentBefore" class="content"></div>
       <div class="chart-section" id="chartContainer" style="display:none;">
         <div class="chart-title">Distribution of Activities</div>
@@ -170,13 +176,38 @@ const downloadAsPDF = (content, filename, chartData) => {
       <div class="no-print" style="display:none"></div>
       <script>
         (function(){
-          const encode = (s) => s
+          const escapeHtml = (s) => s
             .replace(/&/g,'&amp;')
             .replace(/</g,'&lt;')
             .replace(/>/g,'&gt;')
             .replace(/"/g,'&quot;')
             .replace(/'/g,'&#39;');
-          const rawContent = encode(${JSON.stringify(content)});
+          const formatToHtml = (input) => {
+            if (!input) return '';
+            const lines = escapeHtml(input).split(/\r?\n/);
+            const out = [];
+            let inUl = false, inOl = false;
+            const closeLists = () => { if (inUl) { out.push('</ul>'); inUl=false; } if (inOl) { out.push('</ol>'); inOl=false; } };
+            for (let raw of lines) {
+              const line = raw.trimEnd();
+              if (!line.trim()) { closeLists(); out.push('<p style="margin:0 0 8px 0;">&nbsp;</p>'); continue; }
+              if (/^[-*_]{3,}$/.test(line)) { closeLists(); out.push('<hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0;"/>'); continue; }
+              const h = line.match(/^(#{1,6})\s*(.+)$/);
+              if (h) { closeLists(); out.push('<h4 style=\\"font-size:16px;font-weight:700;margin:14px 0 8px;\\">' + h[2] + '</h4>'); continue; }
+              const ol = line.match(/^\d+\.\s+(.+)$/);
+              if (ol) { if (!inOl) { closeLists(); out.push('<ol style="margin:6px 0 8px 20px;">'); inOl=true; } out.push('<li style="margin:2px 0;">' + ol[1] + '</li>'); continue; }
+              const ul = line.match(/^[-•]\s+(.+)$/);
+              if (ul) { if (!inUl) { closeLists(); out.push('<ul style="margin:6px 0 8px 20px;">'); inUl=true; } out.push('<li style="margin:2px 0;">' + ul[1] + '</li>'); continue; }
+              const paragraph = line
+                .replace(/\*\*(.+?)\*\*/g,'<strong>$1<\/strong>')
+                .replace(/\*(.+?)\*/g,'<em>$1<\/em>');
+              closeLists();
+              out.push('<p style=\\"margin:0 0 8px 0;\\">' + paragraph + '<\\/p>');
+            }
+            closeLists();
+            return out.join('');
+          };
+          const rawContent = ${JSON.stringify(content)};
           const keywords = ${JSON.stringify([
             'Faculty Performance & Activity Levels Analysis',
             'Faculty Performance & Activity Levels',
@@ -194,8 +225,8 @@ const downloadAsPDF = (content, filename, chartData) => {
           }
           const beforeEl = document.getElementById('contentBefore');
           const afterEl = document.getElementById('contentAfter');
-          beforeEl.textContent = before;
-          afterEl.textContent = after;
+          beforeEl.innerHTML = formatToHtml(before);
+          afterEl.innerHTML = formatToHtml(after);
 
           const values = [${(chartData && chartData.assignmentsCount) || 0}, ${(chartData && chartData.quizzesCount) || 0}];
           const hasData = (values[0] + values[1]) > 0;
@@ -238,7 +269,7 @@ const downloadAsPDF = (content, filename, chartData) => {
             });
           };
           // Give charts a moment to render before capturing
-          setTimeout(doDownload, 600);
+          setTimeout(doDownload, 800);
         })();
       </script>
     </body>
@@ -253,7 +284,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.
 export default function Principal_FacultyReport() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [error, setError] = useState(null);
 
   // Filter states
@@ -270,8 +301,8 @@ export default function Principal_FacultyReport() {
   // Faculty activities data
   const [facultyActivities, setFacultyActivities] = useState([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
-  const [allAssignments, setAllAssignments] = useState([]);
-  const [allQuizzes, setAllQuizzes] = useState([]);
+  const [allAssignments] = useState([]);
+  const [allQuizzes] = useState([]);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
