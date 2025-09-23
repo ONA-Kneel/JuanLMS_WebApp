@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = "";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -1217,11 +1217,55 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleChangeStudentForm = async (e) => {
     const { name, value } = e.target;
 
-  if (name === "studentSearch") {
+    if (name === "studentSearch") {
       setStudentSearchTerm(value);
       setStudentFormData(prev => ({ ...prev, studentId: '' }));
-      setShowStudentSuggestions(false);
-      try { setStudentSearchResults([]); } catch {}
+
+      if (value.trim()) {
+        console.log('🔍 Searching for students with:', value);
+        try {
+          const token = localStorage.getItem('token');
+          console.log('🔑 Token exists:', !!token);
+          const res = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(value)}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          console.log('📡 Search response status:', res.status);
+          if (res.ok) {
+            const data = await res.json();
+            console.log('📊 Raw search data:', data);
+            console.log('🔍 Available roles in data:', [...new Set(data.map(user => user.role))]);
+            const studentUsers = data.filter(user => user.role === 'students');
+            console.log('👥 Student users found:', studentUsers.length);
+            if (studentUsers.length === 0) {
+              console.log('🔍 First few users for debugging:', data.slice(0, 3).map(user => ({ 
+                name: `${user.firstName} ${user.lastName}`, 
+                role: user.role,
+                schoolID: user.schoolID,
+                allKeys: Object.keys(user)
+              })));
+            }
+            // Also filter by name and school ID if the search term matches
+            const filteredStudents = studentUsers.filter(student => {
+              const searchTerm = value.toLowerCase();
+              const fullName = `${student.firstname || student.firstName || ''} ${student.lastname || student.lastName || ''}`.toLowerCase();
+              const schoolID = (student.schoolID || '').toLowerCase();
+              return fullName.includes(searchTerm) || schoolID.includes(searchTerm);
+            });
+            console.log('✅ Filtered students:', filteredStudents);
+            setStudentSearchResults(filteredStudents);
+            setShowStudentSuggestions(true);
+          } else {
+            console.log('❌ Search failed with status:', res.status);
+          }
+        } catch (err) {
+          console.error("❌ Error searching students:", err);
+        }
+      } else {
+        setStudentSearchResults([]);
+        setShowStudentSuggestions(false);
+      }
       return;
     } else {
       setStudentFormData(prev => ({
@@ -1247,11 +1291,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
   };
 
+  // Handle school ID input (just for display, search is done via name)
+  const handleSchoolIdChange = (e) => {
+    setStudentManualId(e.target.value);
+  };
+
   // Handle selection of a student from suggestions
   const handleSelectStudent = (student) => {
     setStudentFormData(prev => ({ ...prev, studentId: student._id }));
-    setStudentSearchTerm(`${student.firstname} ${student.lastname} (${student.schoolID})`);
+    const firstName = student.firstname || student.firstName || 'Unknown';
+    const lastName = student.lastname || student.lastName || 'Student';
+    setStudentSearchTerm(`${firstName} ${lastName} (${student.schoolID})`);
+    setStudentManualId(student.schoolID); // Also populate the school ID field
     setShowStudentSuggestions(false);
+    setStudentSearchResults([]);
+    console.log('✅ Selected student:', `${firstName} ${lastName}`);
   };
 
   // Fetch faculty assignments
@@ -6861,7 +6915,7 @@ Validation issues (${skippedCount} items):
                               type="text"
                               id="studentManualId"
                               value={studentManualId}
-                              onChange={(e) => setStudentManualId(e.target.value)}
+                              onChange={handleSchoolIdChange}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="YY-00000 or any ID"
                               disabled={termDetails.status === 'archived'}
@@ -6880,6 +6934,22 @@ Validation issues (${skippedCount} items):
                               required
                               disabled={termDetails.status === 'archived'}
                             />
+                            {showStudentSuggestions && studentSearchResults.length > 0 && (
+                              <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
+                                {studentSearchResults.map(student => (
+                                  <li
+                                    key={student._id}
+                                    onClick={() => handleSelectStudent(student)}
+                                    className="p-2 hover:bg-gray-100 cursor-pointer"
+                                  >
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{student.firstname || student.firstName || 'Unknown'} {student.lastname || student.lastName || 'Student'}</span>
+                                      <span className="text-sm text-gray-500">School ID: {student.schoolID}</span>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
                           </div>
                           <div>
                             <label htmlFor="trackNameStudent" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>

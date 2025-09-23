@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = "";
 
 
 export default function Admin_AcademicSettings() {
