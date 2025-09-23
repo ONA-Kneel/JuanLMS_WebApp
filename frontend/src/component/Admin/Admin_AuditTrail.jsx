@@ -233,7 +233,7 @@ export default function Admin_AuditTrail() {
     }
   };
 
-  // Export audit logs to PDF (Admin only)
+  // Export audit logs to PDF (Admin only) - Frontend HTML generation
   const handleExportPDF = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -259,25 +259,223 @@ export default function Admin_AuditTrail() {
         throw new Error('Failed to export audit logs to PDF');
       }
 
-      const blob = await response.blob();
-      
-      // Get filename from Content-Disposition header
-      let filename = 'audit_logs_export.pdf';
-      const disposition = response.headers.get('Content-Disposition');
-      if (disposition && disposition.indexOf('filename=') !== -1) {
-        const match = disposition.match(/filename="?([^";]+)"?/);
-        if (match && match[1]) filename = match[1];
-      }
+      const data = await response.json();
+      const { logs, totalLogs, filters, generatedAt } = data;
 
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      // Create HTML content matching ClassContent.jsx format exactly
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Audit Trail Report</title>
+          <style>
+            @page {
+              size: A4;
+              margin: 0.5in;
+            }
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 0;
+              font-size: 12px;
+            }
+            * {
+              box-sizing: border-box;
+            }
+            .header {
+              display: flex;
+              align-items: center;
+              margin-bottom: 30px;
+              border-bottom: 2px solid #333;
+              padding-bottom: 20px;
+            }
+            .logo {
+              width: 80px;
+              height: 80px;
+              margin-right: 20px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .logo img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            .institution-info {
+              flex: 1;
+              text-align: center;
+            }
+            .institution-name {
+              font-size: 18px;
+              text-align: center;
+              font-weight: bold;
+              margin: 0;
+            }
+            .institution-address {
+              font-size: 16px;
+              text-align: center;
+              margin: 0;
+            }
+            .institution-accreditation {
+              font-size: 13px;
+              text-align: center;
+              margin: 0;
+            }
+            .report-info {
+              text-align: right;
+              margin-left: auto;
+            }
+            .report-title {
+              font-weight: bold;
+              margin: 0;
+              font-size: 14px;
+            }
+            .report-date {
+              margin: 5px 0 0 0;
+              font-size: 12px;
+            }
+            .audit-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+              table-layout: fixed;
+            }
+            .audit-table th,
+            .audit-table td {
+              border: 1px solid #333;
+              padding: 6px;
+              text-align: left;
+              font-size: 10px;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+            }
+            .audit-table th {
+              background-color: #f0f0f0;
+              font-weight: bold;
+              text-align: center;
+            }
+            .audit-table .timestamp-col {
+              width: 20%;
+            }
+            .audit-table .user-col {
+              width: 20%;
+            }
+            .audit-table .role-col {
+              width: 15%;
+            }
+            .audit-table .action-col {
+              width: 20%;
+            }
+            .audit-table .details-col {
+              width: 45%;
+            }
+            .footer {
+              margin-top: 30px;
+              border-top: 1px solid #333;
+              padding-top: 15px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              font-size: 10px;
+              color: #333;
+            }
+            .footer-left {
+              text-align: left;
+            }
+            .footer-right {
+              text-align: right;
+            }
+            .footer-logo {
+              width: 30px;
+              height: 30px;
+            }
+            .footer-logo img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo-section">
+              <div class="logo">
+                <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
+              </div>
+            </div>
+            <div class="institution-info">
+              <h1 class="institution-name">SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.</h1>
+              <p class="institution-address">2772-2774 Roxas Boulevard, Pasay City 1300 Philippines</p>
+              <p class="institution-accreditation">PAASCU Accredited - COLLEGE</p>
+            </div>
+            <div class="report-info">
+              <p class="report-title">Audit Trail Report</p>
+              <p class="report-date">Date: ${new Date().toLocaleDateString()}</p>
+            </div>
+          </div>
+          
+          <div style="margin: 20px 0;">
+            <p><strong>Total Logs:</strong> ${totalLogs}</p>
+            <p><strong>Filters:</strong> Action=${filters.action}, Role=${filters.role}</p>
+          </div>
+          
+          <table class="audit-table">
+            <thead>
+              <tr>
+                <th class="timestamp-col">Timestamp</th>
+                <th class="user-col">User Name</th>
+                <th class="role-col">User Role</th>
+                <th class="action-col">Action</th>
+                <th class="details-col">Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${logs.map(log => `
+                <tr>
+                  <td class="timestamp-col">${new Date(log.timestamp).toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                  })}</td>
+                  <td class="user-col">${log.userName || 'Unknown'}</td>
+                  <td class="role-col">${log.userRole || 'Unknown'}</td>
+                  <td class="action-col">${log.action || 'Unknown'}</td>
+                  <td class="details-col">${log.details || 'No details'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <div class="footer">
+            <div class="footer-left">
+              <p>Hospital Tel. Nos: 831-9731/36;831-5641/49 www.sanjuandedios.org College Tel.Nos.: 551-2756; 551-2763 www.sjdefi.edu.ph</p>
+            </div>
+            <div class="footer-right">
+              <div class="footer-logo"> 
+                <img src="/src/assets/logo/images.png" alt="San Juan de Dios Hospital Seal" />
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+      
+      // Create a new window for PDF generation
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      
+      // Wait for content to load then print
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 500);
+      };
 
     } catch (err) {
       console.error('Error exporting audit logs to PDF:', err);
