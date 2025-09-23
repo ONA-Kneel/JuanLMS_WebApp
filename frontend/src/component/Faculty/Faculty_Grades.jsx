@@ -557,6 +557,26 @@ export default function Faculty_Grades() {
   };
 
   const handleGradeChange = (studentId, gradeType, value) => {
+    // Allow quarterly exam scores up to 100, but cap other grades at 99 (San Juan grading system)
+    const numericValue = parseFloat(value);
+    if (!isNaN(numericValue)) {
+      if (gradeType === 'quarterlyExam') {
+        // Strictly cap quarterly exam scores at 100
+        if (numericValue > 100) {
+          value = '100';
+        } else if (numericValue < 0) {
+          value = '0';
+        }
+      } else {
+        // Cap other grades at 99
+        if (numericValue > 99) {
+          value = '99';
+        } else if (numericValue < 0) {
+          value = '0';
+        }
+      }
+    }
+    
     setGrades(prev => ({
       ...prev,
       [studentId]: {
@@ -985,7 +1005,8 @@ export default function Faculty_Grades() {
   const transmuteGrade = (initialGrade) => {
     const grade = parseFloat(initialGrade);
     
-    if (grade >= 100) return 100;
+    // Cap maximum grade at 99 (San Juan grading system)
+    if (grade >= 100) return 99;
     if (grade >= 98.40 && grade <= 99.99) return 99;
     if (grade >= 96.80 && grade <= 98.39) return 98;
     if (grade >= 95.20 && grade <= 96.79) return 97;
@@ -1380,6 +1401,8 @@ export default function Faculty_Grades() {
                         <td className="border border-gray-300 px-2 py-2">
                           <input
                             type="number"
+                            min="0"
+                            max="100"
                             className="w-full text-center border-none focus:outline-none focus:ring-1 focus:ring-blue-500"
                             value={grades[student._id]?.quarterlyExam || ''}
                             onChange={(e) => handleGradeChange(student._id, 'quarterlyExam', e.target.value)}

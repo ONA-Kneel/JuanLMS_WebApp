@@ -371,11 +371,45 @@ router.post('/save-quarterly', authenticateToken, async (req, res) => {
       termName
     } = req.body;
 
+    // Log the incoming data for debugging
+    console.log('📥 Save quarterly grade request data:', {
+      classId,
+      section,
+      quarter,
+      studentId,
+      quarterlyGrade,
+      academicYear,
+      termName,
+      facultyId: req.user._id
+    });
+
     // Validate required fields
     if (!classId || !section || !quarter || !studentId || quarterlyGrade === undefined) {
+      console.log('❌ Missing required fields:', {
+        classId: !!classId,
+        section: !!section,
+        quarter: !!quarter,
+        studentId: !!studentId,
+        quarterlyGrade: quarterlyGrade !== undefined
+      });
       return res.status(400).json({
         success: false,
         message: 'Missing required fields: classId, section, quarter, studentId, quarterlyGrade'
+      });
+    }
+
+    // Validate quarterly grade range
+    const numericGrade = parseFloat(quarterlyGrade);
+    if (isNaN(numericGrade) || numericGrade < 0 || numericGrade > 100) {
+      console.log('❌ Invalid quarterly grade:', {
+        quarterlyGrade,
+        numericGrade,
+        isValid: !isNaN(numericGrade) && numericGrade >= 0 && numericGrade <= 100
+      });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid quarterly grade. Must be between 0 and 100.',
+        received: quarterlyGrade
       });
     }
 
@@ -441,10 +475,23 @@ router.post('/save-quarterly', authenticateToken, async (req, res) => {
       });
     } catch (dbError) {
       console.error('❌ Error saving quarterly grade to database:', dbError);
+      console.error('❌ Database error details:', {
+        name: dbError.name,
+        message: dbError.message,
+        code: dbError.code,
+        keyPattern: dbError.keyPattern,
+        keyValue: dbError.keyValue
+      });
       return res.status(500).json({
         success: false,
         message: 'Failed to save quarterly grade to database',
-        error: dbError.message
+        error: dbError.message,
+        details: {
+          name: dbError.name,
+          code: dbError.code,
+          keyPattern: dbError.keyPattern,
+          keyValue: dbError.keyValue
+        }
       });
     }
 

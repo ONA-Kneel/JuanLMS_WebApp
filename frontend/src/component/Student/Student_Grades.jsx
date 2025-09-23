@@ -389,6 +389,47 @@ export default function Student_Grades() {
                       </tr>
                     );
                   })}
+                  
+                  {/* General Average Row - Only Term Final */}
+                  <tr className="bg-blue-50 font-bold">
+                    <td className="p-3 border border-gray-300 text-center font-semibold">
+                      General Average
+                    </td>
+                    <td className="p-3 border border-gray-300 text-center">
+                      -
+                    </td>
+                    <td className="p-3 border border-gray-300 text-center">
+                      -
+                    </td>
+                    <td className="p-3 border border-gray-300 text-center bg-blue-100 font-semibold">
+                      {(() => {
+                        const termFinalGrades = grades
+                          .map(g => g.termFinalGrade)
+                          .filter(grade => grade && grade !== '' && !isNaN(parseFloat(grade)))
+                          .map(grade => parseFloat(grade));
+                        
+                        if (termFinalGrades.length > 0) {
+                          const average = termFinalGrades.reduce((sum, grade) => sum + grade, 0) / termFinalGrades.length;
+                          return Math.round(average * 100) / 100;
+                        }
+                        return '-';
+                      })()}
+                    </td>
+                    <td className="p-3 border border-gray-300 text-center bg-blue-100 font-semibold">
+                      {(() => {
+                        const termFinalGrades = grades
+                          .map(g => g.termFinalGrade)
+                          .filter(grade => grade && grade !== '' && !isNaN(parseFloat(grade)))
+                          .map(grade => parseFloat(grade));
+                        
+                        if (termFinalGrades.length > 0) {
+                          const average = termFinalGrades.reduce((sum, grade) => sum + grade, 0) / termFinalGrades.length;
+                          return average >= 75 ? 'PASSED' : 'REPEAT';
+                        }
+                        return '-';
+                      })()}
+                    </td>
+                  </tr>
               </tbody>
             </table>
           </div>
