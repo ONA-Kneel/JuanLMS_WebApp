@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 
 export default function Admin_AcademicSettings() {
@@ -243,6 +243,82 @@ export default function Admin_AcademicSettings() {
           
           // Refresh quarters after auto-correction
           setTimeout(() => fetchQuarters(year), 1000);
+        } else if (activeQuarters.length === 1 && selectedYear && selectedYear.status === 'active') {
+          // Auto-rollover: if the single active quarter ended today or earlier, move to the next chronological quarter
+          try {
+            const activeQuarter = activeQuarters[0];
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const activeEnd = new Date(activeQuarter.endDate);
+            activeEnd.setHours(0, 0, 0, 0);
+
+            if (activeEnd <= today) {
+              // Determine next quarter by chronological order within same school year (status not archived)
+              const candidates = (data || [])
+                .filter(q => q._id !== activeQuarter._id && q.status !== 'archived')
+                .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+
+              // Next is first quarter whose start is after or on the day after current ends; if none, try the next by index
+              let nextQuarter = candidates.find(q => new Date(q.startDate) > activeEnd) || null;
+              if (!nextQuarter && candidates.length > 0) {
+                // Fallback: pick the immediate next in the list relative to activeQuarter position
+                const byStart = (data || [])
+                  .filter(q => q.status !== 'archived')
+                  .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+                const idx = byStart.findIndex(q => q._id === activeQuarter._id);
+                if (idx >= 0 && idx + 1 < byStart.length) {
+                  nextQuarter = byStart[idx + 1];
+                }
+              }
+
+              if (nextQuarter) {
+                // Deactivate current active quarter
+                await fetch(`${API_BASE}/api/quarters/${activeQuarter._id}`, {
+                  method: 'PATCH',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                  },
+                  body: JSON.stringify({ status: 'inactive' })
+                });
+
+                // Activate next quarter (and ensure others are inactive per invariant)
+                // In case any other quarter is active due to race, deactivate all others first
+                for (const q of data) {
+                  if (q._id !== nextQuarter._id && q.status !== 'archived' && q.status === 'active') {
+                    try {
+                      await fetch(`${API_BASE}/api/quarters/${q._id}`, {
+                        method: 'PATCH',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ status: 'inactive' })
+                      });
+                    } catch (e) {
+                      console.warn('Failed to deactivate other active quarter during rollover', q._id);
+                    }
+                  }
+                }
+
+                await fetch(`${API_BASE}/api/quarters/${nextQuarter._id}`, {
+                  method: 'PATCH',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                  },
+                  body: JSON.stringify({ status: 'active' })
+                });
+
+                setSuccessMessage(`${activeQuarter.quarterName} ended. Automatically activated ${nextQuarter.quarterName}.`);
+                setShowSuccessModal(true);
+                // Refresh list after rollover
+                setTimeout(() => fetchQuarters(year), 500);
+              }
+            }
+          } catch (rollErr) {
+            console.warn('Quarter auto-rollover failed:', rollErr);
+          }
         }
       } else {
         const data = await res.json();
@@ -266,14 +342,8 @@ export default function Admin_AcademicSettings() {
             });
             if (res.ok) {
               const list = await res.json();
-              // Validation: when a School Year is inactive, any non-active term
-              // (archived or inactive) should be counted as archived in the UI.
-              // When a School Year is active, only explicitly archived terms count.
-              // For inactive School Years, archival count should reflect all terms
-              // being considered archived for display purposes
-              const count = y.status === 'inactive'
-                ? list.length
-                : list.filter(t => t.status === 'archived').length;
+              // Show number of INACTIVE terms for the SY
+              const count = list.filter(t => t.status === 'inactive').length;
               return [name, count];
             }
           } catch (error) {
@@ -299,9 +369,7 @@ export default function Admin_AcademicSettings() {
       });
       if (res.ok) {
         const list = await res.json();
-        const count = year.status === 'inactive'
-          ? list.length
-          : list.filter(t => t.status === 'archived').length;
+        const count = list.filter(t => t.status === 'inactive').length;
         setArchivedCounts(prev => ({ ...prev, [name]: count }));
       }
     } catch (error) {
@@ -454,21 +522,9 @@ export default function Admin_AcademicSettings() {
       return;
     }
 
-    // ➕ Create Mode
-    const activeYearExists = schoolYears.some(year => year.status === 'active');
-    if (activeYearExists) {
-      // Show modal asking if the user wants to activate this new year
-      setPendingSchoolYear({
-        schoolYearStart: startYear,
-        schoolYearEnd: startYear + 1
-      });
-      setShowActivateModal(true);
-      return;
-    }
-
-    // If no active year, proceed immediately
-    console.info('[AcademicSettings] Creating new school year', { startYear, setAsActive: true });
-    createSchoolYear(startYear, true);
+    // ➕ Create Mode: Always create as INACTIVE to avoid any automatic term/quarter creation
+    console.info('[AcademicSettings] Creating new school year', { startYear, setAsActive: false });
+    createSchoolYear(startYear, false);
   };
 
   const handleEdit = (year) => {
@@ -495,6 +551,62 @@ export default function Admin_AcademicSettings() {
   const handleView = (year) => {
     setSelectedYear(year);
     setShowViewModal(true);
+  };
+
+  // Open Add Quarter modal with smart defaults
+  const openAddQuarterModal = () => {
+    // Consider only non-archived terms
+    const liveTerms = terms.filter(t => t.status !== 'archived');
+    // Prefer an active term; if none, pick the term with the fewest existing quarters (newest/empty first)
+    let chosenTerm = liveTerms.find(t => t.status === 'active') || null;
+    if (!chosenTerm) {
+      const termToQuarterCount = liveTerms.map(t => ({
+        term: t,
+        count: quarters.filter(q => q.termName === t.termName && q.status !== 'archived').length
+      }));
+      termToQuarterCount.sort((a, b) => {
+        if (a.count !== b.count) return a.count - b.count; // fewest quarters first
+        return a.term.termName.localeCompare(b.term.termName); // stable by name
+      });
+      chosenTerm = termToQuarterCount[0]?.term || null;
+    }
+
+    const defaultTermName = chosenTerm ? chosenTerm.termName : '';
+
+    // Decide available quarter choices for that term
+    let defaultAvailable = [];
+    if (defaultTermName === 'Term 1') {
+      defaultAvailable = [
+        { value: 'Quarter 1', label: 'Quarter 1' },
+        { value: 'Quarter 2', label: 'Quarter 2' }
+      ];
+    } else if (defaultTermName === 'Term 2') {
+      defaultAvailable = [
+        { value: 'Quarter 3', label: 'Quarter 3' },
+        { value: 'Quarter 4', label: 'Quarter 4' }
+      ];
+    }
+
+    // Autoselect first quarter for the chosen term; if Q1/Q3 exists, pick Q2/Q4
+    const existingForTerm = quarters
+      .filter(q => q.termName === defaultTermName && q.status !== 'archived')
+      .map(q => q.quarterName);
+    let defaultQuarterName = '';
+    if (defaultTermName === 'Term 1') {
+      defaultQuarterName = existingForTerm.includes('Quarter 1') ? 'Quarter 2' : 'Quarter 1';
+    } else if (defaultTermName === 'Term 2') {
+      defaultQuarterName = existingForTerm.includes('Quarter 3') ? 'Quarter 4' : 'Quarter 3';
+    }
+
+    setAvailableQuarters(defaultAvailable);
+    setQuarterFormData({
+      quarterName: defaultQuarterName,
+      termName: defaultTermName,
+      startDate: '',
+      endDate: ''
+    });
+    setQuarterError('');
+    setShowAddQuarterModal(true);
   };
 
   const handleViewTerm = (term) => {
@@ -778,6 +890,20 @@ export default function Admin_AcademicSettings() {
       return;
     }
 
+    // For quarter edits: allow editing while active but enforce validations
+    // Disallow editing dates in the past (only today onwards). If original start already passed, allow keeping same start but not moving earlier.
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const editStart = new Date(editTermFormData.startDate);
+    const editEnd = new Date(editTermFormData.endDate);
+    const originalStart = editingTerm ? new Date(editingTerm.startDate) : null;
+    const originalStartInPast = originalStart ? (new Date(originalStart.setHours(0,0,0,0)) < today) : false;
+    const startInvalid = originalStartInPast ? (editStart < new Date(new Date(editingTerm.startDate).setHours(0,0,0,0))) : (editStart < today);
+    if (startInvalid || editEnd < today) {
+      setEditTermError('Dates cannot be in the past. Choose today or a future date.');
+      return;
+    }
+
     // Validate term dates are within school year bounds
     if (selectedYear) {
       const schoolYearStart = selectedYear.schoolYearStart;
@@ -822,6 +948,27 @@ export default function Admin_AcademicSettings() {
 
     // If editing a quarter, also check for overlapping quarters across ALL terms
     if (editingTerm && editingTerm.quarterName) {
+      // Validate quarter dates within selected term bounds
+      const parentTerm = terms.find(t => t.termName === editingTerm.termName && t.status !== 'archived');
+      if (parentTerm) {
+        const tStart = new Date(parentTerm.startDate);
+        const tEnd = new Date(parentTerm.endDate);
+        if (editStart < tStart || editEnd > tEnd) {
+          setEditTermError(`Quarter dates must be within ${parentTerm.termName} (${tStart.toLocaleDateString()} - ${tEnd.toLocaleDateString()}).`);
+          return;
+        }
+      }
+
+      // Validate within school year bounds as well
+      if (selectedYear) {
+        const minDate = new Date(`${selectedYear.schoolYearStart}-01-01`);
+        const maxDate = new Date(`${selectedYear.schoolYearEnd}-12-31`);
+        if (editStart < minDate || editStart > maxDate || editEnd < minDate || editEnd > maxDate) {
+          setEditTermError(`Quarter dates must be within the school year bounds (${selectedYear.schoolYearStart} to ${selectedYear.schoolYearEnd}).`);
+          return;
+        }
+      }
+
       const overlappingQuarters = quarters.filter(q => 
         q._id !== editingTerm._id && // Exclude current quarter being edited
         q.status !== 'archived' && // Only check active/inactive quarters
@@ -872,6 +1019,7 @@ export default function Admin_AcademicSettings() {
         setSuccessMessage('Term updated successfully');
         setShowSuccessModal(true);
         fetchTerms(selectedYear);
+        fetchQuarters(selectedYear);
       } else {
         const data = await res.json();
         console.log('Term update failed:', data);
@@ -884,39 +1032,27 @@ export default function Admin_AcademicSettings() {
   };
 
   const handleToggleTermStatus = async (term) => {
-    // If the term is already active, we don't allow deactivation here
+    // If the term is already active, we handle via explicit deactivate flow
     if (term.status === 'active') {
-      setErrorMessage('Cannot deactivate the active term. Activate another term instead.');
-      setShowErrorModal(true);
+      handleDeactivateActiveTerm(term);
       return;
     }
-    // Show quarter selection prompt for activation
-    try {
-      const token = localStorage.getItem('token');
-      // fetch quarters for this school year and filter by term name
-      const res = await fetch(`${API_BASE}/api/quarters/schoolyear/${selectedYear.schoolYearStart}-${selectedYear.schoolYearEnd}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const list = await res.json();
-        const qs = (list || []).filter(q => q.termName === term.termName).sort((a,b)=> new Date(a.startDate)-new Date(b.startDate));
-        if (!qs || qs.length === 0) {
-          setErrorMessage('This term has no quarters. Create quarters first.');
+    // Simple on/off activation with confirmation (no quarter requirement)
+    setConfirmMessage(`Set ${term.termName} to active? This will activate all quarters and their related entities (tracks, strands, sections, subjects, faculty assignments, and student assignments).`);
+    setConfirmAction(() => () => handleToggleTermStatusInternal(term, 'active', 'activate'));
+    setShowConfirmModal(true);
+  };
+
+  // Deactivate currently active term (set inactive) with confirmation
+  const handleDeactivateActiveTerm = (term) => {
+    if (selectedYear && selectedYear.status !== 'active') {
+      setErrorMessage('Cannot modify terms of inactive school years.');
           setShowErrorModal(true);
           return;
         }
-        setPendingTermToActivate(term);
-        setPendingTermQuarterName(qs[0].quarterName);
-        setPromptQuarters(qs);
-        setShowActivateTermQuarterPrompt(true);
-      } else {
-        setErrorMessage('Failed to load quarters for this term.');
-        setShowErrorModal(true);
-      }
-    } catch (e) {
-      setErrorMessage('Failed to load quarters for this term.');
-      setShowErrorModal(true);
-    }
+    setConfirmMessage(`Set ${term.termName} to inactive? This will deactivate all quarters and their related entities (tracks, strands, sections, subjects, faculty assignments, and student assignments).`);
+    setConfirmAction(() => () => handleToggleTermStatusInternal(term, 'inactive', 'deactivate'));
+    setShowConfirmModal(true);
   };
 
   const handleToggleTermStatusInternal = async (term, newStatus, action, activeQuarterName) => {
@@ -936,14 +1072,19 @@ export default function Admin_AcademicSettings() {
         console.log('Status updated successfully:', updatedTerm);
         setTerms(terms.map(t => t._id === term._id ? updatedTerm : t));
         
-        // Update success message to reflect that inactive terms are now archived
+        // Cascade status update to all quarters and their related entities
+        const schoolYearName = selectedYear ? `${selectedYear.schoolYearStart}-${selectedYear.schoolYearEnd}` : '';
+        await cascadeTermStatusUpdate(term.termName, schoolYearName, newStatus);
+        
+        // Update success message for on/off behavior
         const successMessage = newStatus === 'active' ? 
-          `${term.termName} has been activated` : 
-          `${term.termName} has been archived`;
+          `${term.termName} has been activated. All quarters and their related entities have been activated.` : 
+          `${term.termName} has been set to inactive. All quarters and their related entities have been deactivated.`;
         setSuccessMessage(successMessage);
         setShowSuccessModal(true);
         
         fetchTerms(selectedYear);
+        fetchQuarters(selectedYear);
         refreshArchivedCountForYear(selectedYear);
       } else {
         const data = await res.json();
@@ -957,12 +1098,165 @@ export default function Admin_AcademicSettings() {
   };
 
   // Quarter handler functions
+  // Function to cascade status updates to all entities related to a term and its quarters
+  const cascadeTermStatusUpdate = async (termName, schoolYear, status) => {
+    const token = localStorage.getItem('token');
+    
+    try {
+      console.log(`Cascading ${status} status for term: ${termName}`);
+      
+      // Get all quarters for this term
+      const termQuarters = quarters.filter(q => 
+        q.termName === termName && 
+        q.schoolYear === schoolYear
+      );
+      
+      // Update all quarters for this term
+      for (const quarter of termQuarters) {
+        try {
+          await fetch(`${API_BASE}/api/quarters/${quarter._id}`, {
+            method: 'PATCH',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ status })
+          });
+          
+          // Cascade to all related entities for each quarter
+          await cascadeQuarterStatusUpdate(quarter.quarterName, status);
+        } catch (error) {
+          console.error(`Error updating quarter ${quarter.quarterName} for term ${termName}:`, error);
+        }
+      }
+      
+      console.log(`Successfully cascaded ${status} status for term ${termName} and its quarters`);
+    } catch (error) {
+      console.error(`Error cascading status update for term ${termName}:`, error);
+    }
+  };
+
+  // Function to cascade status updates to all entities related to a quarter
+  const cascadeQuarterStatusUpdate = async (quarterName, status) => {
+    const token = localStorage.getItem('token');
+    const schoolYearName = selectedYear ? `${selectedYear.schoolYearStart}-${selectedYear.schoolYearEnd}` : '';
+    
+    try {
+      console.log(`Cascading ${status} status for quarter: ${quarterName}`);
+      
+      // Update tracks
+      try {
+        const tracksRes = await fetch(`${API_BASE}/api/tracks/quarter/${quarterName}/schoolyear/${schoolYearName}`, {
+          method: 'PATCH',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status })
+        });
+        if (tracksRes.ok) {
+          console.log(`Updated tracks status to ${status} for quarter ${quarterName}`);
+        }
+      } catch (error) {
+        console.error(`Error updating tracks for quarter ${quarterName}:`, error);
+      }
+
+      // Update strands
+      try {
+        const strandsRes = await fetch(`${API_BASE}/api/strands/quarter/${quarterName}/schoolyear/${schoolYearName}`, {
+          method: 'PATCH',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status })
+        });
+        if (strandsRes.ok) {
+          console.log(`Updated strands status to ${status} for quarter ${quarterName}`);
+        }
+      } catch (error) {
+        console.error(`Error updating strands for quarter ${quarterName}:`, error);
+      }
+
+      // Update sections
+      try {
+        const sectionsRes = await fetch(`${API_BASE}/api/sections/quarter/${quarterName}/schoolyear/${schoolYearName}`, {
+          method: 'PATCH',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status })
+        });
+        if (sectionsRes.ok) {
+          console.log(`Updated sections status to ${status} for quarter ${quarterName}`);
+        }
+      } catch (error) {
+        console.error(`Error updating sections for quarter ${quarterName}:`, error);
+      }
+
+      // Update subjects
+      try {
+        const subjectsRes = await fetch(`${API_BASE}/api/subjects/quarter/${quarterName}/schoolyear/${schoolYearName}`, {
+          method: 'PATCH',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status })
+        });
+        if (subjectsRes.ok) {
+          console.log(`Updated subjects status to ${status} for quarter ${quarterName}`);
+        }
+      } catch (error) {
+        console.error(`Error updating subjects for quarter ${quarterName}:`, error);
+      }
+
+      // Update faculty assignments
+      try {
+        const facultyAssignmentsRes = await fetch(`${API_BASE}/api/faculty-assignments/quarter/${quarterName}/schoolyear/${schoolYearName}`, {
+          method: 'PATCH',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status })
+        });
+        if (facultyAssignmentsRes.ok) {
+          console.log(`Updated faculty assignments status to ${status} for quarter ${quarterName}`);
+        }
+      } catch (error) {
+        console.error(`Error updating faculty assignments for quarter ${quarterName}:`, error);
+      }
+
+      // Update student assignments
+      try {
+        const studentAssignmentsRes = await fetch(`${API_BASE}/api/student-assignments/quarter/${quarterName}/schoolyear/${schoolYearName}`, {
+          method: 'PATCH',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status })
+        });
+        if (studentAssignmentsRes.ok) {
+          console.log(`Updated student assignments status to ${status} for quarter ${quarterName}`);
+        }
+      } catch (error) {
+        console.error(`Error updating student assignments for quarter ${quarterName}:`, error);
+      }
+
+    } catch (error) {
+      console.error(`Error cascading status update for quarter ${quarterName}:`, error);
+    }
+  };
+
   const handleToggleQuarterStatus = async (quarter) => {
     const newStatus = quarter.status === 'active' ? 'inactive' : 'active';
     const action = newStatus === 'active' ? 'activate' : 'deactivate';
     
     // Show confirmation modal
-    setConfirmMessage(`Are you sure you want to ${action} ${quarter.quarterName}?`);
+    setConfirmMessage(`Are you sure you want to ${action} ${quarter.quarterName}? This will ${action} all related tracks, strands, sections, subjects, faculty assignments, and student assignments.`);
     setConfirmAction(() => {
       handleToggleQuarterStatusInternal(quarter, newStatus, action);
     });
@@ -980,7 +1274,7 @@ export default function Admin_AcademicSettings() {
           q.status !== 'archived'
         );
         
-        // Deactivate other quarters
+        // Deactivate other quarters and their related entities
         for (const otherQuarter of otherQuarters) {
           try {
             await fetch(`${API_BASE}/api/quarters/${otherQuarter._id}`, {
@@ -991,6 +1285,9 @@ export default function Admin_AcademicSettings() {
               },
               body: JSON.stringify({ status: 'inactive' })
             });
+            
+            // Deactivate all related entities for the other quarter
+            await cascadeQuarterStatusUpdate(otherQuarter.quarterName, 'inactive');
           } catch (error) {
             console.error(`Error deactivating quarter ${otherQuarter.quarterName}:`, error);
           }
@@ -1011,12 +1308,18 @@ export default function Admin_AcademicSettings() {
         console.log('Quarter status updated successfully:', updatedQuarter);
         setQuarters(quarters.map(q => q._id === quarter._id ? updatedQuarter : q));
         
+        // Cascade status update to all related entities
+        await cascadeQuarterStatusUpdate(quarter.quarterName, newStatus);
+        
         // Update success message to reflect the action and auto-deactivation
         const successMessage = newStatus === 'active' ? 
-          `${quarter.quarterName} has been activated. All other quarters across all terms have been set to inactive.` : 
-          `${quarter.quarterName} has been deactivated`;
+          `${quarter.quarterName} has been activated. All other quarters and their related entities have been set to inactive.` : 
+          `${quarter.quarterName} and all its related entities have been deactivated`;
         setSuccessMessage(successMessage);
         setShowSuccessModal(true);
+        
+        // Trigger a storage event to notify other components of the quarter status change
+        localStorage.setItem('quarterStatusChanged', Date.now().toString());
         
         fetchQuarters(selectedYear);
       } else {
@@ -1056,7 +1359,7 @@ export default function Admin_AcademicSettings() {
     }
     
     // Show confirmation modal
-    setConfirmMessage(`Are you sure you want to activate ${quarter.quarterName}? This will automatically set all other quarters across all terms to inactive.`);
+    setConfirmMessage(`Are you sure you want to activate ${quarter.quarterName}? This will activate all related tracks, strands, sections, subjects, faculty assignments, and student assignments, and automatically set all other quarters and their related entities to inactive.`);
     setConfirmAction(() => () => {
       handleActivateQuarterInternal(quarter);
     });
@@ -1073,7 +1376,7 @@ export default function Admin_AcademicSettings() {
         q.status !== 'archived'
       );
       
-      // Deactivate other quarters
+      // Deactivate other quarters and their related entities
       for (const otherQuarter of otherQuarters) {
         try {
           await fetch(`${API_BASE}/api/quarters/${otherQuarter._id}`, {
@@ -1084,6 +1387,9 @@ export default function Admin_AcademicSettings() {
             },
             body: JSON.stringify({ status: 'inactive' })
           });
+          
+          // Deactivate all related entities for the other quarter
+          await cascadeQuarterStatusUpdate(otherQuarter.quarterName, 'inactive');
         } catch (error) {
           console.error(`Error deactivating quarter ${otherQuarter.quarterName}:`, error);
         }
@@ -1102,8 +1408,16 @@ export default function Admin_AcademicSettings() {
       if (res.ok) {
         const updatedQuarter = await res.json();
         setQuarters(quarters.map(q => q._id === quarter._id ? updatedQuarter : q));
-        setSuccessMessage(`${quarter.quarterName} has been activated. All other quarters across all terms have been set to inactive.`);
+        
+        // Activate all related entities for the selected quarter
+        await cascadeQuarterStatusUpdate(quarter.quarterName, 'active');
+        
+        setSuccessMessage(`${quarter.quarterName} has been activated. All other quarters and their related entities have been set to inactive.`);
         setShowSuccessModal(true);
+        
+        // Trigger a storage event to notify other components of the quarter status change
+        localStorage.setItem('quarterStatusChanged', Date.now().toString());
+        
         fetchQuarters(selectedYear);
       } else {
         const data = await res.json();
@@ -1180,7 +1494,7 @@ export default function Admin_AcademicSettings() {
     }
 
     // Require the existing term to be archived before adding a second term
-    if (terms.length >= 1 && terms.some(t => t.status !== 'archived')) {
+    if (terms.length >= 1 && terms.some(t => t.status !== 'inactive')) {
       setTermError('Archive the previous term before adding a new one.');
       return;
     }
@@ -1193,6 +1507,16 @@ export default function Admin_AcademicSettings() {
 
     if (!termFormData.startDate || !termFormData.endDate) {
       setTermError('Please fill in all fields');
+      return;
+    }
+
+    // Disallow creating terms with past dates
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const newStart = new Date(termFormData.startDate);
+    const newEnd = new Date(termFormData.endDate);
+    if (newStart < today || newEnd < today) {
+      setTermError('Dates cannot be in the past. Choose today or a future date.');
       return;
     }
 
@@ -1269,6 +1593,50 @@ export default function Admin_AcademicSettings() {
     }
   };
 
+  // Delete Term handlers
+  const handleDeleteTerm = (term) => {
+    // Only allow deletion when SY is active
+    if (selectedYear && selectedYear.status !== 'active') {
+      setErrorMessage('Cannot delete terms of inactive school years.');
+      setShowErrorModal(true);
+      return;
+    }
+    // Prevent deleting active terms
+    if (term.status === 'active') {
+      setErrorMessage('Cannot delete an active term. Please set it inactive first.');
+      setShowErrorModal(true);
+      return;
+    }
+    setConfirmMessage(`Are you sure you want to DELETE ${term.termName}? This will remove connected data (tracks, strands, sections, subjects, assignments) for this term.`);
+    setConfirmAction(() => () => handleDeleteTermInternal(term));
+    setShowConfirmModal(true);
+  };
+
+  const handleDeleteTermInternal = async (term) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/terms/${term._id}?confirmCascade=true`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (res.ok) {
+        setTerms(terms.filter(t => t._id !== term._id));
+        setSuccessMessage(`${term.termName} deleted successfully.`);
+        setShowSuccessModal(true);
+        fetchTerms(selectedYear);
+        refreshArchivedCountForYear(selectedYear);
+      } else {
+        const data = await res.json();
+        setErrorMessage(data.message || 'Failed to delete term');
+        setShowErrorModal(true);
+      }
+    } catch (err) {
+      setErrorMessage('Error deleting term');
+      setShowErrorModal(true);
+    }
+  };
+
   // Add Quarter handler
   const handleAddQuarter = async (e) => {
     e.preventDefault();
@@ -1285,18 +1653,55 @@ export default function Admin_AcademicSettings() {
       return;
     }
 
-    // Validate quarter belongs to correct term
+    // Enforce sequential quarter availability
+    const existingForTerm = quarters
+      .filter(q => q.termName === quarterFormData.termName && q.status !== 'archived')
+      .map(q => q.quarterName);
+    if (quarterFormData.termName === 'Term 1' && quarterFormData.quarterName === 'Quarter 2' && !existingForTerm.includes('Quarter 1')) {
+      setQuarterError('Quarter 2 requires Quarter 1 to exist first.');
+      return;
+    }
+    if (quarterFormData.termName === 'Term 2' && quarterFormData.quarterName === 'Quarter 4' && !existingForTerm.includes('Quarter 3')) {
+      setQuarterError('Quarter 4 requires Quarter 3 to exist first.');
+      return;
+    }
+
+    // Disallow creating quarters with past dates (same rule as school year/term)
+    const todayQ = new Date();
+    todayQ.setHours(0, 0, 0, 0);
+    const qStart = new Date(quarterFormData.startDate);
+    const qEnd = new Date(quarterFormData.endDate);
+    if (qStart < todayQ || qEnd < todayQ) {
+      setQuarterError('Dates cannot be in the past. Choose today or a future date.');
+      return;
+    }
+
+    // Validate quarter belongs to correct term (by conventional mapping)
     const term1Quarters = ['Quarter 1', 'Quarter 2'];
     const term2Quarters = ['Quarter 3', 'Quarter 4'];
-    
     if (quarterFormData.termName === 'Term 1' && !term1Quarters.includes(quarterFormData.quarterName)) {
       setQuarterError('Quarter 1 and Quarter 2 must belong to Term 1');
       return;
     }
-    
     if (quarterFormData.termName === 'Term 2' && !term2Quarters.includes(quarterFormData.quarterName)) {
       setQuarterError('Quarter 3 and Quarter 4 must belong to Term 2');
       return;
+    }
+
+    // Validate quarter dates are within the chosen term's date range
+    const chosenTerm = terms.find(t => t.termName === quarterFormData.termName && t.status !== 'archived');
+    if (chosenTerm) {
+      const termStart = new Date(chosenTerm.startDate);
+      const termEnd = new Date(chosenTerm.endDate);
+      if (qStart < termStart || qEnd > termEnd) {
+        setQuarterError(`Quarter dates must be within ${chosenTerm.termName} (${new Date(chosenTerm.startDate).toLocaleDateString()} - ${new Date(chosenTerm.endDate).toLocaleDateString()}).`);
+        return;
+      }
+      // Prevent a quarter from exactly matching the term's full range
+      if (qStart.getTime() === termStart.getTime() && qEnd.getTime() === termEnd.getTime()) {
+        setQuarterError('Quarter dates cannot be the exact same range as the term.');
+        return;
+      }
     }
 
     // Check if a non-archived quarter already exists for this school year and term
@@ -1376,9 +1781,34 @@ export default function Admin_AcademicSettings() {
       if (res.ok) {
         const newQuarter = await res.json();
         setQuarters([...quarters, newQuarter]);
+        
+        // Deactivate all other quarters and their related entities when creating a new quarter
+        const otherQuarters = quarters.filter(q => 
+          q._id !== newQuarter._id && 
+          q.status !== 'archived'
+        );
+        
+        for (const otherQuarter of otherQuarters) {
+          try {
+            await fetch(`${API_BASE}/api/quarters/${otherQuarter._id}`, {
+              method: 'PATCH',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ status: 'inactive' })
+            });
+            
+            // Deactivate all related entities for the other quarter
+            await cascadeQuarterStatusUpdate(otherQuarter.quarterName, 'inactive');
+          } catch (error) {
+            console.error(`Error deactivating quarter ${otherQuarter.quarterName}:`, error);
+          }
+        }
+        
         setShowAddQuarterModal(false);
         setQuarterFormData({ quarterName: '', termName: '', startDate: '', endDate: '' });
-        setSuccessMessage(`✅ ${quarterFormData.quarterName} created successfully as inactive. You can now edit the details and activate it when ready. Only one quarter can be active at a time.`);
+        setSuccessMessage(`✅ ${quarterFormData.quarterName} created successfully as inactive. All other quarters and their related entities have been deactivated. You can now edit the details and activate it when ready. Only one quarter can be active at a time.`);
         setShowSuccessModal(true);
         fetchQuarters(selectedYear);
       } else {
@@ -1624,7 +2054,7 @@ export default function Admin_AcademicSettings() {
                         <th className="p-3 border">Start Year</th>
                         <th className="p-3 border">End Year</th>
                         <th className="p-3 border">Status</th>
-                        <th className="p-3 border">Archived Terms</th>
+                        <th className="p-3 border">Inactive Terms</th>
                         <th className="p-3 border">Actions</th>
                       </tr>
                     </thead>
@@ -1729,14 +2159,14 @@ export default function Admin_AcademicSettings() {
                           <button
                             onClick={() => setShowAddTermModal(true)}
                             className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2 ${
-                              (terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status !== 'archived'))) ? 'opacity-50 cursor-not-allowed' : ''
+                              (terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status === 'active'))) ? 'opacity-50 cursor-not-allowed' : ''
                             }`}
-                            disabled={terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status !== 'archived'))}
+                            disabled={terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status === 'active'))}
                             title={
                               terms.length >= 2
                                 ? 'Maximum 2 terms allowed per school year'
-                                : (terms.length >= 1 && terms.some(t => t.status !== 'archived'))
-                                  ? 'Archive the previous term before adding a new one'
+                                : (terms.length >= 1 && terms.some(t => t.status === 'active'))
+                                  ? 'Deactivate the previous active term before adding a new one'
                                   : 'Add New Term'
                             }
                           >
@@ -1746,9 +2176,12 @@ export default function Admin_AcademicSettings() {
                             Add Term
                           </button>
                           <button
-                            onClick={() => setShowAddQuarterModal(true)}
-                            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2"
-                            title="Add New Quarter"
+                            onClick={openAddQuarterModal}
+                            className={`px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2 ${
+                              (quarters.filter(q => q.status !== 'archived').length >= 4) ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                            disabled={quarters.filter(q => q.status !== 'archived').length >= 4}
+                            title={(quarters.filter(q => q.status !== 'archived').length >= 4) ? 'Maximum of 4 quarters per school year reached' : 'Add New Quarter'}
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -1811,11 +2244,24 @@ export default function Admin_AcademicSettings() {
                         {/* Term Header */}
                         <div className="bg-gray-50 px-4 py-3 border-b">
                           <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
                             <div>
                               <h4 className="text-lg font-semibold text-gray-900">{term.termName}</h4>
                               <p className="text-sm text-gray-600">
                                 {new Date(term.startDate).toLocaleDateString()} - {new Date(term.endDate).toLocaleDateString()}
                               </p>
+                              </div>
+                              {selectedYear.status === 'active' && (
+                                <button
+                                  onClick={() => handleEditTerm(term)}
+                                  className="p-2 rounded hover:bg-yellow-100"
+                                  title="Edit term dates"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-800">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                  </svg>
+                                </button>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               {selectedYear.status !== 'active' ? (
@@ -1824,9 +2270,13 @@ export default function Admin_AcademicSettings() {
                                 </span>
                               ) : (
                                 term.status === 'active' ? (
-                                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800" title="Active term">
+                                  <button
+                                    onClick={() => handleDeactivateActiveTerm(term)}
+                                    className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer hover:shadow bg-green-100 text-green-800 hover:bg-red-100 hover:text-red-800"
+                                    title={`Click to set ${term.termName} inactive`}
+                                  >
                                     active
-                                  </span>
+                                  </button>
                                 ) : (
                                   <button
                                     onClick={() => handleToggleTermStatus(term)}
@@ -1837,6 +2287,7 @@ export default function Admin_AcademicSettings() {
                                   </button>
                                 )
                               )}
+                              {/* Moved edit button next to date range for better accessibility */}
                             </div>
                           </div>
                         </div>
@@ -1872,9 +2323,9 @@ export default function Admin_AcademicSettings() {
                                     </td>
                                     <td className="p-3 border">
                                       {selectedYear.status !== 'active' ? (
-                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                                          archived
-                                        </span>
+                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">archived</span>
+                                      ) : term.status !== 'active' ? (
+                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-400" title="Enable the term to toggle quarter status">{quarter.status}</span>
                                       ) : (
                                         <button
                                           onClick={() => handleToggleQuarterStatus(quarter)}
@@ -1900,27 +2351,15 @@ export default function Admin_AcademicSettings() {
                                           </svg>
                                         </button>
                                         {selectedYear.status === 'active' ? (
-                                          quarter.status === 'active' ? (
-                                            <button
-                                              disabled
-                                              className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
-                                              title="Cannot edit active quarter dates"
-                                            >
-                                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
-                                              </svg>
-                                            </button>
-                                          ) : (
                                           <button
                                             onClick={() => handleEditQuarter(quarter)}
                                             className="p-1 rounded hover:bg-yellow-100 group relative"
-                                            title="Edit"
+                                            title="Edit quarter dates"
                                           >
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                                             </svg>
                                           </button>
-                                          )
                                         ) : (
                                           <button
                                             disabled
@@ -1932,57 +2371,7 @@ export default function Admin_AcademicSettings() {
                                             </svg>
                                           </button>
                                         )}
-                                        {quarter.status === 'archived' && selectedYear.status === 'active' ? (
-                                          <button
-                                            onClick={() => handleActivateQuarter(quarter)}
-                                            className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
-                                            title="Activate"
-                                          >
-                                            <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                          </button>
-                                        ) : selectedYear.status !== 'active' ? (
-                                          <button
-                                            disabled
-                                            className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
-                                            title="School year is archived"
-                                          >
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
-                                              <path strokeLinecap="round" strokeLinejoin="round" d="M18 12H6" />
-                                            </svg>
-                                          </button>
-                                        ) : quarter.status === 'active' ? (
-                                          <button
-                                            onClick={() => handleArchiveQuarter(quarter)}
-                                            className="p-1 rounded hover:bg-red-100 group relative"
-                                            title="Deactivate"
-                                          >
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                            </svg>
-                                          </button>
-                                        ) : quarter.status === 'inactive' ? (
-                                          <button
-                                            onClick={() => handleArchiveQuarter(quarter)}
-                                            className="p-1 rounded hover:bg-red-100 group relative"
-                                            title="Deactivate"
-                                          >
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                            </svg>
-                                          </button>
-                                        ) : (
-                                          <button
-                                            onClick={() => handleActivateQuarter(quarter)}
-                                            className="bg-green-500 hover:bg-green-800 text-white px-2 py-1 text-xs rounded"
-                                            title="Activate"
-                                          >
-                                            <svg className="w-6 h-6 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                          </button>
-                                        )}
+                                        {/* Removed quarter activate action button */}
                                       </div>
                                     </td>
                                   </tr>
@@ -2039,7 +2428,7 @@ export default function Admin_AcademicSettings() {
                       School year will be {formData.schoolYearStart}-{formData.schoolYearStart ? parseInt(formData.schoolYearStart) + 1 : ''}
                     </p>
                   </div>
-                  <input type="hidden" id="active" name="status" value="active" />
+                  {/* Ensure new SY is created as inactive - remove hidden active status */}
                   <div className="flex gap-2">
                     <button
                       type="submit"
@@ -2067,7 +2456,8 @@ export default function Admin_AcademicSettings() {
             </div>
           )}
 
-          {showActivateModal && pendingSchoolYear && (
+          {/* Removed activate-on-create pathway to prevent auto-creation of terms/quarters */}
+          {false && showActivateModal && pendingSchoolYear && (
             <div className="fixed inset-0 backdrop-blur-sm bg-white/10 flex items-center justify-center z-50">
               <div className="bg-white p-6 rounded-lg shadow-lg max-w-xl min-w-[500px] w-full">
                 <h2 className="text-xl font-semibold mb-4">Add the School Year?</h2>
@@ -2334,7 +2724,6 @@ export default function Admin_AcademicSettings() {
                       onChange={(e) => {
                         const selectedTerm = e.target.value;
                         setQuarterFormData({ ...quarterFormData, termName: selectedTerm, quarterName: '' });
-                        
                         // Set available quarters based on selected term
                         if (selectedTerm === 'Term 1') {
                           setAvailableQuarters([
@@ -2352,10 +2741,9 @@ export default function Admin_AcademicSettings() {
                       }}
                       className="w-full p-2 border rounded-md"
                       required
+                      disabled
                     >
-                      <option value="">Select Term First</option>
-                      <option value="Term 1">Term 1</option>
-                      <option value="Term 2">Term 2</option>
+                      <option value="">{quarterFormData.termName || 'No terms available'}</option>
                     </select>
                   </div>
 
@@ -2368,16 +2756,9 @@ export default function Admin_AcademicSettings() {
                       onChange={(e) => setQuarterFormData({ ...quarterFormData, quarterName: e.target.value })}
                       className="w-full p-2 border rounded-md"
                       required
-                      disabled={!quarterFormData.termName}
+                      disabled
                     >
-                      <option value="">
-                        {quarterFormData.termName ? 'Select Quarter' : 'Select Term First'}
-                      </option>
-                      {availableQuarters.map(quarter => (
-                        <option key={quarter.value} value={quarter.value}>
-                          {quarter.label}
-                        </option>
-                      ))}
+                      <option value="">{quarterFormData.quarterName || 'Select Quarter'}</option>
                     </select>
                   </div>
 
@@ -2476,10 +2857,10 @@ export default function Admin_AcademicSettings() {
                       value={editTermFormData.startDate}
                       onChange={(e) => setEditTermFormData({ ...editTermFormData, startDate: e.target.value })}
                       className={`w-full p-2 border rounded-md ${
-                        selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
+                        selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : (editingTerm && new Date(editingTerm.startDate) < new Date(new Date().setHours(0,0,0,0)) ? 'opacity-50 cursor-not-allowed' : '')
                       }`}
                       required
-                      disabled={selectedYear && selectedYear.status !== 'active'}
+                      disabled={(selectedYear && selectedYear.status !== 'active') || (editingTerm && new Date(editingTerm.startDate) < new Date(new Date().setHours(0,0,0,0)))}
                     />
                   </div>
 

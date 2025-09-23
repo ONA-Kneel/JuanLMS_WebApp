@@ -87,137 +87,8 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     const savedYear = await schoolYear.save();
-
-    // Create 2 terms with 2 quarters each for the new school year
-    const schoolYearName = `${schoolYearStart}-${schoolYearStart + 1}`;
-    
-    // Calculate default dates for terms and quarters
-    const term1Start = new Date(`${schoolYearStart}-06-01`); // June 1st
-    const term1End = new Date(`${schoolYearStart}-11-30`); // November 30th
-    const term2Start = new Date(`${schoolYearStart}-12-01`); // December 1st
-    const term2End = new Date(`${schoolYearStart + 1}-05-31`); // May 31st of next year
-
-    // Create Term 1
-    const term1 = new Term({
-      termName: 'Term 1',
-      schoolYear: schoolYearName,
-      startDate: term1Start,
-      endDate: term1End,
-      status: effectiveSetAsActive && activeTermName === 'Term 1' ? 'active' : effectiveSetAsActive && !activeTermName ? 'active' : 'inactive'
-    });
-    await term1.save();
-
-    // Create Term 2
-    const term2 = new Term({
-      termName: 'Term 2',
-      schoolYear: schoolYearName,
-      startDate: term2Start,
-      endDate: term2End,
-      status: 'inactive' // Always start as inactive
-    });
-    await term2.save();
-
-    // Create quarters for Term 1
-    const q1Start = new Date(`${schoolYearStart}-06-01`);
-    const q1End = new Date(`${schoolYearStart}-08-31`);
-    const q2Start = new Date(`${schoolYearStart}-09-01`);
-    const q2End = new Date(`${schoolYearStart}-11-30`);
-
-    // Create quarters for Term 1 (guard against duplicates)
-    const existingQ1 = await Quarter.findOne({ schoolYear: schoolYearName, termName: 'Term 1', quarterName: 'Quarter 1' });
-    const quarter1 = existingQ1 || new Quarter({
-      quarterName: 'Quarter 1',
-      schoolYear: schoolYearName,
-      termName: 'Term 1',
-      startDate: q1Start,
-      endDate: q1End,
-      status: effectiveSetAsActive && (activeTermName ? activeTermName === 'Term 1' : true) && (activeQuarterName ? activeQuarterName === 'Quarter 1' : true) ? 'active' : 'inactive'
-    });
-    if (!existingQ1) await quarter1.save();
-
-    const existingQ2 = await Quarter.findOne({ schoolYear: schoolYearName, termName: 'Term 1', quarterName: 'Quarter 2' });
-    const quarter2 = existingQ2 || new Quarter({
-      quarterName: 'Quarter 2',
-      schoolYear: schoolYearName,
-      termName: 'Term 1',
-      startDate: q2Start,
-      endDate: q2End,
-      status: 'inactive' // Always start as inactive
-    });
-    if (!existingQ2) await quarter2.save();
-
-    // Create quarters for Term 2
-    const q3Start = new Date(`${schoolYearStart}-12-01`);
-    const q3End = new Date(`${schoolYearStart + 1}-02-28`);
-    const q4Start = new Date(`${schoolYearStart + 1}-03-01`);
-    const q4End = new Date(`${schoolYearStart + 1}-05-31`);
-
-    // Create quarters for Term 2 (guard against duplicates)
-    const existingQ3 = await Quarter.findOne({ schoolYear: schoolYearName, termName: 'Term 2', quarterName: 'Quarter 3' });
-    const quarter3 = existingQ3 || new Quarter({
-      quarterName: 'Quarter 3',
-      schoolYear: schoolYearName,
-      termName: 'Term 2',
-      startDate: q3Start,
-      endDate: q3End,
-      status: 'inactive' // Always start as inactive
-    });
-    if (!existingQ3) await quarter3.save();
-
-    const existingQ4 = await Quarter.findOne({ schoolYear: schoolYearName, termName: 'Term 2', quarterName: 'Quarter 4' });
-    const quarter4 = existingQ4 || new Quarter({
-      quarterName: 'Quarter 4',
-      schoolYear: schoolYearName,
-      termName: 'Term 2',
-      startDate: q4Start,
-      endDate: q4End,
-      status: 'inactive' // Always start as inactive
-    });
-    if (!existingQ4) await quarter4.save();
-
-    // If creating as inactive, archive any existing terms for this school year
-    if (!effectiveSetAsActive) {
-      await Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
-      await Quarter.updateMany({ schoolYear: schoolYearName }, { status: 'archived' });
-    }
-
-    // If created as active and an explicit term/quarter was provided, normalize states
-    if (effectiveSetAsActive) {
-      const selectedTerm = activeTermName || 'Term 1';
-      // Ensure selected term is active, others archived
-      await Term.updateMany(
-        { schoolYear: schoolYearName, termName: { $ne: selectedTerm } },
-        { status: 'archived' }
-      );
-      await Term.updateMany(
-        { schoolYear: schoolYearName, termName: selectedTerm },
-        { status: 'active' }
-      );
-
-      // Quarter normalization: inactivate quarters not selected within term; ensure exactly one active
-      if (activeQuarterName) {
-        await Quarter.updateMany(
-          { schoolYear: schoolYearName, termName: selectedTerm, quarterName: { $ne: activeQuarterName } },
-          { status: 'inactive' }
-        );
-        await Quarter.updateMany(
-          { schoolYear: schoolYearName, termName: selectedTerm, quarterName: activeQuarterName },
-          { status: 'active' }
-        );
-      } else {
-        // Default to earliest quarter in the selected term
-        const qs = await Quarter.find({ schoolYear: schoolYearName, termName: selectedTerm, status: { $ne: 'archived' } }).sort({ startDate: 1 });
-        if (qs && qs.length > 0) {
-          await Quarter.updateMany({ _id: { $in: qs.map(q => q._id) } }, { status: 'inactive' });
-          await Quarter.findByIdAndUpdate(qs[0]._id, { status: 'active' });
-        }
-      }
-      // Inactivate any active quarters from other terms
-      await Quarter.updateMany(
-        { schoolYear: schoolYearName, termName: { $ne: selectedTerm }, status: 'active' },
-        { status: 'inactive' }
-      );
-    }
+    // Do not auto-create terms or quarters on school year creation
+    // Admins will add terms/quarters explicitly via their respective endpoints
 
     // Create audit log entry via existing audit route (ensures consistent storage)
     try {
@@ -247,10 +118,8 @@ router.post('/', authenticateToken, async (req, res) => {
       console.error('[Audit] Failed to create audit log for school year creation (via route):', logErr);
     }
 
-    // Also return the created terms and quarters for UI initialization
-    const termsOut = await Term.find({ schoolYear: schoolYearName });
-    const quartersOut = await Quarter.find({ schoolYear: schoolYearName });
-    res.status(201).json({ schoolYear: savedYear, terms: termsOut, quarters: quartersOut });
+    // Return only the created school year
+    res.status(201).json(savedYear);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

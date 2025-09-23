@@ -238,10 +238,10 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     // Handle status updates
     if (req.body.status === 'active') {
       const { activeQuarterName } = req.body;
-      // Archive other terms in the same school year only
+      // Set other terms in the same school year to INACTIVE (not archived)
       await Term.updateMany(
         { _id: { $ne: term._id }, schoolYear: term.schoolYear },
-        { status: 'archived' }
+        { status: 'inactive' }
       );
       
       term.status = 'active';
@@ -279,50 +279,30 @@ router.patch('/:id', authenticateToken, async (req, res) => {
         )
       ]);
 
-      // Ensure a quarter is active when a term is active
-      // Fetch non-archived quarters for this term, ordered by start date
+      // Always inactivate quarters under OTHER terms of the same school year
+      await Quarter.updateMany(
+        { schoolYear: term.schoolYear, termName: { $ne: term.termName }, status: { $ne: 'archived' } },
+        { $set: { status: 'inactive' } }
+      );
+
+      // Quarter handling is OPTIONAL for the activated term. If provided, honor an explicit activeQuarterName
       const quartersForTerm = await Quarter.find({
         schoolYear: term.schoolYear,
         termName: term.termName,
         status: { $ne: 'archived' }
       }).sort({ startDate: 1 });
 
-      if (!quartersForTerm || quartersForTerm.length === 0) {
-        // No quarters defined; cannot keep term active without an active quarter
-        // Revert term to inactive and inform the client
-        term.status = 'inactive';
-        await term.save();
-        return res.status(409).json({
-          message: 'Cannot activate term without at least one quarter. Please create quarters first.'
-        });
+      if (quartersForTerm && quartersForTerm.length > 0 && activeQuarterName) {
+        const chosen = quartersForTerm.find(q => q.quarterName === activeQuarterName);
+        if (chosen) {
+          // Ensure only chosen quarter is active within the term
+          await Quarter.updateMany(
+            { schoolYear: term.schoolYear, termName: term.termName, _id: { $ne: chosen._id } },
+            { $set: { status: 'inactive' } }
+          );
+          await Quarter.findByIdAndUpdate(chosen._id, { status: 'active' });
+        }
       }
-
-      // Require explicit quarter selection when activating a term
-      if (!activeQuarterName) {
-        term.status = 'inactive';
-        await term.save();
-        return res.status(400).json({ message: 'activeQuarterName is required when activating a term.' });
-      }
-
-      // Inactivate any active quarters from other terms of the same school year
-      await Quarter.updateMany(
-        { schoolYear: term.schoolYear, termName: { $ne: term.termName }, status: 'active' },
-        { $set: { status: 'inactive' } }
-      );
-
-      const chosen = quartersForTerm.find(q => q.quarterName === activeQuarterName);
-      if (!chosen) {
-        term.status = 'inactive';
-        await term.save();
-        return res.status(404).json({ message: `Quarter ${activeQuarterName} not found for ${term.termName}.` });
-      }
-
-      // Ensure only chosen quarter is active within the term
-      await Quarter.updateMany(
-        { schoolYear: term.schoolYear, termName: term.termName, _id: { $ne: chosen._id } },
-        { $set: { status: 'inactive' } }
-      );
-      await Quarter.findByIdAndUpdate(chosen._id, { status: 'active' });
       
       console.log(`Successfully reactivated all entities for term: ${term.termName}`);
 
@@ -399,13 +379,14 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       }
       
     } else if (req.body.status === 'inactive') {
-      // Prevent turning an active term into inactive directly. Admins must activate a different term instead.
+      // Allow turning an active term into inactive (on/off behavior)
+      // Set all of its non-archived quarters to inactive to maintain invariants
       if (term.status === 'active') {
-        return res.status(403).json({
-          message: 'Cannot set an active term to inactive. Activate another term instead.'
-        });
+        await Quarter.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        );
       }
-      // Allow setting an already inactive/archived term to inactive (idempotent)
       term.status = 'inactive';
     } else if (req.body.status) {
       term.status = req.body.status;
@@ -633,11 +614,11 @@ router.delete('/:id', async (req, res) => {
       }
     }
 
-    // Proceed with cascading deletion using the model's pre-remove middleware
+    // Proceed with deletion
     console.log(`Deleting term: ${term.termName} (${term.schoolYear})`);
     
-    // Use remove() to trigger the pre-remove middleware for cascading deletes
-    await term.remove();
+    // Use deleteOne() on the document (remove() is not available in modern Mongoose)
+    await term.deleteOne();
     
     console.log(`Successfully deleted term and all connected data`);
     res.json({ message: 'Term and all connected data deleted successfully' });

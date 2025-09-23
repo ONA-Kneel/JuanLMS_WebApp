@@ -6,34 +6,8 @@ import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Helper: keep Term date range in sync with its quarters
-async function syncTermDateRange(schoolYearName, termName) {
-  try {
-    // Use non-archived quarters to define the live instructional window
-    const quarters = await Quarter.find({
-      schoolYear: schoolYearName,
-      termName,
-      status: { $ne: 'archived' }
-    });
-
-    if (!quarters || quarters.length === 0) {
-      // No quarters remaining; do not alter term dates
-      return;
-    }
-
-    const minStart = new Date(Math.min(...quarters.map(q => new Date(q.startDate).getTime())));
-    const maxEnd = new Date(Math.max(...quarters.map(q => new Date(q.endDate).getTime())));
-
-    await Term.findOneAndUpdate(
-      { schoolYear: schoolYearName, termName },
-      { startDate: minStart, endDate: maxEnd },
-      { new: true }
-    );
-  } catch (e) {
-    // Silent log; avoid blocking the main operation
-    console.warn('syncTermDateRange failed:', e?.message || e);
-  }
-}
+// Deprecated: Terms should keep admin-set dates. Quarters must fit inside term, but should not change term dates.
+async function syncTermDateRange() { return; }
 
 // Get all quarters
 router.get('/', authenticateToken, async (req, res) => {
@@ -98,6 +72,19 @@ router.post('/', authenticateToken, async (req, res) => {
     }
     
     const schoolYearName = `${schoolYear.schoolYearStart}-${schoolYear.schoolYearEnd}`;
+    // Validate term exists and quarter dates are within the term bounds
+    const parentTerm = await Term.findOne({ schoolYear: schoolYearName, termName });
+    if (!parentTerm) {
+      return res.status(404).json({ message: `Parent term ${termName} not found in ${schoolYearName}` });
+    }
+    const qStart = new Date(startDate);
+    const qEnd = new Date(endDate);
+    if (qEnd <= qStart) {
+      return res.status(400).json({ message: 'Quarter end date must be after start date' });
+    }
+    if (qStart < new Date(parentTerm.startDate) || qEnd > new Date(parentTerm.endDate)) {
+      return res.status(400).json({ message: `Quarter dates must be within ${termName} (${new Date(parentTerm.startDate).toLocaleDateString()} - ${new Date(parentTerm.endDate).toLocaleDateString()}).` });
+    }
     
     // Check if quarter already exists for this school year and term
     const existingQuarter = await Quarter.findOne({
@@ -119,8 +106,6 @@ router.post('/', authenticateToken, async (req, res) => {
     });
     
     const savedQuarter = await quarter.save();
-    // Sync term date after creating a quarter
-    await syncTermDateRange(schoolYearName, termName);
     res.status(201).json(savedQuarter);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -151,13 +136,12 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       }
     }
     
-    const updatedQuarter = await Quarter.findByIdAndUpdate(
+  const updatedQuarter = await Quarter.findByIdAndUpdate(
       req.params.id,
       { quarterName, termName, startDate, endDate, status },
       { new: true, runValidators: true }
     );
-    // Sync term date after updating a quarter
-    await syncTermDateRange(updatedQuarter.schoolYear, updatedQuarter.termName);
+    // Do not sync term date range from quarters
 
     // If status is being set to active, enforce consistency across terms/quarters
     if (status === 'active') {
@@ -246,13 +230,12 @@ router.patch('/:id/archive', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Quarter not found' });
     }
     
-    const updatedQuarter = await Quarter.findByIdAndUpdate(
+  const updatedQuarter = await Quarter.findByIdAndUpdate(
       req.params.id,
       { status: 'archived' },
       { new: true }
     );
-    // Sync term date after archiving a quarter
-    await syncTermDateRange(updatedQuarter.schoolYear, updatedQuarter.termName);
+    // Do not sync term date range from quarters
     res.json(updatedQuarter);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -268,8 +251,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
     
     await Quarter.findByIdAndDelete(req.params.id);
-    // Sync term date after deletion (use values from the pre-fetched doc)
-    await syncTermDateRange(quarter.schoolYear, quarter.termName);
+    // Do not sync term date range from quarters
     res.json({ message: 'Quarter deleted successfully' });
   } catch (err) {
     res.status(500).json({ message: err.message });

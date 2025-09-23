@@ -25,6 +25,10 @@ const subjectSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Optional quarter scoping within the term
+  quarterName: {
+    type: String,
+  },
   schoolYear: {
     type: String,
     required: true

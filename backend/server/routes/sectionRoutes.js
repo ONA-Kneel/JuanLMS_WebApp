@@ -9,12 +9,13 @@ const router = express.Router();
 // Get all sections
 router.get('/', async (req, res) => {
   try {
-    const { schoolYear, termName } = req.query;
+    const { schoolYear, termName, quarterName } = req.query;
     const filter = {};
     
     // If schoolYear and termName are provided, filter by them
     if (schoolYear) filter.schoolYear = schoolYear;
     if (termName) filter.termName = termName;
+    if (quarterName) filter.quarterName = quarterName;
     
     const sections = await Section.find(filter).sort({ sectionName: 1 });
     res.status(200).json(sections);
@@ -27,14 +28,12 @@ router.get('/', async (req, res) => {
 router.get('/track/:trackName/strand/:strandName', async (req, res) => {
   try {
     const { trackName, strandName } = req.params;
-    const { schoolYear, termName } = req.query;
-    const sections = await Section.find({ 
-      trackName, 
-      strandName, 
-      schoolYear,
-      termName,
-      // status: 'active' // Remove status filter to show actual status 
-    });
+    const { schoolYear, termName, quarterName } = req.query;
+    const filter = { trackName, strandName };
+    if (schoolYear) filter.schoolYear = schoolYear;
+    if (termName) filter.termName = termName;
+    if (quarterName) filter.quarterName = quarterName;
+    const sections = await Section.find(filter);
     res.status(200).json(sections);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -45,6 +44,7 @@ router.get('/track/:trackName/strand/:strandName', async (req, res) => {
 router.get('/termId/:termId', async (req, res) => {
   try {
     const { termId } = req.params;
+    const { quarterName } = req.query;
     
     // First get the term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -54,10 +54,9 @@ router.get('/termId/:termId', async (req, res) => {
     }
     
     // Get sections for this specific school year and term, regardless of status
-    const sections = await Section.find({ 
-      schoolYear: term.schoolYear, 
-      termName: term.termName 
-    }).sort({ sectionName: 1 });
+    const filter = { schoolYear: term.schoolYear, termName: term.termName };
+    if (quarterName) filter.quarterName = quarterName;
+    const sections = await Section.find(filter).sort({ sectionName: 1 });
     
     res.json(sections);
   } catch (error) {
@@ -67,7 +66,7 @@ router.get('/termId/:termId', async (req, res) => {
 
 // Create a new section
 router.post('/', async (req, res) => {
-  const { sectionName, trackName, strandName, gradeLevel, schoolYear, termName } = req.body;
+  const { sectionName, trackName, strandName, gradeLevel, schoolYear, termName, quarterName } = req.body;
 
   if (!sectionName || !trackName || !strandName || !gradeLevel) {
     return res.status(400).json({ message: 'Section name, track name, strand name, and grade level are required' });
@@ -80,6 +79,7 @@ router.post('/', async (req, res) => {
     // Use provided schoolYear and termName, or fall back to current active term
     let targetSchoolYear = schoolYear;
     let targetTermName = termName;
+    let targetQuarterName = quarterName;
     
     if (!targetSchoolYear || !targetTermName) {
       const currentTerm = await Term.findOne({ status: 'active' });
@@ -108,7 +108,8 @@ router.post('/', async (req, res) => {
       strandName, 
       gradeLevel,
       schoolYear: targetSchoolYear,
-      termName: targetTermName
+      termName: targetTermName,
+      quarterName: targetQuarterName
     });
     await newSection.save();
     res.status(201).json(newSection);
@@ -328,6 +329,34 @@ router.delete('/:id', async (req, res) => {
     
     console.log(`Successfully deleted section and all connected data`);
     res.status(200).json({ message: 'Section and all connected data deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update sections by quarter and school year
+router.patch('/quarter/:quarterName/schoolyear/:schoolYear', async (req, res) => {
+  try {
+    const { quarterName, schoolYear } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ message: 'Status is required' });
+    }
+
+    const result = await Section.updateMany(
+      { 
+        quarterName: quarterName,
+        schoolYear: schoolYear
+      },
+      { $set: { status: status } }
+    );
+
+    console.log(`Updated ${result.modifiedCount} sections to status: ${status} for quarter: ${quarterName}, school year: ${schoolYear}`);
+    res.json({ 
+      message: `Updated ${result.modifiedCount} sections to status: ${status}`,
+      modifiedCount: result.modifiedCount
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
