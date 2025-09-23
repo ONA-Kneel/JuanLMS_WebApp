@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import ExportModal from './ExportModal';
 
-const API_BASE = "";
+const API_BASE = "http://localhost:5000";
 
 const statusColors = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -44,9 +44,10 @@ export default function Admin_Registrants() {
   const [currentTerm, setCurrentTerm] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   // Fetch registrants from backend
-  const fetchRegistrants = async () => {
+  const fetchRegistrants = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -86,7 +87,7 @@ export default function Admin_Registrants() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [pagination.page, pagination.limit, selectedDate, statusFilter]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -131,7 +132,7 @@ export default function Admin_Registrants() {
 
   useEffect(() => {
     fetchRegistrants();
-  }, [selectedDate, statusFilter, pagination.page, pagination.limit]);
+  }, [selectedDate, statusFilter, pagination.page, pagination.limit, fetchRegistrants]);
 
   // Fetch student assignments for the active term to validate registrants
   useEffect(() => {
@@ -144,7 +145,7 @@ export default function Admin_Registrants() {
           headers: { Authorization: `Bearer ${token}` }
         });
         setStudentAssignments(res.data || []);
-      } catch (err) {
+      } catch {
         // Silent fail; validation column will show unknown
         console.warn('Failed to fetch student assignments for validation');
         setStudentAssignments([]);
@@ -333,6 +334,289 @@ export default function Admin_Registrants() {
       setError('Failed to export registrants. Please try again.');
     } finally {
       setExportLoading(false);
+    }
+  };
+
+  // Export registrants to PDF
+  const handleExportPDF = async (exportStatus) => {
+    if (exportingPDF) return;
+    
+    setExportingPDF(true);
+    setError('');
+    setShowExportModal(false);
+    
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setError('Authentication required. Please log in again.');
+        return;
+      }
+
+      // Build query parameters for export
+      const params = [];
+      if (selectedDate) params.push(`date=${encodeURIComponent(selectedDate)}`);
+      if (exportStatus !== 'all') params.push(`status=${encodeURIComponent(exportStatus)}`);
+      const query = params.length ? `?${params.join('&')}` : '';
+
+      const response = await fetch(`${API_BASE}/api/registrants/export-pdf${query}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError('Your session has expired. Please log in again.');
+        } else if (response.status === 403) {
+          setError('You do not have permission to export registrants.');
+        } else {
+          throw new Error(`Failed to export registrants (${response.status}).`);
+        }
+        return;
+      }
+
+      const data = await response.json();
+      const { registrants: registrantsData, totalRegistrants, filters } = data;
+
+      // Create HTML content for PDF
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Registrants Report</title>
+          <style>
+            @page {
+              size: A4;
+              margin: 0.5in;
+            }
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 0;
+              font-size: 12px;
+            }
+            * {
+              box-sizing: border-box;
+            }
+            .header {
+              display: flex;
+              align-items: center;
+              margin-bottom: 30px;
+              border-bottom: 2px solid #333;
+              padding-bottom: 20px;
+            }
+            .logo {
+              width: 80px;
+              height: 80px;
+              margin-right: 20px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .logo img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            .institution-info {
+              flex: 1;
+              text-align: center;
+            }
+            .institution-name {
+              font-size: 18px;
+              text-align: center;
+              font-weight: bold;
+              margin: 0;
+            }
+            .institution-address {
+              font-size: 16px;
+              text-align: center;
+              margin: 0;
+            }
+            .institution-accreditation {
+              font-size: 13px;
+              text-align: center;
+              margin: 0;
+            }
+            .report-info {
+              text-align: right;
+              margin-left: auto;
+            }
+            .report-title {
+              font-weight: bold;
+              margin: 0;
+              font-size: 14px;
+            }
+            .report-date {
+              margin: 5px 0 0 0;
+              font-size: 12px;
+            }
+            .registrants-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+              table-layout: fixed;
+            }
+            .registrants-table th,
+            .registrants-table td {
+              border: 1px solid #333;
+              padding: 6px;
+              text-align: left;
+              font-size: 10px;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+            }
+            .registrants-table th {
+              background-color: #f0f0f0;
+              font-weight: bold;
+              text-align: center;
+            }
+            .registrants-table .school-id-col { width: 12%; }
+            .registrants-table .track-col { width: 10%; }
+            .registrants-table .strand-col { width: 10%; }
+            .registrants-table .section-col { width: 10%; }
+            .registrants-table .validation-col { width: 15%; }
+            .registrants-table .name-col { width: 12%; }
+            .registrants-table .email-col { width: 15%; }
+            .registrants-table .contact-col { width: 10%; }
+            .registrants-table .date-col { width: 8%; }
+            .registrants-table .status-col { width: 8%; }
+            .footer {
+              margin-top: 30px;
+              border-top: 1px solid #333;
+              padding-top: 15px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              font-size: 10px;
+              color: #333;
+            }
+            .footer-left {
+              text-align: left;
+            }
+            .footer-right {
+              text-align: right;
+            }
+            .footer-logo {
+              width: 30px;
+              height: 30px;
+            }
+            .footer-logo img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo-section">
+              <div class="logo">
+                <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
+              </div>
+            </div>
+            <div class="institution-info">
+              <h1 class="institution-name">SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.</h1>
+              <p class="institution-address">2772-2774 Roxas Boulevard, Pasay City 1300 Philippines</p>
+              <p class="institution-accreditation">PAASCU Accredited - COLLEGE</p>
+            </div>
+            <div class="report-info">
+              <p class="report-title">Registrants Report</p>
+              <p class="report-date">Date: ${new Date().toLocaleDateString()}</p>
+            </div>
+          </div>
+          
+          <div style="margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #00418B;">
+            <h3 style="margin: 0 0 10px 0; color: #00418B; font-size: 14px;">REPORT SUMMARY</h3>
+            <p style="margin: 5px 0; font-size: 12px;"><strong>Total Registrants:</strong> ${totalRegistrants}</p>
+            <p style="margin: 5px 0; font-size: 12px;"><strong>Filters:</strong> Status=${filters.status}, Date=${filters.date || 'All'}</p>
+            <p style="margin: 5px 0; font-size: 12px;"><strong>Academic Year:</strong> ${academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'N/A'}</p>
+            <p style="margin: 5px 0; font-size: 12px;"><strong>Current Term:</strong> ${currentTerm ? currentTerm.termName : 'N/A'}</p>
+            <p style="margin: 5px 0; font-size: 12px;"><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+          
+          <table class="registrants-table">
+            <thead>
+              <tr>
+                <th class="school-id-col">School ID</th>
+                <th class="track-col">Track</th>
+                <th class="strand-col">Strand</th>
+                <th class="section-col">Section</th>
+                <th class="validation-col">Validation</th>
+                <th class="name-col">Full Name</th>
+                <th class="email-col">Email</th>
+                <th class="contact-col">Contact</th>
+                <th class="date-col">Date</th>
+                <th class="status-col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${registrantsData.map(registrant => `
+                <tr>
+                  <td class="school-id-col">${formatSchoolId(registrant.schoolID)}</td>
+                  <td class="track-col">${registrant.trackName || '-'}</td>
+                  <td class="strand-col">${registrant.strandName || '-'}</td>
+                  <td class="section-col">${registrant.sectionName || '-'}</td>
+                  <td class="validation-col">${validateAgainstAssignments(registrant) ? 'Account exists' : 'Account does not exist'}</td>
+                  <td class="name-col">${registrant.firstName} ${registrant.middleName} ${registrant.lastName}</td>
+                  <td class="email-col">${maskEmail(registrant.personalEmail)}</td>
+                  <td class="contact-col">${registrant.contactNo}</td>
+                  <td class="date-col">${registrant.registrationDate ? registrant.registrationDate.slice(0, 10) : ''}</td>
+                  <td class="status-col">${registrant.status}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <div class="footer">
+            <div class="footer-left">
+              <p>Hospital Tel. Nos: 831-9731/36;831-5641/49 www.sanjuandedios.org College Tel.Nos.: 551-2756; 551-2763 www.sjdefi.edu.ph</p>
+            </div>
+            <div class="footer-right">
+              <div class="footer-logo"> 
+                <img src="/src/assets/logo/images.png" alt="San Juan de Dios Hospital Seal" />
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Create a new window for PDF generation
+      const printWindow = window.open('', '_blank');
+      
+      if (!printWindow) {
+        throw new Error('Popup blocked. Please allow popups for this site.');
+      }
+      
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      
+      // Wait for content to load then print
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+          // Don't close immediately, let user see the print dialog
+          setTimeout(() => {
+            printWindow.close();
+          }, 1000);
+        }, 1000);
+      };
+      
+      // Fallback if onload doesn't fire
+      setTimeout(() => {
+        if (printWindow.document.readyState === 'complete') {
+          printWindow.print();
+          setTimeout(() => printWindow.close(), 1000);
+        }
+      }, 2000);
+
+    } catch (err) {
+      console.error('Error exporting registrants to PDF:', err);
+      setError('Failed to export registrants to PDF. Please try again.');
+    } finally {
+      setExportingPDF(false);
     }
   };
 
@@ -621,7 +905,9 @@ export default function Admin_Registrants() {
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
           onExport={handleExport}
+          onExportPDF={handleExportPDF}
           loading={exportLoading}
+          exportingPDF={exportingPDF}
         />
       </div>
     </div>

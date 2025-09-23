@@ -1,6 +1,6 @@
 import React from 'react';
 
-const ExportModal = ({ isOpen, onClose, onExport, loading }) => {
+const ExportModal = ({ isOpen, onClose, onExport, onExportPDF, loading, exportingPDF }) => {
   if (!isOpen) return null;
 
   const exportOptions = [
@@ -31,15 +31,26 @@ const ExportModal = ({ isOpen, onClose, onExport, loading }) => {
         
         <div className="space-y-3">
           {exportOptions.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => onExport(option.value)}
-              disabled={loading}
-              className="w-full text-left p-3 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <div className="font-medium text-gray-900">{option.label}</div>
-              <div className="text-sm text-gray-500">{option.description}</div>
-            </button>
+            <div key={option.value} className="border border-gray-200 rounded-lg p-3">
+              <div className="font-medium text-gray-900 mb-1">{option.label}</div>
+              <div className="text-sm text-gray-500 mb-3">{option.description}</div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onExport(option.value)}
+                  disabled={loading || exportingPDF}
+                  className="flex-1 px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                >
+                  {loading ? 'Exporting...' : 'Export Excel'}
+                </button>
+                <button
+                  onClick={() => onExportPDF(option.value)}
+                  disabled={loading || exportingPDF}
+                  className="flex-1 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                >
+                  {exportingPDF ? 'Exporting...' : 'Export PDF'}
+                </button>
+              </div>
+            </div>
           ))}
         </div>
         

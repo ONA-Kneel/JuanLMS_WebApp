@@ -259,6 +259,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     facultyAssignments: { valid: 0, invalid: 0, details: [] },
     studentAssignments: { valid: 0, invalid: 0, details: [] }
   });
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   const tabs = [
     { id: 'dashboard', label: 'Term Dashboard', icon: termDashboardIcon },
@@ -2042,6 +2043,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
   // Generate comprehensive PDF report with all term and quarter details
   const generateComprehensivePDFReport = async () => {
+    if (exportingPDF) return;
+    
+    setExportingPDF(true);
     try {
       console.log('Generating comprehensive PDF report...');
       
@@ -2421,6 +2425,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (error) {
       console.error('Error generating comprehensive PDF report:', error);
       window.alert('Error generating comprehensive PDF report. Please try again.');
+    } finally {
+      setExportingPDF(false);
     }
   };
 
@@ -4199,8 +4205,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           if (expectedName !== providedName) {
             console.log(`Name mismatch for existing student - will create new entry for "${studentNameInput}"`);
             studentId = null; // Will be created as new student
-          } else {
-            studentId = studentFound._id;
+        } else {
+          studentId = studentFound._id;
           }
         } else {
           // Student doesn't exist in system - this is allowed for enrollment data
@@ -6077,9 +6083,14 @@ Validation issues (${skippedCount} items):
                   </button>
                   <button
                     onClick={generateComprehensivePDFReport}
-                    className="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    disabled={exportingPDF}
+                    className={`py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                      exportingPDF
+                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                        : 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500'
+                    }`}
                   >
-                    Export PDF Report
+                    {exportingPDF ? 'Exporting...' : 'Export PDF Report'}
                   </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -8928,9 +8939,9 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
     const student = activeStudents.find(s => s.schoolID === assignment.studentSchoolID && s.role === 'students');
     if (student) {
       // If student exists, verify that the name matches the school ID
-      const expectedName = `${student.firstname} ${student.lastname}`.toLowerCase();
-      const providedName = assignment.studentName.toLowerCase();
-      if (expectedName !== providedName) {
+    const expectedName = `${student.firstname} ${student.lastname}`.toLowerCase();
+    const providedName = assignment.studentName.toLowerCase();
+    if (expectedName !== providedName) {
         console.log(`Name mismatch for existing student - will create new entry for "${assignment.studentName}"`);
       }
     } else {
@@ -8942,16 +8953,16 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
 
     // Check for duplicate assignment (only if student exists)
     if (student) {
-      const exists = activeAssignments.some(ea =>
-        ea.studentId === student._id &&
-        ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
-        ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
-        ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
-      );
-      if (exists) {
-        results.push({ valid: false, message: 'Assignment already exists' });
+    const exists = activeAssignments.some(ea =>
+      ea.studentId === student._id &&
+      ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
+      ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
+      ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
+    );
+    if (exists) {
+      results.push({ valid: false, message: 'Assignment already exists' });
         continue;
-      }
+    }
     }
     
     results.push({ valid: true, studentId: student ? student._id : null });
