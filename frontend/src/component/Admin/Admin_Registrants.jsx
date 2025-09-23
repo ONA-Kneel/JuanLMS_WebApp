@@ -4,7 +4,7 @@ import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import ExportModal from './ExportModal';
 
-const API_BASE = "";
+const API_BASE = import.meta.env.VITE_API_BASE || "https://juanlms-webapp-server.onrender.com";
 
 const statusColors = {
   pending: 'bg-yellow-100 text-yellow-800',
