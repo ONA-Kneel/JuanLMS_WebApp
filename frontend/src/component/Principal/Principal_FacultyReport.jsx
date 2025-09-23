@@ -306,6 +306,12 @@ export default function Principal_FacultyReport() {
   // Tab state
   const [activeTab, setActiveTab] = useState('activities');
 
+  // New: report type modal state
+  const [showReportTypeModal, setShowReportTypeModal] = useState(false);
+  const [reportType, setReportType] = useState('year'); // 'year' | 'strand' | 'section'
+  const [modalStrand, setModalStrand] = useState('');
+  const [modalSection, setModalSection] = useState('');
+
   // Convert simple markdown-like text to safe HTML (no raw # or *)
   const formatAnalysisToHtml = useCallback((input) => {
     if (!input) return '';
@@ -874,25 +880,42 @@ export default function Principal_FacultyReport() {
       return;
     }
 
+    // Open report type modal first
+    setShowReportTypeModal(true);
+  };
+
+  const confirmCreateAnalysis = async () => {
+    setShowReportTypeModal(false);
+
     setLoadingAnalysis(true);
     setAnalysisError(null);
     setAiAnalysis(null);
 
     try {
       const token = localStorage.getItem("token");
+
+      // Derive filters based on selection
+      const body = {
+        schoolYear: selectedSchoolYear,
+        termName: selectedTerm,
+        sectionFilter: null,
+        trackFilter: null,
+        strandFilter: null,
+      };
+
+      if (reportType === 'strand') {
+        body.strandFilter = modalStrand || selectedStrand || null;
+      } else if (reportType === 'section') {
+        body.sectionFilter = modalSection || selectedSection || null;
+      }
+
       const response = await fetch(`${API_BASE}/api/ai-analytics/create-analysis`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          schoolYear: selectedSchoolYear,
-          termName: selectedTerm,
-          sectionFilter: selectedSection || null,
-          trackFilter: selectedTrack || null,
-          strandFilter: selectedStrand || null
-        })
+        body: JSON.stringify(body)
       });
 
       if (!response.ok) {
@@ -1949,6 +1972,54 @@ export default function Principal_FacultyReport() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Report Type Modal */}
+      {showReportTypeModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="p-5 border-b">
+              <h3 className="text-lg font-semibold">Choose report type</h3>
+              <p className="text-sm text-gray-600 mt-1">How should the analysis be generated?</p>
+            </div>
+            <div className="p-5 space-y-3">
+              <label className="flex items-center gap-3">
+                <input type="radio" name="reportType" value="year" checked={reportType==='year'} onChange={() => setReportType('year')} />
+                <span>For the whole active academic year</span>
+              </label>
+              <label className="flex items-center gap-3">
+                <input type="radio" name="reportType" value="strand" checked={reportType==='strand'} onChange={() => setReportType('strand')} />
+                <span>For a specific strand</span>
+              </label>
+              {reportType==='strand' && (
+                <select value={modalStrand} onChange={e=>setModalStrand(e.target.value)} className="w-full border rounded px-3 py-2">
+                  <option value="">Select strand</option>
+                  {[...new Set(facultyActivities.map(a=>a.strandName).filter(Boolean))].sort().map(s=> (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              )}
+              <label className="flex items-center gap-3">
+                <input type="radio" name="reportType" value="section" checked={reportType==='section'} onChange={() => setReportType('section')} />
+                <span>For a specific section within the active term</span>
+              </label>
+              {reportType==='section' && (
+                <select value={modalSection} onChange={e=>setModalSection(e.target.value)} className="w-full border rounded px-3 py-2">
+                  <option value="">Select section</option>
+                  {[...new Set(facultyActivities.map(a=>a.sectionName).filter(Boolean))].sort().map(s=> (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div className="p-5 border-t flex justify-end gap-2 bg-gray-50">
+              <button onClick={()=>setShowReportTypeModal(false)} className="px-4 py-2 border rounded">Cancel</button>
+              <button onClick={confirmCreateAnalysis} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50" disabled={loadingAnalysis || (reportType==='strand' && !modalStrand && !selectedStrand) || (reportType==='section' && !modalSection && !selectedSection)}>
+                Continue
+              </button>
+            </div>
           </div>
         </div>
       )}
