@@ -3242,33 +3242,40 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     try {
       const wb = XLSX.utils.book_new();
 
-      // Sheet 1: Template for adding new student assignments
+      // Sheet 1: Template for adding new student assignments (San Juan Enrollment System Format)
       const templateWs = XLSX.utils.aoa_to_sheet([
-        ['Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name'], // Updated headers to include both School ID and Name
+        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade'], // San Juan enrollment system format
+        [7180, '10/3/2024', '22-12345', 'Dela Cruz', 'Juan', 'STEM', 'STEM1', 'Grade 11'], // Sample data
+        [7179, '10/3/2024', '22-12346', 'Santos', 'Maria', 'STEM', 'STEM1', 'Grade 11'], // Sample data
+        [7178, '10/3/2024', '22-12347', 'Garcia', 'John', 'STEM', 'STEM1', 'Grade 11'], // Sample data
+        [7177, '10/3/2024', '22-12348', 'Rodriguez', 'Ana', 'STEM', 'STEM1', 'Grade 11'], // Sample data
+        [7176, '10/3/2024', '22-12349', 'Martinez', 'Carlos', 'STEM', 'STEM1', 'Grade 11'], // Sample data
       ]);
-      XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Student Assignments');
+      XLSX.utils.book_append_sheet(wb, templateWs, 'Enrolled Students Template');
 
       // Sheet 2: Current student assignments in the system
       const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
       const currentStudentAssignmentsData = [
-        ['Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'], // Updated headers to use School ID
-        ...currentStudentAssignments.map(assignment => [
-          assignment.schoolID || '', // Use school ID instead of object ID
-          assignment.studentName,
-          assignment.gradeLevel || '',
-          assignment.trackName,
+        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade', 'status'], // Updated headers to match San Juan format
+        ...currentStudentAssignments.map((assignment, index) => [
+          assignment.enrollmentNo || (7180 - index), // Use enrollment number or generate sequential
+          assignment.enrollmentDate || '10/3/2024', // Use enrollment date or default
+          assignment.schoolID || '', // Use school ID
+          assignment.studentName ? assignment.studentName.split(' ').slice(-1)[0] : '', // Last name
+          assignment.studentName ? assignment.studentName.split(' ').slice(0, -1).join(' ') : '', // First name
           assignment.strandName,
           assignment.sectionName,
+          assignment.gradeLevel || '',
           assignment.status
         ])
       ];
 
       const currentStudentAssignmentsWs = XLSX.utils.aoa_to_sheet(currentStudentAssignmentsData);
       const saWscols = [
-        { wch: 30 }, { wch: 25 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 10 }
+        { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 10 }
       ];
       currentStudentAssignmentsWs['!cols'] = saWscols;
-      XLSX.utils.book_append_sheet(wb, currentStudentAssignmentsWs, 'Current Assignments');
+      XLSX.utils.book_append_sheet(wb, currentStudentAssignmentsWs, 'Current Enrolled Students');
 
       // Sheet 3: Available Students
       const activeStudents = students.filter(s => !s.isArchived);
@@ -3424,23 +3431,46 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     for (let i = 0; i < assignmentsToValidate.length; i++) {
       const assignment = assignmentsToValidate[i];
       console.log(`Validating assignment ${i + 1}:`, assignment);
-      const studentSchoolIDInput = assignment['Student School ID']?.trim() || '';
-      const studentNameInput = assignment['Student Name']?.trim() || '';
-      const gradeLevel = assignment['Grade Level']?.trim() || '';
-      const trackName = assignment['Track Name']?.trim() || '';
-      const strandName = assignment['Strand Name']?.trim() || '';
-      const sectionName = assignment['Section Name']?.trim() || '';
-      console.log(`Extracted: Student School ID: "${studentSchoolIDInput}", Student Name: "${studentNameInput}", Grade Level: "${gradeLevel}", Track: "${trackName}", Strand: "${strandName}", Section: "${sectionName}"`);
+      // Handle both old and new format for backward compatibility
+      const studentSchoolIDInput = assignment['student_no']?.trim() || assignment['Student School ID']?.trim() || '';
+      const studentNameInput = (assignment['first_name']?.trim() || '') + ' ' + (assignment['last_name']?.trim() || '') || assignment['Student Name']?.trim() || '';
+      const gradeLevel = assignment['grade']?.trim() || assignment['Grade Level']?.trim() || '';
+      const trackName = assignment['Track Name']?.trim() || ''; // Track name not in new format, will be derived from strand
+      const strandName = assignment['strand']?.trim() || assignment['Strand Name']?.trim() || '';
+      const sectionName = assignment['section']?.trim() || assignment['Section Name']?.trim() || '';
+      // Derive track name from strand if not provided (for new San Juan format)
+      let derivedTrackName = trackName;
+      if (!trackName && strandName) {
+        // Map strands to their tracks - handle both full names and abbreviations
+        if (strandName === 'STEM' || 
+            strandName === 'ABM' || 
+            strandName === 'GAS' || 
+            strandName === 'HUMSS' ||
+            strandName === 'Accountancy, Business and Management (ABM)' || 
+            strandName === 'General Academic Strand (GAS)' || 
+            strandName === 'Humanities and Social Sciences (HUMSS)' || 
+            strandName === 'Science, Technology, Engineering, and Mathematics (STEM)') {
+          derivedTrackName = 'Academic Track';
+        } else if (strandName === 'Housekeeping' || 
+                   strandName === 'Cookery' || 
+                   strandName === 'Food and Beverage Services' || 
+                   strandName === 'Bread and Pastry Production' ||
+                   strandName === 'ICT') {
+          derivedTrackName = 'TVL Track';
+        }
+      }
+
+      console.log(`Extracted: Student School ID: "${studentSchoolIDInput}", Student Name: "${studentNameInput}", Grade Level: "${gradeLevel}", Track: "${derivedTrackName}", Strand: "${strandName}", Section: "${sectionName}"`);
 
       let isValid = true;
       let message = 'Valid';
       let studentId = ''; // To store the student ID for valid assignments
 
       // 1. Check for missing required fields
-      if (!studentSchoolIDInput || !studentNameInput || !gradeLevel || !trackName || !strandName || !sectionName) {
+      if (!studentSchoolIDInput || !studentNameInput || !gradeLevel || !derivedTrackName || !strandName || !sectionName) {
         isValid = false;
         message = 'Missing Student School ID, Student Name, Grade Level, Track Name, Strand Name, or Section Name';
-        console.log(`Row ${i + 1}: Missing required fields - studentSchoolIDInput: "${studentSchoolIDInput}", studentNameInput: "${studentNameInput}", gradeLevel: "${gradeLevel}", trackName: "${trackName}", strandName: "${strandName}", sectionName: "${sectionName}"`);
+        console.log(`Row ${i + 1}: Missing required fields - studentSchoolIDInput: "${studentSchoolIDInput}", studentNameInput: "${studentNameInput}", gradeLevel: "${gradeLevel}", trackName: "${derivedTrackName}", strandName: "${strandName}", sectionName: "${sectionName}"`);
         status[i] = { valid: isValid, message: message, studentId: studentId };
         console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
         continue; // Skip all other validations for this row
@@ -3465,12 +3495,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
 
       // 2. Check if student exists and is active (search by school ID and verify name matches)
+      // For enrollment data, allow creating new students if they don't exist
       if (isValid) {
         const studentFound = activeStudentsMap.get(studentSchoolIDInput);
         console.log(`Student with School ID "${studentSchoolIDInput}" found:`, studentFound);
         if (!studentFound) {
-          isValid = false;
-          message = `Student with School ID "${studentSchoolIDInput}" does not exist or is not active`;
+          // For enrollment data, we allow creating new students
+          console.log(`Student with School ID "${studentSchoolIDInput}" not found - will be created as new student`);
+          studentId = null; // Will be created during upload
         } else {
           // Verify that the name matches the school ID
           const expectedName = `${studentFound.firstname} ${studentFound.lastname}`.toLowerCase();
@@ -3486,37 +3518,37 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
       // 3. Check if track exists and is active
       if (isValid) {
-        const trackFound = activeTracksMap.get(trackName);
-        console.log(`Track "${trackName}" found:`, trackFound);
+        const trackFound = activeTracksMap.get(derivedTrackName);
+        console.log(`Track "${derivedTrackName}" found:`, trackFound);
         if (!trackFound) {
           isValid = false;
-          message = `Track "${trackName}" does not exist or is not active`;
+          message = `Track "${derivedTrackName}" does not exist or is not active`;
         }
       }
 
       // 4. Check if strand exists and is active within the track
       if (isValid) {
-        const strandFound = activeStrandsMap.get(`${trackName}-${strandName}`);
-        console.log(`Strand "${strandName}" for Track "${trackName}" found:`, strandFound);
+        const strandFound = activeStrandsMap.get(`${derivedTrackName}-${strandName}`);
+        console.log(`Strand "${strandName}" for Track "${derivedTrackName}" found:`, strandFound);
         if (!strandFound) {
           isValid = false;
-          message = `Strand "${strandName}" for Track "${trackName}" does not exist or is not active`;
+          message = `Strand "${strandName}" for Track "${derivedTrackName}" does not exist or is not active`;
         }
       }
 
       // 5. Check if section exists and is active within the track and strand
       if (isValid) {
-        const sectionFound = activeSectionsMap.get(`${trackName}-${strandName}-${sectionName}`);
-        console.log(`Section "${sectionName}" for Track "${trackName}" and Strand "${strandName}" found:`, sectionFound);
+        const sectionFound = activeSectionsMap.get(`${derivedTrackName}-${strandName}-${sectionName}`);
+        console.log(`Section "${sectionName}" for Track "${derivedTrackName}" and Strand "${strandName}" found:`, sectionFound);
         if (!sectionFound) {
           isValid = false;
-          message = `Section "${sectionName}" for Track "${trackName}" and Strand "${strandName}" does not exist or is not active`;
+          message = `Section "${sectionName}" for Track "${derivedTrackName}" and Strand "${strandName}" does not exist or is not active`;
         }
       }
 
       // 6. Check for duplicates within the uploaded data
       if (isValid) {
-        const currentCombo = `${studentId || studentNameInput}-${trackName}-${strandName}-${sectionName}`;
+        const currentCombo = `${studentSchoolIDInput}-${derivedTrackName}-${strandName}-${sectionName}`;
         console.log(`Checking for duplicate in uploaded data: "${currentCombo}"`);
         if (uploadedAssignmentCombos.has(currentCombo)) {
           isValid = false;
@@ -3526,9 +3558,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       }
 
-      // 7. Check for existing assignments in the system
-      if (isValid) {
-        const existingCombo = `${studentId}-${trackName}-${strandName}-${sectionName}`;
+      // 7. Check for existing assignments in the system (only if student exists)
+      if (isValid && studentId) {
+        const existingCombo = `${studentId}-${derivedTrackName}-${strandName}-${sectionName}`;
         console.log(`Row ${i + 1}: Checking for existing assignment in system: "${existingCombo}"`);
         console.log(`Row ${i + 1}: Available existing assignments:`, Array.from(existingAssignmentsInSystem));
         if (existingAssignmentsInSystem.has(existingCombo)) {
@@ -3571,19 +3603,25 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const actualHeaders = rawData[0].map(h => String(h).trim()); // Get actual headers and trim them
       console.log("Actual Headers from Excel:", actualHeaders);
 
-      // Define expected headers and create a mapping for flexible matching
+      // Define expected headers and create a mapping for flexible matching (San Juan format)
       const expectedHeadersMap = {
-        'Student School ID': '',
-        'Student Name': '',
-        'Grade Level': '',
-        'Track Name': '',
-        'Strand Name': '',
-        'Section Name': '',
+        'enrollment_no': '',
+        'date': '',
+        'student_no': '',
+        'last_name': '',
+        'first_name': '',
+        'strand': '',
+        'section': '',
+        'grade': '',
       };
       const headerMapping = {};
 
       for (const expectedKey of Object.keys(expectedHeadersMap)) {
-        const foundHeader = actualHeaders.find(actual => actual.toLowerCase().startsWith(expectedKey.toLowerCase().substring(0, Math.min(actual.length, expectedKey.length))));
+        const foundHeader = actualHeaders.find(actual => 
+          actual.toLowerCase() === expectedKey.toLowerCase() ||
+          actual.toLowerCase().includes(expectedKey.toLowerCase()) ||
+          expectedKey.toLowerCase().includes(actual.toLowerCase())
+        );
         if (foundHeader) {
           headerMapping[expectedKey] = foundHeader;
         } else {
@@ -3656,10 +3694,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         const originalIndex = studentPreviewData.indexOf(assignment);
         const studentId = studentValidationStatus[originalIndex]?.studentId;
 
-        if (!studentId) { // Should not happen if validation is correct, but as a safeguard
-          console.warn('Skipping assignment due to missing studentId after validation', assignment);
-          continue;
-        }
+        // Handle new students (studentId is null for enrollment data)
+        // For enrollment data, send student info directly to assignment endpoint (same as manual assignment)
+        const studentName = assignment['first_name'] && assignment['last_name'] 
+          ? `${assignment['first_name']} ${assignment['last_name']}` 
+          : assignment['Student Name'] || '';
+        const studentSchoolID = assignment['student_no'] || assignment['Student School ID'] || '';
 
         const res = await fetch(`${API_BASE}/api/student-assignments`, {
           method: 'POST',
@@ -3667,14 +3707,28 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({
-            studentId: studentId,
-            gradeLevel: assignment['Grade Level'],
-            trackName: assignment['Track Name'],
-            strandName: assignment['Strand Name'],
-            sectionName: assignment['Section Name'],
-            termId: termDetails._id,
-          })
+          body: JSON.stringify((() => {
+            const basePayload = {
+              gradeLevel: assignment['grade'] || assignment['Grade Level'],
+              trackName: assignment['Track Name'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track'),
+              strandName: assignment['strand'] || assignment['Strand Name'],
+              sectionName: assignment['section'] || assignment['Section Name'],
+              termId: termDetails._id,
+              quarterName: quarterData ? quarterData.quarterName : undefined
+            };
+            
+            if (studentId) {
+              // Existing student - send studentId
+              return { ...basePayload, studentId: studentId };
+            } else {
+              // New student - send student info directly (same as manual assignment)
+              const payload = { ...basePayload, studentName: studentName };
+              if (studentSchoolID) {
+                payload.studentSchoolID = studentSchoolID;
+              }
+              return payload;
+            }
+          })())
         });
 
         if (res.ok) {
@@ -4411,20 +4465,26 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const wb = XLSX.utils.book_new();
       const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
       const studentAssignmentData = [
-        ['Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'],
-        ...currentStudentAssignments.map(assignment => [
-          assignment.schoolID || '',
-          assignment.studentName,
-          assignment.gradeLevel || '',
-          assignment.trackName,
+        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade', 'status'],
+        ...currentStudentAssignments.map((assignment, index) => [
+          assignment.enrollmentNo || (7180 - index), // Use enrollment number or generate sequential
+          assignment.enrollmentDate || '10/3/2024', // Use enrollment date or default
+          assignment.schoolID || '', // Use school ID
+          assignment.studentName ? assignment.studentName.split(' ').slice(-1)[0] : '', // Last name
+          assignment.studentName ? assignment.studentName.split(' ').slice(0, -1).join(' ') : '', // First name
           assignment.strandName,
           assignment.sectionName,
+          assignment.gradeLevel || '',
           assignment.status
         ])
       ];
       const ws = XLSX.utils.aoa_to_sheet(studentAssignmentData);
-      XLSX.utils.book_append_sheet(wb, ws, 'Active Student Assignments');
-      XLSX.writeFile(wb, 'active_student_assignments.xlsx');
+      const wsCols = [
+        { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 10 }
+      ];
+      ws['!cols'] = wsCols;
+      XLSX.utils.book_append_sheet(wb, ws, 'Enrolled Students');
+      XLSX.writeFile(wb, 'enrolled_students.xlsx');
       // Audit log: Extract Student
       try {
         const token = localStorage.getItem('token');
@@ -5462,18 +5522,18 @@ Validation issues (${skippedCount} items):
                     {trackFormData.trackType === 'custom' && (
                       <div className="flex-1">
                         <label htmlFor="trackName" className="block text-sm font-medium text-gray-700 mb-1">Custom Track Name</label>
-                        <input
-                          type="text"
-                          id="trackName"
-                          name="trackName"
-                          value={trackFormData.trackName}
-                          onChange={e => setTrackFormData({ ...trackFormData, trackName: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      <input
+                        type="text"
+                        id="trackName"
+                        name="trackName"
+                        value={trackFormData.trackName}
+                        onChange={e => setTrackFormData({ ...trackFormData, trackName: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="Enter custom track name"
-                          required
-                          disabled={termDetails.status === 'archived'}
-                        />
-                      </div>
+                        required
+                        disabled={termDetails.status === 'archived'}
+                      />
+                    </div>
                     )}
                   </div>
                   <div className="space-y-2">
@@ -5729,18 +5789,18 @@ Validation issues (${skippedCount} items):
                     {strandFormData.strandType === 'custom' && (
                       <div className="flex-1">
                         <label htmlFor="strandName" className="block text-sm font-medium text-gray-700 mb-1">Custom Strand Name</label>
-                        <input
-                          type="text"
-                          id="strandName"
-                          name="strandName"
-                          value={strandFormData.strandName}
-                          onChange={e => setStrandFormData({ ...strandFormData, strandName: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      <input
+                        type="text"
+                        id="strandName"
+                        name="strandName"
+                        value={strandFormData.strandName}
+                        onChange={e => setStrandFormData({ ...strandFormData, strandName: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="Enter custom strand name"
-                          required
-                          disabled={termDetails.status === 'archived'}
-                        />
-                      </div>
+                        required
+                        disabled={termDetails.status === 'archived'}
+                      />
+                    </div>
                     )}
                   </div>
                   <div className="space-y-2">
@@ -6964,7 +7024,7 @@ Validation issues (${skippedCount} items):
                     This term is archived. Editing is disabled.
                   </div>
                 )}
-                {/* Assign Student Button */}
+                {/* Assign Enrolled Student Button */}
                 <div className="flex justify-between items-center mt-5 mb-4">
                   <h4 className="text-2xl font-semibold mb-2">Student Assignments</h4>
                   <div className="flex justify-end">
@@ -6980,7 +7040,7 @@ Validation issues (${skippedCount} items):
                       }}
                       disabled={termDetails.status === 'archived'}
                     >
-                      Assign Student
+                      Assign Enrolled Student
                     </button>
                   </div>
                 </div>
@@ -7000,11 +7060,11 @@ Validation issues (${skippedCount} items):
                       >
                         &times;
                       </button>
-                      <h3 className="text-xl font-semibold mb-4">{isStudentEditMode ? 'Edit Student Assignment' : 'Assign Student'}</h3>
+                      <h3 className="text-xl font-semibold mb-4">{isStudentEditMode ? 'Edit Student Assignment' : 'Assign Enrolled Student'}</h3>
                       {studentError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{studentError}</div>}
                       {/* Excel Upload Section */}
                       <div className="mb-6 p-4 border rounded-lg bg-gray-50">
-                        <h4 className="text-lg font-medium mb-3">Bulk Assign Students</h4>
+                        <h4 className="text-lg font-medium mb-3">Bulk Assign Enrolled Students</h4>
                         <div className="flex flex-col md:flex-row gap-4 items-end">
                           <div className="flex-1">
                             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -7180,7 +7240,7 @@ Validation issues (${skippedCount} items):
                             className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                             disabled={termDetails.status === 'archived'}
                           >
-                            {isStudentEditMode ? 'Save Changes' : 'Assign Student'}
+                            {isStudentEditMode ? 'Save Changes' : 'Assign Enrolled Student'}
                           </button>
                           {isStudentEditMode && (
                             <button
@@ -7249,14 +7309,25 @@ Validation issues (${skippedCount} items):
                             {studentPreviewData.map((assignment, index) => {
                               const isValid = studentValidationStatus[index]?.valid;
                               const message = studentValidationStatus[index]?.message;
+                              
+                              // Extract data from both old and new formats
+                              const studentSchoolID = assignment['student_no'] || assignment['Student School ID'] || '';
+                              const studentName = assignment['first_name'] && assignment['last_name'] 
+                                ? `${assignment['first_name']} ${assignment['last_name']}` 
+                                : assignment['Student Name'] || '';
+                              const gradeLevel = assignment['grade'] || assignment['Grade Level'] || '';
+                              const trackName = assignment['Track Name'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track');
+                              const strandName = assignment['strand'] || assignment['Strand Name'] || '';
+                              const sectionName = assignment['section'] || assignment['Section Name'] || '';
+                              
                               return (
                                 <tr key={index} className={!isValid ? 'bg-red-50' : ''}>
-                                  <td className="p-3 border">{assignment['Student School ID'] || ''}</td>
-                                  <td className="p-3 border">{assignment['Student Name']}</td>
-                                  <td className="p-3 border">{assignment['Grade Level']}</td>
-                                  <td className="p-3 border">{assignment['Track Name']}</td>
-                                  <td className="p-3 border">{assignment['Strand Name']}</td>
-                                  <td className="p-3 border">{assignment['Section Name']}</td>
+                                  <td className="p-3 border">{studentSchoolID}</td>
+                                  <td className="p-3 border">{studentName}</td>
+                                  <td className="p-3 border">{gradeLevel}</td>
+                                  <td className="p-3 border">{trackName}</td>
+                                  <td className="p-3 border">{strandName}</td>
+                                  <td className="p-3 border">{sectionName}</td>
                                   <td className="p-3 border">
                                     <span className={`px-2 py-1 rounded text-xs ${isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                       {message}
