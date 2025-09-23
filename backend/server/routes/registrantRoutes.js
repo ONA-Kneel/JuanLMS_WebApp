@@ -720,4 +720,110 @@ router.post('/test-approval', async (req, res) => {
   }
 });
 
+// Public endpoints for academic data (no authentication required)
+// GET /api/registrants/tracks - Get all tracks for active term
+router.get('/tracks', async (req, res) => {
+  try {
+    // First get the active academic year and term
+    const SchoolYear = (await import('../models/SchoolYear.js')).default;
+    const Term = (await import('../models/Term.js')).default;
+    const Track = (await import('../models/Track.js')).default;
+    
+    const activeYear = await SchoolYear.findOne({ status: 'active' });
+    if (!activeYear) {
+      return res.status(404).json({ message: 'No active academic year found' });
+    }
+    
+    const activeTerm = await Term.findOne({ 
+      schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
+      status: 'active' 
+    });
+    
+    if (!activeTerm) {
+      return res.status(404).json({ message: 'No active term found' });
+    }
+    
+    const tracks = await Track.find({
+      schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
+      termName: activeTerm.termName,
+      status: 'active'
+    });
+    
+    res.json(tracks);
+  } catch (error) {
+    console.error('Error fetching tracks:', error);
+    res.status(500).json({ message: 'Failed to fetch tracks', error: error.message });
+  }
+});
+
+// GET /api/registrants/strands - Get all strands for active term
+router.get('/strands', async (req, res) => {
+  try {
+    // First get the active academic year and term
+    const SchoolYear = (await import('../models/SchoolYear.js')).default;
+    const Term = (await import('../models/Term.js')).default;
+    const Strand = (await import('../models/Strand.js')).default;
+    
+    const activeYear = await SchoolYear.findOne({ status: 'active' });
+    if (!activeYear) {
+      return res.status(404).json({ message: 'No active academic year found' });
+    }
+    
+    const activeTerm = await Term.findOne({ 
+      schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
+      status: 'active' 
+    });
+    
+    if (!activeTerm) {
+      return res.status(404).json({ message: 'No active term found' });
+    }
+    
+    const strands = await Strand.find({
+      schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
+      termName: activeTerm.termName,
+      status: 'active'
+    });
+    
+    res.json(strands);
+  } catch (error) {
+    console.error('Error fetching strands:', error);
+    res.status(500).json({ message: 'Failed to fetch strands', error: error.message });
+  }
+});
+
+// GET /api/registrants/sections - Get all sections for active term
+router.get('/sections', async (req, res) => {
+  try {
+    // First get the active academic year and term
+    const SchoolYear = (await import('../models/SchoolYear.js')).default;
+    const Term = (await import('../models/Term.js')).default;
+    const Section = (await import('../models/Section.js')).default;
+    
+    const activeYear = await SchoolYear.findOne({ status: 'active' });
+    if (!activeYear) {
+      return res.status(404).json({ message: 'No active academic year found' });
+    }
+    
+    const activeTerm = await Term.findOne({ 
+      schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
+      status: 'active' 
+    });
+    
+    if (!activeTerm) {
+      return res.status(404).json({ message: 'No active term found' });
+    }
+    
+    const sections = await Section.find({
+      schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
+      termName: activeTerm.termName,
+      status: 'active'
+    });
+    
+    res.json(sections);
+  } catch (error) {
+    console.error('Error fetching sections:', error);
+    res.status(500).json({ message: 'Failed to fetch sections', error: error.message });
+  }
+});
+
 export default router; 
