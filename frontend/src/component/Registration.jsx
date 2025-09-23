@@ -146,9 +146,9 @@ export default function Registration() {
               <input type="text" name="lastName" required placeholder="Last Name" className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.lastName} onChange={handleChange} disabled={loading} />
             </div>
             <div>
-              <label className="block text-base mb-2">Personal Email<span className="text-red-500">*</span></label>
-              <input type="email" name="personalEmail" required placeholder="username@gmail.com" className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.personalEmail} onChange={handleChange} disabled={loading} />
-              <p className="text-xs text-gray-500 mt-1">Note: Your Zoho Mail (role.firstname.lastname@sjdefilms.com) will be created upon approval.</p>
+              <label className="block text-base mb-2">School Email<span className="text-red-500">*</span></label>
+              <input type="email" name="personalEmail" required placeholder="username@sjdefi.edu.ph" className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.personalEmail} onChange={handleChange} disabled={loading} />
+              <p className="text-xs text-gray-500 mt-1">Note: Your JuanLMS Mail (role.firstname.lastname@sjdefilms.com) will be created upon approval.</p>
             </div>
             <div>
               <label className="block text-base mb-2">Contact No.<span className="text-red-500">*</span></label>

@@ -1184,8 +1184,8 @@ export default function Admin_Accounts() {
                       <p className="text-xs text-gray-500 mt-1">Format: role.firstname.lastname@sjdefilms.com</p>
                     </div>
                     <div>
-                      <label className="block font-semibold mb-1" htmlFor="personalemail">Personal Email</label>
-                      <input id="personalemail" type="email" name="personalemail" value={formData.personalemail} onChange={handleChange} placeholder="Personal Email" className="border rounded p-4 text-lg w-full" required />
+                      <label className="block font-semibold mb-1" htmlFor="personalemail">School Email</label>
+                      <input id="personalemail" type="email" name="personalemail" value={formData.personalemail} onChange={handleChange} placeholder="School Email" className="border rounded p-4 text-lg w-full" required />
                     </div>
                     <div>
                       <label className="block font-semibold mb-1" htmlFor="schoolID">School ID</label>
