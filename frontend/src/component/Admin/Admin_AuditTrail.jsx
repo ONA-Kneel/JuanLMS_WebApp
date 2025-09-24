@@ -18,8 +18,6 @@ export default function Admin_AuditTrail() {
   const navigate = useNavigate();
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [exportingExcel, setExportingExcel] = useState(false);
-  const [exportingPDF, setExportingPDF] = useState(false);
 
   // Map backend action values to user-friendly labels
   const actionLabelMap = {
@@ -185,9 +183,6 @@ export default function Admin_AuditTrail() {
 
   // Export audit logs to Excel
   const handleExport = async () => {
-    if (exportingExcel || exportingPDF) return;
-    
-    setExportingExcel(true);
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -235,16 +230,11 @@ export default function Admin_AuditTrail() {
     } catch (err) {
       console.error('Error exporting audit logs:', err);
       alert('Failed to export audit logs. Please try again.');
-    } finally {
-      setExportingExcel(false);
     }
   };
 
   // Export audit logs to PDF (Admin only) - Frontend HTML generation
   const handleExportPDF = async () => {
-    if (exportingExcel || exportingPDF) return;
-    
-    setExportingPDF(true);
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -345,21 +335,6 @@ export default function Admin_AuditTrail() {
               margin: 5px 0 0 0;
               font-size: 12px;
             }
-            .summary-info {
-              margin: 20px 0;
-              padding: 15px;
-              background-color: #f8f9fa;
-              border-left: 4px solid #00418B;
-            }
-            .summary-info h3 {
-              margin: 0 0 10px 0;
-              color: #00418B;
-              font-size: 14px;
-            }
-            .summary-info p {
-              margin: 5px 0;
-              font-size: 12px;
-            }
             .audit-table {
               width: 100%;
               border-collapse: collapse;
@@ -440,11 +415,9 @@ export default function Admin_AuditTrail() {
             </div>
           </div>
           
-          <div style="margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #00418B;">
-            <h3 style="margin: 0 0 10px 0; color: #00418B; font-size: 14px;">REPORT SUMMARY</h3>
-            <p style="margin: 5px 0; font-size: 12px;"><strong>Total Logs:</strong> ${totalLogs}</p>
-            <p style="margin: 5px 0; font-size: 12px;"><strong>Filters:</strong> Action=${filters.action}, Role=${filters.role}</p>
-            <p style="margin: 5px 0; font-size: 12px;"><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+          <div style="margin: 20px 0;">
+            <p><strong>Total Logs:</strong> ${totalLogs}</p>
+            <p><strong>Filters:</strong> Action=${filters.action}, Role=${filters.role}</p>
           </div>
           
           <table class="audit-table">
@@ -507,8 +480,6 @@ export default function Admin_AuditTrail() {
     } catch (err) {
       console.error('Error exporting audit logs to PDF:', err);
       alert('Failed to export audit logs to PDF. Please try again.');
-    } finally {
-      setExportingPDF(false);
     }
   };
 
@@ -552,25 +523,15 @@ export default function Admin_AuditTrail() {
             </button>
             <button
               onClick={handleExport}
-              disabled={exportingExcel || exportingPDF}
-              className={`px-4 py-2 rounded transition-colors ${
-                exportingExcel || exportingPDF
-                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                  : 'bg-green-500 text-white hover:bg-green-600'
-              }`}
+              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
             >
-              {exportingExcel ? 'Exporting...' : 'Export to Excel'}
+              Export to Excel
             </button>
             <button
               onClick={handleExportPDF}
-              disabled={exportingExcel || exportingPDF}
-              className={`px-4 py-2 rounded transition-colors ${
-                exportingExcel || exportingPDF
-                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                  : 'bg-red-500 text-white hover:bg-red-600'
-              }`}
+              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
             >
-              {exportingPDF ? 'Exporting...' : 'Export to PDF'}
+              Export to PDF
             </button>
             <ProfileMenu />
           </div>
