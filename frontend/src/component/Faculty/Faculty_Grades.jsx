@@ -3,6 +3,7 @@ import ProfileModal from "../ProfileModal";
 import ProfileMenu from "../ProfileMenu";
 import React, { useEffect, useState, useCallback } from 'react';
 import { useQuarter } from "../../context/QuarterContext.jsx";
+import * as XLSX from 'xlsx';
 
 /**
  * Faculty Grades Component
@@ -98,6 +99,8 @@ export default function Faculty_Grades() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [saving, setSaving] = useState(false);
   const [quarterStatus, setQuarterStatus] = useState({}); // Store quarter status for each quarter
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
   const [confirmRepost, setConfirmRepost] = useState({ isOpen: false, quarter: null, callback: null });
 
   const showModal = (title, message, type = 'info') => {
@@ -1171,6 +1174,472 @@ export default function Faculty_Grades() {
     return transmutedGrade;
   };
 
+  // Export to Excel function
+  const exportToExcel = async () => {
+    if (!selectedClass || !selectedSection || students.length === 0) {
+      showModal('Error', 'Please select a class and section with students first', 'error');
+      return;
+    }
+
+    setExportingExcel(true);
+    try {
+      const selectedClassData = classes.find(c => c._id === selectedClass);
+      const trackInfo = getSubjectTrackAndPercentages(selectedClassData?.className);
+      
+      // Create workbook
+      const workbook = XLSX.utils.book_new();
+      
+      // Create detailed grades sheet
+      const detailedGradesData = [
+        // Header rows
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [],
+        ['DETAILED GRADES REPORT'],
+        [`Date: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'N/A'}`],
+        [`Term: ${currentTerm ? currentTerm.termName : 'N/A'}`],
+        [`Class: ${selectedClassData?.className || 'N/A'}`],
+        [`Section: ${selectedSection}`],
+        [`Quarter: ${selectedQuarter}`],
+        [],
+        // Table headers
+        ['Student No.', 'Student Name', 'Written Works HPS', 'Written Works RAW', 'Written Works PS', 'Written Works WS', 
+         'Performance Tasks HPS', 'Performance Tasks RAW', 'Performance Tasks PS', 'Performance Tasks WS',
+         'Quarterly Exam Score', 'Initial Grade', 'Quarterly Grade']
+      ];
+
+      // Add student data
+      students.forEach(student => {
+        const scores = calculateRawScoresAndHPS(student._id);
+        const writtenPS = scores.writtenWorksHPS > 0 ? (scores.writtenWorksRAW / scores.writtenWorksHPS) * 100 : 0;
+        const writtenWS = writtenPS * trackInfo.percentages.written / 100;
+        const performancePS = scores.performanceTasksHPS > 0 ? (scores.performanceTasksRAW / scores.performanceTasksHPS) * 100 : 0;
+        const performanceWS = performancePS * trackInfo.percentages.performance / 100;
+        const initialGrade = writtenWS + performanceWS;
+        const quarterlyScore = grades[student._id]?.quarterlyExam || 0;
+        const finalGrade = calculateFinalGrade(student._id, selectedClassData?.className, quarterlyScore);
+
+        detailedGradesData.push([
+          student.schoolID,
+          `${student.lastname}, ${student.firstname} ${student.middlename || ''}`,
+          scores.writtenWorksHPS,
+          scores.writtenWorksRAW,
+          Math.round(writtenPS * 100) / 100,
+          Math.round(writtenWS * 100) / 100,
+          scores.performanceTasksHPS,
+          scores.performanceTasksRAW,
+          Math.round(performancePS * 100) / 100,
+          Math.round(performanceWS * 100) / 100,
+          quarterlyScore,
+          Math.round(initialGrade * 100) / 100,
+          finalGrade
+        ]);
+      });
+
+      // Create grade management sheet
+      const gradeManagementData = [
+        // Header rows
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [],
+        ['GRADE MANAGEMENT REPORT'],
+        [`Date: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'N/A'}`],
+        [`Term: ${currentTerm ? currentTerm.termName : 'N/A'}`],
+        [`Class: ${selectedClassData?.className || 'N/A'}`],
+        [`Section: ${selectedSection}`],
+        [],
+        // Table headers
+        ['Student ID', 'Student Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Term Final Grade', 'Remarks']
+      ];
+
+      // Add grade management data
+      students.forEach(student => {
+        const q1Grade = quarterlyGrades[student._id]?.Q1 || '';
+        const q2Grade = quarterlyGrades[student._id]?.Q2 || '';
+        const q3Grade = quarterlyGrades[student._id]?.Q3 || '';
+        const q4Grade = quarterlyGrades[student._id]?.Q4 || '';
+        
+        // Calculate term final grade (average of available quarters)
+        const grades = [q1Grade, q2Grade, q3Grade, q4Grade].filter(grade => grade !== '');
+        const termFinalGrade = grades.length > 0 ? (grades.reduce((sum, grade) => sum + parseFloat(grade), 0) / grades.length).toFixed(1) : '';
+        
+        // Determine remarks
+        let remarks = '';
+        if (termFinalGrade) {
+          const finalGrade = parseFloat(termFinalGrade);
+          remarks = finalGrade >= 75 ? 'PASSED' : 'REPEAT';
+        }
+
+        gradeManagementData.push([
+          student.schoolID,
+          `${student.lastname}, ${student.firstname} ${student.middlename || ''}`,
+          q1Grade,
+          q2Grade,
+          q3Grade,
+          q4Grade,
+          termFinalGrade,
+          remarks
+        ]);
+      });
+
+      // Add footer to both sheets
+      const footerData = [
+        [],
+        ['Hospital Tel. Nos: 831-9731/36;831-5641/49 www.sanjuandedios.org College Tel.Nos.: 551-2756; 551-2763 www.sjdefi.edu.ph'],
+        [`Report generated by JuanLMS System - ${new Date().toLocaleString()}`]
+      ];
+
+      // Create worksheets with footer data
+      const detailedGradesWithFooter = [...detailedGradesData, ...footerData];
+      const gradeManagementWithFooter = [...gradeManagementData, ...footerData];
+      
+      const detailedGradesWS = XLSX.utils.aoa_to_sheet(detailedGradesWithFooter);
+      const gradeManagementWS = XLSX.utils.aoa_to_sheet(gradeManagementWithFooter);
+      
+      XLSX.utils.book_append_sheet(workbook, detailedGradesWS, 'Detailed Grades');
+      XLSX.utils.book_append_sheet(workbook, gradeManagementWS, 'Grade Management');
+
+      // Generate and download file
+      const fileName = `Grades_${selectedClassData?.className}_${selectedSection}_${selectedQuarter}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      
+      showModal('Success', 'Grades exported to Excel successfully!', 'success');
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      showModal('Error', 'Failed to export grades to Excel', 'error');
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
+  // Export to PDF function
+  const exportToPDF = async () => {
+    if (!selectedClass || !selectedSection || students.length === 0) {
+      showModal('Error', 'Please select a class and section with students first', 'error');
+      return;
+    }
+
+    setExportingPDF(true);
+    try {
+      const selectedClassData = classes.find(c => c._id === selectedClass);
+      const trackInfo = getSubjectTrackAndPercentages(selectedClassData?.className);
+      
+      // Create HTML content for PDF
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Grades Report</title>
+          <style>
+            @page {
+              size: A4;
+              margin: 0.5in;
+            }
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 0;
+              font-size: 12px;
+            }
+            * {
+              box-sizing: border-box;
+            }
+            .header {
+              display: flex;
+              align-items: center;
+              margin-bottom: 30px;
+              border-bottom: 2px solid #333;
+              padding-bottom: 20px;
+            }
+            .logo {
+              width: 80px;
+              height: 80px;
+              margin-right: 20px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .logo img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            .institution-info {
+              flex: 1;
+              text-align: center;
+            }
+            .institution-name {
+              font-size: 18px;
+              text-align: center;
+              font-weight: bold;
+              margin: 0;
+            }
+            .institution-address {
+              font-size: 16px;
+              text-align: center;
+              margin: 0;
+            }
+            .institution-accreditation {
+              font-size: 13px;
+              text-align: center;
+              margin: 0;
+            }
+            .report-info {
+              text-align: right;
+              margin-left: auto;
+            }
+            .report-title {
+              font-weight: bold;
+              margin: 0;
+              font-size: 14px;
+            }
+            .report-date {
+              margin: 5px 0 0 0;
+              font-size: 12px;
+            }
+            .grades-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+              table-layout: fixed;
+            }
+            .grades-table th,
+            .grades-table td {
+              border: 1px solid #333;
+              padding: 6px;
+              text-align: center;
+              font-size: 10px;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+            }
+            .grades-table th {
+              background-color: #f0f0f0;
+              font-weight: bold;
+            }
+            .student-name {
+              text-align: left;
+              font-weight: bold;
+            }
+            .student-id {
+              text-align: left;
+              font-size: 10px;
+              color: #666;
+            }
+            .footer {
+              margin-top: 30px;
+              border-top: 1px solid #333;
+              padding-top: 15px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              font-size: 10px;
+              color: #333;
+            }
+            .footer-left {
+              text-align: left;
+            }
+            .footer-right {
+              text-align: right;
+            }
+            .footer-logo {
+              width: 30px;
+              height: 30px;
+            }
+            .footer-logo img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            .section-break {
+              page-break-before: always;
+              margin-top: 30px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo-section">
+              <div class="logo">
+                <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
+              </div>
+            </div>
+            <div class="institution-info">
+              <h1 class="institution-name">SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.</h1>
+              <p class="institution-address">2772-2774 Roxas Boulevard, Pasay City 1300 Philippines</p>
+              <p class="institution-accreditation">PAASCU Accredited - COLLEGE</p>
+            </div>
+            <div class="report-info">
+              <p class="report-title">Grades Report</p>
+              <p class="report-date">Date: ${new Date().toLocaleDateString()}</p>
+            </div>
+          </div>
+          
+          <div style="margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #00418B;">
+            <h3 style="margin: 0 0 10px 0; color: #00418B; font-size: 14px;">REPORT SUMMARY</h3>
+            <p style="margin: 5px 0; font-size: 12px;"><strong>Academic Year:</strong> ${academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'N/A'}</p>
+            <p style="margin: 5px 0; font-size: 12px;"><strong>Term:</strong> ${currentTerm ? currentTerm.termName : 'N/A'}</p>
+            <p style="margin: 5px 0; font-size: 12px;"><strong>Class:</strong> ${selectedClassData?.className || 'N/A'}</p>
+            <p style="margin: 5px 0; font-size: 12px;"><strong>Section:</strong> ${selectedSection}</p>
+            <p style="margin: 5px 0; font-size: 12px;"><strong>Quarter:</strong> ${selectedQuarter}</p>
+            <p style="margin: 5px 0; font-size: 12px;"><strong>Total Students:</strong> ${students.length}</p>
+          </div>
+          
+          <h2 style="margin: 30px 0 20px 0; color: #00418B; font-size: 16px;">DETAILED GRADES - ${selectedQuarter}</h2>
+          
+          <table class="grades-table">
+            <thead>
+              <tr>
+                <th style="width: 8%;">Student No.</th>
+                <th style="width: 20%;">Student Name</th>
+                <th style="width: 6%;">WW HPS</th>
+                <th style="width: 6%;">WW RAW</th>
+                <th style="width: 6%;">WW PS</th>
+                <th style="width: 6%;">WW WS</th>
+                <th style="width: 6%;">PT HPS</th>
+                <th style="width: 6%;">PT RAW</th>
+                <th style="width: 6%;">PT PS</th>
+                <th style="width: 6%;">PT WS</th>
+                <th style="width: 6%;">QE Score</th>
+                <th style="width: 6%;">Initial</th>
+                <th style="width: 6%;">Final</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${students.map(student => {
+                const scores = calculateRawScoresAndHPS(student._id);
+                const writtenPS = scores.writtenWorksHPS > 0 ? (scores.writtenWorksRAW / scores.writtenWorksHPS) * 100 : 0;
+                const writtenWS = writtenPS * trackInfo.percentages.written / 100;
+                const performancePS = scores.performanceTasksHPS > 0 ? (scores.performanceTasksRAW / scores.performanceTasksHPS) * 100 : 0;
+                const performanceWS = performancePS * trackInfo.percentages.performance / 100;
+                const initialGrade = writtenWS + performanceWS;
+                const quarterlyScore = grades[student._id]?.quarterlyExam || 0;
+                const finalGrade = calculateFinalGrade(student._id, selectedClassData?.className, quarterlyScore);
+                
+                return `
+                  <tr>
+                    <td class="student-id">${student.schoolID}</td>
+                    <td class="student-name">${student.lastname}, ${student.firstname} ${student.middlename || ''}</td>
+                    <td>${scores.writtenWorksHPS}</td>
+                    <td>${scores.writtenWorksRAW}</td>
+                    <td>${Math.round(writtenPS * 100) / 100}</td>
+                    <td>${Math.round(writtenWS * 100) / 100}</td>
+                    <td>${scores.performanceTasksHPS}</td>
+                    <td>${scores.performanceTasksRAW}</td>
+                    <td>${Math.round(performancePS * 100) / 100}</td>
+                    <td>${Math.round(performanceWS * 100) / 100}</td>
+                    <td>${quarterlyScore}</td>
+                    <td>${Math.round(initialGrade * 100) / 100}</td>
+                    <td>${finalGrade}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+          
+          <div class="section-break">
+            <h2 style="margin: 30px 0 20px 0; color: #00418B; font-size: 16px;">GRADE MANAGEMENT</h2>
+            
+            <table class="grades-table">
+              <thead>
+                <tr>
+                  <th style="width: 12%;">Student ID</th>
+                  <th style="width: 25%;">Student Name</th>
+                  <th style="width: 8%;">Q1</th>
+                  <th style="width: 8%;">Q2</th>
+                  <th style="width: 8%;">Q3</th>
+                  <th style="width: 8%;">Q4</th>
+                  <th style="width: 10%;">Term Final</th>
+                  <th style="width: 10%;">Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${students.map(student => {
+                  const q1Grade = quarterlyGrades[student._id]?.Q1 || '';
+                  const q2Grade = quarterlyGrades[student._id]?.Q2 || '';
+                  const q3Grade = quarterlyGrades[student._id]?.Q3 || '';
+                  const q4Grade = quarterlyGrades[student._id]?.Q4 || '';
+                  
+                  const grades = [q1Grade, q2Grade, q3Grade, q4Grade].filter(grade => grade !== '');
+                  const termFinalGrade = grades.length > 0 ? (grades.reduce((sum, grade) => sum + parseFloat(grade), 0) / grades.length).toFixed(1) : '';
+                  
+                  let remarks = '';
+                  if (termFinalGrade) {
+                    const finalGrade = parseFloat(termFinalGrade);
+                    remarks = finalGrade >= 75 ? 'PASSED' : 'REPEAT';
+                  }
+                  
+                  return `
+                    <tr>
+                      <td class="student-id">${student.schoolID}</td>
+                      <td class="student-name">${student.lastname}, ${student.firstname} ${student.middlename || ''}</td>
+                      <td>${q1Grade}</td>
+                      <td>${q2Grade}</td>
+                      <td>${q3Grade}</td>
+                      <td>${q4Grade}</td>
+                      <td>${termFinalGrade}</td>
+                      <td>${remarks}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          
+          <div class="footer">
+            <div class="footer-left">
+              <p>Hospital Tel. Nos: 831-9731/36;831-5641/49 www.sanjuandedios.org College Tel.Nos.: 551-2756; 551-2763 www.sjdefi.edu.ph</p>
+            </div>
+            <div class="footer-right">
+              <div class="footer-logo"> 
+                <img src="/src/assets/logo/images.png" alt="San Juan de Dios Hospital Seal" />
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Create a new window for PDF generation
+      const printWindow = window.open('', '_blank');
+      
+      if (!printWindow) {
+        throw new Error('Popup blocked. Please allow popups for this site.');
+      }
+      
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      
+      // Wait for content to load then print
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+          setTimeout(() => {
+            printWindow.close();
+          }, 1000);
+        }, 1000);
+      };
+      
+      // Fallback if onload doesn't fire
+      setTimeout(() => {
+        if (printWindow.document.readyState === 'complete') {
+          printWindow.print();
+          setTimeout(() => printWindow.close(), 1000);
+        }
+      }, 2000);
+
+      showModal('Success', 'Grades exported to PDF successfully!', 'success');
+    } catch (error) {
+      console.error('Error exporting to PDF:', error);
+      showModal('Error', 'Failed to export grades to PDF', 'error');
+    } finally {
+      setExportingPDF(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -1306,6 +1775,20 @@ export default function Faculty_Grades() {
                   Last updated: {lastUpdated.toLocaleTimeString()}
                 </div>
               )}
+              <button
+                  onClick={exportToExcel}
+                  disabled={exportingExcel || exportingPDF || !selectedClass || !selectedSection || students.length === 0}
+                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {exportingExcel ? 'Exporting...' : 'Export Excel'}
+                </button>
+                <button
+                  onClick={exportToPDF}
+                  disabled={exportingExcel || exportingPDF || !selectedClass || !selectedSection || students.length === 0}
+                  className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {exportingPDF ? 'Exporting...' : 'Export PDF'}
+                </button>
             </div>
           )}
         </div>
@@ -1370,6 +1853,7 @@ export default function Faculty_Grades() {
                 >
                   {saving ? 'Saving...' : 'Save Grades'}
                 </button>
+                
               </div>
             </div>
             
