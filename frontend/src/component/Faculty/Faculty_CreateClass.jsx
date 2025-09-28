@@ -361,7 +361,13 @@ export default function FacultyCreateClass() {
       { headers: { Authorization: `Bearer ${token}` } }
     );
     const assignments = await res.json();
-    return assignments.length > 0;
+    
+    // Check if student is both active AND approved
+    const approvedAssignment = assignments.find(assignment => 
+      assignment.status === 'active' && assignment.isApproved === true
+    );
+    
+    return approvedAssignment !== undefined;
   }
 
   // Update handleAddStudent to check assignment
@@ -519,22 +525,25 @@ export default function FacultyCreateClass() {
 
   // Download template function
   const handleDownloadTemplate = () => {
-    // Create template data with headers and sample rows
+    // Create template data with headers and sample rows matching student assignments export format
     const templateData = [
       {
-        'School ID': '2024-001',
-        'Full Name': 'Dela Cruz, Juan Miguel',
-        'Email': 'juan.delacruz@example.com'
+        'Student School ID': '25-00016',
+        'Student Name': 'Hannah Reyes',
+        'Track Name': 'Academic Track',
+        'Strand Name': 'Accountancy, Business and Management (ABM)',
+        'Section Name': 'St. Augustine',
+        'Grade Level': 'Grade 11',
+        'Status': 'Active'
       },
       {
-        'School ID': '2024-002', 
-        'Full Name': 'Santos, Maria Elena',
-        'Email': 'maria.santos@example.com'
-      },
-      {
-        'School ID': '2024-003',
-        'Full Name': 'Garcia, Jose Rizal',
-        'Email': 'jose.garcia@example.com'
+        'Student School ID': '25-00070',
+        'Student Name': 'Isabel De Marco',
+        'Track Name': 'Academic Track',
+        'Strand Name': 'Accountancy, Business and Management (ABM)',
+        'Section Name': 'St. Athanasius',
+        'Grade Level': 'Grade 11',
+        'Status': 'Active'
       }
     ];
 
@@ -544,17 +553,21 @@ export default function FacultyCreateClass() {
 
     // Set column widths
     worksheet['!cols'] = [
-      { wch: 15 }, // School ID
-      { wch: 30 }, // Full Name
-      { wch: 35 }  // Email
+      { wch: 18 }, // Student School ID
+      { wch: 25 }, // Student Name
+      { wch: 20 }, // Track Name
+      { wch: 35 }, // Strand Name
+      { wch: 20 }, // Section Name
+      { wch: 15 }, // Grade Level
+      { wch: 12 }  // Status
     ];
 
     // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Student Template');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Student Assignments');
 
     // Generate filename with current date
     const currentDate = new Date().toISOString().split('T')[0];
-    const filename = `Student_Bulk_Upload_Template_${currentDate}.xlsx`;
+    const filename = `Student_Assignments_Template_${currentDate}.xlsx`;
 
     // Download the file
     XLSX.writeFile(workbook, filename);
@@ -591,9 +604,20 @@ export default function FacultyCreateClass() {
       let skippedNames = [];
       let notFoundNames = [];
 
+      // Validate that the file has the expected columns
+      if (json.length > 0) {
+        const firstRow = json[0];
+        const hasRequiredColumns = firstRow['Student School ID'] || firstRow['School ID'] || firstRow['schoolID'];
+        if (!hasRequiredColumns) {
+          setBatchMessage('Error: The uploaded file does not have the correct format. Please download the template and use the correct column names.');
+          setBatchLoading(false);
+          return;
+        }
+      }
+
       for (const row of json) {
-        // Try to get School ID first, then fallback to email for backward compatibility
-        const schoolID = (row['School ID'] || row['schoolID'] || row['SchoolID'] || "").trim();
+        // Try to get Student School ID first, then fallback to other formats for backward compatibility
+        const schoolID = (row['Student School ID'] || row['School ID'] || row['schoolID'] || row['SchoolID'] || "").trim();
         const email = (row.Email || row["email"] || row["School Email"] || row["school email"] || "").trim();
         
         if (!schoolID && !email) {
@@ -773,7 +797,7 @@ export default function FacultyCreateClass() {
           
             <div className="border rounded-lg p-4 bg-white mb-4 w-full ">
               <div className="font-bold mb-2">Bulk Assign Students</div>
-              <div className="text-sm text-gray-600 mb-2">Upload Excel File with School ID, Full Name, and Email columns</div>
+              <div className="text-sm text-gray-600 mb-2">Upload Excel File with Student School ID, Student Name, Track Name, Strand Name, Section Name, Grade Level, and Status columns</div>
               <div className="text-xs text-blue-600 mb-2">💡 Download the template to see the correct format. The system will search for students using School ID first.</div>
               <div className="flex items-center gap-4 mb-2">
                 <input

@@ -125,6 +125,16 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [registrants, setRegistrants] = useState([]);
 
+  // Filter states for student assignments
+  const [studentSectionFilter, setStudentSectionFilter] = useState('');
+  const [studentStatusFilter, setStudentStatusFilter] = useState('');
+  const [studentSearchFilter, setStudentSearchFilter] = useState('');
+
+  // Filter states for faculty assignments
+  const [facultySectionFilter, setFacultySectionFilter] = useState('');
+  const [facultyStatusFilter, setFacultyStatusFilter] = useState('');
+  const [facultySearchFilter, setFacultySearchFilter] = useState('');
+
   // Add state for search functionality for Faculty and Students
   const [facultySearchTerm, setFacultySearchTerm] = useState('');
   const [showFacultySuggestions, setShowFacultySuggestions] = useState(false);
@@ -5835,6 +5845,128 @@ Validation issues (${skippedCount} items):
   const uniqueStrandNames = Array.from(
     new Set(filteredStrands.map(strand => strand.strandName))
   );
+
+  // Filtered student assignments based on filters
+  const filteredStudentAssignments = studentAssignments.filter(assignment => {
+    // Filter by section
+    if (studentSectionFilter && assignment.sectionName !== studentSectionFilter) {
+      return false;
+    }
+    
+    // Filter by status
+    if (studentStatusFilter) {
+      if (studentStatusFilter === 'active' && !isStudentApproved(assignment)) {
+        return false;
+      }
+      if (studentStatusFilter === 'pending' && isStudentApproved(assignment)) {
+        return false;
+      }
+      if (studentStatusFilter === 'archived' && assignment.status !== 'archived') {
+        return false;
+      }
+    }
+    
+    // Filter by search term
+    if (studentSearchFilter) {
+      const searchTerm = studentSearchFilter.toLowerCase();
+      const student = students.find(s => s._id === assignment.studentId);
+      const schoolId = student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '';
+      const studentName = assignment.studentName || 'Unknown';
+      
+      if (!schoolId.toLowerCase().includes(searchTerm) && 
+          !studentName.toLowerCase().includes(searchTerm)) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+
+  // Filtered faculty assignments based on filters
+  const filteredFacultyAssignments = facultyAssignments.filter(assignment => {
+    // Filter by section
+    if (facultySectionFilter && assignment.sectionName !== facultySectionFilter) {
+      return false;
+    }
+    
+    // Filter by status
+    if (facultyStatusFilter) {
+      if (facultyStatusFilter === 'active' && assignment.status !== 'active') {
+        return false;
+      }
+      if (facultyStatusFilter === 'archived' && assignment.status !== 'archived') {
+        return false;
+      }
+    }
+    
+    // Filter by search term
+    if (facultySearchFilter) {
+      const searchTerm = facultySearchFilter.toLowerCase();
+      const facultyName = assignment.facultyName?.toLowerCase() || '';
+      const schoolId = (assignment.facultySchoolID || '').toLowerCase();
+      const trackName = assignment.trackName?.toLowerCase() || '';
+      const strandName = assignment.strandName?.toLowerCase() || '';
+      const sectionName = assignment.sectionName?.toLowerCase() || '';
+      const subjectName = assignment.subjectName?.toLowerCase() || '';
+      
+      if (!facultyName.includes(searchTerm) && 
+          !schoolId.includes(searchTerm) && 
+          !trackName.includes(searchTerm) && 
+          !strandName.includes(searchTerm) && 
+          !sectionName.includes(searchTerm) &&
+          !subjectName.includes(searchTerm)) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+
+  // Export student assignments to Excel
+  const handleExportStudentAssignments = async () => {
+    try {
+      // Export all students (active and pending)
+      const allStudents = filteredStudentAssignments.filter(assignment => 
+        assignment.status === 'active' // Only include non-archived students
+      );
+
+      if (allStudents.length === 0) {
+        alert('No students found to export.');
+        return;
+      }
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(
+        allStudents.map(assignment => {
+          const student = students.find(s => s._id === assignment.studentId);
+          const status = isStudentApproved(assignment) ? 'Active' : 'Pending Approval';
+          return {
+            'Student School ID': student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
+            'Student Name': assignment.studentName || 'Unknown',
+            'Track Name': assignment.trackName,
+            'Strand Name': assignment.strandName,
+            'Section Name': assignment.sectionName,
+            'Grade Level': assignment.gradeLevel,
+            'Status': status
+          };
+        })
+      );
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Student Assignments');
+
+      // Generate filename
+      const fileName = `${termDetails?.schoolYear} - ${termDetails?.termName}${quarterData ? ` - ${quarterData.quarterName}` : ''} - Student Assignments.xlsx`;
+
+      // Save file
+      XLSX.writeFile(wb, fileName);
+    } catch (error) {
+      console.error('Error exporting student assignments:', error);
+      alert('Error exporting student assignments. Please try again.');
+    }
+  };
+
   return (
     
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -6077,7 +6209,7 @@ Validation issues (${skippedCount} items):
                   />
                   <button
                     onClick={() => importFileInputRef.current.click()} // Trigger file input click
-                    className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                    className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                   >
                     Import Term Data
                   </button>
@@ -6249,7 +6381,7 @@ Validation issues (${skippedCount} items):
                   <div className="space-y-2">
                     <button
                       type="submit"
-                      className={`w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                       disabled={termDetails.status === 'archived'}
                     >
                       {isEditMode ? 'Save Changes' : 'Add New Track'}
@@ -6287,7 +6419,7 @@ Validation issues (${skippedCount} items):
                   <h4 className="text-2xl font-semibold mb-2 ">Tracks List</h4>
                     <div className="flex justify-end mb-4">
                     <button
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded"
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
                       onClick={() => {
                         setShowTrackModal(true);
                         setIsEditMode(false);
@@ -6516,7 +6648,7 @@ Validation issues (${skippedCount} items):
                   <div className="space-y-2">
                     <button
                       type="submit"
-                      className={`w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                       disabled={termDetails.status === 'archived'}
                     >
                       {isStrandEditMode ? 'Save Changes' : 'Add New Strand'}
@@ -6549,7 +6681,7 @@ Validation issues (${skippedCount} items):
                   <div className="flex justify-end mb-4">
                   <button
                     type="button"
-                    className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
                     onClick={() => {
                       setIsStrandModalOpen(true);
                       setIsStrandEditMode(false);
@@ -6775,7 +6907,7 @@ Validation issues (${skippedCount} items):
                     <div className="flex gap-2">
                       <button
                         type="submit"
-                        className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                         disabled={termDetails.status === 'archived'}
                       >
                         {isSectionEditMode ? 'Save Changes' : 'Add New Section'}
@@ -6808,7 +6940,7 @@ Validation issues (${skippedCount} items):
                     <div className="flex justify-end">
                     <button
                       type="button"
-                      className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
                       onClick={() => {
                         setIsSectionModalOpen(true);
                         setIsSectionEditMode(false);
@@ -6960,7 +7092,7 @@ Validation issues (${skippedCount} items):
                         <button
                           onClick={handleConfirmSectionUpload}
                           disabled={isSectionUploading || !sectionPreviewData.some((_, index) => sectionValidationStatus[index]?.valid)}
-                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!sectionPreviewData.some((_, index) => sectionValidationStatus[index]?.valid) || isSectionUploading)
+                          className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${(!sectionPreviewData.some((_, index) => sectionValidationStatus[index]?.valid) || isSectionUploading)
                             ? 'opacity-50 cursor-not-allowed'
                             : ''
                             }`}
@@ -6987,7 +7119,7 @@ Validation issues (${skippedCount} items):
                   <div className="flex justify-end">
                     <button
                       type="button"
-                      className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
                       onClick={() => {
                         setIsSubjectModalOpen(true);
                         setIsSubjectEditMode(false);
@@ -7106,7 +7238,7 @@ Validation issues (${skippedCount} items):
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
-                            className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                             disabled={termDetails.status === 'archived'}
                           >
                             {isSubjectEditMode ? 'Save Changes' : 'Add New Subject'}
@@ -7273,7 +7405,7 @@ Validation issues (${skippedCount} items):
                         <button
                           onClick={handleConfirmSubjectUpload}
                           disabled={isSubjectUploading || !subjectPreviewData.some((_, index) => subjectValidationStatus[index]?.valid)}
-                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!subjectPreviewData.some((_, index) => subjectValidationStatus[index]?.valid) || isSubjectUploading)
+                          className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${(!subjectPreviewData.some((_, index) => subjectValidationStatus[index]?.valid) || isSubjectUploading)
                             ? 'opacity-50 cursor-not-allowed'
                             : ''
                             }`}
@@ -7300,7 +7432,7 @@ Validation issues (${skippedCount} items):
                   <div className="flex justify-end">
                     <button
                       type="button"
-                      className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
                       onClick={() => {
                         setIsFacultyModalOpen(true);
                         setIsFacultyEditMode(false);
@@ -7515,7 +7647,7 @@ Validation issues (${skippedCount} items):
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
-                            className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                             disabled={termDetails.status === 'archived'}
                           >
                             {isFacultyEditMode ? 'Save Changes' : 'Assign Faculty'}
@@ -7543,6 +7675,66 @@ Validation issues (${skippedCount} items):
                 )}
                 {/* Faculty Assignments List */}
                 <div className="mt-8">
+                  {/* Faculty Assignment Filters */}
+                  <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Section</label>
+                        <select
+                          value={facultySectionFilter}
+                          onChange={(e) => setFacultySectionFilter(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">All Sections</option>
+                          {sections.map(section => (
+                            <option key={section._id} value={section.sectionName}>
+                              {section.sectionName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Status</label>
+                        <select
+                          value={facultyStatusFilter}
+                          onChange={(e) => setFacultyStatusFilter(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">All Status</option>
+                          <option value="active">Active</option>
+                          <option value="archived">Archived</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                        <input
+                          type="text"
+                          placeholder="Search faculty assignments..."
+                          value={facultySearchFilter}
+                          onChange={(e) => setFacultySearchFilter(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <button
+                          onClick={() => {
+                            setFacultySectionFilter('');
+                            setFacultyStatusFilter('');
+                            setFacultySearchFilter('');
+                          }}
+                          className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                        >
+                          Clear Filters
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">
+                        Showing {filteredFacultyAssignments.length} of {facultyAssignments.length} faculty assignments
+                      </span>
+                    </div>
+                  </div>
+                  
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                   <thead>
                       <tr className="bg-gray-100 text-left">
@@ -7558,14 +7750,14 @@ Validation issues (${skippedCount} items):
                       </tr>
                     </thead>
                     <tbody>
-                      {facultyAssignments.length === 0 ? (
+                      {filteredFacultyAssignments.length === 0 ? (
                         <tr>
                           <td colSpan="9" className="p-3 border text-center text-gray-500">
                             No faculty assignments found.
                           </td>
                         </tr>
                       ) : (
-                        paginate(facultyAssignments, facultyAssignPage, ROWS_PER_PAGE).slice.map((assignment) => (
+                        paginate(filteredFacultyAssignments, facultyAssignPage, ROWS_PER_PAGE).slice.map((assignment) => (
                           <tr key={assignment._id}>
                             <td className="p-3 border">{assignment.facultySchoolID || ''}</td>
                             <td className="p-3 border">{assignment.facultyName}</td>
@@ -7622,11 +7814,11 @@ Validation issues (${skippedCount} items):
                       )}
                     </tbody>
                   </table>
-                  {facultyAssignments.length > 0 && (
+                  {filteredFacultyAssignments.length > 0 && (
                     <div className="flex justify-center items-center gap-2 mt-3">
                       <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setFacultyAssignPage(p => Math.max(1, p - 1))} disabled={facultyAssignPage === 1}>{'<'}</button>
-                      <span className="text-xs">Page {paginate(facultyAssignments, facultyAssignPage, ROWS_PER_PAGE).currentPage} of {paginate(facultyAssignments, facultyAssignPage, ROWS_PER_PAGE).totalPages}</span>
-                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setFacultyAssignPage(p => Math.min(paginate(facultyAssignments, facultyAssignPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={facultyAssignPage === paginate(facultyAssignments, facultyAssignPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
+                      <span className="text-xs">Page {paginate(filteredFacultyAssignments, facultyAssignPage, ROWS_PER_PAGE).currentPage} of {paginate(filteredFacultyAssignments, facultyAssignPage, ROWS_PER_PAGE).totalPages}</span>
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setFacultyAssignPage(p => Math.min(paginate(filteredFacultyAssignments, facultyAssignPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={facultyAssignPage === paginate(filteredFacultyAssignments, facultyAssignPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
                     </div>
                   )}
                 </div>
@@ -7713,7 +7905,7 @@ Validation issues (${skippedCount} items):
                         <button
                           onClick={handleConfirmFacultyAssignmentUpload}
                           disabled={isFacultyAssignmentUploading || !facultyAssignmentPreviewData.some((_, index) => facultyAssignmentValidationStatus[index]?.valid)}
-                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!facultyAssignmentPreviewData.some((_, index) => facultyAssignmentValidationStatus[index]?.valid) || isFacultyAssignmentUploading)
+                          className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${(!facultyAssignmentPreviewData.some((_, index) => facultyAssignmentValidationStatus[index]?.valid) || isFacultyAssignmentUploading)
                             ? 'opacity-50 cursor-not-allowed'
                             : ''
                             }`}
@@ -7737,10 +7929,18 @@ Validation issues (${skippedCount} items):
                 {/* Assign Enrolled Student Button */}
                 <div className="flex justify-between items-center mt-5 mb-4">
                   <h4 className="text-2xl font-semibold mb-2">Student Assignments</h4>
-                  <div className="flex justify-end">
+                  <div className="flex gap-2">
                     <button
                       type="button"
-                      className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                      className="bg-blue-900 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      onClick={handleExportStudentAssignments}
+                      disabled={termDetails.status === 'archived'}
+                    >
+                      Export Classlist
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       onClick={() => {
                         setIsStudentModalOpen(true);
                         setIsStudentEditMode(false);
@@ -7751,6 +7951,70 @@ Validation issues (${skippedCount} items):
                       disabled={termDetails.status === 'archived'}
                     >
                       Assign Enrolled Student
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filter Controls */}
+                <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Section</label>
+                      <select
+                        value={studentSectionFilter}
+                        onChange={(e) => setStudentSectionFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">All Sections</option>
+                        {sections
+                          .filter(section => 
+                            section.schoolYear === termDetails?.schoolYear && 
+                            section.termName === termDetails?.termName
+                          )
+                          .map(section => (
+                            <option key={section._id} value={section.sectionName}>
+                              {section.sectionName}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Status</label>
+                      <select
+                        value={studentStatusFilter}
+                        onChange={(e) => setStudentStatusFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="pending">Pending Approval</option>
+                        <option value="archived">Archived</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Search Student</label>
+                      <input
+                        type="text"
+                        value={studentSearchFilter}
+                        onChange={(e) => setStudentSearchFilter(e.target.value)}
+                        placeholder="Search by name or school ID..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-2 flex justify-between items-center">
+                    <span className="text-sm text-gray-600">
+                      Showing {filteredStudentAssignments.length} of {studentAssignments.length} students
+                    </span>
+                    <button
+                      onClick={() => {
+                        setStudentSectionFilter('');
+                        setStudentStatusFilter('');
+                        setStudentSearchFilter('');
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Clear Filters
                     </button>
                   </div>
                 </div>
@@ -7947,7 +8211,7 @@ Validation issues (${skippedCount} items):
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
-                            className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                             disabled={termDetails.status === 'archived'}
                           >
                             {isStudentEditMode ? 'Save Changes' : 'Assign Enrolled Student'}
@@ -8065,7 +8329,7 @@ Validation issues (${skippedCount} items):
                         <button
                           onClick={handleConfirmStudentAssignmentUpload}
                           disabled={isStudentUploading || !studentPreviewData.some((_, index) => studentValidationStatus[index]?.valid)}
-                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!studentPreviewData.some((_, index) => studentValidationStatus[index]?.valid) || isStudentUploading)
+                          className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${(!studentPreviewData.some((_, index) => studentValidationStatus[index]?.valid) || isStudentUploading)
                             ? 'opacity-50 cursor-not-allowed'
                             : ''
                             }`}
@@ -8093,14 +8357,14 @@ Validation issues (${skippedCount} items):
                       </tr>
                     </thead>
                     <tbody>
-                      {studentAssignments.length === 0 ? (
+                      {filteredStudentAssignments.length === 0 ? (
                         <tr>
                           <td colSpan="8" className="p-3 border text-center text-gray-500">
                             No student assignments found.
                           </td>
                         </tr>
                       ) : (
-                        paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).slice.map((assignment) => {
+                        paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).slice.map((assignment) => {
                           const student = students.find(s => s._id === assignment.studentId);
                           return (
                             <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
@@ -8234,7 +8498,7 @@ Validation issues (${skippedCount} items):
               <button
                 onClick={handleConfirmUpload}
                 disabled={isUploading || !previewTracks.some((_, index) => validationStatus[index]?.valid)}
-                className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!previewTracks.some((_, index) => validationStatus[index]?.valid) || isUploading)
+                className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${(!previewTracks.some((_, index) => validationStatus[index]?.valid) || isUploading)
                   ? 'opacity-50 cursor-not-allowed'
                   : ''
                   }`}

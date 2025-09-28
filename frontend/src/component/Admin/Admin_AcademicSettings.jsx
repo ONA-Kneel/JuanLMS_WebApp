@@ -574,6 +574,7 @@ export default function Admin_AcademicSettings() {
          setSuccessMessage(`${term.termName} has been activated`);
          setShowSuccessModal(true);
          fetchTerms(selectedYear);
+         fetchQuarters(selectedYear); // Refresh quarters to reflect backend changes
          refreshArchivedCountForYear(selectedYear);
        } else {
         const data = await res.json();
@@ -624,6 +625,7 @@ export default function Admin_AcademicSettings() {
            // If deactivating, refresh terms to show archived status
            if (selectedYear && selectedYear._id === year._id) {
              fetchTerms(selectedYear);
+             fetchQuarters(selectedYear); // Refresh quarters to reflect backend changes
            }
            fetchSchoolYears();
            setSuccessMessage(`School year set as ${newStatus}`);
@@ -870,6 +872,7 @@ export default function Admin_AcademicSettings() {
         setShowSuccessModal(true);
         
         fetchTerms(selectedYear);
+        fetchQuarters(selectedYear); // Refresh quarters to reflect backend changes
         refreshArchivedCountForYear(selectedYear);
       } else {
         const data = await res.json();
@@ -1105,9 +1108,9 @@ export default function Admin_AcademicSettings() {
       return;
     }
 
-    // Require the existing term to be archived before adding a second term
-    if (terms.length >= 1 && terms.some(t => t.status !== 'archived')) {
-      setTermError('Archive the previous term before adding a new one.');
+    // Require the existing term to be inactive before adding a second term
+    if (terms.length >= 1 && terms.some(t => t.status !== 'inactive' && t.status !== 'archived')) {
+      setTermError('Inactivate the previous term before adding a new one.');
       return;
     }
 
@@ -1655,14 +1658,14 @@ export default function Admin_AcademicSettings() {
                           <button
                             onClick={() => setShowAddTermModal(true)}
                             className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2 ${
-                              (terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status !== 'archived'))) ? 'opacity-50 cursor-not-allowed' : ''
+                              (terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status !== 'inactive' && t.status !== 'archived'))) ? 'opacity-50 cursor-not-allowed' : ''
                             }`}
-                            disabled={terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status !== 'archived'))}
+                            disabled={terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status !== 'inactive' && t.status !== 'archived'))}
                             title={
                               terms.length >= 2
                                 ? 'Maximum 2 terms allowed per school year'
-                                : (terms.length >= 1 && terms.some(t => t.status !== 'archived'))
-                                  ? 'Archive the previous term before adding a new one'
+                                : (terms.length >= 1 && terms.some(t => t.status !== 'inactive' && t.status !== 'archived'))
+                                  ? 'Inactivate the previous term before adding a new one'
                                   : 'Add New Term'
                             }
                           >
@@ -2544,7 +2547,10 @@ export default function Admin_AcademicSettings() {
                 <p className="text-gray-700 mb-6">{confirmMessage}</p>
                 <div className="flex justify-end gap-3">
                   <button
-                    onClick={() => setShowConfirmModal(false)}
+                    onClick={() => {
+                      setShowConfirmModal(false);
+                      setConfirmAction(null); // Clear the action to prevent execution
+                    }}
                     className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
                   >
                     Cancel
@@ -2553,6 +2559,7 @@ export default function Admin_AcademicSettings() {
                     onClick={() => {
                       if (confirmAction) confirmAction();
                       setShowConfirmModal(false);
+                      setConfirmAction(null); // Clear the action after execution
                     }}
                     className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                   >

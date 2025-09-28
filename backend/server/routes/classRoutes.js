@@ -8,6 +8,7 @@ import database from '../connect.cjs';
 import { ObjectId } from 'mongodb';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import User from '../models/User.js';
+import StudentAssignment from '../models/StudentAssignment.js';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -291,9 +292,29 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
           ]
         }).select('_id userID schoolID');
         
-        const allowed = validStudents.map(u => String(u._id));
+        // Filter to only include students who are active AND approved in the current term
+        const activeStudentIds = validStudents.map(student => student._id);
+        const studentAssignments = await StudentAssignment.find({
+          studentId: { $in: activeStudentIds },
+          schoolYear: classData.academicYear,
+          termName: classData.termName,
+          status: 'active'
+        }).select('studentId isApproved');
+
+        // Only include students who are both active and approved
+        const approvedStudentIdsSet = new Set(
+          studentAssignments
+            .filter(assignment => assignment.isApproved === true)
+            .map(assignment => String(assignment.studentId))
+        );
+        
+        const filteredActiveStudents = validStudents.filter(student => 
+          approvedStudentIdsSet.has(String(student._id))
+        );
+        
+        const allowed = filteredActiveStudents.map(u => String(u._id));
         classData.members = allowed;
-        console.log('[CREATE-CLASS] Filtered/normalized members (students only):', classData.members.length);
+        console.log('[CREATE-CLASS] Filtered/normalized members (approved active students only):', classData.members.length);
       } else {
         classData.members = [];
       }
@@ -930,4 +951,4 @@ router.get('/:classID/analyze-members', authenticateToken, async (req, res) => {
   }
 });
 
-export default router; 
+export default router;

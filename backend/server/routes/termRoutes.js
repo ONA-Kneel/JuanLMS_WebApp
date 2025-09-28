@@ -7,6 +7,7 @@ import Section from '../models/Section.js';
 import Subject from '../models/Subject.js';
 import Track from '../models/Track.js';
 import Strand from '../models/Strand.js';
+import Quarter from '../models/Quarter.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -165,6 +166,12 @@ router.patch('/:termId/archive', authenticateToken, async (req, res) => {
       StudentAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
       FacultyAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
       
+      // Archive quarters for this term
+      Quarter.updateMany(
+        { schoolYear: term.schoolYear, termName: term.termName }, 
+        { $set: { status: 'archived' } }
+      ),
+      
       // Archive structural entities by schoolYear and termName
       Track.updateMany(
         { schoolYear: term.schoolYear, termName: term.termName }, 
@@ -258,6 +265,12 @@ router.patch('/:id', authenticateToken, async (req, res) => {
           { $set: { status: 'active' } }
         ),
         
+        // Reactivate quarters for this term
+        Quarter.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'active' } }
+        ),
+        
         // Reactivate structural entities by schoolYear and termName
         Track.updateMany(
           { schoolYear: term.schoolYear, termName: term.termName }, 
@@ -309,6 +322,12 @@ router.patch('/:id', authenticateToken, async (req, res) => {
         // Archive assignments
         StudentAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
         FacultyAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
+        
+        // Archive quarters for this term
+        Quarter.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'archived' } }
+        ),
         
         // Archive structural entities by schoolYear and termName
         Track.updateMany(

@@ -2,6 +2,7 @@ import express from 'express';
 import StudentAssignment from '../models/StudentAssignment.js';
 import User from '../models/User.js'; // To populate student details
 import Term from '../models/Term.js';
+import Registrant from '../models/Registrant.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -19,9 +20,19 @@ router.get('/', authenticateToken, async (req, res) => {
 
     const assignments = await StudentAssignment.find(query).populate('studentId');
 
+    // Get all approved registrants for approval checking
+    const approvedRegistrants = await Registrant.find({ status: 'approved' }).select('schoolID');
+
     // Transform data to include student names directly and support manual entries
     const transformedAssignments = assignments.map(assignment => {
+      let isApproved = false;
+      
       if (assignment.studentId && assignment.studentId.firstname && assignment.studentId.lastname) {
+        const schoolID = assignment.studentId.getDecryptedSchoolID ? assignment.studentId.getDecryptedSchoolID() : assignment.studentId.schoolID;
+        isApproved = approvedRegistrants.some(registrant => 
+          registrant.schoolID && registrant.schoolID.trim() === schoolID?.trim()
+        );
+        
         return {
           _id: assignment._id,
           studentId: assignment.studentId._id,
@@ -32,14 +43,19 @@ router.get('/', authenticateToken, async (req, res) => {
           sectionName: assignment.sectionName,
           termId: assignment.termId,
           status: assignment.status,
-          schoolID: assignment.studentId.getDecryptedSchoolID ? assignment.studentId.getDecryptedSchoolID() : assignment.studentId.schoolID,
+          schoolID: schoolID,
           email: assignment.studentId.email,
           middlename: assignment.studentId.middlename,
           firstname: assignment.studentId.firstname,
           lastname: assignment.studentId.lastname,
+          isApproved: isApproved
         };
       }
       // Manual entry (no linked user)
+      isApproved = approvedRegistrants.some(registrant => 
+        registrant.schoolID && registrant.schoolID.trim() === assignment.studentSchoolID?.trim()
+      );
+      
       return {
         _id: assignment._id,
         studentId: assignment.studentId || null,
@@ -51,6 +67,7 @@ router.get('/', authenticateToken, async (req, res) => {
         termId: assignment.termId,
         status: assignment.status,
         schoolID: assignment.studentSchoolID || '',
+        isApproved: isApproved
       };
     });
 
@@ -373,4 +390,4 @@ router.get('/enrolled-subjects/:studentId', authenticateToken, async (req, res) 
   }
 });
 
-export default router; 
+export default router;
