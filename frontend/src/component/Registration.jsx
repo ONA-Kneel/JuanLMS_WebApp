@@ -59,6 +59,8 @@ export default function Registration() {
         const strandsData = await strandsRes.json();
         const sectionsData = await sectionsRes.json();
         
+        console.log('Fetched academic data:', { tracksData, strandsData, sectionsData });
+        
         setTracks(tracksData || []);
         setStrands(strandsData || []);
         setSections(sectionsData || []);
@@ -93,10 +95,9 @@ export default function Registration() {
     } else {
       setFilteredSections([]);
     }
-  }, [form.strandName, sections]);
+  }, [form.strandName, form.sectionName, sections]);
 
   function isValidName(name) { return /^[\p{L}\s'-]+$/u.test(name); }
-  function isValidAlphanumericName(name) { return /^[\p{L}0-9\s-]+$/u.test(name); }
   function isValidContactNo(contactNo) { return /^09\d{9}$/.test(contactNo); }
 
   const handleChange = (e) => {

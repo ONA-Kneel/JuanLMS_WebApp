@@ -745,8 +745,14 @@ router.get('/tracks', async (req, res) => {
     
     const tracks = await Track.find({
       schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
+      termName: activeTerm.termName
+    });
+    
+    console.log('Fetched tracks for registration:', {
+      schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
       termName: activeTerm.termName,
-      status: 'active'
+      tracksCount: tracks.length,
+      tracks: tracks.map(t => ({ _id: t._id, trackName: t.trackName, schoolYear: t.schoolYear, termName: t.termName }))
     });
     
     res.json(tracks);
@@ -780,8 +786,14 @@ router.get('/strands', async (req, res) => {
     
     const strands = await Strand.find({
       schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
+      termName: activeTerm.termName
+    });
+    
+    console.log('Fetched strands for registration:', {
+      schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
       termName: activeTerm.termName,
-      status: 'active'
+      strandsCount: strands.length,
+      strands: strands.map(s => ({ _id: s._id, strandName: s.strandName, trackName: s.trackName, schoolYear: s.schoolYear, termName: s.termName }))
     });
     
     res.json(strands);
@@ -815,8 +827,14 @@ router.get('/sections', async (req, res) => {
     
     const sections = await Section.find({
       schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
+      termName: activeTerm.termName
+    });
+    
+    console.log('Fetched sections for registration:', {
+      schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
       termName: activeTerm.termName,
-      status: 'active'
+      sectionsCount: sections.length,
+      sections: sections.map(s => ({ _id: s._id, sectionName: s.sectionName, trackName: s.trackName, strandName: s.strandName, schoolYear: s.schoolYear, termName: s.termName }))
     });
     
     res.json(sections);
