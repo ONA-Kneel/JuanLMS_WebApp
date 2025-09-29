@@ -126,15 +126,19 @@ export default function Student_Chats() {
       transports: ["websocket"],
       reconnectionAttempts: 5,
       timeout: 10000,
+      auth: {
+        token: localStorage.getItem('token'),
+        userId: currentUserId
+      }
     });
 
     socket.current.emit("addUser", currentUserId);
 
-    socket.current.on("getMessage", (data) => {
+    const handleIncomingDirect = (data) => {
       const incomingMessage = {
         senderId: data.senderId,
         receiverId: currentUserId,
-        message: data.text,
+        message: data.text || data.message,
         fileUrl: data.fileUrl || null,
         createdAt: new Date().toISOString(),
       };
@@ -212,7 +216,9 @@ export default function Student_Chats() {
       setTimeout(() => {
         setMessages(prev => ({ ...prev }));
       }, 50);
-    });
+    };
+    socket.current.on("getMessage", handleIncomingDirect);
+    socket.current.on("receiveMessage", handleIncomingDirect);
 
     // Group chat socket events
     socket.current.on("getGroupMessage", (data) => {

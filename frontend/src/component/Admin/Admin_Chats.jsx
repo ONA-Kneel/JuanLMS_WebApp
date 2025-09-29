@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { io } from "socket.io-client";
+import { useSocket } from "../../contexts/SocketContext.jsx";
 import uploadfile from "../../assets/uploadfile.png";
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
@@ -98,7 +98,7 @@ export default function Admin_Chats() {
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
-  const socket = useRef(null);
+  const { socket: ctxSocket, isConnected } = useSocket();
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
 
@@ -201,19 +201,14 @@ export default function Admin_Chats() {
 
   // ================= SOCKET.IO SETUP =================
   useEffect(() => {
-    socket.current = io(SOCKET_URL, {
-      transports: ["websocket"],
-      reconnectionAttempts: 5,
-      timeout: 10000,
-    });
+    if (!ctxSocket || !isConnected || !currentUserId) return;
+    ctxSocket.emit("addUser", currentUserId);
 
-    socket.current.emit("addUser", currentUserId);
-
-    socket.current.on("getMessage", (data) => {
+    const handleIncomingDirect = (data) => {
       const incomingMessage = {
         senderId: data.senderId,
         receiverId: currentUserId,
-        message: data.text,
+        message: data.text || data.message,
         fileUrl: data.fileUrl || null,
         createdAt: new Date().toISOString(),
       };
@@ -276,11 +271,19 @@ export default function Admin_Chats() {
         return newMessages;
       });
       
-      // Avoid double-appending; state already updated above
-    });
+      // If current open chat is the sender, force a light refresh and scroll
+      if (selectedChat && !selectedChat.isGroup && selectedChat._id === incomingMessage.senderId) {
+        setTimeout(() => {
+          setMessages(prev => ({ ...prev }));
+          try { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); } catch {}
+        }, 25);
+      }
+    };
+    ctxSocket.on("getMessage", handleIncomingDirect);
+    ctxSocket.on("receiveMessage", handleIncomingDirect);
 
     // Group chat message handling
-    socket.current.on("getGroupMessage", (data) => {
+    const handleIncomingGroup = (data) => {
       const incomingGroupMessage = {
         senderId: data.senderId,
         groupId: data.groupId,
@@ -330,12 +333,15 @@ export default function Admin_Chats() {
         
         return newGroupMessages;
       });
-    });
+    };
+    ctxSocket.on("getGroupMessage", handleIncomingGroup);
 
     return () => {
-      socket.current.disconnect();
+      ctxSocket.off("getMessage", handleIncomingDirect);
+      ctxSocket.off("receiveMessage", handleIncomingDirect);
+      ctxSocket.off("getGroupMessage", handleIncomingGroup);
     };
-  }, [currentUserId, recentChats]);
+  }, [ctxSocket, isConnected, currentUserId, selectedChat, recentChats, users, userGroups]);
 
   // ================= FETCH USERS =================
   useEffect(() => {
@@ -552,7 +558,7 @@ export default function Admin_Chats() {
 
       const sentMessage = res.data;
 
-      socket.current.emit("sendMessage", {
+      ctxSocket?.emit("sendMessage", {
         senderId: currentUserId,
         receiverId: selectedChat._id,
         text: sentMessage.message,
@@ -753,7 +759,7 @@ export default function Admin_Chats() {
         
         // Join all groups in socket for real-time updates (avoid heavy prefetch of group messages)
         res.data.forEach(group => {
-          socket.current?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
+          ctxSocket?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
         });
 
         // Lazily hydrate only visible group previews first for speed
@@ -911,7 +917,7 @@ export default function Admin_Chats() {
       setSelectedParticipants([]);
 
       // Join the group in socket
-      socket.current?.emit("joinGroup", { userId: currentUserId, groupId: newGroup._id });
+      ctxSocket?.emit("joinGroup", { userId: currentUserId, groupId: newGroup._id });
     } catch (err) {
       setValidationModal({
         isOpen: true,
@@ -996,7 +1002,7 @@ export default function Admin_Chats() {
       });
 
       // Leave the group in socket
-      socket.current?.emit("leaveGroup", { userId: currentUserId, groupId: selectedChat._id });
+      ctxSocket?.emit("leaveGroup", { userId: currentUserId, groupId: selectedChat._id });
     } catch (err) {
       setValidationModal({
         isOpen: true,
@@ -1030,7 +1036,7 @@ export default function Admin_Chats() {
 
       const sentMessage = res.data;
 
-              socket.current.emit("sendGroupMessage", {
+              ctxSocket?.emit("sendGroupMessage", {
           senderId: currentUserId,
           groupId: selectedChat._id,
           text: sentMessage.message,

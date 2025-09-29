@@ -17,8 +17,18 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    const userId = localStorage.getItem('userID');
-    
+    // Prefer stored user object (used throughout app) and fall back to legacy key
+    let userId = null;
+    try {
+      const storedUser = localStorage.getItem('user');
+      userId = storedUser ? JSON.parse(storedUser)?._id : null;
+    } catch {
+      userId = null;
+    }
+    if (!userId) {
+      userId = localStorage.getItem('userID');
+    }
+
     if (token && userId) {
       const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
       

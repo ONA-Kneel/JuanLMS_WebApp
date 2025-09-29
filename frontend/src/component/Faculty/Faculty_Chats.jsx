@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { io } from "socket.io-client";
+import { useSocket } from "../../contexts/SocketContext.jsx";
 import uploadfile from "../../assets/uploadfile.png";
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
@@ -99,7 +99,7 @@ export default function Faculty_Chats() {
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
-  const socket = useRef(null);
+  const { socket: ctxSocket, isConnected } = useSocket();
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
 
@@ -147,28 +147,21 @@ export default function Faculty_Chats() {
     }, 50);
   };
 
-  // ================= SOCKET.IO SETUP =================
+  // ================= SOCKET.IO SETUP (shared SocketContext) =================
   useEffect(() => {
-    socket.current = io(SOCKET_URL, {
-      transports: ["websocket"],
-      reconnectionAttempts: 5,
-      timeout: 10000,
-    });
+    if (!ctxSocket || !isConnected || !currentUserId) return;
+    ctxSocket.emit("addUser", currentUserId);
 
-    socket.current.emit("addUser", currentUserId);
-    
-    // When socket connects, join all groups
-    socket.current.on("connect", () => {
-      console.log("[FRONTEND] Socket connected, joining groups...");
+    const handleConnect = () => {
       if (groups.length > 0) {
         groups.forEach(group => {
-          console.log("[FRONTEND] Joining group on connect:", group._id);
-          socket.current.emit("joinGroup", { userId: currentUserId, groupId: group._id });
+          ctxSocket.emit("joinGroup", { userId: currentUserId, groupId: group._id });
         });
       }
-    });
+    };
+    ctxSocket.on("connect", handleConnect);
 
-    socket.current.on("getMessage", (data) => {
+    const handleGetMessage = (data) => {
       const incomingMessage = {
         senderId: data.senderId,
         receiverId: currentUserId,
@@ -250,10 +243,12 @@ export default function Faculty_Chats() {
       setTimeout(() => {
         setMessages(prev => ({ ...prev }));
       }, 50);
-    });
+    };
+    ctxSocket.on("getMessage", handleGetMessage);
+    ctxSocket.on("receiveMessage", handleGetMessage);
 
     // Group chat socket events
-    socket.current.on("getGroupMessage", (data) => {
+    const handleGetGroupMessage = (data) => {
       console.log("[FRONTEND] Received group message:", data);
       console.log("[FRONTEND] Current selectedChat:", selectedChat);
       console.log("[FRONTEND] Current isGroupChat:", isGroupChat);
@@ -316,25 +311,32 @@ export default function Faculty_Chats() {
           setGroupMessages(prev => ({ ...prev }));
         }, 50);
       }
-    });
+    };
+    ctxSocket.on("getGroupMessage", handleGetGroupMessage);
 
-    socket.current.on("groupCreated", (group) => {
+    const handleGroupCreated = (group) => {
       setGroups((prev) => [...prev, group]);
       setShowCreateGroupModal(false);
       setNewGroupName("");
       setSelectedGroupMembers([]);
-    });
+    };
+    ctxSocket.on("groupCreated", handleGroupCreated);
 
-    socket.current.on("groupJoined", (group) => {
+    const handleGroupJoined = (group) => {
       setGroups((prev) => [...prev, group]);
       setShowJoinGroupModal(false);
       setJoinGroupCode("");
-    });
+    };
+    ctxSocket.on("groupJoined", handleGroupJoined);
 
     return () => {
-      socket.current.disconnect();
+      ctxSocket.off("connect", handleConnect);
+      ctxSocket.off("getMessage", handleGetMessage);
+      ctxSocket.off("getGroupMessage", handleGetGroupMessage);
+      ctxSocket.off("groupCreated", handleGroupCreated);
+      ctxSocket.off("groupJoined", handleGroupJoined);
     };
-  }, [currentUserId, recentChats]);
+  }, [ctxSocket, isConnected, currentUserId, groups, selectedChat, isGroupChat, recentChats, users]);
 
   // ================= FETCH USERS =================
   useEffect(() => {
@@ -670,7 +672,7 @@ export default function Faculty_Chats() {
 
         const sentMessage = res.data;
 
-        socket.current.emit("sendGroupMessage", {
+        ctxSocket?.emit("sendGroupMessage", {
           senderId: currentUserId,
           groupId: selectedChat._id,
           text: sentMessage.message,
@@ -729,7 +731,7 @@ export default function Faculty_Chats() {
 
         const sentMessage = res.data;
 
-        socket.current.emit("sendMessage", {
+        ctxSocket?.emit("sendMessage", {
           senderId: currentUserId,
           receiverId: selectedChat._id,
           text: sentMessage.message,

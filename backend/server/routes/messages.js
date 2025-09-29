@@ -10,6 +10,7 @@ import fs from "fs";
 import { createMessageNotification } from '../services/notificationService.js';
 import User from '../models/User.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import { getIO } from '../server.js';
 
 const router = express.Router();
 
@@ -71,9 +72,60 @@ router.post('/', authenticateToken, upload.single('file'), async (req, res) => {
       message: newMessage.getDecryptedMessage(),
       fileUrl: newMessage.getDecryptedFileUrl(),
     });
+
+    // --- Emit real-time event to receiver sockets (server-side guarantee) ---
+    try {
+      const io = getIO();
+      const payload = {
+        senderId,
+        receiverId,
+        text: newMessage.getDecryptedMessage(),
+        fileUrl: newMessage.getDecryptedFileUrl(),
+        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      };
+
+      // Notify all connected sockets that belong to the receiver
+      for (const [socketId, socket] of io.sockets.sockets) {
+        if (socket.userId === receiverId) {
+          io.to(socketId).emit('getMessage', payload);
+          io.to(socketId).emit('receiveMessage', { ...payload, message: payload.text });
+        }
+      }
+    } catch (emitErr) {
+      console.error('[MESSAGES] Socket emit failed:', emitErr.message);
+    }
   } catch (error) {
     console.error('Error sending message:', error);
     res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// --- GET /user/:userId - fetch all messages involving the user (sent or received) ---
+router.get('/user/:userId', authenticateToken, async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const messages = await Message.find({}); // Cannot query by encrypted fields; decrypt then filter
+
+    const decryptedMessages = messages.map((msg) => ({
+      ...msg.toObject(),
+      senderId: msg.getDecryptedSenderId(),
+      receiverId: msg.getDecryptedReceiverId(),
+      message: msg.getDecryptedMessage(),
+      fileUrl: msg.getDecryptedFileUrl(),
+    }));
+
+    const userMessages = decryptedMessages.filter(
+      (m) => m.senderId === userId || m.receiverId === userId
+    );
+
+    // Sort by createdAt ascending for consistency; clients can regroup as needed
+    userMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    res.json(userMessages);
+  } catch (err) {
+    console.error('Error fetching user messages:', err);
+    res.status(500).json({ error: 'Server error fetching user messages' });
   }
 });
 
