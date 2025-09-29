@@ -125,6 +125,31 @@ export default function Student_Chats() {
 
   const navigate = useNavigate();
 
+  // Fetch a single user by id and merge to cache/state (used when sender not in users list yet)
+  const fetchUserIfMissing = async (userId) => {
+    if (!userId) return null;
+    const existing = users.find(u => u._id === userId);
+    if (existing) return existing;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${API_BASE}/users/${userId}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.data && res.data._id) {
+        const fetched = res.data;
+        setUsers(prev => {
+          const next = [...prev.filter(u => u._id !== fetched._id), fetched];
+          try { localStorage.setItem('users_all_student', JSON.stringify(next)); } catch {}
+          return next;
+        });
+        return fetched;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return null;
+  };
+
   useEffect(() => {
     if (!currentUserId) {
       navigate("/", { replace: true });
@@ -176,23 +201,34 @@ export default function Student_Chats() {
         // Update last message for this chat
         let chat = recentChats.find(c => c._id === incomingMessage.senderId);
         
-        // If chat not found in recentChats, find the user and add them
+        // If chat not found in recentChats, fetch the sender and add them
         if (!chat) {
-          const sender = users.find(u => u._id === incomingMessage.senderId);
-          if (sender && sender.firstname && sender.lastname) {
-            chat = {
-              _id: sender._id,
-              firstname: sender.firstname,
-              lastname: sender.lastname,
-              profilePic: sender.profilePic
-            };
-            // Add to recentChats
-            setRecentChats(prev => {
-              const updated = [chat, ...prev];
-              localStorage.setItem("recentChats_student", JSON.stringify(updated));
-              return updated;
-            });
-          }
+          const ensureSender = async () => {
+            const sender = users.find(u => u._id === incomingMessage.senderId) || await fetchUserIfMissing(incomingMessage.senderId);
+            if (sender && sender.firstname && sender.lastname) {
+              const newChat = {
+                _id: sender._id,
+                firstname: sender.firstname,
+                lastname: sender.lastname,
+                profilePic: sender.profilePic
+              };
+              setRecentChats(prev => {
+                const updated = [newChat, ...prev.filter(c => c._id !== newChat._id)];
+                localStorage.setItem("recentChats_student", JSON.stringify(updated));
+                return updated;
+              });
+              const previewText = incomingMessage.message ? incomingMessage.message : (incomingMessage.fileUrl ? 'File sent' : '');
+              setLastMessages(prev => ({
+                ...prev,
+                [newChat._id]: { prefix: `${newChat.lastname || 'Unknown'}, ${newChat.firstname || 'User'}: `, text: previewText }
+              }));
+              if (!(selectedChat && !isGroupChat && selectedChat._id === newChat._id)) {
+                addHighlight(newChat._id);
+              }
+            }
+          };
+          // fire and forget; do not block handler
+          ensureSender();
         }
         
         if (chat) {
