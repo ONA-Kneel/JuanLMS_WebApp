@@ -44,10 +44,10 @@ router.get('/', authenticateToken, async (req, res) => {
           termId: assignment.termId,
           status: assignment.status,
           schoolID: schoolID,
-          email: assignment.studentId.email,
-          middlename: assignment.studentId.middlename,
-          firstname: assignment.studentId.firstname,
-          lastname: assignment.studentId.lastname,
+          email: assignment.studentId.getDecryptedEmail ? assignment.studentId.getDecryptedEmail() : assignment.studentId.email,
+          middlename: assignment.studentId.getDecryptedMiddlename ? assignment.studentId.getDecryptedMiddlename() : assignment.studentId.middlename,
+          firstname: assignment.studentId.getDecryptedFirstname ? assignment.studentId.getDecryptedFirstname() : assignment.studentId.firstname,
+          lastname: assignment.studentId.getDecryptedLastname ? assignment.studentId.getDecryptedLastname() : assignment.studentId.lastname,
           isApproved: isApproved
         };
       }

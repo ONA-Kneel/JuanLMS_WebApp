@@ -7715,23 +7715,18 @@ Validation issues (${skippedCount} items):
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
-                      <div className="flex items-end">
-                        <button
+                    </div>
+                    <div className="flex justify-between items-center">
+                    <button
                           onClick={() => {
                             setFacultySectionFilter('');
                             setFacultyStatusFilter('');
                             setFacultySearchFilter('');
                           }}
-                          className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                           className="text-sm text-blue-600 hover:text-blue-800"
                         >
                           Clear Filters
                         </button>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">
-                        Showing {filteredFacultyAssignments.length} of {facultyAssignments.length} faculty assignments
-                      </span>
                     </div>
                   </div>
                   
@@ -8003,9 +7998,7 @@ Validation issues (${skippedCount} items):
                     </div>
                   </div>
                   <div className="mt-2 flex justify-between items-center">
-                    <span className="text-sm text-gray-600">
-                      Showing {filteredStudentAssignments.length} of {studentAssignments.length} students
-                    </span>
+                    
                     <button
                       onClick={() => {
                         setStudentSectionFilter('');

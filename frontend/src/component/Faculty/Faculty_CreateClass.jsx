@@ -165,17 +165,13 @@ export default function FacultyCreateClass() {
     const uniqueSubjects = [...new Set(filtered.map(a => a.subjectName))];
     console.log('Available subjects:', uniqueSubjects);
     
-    // Filter out subjects that already have classes for this faculty
+    // Filter out subjects that already have classes for THIS FACULTY MEMBER
+    // But allow the same subject for different sections
     const availableSubjects = uniqueSubjects.filter(subject => {
-      // Check if faculty already has a class for this subject in the current term/year
-      const hasExistingClass = existingClasses.some(existingClass => {
-        // Match by subject name and current academic year/term
-        return existingClass.className === subject && 
-               existingClass.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
-               existingClass.termName === currentTerm?.termName;
-      });
-      
-      return !hasExistingClass;
+      // Check if THIS FACULTY already has a class for this subject in the current term/year
+      // We'll allow the same subject for different sections, so we don't filter here
+      // The real filtering will happen when a section is selected
+      return true; // Allow all subjects initially
     });
     
     console.log('Available subjects (excluding existing classes):', availableSubjects);
@@ -203,11 +199,26 @@ export default function FacultyCreateClass() {
     );
     
     const uniqueSections = [...new Set(filtered.map(a => a.sectionName))];
-    console.log('Available sections:', uniqueSections);
-    setSections(uniqueSections);
+    
+    // Filter out sections that already have classes for this subject by this faculty
+    const availableSections = uniqueSections.filter(section => {
+      // Check if THIS FACULTY already has a class for this subject AND section in the current term/year
+      const hasExistingClass = existingClasses.some(existingClass => {
+        return existingClass.className === selectedSubject && 
+               existingClass.section === section &&
+               existingClass.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
+               existingClass.termName === currentTerm?.termName &&
+               (existingClass.facultyID === userMongoId || existingClass.facultyID === localStorage.getItem('userID'));
+      });
+      
+      return !hasExistingClass;
+    });
+    
+    console.log('Available sections:', availableSections);
+    setSections(availableSections);
     
     // Reset section if current selection is not available
-    if (!uniqueSections.includes(selectedSection)) {
+    if (!availableSections.includes(selectedSection)) {
       setSelectedSection("");
     }
   }, [filteredAssignments, selectedGradeLevel, selectedSubject, selectedSection]);
@@ -293,54 +304,55 @@ export default function FacultyCreateClass() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/users/search?q=${query}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      
+      // Search directly within the selected section using student assignments
+      const response = await fetch(
+        `${API_BASE}/api/student-assignments?termId=${currentTerm._id}&sectionName=${selectedSection}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}&status=active`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
       if (!response.ok) {
         if (response.status === 401) {
           setError("Session expired. Please log in again.");
-          // Optionally: window.location.href = '/login';
         } else {
           setError("Error fetching student data");
         }
         setStudents([]);
         return;
       }
-      const data = await response.json();
-      if (!Array.isArray(data)) {
-        setError("Unexpected response from server");
-        setStudents([]);
-        return;
-      }
       
-      // Filter students by role and section assignment
-      const filteredStudents = data
-        .filter(student => student.role === 'students')
-        .filter(student => !selectedStudents.some(sel => sel._id === student._id));
+      const assignments = await response.json();
+      
+      // Filter assignments by search query (search in student name or school ID)
+      const searchTerm = query.toLowerCase();
+      const filteredAssignments = assignments.filter(assignment => {
+        const studentName = assignment.studentName?.toLowerCase() || '';
+        const schoolID = assignment.schoolID?.toLowerCase() || '';
+        return studentName.includes(searchTerm) || schoolID.includes(searchTerm);
+      });
 
-      // Now filter by section assignment - only show students assigned to the selected section
-      const sectionFilteredStudents = [];
-      for (const student of filteredStudents) {
-        try {
-          const isAssigned = await isStudentAssignedToSection(student._id);
-          if (isAssigned) {
-            sectionFilteredStudents.push(student);
-          }
-        } catch (err) {
-          console.warn(`Failed to check section assignment for student ${student._id}:`, err);
-        }
-      }
+      // Convert assignments to student objects and filter out already selected students
+      const availableStudents = filteredAssignments
+        .filter(assignment => assignment.studentId) // Filter out assignments without studentId first
+        .map(assignment => ({
+          _id: assignment.studentId,
+          firstname: assignment.firstname || assignment.studentName?.split(' ')[0] || '',
+          lastname: assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || '',
+          middlename: assignment.middlename || '',
+          schoolID: assignment.schoolID || '',
+          email: assignment.email || '',
+          role: 'students'
+        }))
+        .filter(student => student && student._id && !selectedStudents.some(sel => sel && sel._id === student._id));
 
-      if (sectionFilteredStudents.length === 0) {
-        setError("No students found in the selected section");
+      if (availableStudents.length === 0) {
+        setError("No students found in the selected section matching your search");
       } else {
-        setStudents(sectionFilteredStudents);
+        setStudents(availableStudents);
         setError("");
       }
-    } catch {
-      console.error("Error fetching student data:");
+    } catch (error) {
+      console.error("Error fetching student data:", error);
       setError("Error fetching student data");
     }
   };
