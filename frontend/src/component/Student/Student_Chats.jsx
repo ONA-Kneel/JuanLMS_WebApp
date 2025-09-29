@@ -82,6 +82,27 @@ export default function Student_Chats() {
 
   // Add loading state for chat list
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  // Track chats that should be highlighted due to new messages
+  const [highlightedChats, setHighlightedChats] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('highlightedChats_student') || '{}'); } catch { return {}; }
+  });
+  const addHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      const next = { ...prev, [chatId]: Date.now() };
+      try { localStorage.setItem('highlightedChats_student', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const clearHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      if (!prev[chatId]) return prev;
+      const { [chatId]: _ignore, ...rest } = prev;
+      try { localStorage.setItem('highlightedChats_student', JSON.stringify(rest)); } catch {}
+      return rest;
+    });
+  };
 
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
@@ -193,6 +214,11 @@ export default function Student_Chats() {
           
           // Bump chat to top
           bumpChatToTop(chat);
+
+          // Highlight conversation item if not currently open
+          if (!(selectedChat && !isGroupChat && selectedChat._id === chat._id)) {
+            addHighlight(chat._id);
+          }
           
                   // Refresh recent conversations to update sidebar
         setTimeout(() => {
@@ -250,6 +276,11 @@ export default function Student_Chats() {
         
         return updated;
       });
+
+      // Highlight group item if it's not the currently open chat
+      if (!(selectedChat && isGroupChat && selectedChat._id === data.groupId)) {
+        addHighlight(data.groupId);
+      }
 
       // Update last message for this group chat
       const group = groups.find(g => g._id === data.groupId);
@@ -1143,17 +1174,21 @@ export default function Student_Chats() {
                     <div
                       key={chat._id}
                       className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                        selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')) ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                        (selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')))
+                          ? "bg-white"
+                          : (highlightedChats[chat._id] ? "bg-yellow-50 ring-2 ring-yellow-400" : "bg-gray-100 hover:bg-gray-300")
                       }`}
                       onClick={() => {
                         if (chat.type === 'group') {
                           setSelectedChat(chat);
                           setIsGroupChat(true);
                           localStorage.setItem("selectedChatId_student", chat._id);
+                          clearHighlight(chat._id);
                         } else {
                           setSelectedChat(chat);
                           setIsGroupChat(false);
                           localStorage.setItem("selectedChatId_student", chat._id);
+                          clearHighlight(chat._id);
                         }
                       }}
                     >
