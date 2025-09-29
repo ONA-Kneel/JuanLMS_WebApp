@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 
-const API_BASE = import.meta.env.VITE_API_BASE || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = "http://localhost:5000";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -48,7 +48,7 @@ const validateFacultySchoolIDFormat = (schoolID) => {
   return facultySchoolIDPattern.test(trimmedID);
 };
 
-export default function TermDetails({ termData: propTermData, quarterData, refreshKey }) {
+export default function TermDetails({ termData: propTermData, quarterData }) {
   const { termId } = useParams();
   const navigate = useNavigate();
   const importFileInputRef = useRef(null); // Initialize useRef for the file input
@@ -238,8 +238,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [showFacultyModal, setShowFacultyModal] = useState(false);
   const [showStudentModal, setShowStudentModal] = useState(false);
-  const [showExportClasslistModal, setShowExportClasslistModal] = useState(false);
-  const [selectedExportSection, setSelectedExportSection] = useState('');
   
 
   // New state for Term Data Import
@@ -275,6 +273,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     facultyAssignments: { valid: 0, invalid: 0, details: [] },
     studentAssignments: { valid: 0, invalid: 0, details: [] }
   });
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   const tabs = [
     { id: 'dashboard', label: 'Term Dashboard', icon: termDashboardIcon },
@@ -753,8 +752,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           strandName: strandFormData.strandType === 'custom' ? strandFormData.strandName.trim() : strandFormData.strandType,
           trackName: selectedTrack.trackName,
           schoolYear: termDetails.schoolYear,
-          termName: termDetails.termName,
-          quarterName: quarterData ? quarterData.quarterName : undefined
+          termName: termDetails.termName
         })
       });
 
@@ -1376,14 +1374,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       if (res.ok) {
         const data = await res.json();
         console.log("Fetched faculty assignments for template (after backend restart):", data); // Re-added console.log
-        console.log("Faculty assignments count:", data.length);
-        console.log("Faculty assignments details:", data.map(a => ({
-          id: a._id,
-          facultyName: a.facultyName,
-          termId: a.termId,
-          status: a.status,
-          quarterName: a.quarterName
-        })));
         setFacultyAssignments(data);
       } else {
         const errorData = await res.json();
@@ -1414,14 +1404,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       if (res.ok) {
         const data = await res.json();
         console.log("Fetched student assignments:", data);
-        console.log("Student assignments count:", data.length);
-        console.log("Student assignments details:", data.map(a => ({
-          id: a._id,
-          studentName: a.studentName,
-          termId: a.termId,
-          status: a.status,
-          quarterName: a.quarterName
-        })));
         setStudentAssignments(data);
       } else {
         const errorData = await res.json();
@@ -1468,55 +1450,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       fetchRegistrants();
     }
   }, [termDetails, fetchStudentAssignments, fetchRegistrants]);
-
-  // Refresh assignments when quarter data changes (e.g., when quarter status changes)
-  useEffect(() => {
-    if (termDetails && quarterData) {
-      console.log('Quarter data changed, refreshing assignments...', quarterData);
-      fetchFacultyAssignments();
-      fetchStudentAssignments();
-    }
-  }, [quarterData, termDetails, fetchFacultyAssignments, fetchStudentAssignments]);
-
-  // Refresh assignments when refreshKey changes (triggered by parent component)
-  useEffect(() => {
-    if (termDetails && refreshKey) {
-      console.log('Refresh key changed, refreshing assignments...', refreshKey);
-      fetchFacultyAssignments();
-      fetchStudentAssignments();
-    }
-  }, [refreshKey, termDetails, fetchFacultyAssignments, fetchStudentAssignments]);
-
-  // Add a mechanism to refresh data when quarter status might have changed
-  useEffect(() => {
-    if (!termDetails || !quarterData) return;
-
-    // Listen for storage events (when quarter status changes in another tab/window)
-    const handleStorageChange = (e) => {
-      if (e.key === 'quarterStatusChanged') {
-        console.log('Quarter status changed detected, refreshing assignments...');
-        fetchFacultyAssignments();
-        fetchStudentAssignments();
-        // Clear the storage event
-        localStorage.removeItem('quarterStatusChanged');
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    // Also check for changes every 5 seconds when the component is active
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchFacultyAssignments();
-        fetchStudentAssignments();
-      }
-    }, 5000);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
-    };
-  }, [termDetails, quarterData, fetchFacultyAssignments, fetchStudentAssignments]);
 
   // Check if a student is approved in registrations
   const isStudentApproved = (assignment) => {
@@ -2129,6 +2062,9 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
 
   // Generate comprehensive PDF report with all term and quarter details
   const generateComprehensivePDFReport = async () => {
+    if (exportingPDF) return;
+    
+    setExportingPDF(true);
     try {
       console.log('Generating comprehensive PDF report...');
       
@@ -2508,6 +2444,8 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     } catch (error) {
       console.error('Error generating comprehensive PDF report:', error);
       window.alert('Error generating comprehensive PDF report. Please try again.');
+    } finally {
+      setExportingPDF(false);
     }
   };
 
@@ -2572,14 +2510,13 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       
       // 2. TRACKS SHEET
       const tracksData = [
-        ['Track Name', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
+        ['Track Name', 'Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         tracks.filter(t => t.status === 'active').map(track => [
           track.trackName,
           track.status,
           track.schoolYear,
           track.termName,
-          track.quarterName || '',
           new Date(track.createdAt).toLocaleDateString()
         ])
       );
@@ -2589,7 +2526,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       
       // 3. STRANDS SHEET
       const strandsData = [
-        ['Strand Name', 'Track Name', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
+        ['Strand Name', 'Track Name', 'Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         strands.filter(s => s.status === 'active').map(strand => [
           strand.strandName,
@@ -2597,7 +2534,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           strand.status,
           strand.schoolYear,
           strand.termName,
-          strand.quarterName || '',
           new Date(strand.createdAt).toLocaleDateString()
         ])
       );
@@ -2607,7 +2543,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       
       // 4. SECTIONS SHEET
       const sectionsData = [
-        ['Section Name', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
+        ['Section Name', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         sections.filter(s => s.status === 'active').map(section => [
           section.sectionName,
@@ -2617,7 +2553,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           section.status,
           section.schoolYear,
           section.termName,
-          section.quarterName || '',
           new Date(section.createdAt).toLocaleDateString()
         ])
       );
@@ -2627,7 +2562,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       
       // 5. SUBJECTS SHEET
       const subjectsData = [
-        ['Subject Name', 'Subject Code', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
+        ['Subject Name', 'Subject Code', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         subjects.filter(s => s.status === 'active').map(subject => [
           subject.subjectName,
@@ -2638,7 +2573,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           subject.status,
           subject.schoolYear,
           subject.termName,
-          subject.quarterName || '',
           new Date(subject.createdAt).toLocaleDateString()
         ])
       );
@@ -2648,7 +2582,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       
       // 6. FACULTY ASSIGNMENTS SHEET
       const facultyAssignmentsData = [
-        ['Faculty Name', 'Faculty School ID', 'Subject Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
+        ['Faculty Name', 'Faculty School ID', 'Subject Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         facultyAssignments.filter(fa => fa.status === 'active').map(assignment => {
           const faculty = faculties.find(f => f._id === assignment.facultyId);
@@ -2663,7 +2597,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             assignment.status,
             assignment.schoolYear,
             assignment.termName,
-            assignment.quarterName || '',
             new Date(assignment.createdAt).toLocaleDateString()
           ];
         })
@@ -2674,7 +2607,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       
       // 7. STUDENT ASSIGNMENTS SHEET
       const studentAssignmentsData = [
-        ['Student Name', 'Student School ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'Approval Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
+        ['Student Name', 'Student School ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'Approval Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         studentAssignments.filter(sa => sa.status === 'active').map(assignment => {
           const student = students.find(s => s._id === assignment.studentId);
@@ -2692,7 +2625,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             approvalStatus,
             assignment.schoolYear,
             assignment.termName,
-            assignment.quarterName || '',
             new Date(assignment.createdAt).toLocaleDateString()
           ];
         })
@@ -2944,8 +2876,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             return;
           }
 
-          // tracksToPreview is already prepared above
-
           // Validate tracks
           const validationResults = await validateTracks(tracksToPreview);
 
@@ -2982,7 +2912,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       const res = await fetch(`${API_BASE}/api/tracks/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tracks: validTracks.map(t => ({ ...t, quarterName: quarterData ? quarterData.quarterName : undefined })) })
+        body: JSON.stringify({ tracks: validTracks })
       });
 
       if (res.ok) {
@@ -3297,8 +3227,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           body: JSON.stringify({
             ...strand,
             schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName,
-            quarterName: quarterData ? quarterData.quarterName : undefined
+            termName: termDetails.termName
           })
         });
 
@@ -3647,10 +3576,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         const res = await fetch(`${API_BASE}/api/sections`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...section,
-            quarterName: quarterData ? quarterData.quarterName : undefined
-          })
+          body: JSON.stringify(section)
         });
 
         if (res.ok) {
@@ -4198,9 +4124,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             gradeLevel: assignment.gradeLevel,
             subjectName: assignment.subjectName,
             termId: termDetails._id,
-            schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName,
-            quarterName: quarterData ? quarterData.quarterName : undefined
           })
         });
 
@@ -4840,8 +4763,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
               strandName: assignment['strand'] || assignment['Strand Name'],
               sectionName: assignment['section'] || assignment['Section Name'],
               termId: termDetails._id,
-              schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName,
               quarterName: quarterData ? quarterData.quarterName : undefined
             };
             
@@ -5407,8 +5328,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           body: JSON.stringify({
             ...subject,
             schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName,
-            quarterName: quarterData ? quarterData.quarterName : undefined
+            termName: termDetails.termName
           })
         });
         if (res.ok) {
@@ -6023,8 +5943,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             body: JSON.stringify({
               trackName: track.trackName,
               schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName,
-              quarterName: quarterData ? quarterData.quarterName : undefined
+              termName: termDetails.termName
             })
           });
 
@@ -6052,8 +5971,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
               strandName: strand.strandName,
               trackName: strand.trackName,
               schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName,
-              quarterName: quarterData ? quarterData.quarterName : undefined
+              termName: termDetails.termName
             })
           });
 
@@ -6083,8 +6001,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
               strandName: section.strandName,
               gradeLevel: section.gradeLevel,
               schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName,
-              quarterName: quarterData ? quarterData.quarterName : undefined
+              termName: termDetails.termName
             })
           });
 
@@ -6114,8 +6031,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
               strandName: subject.strandName,
               gradeLevel: subject.gradeLevel,
               schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName,
-              quarterName: quarterData ? quarterData.quarterName : undefined
+              termName: termDetails.termName
             })
           });
 
@@ -6160,8 +6076,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
               sectionName: assignment.sectionName,
               gradeLevel: assignment.gradeLevel,
               subjectName: assignment.subjectName,
-              termId: termDetails._id,
-              quarterName: quarterData ? quarterData.quarterName : undefined
+              termId: termDetails._id
             })
           });
 
@@ -6215,8 +6130,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
               strandName: assignment.strandName,
               sectionName: assignment.sectionName,
               gradeLevel: assignment.gradeLevel,
-              termId: termDetails._id,
-              quarterName: quarterData ? quarterData.quarterName : undefined
+              termId: termDetails._id
             };
           }
 
@@ -6340,32 +6254,23 @@ Validation issues (${skippedCount} items):
     return studentAssignments.filter(sa => sa.termId === termDetails._id).length;
   }
 
-  // Helper functions for quarter-filtered counts
-  function getFilteredFacultyCount(termDetails, filteredFacultyAssignments) {
-    if (!termDetails) return 0;
-    return filteredFacultyAssignments.length;
-  }
-
-  function getFilteredStudentCount(termDetails, filteredStudentAssignments) {
-    if (!termDetails) return 0;
-    return filteredStudentAssignments.length;
-  }
-
   // Place after all useState/useEffect, before return
   const filteredTracks = tracks.filter(t => {
     const matchesTerm = t.schoolYear === termDetails?.schoolYear && t.termName === termDetails?.termName;
-    // If quarterData is available, also filter by quarter
+    // If quarterData is available, also filter by quarter, but be more flexible
     if (quarterData && quarterData.quarterName) {
-      return matchesTerm && t.quarterName === quarterData.quarterName;
+      // If track has quarterName, it must match. If track doesn't have quarterName, include it anyway
+      return matchesTerm && (!t.quarterName || t.quarterName === quarterData.quarterName);
     }
     return matchesTerm;
   });
   
   const filteredSubjects = subjects.filter(s => {
     const matchesTerm = s.schoolYear === termDetails?.schoolYear && s.termName === termDetails?.termName;
-    // If quarterData is available, also filter by quarter
+    // If quarterData is available, also filter by quarter, but be more flexible
     if (quarterData && quarterData.quarterName) {
-      return matchesTerm && s.quarterName === quarterData.quarterName;
+      // If subject has quarterName, it must match. If subject doesn't have quarterName, include it anyway
+      return matchesTerm && (!s.quarterName || s.quarterName === quarterData.quarterName);
     }
     return matchesTerm;
   });
@@ -6373,9 +6278,10 @@ Validation issues (${skippedCount} items):
   // Before rendering the strands table, filter out duplicate strands by _id
   const filteredStrands = strands.filter(strand => {
     const matchesTerm = strand.schoolYear === termDetails.schoolYear && strand.termName === termDetails.termName;
-    // If quarterData is available, also filter by quarter
+    // If quarterData is available, also filter by quarter, but be more flexible
     if (quarterData && quarterData.quarterName) {
-      return matchesTerm && strand.quarterName === quarterData.quarterName;
+      // If strand has quarterName, it must match. If strand doesn't have quarterName, include it anyway
+      return matchesTerm && (!strand.quarterName || strand.quarterName === quarterData.quarterName);
     }
     return matchesTerm;
   });
@@ -6388,57 +6294,12 @@ Validation issues (${skippedCount} items):
   // Filter sections by quarter as well
   const filteredSections = sections.filter(section => {
     const matchesTerm = section.schoolYear === termDetails?.schoolYear && section.termName === termDetails?.termName;
-    // If quarterData is available, also filter by quarter
+    // If quarterData is available, also filter by quarter, but be more flexible
     if (quarterData && quarterData.quarterName) {
-      return matchesTerm && section.quarterName === quarterData.quarterName;
+      // If section has quarterName, it must match. If section doesn't have quarterName, include it anyway
+      return matchesTerm && (!section.quarterName || section.quarterName === quarterData.quarterName);
     }
     return matchesTerm;
-  });
-
-  // Debug logging for term and quarter data
-  console.log('Current Term Details:', {
-    termId: termDetails?._id,
-    schoolYear: termDetails?.schoolYear,
-    termName: termDetails?.termName,
-    status: termDetails?.status
-  });
-  console.log('Current Quarter Data:', quarterData);
-  console.log('Faculty Assignments Raw:', facultyAssignments);
-  console.log('Student Assignments Raw:', studentAssignments);
-
-  // Basic filtering for faculty assignments (term and status)
-  const basicFilteredFacultyAssignments = facultyAssignments.filter(assignment => {
-    const matchesTerm = assignment.termId === termDetails?._id;
-    const matchesStatus = assignment.status === 'active'; // Only show active assignments
-    
-    // Debug logging
-    console.log('Faculty Assignment Filter Debug:', {
-      assignmentId: assignment._id,
-      assignmentTermId: assignment.termId,
-      currentTermId: termDetails?._id,
-      matchesTerm,
-      assignmentStatus: assignment.status,
-      matchesStatus,
-      assignmentQuarterName: assignment.quarterName,
-      currentQuarterName: quarterData?.quarterName,
-      facultyName: assignment.facultyName
-    });
-    
-    // Temporarily disable quarter filtering to debug
-    // If quarterData is available, also filter by quarter
-    // if (quarterData && quarterData.quarterName) {
-    //   const matchesQuarter = assignment.quarterName === quarterData.quarterName;
-    //   console.log('Quarter match:', matchesQuarter);
-    //   return matchesTerm && matchesStatus && matchesQuarter;
-    // }
-    return matchesTerm && matchesStatus;
-  });
-
-  // Basic filtering for student assignments (term and status)
-  const basicFilteredStudentAssignments = studentAssignments.filter(assignment => {
-    const matchesTerm = assignment.termId === termDetails?._id;
-    const matchesStatus = assignment.status === 'active'; // Only show active assignments
-    return matchesTerm && matchesStatus;
   });
 
   // Update: Enforce absolute uniqueness for strand names
@@ -6447,7 +6308,7 @@ Validation issues (${skippedCount} items):
   );
 
   // Filtered student assignments based on filters
-  const filteredStudentAssignments = basicFilteredStudentAssignments.filter(assignment => {
+  const filteredStudentAssignments = studentAssignments.filter(assignment => {
     // Filter by section
     if (studentSectionFilter && assignment.sectionName !== studentSectionFilter) {
       return false;
@@ -6483,7 +6344,7 @@ Validation issues (${skippedCount} items):
   });
 
   // Filtered faculty assignments based on filters
-  const filteredFacultyAssignments = basicFilteredFacultyAssignments.filter(assignment => {
+  const filteredFacultyAssignments = facultyAssignments.filter(assignment => {
     // Filter by section
     if (facultySectionFilter && assignment.sectionName !== facultySectionFilter) {
       return false;
@@ -6604,85 +6465,36 @@ Validation issues (${skippedCount} items):
   };
 
   // Export classlist only (Strand, Section, Grade format)
-  const handleExportClasslist = () => {
-    setShowExportClasslistModal(true);
-  };
-
-  const handleConfirmExportClasslist = () => {
-    if (!selectedExportSection) {
-      alert('Please select a section to export');
-      return;
-    }
-
+  const handleExportClasslist = async () => {
     try {
-      // Filter student assignments by selected section
-      const sectionStudents = studentAssignments.filter(assignment => 
-        assignment.sectionName === selectedExportSection && assignment.status === 'active'
+      // Export all students (active and pending)
+      const allStudents = filteredStudentAssignments.filter(assignment => 
+        assignment.status === 'active' // Only include non-archived students
       );
 
-      if (sectionStudents.length === 0) {
-        alert('No students found in the selected section.');
+      if (allStudents.length === 0) {
+        alert('No students found to export.');
         return;
       }
-
-      // Get the actual grade and strand from the first student (assuming all students in section have same grade/strand)
-      const firstStudent = sectionStudents[0];
-      const actualGrade = firstStudent?.gradeLevel || 'N/A';
-      const actualStrand = firstStudent?.strandName || 'N/A';
 
       // Create workbook
       const wb = XLSX.utils.book_new();
 
-      // Create the classlist with school details
-      const classlistData = [
-        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
-        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
-        ['PAASCU Accredited - COLLEGE'],
-        [''], // Empty row
-        ['BREAKDOWN OF STUDENTS'],
-        [`Generated on: ${new Date().toLocaleDateString()}`],
-        [`Academic Year: ${termDetails.schoolYear}`],
-        [`Term: ${termDetails.termName}`],
-        [''], // Empty row
-        ['Grade:', actualGrade],
-        ['Section:', selectedExportSection],
-        ['Strand:', actualStrand],
-        [''], // Empty row
-        ['Student No.', 'Last Name', 'First Name', 'Status'], // Headers
-        // Student data
-        ...sectionStudents.map(assignment => {
-          const student = students.find(s => s._id === assignment.studentId);
-          const status = isStudentApproved(assignment) ? 'Active' : 'Pending Approval';
-          return [
-            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || 'N/A',
-            assignment.lastname || assignment.lastName || 'N/A',
-            assignment.firstname || assignment.firstName || 'N/A',
-            status
-          ];
-        })
-      ];
+      // Classlist Format (Strand, Section, Grade) - exactly like your example
+      const classlistData = allStudents.map(assignment => ({
+        'Strand': assignment.strandName || 'N/A',
+        'Section': assignment.sectionName || 'N/A', 
+        'Grade': assignment.gradeLevel || 'N/A'
+      }));
 
-      const classlistWs = XLSX.utils.aoa_to_sheet(classlistData);
-      
-      // Set column widths
-      classlistWs['!cols'] = [
-        { wch: 15 }, // Student No.
-        { wch: 20 }, // Last Name
-        { wch: 20 }, // First Name
-        { wch: 12 }  // Status
-      ];
-      
+      const classlistWs = XLSX.utils.json_to_sheet(classlistData);
       XLSX.utils.book_append_sheet(wb, classlistWs, 'Classlist');
 
       // Generate filename
-      const fileName = `${termDetails?.schoolYear} - ${termDetails?.termName} - ${selectedExportSection} - Classlist.xlsx`;
+      const fileName = `${termDetails?.schoolYear} - ${termDetails?.termName}${quarterData ? ` - ${quarterData.quarterName}` : ''} - Classlist.xlsx`;
 
       // Save file
       XLSX.writeFile(wb, fileName);
-
-      setShowExportClasslistModal(false);
-      setSelectedExportSection('');
-
     } catch (error) {
       console.error('Error exporting classlist:', error);
       alert('Error exporting classlist. Please try again.');
@@ -6931,9 +6743,14 @@ Validation issues (${skippedCount} items):
                   </button>
                   <button
                     onClick={generateComprehensivePDFReport}
-                    className="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    disabled={exportingPDF}
+                    className={`py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                      exportingPDF
+                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                        : 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500'
+                    }`}
                   >
-                    Export PDF Report
+                    {exportingPDF ? 'Exporting...' : 'Export PDF Report'}
                   </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -6968,7 +6785,7 @@ Validation issues (${skippedCount} items):
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('sections')}>
                     <img src={sectionsIcon} alt="Sections Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
-                      sections.filter(sec => sec.status === 'active' && filteredTracks.find(t => t.trackName === sec.trackName && t.status === 'active')).length
+                      filteredSections.filter(sec => sec.status === 'active' && filteredTracks.find(t => t.trackName === sec.trackName && t.status === 'active')).length
                     }</span>
                     <span className="text-gray-600 mt-2">Active Sections</span>
                     <button
@@ -8399,7 +8216,7 @@ Validation issues (${skippedCount} items):
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">All Sections</option>
-                          {sections.map(section => (
+                          {filteredSections.map(section => (
                             <option key={section._id} value={section.sectionName}>
                               {section.sectionName}
                             </option>
@@ -8642,7 +8459,7 @@ Validation issues (${skippedCount} items):
                     <button
                       type="button"
                       className="bg-blue-900 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 w-fit"
-                      onClick={handleExportClasslist}
+                      onClick={handleExportStudentAssignments}
                       disabled={termDetails.status === 'archived'}
                     >
                       Export Classlist
@@ -8675,16 +8492,11 @@ Validation issues (${skippedCount} items):
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">All Sections</option>
-                        {sections
-                          .filter(section => 
-                            section.schoolYear === termDetails?.schoolYear && 
-                            section.termName === termDetails?.termName
-                          )
-                          .map(section => (
-                            <option key={section._id} value={section.sectionName}>
-                              {section.sectionName}
-                            </option>
-                          ))}
+                        {filteredSections.map(section => (
+                          <option key={section._id} value={section.sectionName}>
+                            {section.sectionName}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -9074,55 +8886,6 @@ Validation issues (${skippedCount} items):
                     </div>
                   </div>
                 )}
-
-                {/* Export Classlist Modal */}
-                {showExportClasslistModal && (
-                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 max-w-md w-full">
-                      <h3 className="text-xl font-semibold mb-4">Export Classlist</h3>
-                      <p className="text-gray-600 mb-4">Select a section to export the classlist with Student No., Last Name, First Name, and Status.</p>
-                      
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Select Section
-                        </label>
-                        <select
-                          value={selectedExportSection}
-                          onChange={(e) => setSelectedExportSection(e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="">Choose a section...</option>
-                          {sections.map(section => (
-                            <option key={section._id} value={section.sectionName}>
-                              {section.sectionName}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="flex justify-end gap-3">
-                        <button
-                          onClick={() => {
-                            setShowExportClasslistModal(false);
-                            setSelectedExportSection('');
-                          }}
-                          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleConfirmExportClasslist}
-                          disabled={!selectedExportSection}
-                          className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${
-                            !selectedExportSection ? 'opacity-50 cursor-not-allowed' : ''
-                          }`}
-                        >
-                          Export Classlist
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
                 
                 {/* Enrolled Students List */}
                 <div className="mt-8">
@@ -9212,11 +8975,11 @@ Validation issues (${skippedCount} items):
                       )}
                     </tbody>
                   </table>
-                  {filteredStudentAssignments.length > 0 && (
+                  {studentAssignments.length > 0 && (
                     <div className="flex justify-center items-center gap-2 mt-3">
                       <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStudentAssignPage(p => Math.max(1, p - 1))} disabled={studentAssignPage === 1}>{'<'}</button>
-                      <span className="text-xs">Page {paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).currentPage} of {paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}</span>
-                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStudentAssignPage(p => Math.min(paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={studentAssignPage === paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
+                      <span className="text-xs">Page {paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).currentPage} of {paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}</span>
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStudentAssignPage(p => Math.min(paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={studentAssignPage === paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
                     </div>
                   )}
                 </div>
@@ -10012,17 +9775,17 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
       console.log(`Student with School ID '${assignment.studentSchoolID}' not found - will be created as new student`);
       
       // For new students, check if there's already a manual assignment with the same details
-        const exists = activeAssignments.some(ea =>
+      const exists = activeAssignments.some(ea =>
         !ea.studentId && // Manual assignment (no linked student)
-          ea.studentSchoolID === assignment.studentSchoolID &&
-          ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
-          ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
-          ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
-        );
-        if (exists) {
-          results.push({ valid: false, message: `Student assignment for "${assignment.studentName}" already exists` });
-          continue;
-        }
+        ea.studentSchoolID === assignment.studentSchoolID &&
+        ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
+        ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
+        ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
+      );
+      if (exists) {
+        results.push({ valid: false, message: `Student assignment for "${assignment.studentName}" already exists` });
+        continue;
+      }
     }
 
     // Don't check if track/strand/section exist since they'll be created during import

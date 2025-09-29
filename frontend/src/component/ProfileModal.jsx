@@ -992,8 +992,7 @@ export default function ProfileModal({
         <div className="mb-4">
           <h3 className="text-lg font-semibold mb-4">Settings</h3>
           <div>
-            {/* Notification Settings */}
-            <NotificationSettingsSection />
+            
             
             {/* Other settings here */}
             <button
