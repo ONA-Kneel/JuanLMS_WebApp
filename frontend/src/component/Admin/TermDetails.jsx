@@ -115,7 +115,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     trackId: '',
     strandId: '',
     sectionIds: [],
-    gradeLevel: ''
+    gradeLevel: '',
+    enrollmentNo: '',
+    enrollmentDate: '',
+    lastName: '',
+    firstName: ''
   });
   const [studentAssignments, setStudentAssignments] = useState([]);
   const [studentError, setStudentError] = useState('');
@@ -309,11 +313,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
         
         const data = await response.json();
-        console.log('Term details loaded:', data);
+        
         setTermDetails(data);
         setError(null);
       } catch (err) {
-        console.error('Error loading term details:', err);
+        
         setError("Failed to load term details.");
       } finally {
         setLoading(false);
@@ -1781,10 +1785,10 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     e.preventDefault();
     setStudentError('');
 
-    // Allow either selecting an existing student (studentId) OR typing a name manually (studentSearchTerm)
-    const hasStudent = Boolean(studentFormData.studentId) || (studentSearchTerm && studentSearchTerm.trim().length > 0);
-    if (!hasStudent || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
-      setStudentError('All fields are required for student assignment. Select a student or type a name.');
+    // Check if we have required student information
+    const hasStudentInfo = Boolean(studentFormData.studentId) || (studentFormData.firstName && studentFormData.lastName);
+    if (!hasStudentInfo || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
+      setStudentError('All fields are required for student assignment. Provide student information.');
       return;
     }
 
@@ -1819,10 +1823,15 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           if (studentToAssign) {
             return { ...basePayload, studentId: studentToAssign._id };
           }
-          // For manual entries, DO NOT send studentId (backend expects ObjectId). Send school ID and name instead.
+          // For manual entries, DO NOT send studentId (backend expects ObjectId). Send school ID and names instead.
           const manualSchoolId = studentManualId.trim();
-          const manualName = studentSearchTerm.trim();
-          const payload = { ...basePayload, studentName: manualName };
+          const payload = { 
+            ...basePayload, 
+            firstName: studentFormData.firstName,
+            lastName: studentFormData.lastName,
+            enrollmentNo: studentFormData.enrollmentNo,
+            enrollmentDate: studentFormData.enrollmentDate
+          };
           if (manualSchoolId) {
             payload.studentSchoolID = manualSchoolId;
           }
@@ -1842,7 +1851,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             },
             body: JSON.stringify({
               action: 'Student Assignment Added',
-              details: `Assigned Student "${studentToAssign ? `${studentToAssign.firstname} ${studentToAssign.lastname}` : studentSearchTerm.trim()}" to Section "${selectedSection.sectionName}" (Grade ${studentFormData.gradeLevel}) under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}${quarterData ? ` (${quarterData.quarterName})` : ''}`,
+              details: `Assigned Student "${studentToAssign ? `${studentToAssign.firstname} ${studentToAssign.lastname}` : `${studentFormData.firstName} ${studentFormData.lastName}`}" to Section "${selectedSection.sectionName}" (Grade ${studentFormData.gradeLevel}) under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}${quarterData ? ` (${quarterData.quarterName})` : ''}`,
               userRole: 'admin'
             })
           }).catch(() => {});
@@ -3951,27 +3960,23 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     try {
       const wb = XLSX.utils.book_new();
 
-      // Sheet 1: Template for adding new student assignments (San Juan Enrollment System Format)
+      // Sheet 1: Template for adding new student assignments (Updated Format)
       const templateWs = XLSX.utils.aoa_to_sheet([
-        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade'], // San Juan enrollment system format
-        [7180, '10/3/2024', '22-12345', 'Dela Cruz', 'Juan', 'STEM', 'STEM1', 'Grade 11'], // Sample data
-        [7179, '10/3/2024', '22-12346', 'Santos', 'Maria', 'STEM', 'STEM1', 'Grade 11'], // Sample data
-        [7178, '10/3/2024', '22-12347', 'Garcia', 'John', 'STEM', 'STEM1', 'Grade 11'], // Sample data
-        [7177, '10/3/2024', '22-12348', 'Rodriguez', 'Ana', 'STEM', 'STEM1', 'Grade 11'], // Sample data
-        [7176, '10/3/2024', '22-12349', 'Martinez', 'Carlos', 'STEM', 'STEM1', 'Grade 11'], // Sample data
+        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade'], // Updated format
+       
       ]);
       XLSX.utils.book_append_sheet(wb, templateWs, 'Enrolled Students Template');
 
       // Sheet 2: Current student assignments in the system
       const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
       const currentStudentAssignmentsData = [
-        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade', 'status'], // Updated headers to match San Juan format
+        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade', 'status'], // Updated headers
         ...currentStudentAssignments.map((assignment, index) => [
           assignment.enrollmentNo || (7180 - index), // Use enrollment number or generate sequential
           assignment.enrollmentDate || '10/3/2024', // Use enrollment date or default
           assignment.schoolID || '', // Use school ID
-          assignment.studentName ? assignment.studentName.split(' ').slice(-1)[0] : '', // Last name
-          assignment.studentName ? assignment.studentName.split(' ').slice(0, -1).join(' ') : '', // First name
+          assignment.lastname || '', // Last name
+          assignment.firstname || '', // First name
           assignment.strandName,
           assignment.sectionName,
           assignment.gradeLevel || '',
@@ -4140,9 +4145,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     for (let i = 0; i < assignmentsToValidate.length; i++) {
       const assignment = assignmentsToValidate[i];
       console.log(`Validating assignment ${i + 1}:`, assignment);
-      // Handle both old and new format for backward compatibility
+      // Handle new format with separate first_name and last_name
       const studentSchoolIDInput = assignment['student_no']?.trim() || assignment['Student School ID']?.trim() || '';
-      const studentNameInput = (assignment['first_name']?.trim() || '') + ' ' + (assignment['last_name']?.trim() || '') || assignment['Student Name']?.trim() || '';
+      const firstNameInput = assignment['first_name']?.trim() || '';
+      const lastNameInput = assignment['last_name']?.trim() || '';
+      const enrollmentNoInput = assignment['enrollment_no']?.trim() || '';
+      const enrollmentDateInput = assignment['date']?.trim() || '';
       const gradeLevel = assignment['grade']?.trim() || assignment['Grade Level']?.trim() || '';
       const trackName = assignment['Track Name']?.trim() || ''; // Track name not in new format, will be derived from strand
       const strandName = assignment['strand']?.trim() || assignment['Strand Name']?.trim() || '';
@@ -4169,17 +4177,17 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       }
 
-      console.log(`Extracted: Student School ID: "${studentSchoolIDInput}", Student Name: "${studentNameInput}", Grade Level: "${gradeLevel}", Track: "${derivedTrackName}", Strand: "${strandName}", Section: "${sectionName}"`);
+      console.log(`Extracted: Student School ID: "${studentSchoolIDInput}", First Name: "${firstNameInput}", Last Name: "${lastNameInput}", Grade Level: "${gradeLevel}", Track: "${derivedTrackName}", Strand: "${strandName}", Section: "${sectionName}"`);
 
       let isValid = true;
       let message = 'Valid';
       let studentId = ''; // To store the student ID for valid assignments
 
       // 1. Check for missing required fields
-      if (!studentSchoolIDInput || !studentNameInput || !gradeLevel || !derivedTrackName || !strandName || !sectionName) {
+      if (!studentSchoolIDInput || !firstNameInput || !lastNameInput || !gradeLevel || !derivedTrackName || !strandName || !sectionName) {
         isValid = false;
-        message = 'Missing Student School ID, Student Name, Grade Level, Track Name, Strand Name, or Section Name';
-        console.log(`Row ${i + 1}: Missing required fields - studentSchoolIDInput: "${studentSchoolIDInput}", studentNameInput: "${studentNameInput}", gradeLevel: "${gradeLevel}", trackName: "${derivedTrackName}", strandName: "${strandName}", sectionName: "${sectionName}"`);
+        message = 'Missing Student School ID, First Name, Last Name, Grade Level, Track Name, Strand Name, or Section Name';
+        console.log(`Row ${i + 1}: Missing required fields - studentSchoolIDInput: "${studentSchoolIDInput}", firstNameInput: "${firstNameInput}", lastNameInput: "${lastNameInput}", gradeLevel: "${gradeLevel}", trackName: "${derivedTrackName}", strandName: "${strandName}", sectionName: "${sectionName}"`);
         status[i] = { valid: isValid, message: message, studentId: studentId };
         console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
         continue; // Skip all other validations for this row
@@ -4405,10 +4413,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
         // Handle new students (studentId is null for enrollment data)
         // For enrollment data, send student info directly to assignment endpoint (same as manual assignment)
-        const studentName = assignment['first_name'] && assignment['last_name'] 
-          ? `${assignment['first_name']} ${assignment['last_name']}` 
-          : assignment['Student Name'] || '';
+        const firstName = assignment['first_name'] || '';
+        const lastName = assignment['last_name'] || '';
         const studentSchoolID = assignment['student_no'] || assignment['Student School ID'] || '';
+        const enrollmentNo = assignment['enrollment_no'] || '';
+        const enrollmentDate = assignment['date'] || '';
 
         const res = await fetch(`${API_BASE}/api/student-assignments`, {
           method: 'POST',
@@ -4431,7 +4440,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               return { ...basePayload, studentId: studentId };
             } else {
               // New student - send student info directly (same as manual assignment)
-              const payload = { ...basePayload, studentName: studentName };
+              const payload = { 
+                ...basePayload, 
+                firstName: firstName,
+                lastName: lastName,
+                enrollmentNo: enrollmentNo,
+                enrollmentDate: enrollmentDate
+              };
               if (studentSchoolID) {
                 payload.studentSchoolID = studentSchoolID;
               }
@@ -4445,7 +4460,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           createdAssignments.push(newAssignment);
         } else {
           const data = await res.json();
-          throw new Error(data.message || `Failed to create assignment for ${assignment['Student Name']}`);
+          throw new Error(data.message || `Failed to create assignment for ${firstName} ${lastName}`);
         }
       }
 
@@ -5922,7 +5937,7 @@ Validation issues (${skippedCount} items):
     return true;
   });
 
-  // Export student assignments to Excel
+  // Export student assignments to Excel with Breakdown of Grades format
   const handleExportStudentAssignments = async () => {
     try {
       // Export all students (active and pending)
@@ -5935,35 +5950,108 @@ Validation issues (${skippedCount} items):
         return;
       }
 
-      // Create workbook and worksheet
+      // Create workbook
       const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(
-        allStudents.map(assignment => {
+
+      // Create the main classlist sheet in "Breakdown of Grades" format
+      const classlistData = [
+        // Header information
+        ['San Juan De Dios Educational Foundation Inc.'],
+        ['Breakdown of Students'],
+        [`${new Date().toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        })}`],
+        [],
+        // Class information
+        ['Name of Subject:', 'Student Assignments'],
+        ['Faculty Name:', 'System Administrator'],
+        ['Grade:', 'All Grades'],
+        ['Section:', 'All Sections'],
+        ['Strand:', 'All Strands'],
+        [],
+        // Student data headers
+        ['Student N.', 'Student ID', 'Enrollment No.', 'Enrollment Date', 'Last Name', 'First Name', 'Strand', 'Section', 'Grade', 'Status'],
+        // Student data rows
+        ...allStudents.map(assignment => {
           const student = students.find(s => s._id === assignment.studentId);
           const status = isStudentApproved(assignment) ? 'Active' : 'Pending Approval';
-          return {
-            'Student School ID': student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
-            'Student Name': assignment.studentName || 'Unknown',
-            'Track Name': assignment.trackName,
-            'Strand Name': assignment.strandName,
-            'Section Name': assignment.sectionName,
-            'Grade Level': assignment.gradeLevel,
-            'Status': status
-          };
-        })
-      );
+          return [
+            `${assignment.lastname || ''} ${assignment.firstname || ''}`.trim() || 'Unknown',
+            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
+            assignment.enrollmentNo || 'N/A',
+            assignment.enrollmentDate || 'N/A',
+            assignment.lastname || '',
+            assignment.firstname || '',
+            assignment.strandName || 'N/A',
+            assignment.sectionName || 'N/A',
+            assignment.gradeLevel || 'N/A',
+            status
+          ];
+        }),
+        [],
+        [`Generated on ${new Date().toLocaleString('en-US', { 
+          month: 'numeric', 
+          day: 'numeric', 
+          year: 'numeric', 
+          hour: 'numeric', 
+          minute: '2-digit', 
+          second: '2-digit', 
+          hour12: true 
+        })}`],
+        ['San Juan De Dios Educational Foundation Inc.']
+      ];
 
-      // Add worksheet to workbook
-      XLSX.utils.book_append_sheet(wb, ws, 'Student Assignments');
+      const classlistWs = XLSX.utils.aoa_to_sheet(classlistData);
+      XLSX.utils.book_append_sheet(wb, classlistWs, 'Student Classlist');
 
       // Generate filename
-      const fileName = `${termDetails?.schoolYear} - ${termDetails?.termName}${quarterData ? ` - ${quarterData.quarterName}` : ''} - Student Assignments.xlsx`;
+      const fileName = `${termDetails?.schoolYear} - ${termDetails?.termName}${quarterData ? ` - ${quarterData.quarterName}` : ''} - Student Classlist.xlsx`;
 
       // Save file
       XLSX.writeFile(wb, fileName);
     } catch (error) {
       console.error('Error exporting student assignments:', error);
       alert('Error exporting student assignments. Please try again.');
+    }
+  };
+
+  // Export classlist only (Strand, Section, Grade format)
+  const handleExportClasslist = async () => {
+    try {
+      // Export all students (active and pending)
+      const allStudents = filteredStudentAssignments.filter(assignment => 
+        assignment.status === 'active' // Only include non-archived students
+      );
+
+      if (allStudents.length === 0) {
+        alert('No students found to export.');
+        return;
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+
+      // Classlist Format (Strand, Section, Grade) - exactly like your example
+      const classlistData = allStudents.map(assignment => ({
+        'Strand': assignment.strandName || 'N/A',
+        'Section': assignment.sectionName || 'N/A', 
+        'Grade': assignment.gradeLevel || 'N/A'
+      }));
+
+      const classlistWs = XLSX.utils.json_to_sheet(classlistData);
+      XLSX.utils.book_append_sheet(wb, classlistWs, 'Classlist');
+
+      // Generate filename
+      const fileName = `${termDetails?.schoolYear} - ${termDetails?.termName}${quarterData ? ` - ${quarterData.quarterName}` : ''} - Classlist.xlsx`;
+
+      // Save file
+      XLSX.writeFile(wb, fileName);
+    } catch (error) {
+      console.error('Error exporting classlist:', error);
+      alert('Error exporting classlist. Please try again.');
     }
   };
 
@@ -6956,18 +7044,19 @@ Validation issues (${skippedCount} items):
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                   <thead>
                     <tr className="bg-gray-100 text-left">
-                      <th className="p-3 border w-1/6">Track Name</th>
-                      <th className="p-3 border w-1/6">Strand Name</th>
-                      <th className="p-3 border w-1/6">Section Name</th>
-                      <th className="p-3 border w-1/6">Grade Level</th>
-                      <th className="p-3 border w-1/6">Status</th>
-                      <th className="p-3 border w-1/6">Actions</th>
+                      <th className="p-3 border w-1/7">Track Name</th>
+                      <th className="p-3 border w-1/7">Strand Name</th>
+                      <th className="p-3 border w-1/7">Section Name</th>
+                      <th className="p-3 border w-1/7">Section Code</th>
+                      <th className="p-3 border w-1/7">Grade Level</th>
+                      <th className="p-3 border w-1/7">Status</th>
+                      <th className="p-3 border w-1/7">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {sections.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="p-3 border text-center text-gray-500">
+                        <td colSpan="7" className="p-3 border text-center text-gray-500">
                           No sections found.
                         </td>
                       </tr>
@@ -6977,6 +7066,7 @@ Validation issues (${skippedCount} items):
                           <td className="p-3 border">{section.trackName}</td>
                           <td className="p-3 border">{section.strandName}</td>
                           <td className="p-3 border">{section.sectionName}</td>
+                          <td className="p-3 border">{section.sectionCode || 'N/A'}</td>
                           <td className="p-3 border">{section.gradeLevel}</td>
                           <td className="p-3 border">{section.status}</td>
                           <td className="p-3 border">
@@ -7925,13 +8015,14 @@ Validation issues (${skippedCount} items):
                 <div className="flex justify-between items-center mt-5 mb-4">
                   <h4 className="text-2xl font-semibold mb-2">Student Assignments</h4>
                   <div className="flex gap-2">
+                   
                     <button
                       type="button"
-                      className="bg-blue-900 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      className="bg-blue-900 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 w-fit"
                       onClick={handleExportStudentAssignments}
                       disabled={termDetails.status === 'archived'}
                     >
-                      Export Classlist
+                      Export Detailed Assignments
                     </button>
                     <button
                       type="button"
@@ -8082,6 +8173,33 @@ Validation issues (${skippedCount} items):
                       >
                         <div className="grid grid-cols-2 gap-4">
                           <div>
+                            <label htmlFor="enrollmentNo" className="block text-sm font-medium text-gray-700 mb-1">Enrollment No.</label>
+                            <input
+                              type="text"
+                              id="enrollmentNo"
+                              name="enrollmentNo"
+                              value={studentFormData.enrollmentNo || ''}
+                              onChange={handleChangeStudentForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter enrollment number"
+                              disabled={termDetails.status === 'archived'}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="enrollmentDate" className="block text-sm font-medium text-gray-700 mb-1">Enrollment Date</label>
+                            <input
+                              type="date"
+                              id="enrollmentDate"
+                              name="enrollmentDate"
+                              value={studentFormData.enrollmentDate || ''}
+                              onChange={handleChangeStudentForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              disabled={termDetails.status === 'archived'}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
                             <label htmlFor="studentManualId" className="block text-sm font-medium text-gray-700 mb-1">Student School ID</label>
                             <input
                               type="text"
@@ -8093,36 +8211,36 @@ Validation issues (${skippedCount} items):
                               disabled={termDetails.status === 'archived'}
                             />
                           </div>
-                          <div className="relative">
-                            <label htmlFor="studentSearch" className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
                             <input
                               type="text"
-                              id="studentSearch"
-                              name="studentSearch"
-                              value={studentSearchTerm}
+                              id="lastName"
+                              name="lastName"
+                              value={studentFormData.lastName || ''}
                               onChange={handleChangeStudentForm}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Type to search or enter a new name..."
-                              required
+                              placeholder="Enter last name"
                               disabled={termDetails.status === 'archived'}
                             />
-                            {showStudentSuggestions && studentSearchResults.length > 0 && (
-                              <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
-                                {studentSearchResults.map(student => (
-                                  <li
-                                    key={student._id}
-                                    onClick={() => handleSelectStudent(student)}
-                                    className="p-2 hover:bg-gray-100 cursor-pointer"
-                                  >
-                                    <div className="flex flex-col">
-                                      <span className="font-medium">{student.firstname || student.firstName || 'Unknown'} {student.lastname || student.lastName || 'Student'}</span>
-                                      <span className="text-sm text-gray-500">School ID: {student.schoolID}</span>
-                                    </div>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
                           </div>
+                          <div>
+                            <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                            <input
+                              type="text"
+                              id="firstName"
+                              name="firstName"
+                              value={studentFormData.firstName || ''}
+                              onChange={handleChangeStudentForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter first name"
+                              disabled={termDetails.status === 'archived'}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label htmlFor="trackNameStudent" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
                             <select
@@ -8142,8 +8260,6 @@ Validation issues (${skippedCount} items):
                               ))}
                             </select>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label htmlFor="strandNameStudent" className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
                             <select
@@ -8163,6 +8279,8 @@ Validation issues (${skippedCount} items):
                               ))}
                             </select>
                           </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label htmlFor="gradeLevelStudent" className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
                             <select
@@ -8277,11 +8395,11 @@ Validation issues (${skippedCount} items):
                               const isValid = studentValidationStatus[index]?.valid;
                               const message = studentValidationStatus[index]?.message;
                               
-                              // Extract data from both old and new formats
+                              // Extract data from new format
                               const studentSchoolID = assignment['student_no'] || assignment['Student School ID'] || '';
-                              const studentName = assignment['first_name'] && assignment['last_name'] 
-                                ? `${assignment['first_name']} ${assignment['last_name']}` 
-                                : assignment['Student Name'] || '';
+                              const firstName = assignment['first_name'] || '';
+                              const lastName = assignment['last_name'] || '';
+                              const studentName = `${firstName} ${lastName}`.trim();
                               const gradeLevel = assignment['grade'] || assignment['Grade Level'] || '';
                               const trackName = assignment['Track Name'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track');
                               const strandName = assignment['strand'] || assignment['Strand Name'] || '';
@@ -8339,12 +8457,14 @@ Validation issues (${skippedCount} items):
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                     <thead>
                       <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border">Student School ID</th>
-                        <th className="p-3 border">Student Name</th>
-                        <th className="p-3 border">Track Name</th>
-                        <th className="p-3 border">Strand Name</th>
-                        <th className="p-3 border">Grade Level</th>
+                        <th className="p-3 border">Enrollment No.</th>
+                        <th className="p-3 border">Enrollment Date</th>
+                        <th className="p-3 border">Student No.</th>
+                        <th className="p-3 border">Last Name</th>
+                        <th className="p-3 border">First Name</th>
+                        <th className="p-3 border">Strand</th>
                         <th className="p-3 border">Section</th>
+                        <th className="p-3 border">Grade</th>
                         <th className="p-3 border">Status</th>
                         <th className="p-3 border">Actions</th>
                       </tr>
@@ -8352,7 +8472,7 @@ Validation issues (${skippedCount} items):
                     <tbody>
                       {filteredStudentAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="8" className="p-3 border text-center text-gray-500">
+                          <td colSpan="10" className="p-3 border text-center text-gray-500">
                             No student assignments found.
                           </td>
                         </tr>
@@ -8361,12 +8481,14 @@ Validation issues (${skippedCount} items):
                           const student = students.find(s => s._id === assignment.studentId);
                           return (
                             <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
+                              <td className="p-3 border">{assignment.enrollmentNo || 'N/A'}</td>
+                              <td className="p-3 border">{assignment.enrollmentDate || 'N/A'}</td>
                               <td className="p-3 border">{student?.schoolID || assignment.studentSchoolID || assignment.schoolID || ''}</td>
-                              <td className="p-3 border">{assignment.studentName || 'Unknown'}</td>
-                              <td className="p-3 border">{assignment.trackName}</td>
+                              <td className="p-3 border">{assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || 'N/A'}</td>
+                              <td className="p-3 border">{assignment.firstname || assignment.studentName?.split(' ')[0] || 'N/A'}</td>
                               <td className="p-3 border">{assignment.strandName}</td>
-                              <td className="p-3 border">{assignment.gradeLevel}</td>
                               <td className="p-3 border">{assignment.sectionName}</td>
+                              <td className="p-3 border">{assignment.gradeLevel}</td>
                               <td className="p-3 border">
                                 {assignment.status === 'archived' ? (
                                   <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>

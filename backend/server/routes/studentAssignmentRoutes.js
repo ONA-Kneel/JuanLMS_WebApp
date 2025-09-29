@@ -48,6 +48,8 @@ router.get('/', authenticateToken, async (req, res) => {
           middlename: assignment.studentId.getDecryptedMiddlename ? assignment.studentId.getDecryptedMiddlename() : assignment.studentId.middlename,
           firstname: assignment.studentId.getDecryptedFirstname ? assignment.studentId.getDecryptedFirstname() : assignment.studentId.firstname,
           lastname: assignment.studentId.getDecryptedLastname ? assignment.studentId.getDecryptedLastname() : assignment.studentId.lastname,
+          enrollmentNo: assignment.enrollmentNo || '',
+          enrollmentDate: assignment.enrollmentDate || null,
           isApproved: isApproved
         };
       }
@@ -67,6 +69,10 @@ router.get('/', authenticateToken, async (req, res) => {
         termId: assignment.termId,
         status: assignment.status,
         schoolID: assignment.studentSchoolID || '',
+        enrollmentNo: assignment.enrollmentNo || '',
+        enrollmentDate: assignment.enrollmentDate || null,
+        firstname: assignment.firstName || '',
+        lastname: assignment.lastName || '',
         isApproved: isApproved
       };
     });
@@ -81,7 +87,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create a new student assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId } = req.body;
+    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, enrollmentNo, enrollmentDate, firstName, lastName } = req.body;
 
     // Get term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -139,6 +145,10 @@ router.post('/', authenticateToken, async (req, res) => {
       studentId: actualStudentId || undefined,
       studentName: !actualStudentId ? studentName : undefined,
       studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
+      enrollmentNo: enrollmentNo || undefined,
+      enrollmentDate: enrollmentDate || undefined,
+      firstName: firstName || undefined,
+      lastName: lastName || undefined,
       trackName,
       strandName,
       sectionName,
@@ -166,7 +176,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
   const errors = [];
 
   for (const assignmentData of assignments) {
-    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId } = assignmentData;
+    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, enrollmentNo, enrollmentDate, firstName, lastName } = assignmentData;
 
     try {
       const term = await Term.findById(termId);
@@ -226,6 +236,10 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         studentId: actualStudentId || undefined,
         studentName: !actualStudentId ? studentName : undefined,
         studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
+        enrollmentNo: enrollmentNo || undefined,
+        enrollmentDate: enrollmentDate || undefined,
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
         trackName,
         strandName,
         sectionName,
@@ -299,7 +313,7 @@ router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
 // Update a student assignment (e.g., if track/strand/section changes)
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
-    const { trackName, strandName, sectionName, gradeLevel, termId } = req.body;
+    const { trackName, strandName, sectionName, gradeLevel, termId, enrollmentNo, enrollmentDate, firstName, lastName } = req.body;
 
     const assignment = await StudentAssignment.findById(req.params.id);
     if (!assignment) {
@@ -317,6 +331,10 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     assignment.strandName = strandName || assignment.strandName;
     assignment.sectionName = sectionName || assignment.sectionName;
     if (gradeLevel) assignment.gradeLevel = gradeLevel;
+    if (enrollmentNo !== undefined) assignment.enrollmentNo = enrollmentNo;
+    if (enrollmentDate !== undefined) assignment.enrollmentDate = enrollmentDate;
+    if (firstName !== undefined) assignment.firstName = firstName;
+    if (lastName !== undefined) assignment.lastName = lastName;
     assignment.termId = currentTermId; // Update termId if provided
     assignment.schoolYear = term.schoolYear;
     assignment.termName = term.termName;

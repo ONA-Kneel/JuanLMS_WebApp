@@ -272,7 +272,7 @@ export default function FacultyCreateClass() {
       }
       const token = localStorage.getItem('token');
       const res = await fetch(
-        `${API_BASE}/api/student-assignments?termId=${currentTerm._id}&sectionName=${selectedSection}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}&status=active`,
+        `${API_BASE}/api/student-assignments?termId=${currentTerm._id}&sectionName=${selectedSection}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (res.ok) {
@@ -306,8 +306,9 @@ export default function FacultyCreateClass() {
       const token = localStorage.getItem('token');
       
       // Search directly within the selected section using student assignments
+      // Include both active and pending students (don't filter by status)
       const response = await fetch(
-        `${API_BASE}/api/student-assignments?termId=${currentTerm._id}&sectionName=${selectedSection}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}&status=active`,
+        `${API_BASE}/api/student-assignments?termId=${currentTerm._id}&sectionName=${selectedSection}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
@@ -322,27 +323,54 @@ export default function FacultyCreateClass() {
       }
       
       const assignments = await response.json();
+      console.log('[SEARCH] All assignments for section:', assignments);
+      console.log('[SEARCH] Searching for:', query);
       
       // Filter assignments by search query (search in student name or school ID)
       const searchTerm = query.toLowerCase();
       const filteredAssignments = assignments.filter(assignment => {
         const studentName = assignment.studentName?.toLowerCase() || '';
+        const firstName = assignment.firstname?.toLowerCase() || '';
+        const lastName = assignment.lastname?.toLowerCase() || '';
         const schoolID = assignment.schoolID?.toLowerCase() || '';
-        return studentName.includes(searchTerm) || schoolID.includes(searchTerm);
+        
+        // Search in multiple fields
+        return studentName.includes(searchTerm) || 
+               firstName.includes(searchTerm) || 
+               lastName.includes(searchTerm) ||
+               schoolID.includes(searchTerm);
       });
+      
+      console.log('[SEARCH] Filtered assignments:', filteredAssignments);
 
       // Convert assignments to student objects and filter out already selected students
       const availableStudents = filteredAssignments
-        .filter(assignment => assignment.studentId) // Filter out assignments without studentId first
-        .map(assignment => ({
-          _id: assignment.studentId,
-          firstname: assignment.firstname || assignment.studentName?.split(' ')[0] || '',
-          lastname: assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || '',
-          middlename: assignment.middlename || '',
-          schoolID: assignment.schoolID || '',
-          email: assignment.email || '',
-          role: 'students'
-        }))
+        .map(assignment => {
+          // Handle both linked students (with studentId) and manual entries (without studentId)
+          if (assignment.studentId) {
+            // Linked student - use the studentId as _id
+            return {
+              _id: assignment.studentId,
+              firstname: assignment.firstname || assignment.studentName?.split(' ')[0] || '',
+              lastname: assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || '',
+              middlename: assignment.middlename || '',
+              schoolID: assignment.schoolID || '',
+              email: assignment.email || '',
+              role: 'students'
+            };
+          } else {
+            // Manual entry - use assignment _id as _id
+            return {
+              _id: assignment._id,
+              firstname: assignment.firstname || assignment.studentName?.split(' ')[0] || '',
+              lastname: assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || '',
+              middlename: assignment.middlename || '',
+              schoolID: assignment.schoolID || '',
+              email: assignment.email || '',
+              role: 'students'
+            };
+          }
+        })
         .filter(student => student && student._id && !selectedStudents.some(sel => sel && sel._id === student._id));
 
       if (availableStudents.length === 0) {
@@ -369,17 +397,18 @@ export default function FacultyCreateClass() {
     if (!selectedSection || !currentTerm || !academicYear) return false;
     const token = localStorage.getItem('token');
     const res = await fetch(
-      `${API_BASE}/api/student-assignments?studentId=${studentId}&termId=${currentTerm._id}&sectionName=${selectedSection}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}&status=active`,
+      `${API_BASE}/api/student-assignments?studentId=${studentId}&termId=${currentTerm._id}&sectionName=${selectedSection}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     const assignments = await res.json();
     
-    // Check if student is both active AND approved
-    const approvedAssignment = assignments.find(assignment => 
-      assignment.status === 'active' && assignment.isApproved === true
+    // Check if student is assigned to the section (active or pending)
+    // Don't filter by status - include both active and pending students
+    const assignedToSection = assignments.find(assignment => 
+      assignment.status === 'active' // Only include non-archived students
     );
     
-    return approvedAssignment !== undefined;
+    return assignedToSection !== undefined;
   }
 
   // Update handleAddStudent to check assignment
