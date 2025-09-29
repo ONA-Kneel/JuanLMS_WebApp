@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = "";
+const API_BASE = "http://localhost:5000";
 
 
 export default function Admin_AcademicSettings() {

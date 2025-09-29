@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 
-const API_BASE = "";
+const API_BASE = "http://localhost:5000";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -3822,13 +3822,41 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
     }
 
-    // Get existing faculty assignments from the component state (more reliable)
-    const existingAssignments = facultyAssignments.filter(assignment => assignment.status === 'active');
+    // Fetch latest faculty assignments from backend for accurate validation
+    let existingAssignments = [];
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/faculty-assignments?termId=${termDetails._id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        existingAssignments = await res.json();
+        existingAssignments = existingAssignments.filter(assignment => assignment.status === 'active');
+      } else {
+        console.error('Failed to fetch existing faculty assignments for validation.');
+        // Fallback to component state
+        existingAssignments = facultyAssignments.filter(assignment => assignment.status === 'active');
+      }
+    } catch (err) {
+      console.error('Error fetching existing faculty assignments for validation:', err);
+      // Fallback to component state
+      existingAssignments = facultyAssignments.filter(assignment => assignment.status === 'active');
+    }
+    
     const existingAssignmentsInSystem = new Set(existingAssignments.map(assign => 
-      `${assign.facultyId}-${assign.trackName}-${assign.strandName}-${assign.sectionName}`
+      `${assign.facultyId}-${assign.trackName}-${assign.strandName}-${assign.sectionName}-${assign.subjectName || ''}`
     ));
     
     console.log('Existing faculty assignments in system:', Array.from(existingAssignmentsInSystem));
+    console.log('Total existing assignments fetched:', existingAssignments.length);
+    console.log('Detailed existing assignments:', existingAssignments.map(assign => ({
+      facultyId: assign.facultyId,
+      trackName: assign.trackName,
+      strandName: assign.strandName,
+      sectionName: assign.sectionName,
+      subjectName: assign.subjectName,
+      combo: `${assign.facultyId}-${assign.trackName}-${assign.strandName}-${assign.sectionName}-${assign.subjectName || ''}`
+    })));
 
     for (let i = 0; i < assignmentsToValidate.length; i++) {
       const assignment = assignmentsToValidate[i];
@@ -3843,6 +3871,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       let isValid = true;
       let message = 'Valid';
       let facultyId = ''; // To store the faculty ID for valid assignments
+      
+      console.log(`Row ${i + 1}: Starting validation for ${facultyName} (${facultySchoolID})`);
 
       // 1. Check for missing required fields
       if (!facultySchoolID || !facultyName || !trackName || !strandName || !sectionName || !gradeLevel || !subjectName) {
@@ -3879,6 +3909,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             message = `Faculty Name "${facultyName}" does not match School ID "${facultySchoolID}". Expected: "${facultyFound.firstname} ${facultyFound.lastname}"`;
           } else {
             facultyId = facultyFound._id;
+            console.log(`Row ${i + 1}: Found faculty ID: ${facultyId} for ${facultyName}`);
           }
         }
       }
@@ -3921,36 +3952,46 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       }
 
-      // 7. Check for existing assignments in the system
-      if (isValid) {
-        const existingCombo = `${facultyId}-${trackName}-${strandName}-${sectionName}`;
+      // 7. Check for existing assignments in the system (including subject)
+      if (isValid && facultyId) {
+        const existingCombo = `${facultyId}-${trackName}-${strandName}-${sectionName}-${subjectName}`;
         console.log(`Row ${i + 1}: Checking if faculty assignment exists: "${existingCombo}"`);
         console.log(`Row ${i + 1}: Available existing assignments:`, Array.from(existingAssignmentsInSystem));
+        console.log(`Row ${i + 1}: Does combo exist?`, existingAssignmentsInSystem.has(existingCombo));
         if (existingAssignmentsInSystem.has(existingCombo)) {
           isValid = false;
           message = 'Faculty assignment already exists in the system';
           console.log(`Row ${i + 1}: Found existing assignment match`);
+        } else {
+          console.log(`Row ${i + 1}: No existing assignment match found`);
         }
       }
 
-      // 8. Check for subject-section conflicts (NEW VALIDATION)
+      // 8. Check for subject-section conflicts (only one faculty per subject-section)
       if (isValid) {
         const conflictingAssignment = existingAssignments.find(ea => 
           ea.subjectName.toLowerCase() === subjectName.toLowerCase() &&
           ea.sectionName.toLowerCase() === sectionName.toLowerCase() &&
-          ea.facultyId !== facultyId &&
           ea.status === 'active'
         );
         
         if (conflictingAssignment) {
-          isValid = false;
-          message = `Subject "${subjectName}" in Section "${sectionName}" is already assigned to another faculty`;
-          console.log(`Row ${i + 1}: Found subject-section conflict`);
+          // Check if it's the same faculty (allowed) or different faculty (not allowed)
+          if (conflictingAssignment.facultyId !== facultyId) {
+            isValid = false;
+            message = `Subject "${subjectName}" in Section "${sectionName}" is already assigned to another faculty`;
+            console.log(`Row ${i + 1}: Found subject-section conflict with different faculty`);
+          } else {
+            // Same faculty, same subject-section - this is a duplicate
+            isValid = false;
+            message = 'Faculty assignment already exists in the system';
+            console.log(`Row ${i + 1}: Found duplicate assignment for same faculty`);
+          }
         }
       }
 
       status[i] = { valid: isValid, message: message, facultyId: facultyId };
-      console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
+      console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}", facultyId: "${facultyId}"`);
     }
     return status;
   };
@@ -3976,40 +4017,45 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           const workbook = XLSX.read(data, { type: 'array' });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
 
-          const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:A1');
-          const actualHeaders = [];
-          for (let C = range.s.c; C <= range.e.c; ++C) {
-            const cell = worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
-            if (cell && cell.v) {
-              actualHeaders.push(String(cell.v).trim());
-            }
-          }
-
-          const requiredHeaders = ['Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject'];
-          const missingOrMismatchedHeaders = requiredHeaders.filter(header => !actualHeaders.includes(header));
-
-          if (missingOrMismatchedHeaders.length > 0) {
-            setFacultyError(`Missing or misspelled column(s) in Excel file: ${missingOrMismatchedHeaders.join(', ')}. Please ensure headers are exactly as in the template.`);
+          // Use the improved header detection
+          const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+          console.log("Raw Excel Data for Faculty Assignments:", rawData);
+          
+          // Find the actual header row
+          const expectedHeaders = ['Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject'];
+          const { headerRowIndex, headers } = findDataHeaders(rawData, expectedHeaders);
+          
+          // Get data rows starting after the header row
+          const dataRows = rawData.slice(headerRowIndex + 1);
+          console.log("Data rows for Faculty Assignments:", dataRows);
+          
+          if (dataRows.length === 0) {
+            setFacultyError('No data rows found after headers');
             return;
           }
 
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-          jsonData.shift();
-
-          if (jsonData.length === 0) {
-            setFacultyError('The Excel file contains only headers or is empty after header parsing.');
-            return;
-          }
-
-          const assignmentsToPreview = jsonData.map(row => ({
-            facultySchoolID: String(row[actualHeaders.indexOf('Faculty School ID')] || '').trim(),
-            facultyName: String(row[actualHeaders.indexOf('Faculty Name')] || '').trim(),
-            trackName: String(row[actualHeaders.indexOf('Track Name')] || '').trim(),
-            strandName: String(row[actualHeaders.indexOf('Strand Name')] || '').trim(),
-            sectionName: String(row[actualHeaders.indexOf('Section Name')] || '').trim(),
-            gradeLevel: String(row[actualHeaders.indexOf('Grade Level')] || '').trim(),
-            subjectName: String(row[actualHeaders.indexOf('Subject')] || '').trim(),
-          }));
+          // Map data rows to objects using the found headers
+          console.log('Headers found:', headers);
+          console.log('Data rows to process:', dataRows);
+          
+          const assignmentsToPreview = dataRows.map((row, index) => {
+            console.log(`Processing row ${index}:`, row);
+            const assignmentObj = {};
+            headers.forEach((header, headerIndex) => {
+              const key = String(header).trim();
+              const value = String(row[headerIndex] || '').trim();
+              assignmentObj[key] = value;
+            });
+            return {
+              facultySchoolID: assignmentObj['Faculty School ID'] || '',
+              facultyName: assignmentObj['Faculty Name'] || '',
+              trackName: assignmentObj['Track Name'] || '',
+              strandName: assignmentObj['Strand Name'] || '',
+              sectionName: assignmentObj['Section Name'] || '',
+              gradeLevel: assignmentObj['Grade Level'] || '',
+              subjectName: assignmentObj['Subject'] || '',
+            };
+          });
 
           const validationResults = await validateFacultyAssignments(assignmentsToPreview);
 
@@ -4194,33 +4240,47 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     try {
       const wb = XLSX.utils.book_new();
 
-      // Sheet 1: Template for adding new student assignments (Updated Format)
+      // Sheet 1: Template for adding new student assignments with complete school details
       const templateWs = XLSX.utils.aoa_to_sheet([
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['ENROLLED STUDENTS MANAGEMENT'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
         ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade'], // Updated format
-       
       ]);
+      
+      // Set column widths
+      templateWs['!cols'] = [
+        { wch: 15 }, // enrollment_no
+        { wch: 12 }, // date
+        { wch: 15 }, // student_no
+        { wch: 20 }, // last_name
+        { wch: 20 }, // first_name
+        { wch: 25 }, // strand
+        { wch: 20 }, // section
+        { wch: 10 }  // grade
+      ];
+      
       XLSX.utils.book_append_sheet(wb, templateWs, 'Enrolled Students Template');
 
       // Sheet 2: Current student assignments in the system with school details
       const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
       const currentStudentAssignmentsData = [
-        // School details header
-        ['San Juan De Dios Educational Foundation Inc.'],
-        ['Breakdown of Students'],
-        [`${new Date().toLocaleDateString('en-US', { 
-          weekday: 'long', 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
-        })}`],
-        [],
-        // Class information
-        ['Name of Subject:', 'Enrolled Students'],
-        ['Faculty Name:', 'System Administrator'],
-        ['Grade:', 'All Grades'],
-        ['Section:', 'All Sections'],
-        ['Strand:', 'All Strands'],
-        [],
+        // Complete school details header
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['CURRENT ENROLLED STUDENTS'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
         // Student data headers
         ['Student N.', 'Student ID', 'Enrollment No.', 'Enrollment Date', 'Last Name', 'First Name', 'Strand', 'Section', 'Grade', 'Status'],
         // Student data rows
