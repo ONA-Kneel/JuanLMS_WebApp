@@ -238,6 +238,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [showFacultyModal, setShowFacultyModal] = useState(false);
   const [showStudentModal, setShowStudentModal] = useState(false);
+  const [showExportClasslistModal, setShowExportClasslistModal] = useState(false);
+  const [selectedExportSection, setSelectedExportSection] = useState('');
   
 
   // New state for Term Data Import
@@ -6435,36 +6437,85 @@ Validation issues (${skippedCount} items):
   };
 
   // Export classlist only (Strand, Section, Grade format)
-  const handleExportClasslist = async () => {
+  const handleExportClasslist = () => {
+    setShowExportClasslistModal(true);
+  };
+
+  const handleConfirmExportClasslist = () => {
+    if (!selectedExportSection) {
+      alert('Please select a section to export');
+      return;
+    }
+
     try {
-      // Export all students (active and pending)
-      const allStudents = filteredStudentAssignments.filter(assignment => 
-        assignment.status === 'active' // Only include non-archived students
+      // Filter student assignments by selected section
+      const sectionStudents = studentAssignments.filter(assignment => 
+        assignment.sectionName === selectedExportSection && assignment.status === 'active'
       );
 
-      if (allStudents.length === 0) {
-        alert('No students found to export.');
+      if (sectionStudents.length === 0) {
+        alert('No students found in the selected section.');
         return;
       }
+
+      // Get the actual grade and strand from the first student (assuming all students in section have same grade/strand)
+      const firstStudent = sectionStudents[0];
+      const actualGrade = firstStudent?.gradeLevel || 'N/A';
+      const actualStrand = firstStudent?.strandName || 'N/A';
 
       // Create workbook
       const wb = XLSX.utils.book_new();
 
-      // Classlist Format (Strand, Section, Grade) - exactly like your example
-      const classlistData = allStudents.map(assignment => ({
-        'Strand': assignment.strandName || 'N/A',
-        'Section': assignment.sectionName || 'N/A', 
-        'Grade': assignment.gradeLevel || 'N/A'
-      }));
+      // Create the classlist with school details
+      const classlistData = [
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['BREAKDOWN OF STUDENTS'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
+        ['Grade:', actualGrade],
+        ['Section:', selectedExportSection],
+        ['Strand:', actualStrand],
+        [''], // Empty row
+        ['Student No.', 'Last Name', 'First Name', 'Status'], // Headers
+        // Student data
+        ...sectionStudents.map(assignment => {
+          const student = students.find(s => s._id === assignment.studentId);
+          const status = isStudentApproved(assignment) ? 'Active' : 'Pending Approval';
+          return [
+            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || 'N/A',
+            assignment.lastname || assignment.lastName || 'N/A',
+            assignment.firstname || assignment.firstName || 'N/A',
+            status
+          ];
+        })
+      ];
 
-      const classlistWs = XLSX.utils.json_to_sheet(classlistData);
+      const classlistWs = XLSX.utils.aoa_to_sheet(classlistData);
+      
+      // Set column widths
+      classlistWs['!cols'] = [
+        { wch: 15 }, // Student No.
+        { wch: 20 }, // Last Name
+        { wch: 20 }, // First Name
+        { wch: 12 }  // Status
+      ];
+      
       XLSX.utils.book_append_sheet(wb, classlistWs, 'Classlist');
 
       // Generate filename
-      const fileName = `${termDetails?.schoolYear} - ${termDetails?.termName}${quarterData ? ` - ${quarterData.quarterName}` : ''} - Classlist.xlsx`;
+      const fileName = `${termDetails?.schoolYear} - ${termDetails?.termName} - ${selectedExportSection} - Classlist.xlsx`;
 
       // Save file
       XLSX.writeFile(wb, fileName);
+
+      setShowExportClasslistModal(false);
+      setSelectedExportSection('');
+
     } catch (error) {
       console.error('Error exporting classlist:', error);
       alert('Error exporting classlist. Please try again.');
@@ -8429,7 +8480,7 @@ Validation issues (${skippedCount} items):
                     <button
                       type="button"
                       className="bg-blue-900 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 w-fit"
-                      onClick={handleExportStudentAssignments}
+                      onClick={handleExportClasslist}
                       disabled={termDetails.status === 'archived'}
                     >
                       Export Classlist
@@ -8856,6 +8907,55 @@ Validation issues (${skippedCount} items):
                             }`}
                         >
                           {isStudentUploading ? 'Uploading...' : `Upload ${Object.values(studentValidationStatus).filter(v => v.valid).length} Valid Student Assignment(s)`}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Export Classlist Modal */}
+                {showExportClasslistModal && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full">
+                      <h3 className="text-xl font-semibold mb-4">Export Classlist</h3>
+                      <p className="text-gray-600 mb-4">Select a section to export the classlist with Student No., Last Name, First Name, and Status.</p>
+                      
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Select Section
+                        </label>
+                        <select
+                          value={selectedExportSection}
+                          onChange={(e) => setSelectedExportSection(e.target.value)}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="">Choose a section...</option>
+                          {sections.map(section => (
+                            <option key={section._id} value={section.sectionName}>
+                              {section.sectionName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex justify-end gap-3">
+                        <button
+                          onClick={() => {
+                            setShowExportClasslistModal(false);
+                            setSelectedExportSection('');
+                          }}
+                          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleConfirmExportClasslist}
+                          disabled={!selectedExportSection}
+                          className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${
+                            !selectedExportSection ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          Export Classlist
                         </button>
                       </div>
                     </div>

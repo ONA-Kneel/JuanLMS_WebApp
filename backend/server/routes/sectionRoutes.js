@@ -133,7 +133,7 @@ router.post('/', async (req, res) => {
     }
 
     const newSection = new Section({ 
-      sectionName,
+      sectionName, 
       sectionCode,
       trackName, 
       strandName, 

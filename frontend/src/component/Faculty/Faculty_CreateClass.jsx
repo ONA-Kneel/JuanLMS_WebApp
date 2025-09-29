@@ -569,21 +569,15 @@ export default function FacultyCreateClass() {
     // Create template data with headers and sample rows matching student assignments export format
     const templateData = [
       {
-        'Student School ID': '25-00016',
-        'Student Name': 'Hannah Reyes',
-        'Track Name': 'Academic Track',
-        'Strand Name': 'Accountancy, Business and Management (ABM)',
-        'Section Name': 'St. Augustine',
-        'Grade Level': 'Grade 11',
+        'Student No.': '25-00016',
+        'Last Name': 'Reyes',
+        'First Name': 'Hannah',
         'Status': 'Active'
       },
       {
-        'Student School ID': '25-00070',
-        'Student Name': 'Isabel De Marco',
-        'Track Name': 'Academic Track',
-        'Strand Name': 'Accountancy, Business and Management (ABM)',
-        'Section Name': 'St. Athanasius',
-        'Grade Level': 'Grade 11',
+        'Student No.': '25-00070',
+        'Last Name': 'De Marco',
+        'First Name': 'Isabel',
         'Status': 'Active'
       }
     ];
@@ -594,12 +588,9 @@ export default function FacultyCreateClass() {
 
     // Set column widths
     worksheet['!cols'] = [
-      { wch: 18 }, // Student School ID
-      { wch: 25 }, // Student Name
-      { wch: 20 }, // Track Name
-      { wch: 35 }, // Strand Name
-      { wch: 20 }, // Section Name
-      { wch: 15 }, // Grade Level
+      { wch: 15 }, // Student No.
+      { wch: 20 }, // Last Name
+      { wch: 20 }, // First Name
       { wch: 12 }  // Status
     ];
 
@@ -648,7 +639,7 @@ export default function FacultyCreateClass() {
       // Validate that the file has the expected columns
       if (json.length > 0) {
         const firstRow = json[0];
-        const hasRequiredColumns = firstRow['Student School ID'] || firstRow['School ID'] || firstRow['schoolID'];
+        const hasRequiredColumns = firstRow['Student No.'] || firstRow['Student School ID'] || firstRow['School ID'] || firstRow['schoolID'];
         if (!hasRequiredColumns) {
           setBatchMessage('Error: The uploaded file does not have the correct format. Please download the template and use the correct column names.');
           setBatchLoading(false);
@@ -657,8 +648,8 @@ export default function FacultyCreateClass() {
       }
 
       for (const row of json) {
-        // Try to get Student School ID first, then fallback to other formats for backward compatibility
-        const schoolID = (row['Student School ID'] || row['School ID'] || row['schoolID'] || row['SchoolID'] || "").trim();
+        // Try to get Student No. first, then fallback to other formats for backward compatibility
+        const schoolID = (row['Student No.'] || row['Student School ID'] || row['School ID'] || row['schoolID'] || row['SchoolID'] || "").trim();
         const email = (row.Email || row["email"] || row["School Email"] || row["school email"] || "").trim();
         
         if (!schoolID && !email) {
