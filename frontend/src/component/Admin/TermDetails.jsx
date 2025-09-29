@@ -6257,32 +6257,20 @@ Validation issues (${skippedCount} items):
   // Place after all useState/useEffect, before return
   const filteredTracks = tracks.filter(t => {
     const matchesTerm = t.schoolYear === termDetails?.schoolYear && t.termName === termDetails?.termName;
-    // If quarterData is available, also filter by quarter, but be more flexible
-    if (quarterData && quarterData.quarterName) {
-      // If track has quarterName, it must match. If track doesn't have quarterName, include it anyway
-      return matchesTerm && (!t.quarterName || t.quarterName === quarterData.quarterName);
-    }
+    // Entities should be visible across all quarters within the same term
     return matchesTerm;
   });
   
   const filteredSubjects = subjects.filter(s => {
     const matchesTerm = s.schoolYear === termDetails?.schoolYear && s.termName === termDetails?.termName;
-    // If quarterData is available, also filter by quarter, but be more flexible
-    if (quarterData && quarterData.quarterName) {
-      // If subject has quarterName, it must match. If subject doesn't have quarterName, include it anyway
-      return matchesTerm && (!s.quarterName || s.quarterName === quarterData.quarterName);
-    }
+    // Entities should be visible across all quarters within the same term
     return matchesTerm;
   });
 
   // Before rendering the strands table, filter out duplicate strands by _id
   const filteredStrands = strands.filter(strand => {
     const matchesTerm = strand.schoolYear === termDetails.schoolYear && strand.termName === termDetails.termName;
-    // If quarterData is available, also filter by quarter, but be more flexible
-    if (quarterData && quarterData.quarterName) {
-      // If strand has quarterName, it must match. If strand doesn't have quarterName, include it anyway
-      return matchesTerm && (!strand.quarterName || strand.quarterName === quarterData.quarterName);
-    }
+    // Entities should be visible across all quarters within the same term
     return matchesTerm;
   });
 
@@ -6291,14 +6279,10 @@ Validation issues (${skippedCount} items):
       index === self.findIndex((s) => s._id === strand._id)
   );
 
-  // Filter sections by quarter as well
+  // Filter sections by term only - entities should be visible across all quarters within the same term
   const filteredSections = sections.filter(section => {
     const matchesTerm = section.schoolYear === termDetails?.schoolYear && section.termName === termDetails?.termName;
-    // If quarterData is available, also filter by quarter, but be more flexible
-    if (quarterData && quarterData.quarterName) {
-      // If section has quarterName, it must match. If section doesn't have quarterName, include it anyway
-      return matchesTerm && (!section.quarterName || section.quarterName === quarterData.quarterName);
-    }
+    // Entities should be visible across all quarters within the same term
     return matchesTerm;
   });
 
@@ -6309,6 +6293,30 @@ Validation issues (${skippedCount} items):
 
   // Filtered student assignments based on filters
   const filteredStudentAssignments = studentAssignments.filter(assignment => {
+    // If term is archived, show all assignments but they will display as archived
+    if (termDetails.status === 'archived') {
+      // Filter by section
+      if (studentSectionFilter && assignment.sectionName !== studentSectionFilter) {
+        return false;
+      }
+      
+      // Filter by search term
+      if (studentSearchFilter) {
+        const searchTerm = studentSearchFilter.toLowerCase();
+        const student = students.find(s => s._id === assignment.studentId);
+        const schoolId = student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '';
+        const studentName = assignment.studentName || 'Unknown';
+        
+        if (!schoolId.toLowerCase().includes(searchTerm) && 
+            !studentName.toLowerCase().includes(searchTerm)) {
+          return false;
+        }
+      }
+      
+      return true;
+    }
+    
+    // For active terms, use original filtering logic
     // Filter by section
     if (studentSectionFilter && assignment.sectionName !== studentSectionFilter) {
       return false;
@@ -6345,6 +6353,37 @@ Validation issues (${skippedCount} items):
 
   // Filtered faculty assignments based on filters
   const filteredFacultyAssignments = facultyAssignments.filter(assignment => {
+    // If term is archived, show all assignments but they will display as archived
+    if (termDetails.status === 'archived') {
+      // Filter by section
+      if (facultySectionFilter && assignment.sectionName !== facultySectionFilter) {
+        return false;
+      }
+      
+      // Filter by search term
+      if (facultySearchFilter) {
+        const searchTerm = facultySearchFilter.toLowerCase();
+        const facultyName = assignment.facultyName?.toLowerCase() || '';
+        const schoolId = (assignment.facultySchoolID || '').toLowerCase();
+        const trackName = assignment.trackName?.toLowerCase() || '';
+        const strandName = assignment.strandName?.toLowerCase() || '';
+        const sectionName = assignment.sectionName?.toLowerCase() || '';
+        const subjectName = assignment.subjectName?.toLowerCase() || '';
+        
+        if (!facultyName.includes(searchTerm) && 
+            !schoolId.includes(searchTerm) && 
+            !trackName.includes(searchTerm) && 
+            !strandName.includes(searchTerm) && 
+            !sectionName.includes(searchTerm) &&
+            !subjectName.includes(searchTerm)) {
+          return false;
+        }
+      }
+      
+      return true;
+    }
+    
+    // For active terms, use original filtering logic
     // Filter by section
     if (facultySectionFilter && assignment.sectionName !== facultySectionFilter) {
       return false;
@@ -8292,7 +8331,9 @@ Validation issues (${skippedCount} items):
                             <td className="p-3 border">{assignment.sectionName}</td>
                             <td className="p-3 border">{assignment.subjectName || ''}</td>
                             <td className="p-3 border">
-                              {assignment.status === 'archived' ? (
+                              {termDetails.status === 'archived' ? (
+                                <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
+                              ) : assignment.status === 'archived' ? (
                                 <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
                               ) : (
                                 <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Active</span>
@@ -8925,7 +8966,9 @@ Validation issues (${skippedCount} items):
                               <td className="p-3 border">{assignment.sectionName}</td>
                               <td className="p-3 border">{assignment.gradeLevel}</td>
                               <td className="p-3 border">
-                                {assignment.status === 'archived' ? (
+                                {termDetails.status === 'archived' ? (
+                                  <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
+                                ) : assignment.status === 'archived' ? (
                                   <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
                                 ) : isStudentApproved(assignment) ? (
                                   <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Active</span>

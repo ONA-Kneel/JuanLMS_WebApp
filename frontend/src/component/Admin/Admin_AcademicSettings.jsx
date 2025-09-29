@@ -29,6 +29,7 @@ export default function Admin_AcademicSettings() {
     startDate: '',
     endDate: ''
   });
+  const [selectedTermForQuarter, setSelectedTermForQuarter] = useState(null);
   const [availableQuarters, setAvailableQuarters] = useState([]);
   const [termError, setTermError] = useState('');
   const [quarterError, setQuarterError] = useState('');
@@ -598,6 +599,7 @@ export default function Admin_AcademicSettings() {
     }
 
     setAvailableQuarters(defaultAvailable);
+    setSelectedTermForQuarter(chosenTerm);
     setQuarterFormData({
       quarterName: defaultQuarterName,
       termName: defaultTermName,
@@ -2697,6 +2699,7 @@ export default function Admin_AcademicSettings() {
                     onClick={() => {
                       setShowAddQuarterModal(false);
                       setQuarterFormData({ quarterName: '', termName: '', startDate: '', endDate: '' });
+                      setSelectedTermForQuarter(null);
                       setQuarterError('');
                     }}
                     className="text-gray-500 hover:text-gray-700"
@@ -2771,12 +2774,19 @@ export default function Admin_AcademicSettings() {
                       type="date"
                       value={quarterFormData.startDate}
                       onChange={(e) => setQuarterFormData({ ...quarterFormData, startDate: e.target.value })}
+                      min={selectedTermForQuarter ? selectedTermForQuarter.startDate.split('T')[0] : ''}
+                      max={selectedTermForQuarter ? selectedTermForQuarter.endDate.split('T')[0] : ''}
                       className={`w-full p-2 border rounded-md ${
                         selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       required
                       disabled={selectedYear && selectedYear.status !== 'active'}
                     />
+                    {selectedTermForQuarter && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Must be between {new Date(selectedTermForQuarter.startDate).toLocaleDateString()} and {new Date(selectedTermForQuarter.endDate).toLocaleDateString()}
+                      </p>
+                    )}
                   </div>
 
                   <div className="mb-4">
@@ -2787,12 +2797,19 @@ export default function Admin_AcademicSettings() {
                       type="date"
                       value={quarterFormData.endDate}
                       onChange={(e) => setQuarterFormData({ ...quarterFormData, endDate: e.target.value })}
+                      min={selectedTermForQuarter ? selectedTermForQuarter.startDate.split('T')[0] : ''}
+                      max={selectedTermForQuarter ? selectedTermForQuarter.endDate.split('T')[0] : ''}
                       className={`w-full p-2 border rounded-md ${
                         selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       required
                       disabled={selectedYear && selectedYear.status !== 'active'}
                     />
+                    {selectedTermForQuarter && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Must be between {new Date(selectedTermForQuarter.startDate).toLocaleDateString()} and {new Date(selectedTermForQuarter.endDate).toLocaleDateString()}
+                      </p>
+                    )}
                   </div>
 
                   {quarterError && (
@@ -2807,6 +2824,7 @@ export default function Admin_AcademicSettings() {
                       onClick={() => {
                         setShowAddQuarterModal(false);
                         setQuarterFormData({ quarterName: '', termName: '', startDate: '', endDate: '' });
+                        setSelectedTermForQuarter(null);
                         setQuarterError('');
                       }}
                       className="px-4 py-2 text-gray-600 hover:text-gray-800"
