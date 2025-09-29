@@ -263,6 +263,11 @@ export default function VPE_Chats() {
           }, 10);
         }
         
+        // Highlight group item if it's not the currently open chat
+        if (!(selectedChat && isGroupChat && selectedChat._id === data.groupId)) {
+          try { /* may not be defined yet, add later if needed */ addHighlight && addHighlight(data.groupId); } catch {}
+        }
+        
         return updated;
       });
 
@@ -1158,17 +1163,21 @@ export default function VPE_Chats() {
                     <div
                       key={chat._id}
                       className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                        selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')) ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                        (selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')))
+                          ? "bg-white"
+                          : (highlightedChats && highlightedChats[chat._id] ? "bg-yellow-50 ring-2 ring-yellow-400" : "bg-gray-100 hover:bg-gray-300")
                       }`}
                       onClick={() => {
                         if (chat.type === 'group') {
                           setSelectedChat(chat);
                           setIsGroupChat(true);
                           localStorage.setItem("selectedChatId_VPE", chat._id);
+                          try { clearHighlight && clearHighlight(chat._id); } catch {}
                         } else {
                           setSelectedChat(chat);
                           setIsGroupChat(false);
                           localStorage.setItem("selectedChatId_VPE", chat._id);
+                          try { clearHighlight && clearHighlight(chat._id); } catch {}
                         }
                       }}
                     >

@@ -95,12 +95,38 @@ export default function Admin_Chats() {
 
   // Add loading state for chat list
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  // Highlight chats with new/unread messages
+  const [highlightedChats, setHighlightedChats] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('highlightedChats_admin') || '{}'); } catch { return {}; }
+  });
+  const addHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      const next = { ...prev, [chatId]: Date.now() };
+      try { localStorage.setItem('highlightedChats_admin', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const clearHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      if (!prev[chatId]) return prev;
+      const { [chatId]: _omit, ...rest } = prev;
+      try { localStorage.setItem('highlightedChats_admin', JSON.stringify(rest)); } catch {}
+      return rest;
+    });
+  };
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const { socket: ctxSocket, isConnected } = useSocket();
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
+  // Live refs to avoid stale closures in socket handlers
+  const recentChatsRef = useRef([]);
+  const selectedChatRef = useRef(null);
+  const isGroupChatRef = useRef(false);
+  const usersRef = useRef([]);
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -109,6 +135,10 @@ export default function Admin_Chats() {
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
 
   const navigate = useNavigate();
+  // Sync refs with latest state
+  useEffect(() => { recentChatsRef.current = recentChats; }, [recentChats]);
+  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
+  useEffect(() => { usersRef.current = users; }, [users]);
 
   // Fetch a single user by id and merge to cache/state
   const fetchUserIfMissing = async (userId) => {
@@ -223,12 +253,12 @@ export default function Admin_Chats() {
         };
         
         // Update last message for this chat
-        let chat = recentChats.find(c => c._id === incomingMessage.senderId);
+        let chat = (recentChatsRef.current || []).find(c => c._id === incomingMessage.senderId);
         
         // If chat not in recentChats, fetch or find the user and add them
         if (!chat) {
           const ensureSender = async () => {
-            const sender = users.find(u => u._id === incomingMessage.senderId) || await fetchUserIfMissing(incomingMessage.senderId);
+            const sender = (usersRef.current || []).find(u => u._id === incomingMessage.senderId) || await fetchUserIfMissing(incomingMessage.senderId);
             if (sender && sender.firstname && sender.lastname) {
               const newChat = {
                 _id: sender._id,
@@ -241,6 +271,14 @@ export default function Admin_Chats() {
                 localStorage.setItem("recentChats_admin", JSON.stringify(updated));
                 return updated;
               });
+              const previewText = incomingMessage.message ? incomingMessage.message : (incomingMessage.fileUrl ? 'File sent' : '');
+              setLastMessages(prev => ({
+                ...prev,
+                [newChat._id]: { prefix: `${newChat.lastname || 'Unknown'}, ${newChat.firstname || 'User'}: `, text: previewText }
+              }));
+              if (!(selectedChatRef.current && selectedChatRef.current._id === newChat._id)) {
+                addHighlight(newChat._id);
+              }
             }
           };
           // fire and forget
@@ -261,6 +299,11 @@ export default function Admin_Chats() {
           
           // Bump chat to top
           bumpChatToTop(chat);
+
+          // Highlight if not the currently open chat
+          if (!(selectedChatRef.current && selectedChatRef.current._id === chat._id)) {
+            addHighlight(chat._id);
+          }
           
                   // Refresh recent conversations to update sidebar
         setTimeout(() => {
@@ -306,7 +349,7 @@ export default function Admin_Chats() {
         };
         
         // If this group is currently selected, force an immediate UI update
-        if (selectedChat && selectedChat._id === incomingGroupMessage.groupId && selectedChat.isGroup) {
+        if (selectedChatRef.current && selectedChatRef.current._id === incomingGroupMessage.groupId && selectedChatRef.current.isGroup) {
           // Force a re-render by updating the selected chat messages
           setTimeout(() => {
             setGroupMessages(current => ({ ...current }));
@@ -329,6 +372,9 @@ export default function Admin_Chats() {
 
           // Bump group chat to top; avoid extra forced re-render
           bumpChatToTop(group);
+          if (!(selectedChatRef.current && selectedChatRef.current._id === group._id && selectedChatRef.current.isGroup)) {
+            addHighlight(group._id);
+          }
         }
         
         return newGroupMessages;
@@ -1255,15 +1301,19 @@ export default function Admin_Chats() {
                     <div
                       key={chat._id}
                       className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                        selectedChat?._id === chat._id && ((selectedChat.isGroup && chat.type === 'group') || (!selectedChat.isGroup && chat.type === 'individual')) ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                        (selectedChat?._id === chat._id && ((selectedChat.isGroup && chat.type === 'group') || (!selectedChat.isGroup && chat.type === 'individual')))
+                          ? "bg-white"
+                          : (highlightedChats[chat._id] ? "bg-yellow-50 ring-2 ring-yellow-400" : "bg-gray-100 hover:bg-gray-300")
                       }`}
                       onClick={() => {
                         if (chat.type === 'group') {
                           setSelectedChat({ ...chat, isGroup: true });
                           localStorage.setItem("selectedChatId_admin", chat._id);
+                          clearHighlight(chat._id);
                         } else {
                           setSelectedChat(chat);
                           localStorage.setItem("selectedChatId_admin", chat._id);
+                          clearHighlight(chat._id);
                         }
                       }}
                     >

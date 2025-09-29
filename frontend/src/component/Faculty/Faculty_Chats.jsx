@@ -89,6 +89,27 @@ export default function Faculty_Chats() {
 
   // Add loading state for chat list
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  // Highlight chats with new/unread messages
+  const [highlightedChats, setHighlightedChats] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('highlightedChats_faculty') || '{}'); } catch { return {}; }
+  });
+  const addHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      const next = { ...prev, [chatId]: Date.now() };
+      try { localStorage.setItem('highlightedChats_faculty', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const clearHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      if (!prev[chatId]) return prev;
+      const { [chatId]: _omit, ...rest } = prev;
+      try { localStorage.setItem('highlightedChats_faculty', JSON.stringify(rest)); } catch {}
+      return rest;
+    });
+  };
 
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
@@ -102,6 +123,11 @@ export default function Faculty_Chats() {
   const { socket: ctxSocket, isConnected } = useSocket();
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
+  // Live refs to avoid stale closures in socket handlers
+  const recentChatsRef = useRef([]);
+  const selectedChatRef = useRef(null);
+  const isGroupChatRef = useRef(false);
+  const usersRef = useRef([]);
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -110,6 +136,11 @@ export default function Faculty_Chats() {
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
 
   const navigate = useNavigate();
+  // Sync refs with latest state
+  useEffect(() => { recentChatsRef.current = recentChats; }, [recentChats]);
+  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
+  useEffect(() => { isGroupChatRef.current = isGroupChat; }, [isGroupChat]);
+  useEffect(() => { usersRef.current = users; }, [users]);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -180,11 +211,11 @@ export default function Faculty_Chats() {
         };
         
         // Update last message for this chat
-        let chat = recentChats.find(c => c._id === incomingMessage.senderId);
+        let chat = (recentChatsRef.current || []).find(c => c._id === incomingMessage.senderId);
         
         // If chat not found in recentChats, find the user and add them
         if (!chat) {
-          const sender = users.find(u => u._id === incomingMessage.senderId);
+          const sender = (usersRef.current || []).find(u => u._id === incomingMessage.senderId);
           if (sender && sender.firstname && sender.lastname) {
             chat = {
               _id: sender._id,
@@ -220,6 +251,9 @@ export default function Faculty_Chats() {
           
           // Bump chat to top
           bumpChatToTop(chat);
+          if (!(selectedChatRef.current && !isGroupChatRef.current && selectedChatRef.current._id === chat._id)) {
+            addHighlight(chat._id);
+          }
           
                   // Refresh recent conversations to update sidebar
         setTimeout(() => {
@@ -273,7 +307,7 @@ export default function Faculty_Chats() {
         };
         
         // If this group is currently selected, force an immediate UI update
-        if (selectedChat && selectedChat._id === data.groupId && isGroupChat) {
+        if (selectedChatRef.current && selectedChatRef.current._id === data.groupId && isGroupChatRef.current) {
           // Force a re-render by updating the selected chat messages
           setTimeout(() => {
             setGroupMessages(current => ({ ...current }));
@@ -305,6 +339,9 @@ export default function Faculty_Chats() {
 
         // Bump group chat to top and refresh sidebar
         bumpChatToTop(group);
+        if (!(selectedChatRef.current && isGroupChatRef.current && selectedChatRef.current._id === group._id)) {
+          addHighlight(group._id);
+        }
         
         // Force a re-render by updating the group messages state
         setTimeout(() => {
@@ -1328,17 +1365,21 @@ export default function Faculty_Chats() {
                     <div
                       key={chat._id}
                       className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                        selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')) ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                        (selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')))
+                          ? "bg-white"
+                          : (highlightedChats[chat._id] ? "bg-yellow-50 ring-2 ring-yellow-400" : "bg-gray-100 hover:bg-gray-300")
                       }`}
                       onClick={() => {
                         if (chat.type === 'group') {
                           setSelectedChat(chat);
                           setIsGroupChat(true);
                           localStorage.setItem("selectedChatId_faculty", chat._id);
+                          clearHighlight(chat._id);
                         } else {
                           setSelectedChat(chat);
                           setIsGroupChat(false);
                           localStorage.setItem("selectedChatId_faculty", chat._id);
+                          clearHighlight(chat._id);
                         }
                       }}
                     >
@@ -1391,7 +1432,9 @@ export default function Faculty_Chats() {
                     <div
                       key={item._id}
                       className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                        selectedChat?._id === item._id ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                        (selectedChat?._id === item._id)
+                          ? "bg-white"
+                          : (highlightedChats[item._id] ? "bg-yellow-50 ring-2 ring-yellow-400" : "bg-gray-100 hover:bg-gray-300")
                       }`}
                       onClick={() => {
                         if (item.isNewUser) {

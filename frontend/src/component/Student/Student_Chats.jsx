@@ -116,6 +116,11 @@ export default function Student_Chats() {
   const socket = useRef(null);
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
+  // Live refs to avoid stale closures in socket handlers
+  const recentChatsRef = useRef([]);
+  const selectedChatRef = useRef(null);
+  const isGroupChatRef = useRef(false);
+  const usersRef = useRef([]);
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -124,6 +129,12 @@ export default function Student_Chats() {
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
 
   const navigate = useNavigate();
+
+  // Keep refs in sync with state
+  useEffect(() => { recentChatsRef.current = recentChats; }, [recentChats]);
+  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
+  useEffect(() => { isGroupChatRef.current = isGroupChat; }, [isGroupChat]);
+  useEffect(() => { usersRef.current = users; }, [users]);
 
   // Fetch a single user by id and merge to cache/state (used when sender not in users list yet)
   const fetchUserIfMissing = async (userId) => {
@@ -199,12 +210,12 @@ export default function Student_Chats() {
         };
         
         // Update last message for this chat
-        let chat = recentChats.find(c => c._id === incomingMessage.senderId);
+        let chat = (recentChatsRef.current || []).find(c => c._id === incomingMessage.senderId);
         
         // If chat not found in recentChats, fetch the sender and add them
         if (!chat) {
           const ensureSender = async () => {
-            const sender = users.find(u => u._id === incomingMessage.senderId) || await fetchUserIfMissing(incomingMessage.senderId);
+            const sender = (usersRef.current || []).find(u => u._id === incomingMessage.senderId) || await fetchUserIfMissing(incomingMessage.senderId);
             if (sender && sender.firstname && sender.lastname) {
               const newChat = {
                 _id: sender._id,
@@ -222,7 +233,7 @@ export default function Student_Chats() {
                 ...prev,
                 [newChat._id]: { prefix: `${newChat.lastname || 'Unknown'}, ${newChat.firstname || 'User'}: `, text: previewText }
               }));
-              if (!(selectedChat && !isGroupChat && selectedChat._id === newChat._id)) {
+              if (!(selectedChatRef.current && !isGroupChatRef.current && selectedChatRef.current._id === newChat._id)) {
                 addHighlight(newChat._id);
               }
             }
@@ -252,7 +263,7 @@ export default function Student_Chats() {
           bumpChatToTop(chat);
 
           // Highlight conversation item if not currently open
-          if (!(selectedChat && !isGroupChat && selectedChat._id === chat._id)) {
+          if (!(selectedChatRef.current && !isGroupChatRef.current && selectedChatRef.current._id === chat._id)) {
             addHighlight(chat._id);
           }
           
@@ -303,7 +314,7 @@ export default function Student_Chats() {
         };
         
         // If this group is currently selected, force an immediate UI update
-        if (selectedChat && selectedChat._id === data.groupId && isGroupChat) {
+        if (selectedChatRef.current && selectedChatRef.current._id === data.groupId && isGroupChatRef.current) {
           // Force a re-render by updating the selected chat messages
           setTimeout(() => {
             setGroupMessages(current => ({ ...current }));
@@ -314,7 +325,7 @@ export default function Student_Chats() {
       });
 
       // Highlight group item if it's not the currently open chat
-      if (!(selectedChat && isGroupChat && selectedChat._id === data.groupId)) {
+      if (!(selectedChatRef.current && isGroupChatRef.current && selectedChatRef.current._id === data.groupId)) {
         addHighlight(data.groupId);
       }
 
