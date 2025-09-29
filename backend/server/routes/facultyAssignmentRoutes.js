@@ -101,10 +101,13 @@ const router = express.Router();
 // Get all faculty assignments (can be filtered by termId)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { termId } = req.query;
+    const { termId, quarterName } = req.query;
     let query = {};
     if (termId) {
       query.termId = termId;
+    }
+    if (quarterName) {
+      query.quarterName = quarterName;
     }
     const assignments = await FacultyAssignment.find(query).populate('facultyId');
 
@@ -140,7 +143,10 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get all faculty assignments for a term
 router.get('/term/:termId', authenticateToken, async (req, res) => {
   try {
-    const assignments = await FacultyAssignment.find({ termId: req.params.termId, status: 'active' })
+    const filter = { termId: req.params.termId, status: 'active' };
+    const { quarterName } = req.query;
+    if (quarterName) filter.quarterName = quarterName;
+    const assignments = await FacultyAssignment.find(filter)
       .populate('facultyId', 'firstName lastName email')
       .select('-schoolYear -termName'); // Exclude hidden fields from response
     res.json(assignments);
@@ -152,7 +158,7 @@ router.get('/term/:termId', authenticateToken, async (req, res) => {
 // Create a new faculty assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { facultyId, facultyName, trackName, strandName, sectionName, subjectName, gradeLevel, termId } = req.body;
+    const { facultyId, facultyName, trackName, strandName, sectionName, subjectName, gradeLevel, termId, quarterName } = req.body;
 
     // Get term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -238,7 +244,8 @@ router.post('/', authenticateToken, async (req, res) => {
       gradeLevel,
       termId,
       schoolYear: term.schoolYear,
-      termName: term.termName
+      termName: term.termName,
+      quarterName
     });
 
     console.log(`[BACKEND] Attempting to save assignment:`, {
@@ -289,7 +296,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
     const errors = [];
 
     for (const assignmentData of assignments) {
-      const { facultyId, facultyName, trackName, strandName, sectionName, subjectName, gradeLevel, termId } = assignmentData;
+      const { facultyId, facultyName, trackName, strandName, sectionName, subjectName, gradeLevel, termId, quarterName } = assignmentData;
 
       try {
         const term = await Term.findById(termId);
@@ -380,7 +387,8 @@ router.post('/bulk', authenticateToken, async (req, res) => {
           gradeLevel,
           termId,
           schoolYear: term.schoolYear,
-          termName: term.termName
+          termName: term.termName,
+          quarterName
         });
 
         const savedAssignment = await newAssignment.save();
@@ -460,7 +468,7 @@ router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
 // PATCH route for updating faculty assignment
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
-    const { trackName, strandName, sectionName, subjectName, gradeLevel, termId } = req.body;
+    const { trackName, strandName, sectionName, subjectName, gradeLevel, termId, quarterName } = req.body;
     const assignment = await FacultyAssignment.findById(req.params.id);
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
@@ -500,6 +508,9 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     assignment.termId = currentTermId;
     assignment.schoolYear = term.schoolYear;
     assignment.termName = term.termName;
+    if (quarterName !== undefined) {
+      assignment.quarterName = quarterName;
+    }
     const updatedAssignment = await assignment.save();
     const response = updatedAssignment.toObject();
     delete response.schoolYear;
@@ -511,6 +522,34 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     } else {
       res.status(400).json({ message: err.message });
     }
+  }
+});
+
+// Update faculty assignments by quarter and school year
+router.patch('/quarter/:quarterName/schoolyear/:schoolYear', async (req, res) => {
+  try {
+    const { quarterName, schoolYear } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ message: 'Status is required' });
+    }
+
+    const result = await FacultyAssignment.updateMany(
+      { 
+        quarterName: quarterName,
+        schoolYear: schoolYear
+      },
+      { $set: { status: status } }
+    );
+
+    console.log(`Updated ${result.modifiedCount} faculty assignments to status: ${status} for quarter: ${quarterName}, school year: ${schoolYear}`);
+    res.json({ 
+      message: `Updated ${result.modifiedCount} faculty assignments to status: ${status}`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 

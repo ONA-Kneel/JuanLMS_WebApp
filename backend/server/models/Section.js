@@ -33,6 +33,10 @@ const sectionSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Optional quarter scoping within the term
+  quarterName: {
+    type: String,
+  },
   status: {
     type: String,
     enum: ['active', 'archived'],

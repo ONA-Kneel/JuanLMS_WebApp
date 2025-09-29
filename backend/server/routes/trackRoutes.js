@@ -320,6 +320,34 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// Update tracks by quarter and school year
+router.patch('/quarter/:quarterName/schoolyear/:schoolYear', async (req, res) => {
+  try {
+    const { quarterName, schoolYear } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ message: 'Status is required' });
+    }
+
+    const result = await Track.updateMany(
+      { 
+        quarterName: quarterName,
+        schoolYear: schoolYear
+      },
+      { $set: { status: status } }
+    );
+
+    console.log(`Updated ${result.modifiedCount} tracks to status: ${status} for quarter: ${quarterName}, school year: ${schoolYear}`);
+    res.json({ 
+      message: `Updated ${result.modifiedCount} tracks to status: ${status}`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Create tracks in bulk
 router.post('/bulk', async (req, res) => {
   try {

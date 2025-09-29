@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || "https://juanlms-webapp-server.onrender.com";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -48,7 +48,7 @@ const validateFacultySchoolIDFormat = (schoolID) => {
   return facultySchoolIDPattern.test(trimmedID);
 };
 
-export default function TermDetails({ termData: propTermData, quarterData }) {
+export default function TermDetails({ termData: propTermData, quarterData, refreshKey }) {
   const { termId } = useParams();
   const navigate = useNavigate();
   const importFileInputRef = useRef(null); // Initialize useRef for the file input
@@ -275,7 +275,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     facultyAssignments: { valid: 0, invalid: 0, details: [] },
     studentAssignments: { valid: 0, invalid: 0, details: [] }
   });
-  const [exportingPDF, setExportingPDF] = useState(false);
 
   const tabs = [
     { id: 'dashboard', label: 'Term Dashboard', icon: termDashboardIcon },
@@ -754,7 +753,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           strandName: strandFormData.strandType === 'custom' ? strandFormData.strandName.trim() : strandFormData.strandType,
           trackName: selectedTrack.trackName,
           schoolYear: termDetails.schoolYear,
-          termName: termDetails.termName
+          termName: termDetails.termName,
+          quarterName: quarterData ? quarterData.quarterName : undefined
         })
       });
 
@@ -1376,6 +1376,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       if (res.ok) {
         const data = await res.json();
         console.log("Fetched faculty assignments for template (after backend restart):", data); // Re-added console.log
+        console.log("Faculty assignments count:", data.length);
+        console.log("Faculty assignments details:", data.map(a => ({
+          id: a._id,
+          facultyName: a.facultyName,
+          termId: a.termId,
+          status: a.status,
+          quarterName: a.quarterName
+        })));
         setFacultyAssignments(data);
       } else {
         const errorData = await res.json();
@@ -1406,6 +1414,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       if (res.ok) {
         const data = await res.json();
         console.log("Fetched student assignments:", data);
+        console.log("Student assignments count:", data.length);
+        console.log("Student assignments details:", data.map(a => ({
+          id: a._id,
+          studentName: a.studentName,
+          termId: a.termId,
+          status: a.status,
+          quarterName: a.quarterName
+        })));
         setStudentAssignments(data);
       } else {
         const errorData = await res.json();
@@ -1452,6 +1468,55 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       fetchRegistrants();
     }
   }, [termDetails, fetchStudentAssignments, fetchRegistrants]);
+
+  // Refresh assignments when quarter data changes (e.g., when quarter status changes)
+  useEffect(() => {
+    if (termDetails && quarterData) {
+      console.log('Quarter data changed, refreshing assignments...', quarterData);
+      fetchFacultyAssignments();
+      fetchStudentAssignments();
+    }
+  }, [quarterData, termDetails, fetchFacultyAssignments, fetchStudentAssignments]);
+
+  // Refresh assignments when refreshKey changes (triggered by parent component)
+  useEffect(() => {
+    if (termDetails && refreshKey) {
+      console.log('Refresh key changed, refreshing assignments...', refreshKey);
+      fetchFacultyAssignments();
+      fetchStudentAssignments();
+    }
+  }, [refreshKey, termDetails, fetchFacultyAssignments, fetchStudentAssignments]);
+
+  // Add a mechanism to refresh data when quarter status might have changed
+  useEffect(() => {
+    if (!termDetails || !quarterData) return;
+
+    // Listen for storage events (when quarter status changes in another tab/window)
+    const handleStorageChange = (e) => {
+      if (e.key === 'quarterStatusChanged') {
+        console.log('Quarter status changed detected, refreshing assignments...');
+        fetchFacultyAssignments();
+        fetchStudentAssignments();
+        // Clear the storage event
+        localStorage.removeItem('quarterStatusChanged');
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    // Also check for changes every 5 seconds when the component is active
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchFacultyAssignments();
+        fetchStudentAssignments();
+      }
+    }, 5000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, [termDetails, quarterData, fetchFacultyAssignments, fetchStudentAssignments]);
 
   // Check if a student is approved in registrations
   const isStudentApproved = (assignment) => {
@@ -2064,9 +2129,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
   // Generate comprehensive PDF report with all term and quarter details
   const generateComprehensivePDFReport = async () => {
-    if (exportingPDF) return;
-    
-    setExportingPDF(true);
     try {
       console.log('Generating comprehensive PDF report...');
       
@@ -2446,8 +2508,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (error) {
       console.error('Error generating comprehensive PDF report:', error);
       window.alert('Error generating comprehensive PDF report. Please try again.');
-    } finally {
-      setExportingPDF(false);
     }
   };
 
@@ -2512,13 +2572,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       
       // 2. TRACKS SHEET
       const tracksData = [
-        ['Track Name', 'Status', 'School Year', 'Term Name', 'Created At']
+        ['Track Name', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
       ].concat(
         tracks.filter(t => t.status === 'active').map(track => [
           track.trackName,
           track.status,
           track.schoolYear,
           track.termName,
+          track.quarterName || '',
           new Date(track.createdAt).toLocaleDateString()
         ])
       );
@@ -2528,7 +2589,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       
       // 3. STRANDS SHEET
       const strandsData = [
-        ['Strand Name', 'Track Name', 'Status', 'School Year', 'Term Name', 'Created At']
+        ['Strand Name', 'Track Name', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
       ].concat(
         strands.filter(s => s.status === 'active').map(strand => [
           strand.strandName,
@@ -2536,6 +2597,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           strand.status,
           strand.schoolYear,
           strand.termName,
+          strand.quarterName || '',
           new Date(strand.createdAt).toLocaleDateString()
         ])
       );
@@ -2545,7 +2607,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       
       // 4. SECTIONS SHEET
       const sectionsData = [
-        ['Section Name', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Created At']
+        ['Section Name', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
       ].concat(
         sections.filter(s => s.status === 'active').map(section => [
           section.sectionName,
@@ -2555,6 +2617,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           section.status,
           section.schoolYear,
           section.termName,
+          section.quarterName || '',
           new Date(section.createdAt).toLocaleDateString()
         ])
       );
@@ -2564,7 +2627,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       
       // 5. SUBJECTS SHEET
       const subjectsData = [
-        ['Subject Name', 'Subject Code', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Created At']
+        ['Subject Name', 'Subject Code', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
       ].concat(
         subjects.filter(s => s.status === 'active').map(subject => [
           subject.subjectName,
@@ -2575,6 +2638,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           subject.status,
           subject.schoolYear,
           subject.termName,
+          subject.quarterName || '',
           new Date(subject.createdAt).toLocaleDateString()
         ])
       );
@@ -2584,7 +2648,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       
       // 6. FACULTY ASSIGNMENTS SHEET
       const facultyAssignmentsData = [
-        ['Faculty Name', 'Faculty School ID', 'Subject Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Created At']
+        ['Faculty Name', 'Faculty School ID', 'Subject Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
       ].concat(
         facultyAssignments.filter(fa => fa.status === 'active').map(assignment => {
           const faculty = faculties.find(f => f._id === assignment.facultyId);
@@ -2599,6 +2663,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             assignment.status,
             assignment.schoolYear,
             assignment.termName,
+            assignment.quarterName || '',
             new Date(assignment.createdAt).toLocaleDateString()
           ];
         })
@@ -2609,7 +2674,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       
       // 7. STUDENT ASSIGNMENTS SHEET
       const studentAssignmentsData = [
-        ['Student Name', 'Student School ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'Approval Status', 'School Year', 'Term Name', 'Created At']
+        ['Student Name', 'Student School ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'Approval Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
       ].concat(
         studentAssignments.filter(sa => sa.status === 'active').map(assignment => {
           const student = students.find(s => s._id === assignment.studentId);
@@ -2627,6 +2692,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             approvalStatus,
             assignment.schoolYear,
             assignment.termName,
+            assignment.quarterName || '',
             new Date(assignment.createdAt).toLocaleDateString()
           ];
         })
@@ -2878,6 +2944,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             return;
           }
 
+          // Prepare the data for preview
+          const tracksToPreview = jsonData.map(row => ({
+            trackName: row['Track Name to Add'].trim(),
+            schoolYear: termDetails.schoolYear,
+            termName: termDetails.termName,
+            quarterName: quarterData ? quarterData.quarterName : undefined
+          }));
+
           // Validate tracks
           const validationResults = await validateTracks(tracksToPreview);
 
@@ -2914,7 +2988,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const res = await fetch(`${API_BASE}/api/tracks/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tracks: validTracks })
+        body: JSON.stringify({ tracks: validTracks.map(t => ({ ...t, quarterName: quarterData ? quarterData.quarterName : undefined })) })
       });
 
       if (res.ok) {
@@ -3229,7 +3303,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           body: JSON.stringify({
             ...strand,
             schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName
+            termName: termDetails.termName,
+            quarterName: quarterData ? quarterData.quarterName : undefined
           })
         });
 
@@ -3578,7 +3653,10 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         const res = await fetch(`${API_BASE}/api/sections`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(section)
+          body: JSON.stringify({
+            ...section,
+            quarterName: quarterData ? quarterData.quarterName : undefined
+          })
         });
 
         if (res.ok) {
@@ -4126,6 +4204,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             gradeLevel: assignment.gradeLevel,
             subjectName: assignment.subjectName,
             termId: termDetails._id,
+            schoolYear: termDetails.schoolYear,
+            termName: termDetails.termName,
+            quarterName: quarterData ? quarterData.quarterName : undefined
           })
         });
 
@@ -4765,6 +4846,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               strandName: assignment['strand'] || assignment['Strand Name'],
               sectionName: assignment['section'] || assignment['Section Name'],
               termId: termDetails._id,
+              schoolYear: termDetails.schoolYear,
+              termName: termDetails.termName,
               quarterName: quarterData ? quarterData.quarterName : undefined
             };
             
@@ -5330,7 +5413,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           body: JSON.stringify({
             ...subject,
             schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName
+            termName: termDetails.termName,
+            quarterName: quarterData ? quarterData.quarterName : undefined
           })
         });
         if (res.ok) {
@@ -5945,7 +6029,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             body: JSON.stringify({
               trackName: track.trackName,
               schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName
+              termName: termDetails.termName,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             })
           });
 
@@ -5973,7 +6058,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               strandName: strand.strandName,
               trackName: strand.trackName,
               schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName
+              termName: termDetails.termName,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             })
           });
 
@@ -6003,7 +6089,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               strandName: section.strandName,
               gradeLevel: section.gradeLevel,
               schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName
+              termName: termDetails.termName,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             })
           });
 
@@ -6033,7 +6120,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               strandName: subject.strandName,
               gradeLevel: subject.gradeLevel,
               schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName
+              termName: termDetails.termName,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             })
           });
 
@@ -6078,7 +6166,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               sectionName: assignment.sectionName,
               gradeLevel: assignment.gradeLevel,
               subjectName: assignment.subjectName,
-              termId: termDetails._id
+              termId: termDetails._id,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             })
           });
 
@@ -6132,7 +6221,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               strandName: assignment.strandName,
               sectionName: assignment.sectionName,
               gradeLevel: assignment.gradeLevel,
-              termId: termDetails._id
+              termId: termDetails._id,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             };
           }
 
@@ -6256,23 +6346,127 @@ Validation issues (${skippedCount} items):
     return studentAssignments.filter(sa => sa.termId === termDetails._id).length;
   }
 
+  // Helper functions for quarter-filtered counts
+  function getFilteredFacultyCount(termDetails, filteredFacultyAssignments) {
+    if (!termDetails) return 0;
+    return filteredFacultyAssignments.length;
+  }
+
+  function getFilteredStudentCount(termDetails, filteredStudentAssignments) {
+    if (!termDetails) return 0;
+    return filteredStudentAssignments.length;
+  }
+
   // Place after all useState/useEffect, before return
-  const filteredTracks = tracks.filter(
-    t => t.schoolYear === termDetails?.schoolYear && t.termName === termDetails?.termName
-  );
-  const filteredSubjects = subjects.filter(
-    s => s.schoolYear === termDetails?.schoolYear && s.termName === termDetails?.termName
-  );
+  const filteredTracks = tracks.filter(t => {
+    const matchesTerm = t.schoolYear === termDetails?.schoolYear && t.termName === termDetails?.termName;
+    // If quarterData is available, also filter by quarter
+    if (quarterData && quarterData.quarterName) {
+      return matchesTerm && t.quarterName === quarterData.quarterName;
+    }
+    return matchesTerm;
+  });
+  
+  const filteredSubjects = subjects.filter(s => {
+    const matchesTerm = s.schoolYear === termDetails?.schoolYear && s.termName === termDetails?.termName;
+    // If quarterData is available, also filter by quarter
+    if (quarterData && quarterData.quarterName) {
+      return matchesTerm && s.quarterName === quarterData.quarterName;
+    }
+    return matchesTerm;
+  });
 
   // Before rendering the strands table, filter out duplicate strands by _id
-  const filteredStrands = strands.filter(
-    strand => strand.schoolYear === termDetails.schoolYear && strand.termName === termDetails.termName
-  );
+  const filteredStrands = strands.filter(strand => {
+    const matchesTerm = strand.schoolYear === termDetails.schoolYear && strand.termName === termDetails.termName;
+    // If quarterData is available, also filter by quarter
+    if (quarterData && quarterData.quarterName) {
+      return matchesTerm && strand.quarterName === quarterData.quarterName;
+    }
+    return matchesTerm;
+  });
 
   const uniqueStrands = filteredStrands.filter(
     (strand, index, self) =>
       index === self.findIndex((s) => s._id === strand._id)
   );
+
+  // Filter sections by quarter as well
+  const filteredSections = sections.filter(section => {
+    const matchesTerm = section.schoolYear === termDetails?.schoolYear && section.termName === termDetails?.termName;
+    // If quarterData is available, also filter by quarter
+    if (quarterData && quarterData.quarterName) {
+      return matchesTerm && section.quarterName === quarterData.quarterName;
+    }
+    return matchesTerm;
+  });
+
+  // Debug logging for term and quarter data
+  console.log('Current Term Details:', {
+    termId: termDetails?._id,
+    schoolYear: termDetails?.schoolYear,
+    termName: termDetails?.termName,
+    status: termDetails?.status
+  });
+  console.log('Current Quarter Data:', quarterData);
+  console.log('Faculty Assignments Raw:', facultyAssignments);
+  console.log('Student Assignments Raw:', studentAssignments);
+
+  // Filter faculty assignments by quarter and status
+  const filteredFacultyAssignments = facultyAssignments.filter(assignment => {
+    const matchesTerm = assignment.termId === termDetails?._id;
+    const matchesStatus = assignment.status === 'active'; // Only show active assignments
+    
+    // Debug logging
+    console.log('Faculty Assignment Filter Debug:', {
+      assignmentId: assignment._id,
+      assignmentTermId: assignment.termId,
+      currentTermId: termDetails?._id,
+      matchesTerm,
+      assignmentStatus: assignment.status,
+      matchesStatus,
+      assignmentQuarterName: assignment.quarterName,
+      currentQuarterName: quarterData?.quarterName,
+      facultyName: assignment.facultyName
+    });
+    
+    // Temporarily disable quarter filtering to debug
+    // If quarterData is available, also filter by quarter
+    // if (quarterData && quarterData.quarterName) {
+    //   const matchesQuarter = assignment.quarterName === quarterData.quarterName;
+    //   console.log('Quarter match:', matchesQuarter);
+    //   return matchesTerm && matchesStatus && matchesQuarter;
+    // }
+    return matchesTerm && matchesStatus;
+  });
+
+  // Filter student assignments by quarter and status
+  const filteredStudentAssignments = studentAssignments.filter(assignment => {
+    const matchesTerm = assignment.termId === termDetails?._id;
+    const matchesStatus = assignment.status === 'active'; // Only show active assignments
+    
+    // Debug logging
+    console.log('Student Assignment Filter Debug:', {
+      assignmentId: assignment._id,
+      assignmentTermId: assignment.termId,
+      currentTermId: termDetails?._id,
+      matchesTerm,
+      assignmentStatus: assignment.status,
+      matchesStatus,
+      assignmentQuarterName: assignment.quarterName,
+      currentQuarterName: quarterData?.quarterName,
+      studentName: assignment.studentName
+    });
+    
+    // Temporarily disable quarter filtering to debug
+    // If quarterData is available, also filter by quarter
+    // if (quarterData && quarterData.quarterName) {
+    //   const matchesQuarter = assignment.quarterName === quarterData.quarterName;
+    //   console.log('Quarter match:', matchesQuarter);
+    //   return matchesTerm && matchesStatus && matchesQuarter;
+    // }
+    return matchesTerm && matchesStatus;
+  });
 
   // Update: Enforce absolute uniqueness for strand names
   const uniqueStrandNames = Array.from(
@@ -6764,14 +6958,9 @@ Validation issues (${skippedCount} items):
                   </button>
                   <button
                     onClick={generateComprehensivePDFReport}
-                    disabled={exportingPDF}
-                    className={`py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                      exportingPDF
-                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                        : 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500'
-                    }`}
+                    className="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                   >
-                    {exportingPDF ? 'Exporting...' : 'Export PDF Report'}
+                    Export PDF Report
                   </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -7515,14 +7704,14 @@ Validation issues (${skippedCount} items):
                     </tr>
                   </thead>
                   <tbody>
-                    {sections.length === 0 ? (
+                    {filteredSections.length === 0 ? (
                       <tr>
                         <td colSpan="7" className="p-3 border text-center text-gray-500">
                           No sections found.
                         </td>
                       </tr>
                     ) : (
-                      paginate(sections, sectionsPage, ROWS_PER_PAGE).slice.map((section) => (
+                      paginate(filteredSections, sectionsPage, ROWS_PER_PAGE).slice.map((section) => (
                         <tr key={section._id}>
                           <td className="p-3 border">{section.trackName}</td>
                           <td className="p-3 border">{section.strandName}</td>
@@ -7559,11 +7748,11 @@ Validation issues (${skippedCount} items):
                     )}
                   </tbody>
                   </table>
-                  {sections.length > 0 && (
+                  {filteredSections.length > 0 && (
                     <div className="flex justify-center items-center gap-2 mt-3">
                       <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setSectionsPage(p => Math.max(1, p - 1))} disabled={sectionsPage === 1}>{'<'}</button>
-                      <span className="text-xs">Page {paginate(sections, sectionsPage, ROWS_PER_PAGE).currentPage} of {paginate(sections, sectionsPage, ROWS_PER_PAGE).totalPages}</span>
-                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setSectionsPage(p => Math.min(paginate(sections, sectionsPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={sectionsPage === paginate(sections, sectionsPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
+                      <span className="text-xs">Page {paginate(filteredSections, sectionsPage, ROWS_PER_PAGE).currentPage} of {paginate(filteredSections, sectionsPage, ROWS_PER_PAGE).totalPages}</span>
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setSectionsPage(p => Math.min(paginate(filteredSections, sectionsPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={sectionsPage === paginate(filteredSections, sectionsPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
                     </div>
                   )}
                 </div>
@@ -9050,11 +9239,11 @@ Validation issues (${skippedCount} items):
                       )}
                     </tbody>
                   </table>
-                  {studentAssignments.length > 0 && (
+                  {filteredStudentAssignments.length > 0 && (
                     <div className="flex justify-center items-center gap-2 mt-3">
                       <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStudentAssignPage(p => Math.max(1, p - 1))} disabled={studentAssignPage === 1}>{'<'}</button>
-                      <span className="text-xs">Page {paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).currentPage} of {paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}</span>
-                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStudentAssignPage(p => Math.min(paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={studentAssignPage === paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
+                      <span className="text-xs">Page {paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).currentPage} of {paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}</span>
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStudentAssignPage(p => Math.min(paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={studentAssignPage === paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
                     </div>
                   )}
                 </div>
@@ -9850,16 +10039,17 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
       console.log(`Student with School ID '${assignment.studentSchoolID}' not found - will be created as new student`);
       
       // For new students, check if there's already a manual assignment with the same details
-      const exists = activeAssignments.some(ea =>
+        const exists = activeAssignments.some(ea =>
         !ea.studentId && // Manual assignment (no linked student)
-        ea.studentSchoolID === assignment.studentSchoolID &&
-        ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
-        ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
-        ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
-      );
-      if (exists) {
-        results.push({ valid: false, message: `Student assignment for "${assignment.studentName}" already exists` });
+          ea.studentSchoolID === assignment.studentSchoolID &&
+          ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
+          ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
+          ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
+        );
+        if (exists) {
+          results.push({ valid: false, message: `Student assignment for "${assignment.studentName}" already exists` });
         continue;
+      }
       }
     }
 

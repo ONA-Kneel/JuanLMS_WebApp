@@ -7,7 +7,7 @@ import ProfileMenu from "../ProfileMenu";
 
 // PDF generation function with pie chart (Assignments vs Quizzes)
 const downloadAsPDF = (content, filename, chartData) => {
-  // Create a new window with the content
+  // Create a new window with the content, then auto-generate and download a PDF via html2pdf.js
   const printWindow = window.open('', '_blank');
   // Note: Heading variants are defined inline where used to avoid unused var
   printWindow.document.write(`
@@ -128,6 +128,7 @@ const downloadAsPDF = (content, filename, chartData) => {
         }
       </style>
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     </head>
     <body>
       <div class="header">
@@ -162,10 +163,7 @@ const downloadAsPDF = (content, filename, chartData) => {
           </div>
         </div>
       </div>
-      <div class="no-print">
-        <button onclick="window.print()">Print / Save as PDF</button>
-        <button onclick="window.close()">Close</button>
-      </div>
+      <div class="no-print" style="display:none"></div>
       <script>
         (function(){
           const encode = (s) => s
@@ -213,6 +211,28 @@ const downloadAsPDF = (content, filename, chartData) => {
           } else {
             document.getElementById('chartContainer').style.display = 'none';
           }
+
+          // After layout and charts are ready, generate and download the PDF automatically
+          const doDownload = () => {
+            if (!window.html2pdf) { setTimeout(doDownload, 200); return; }
+            const safeName = encodeURIComponent(${JSON.stringify(filename)});
+            const opt = {
+              margin: 0.5,
+              filename: safeName + '.pdf',
+              image: { type: 'jpeg', quality: 0.98 },
+              html2canvas: { scale: 2, useCORS: true, allowTaint: true },
+              jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+            };
+            window.html2pdf().set(opt).from(document.body).save().then(() => {
+              window.close();
+            }).catch(() => {
+              // Fallback: open print dialog if direct save fails
+              window.print();
+              setTimeout(() => window.close(), 500);
+            });
+          };
+          // Give charts a moment to render before capturing
+          setTimeout(doDownload, 600);
         })();
       </script>
     </body>
@@ -263,9 +283,22 @@ export default function VPE_FacultyReport() {
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const chartCanvasRef = useRef(null);
   const chartInstanceRef = useRef(null);
+  const sectionChartCanvasRef = useRef(null);
+  const trackChartCanvasRef = useRef(null);
+  const strandChartCanvasRef = useRef(null);
+  const sectionChartInstanceRef = useRef(null);
+  const trackChartInstanceRef = useRef(null);
+  const strandChartInstanceRef = useRef(null);
+  const [analysisMeta, setAnalysisMeta] = useState(null);
 
   // Tab state
   const [activeTab, setActiveTab] = useState('activities');
+
+  // New: report type modal state
+  const [showReportTypeModal, setShowReportTypeModal] = useState(false);
+  const [reportType, setReportType] = useState('year'); // 'year' | 'strand' | 'section'
+  const [modalStrand, setModalStrand] = useState('');
+  const [modalSection, setModalSection] = useState('');
 
   // Convert simple markdown-like text to safe HTML (no raw # or *)
   const formatAnalysisToHtml = useCallback((input) => {
@@ -818,25 +851,42 @@ export default function VPE_FacultyReport() {
       return;
     }
 
+    // Open report type modal first
+    setShowReportTypeModal(true);
+  };
+
+  const confirmCreateAnalysis = async () => {
+    setShowReportTypeModal(false);
+
     setLoadingAnalysis(true);
     setAnalysisError(null);
     setAiAnalysis(null);
 
     try {
       const token = localStorage.getItem("token");
+
+      // Derive filters based on selection
+      const body = {
+        schoolYear: selectedSchoolYear,
+        termName: selectedTerm,
+        sectionFilter: null,
+        trackFilter: null,
+        strandFilter: null,
+      };
+
+      if (reportType === 'strand') {
+        body.strandFilter = modalStrand || selectedStrand || null;
+      } else if (reportType === 'section') {
+        body.sectionFilter = modalSection || selectedSection || null;
+      }
+
       const response = await fetch(`${API_BASE}/api/ai-analytics/create-analysis`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          schoolYear: selectedSchoolYear,
-          termName: selectedTerm,
-          sectionFilter: selectedSection || null,
-          trackFilter: selectedTrack || null,
-          strandFilter: selectedStrand || null
-        })
+        body: JSON.stringify(body)
       });
 
       if (!response.ok) {
@@ -846,6 +896,7 @@ export default function VPE_FacultyReport() {
 
       const data = await response.json();
       setAiAnalysis(data.analysis);
+      setAnalysisMeta(data.metadata || null);
       setShowAnalysisModal(true);
     } catch (error) {
       console.error("AI Analysis Error:", error);
@@ -913,22 +964,149 @@ export default function VPE_FacultyReport() {
     if (chartInstanceRef.current) {
       chartInstanceRef.current.destroy();
     }
-    if (assignmentsCount + quizzesCount === 0) return;
-    chartInstanceRef.current = new Chart(context, {
-      type: 'pie',
-      data: {
-        labels: ['Assignments', 'Quizzes'],
-        datasets: [{
-          data: [assignmentsCount, quizzesCount],
-          backgroundColor: ['#f59e0b', '#3b82f6'],
-          borderColor: '#ffffff',
-          borderWidth: 2
-        }]
-      },
-      options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
-    });
-    return () => { if (chartInstanceRef.current) chartInstanceRef.current.destroy(); };
-  }, [showAnalysisModal, assignmentsCount, quizzesCount]);
+
+    // Determine report type
+    const rType = analysisMeta?.reportType || (modalStrand ? 'strand' : (modalSection ? 'section' : 'year'));
+
+    // Base counts
+    const totalAssign = assignmentsCount;
+    const totalQuiz = quizzesCount;
+
+    if (rType === 'year') {
+      if (totalAssign + totalQuiz === 0) return;
+      chartInstanceRef.current = new Chart(context, {
+        type: 'pie',
+        data: {
+          labels: ['Assignments', 'Quizzes'],
+          datasets: [{ data: [totalAssign, totalQuiz], backgroundColor: ['#f59e0b', '#3b82f6'], borderColor: '#ffffff', borderWidth: 2 }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
+      });
+    } else if (rType === 'strand') {
+      // Show distribution by section within the strand
+      const inStrand = filteredActivities.filter(a => a.strandName === (analysisMeta?.filters?.strand || modalStrand || selectedStrand));
+      const bySection = new Map();
+      for (const it of inStrand) {
+        const key = it.sectionName || 'Unknown';
+        bySection.set(key, (bySection.get(key) || 0) + 1);
+      }
+      const labels = Array.from(bySection.keys());
+      const data = Array.from(bySection.values());
+      if (data.reduce((a,b)=>a+b,0) === 0) return;
+      chartInstanceRef.current = new Chart(context, {
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{ data, backgroundColor: labels.map((_,i)=>['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316'][i%8]), borderColor: '#ffffff', borderWidth: 2 }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
+      });
+    } else if (rType === 'section') {
+      // Show distribution by activity status within the section
+      const section = analysisMeta?.filters?.section || modalSection || selectedSection;
+      const inSection = filteredActivities.filter(a => a.sectionName === section);
+      const posted = inSection.filter(a => a.postAt && new Date(a.postAt) <= new Date()).length;
+      const pending = inSection.filter(a => !a.postAt || new Date(a.postAt) > new Date()).length;
+      if (posted + pending === 0) return;
+      chartInstanceRef.current = new Chart(context, {
+        type: 'pie',
+        data: {
+          labels: ['Posted', 'Pending'],
+          datasets: [{ data: [posted, pending], backgroundColor: ['#10b981','#f59e0b'], borderColor: '#ffffff', borderWidth: 2 }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, responsive: false }
+      });
+    }
+
+    // Secondary pies: re-purpose based on rType
+    const secCanvas = sectionChartCanvasRef.current;
+    const trkCanvas = trackChartCanvasRef.current;
+    const strCanvas = strandChartCanvasRef.current;
+
+    if (sectionChartInstanceRef.current) sectionChartInstanceRef.current.destroy();
+    if (trackChartInstanceRef.current) trackChartInstanceRef.current.destroy();
+    if (strandChartInstanceRef.current) strandChartInstanceRef.current.destroy();
+
+    const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316','#22c55e','#6366f1'];
+    const toColors = (n) => Array.from({ length: n }, (_, i) => palette[i % palette.length]);
+
+    if (rType === 'year') {
+      // Section distribution, Track distribution, Strand distribution
+      const buildCounts = (items, key) => {
+        const map = new Map();
+        for (const it of items) { const k = it[key] || 'Unknown'; map.set(k, (map.get(k)||0)+1); }
+        return { labels: Array.from(map.keys()), data: Array.from(map.values()) };
+      };
+      const sectionDist = buildCounts(filteredActivities, 'sectionName');
+      const trackDist = buildCounts(filteredActivities, 'trackName');
+      const strandDist = buildCounts(filteredActivities, 'strandName');
+      if (secCanvas && sectionDist.data.reduce((a,b)=>a+b,0) > 0) {
+        sectionChartInstanceRef.current = new Chart(secCanvas.getContext('2d'), { type: 'pie', data: { labels: sectionDist.labels, datasets: [{ data: sectionDist.data, backgroundColor: toColors(sectionDist.data.length), borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+      }
+      if (trkCanvas && trackDist.data.reduce((a,b)=>a+b,0) > 0) {
+        trackChartInstanceRef.current = new Chart(trkCanvas.getContext('2d'), { type: 'pie', data: { labels: trackDist.labels, datasets: [{ data: trackDist.data, backgroundColor: toColors(trackDist.data.length), borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+      }
+      if (strCanvas && strandDist.data.reduce((a,b)=>a+b,0) > 0) {
+        strandChartInstanceRef.current = new Chart(strCanvas.getContext('2d'), { type: 'pie', data: { labels: strandDist.labels, datasets: [{ data: strandDist.data, backgroundColor: toColors(strandDist.data.length), borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+      }
+    } else if (rType === 'strand') {
+      // Within the strand: Activities by Section, and assignment vs quiz within the strand
+      const strandVal = analysisMeta?.filters?.strand || modalStrand || selectedStrand;
+      const inStrand = filteredActivities.filter(a => a.strandName === strandVal);
+      const bySection = new Map();
+      let aCount = 0, qCount = 0;
+      for (const it of inStrand) {
+        const sec = it.sectionName || 'Unknown';
+        bySection.set(sec, (bySection.get(sec)||0) + 1);
+        if (it._kind === 'assignment') aCount++; else if (it._kind === 'quiz') qCount++;
+      }
+      if (sectionChartCanvasRef.current) {
+        const labels = Array.from(bySection.keys()); const data = Array.from(bySection.values());
+        if (data.reduce((a,b)=>a+b,0) > 0) {
+          sectionChartInstanceRef.current = new Chart(sectionChartCanvasRef.current.getContext('2d'), { type: 'pie', data: { labels, datasets: [{ data, backgroundColor: toColors(data.length), borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+        }
+      }
+      if (trackChartCanvasRef.current && (aCount+qCount)>0) {
+        trackChartInstanceRef.current = new Chart(trackChartCanvasRef.current.getContext('2d'), { type: 'pie', data: { labels: ['Assignments','Quizzes'], datasets: [{ data: [aCount,qCount], backgroundColor: ['#f59e0b','#3b82f6'], borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+      }
+      // Leave strand pie empty or mirror bySection if needed
+    } else if (rType === 'section') {
+      // Within the section: By subject/course, and status distribution
+      const sectionVal = analysisMeta?.filters?.section || modalSection || selectedSection;
+      const inSection = filteredActivities.filter(a => a.sectionName === sectionVal);
+      const byCourse = new Map();
+      let posted = 0, pending = 0;
+      for (const it of inSection) {
+        const course = it.subject || 'Unknown';
+        byCourse.set(course, (byCourse.get(course)||0) + 1);
+        if (it.postAt && new Date(it.postAt) <= new Date()) posted++; else pending++;
+      }
+      if (sectionChartCanvasRef.current) {
+        const labels = Array.from(byCourse.keys()); const data = Array.from(byCourse.values());
+        if (data.reduce((a,b)=>a+b,0) > 0) {
+          sectionChartInstanceRef.current = new Chart(sectionChartCanvasRef.current.getContext('2d'), { type: 'pie', data: { labels, datasets: [{ data, backgroundColor: toColors(data.length), borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+        }
+      }
+      if (trackChartCanvasRef.current && (posted+pending)>0) {
+        trackChartInstanceRef.current = new Chart(trackChartCanvasRef.current.getContext('2d'), { type: 'pie', data: { labels: ['Posted','Pending'], datasets: [{ data: [posted,pending], backgroundColor: ['#10b981','#f59e0b'], borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+      }
+      // Use strand chart to show assignment vs quiz in the section
+      if (strandChartCanvasRef.current) {
+        const aCount = inSection.filter(a => a._kind==='assignment').length;
+        const qCount = inSection.filter(a => a._kind==='quiz').length;
+        if (aCount+qCount>0) {
+          strandChartInstanceRef.current = new Chart(strandChartCanvasRef.current.getContext('2d'), { type: 'pie', data: { labels: ['Assignments','Quizzes'], datasets: [{ data: [aCount,qCount], backgroundColor: ['#f59e0b','#3b82f6'], borderColor: '#ffffff', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom' } }, responsive: false } });
+        }
+      }
+    }
+
+    return () => {
+      if (chartInstanceRef.current) chartInstanceRef.current.destroy();
+      if (sectionChartInstanceRef.current) sectionChartInstanceRef.current.destroy();
+      if (trackChartInstanceRef.current) trackChartInstanceRef.current.destroy();
+      if (strandChartInstanceRef.current) strandChartInstanceRef.current.destroy();
+    };
+  }, [showAnalysisModal, assignmentsCount, quizzesCount, filteredActivities, analysisMeta, modalStrand, modalSection, selectedStrand, selectedSection]);
   
 
   return (
@@ -1729,8 +1907,24 @@ export default function VPE_FacultyReport() {
                   </div>
                   <div className="text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(before) }} />
                   {idx !== -1 && (
-                    <div className="flex items-center justify-center py-3">
-                      <canvas ref={chartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                    <div className="flex flex-col gap-6 py-3">
+                      <div className="flex items-center justify-center">
+                        <canvas ref={chartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="flex flex-col items-center">
+                          <div className="text-sm font-medium mb-2">By Section</div>
+                          <canvas ref={sectionChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <div className="text-sm font-medium mb-2">By Track</div>
+                          <canvas ref={trackChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <div className="text-sm font-medium mb-2">By Strand</div>
+                          <canvas ref={strandChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                        </div>
+                      </div>
                     </div>
                   )}
                   <div className="text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(after) }} />
@@ -1797,6 +1991,54 @@ export default function VPE_FacultyReport() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Report Type Modal */}
+      {showReportTypeModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="p-5 border-b">
+              <h3 className="text-lg font-semibold">Choose report type</h3>
+              <p className="text-sm text-gray-600 mt-1">How should the analysis be generated?</p>
+            </div>
+            <div className="p-5 space-y-3">
+              <label className="flex items-center gap-3">
+                <input type="radio" name="reportType" value="year" checked={reportType==='year'} onChange={() => setReportType('year')} />
+                <span>For the whole active academic year</span>
+              </label>
+              <label className="flex items-center gap-3">
+                <input type="radio" name="reportType" value="strand" checked={reportType==='strand'} onChange={() => setReportType('strand')} />
+                <span>For a specific strand</span>
+              </label>
+              {reportType==='strand' && (
+                <select value={modalStrand} onChange={e=>setModalStrand(e.target.value)} className="w-full border rounded px-3 py-2">
+                  <option value="">Select strand</option>
+                  {[...new Set(facultyActivities.map(a=>a.strandName).filter(Boolean))].sort().map(s=> (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              )}
+              <label className="flex items-center gap-3">
+                <input type="radio" name="reportType" value="section" checked={reportType==='section'} onChange={() => setReportType('section')} />
+                <span>For a specific section within the active term</span>
+              </label>
+              {reportType==='section' && (
+                <select value={modalSection} onChange={e=>setModalSection(e.target.value)} className="w-full border rounded px-3 py-2">
+                  <option value="">Select section</option>
+                  {[...new Set(facultyActivities.map(a=>a.sectionName).filter(Boolean))].sort().map(s=> (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div className="p-5 border-t flex justify-end gap-2 bg-gray-50">
+              <button onClick={()=>setShowReportTypeModal(false)} className="px-4 py-2 border rounded">Cancel</button>
+              <button onClick={confirmCreateAnalysis} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50" disabled={loadingAnalysis || (reportType==='strand' && !modalStrand && !selectedStrand) || (reportType==='section' && !modalSection && !selectedSection)}>
+                Continue
+              </button>
+            </div>
           </div>
         </div>
       )}

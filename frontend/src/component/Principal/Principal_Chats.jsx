@@ -84,6 +84,27 @@ export default function Principal_Chats() {
 
   // Add loading state for chat list
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  // Highlight chats with new/unread messages
+  const [highlightedChats, setHighlightedChats] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('highlightedChats_principal') || '{}'); } catch { return {}; }
+  });
+  const addHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      const next = { ...prev, [chatId]: Date.now() };
+      try { localStorage.setItem('highlightedChats_principal', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const clearHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      if (!prev[chatId]) return prev;
+      const { [chatId]: _omit, ...rest } = prev;
+      try { localStorage.setItem('highlightedChats_principal', JSON.stringify(rest)); } catch {}
+      return rest;
+    });
+  };
 
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
@@ -149,15 +170,19 @@ export default function Principal_Chats() {
       transports: ["websocket"],
       reconnectionAttempts: 5,
       timeout: 10000,
+      auth: {
+        token: localStorage.getItem('token'),
+        userId: currentUserId
+      }
     });
 
     socket.current.emit("addUser", currentUserId);
 
-    socket.current.on("getMessage", (data) => {
+    const handleIncomingDirect = (data) => {
       const incomingMessage = {
         senderId: data.senderId,
         receiverId: currentUserId,
-        message: data.text,
+        message: data.text || data.message,
         fileUrl: data.fileUrl || null,
         createdAt: new Date().toISOString(),
       };
@@ -212,13 +237,18 @@ export default function Principal_Chats() {
           
           // Bump chat to top (no delayed refresh)
           bumpChatToTop(chat);
+          if (!(selectedChat && !isGroupChat && selectedChat._id === chat._id)) {
+            addHighlight(chat._id);
+          }
         }
         
         return newMessages;
       });
       
       // Avoid double-appending / forced re-render
-    });
+    };
+    socket.current.on("getMessage", handleIncomingDirect);
+    socket.current.on("receiveMessage", handleIncomingDirect);
 
     // Group chat socket events
     socket.current.on("getGroupMessage", (data) => {
@@ -1189,17 +1219,21 @@ export default function Principal_Chats() {
                     <div
                       key={chat._id}
                       className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                        selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')) ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                        (selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')))
+                          ? "bg-white"
+                          : (highlightedChats[chat._id] ? "bg-yellow-50 ring-2 ring-yellow-400" : "bg-gray-100 hover:bg-gray-300")
                       }`}
                       onClick={() => {
                         if (chat.type === 'group') {
                           setSelectedChat(chat);
                           setIsGroupChat(true);
                           localStorage.setItem("selectedChatId_principal", chat._id);
+                          clearHighlight(chat._id);
                         } else {
                           setSelectedChat(chat);
                           setIsGroupChat(false);
                           localStorage.setItem("selectedChatId_principal", chat._id);
+                          clearHighlight(chat._id);
                         }
                       }}
                     >

@@ -6,6 +6,7 @@ import express from "express";
 import cors from "cors";
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import net from 'node:net';
 import messageRoutes from "./routes/messages.js";
 import groupChatRoutes from "./routes/groupChats.js";
 import groupMessageRoutes from "./routes/groupMessages.js";
@@ -80,7 +81,28 @@ io.use((socket, next) => {
 // Export io instance for use in routes
 export const getIO = () => io;
 
-const PORT = process.env.PORT || 5000;
+const PREFERRED_PORT = Number(process.env.PORT) || 5000;
+
+async function isPortFree(port) {
+  return new Promise((resolve) => {
+    const tester = net
+      .createServer()
+      .once('error', () => resolve(false))
+      .once('listening', () => tester.close(() => resolve(true)))
+      .listen({ port, host: '0.0.0.0' });
+  });
+}
+
+async function findAvailablePort(startPort, maxAttempts = 20) {
+  let candidate = startPort;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    const free = await isPortFree(candidate);
+    if (free) return candidate;
+    candidate += 1;
+  }
+  return startPort; // fallback to preferred if none found (will error as before)
+}
 
 // Socket.io connection handling
 let activeUsers = [];
@@ -93,11 +115,9 @@ io.on("connection", (socket) => {
     
     socket.on("addUser", (userId) => {
         socket.userId = userId; // Store userId on socket for later use
-        if (!activeUsers.some(user => user.userId === userId)) {
-            activeUsers.push({ 
-                userId, 
-                socketId: socket.id 
-            });
+        // Allow multiple sockets per user; avoid duplicate socketIds
+        if (!activeUsers.some(entry => entry.socketId === socket.id)) {
+            activeUsers.push({ userId, socketId: socket.id });
         }
         console.log("Active Users: ", activeUsers);
         io.emit("getUsers", activeUsers);
@@ -123,31 +143,34 @@ io.on("connection", (socket) => {
         socket.leave(`user_${userId}`);
     });
 
-    socket.on("sendMessage", ({ chatId, senderId, receiverId, message, timestamp }) => {
-        console.log("Received sendMessage:", { chatId, senderId, receiverId, message, timestamp });
-        
-        // Find the receiver in active users
-        const receiver = activeUsers.find(user => user.userId === receiverId);
-        if (receiver) {
-            console.log("Sending message to receiver:", receiver.userId);
-            io.to(receiver.socketId).emit("receiveMessage", {
-                senderId,
-                receiverId,
-                message,
-                timestamp: timestamp || new Date().toISOString(),
-                createdAt: new Date().toISOString()
+    socket.on("sendMessage", ({ chatId, senderId, receiverId, message, text, fileUrl, timestamp }) => {
+        console.log("Received sendMessage:", { chatId, senderId, receiverId, message, text, fileUrl, timestamp });
+
+        const normalizedText = typeof message === 'string' && message.length > 0 ? message : (text || "");
+        const payload = {
+            senderId,
+            receiverId,
+            text: normalizedText,
+            fileUrl,
+            timestamp: timestamp || new Date().toISOString(),
+            createdAt: new Date().toISOString()
+        };
+
+        // Find all receiver sockets in active users
+        const receiverSockets = activeUsers.filter(user => user.userId === receiverId);
+        if (receiverSockets.length > 0) {
+            console.log("Sending message to receiver sockets:", receiverSockets.map(u => u.socketId));
+            // Emit both legacy and current events for compatibility to all receiver sockets
+            receiverSockets.forEach(({ socketId }) => {
+                io.to(socketId).emit("getMessage", payload);
+                io.to(socketId).emit("receiveMessage", { ...payload, message: normalizedText });
             });
         } else {
             console.log("Receiver not found in active users:", receiverId);
         }
-        
+
         // Also emit to the sender for confirmation (optional)
-        io.to(socket.id).emit("messageSent", {
-            senderId,
-            receiverId,
-            message,
-            timestamp: timestamp || new Date().toISOString()
-        });
+        io.to(socket.id).emit("messageSent", payload);
     });
 
     // Join a group chat room
@@ -172,20 +195,27 @@ io.on("connection", (socket) => {
     });
 
     // Send message to group chat
-    socket.on("sendGroupMessage", ({ senderId, groupId, text, fileUrl, senderName }) => {
-        console.log("Received sendGroupMessage:", { senderId, groupId, text, fileUrl, senderName });
-        
-        // Broadcast to all users in the group (including sender for consistency)
-        io.to(groupId).emit("receiveGroupMessage", {
+    socket.on("sendGroupMessage", ({ senderId, groupId, text, fileUrl, senderName, senderFirstname, senderLastname, senderProfilePic }) => {
+        console.log("Received sendGroupMessage:", { senderId, groupId, text, fileUrl, senderName, senderFirstname, senderLastname, senderProfilePic });
+
+        const payload = {
             senderId,
             groupId,
-            message: text,
+            text,
             fileUrl,
             senderName,
+            senderFirstname,
+            senderLastname,
+            senderProfilePic,
             createdAt: new Date().toISOString(),
             timestamp: new Date().toISOString()
-        });
-        
+        };
+
+        // Broadcast to all users in the group (including sender for consistency)
+        io.to(groupId).emit("getGroupMessage", payload);
+        // Also emit legacy event name for any older clients
+        io.to(groupId).emit("receiveGroupMessage", { ...payload, message: text });
+
         console.log("Broadcasted group message to room:", groupId);
     });
 
@@ -218,11 +248,15 @@ io.on("connection", (socket) => {
     });
 
     socket.on("disconnect", () => {
-        const user = activeUsers.find(user => user.socketId === socket.id);
+        // Remove this socket from active users; keep others for same user
+        const user = activeUsers.find(entry => entry.socketId === socket.id);
         if (user) {
-            activeUsers = activeUsers.filter(user => user.socketId !== socket.id);
-            // Clean up user groups
-            delete userGroups[user.userId];
+            activeUsers = activeUsers.filter(entry => entry.socketId !== socket.id);
+            // If no more sockets for this user, optionally clean up user groups
+            const stillConnected = activeUsers.some(entry => entry.userId === user.userId);
+            if (!stillConnected) {
+                delete userGroups[user.userId];
+            }
             io.emit("getUsers", activeUsers);
         }
         console.log("User disconnected:", socket.id);
@@ -434,6 +468,11 @@ app.use((error, req, res, next) => {
 });
 
 // Start server with socket.io
+const PORT = await findAvailablePort(PREFERRED_PORT);
+if (PORT !== PREFERRED_PORT) {
+  console.warn(`[SERVER] Preferred port ${PREFERRED_PORT} is in use. Using ${PORT} instead.`);
+}
+
 server.listen(PORT, () => {
   connect.connectToServer();
   console.log(`Server is running on port: ${PORT}`);

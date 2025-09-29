@@ -9,14 +9,15 @@ const router = express.Router();
 router.get('/term/:termName', async (req, res) => {
   try {
     const { termName } = req.params;
-    const { schoolYear } = req.query;
+    const { schoolYear, quarterName } = req.query;
     const filter = { termName: termName };
     if (schoolYear) filter.schoolYear = schoolYear;
+    if (quarterName) filter.quarterName = quarterName;
     const subjects = await Subject.find(filter);
-    // Deduplicate by subjectName, trackName, strandName, gradeLevel, schoolYear, termName
+    // Deduplicate by subjectName, trackName, strandName, gradeLevel, schoolYear, termName, quarterName
     const unique = new Map();
     for (const s of subjects) {
-      const key = `${s.subjectName}|${s.trackName}|${s.strandName}|${s.gradeLevel}|${s.schoolYear}|${s.termName}`;
+      const key = `${s.subjectName}|${s.trackName}|${s.strandName}|${s.gradeLevel}|${s.schoolYear}|${s.termName}|${s.quarterName || ''}`;
       if (!unique.has(key)) unique.set(key, s);
     }
     res.json(Array.from(unique.values()));
@@ -29,6 +30,7 @@ router.get('/term/:termName', async (req, res) => {
 router.get('/termId/:termId', async (req, res) => {
   try {
     const { termId } = req.params;
+    const { quarterName } = req.query;
     
     // First get the term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -38,15 +40,14 @@ router.get('/termId/:termId', async (req, res) => {
     }
     
     // Get subjects for this specific school year and term, regardless of status
-    const subjects = await Subject.find({ 
-      schoolYear: term.schoolYear, 
-      termName: term.termName 
-    });
+    const filter = { schoolYear: term.schoolYear, termName: term.termName };
+    if (quarterName) filter.quarterName = quarterName;
+    const subjects = await Subject.find(filter);
     
-    // Deduplicate by subjectName, trackName, strandName, gradeLevel, schoolYear, termName
+    // Deduplicate by subjectName, trackName, strandName, gradeLevel, schoolYear, termName, quarterName
     const unique = new Map();
     for (const s of subjects) {
-      const key = `${s.subjectName}|${s.trackName}|${s.strandName}|${s.gradeLevel}|${s.schoolYear}|${s.termName}`;
+      const key = `${s.subjectName}|${s.trackName}|${s.strandName}|${s.gradeLevel}|${s.schoolYear}|${s.termName}|${s.quarterName || ''}`;
       if (!unique.has(key)) unique.set(key, s);
     }
     
@@ -59,7 +60,7 @@ router.get('/termId/:termId', async (req, res) => {
 // Create a new subject
 router.post('/', async (req, res) => {
   try {
-    const { subjectName, trackName, strandName, gradeLevel, schoolYear, termName } = req.body;
+    const { subjectName, trackName, strandName, gradeLevel, schoolYear, termName, quarterName } = req.body;
 
     // Check for existing subject with same combination (using the compound unique index)
     const existingSubject = await Subject.findOne({ 
@@ -80,7 +81,8 @@ router.post('/', async (req, res) => {
       strandName,
       gradeLevel,
       schoolYear,
-      termName
+      termName,
+      quarterName
     });
 
     const savedSubject = await subject.save();
@@ -99,7 +101,7 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { subjectName, trackName, strandName, gradeLevel, schoolYear, termName } = req.body;
+    const { subjectName, trackName, strandName, gradeLevel, schoolYear, termName, quarterName } = req.body;
 
     // Check for existing subject with same combination, excluding current subject
     const existingSubject = await Subject.findOne({ 
@@ -123,7 +125,7 @@ router.patch('/:id', async (req, res) => {
 
     const updatedSubject = await Subject.findByIdAndUpdate(
       id,
-      { subjectName, trackName, strandName, gradeLevel, schoolYear, termName },
+      { subjectName, trackName, strandName, gradeLevel, schoolYear, termName, ...(quarterName !== undefined ? { quarterName } : {}) },
       { new: true, runValidators: true }
     );
 
@@ -201,7 +203,7 @@ router.post('/bulk', async (req, res) => {
 
     // Check for duplicates within the uploaded data
     const subjectKeys = subjects.map(s => 
-      `${s.subjectName.trim()}-${s.trackName.trim()}-${s.strandName.trim()}-${s.gradeLevel}-${s.termName}-${s.schoolYear}`
+      `${s.subjectName.trim()}-${s.trackName.trim()}-${s.strandName.trim()}-${s.gradeLevel}-${s.termName}-${s.schoolYear}-${s.quarterName || ''}`
     );
     const uniqueSubjectKeys = new Set(subjectKeys);
     if (uniqueSubjectKeys.size !== subjectKeys.length) {
@@ -216,7 +218,8 @@ router.post('/bulk', async (req, res) => {
         strandName: subject.strandName.trim(),
         gradeLevel: subject.gradeLevel,
         termName: subject.termName,
-        schoolYear: subject.schoolYear
+        schoolYear: subject.schoolYear,
+        ...(subject.quarterName ? { quarterName: subject.quarterName } : {})
       }))
     });
 
@@ -236,6 +239,7 @@ router.post('/bulk', async (req, res) => {
         gradeLevel: subject.gradeLevel,
         schoolYear: subject.schoolYear,
         termName: subject.termName,
+        quarterName: subject.quarterName,
         status: 'active'
       }))
     );
@@ -264,11 +268,14 @@ router.get('/', async (req, res) => {
 router.get('/schoolyear/:schoolYear/term/:termName', async (req, res) => {
   try {
     const { schoolYear, termName } = req.params;
-    const subjects = await Subject.find({ schoolYear, termName });
-    // Deduplicate by subjectName, trackName, strandName, gradeLevel, schoolYear, termName
+    const { quarterName } = req.query;
+    const filter = { schoolYear, termName };
+    if (quarterName) filter.quarterName = quarterName;
+    const subjects = await Subject.find(filter);
+    // Deduplicate by subjectName, trackName, strandName, gradeLevel, schoolYear, termName, quarterName
     const unique = new Map();
     for (const s of subjects) {
-      const key = `${s.subjectName}|${s.trackName}|${s.strandName}|${s.gradeLevel}|${s.schoolYear}|${s.termName}`;
+      const key = `${s.subjectName}|${s.trackName}|${s.strandName}|${s.gradeLevel}|${s.schoolYear}|${s.termName}|${s.quarterName || ''}`;
       if (!unique.has(key)) unique.set(key, s);
     }
     res.json(Array.from(unique.values()));
@@ -354,6 +361,34 @@ router.delete('/:id', async (req, res) => {
     
     console.log(`Successfully deleted subject and all connected data`);
     res.status(200).json({ message: 'Subject and all connected data deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update subjects by quarter and school year
+router.patch('/quarter/:quarterName/schoolyear/:schoolYear', async (req, res) => {
+  try {
+    const { quarterName, schoolYear } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ message: 'Status is required' });
+    }
+
+    const result = await Subject.updateMany(
+      { 
+        quarterName: quarterName,
+        schoolYear: schoolYear
+      },
+      { $set: { status: status } }
+    );
+
+    console.log(`Updated ${result.modifiedCount} subjects to status: ${status} for quarter: ${quarterName}, school year: ${schoolYear}`);
+    res.json({ 
+      message: `Updated ${result.modifiedCount} subjects to status: ${status}`,
+      modifiedCount: result.modifiedCount
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

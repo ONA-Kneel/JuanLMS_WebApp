@@ -243,10 +243,11 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 
     // Handle status updates
     if (req.body.status === 'active') {
-      // Archive other terms in the same school year only
+      const { activeQuarterName } = req.body;
+      // Set other terms in the same school year to INACTIVE (not archived)
       await Term.updateMany(
         { _id: { $ne: term._id }, schoolYear: term.schoolYear },
-        { status: 'archived' }
+        { status: 'inactive' }
       );
       
       term.status = 'active';
@@ -289,6 +290,31 @@ router.patch('/:id', authenticateToken, async (req, res) => {
           { $set: { status: 'active' } }
         )
       ]);
+
+      // Always inactivate quarters under OTHER terms of the same school year
+      await Quarter.updateMany(
+        { schoolYear: term.schoolYear, termName: { $ne: term.termName }, status: { $ne: 'archived' } },
+        { $set: { status: 'inactive' } }
+      );
+
+      // Quarter handling is OPTIONAL for the activated term. If provided, honor an explicit activeQuarterName
+      const quartersForTerm = await Quarter.find({
+        schoolYear: term.schoolYear,
+        termName: term.termName,
+        status: { $ne: 'archived' }
+      }).sort({ startDate: 1 });
+
+      if (quartersForTerm && quartersForTerm.length > 0 && activeQuarterName) {
+        const chosen = quartersForTerm.find(q => q.quarterName === activeQuarterName);
+        if (chosen) {
+          // Ensure only chosen quarter is active within the term
+          await Quarter.updateMany(
+            { schoolYear: term.schoolYear, termName: term.termName, _id: { $ne: chosen._id } },
+            { $set: { status: 'inactive' } }
+          );
+          await Quarter.findByIdAndUpdate(chosen._id, { status: 'active' });
+        }
+      }
       
       console.log(`Successfully reactivated all entities for term: ${term.termName}`);
 
@@ -371,28 +397,15 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       }
       
     } else if (req.body.status === 'inactive') {
-      // Deactivate term (set status to inactive). We do NOT delete; we leave related data as-is or optionally archive.
-      term.status = 'inactive';
-
-      // Audit: Term deactivated
-      try {
-        const token = req.headers.authorization?.split(' ')[1];
-        const url = `${req.protocol}://${req.get('host')}/audit-log`;
-        await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            action: 'Term Deactivated',
-            details: `Deactivated ${term.termName} for School Year ${term.schoolYear}`,
-            userRole: req.user?.role || 'system'
-          })
-        });
-      } catch (auditErr) {
-        console.warn('[Audit] Failed to log term deactivation:', auditErr);
+      // Allow turning an active term into inactive (on/off behavior)
+      // Set all of its non-archived quarters to inactive to maintain invariants
+      if (term.status === 'active') {
+        await Quarter.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        );
       }
+      term.status = 'inactive';
     } else if (req.body.status) {
       term.status = req.body.status;
     }
@@ -619,11 +632,11 @@ router.delete('/:id', async (req, res) => {
       }
     }
 
-    // Proceed with cascading deletion using the model's pre-remove middleware
+    // Proceed with deletion
     console.log(`Deleting term: ${term.termName} (${term.schoolYear})`);
     
-    // Use remove() to trigger the pre-remove middleware for cascading deletes
-    await term.remove();
+    // Use deleteOne() on the document (remove() is not available in modern Mongoose)
+    await term.deleteOne();
     
     console.log(`Successfully deleted term and all connected data`);
     res.json({ message: 'Term and all connected data deleted successfully' });

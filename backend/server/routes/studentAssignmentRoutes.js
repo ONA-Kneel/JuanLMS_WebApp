@@ -10,13 +10,14 @@ const router = express.Router();
 // Get all student assignments (can be filtered by termId)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { termId, sectionName, status, schoolYear, studentId } = req.query;
+    const { termId, sectionName, status, schoolYear, studentId, quarterName } = req.query;
     let query = {};
     if (termId) query.termId = termId;
     if (sectionName) query.sectionName = sectionName;
     if (status) query.status = status;
     if (schoolYear) query.schoolYear = schoolYear;
     if (studentId) query.studentId = studentId;
+    if (quarterName) query.quarterName = quarterName;
 
     const assignments = await StudentAssignment.find(query).populate('studentId');
 
@@ -87,7 +88,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create a new student assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, enrollmentNo, enrollmentDate, firstName, lastName } = req.body;
+    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, enrollmentNo, enrollmentDate, firstName, lastName, quarterName } = req.body;
 
     // Get term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -155,7 +156,8 @@ router.post('/', authenticateToken, async (req, res) => {
       gradeLevel,
       termId,
       schoolYear: term.schoolYear,
-      termName: term.termName
+      termName: term.termName,
+      quarterName
     });
 
     const newAssignment = await assignment.save();
@@ -176,7 +178,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
   const errors = [];
 
   for (const assignmentData of assignments) {
-    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, enrollmentNo, enrollmentDate, firstName, lastName } = assignmentData;
+    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, enrollmentNo, enrollmentDate, firstName, lastName, quarterName } = assignmentData;
 
     try {
       const term = await Term.findById(termId);
@@ -247,6 +249,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         termId,
         schoolYear: term.schoolYear,
         termName: term.termName,
+        quarterName,
       });
 
       const savedAssignment = await newAssignment.save();
@@ -313,7 +316,7 @@ router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
 // Update a student assignment (e.g., if track/strand/section changes)
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
-    const { trackName, strandName, sectionName, gradeLevel, termId, enrollmentNo, enrollmentDate, firstName, lastName } = req.body;
+    const { trackName, strandName, sectionName, gradeLevel, termId, enrollmentNo, enrollmentDate, firstName, lastName, quarterName } = req.body;
 
     const assignment = await StudentAssignment.findById(req.params.id);
     if (!assignment) {
@@ -338,6 +341,9 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     assignment.termId = currentTermId; // Update termId if provided
     assignment.schoolYear = term.schoolYear;
     assignment.termName = term.termName;
+    if (quarterName !== undefined) {
+      assignment.quarterName = quarterName;
+    }
 
     const updatedAssignment = await assignment.save();
     res.json(updatedAssignment);
@@ -354,7 +360,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 router.get('/enrolled-subjects/:studentId', authenticateToken, async (req, res) => {
   try {
     const { studentId } = req.params;
-    const { termName, schoolYear } = req.query;
+    const { termName, schoolYear, quarterName } = req.query;
     
     // Verify the requesting user has access to this student's data
     if (req.user.role === 'students' && req.user.userID !== studentId) {
@@ -368,6 +374,7 @@ router.get('/enrolled-subjects/:studentId', authenticateToken, async (req, res) 
     let query = { studentId, status: 'active' };
     if (termName) query.termName = termName;
     if (schoolYear) query.schoolYear = schoolYear;
+    if (quarterName) query.quarterName = quarterName;
 
     const assignments = await StudentAssignment.find(query);
     
@@ -405,6 +412,34 @@ router.get('/enrolled-subjects/:studentId', authenticateToken, async (req, res) 
       message: 'Error fetching enrolled subjects', 
       error: error.message 
     });
+  }
+});
+
+// Update student assignments by quarter and school year
+router.patch('/quarter/:quarterName/schoolyear/:schoolYear', async (req, res) => {
+  try {
+    const { quarterName, schoolYear } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ message: 'Status is required' });
+    }
+
+    const result = await StudentAssignment.updateMany(
+      { 
+        quarterName: quarterName,
+        schoolYear: schoolYear
+      },
+      { $set: { status: status } }
+    );
+
+    console.log(`Updated ${result.modifiedCount} student assignments to status: ${status} for quarter: ${quarterName}, school year: ${schoolYear}`);
+    res.json({ 
+      message: `Updated ${result.modifiedCount} student assignments to status: ${status}`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 

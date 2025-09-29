@@ -141,15 +141,19 @@ export default function VPE_Chats() {
       transports: ["websocket"],
       reconnectionAttempts: 5,
       timeout: 10000,
+      auth: {
+        token: localStorage.getItem('token'),
+        userId: currentUserId
+      }
     });
 
     socket.current.emit("addUser", currentUserId);
 
-    socket.current.on("getMessage", (data) => {
+    const handleIncomingDirect = (data) => {
       const incomingMessage = {
         senderId: data.senderId,
         receiverId: currentUserId,
-        message: data.text,
+        message: data.text || data.message,
         fileUrl: data.fileUrl || null,
         createdAt: new Date().toISOString(),
       };
@@ -227,7 +231,9 @@ export default function VPE_Chats() {
       setTimeout(() => {
         setMessages(prev => ({ ...prev }));
       }, 50);
-    });
+    };
+    socket.current.on("getMessage", handleIncomingDirect);
+    socket.current.on("receiveMessage", handleIncomingDirect);
 
     // Group chat socket events
     socket.current.on("getGroupMessage", (data) => {
@@ -255,6 +261,11 @@ export default function VPE_Chats() {
           setTimeout(() => {
             setGroupMessages(current => ({ ...current }));
           }, 10);
+        }
+        
+        // Highlight group item if it's not the currently open chat
+        if (!(selectedChat && isGroupChat && selectedChat._id === data.groupId)) {
+          try { /* may not be defined yet, add later if needed */ addHighlight && addHighlight(data.groupId); } catch {}
         }
         
         return updated;
@@ -1152,17 +1163,21 @@ export default function VPE_Chats() {
                     <div
                       key={chat._id}
                       className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                        selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')) ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                        (selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')))
+                          ? "bg-white"
+                          : (highlightedChats && highlightedChats[chat._id] ? "bg-yellow-50 ring-2 ring-yellow-400" : "bg-gray-100 hover:bg-gray-300")
                       }`}
                       onClick={() => {
                         if (chat.type === 'group') {
                           setSelectedChat(chat);
                           setIsGroupChat(true);
                           localStorage.setItem("selectedChatId_VPE", chat._id);
+                          try { clearHighlight && clearHighlight(chat._id); } catch {}
                         } else {
                           setSelectedChat(chat);
                           setIsGroupChat(false);
                           localStorage.setItem("selectedChatId_VPE", chat._id);
+                          try { clearHighlight && clearHighlight(chat._id); } catch {}
                         }
                       }}
                     >

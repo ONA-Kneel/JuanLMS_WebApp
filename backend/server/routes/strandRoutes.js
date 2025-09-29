@@ -12,12 +12,10 @@ const router = express.Router();
 router.get('/track/:trackName', async (req, res) => {
   try {
     const { trackName } = req.params;
-    const { schoolYear, termName } = req.query;
-    const strands = await Strand.find({ 
-      trackName, 
-      schoolYear,
-      termName
-    });
+    const { schoolYear, termName, quarterName } = req.query;
+    const filter = { trackName, schoolYear, termName };
+    if (quarterName) filter.quarterName = quarterName;
+    const strands = await Strand.find(filter);
     res.status(200).json(strands);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -28,11 +26,14 @@ router.get('/track/:trackName', async (req, res) => {
 router.get('/schoolyear/:schoolYear/term/:termName', async (req, res) => {
   try {
     const { schoolYear, termName } = req.params;
-    const strands = await Strand.find({ schoolYear, termName });
-    // Deduplicate by strandName, trackName, schoolYear, termName
+    const { quarterName } = req.query;
+    const filter = { schoolYear, termName };
+    if (quarterName) filter.quarterName = quarterName;
+    const strands = await Strand.find(filter);
+    // Deduplicate by strandName, trackName, schoolYear, termName, quarterName
     const unique = new Map();
     for (const s of strands) {
-      const key = `${s.strandName}|${s.trackName}|${s.schoolYear}|${s.termName}`;
+      const key = `${s.strandName}|${s.trackName}|${s.schoolYear}|${s.termName}|${s.quarterName || ''}`;
       if (!unique.has(key)) unique.set(key, s);
     }
     res.json(Array.from(unique.values()));
@@ -45,6 +46,7 @@ router.get('/schoolyear/:schoolYear/term/:termName', async (req, res) => {
 router.get('/termId/:termId', async (req, res) => {
   try {
     const { termId } = req.params;
+    const { quarterName } = req.query;
     
     // First get the term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -54,15 +56,14 @@ router.get('/termId/:termId', async (req, res) => {
     }
     
     // Get strands for this specific school year and term, regardless of status
-    const strands = await Strand.find({ 
-      schoolYear: term.schoolYear, 
-      termName: term.termName 
-    });
+    const filter = { schoolYear: term.schoolYear, termName: term.termName };
+    if (quarterName) filter.quarterName = quarterName;
+    const strands = await Strand.find(filter);
     
-    // Deduplicate by strandName, trackName, schoolYear, termName
+    // Deduplicate by strandName, trackName, schoolYear, termName, quarterName
     const unique = new Map();
     for (const s of strands) {
-      const key = `${s.strandName}|${s.trackName}|${s.schoolYear}|${s.termName}`;
+      const key = `${s.strandName}|${s.trackName}|${s.schoolYear}|${s.termName}|${s.quarterName || ''}`;
       if (!unique.has(key)) unique.set(key, s);
     }
     
@@ -74,7 +75,7 @@ router.get('/termId/:termId', async (req, res) => {
 
 // Create a new strand
 router.post('/', async (req, res) => {
-  const { strandName, trackName, schoolYear, termName } = req.body;
+  const { strandName, trackName, schoolYear, termName, quarterName } = req.body;
 
   if (!strandName || !trackName || !schoolYear || !termName) {
     return res.status(400).json({ message: 'Strand name, track name, school year, and term name are required' });
@@ -96,7 +97,8 @@ router.post('/', async (req, res) => {
       strandName, 
       trackName, 
       schoolYear, 
-      termName 
+      termName,
+      quarterName
     });
     await newStrand.save();
     res.status(201).json(newStrand);
@@ -108,7 +110,7 @@ router.post('/', async (req, res) => {
 // Update a strand
 router.patch('/:id', async (req, res) => {
   const { id } = req.params;
-  const { strandName, trackName } = req.body;
+  const { strandName, trackName, quarterName } = req.body;
 
   if (!strandName || !trackName) {
     return res.status(400).json({ message: 'Strand name and track name are required' });
@@ -146,6 +148,9 @@ router.patch('/:id', async (req, res) => {
     strand.trackName = trackName;
     strand.schoolYear = currentTerm.schoolYear;
     strand.termName = currentTerm.termName;
+    if (quarterName !== undefined) {
+      strand.quarterName = quarterName;
+    }
 
     await strand.save();
 
@@ -347,6 +352,34 @@ router.delete('/:id', async (req, res) => {
     
     console.log(`Successfully deleted strand and all connected data`);
     res.status(200).json({ message: 'Strand and all connected data deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update strands by quarter and school year
+router.patch('/quarter/:quarterName/schoolyear/:schoolYear', async (req, res) => {
+  try {
+    const { quarterName, schoolYear } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ message: 'Status is required' });
+    }
+
+    const result = await Strand.updateMany(
+      { 
+        quarterName: quarterName,
+        schoolYear: schoolYear
+      },
+      { $set: { status: status } }
+    );
+
+    console.log(`Updated ${result.modifiedCount} strands to status: ${status} for quarter: ${quarterName}, school year: ${schoolYear}`);
+    res.json({ 
+      message: `Updated ${result.modifiedCount} strands to status: ${status}`,
+      modifiedCount: result.modifiedCount
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

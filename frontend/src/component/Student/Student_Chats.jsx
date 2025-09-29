@@ -82,6 +82,27 @@ export default function Student_Chats() {
 
   // Add loading state for chat list
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  // Track chats that should be highlighted due to new messages
+  const [highlightedChats, setHighlightedChats] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('highlightedChats_student') || '{}'); } catch { return {}; }
+  });
+  const addHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      const next = { ...prev, [chatId]: Date.now() };
+      try { localStorage.setItem('highlightedChats_student', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const clearHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      if (!prev[chatId]) return prev;
+      const { [chatId]: _ignore, ...rest } = prev;
+      try { localStorage.setItem('highlightedChats_student', JSON.stringify(rest)); } catch {}
+      return rest;
+    });
+  };
 
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
@@ -95,6 +116,11 @@ export default function Student_Chats() {
   const socket = useRef(null);
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
+  // Live refs to avoid stale closures in socket handlers
+  const recentChatsRef = useRef([]);
+  const selectedChatRef = useRef(null);
+  const isGroupChatRef = useRef(false);
+  const usersRef = useRef([]);
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -103,6 +129,37 @@ export default function Student_Chats() {
   const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
 
   const navigate = useNavigate();
+
+  // Keep refs in sync with state
+  useEffect(() => { recentChatsRef.current = recentChats; }, [recentChats]);
+  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
+  useEffect(() => { isGroupChatRef.current = isGroupChat; }, [isGroupChat]);
+  useEffect(() => { usersRef.current = users; }, [users]);
+
+  // Fetch a single user by id and merge to cache/state (used when sender not in users list yet)
+  const fetchUserIfMissing = async (userId) => {
+    if (!userId) return null;
+    const existing = users.find(u => u._id === userId);
+    if (existing) return existing;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${API_BASE}/users/${userId}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.data && res.data._id) {
+        const fetched = res.data;
+        setUsers(prev => {
+          const next = [...prev.filter(u => u._id !== fetched._id), fetched];
+          try { localStorage.setItem('users_all_student', JSON.stringify(next)); } catch {}
+          return next;
+        });
+        return fetched;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return null;
+  };
 
   useEffect(() => {
     if (!currentUserId) {
@@ -126,15 +183,19 @@ export default function Student_Chats() {
       transports: ["websocket"],
       reconnectionAttempts: 5,
       timeout: 10000,
+      auth: {
+        token: localStorage.getItem('token'),
+        userId: currentUserId
+      }
     });
 
     socket.current.emit("addUser", currentUserId);
 
-    socket.current.on("getMessage", (data) => {
+    const handleIncomingDirect = (data) => {
       const incomingMessage = {
         senderId: data.senderId,
         receiverId: currentUserId,
-        message: data.text,
+        message: data.text || data.message,
         fileUrl: data.fileUrl || null,
         createdAt: new Date().toISOString(),
       };
@@ -149,25 +210,36 @@ export default function Student_Chats() {
         };
         
         // Update last message for this chat
-        let chat = recentChats.find(c => c._id === incomingMessage.senderId);
+        let chat = (recentChatsRef.current || []).find(c => c._id === incomingMessage.senderId);
         
-        // If chat not found in recentChats, find the user and add them
+        // If chat not found in recentChats, fetch the sender and add them
         if (!chat) {
-          const sender = users.find(u => u._id === incomingMessage.senderId);
-          if (sender && sender.firstname && sender.lastname) {
-            chat = {
-              _id: sender._id,
-              firstname: sender.firstname,
-              lastname: sender.lastname,
-              profilePic: sender.profilePic
-            };
-            // Add to recentChats
-            setRecentChats(prev => {
-              const updated = [chat, ...prev];
-              localStorage.setItem("recentChats_student", JSON.stringify(updated));
-              return updated;
-            });
-          }
+          const ensureSender = async () => {
+            const sender = (usersRef.current || []).find(u => u._id === incomingMessage.senderId) || await fetchUserIfMissing(incomingMessage.senderId);
+            if (sender && sender.firstname && sender.lastname) {
+              const newChat = {
+                _id: sender._id,
+                firstname: sender.firstname,
+                lastname: sender.lastname,
+                profilePic: sender.profilePic
+              };
+              setRecentChats(prev => {
+                const updated = [newChat, ...prev.filter(c => c._id !== newChat._id)];
+                localStorage.setItem("recentChats_student", JSON.stringify(updated));
+                return updated;
+              });
+              const previewText = incomingMessage.message ? incomingMessage.message : (incomingMessage.fileUrl ? 'File sent' : '');
+              setLastMessages(prev => ({
+                ...prev,
+                [newChat._id]: { prefix: `${newChat.lastname || 'Unknown'}, ${newChat.firstname || 'User'}: `, text: previewText }
+              }));
+              if (!(selectedChatRef.current && !isGroupChatRef.current && selectedChatRef.current._id === newChat._id)) {
+                addHighlight(newChat._id);
+              }
+            }
+          };
+          // fire and forget; do not block handler
+          ensureSender();
         }
         
         if (chat) {
@@ -189,6 +261,11 @@ export default function Student_Chats() {
           
           // Bump chat to top
           bumpChatToTop(chat);
+
+          // Highlight conversation item if not currently open
+          if (!(selectedChatRef.current && !isGroupChatRef.current && selectedChatRef.current._id === chat._id)) {
+            addHighlight(chat._id);
+          }
           
                   // Refresh recent conversations to update sidebar
         setTimeout(() => {
@@ -212,7 +289,9 @@ export default function Student_Chats() {
       setTimeout(() => {
         setMessages(prev => ({ ...prev }));
       }, 50);
-    });
+    };
+    socket.current.on("getMessage", handleIncomingDirect);
+    socket.current.on("receiveMessage", handleIncomingDirect);
 
     // Group chat socket events
     socket.current.on("getGroupMessage", (data) => {
@@ -235,7 +314,7 @@ export default function Student_Chats() {
         };
         
         // If this group is currently selected, force an immediate UI update
-        if (selectedChat && selectedChat._id === data.groupId && isGroupChat) {
+        if (selectedChatRef.current && selectedChatRef.current._id === data.groupId && isGroupChatRef.current) {
           // Force a re-render by updating the selected chat messages
           setTimeout(() => {
             setGroupMessages(current => ({ ...current }));
@@ -244,6 +323,11 @@ export default function Student_Chats() {
         
         return updated;
       });
+
+      // Highlight group item if it's not the currently open chat
+      if (!(selectedChatRef.current && isGroupChatRef.current && selectedChatRef.current._id === data.groupId)) {
+        addHighlight(data.groupId);
+      }
 
       // Update last message for this group chat
       const group = groups.find(g => g._id === data.groupId);
@@ -1137,17 +1221,21 @@ export default function Student_Chats() {
                     <div
                       key={chat._id}
                       className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
-                        selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')) ? "bg-white" : "bg-gray-100 hover:bg-gray-300"
+                        (selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')))
+                          ? "bg-white"
+                          : (highlightedChats[chat._id] ? "bg-yellow-50 ring-2 ring-yellow-400" : "bg-gray-100 hover:bg-gray-300")
                       }`}
                       onClick={() => {
                         if (chat.type === 'group') {
                           setSelectedChat(chat);
                           setIsGroupChat(true);
                           localStorage.setItem("selectedChatId_student", chat._id);
+                          clearHighlight(chat._id);
                         } else {
                           setSelectedChat(chat);
                           setIsGroupChat(false);
                           localStorage.setItem("selectedChatId_student", chat._id);
+                          clearHighlight(chat._id);
                         }
                       }}
                     >
