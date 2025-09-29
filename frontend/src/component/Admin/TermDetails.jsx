@@ -2944,13 +2944,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             return;
           }
 
-          // Prepare the data for preview
-          const tracksToPreview = jsonData.map(row => ({
-            trackName: row['Track Name to Add'].trim(),
-            schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName,
-            quarterName: quarterData ? quarterData.quarterName : undefined
-          }));
+          // tracksToPreview is already prepared above
 
           // Validate tracks
           const validationResults = await validateTracks(tracksToPreview);
@@ -6412,8 +6406,8 @@ Validation issues (${skippedCount} items):
   console.log('Faculty Assignments Raw:', facultyAssignments);
   console.log('Student Assignments Raw:', studentAssignments);
 
-  // Filter faculty assignments by quarter and status
-  const filteredFacultyAssignments = facultyAssignments.filter(assignment => {
+  // Basic filtering for faculty assignments (term and status)
+  const basicFilteredFacultyAssignments = facultyAssignments.filter(assignment => {
     const matchesTerm = assignment.termId === termDetails?._id;
     const matchesStatus = assignment.status === 'active'; // Only show active assignments
     
@@ -6440,31 +6434,10 @@ Validation issues (${skippedCount} items):
     return matchesTerm && matchesStatus;
   });
 
-  // Filter student assignments by quarter and status
-  const filteredStudentAssignments = studentAssignments.filter(assignment => {
+  // Basic filtering for student assignments (term and status)
+  const basicFilteredStudentAssignments = studentAssignments.filter(assignment => {
     const matchesTerm = assignment.termId === termDetails?._id;
     const matchesStatus = assignment.status === 'active'; // Only show active assignments
-    
-    // Debug logging
-    console.log('Student Assignment Filter Debug:', {
-      assignmentId: assignment._id,
-      assignmentTermId: assignment.termId,
-      currentTermId: termDetails?._id,
-      matchesTerm,
-      assignmentStatus: assignment.status,
-      matchesStatus,
-      assignmentQuarterName: assignment.quarterName,
-      currentQuarterName: quarterData?.quarterName,
-      studentName: assignment.studentName
-    });
-    
-    // Temporarily disable quarter filtering to debug
-    // If quarterData is available, also filter by quarter
-    // if (quarterData && quarterData.quarterName) {
-    //   const matchesQuarter = assignment.quarterName === quarterData.quarterName;
-    //   console.log('Quarter match:', matchesQuarter);
-    //   return matchesTerm && matchesStatus && matchesQuarter;
-    // }
     return matchesTerm && matchesStatus;
   });
 
@@ -6474,7 +6447,7 @@ Validation issues (${skippedCount} items):
   );
 
   // Filtered student assignments based on filters
-  const filteredStudentAssignments = studentAssignments.filter(assignment => {
+  const filteredStudentAssignments = basicFilteredStudentAssignments.filter(assignment => {
     // Filter by section
     if (studentSectionFilter && assignment.sectionName !== studentSectionFilter) {
       return false;
@@ -6510,7 +6483,7 @@ Validation issues (${skippedCount} items):
   });
 
   // Filtered faculty assignments based on filters
-  const filteredFacultyAssignments = facultyAssignments.filter(assignment => {
+  const filteredFacultyAssignments = basicFilteredFacultyAssignments.filter(assignment => {
     // Filter by section
     if (facultySectionFilter && assignment.sectionName !== facultySectionFilter) {
       return false;
@@ -10048,9 +10021,8 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
         );
         if (exists) {
           results.push({ valid: false, message: `Student assignment for "${assignment.studentName}" already exists` });
-        continue;
-      }
-      }
+          continue;
+        }
     }
 
     // Don't check if track/strand/section exist since they'll be created during import
