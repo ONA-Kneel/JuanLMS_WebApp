@@ -35,8 +35,8 @@ const StreamMeetingRoom = ({
   const [error, setError] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [isMicOn, setIsMicOn] = useState(true);
-  const [isCameraOn, setIsCameraOn] = useState(true);
+  const [isMicOn, setIsMicOn] = useState(false);
+  const [isCameraOn, setIsCameraOn] = useState(false);
   const [showConfirmLeave, setShowConfirmLeave] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const statsButtonRef = React.useRef(null);
@@ -202,8 +202,33 @@ const StreamMeetingRoom = ({
         if (isCancelled) return;
 
         const callInstance = c.call('default', resolvedCallId);
+
+        // Ensure mic and camera are disabled at start for the local user
+        try {
+          if (callInstance.microphone && typeof callInstance.microphone.setEnabled === 'function') {
+            await callInstance.microphone.setEnabled(false);
+          }
+        } catch (e) { console.debug('StreamMeetingRoom: pre-join mic disable error', e); }
+        try {
+          if (callInstance.camera && typeof callInstance.camera.setEnabled === 'function') {
+            await callInstance.camera.setEnabled(false);
+          }
+        } catch (e) { console.debug('StreamMeetingRoom: pre-join camera disable error', e); }
+
         // Try to join; create if it does not exist
         await callInstance.join({ create: true });
+
+        // Double-check post-join that tracks remain disabled
+        try {
+          if (callInstance.microphone && typeof callInstance.microphone.setEnabled === 'function') {
+            await callInstance.microphone.setEnabled(false);
+          }
+        } catch (e) { console.debug('StreamMeetingRoom: post-join mic disable error', e); }
+        try {
+          if (callInstance.camera && typeof callInstance.camera.setEnabled === 'function') {
+            await callInstance.camera.setEnabled(false);
+          }
+        } catch (e) { console.debug('StreamMeetingRoom: post-join camera disable error', e); }
         if (isCancelled) {
           await callInstance.leave().catch((e) => console.debug('leave cancelled error', e));
           await c.disconnectUser().catch((e) => console.debug('disconnect cancelled error', e));
