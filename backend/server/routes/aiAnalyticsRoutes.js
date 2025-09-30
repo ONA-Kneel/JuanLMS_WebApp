@@ -369,7 +369,9 @@ Focus on this section: how students are doing (engagement signals, timeliness), 
   }
 });
 
-// GET /api/ai-analytics/history - Get analysis history for the user
+// GET /api/ai-analytics/history - Get analysis history
+// - For principals: return analyses created by the current principal
+// - For VPE: return analyses that have been shared to VPE
 router.get("/history", authenticateToken, async (req, res) => {
   try {
     // Only principals and VPE can access this endpoint
@@ -387,10 +389,14 @@ router.get("/history", authenticateToken, async (req, res) => {
       db = database.getDb();
     }
 
+    const query = req.user.role === 'principal'
+      ? { createdBy: req.user._id }
+      : { sharedToVPE: true };
+
     const history = await db.collection('AIAnalytics')
-      .find({ createdBy: req.user._id })
+      .find(query)
       .sort({ createdAt: -1 })
-      .limit(20)
+      .limit(50)
       .toArray();
 
     res.json({
@@ -404,6 +410,7 @@ router.get("/history", authenticateToken, async (req, res) => {
           track: item.trackFilter,
           strand: item.strandFilter
         },
+        sharedToVPE: !!item.sharedToVPE,
         createdAt: item.createdAt,
         analysisPreview: item.aiAnalysis.substring(0, 200) + "..."
       }))
@@ -437,12 +444,18 @@ router.get("/:id", authenticateToken, async (req, res) => {
     }
 
     const analysis = await db.collection('AIAnalytics').findOne({ 
-      _id: new ObjectId(req.params.id),
-      createdBy: req.user._id 
+      _id: new ObjectId(req.params.id)
     });
 
     if (!analysis) {
       return res.status(404).json({ error: "Analysis not found" });
+    }
+
+    // Authorization: principals can view their own; VPE can view only if shared
+    const isOwner = String(analysis.createdBy) === String(req.user._id);
+    const isVPEWithAccess = req.user.role === 'vice president of education' && analysis.sharedToVPE === true;
+    if (!(isOwner || isVPEWithAccess)) {
+      return res.status(403).json({ error: "Access denied to this analysis" });
     }
 
     res.json({
@@ -451,6 +464,8 @@ router.get("/:id", authenticateToken, async (req, res) => {
         id: analysis._id,
         schoolYear: analysis.schoolYear,
         termName: analysis.termName,
+        reportType: analysis.reportType,
+        sharedToVPE: !!analysis.sharedToVPE,
         filters: {
           section: analysis.sectionFilter,
           track: analysis.trackFilter,
@@ -468,6 +483,76 @@ router.get("/:id", authenticateToken, async (req, res) => {
       error: "Failed to fetch analysis details",
       details: error.message 
     });
+  }
+});
+
+// POST /api/ai-analytics/:id/share-to-vpe - Share an analysis to VPE (principal only)
+router.post("/:id/share-to-vpe", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'principal') {
+      return res.status(403).json({ error: "Only principals can share analyses to VPE." });
+    }
+
+    let db;
+    try {
+      db = database.getDb();
+    } catch (dbError) {
+      await database.connectToServer();
+      db = database.getDb();
+    }
+
+    const _id = new ObjectId(req.params.id);
+    const analysis = await db.collection('AIAnalytics').findOne({ _id });
+    if (!analysis) {
+      return res.status(404).json({ error: "Analysis not found" });
+    }
+
+    if (String(analysis.createdBy) !== String(req.user._id)) {
+      return res.status(403).json({ error: "You can only share your own analyses." });
+    }
+
+    await db.collection('AIAnalytics').updateOne(
+      { _id },
+      { $set: { sharedToVPE: true, sharedAt: new Date() } }
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("AI Analytics Share Error:", error);
+    res.status(500).json({ error: "Failed to share analysis to VPE", details: error.message });
+  }
+});
+
+// DELETE /api/ai-analytics/:id - Delete an analysis (principal owner only)
+router.delete("/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'principal') {
+      return res.status(403).json({ error: "Only principals can delete analyses." });
+    }
+
+    let db;
+    try {
+      db = database.getDb();
+    } catch (dbError) {
+      await database.connectToServer();
+      db = database.getDb();
+    }
+
+    const _id = new ObjectId(req.params.id);
+    const analysis = await db.collection('AIAnalytics').findOne({ _id });
+    if (!analysis) {
+      return res.status(404).json({ error: "Analysis not found" });
+    }
+
+    if (String(analysis.createdBy) !== String(req.user._id)) {
+      return res.status(403).json({ error: "You can only delete your own analyses." });
+    }
+
+    await db.collection('AIAnalytics').deleteOne({ _id });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("AI Analytics Delete Error:", error);
+    res.status(500).json({ error: "Failed to delete analysis", details: error.message });
   }
 });
 

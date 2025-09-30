@@ -290,9 +290,83 @@ export default function VPE_FacultyReport() {
   const trackChartInstanceRef = useRef(null);
   const strandChartInstanceRef = useRef(null);
   const [analysisMeta, setAnalysisMeta] = useState(null);
+  const [analysisHistory, setAnalysisHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
 
   // Tab state
   const [activeTab, setActiveTab] = useState('activities');
+
+  // VPE: fetch analyses shared to VPE when tab active
+  const fetchAnalysisHistory = useCallback(async () => {
+    try {
+      setLoadingHistory(true);
+      setHistoryError(null);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/ai-analytics/history`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err.error || 'Failed to load analysis history');
+      }
+      const data = await res.json();
+      setAnalysisHistory(Array.isArray(data.history) ? data.history : []);
+    } catch (e) {
+      setHistoryError(e.message);
+      setAnalysisHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'ai-analyses') {
+      fetchAnalysisHistory();
+    }
+  }, [activeTab, fetchAnalysisHistory]);
+
+  const viewAnalysisById = useCallback(async (id) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/ai-analytics/${id}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err.error || 'Failed to load analysis');
+      }
+      const data = await res.json();
+      setAiAnalysis(data.analysis?.aiAnalysis || '');
+      setAnalysisMeta({
+        reportType: data.analysis?.reportType,
+        filters: data.analysis?.filters,
+      });
+      setShowAnalysisModal(true);
+    } catch (e) {
+      setAnalysisError(e.message);
+    }
+  }, []);
+
+  const downloadAnalysisPdfById = useCallback(async (id, filename) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/ai-analytics/${id}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err.error || 'Failed to load analysis');
+      }
+      const data = await res.json();
+      const content = data.analysis?.aiAnalysis || '';
+      const aCount = data.analysis?.analysisData?.activitySummary?.assignmentsCount || 0;
+      const qCount = data.analysis?.analysisData?.activitySummary?.quizzesCount || 0;
+      downloadAsPDF(content, filename, { assignmentsCount: aCount, quizzesCount: qCount });
+    } catch (e) {
+      setAnalysisError(e.message);
+    }
+  }, []);
 
   // New: report type modal state
   const [showReportTypeModal, setShowReportTypeModal] = useState(false);
@@ -1129,25 +1203,7 @@ export default function VPE_FacultyReport() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <button
-              onClick={createAIAnalysis}
-              disabled={loadingAnalysis || !selectedSchoolYear || !selectedTerm}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {loadingAnalysis ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Creating Analysis...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  Create Analysis
-                </>
-              )}
-            </button>
+            {/* VPE cannot create analyses; view-only */}
             <ProfileMenu />
           </div>
         </div>
@@ -1185,6 +1241,16 @@ export default function VPE_FacultyReport() {
               }`}
             >
               Faculty Last Logins
+            </button>
+            <button
+              onClick={() => setActiveTab('ai-analyses')}
+              className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
+                activeTab === 'ai-analyses'
+                  ? "bg-white text-blue-900 border border-gray-300 border-b-0"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
+              }`}
+            >
+              AI Analyses
             </button>
           </div>
 
@@ -1842,6 +1908,59 @@ export default function VPE_FacultyReport() {
                   </button>
                 </div>
               )}
+          {activeTab === 'ai-analyses' && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-gray-800">Shared AI Analyses</h3>
+                <button onClick={fetchAnalysisHistory} className="px-3 py-2 text-sm border rounded hover:bg-gray-50">Refresh</button>
+              </div>
+              {loadingHistory ? (
+                <div className="text-center py-8">
+                  <div className="inline-block w-8 h-8 border-4 border-blue-500 border-top-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : historyError ? (
+                <div className="text-center py-8 bg-red-50 rounded-lg"><p className="text-red-600">{historyError}</p></div>
+              ) : analysisHistory.length === 0 ? (
+                <div className="text-center py-8 bg-gray-50 rounded-lg"><p className="text-gray-600">No analyses shared yet.</p></div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-3 border">Created At</th>
+                        <th className="p-3 border">School Year</th>
+                        <th className="p-3 border">Term</th>
+                        <th className="p-3 border">Filters</th>
+                        <th className="p-3 border">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysisHistory.map(item => (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="p-3 border whitespace-nowrap">{item.createdAt ? new Date(item.createdAt).toLocaleString('en-US') : '-'}</td>
+                          <td className="p-3 border whitespace-nowrap">{item.schoolYear}</td>
+                          <td className="p-3 border whitespace-nowrap">{item.termName}</td>
+                          <td className="p-3 border whitespace-normal">
+                            {(() => {
+                              const parts = [];
+                              if (item.filters?.strand) parts.push(`Strand: ${item.filters.strand}`);
+                              if (item.filters?.section) parts.push(`Section: ${item.filters.section}`);
+                              if (item.filters?.track) parts.push(`Track: ${item.filters.track}`);
+                              return parts.join(' | ') || 'Year-level report';
+                            })()}
+                          </td>
+                          <td className="p-3 border whitespace-nowrap flex gap-2">
+                            <button onClick={() => viewAnalysisById(item.id)} className="px-2 py-1 text-xs border rounded hover:bg-gray-50">View</button>
+                            <button onClick={() => downloadAnalysisPdfById(item.id, `AI_Analysis_${item.schoolYear}_${item.termName}`)} className="px-2 py-1 text-xs border rounded hover:bg-gray-50">PDF</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
               {/* Legend */}
               <div className="mt-4 flex flex-wrap gap-4 text-xs">

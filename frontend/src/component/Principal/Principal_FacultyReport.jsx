@@ -9,11 +9,7 @@ import ProfileMenu from "../ProfileMenu";
 const downloadAsPDF = (content, filename, chartData) => {
   // Create a new window with the content, then auto-generate and download a PDF via html2pdf.js
   const printWindow = window.open('', '_blank');
-  const headingVariants = [
-    'Faculty Performance & Activity Levels Analysis',
-    'Faculty Performance & Activity Levels',
-    'Faculty Performance and Activity Levels'
-  ];
+  // heading variants are declared inline where used; remove unused constant
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
@@ -253,7 +249,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.
 export default function Principal_FacultyReport() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [loading, setLoading] = useState(false);
+  // removed unused loading state
   const [error, setError] = useState(null);
 
   // Filter states
@@ -270,8 +266,7 @@ export default function Principal_FacultyReport() {
   // Faculty activities data
   const [facultyActivities, setFacultyActivities] = useState([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
-  const [allAssignments, setAllAssignments] = useState([]);
-  const [allQuizzes, setAllQuizzes] = useState([]);
+  // removed unused assignments/quizzes state
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -303,9 +298,119 @@ export default function Principal_FacultyReport() {
   const trackChartInstanceRef = useRef(null);
   const strandChartInstanceRef = useRef(null);
   const [analysisMeta, setAnalysisMeta] = useState(null);
+  const [analysisHistory, setAnalysisHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
 
   // Tab state
   const [activeTab, setActiveTab] = useState('activities');
+
+  // Fetch saved AI analyses history when tab is active
+  const fetchAnalysisHistory = useCallback(async () => {
+    try {
+      setLoadingHistory(true);
+      setHistoryError(null);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/ai-analytics/history`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err.error || 'Failed to load analysis history');
+      }
+      const data = await res.json();
+      setAnalysisHistory(Array.isArray(data.history) ? data.history : []);
+    } catch (e) {
+      setHistoryError(e.message);
+      setAnalysisHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'ai-analyses') {
+      fetchAnalysisHistory();
+    }
+  }, [activeTab, fetchAnalysisHistory]);
+
+  const viewAnalysisById = useCallback(async (id) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/ai-analytics/${id}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err.error || 'Failed to load analysis');
+      }
+      const data = await res.json();
+      setAiAnalysis(data.analysis?.aiAnalysis || '');
+      setAnalysisMeta({
+        reportType: data.analysis?.reportType,
+        filters: data.analysis?.filters,
+      });
+      setShowAnalysisModal(true);
+    } catch (e) {
+      setAnalysisError(e.message);
+    }
+  }, []);
+
+  const shareAnalysisById = useCallback(async (id) => {
+    if (!confirm('Share this analysis to VPE?')) return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/ai-analytics/${id}/share-to-vpe`, {
+        method: 'POST',
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err.error || 'Failed to share');
+      }
+      await fetchAnalysisHistory();
+    } catch (e) {
+      setAnalysisError(e.message);
+    }
+  }, [fetchAnalysisHistory]);
+
+  const deleteAnalysisById = useCallback(async (id) => {
+    if (!confirm('Delete this analysis? This cannot be undone.')) return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/ai-analytics/${id}`, {
+        method: 'DELETE',
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err.error || 'Failed to delete');
+      }
+      await fetchAnalysisHistory();
+    } catch (e) {
+      setAnalysisError(e.message);
+    }
+  }, [fetchAnalysisHistory]);
+
+  const downloadAnalysisPdfById = useCallback(async (id, filename) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/ai-analytics/${id}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err.error || 'Failed to load analysis');
+      }
+      const data = await res.json();
+      const content = data.analysis?.aiAnalysis || '';
+      const aCount = data.analysis?.analysisData?.activitySummary?.assignmentsCount || 0;
+      const qCount = data.analysis?.analysisData?.activitySummary?.quizzesCount || 0;
+      downloadAsPDF(content, filename, { assignmentsCount: aCount, quizzesCount: qCount });
+    } catch (e) {
+      setAnalysisError(e.message);
+    }
+  }, []);
 
   // New: report type modal state
   const [showReportTypeModal, setShowReportTypeModal] = useState(false);
@@ -810,33 +915,6 @@ export default function Principal_FacultyReport() {
     }
   }, [currentTerm]);
 
-  // Load audit data when term changes
-  useEffect(() => {
-    if (currentTerm) {
-      // Test server connectivity first
-      const testServer = async () => {
-        try {
-          const token = localStorage.getItem("token");
-          const testRes = await fetch(`${API_BASE}/api/health`, {
-            headers: { "Authorization": `Bearer ${token}` }
-          });
-          console.log('[DEBUG] Server health check:', testRes.status);
-          if (testRes.ok) {
-            fetchAuditData();
-            fetchFacultyLastLogins();
-          } else {
-            console.error('[DEBUG] Server health check failed');
-            setAuditError('Server is not accessible');
-          }
-        } catch (err) {
-          console.error('[DEBUG] Server health check error:', err);
-          setAuditError('Cannot connect to server');
-        }
-      };
-      testServer();
-    }
-  }, [currentTerm, fetchAuditData]);
-
   // Fetch faculty last logins
   const fetchFacultyLastLogins = useCallback(async () => {
     try {
@@ -867,12 +945,39 @@ export default function Principal_FacultyReport() {
     }
   }, []);
 
+  // Load audit data when term changes
+  useEffect(() => {
+    if (currentTerm) {
+      // Test server connectivity first
+      const testServer = async () => {
+        try {
+          const token = localStorage.getItem("token");
+          const testRes = await fetch(`${API_BASE}/api/health`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          console.log('[DEBUG] Server health check:', testRes.status);
+          if (testRes.ok) {
+            fetchAuditData();
+            fetchFacultyLastLogins();
+          } else {
+            console.error('[DEBUG] Server health check failed');
+            setAuditError('Server is not accessible');
+          }
+        } catch (err) {
+          console.error('[DEBUG] Server health check error:', err);
+          setAuditError('Cannot connect to server');
+        }
+      };
+      testServer();
+    }
+  }, [currentTerm, fetchAuditData, fetchFacultyLastLogins]);
+
   // Extract unique values for filter dropdowns
   const uniqueTracks = [...new Set(facultyActivities.map(a => a.trackName).filter(Boolean))].sort();
   const uniqueStrands = [...new Set(facultyActivities.map(a => a.strandName).filter(Boolean))].sort();
   const uniqueSections = [...new Set(facultyActivities.map(a => a.sectionName).filter(Boolean))].sort();
   const uniqueCourses = [...new Set(facultyActivities.map(a => a.subject).filter(Boolean))].sort();
-  const uniqueFaculty = [...new Set(facultyActivities.map(a => a.facultyName).filter(Boolean))].sort();
+  // removed unused uniqueFaculty
 
   // AI Analysis function
   const createAIAnalysis = async () => {
@@ -937,11 +1042,9 @@ export default function Principal_FacultyReport() {
   };
 
   // Calculate summary statistics
-  const totalActivities = filteredActivities.length;
   const assignmentsCount = filteredActivities.filter(a => a._kind === 'assignment').length;
   const quizzesCount = filteredActivities.filter(a => a._kind === 'quiz').length;
-  const postedCount = filteredActivities.filter(a => a.postAt && new Date(a.postAt) <= new Date()).length;
-  const pendingCount = filteredActivities.filter(a => !a.postAt || new Date(a.postAt) > new Date()).length;
+  // Removed unused posted/pending counts
 
   // Helper functions for faculty last logins
   const formatDate = (dateString) => {
@@ -1181,7 +1284,7 @@ export default function Principal_FacultyReport() {
         </div>
 
         {/* Main Content Area */}
-        <div className="bg-white rounded-lg shadow-md">
+        <div className="">
           {/* Tab Navigation */}
           <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-300">
             <button
@@ -1214,10 +1317,20 @@ export default function Principal_FacultyReport() {
             >
               Faculty Last Logins
             </button>
+            <button
+              onClick={() => setActiveTab('ai-analyses')}
+              className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
+                activeTab === 'ai-analyses'
+                  ? "bg-white text-blue-900 border border-gray-300 border-b-0"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
+              }`}
+            >
+              AI Analyses
+            </button>
           </div>
 
           {/* Tab Content */}
-          <div className="p-6">
+          <div className="p-6 bg-white ">
             {activeTab === 'activities' && (
               <div>
                 {/* Header Row */}
@@ -1833,7 +1946,7 @@ export default function Principal_FacultyReport() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedFacultyLogins.map((log, idx) => (
+                    {paginatedFacultyLogins.map((log) => (
                       <tr key={log._id} className={getRowColor(log.lastLogin)}>
                         <td className="p-3 border-b text-gray-900 whitespace-nowrap">{log.userName}</td>
                         <td className="p-3 border-b text-gray-700 whitespace-nowrap">{log.userRole}</td>
@@ -1868,6 +1981,65 @@ export default function Principal_FacultyReport() {
                   </button>
                 </div>
               )}
+          {activeTab === 'ai-analyses' && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-gray-800">Saved AI Analyses</h3>
+                <button onClick={fetchAnalysisHistory} className="px-3 py-2 text-sm border rounded hover:bg-gray-50">Refresh</button>
+              </div>
+              {loadingHistory ? (
+                <div className="text-center py-8">
+                  <div className="inline-block w-8 h-8 border-4 border-blue-500 border-top-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : historyError ? (
+                <div className="text-center py-8 bg-red-50 rounded-lg"><p className="text-red-600">{historyError}</p></div>
+              ) : analysisHistory.length === 0 ? (
+                <div className="text-center py-8 bg-gray-50 rounded-lg"><p className="text-gray-600">No analyses saved yet.</p></div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-3 border">Created At</th>
+                        <th className="p-3 border">School Year</th>
+                        <th className="p-3 border">Term</th>
+                        <th className="p-3 border">Filters</th>
+                        <th className="p-3 border">Shared to VPE</th>
+                        <th className="p-3 border">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysisHistory.map(item => (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="p-3 border whitespace-nowrap">{item.createdAt ? new Date(item.createdAt).toLocaleString('en-US') : '-'}</td>
+                          <td className="p-3 border whitespace-nowrap">{item.schoolYear}</td>
+                          <td className="p-3 border whitespace-nowrap">{item.termName}</td>
+                          <td className="p-3 border whitespace-normal">
+                            {(() => {
+                              const parts = [];
+                              if (item.filters?.strand) parts.push(`Strand: ${item.filters.strand}`);
+                              if (item.filters?.section) parts.push(`Section: ${item.filters.section}`);
+                              if (item.filters?.track) parts.push(`Track: ${item.filters.track}`);
+                              return parts.join(' | ') || 'Year-level report';
+                            })()}
+                          </td>
+                          <td className="p-3 border whitespace-nowrap">{item.sharedToVPE ? 'Yes' : 'No'}</td>
+                          <td className="p-3 border whitespace-nowrap flex gap-2">
+                            <button onClick={() => viewAnalysisById(item.id)} className="px-2 py-1 text-xs border rounded hover:bg-gray-50">View</button>
+                            <button onClick={() => downloadAnalysisPdfById(item.id, `AI_Analysis_${item.schoolYear}_${item.termName}`)} className="px-2 py-1 text-xs border rounded hover:bg-gray-50">PDF</button>
+                            {!item.sharedToVPE && (
+                              <button onClick={() => shareAnalysisById(item.id)} className="px-2 py-1 text-xs border rounded text-blue-700 border-blue-300 hover:bg-blue-50">Share to VPE</button>
+                            )}
+                            <button onClick={() => deleteAnalysisById(item.id)} className="px-2 py-1 text-xs border rounded text-red-700 border-red-300 hover:bg-red-50">Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
               {/* Legend */}
               <div className="mt-4 flex flex-wrap gap-4 text-xs">
