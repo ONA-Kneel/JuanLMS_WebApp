@@ -82,6 +82,27 @@ export default function VPE_Chats() {
 
   // Add loading state for chat list
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  // Highlight chats with new/unread messages
+  const [highlightedChats, setHighlightedChats] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('highlightedChats_VPE') || '{}'); } catch { return {}; }
+  });
+  const addHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      const next = { ...prev, [chatId]: Date.now() };
+      try { localStorage.setItem('highlightedChats_VPE', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const clearHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      if (!prev[chatId]) return prev;
+      const { [chatId]: _omit, ...rest } = prev;
+      try { localStorage.setItem('highlightedChats_VPE', JSON.stringify(rest)); } catch {}
+      return rest;
+    });
+  };
 
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
@@ -208,6 +229,10 @@ export default function VPE_Chats() {
           
           // Bump chat to top
           bumpChatToTop(chat);
+          // Highlight if not the currently open individual chat
+          if (!(selectedChat && !isGroupChat && selectedChat._id === chat._id)) {
+            addHighlight(chat._id);
+          }
           
                   // Refresh recent conversations to update sidebar
         setTimeout(() => {
@@ -265,7 +290,7 @@ export default function VPE_Chats() {
         
         // Highlight group item if it's not the currently open chat
         if (!(selectedChat && isGroupChat && selectedChat._id === data.groupId)) {
-          try { /* may not be defined yet, add later if needed */ addHighlight && addHighlight(data.groupId); } catch {}
+          addHighlight(data.groupId);
         }
         
         return updated;
@@ -317,7 +342,7 @@ export default function VPE_Chats() {
     return () => {
       socket.current.disconnect();
     };
-  }, [currentUserId, recentChats]);
+  }, [currentUserId, recentChats, selectedChat, isGroupChat]);
 
   // ================= FETCH USERS =================
   useEffect(() => {
@@ -1165,19 +1190,19 @@ export default function VPE_Chats() {
                       className={`group relative flex items-center p-3 rounded-lg cursor-pointer shadow-sm transition-all ${
                         (selectedChat?._id === chat._id && ((isGroupChat && chat.type === 'group') || (!isGroupChat && chat.type === 'individual')))
                           ? "bg-white"
-                          : (highlightedChats && highlightedChats[chat._id] ? "bg-yellow-50 ring-2 ring-yellow-400" : "bg-gray-100 hover:bg-gray-300")
+                          : (highlightedChats[chat._id] ? "bg-yellow-50 ring-2 ring-yellow-400" : "bg-gray-100 hover:bg-gray-300")
                       }`}
                       onClick={() => {
                         if (chat.type === 'group') {
                           setSelectedChat(chat);
                           setIsGroupChat(true);
                           localStorage.setItem("selectedChatId_VPE", chat._id);
-                          try { clearHighlight && clearHighlight(chat._id); } catch {}
+                          clearHighlight(chat._id);
                         } else {
                           setSelectedChat(chat);
                           setIsGroupChat(false);
                           localStorage.setItem("selectedChatId_VPE", chat._id);
-                          try { clearHighlight && clearHighlight(chat._id); } catch {}
+                          clearHighlight(chat._id);
                         }
                       }}
                     >

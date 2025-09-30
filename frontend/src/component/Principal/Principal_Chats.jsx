@@ -277,6 +277,10 @@ export default function Principal_Chats() {
             setGroupMessages(current => ({ ...current }));
           }, 10);
         }
+        // Highlight if the incoming group is not currently open
+        if (!(selectedChat && isGroupChat && selectedChat._id === data.groupId)) {
+          addHighlight(data.groupId);
+        }
         
         return updated;
       });
