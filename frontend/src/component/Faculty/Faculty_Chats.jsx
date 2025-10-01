@@ -1211,10 +1211,7 @@ export default function Faculty_Chats() {
   // 2. Add state for dropdown menu (showGroupMenu)
   // 3. Merge recentChats and groups into a single unified list
   // Include groups that have messages OR are newly created/joined
-  const groupsWithMessages = groups.filter(group => {
-    const groupMsgs = groupMessages[group._id] || [];
-    return groupMsgs.length > 0;
-  });
+  const groupsWithMessages = groups;
   
   const unifiedChats = [
     ...recentChats.map(chat => ({ ...chat, type: 'individual' })),
@@ -1466,10 +1463,12 @@ export default function Faculty_Chats() {
                           setSearchTerm(""); // Clear search after selecting
                         } else if (item.type === 'group') {
                           setSelectedChat({ ...item, isGroup: true });
+                          setIsGroupChat(true);
                           localStorage.setItem("selectedChatId_faculty", item._id);
                           setSearchTerm(""); // Clear search after selecting
                         } else {
                           setSelectedChat(item);
+                          setIsGroupChat(false);
                           localStorage.setItem("selectedChatId_faculty", item._id);
                           setSearchTerm(""); // Clear search after selecting
                         }

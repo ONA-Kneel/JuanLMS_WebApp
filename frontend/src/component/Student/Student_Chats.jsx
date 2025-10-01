@@ -1112,11 +1112,8 @@ export default function Student_Chats() {
   // 1. Remove activeTab and all tab logic
   // 2. Add state for dropdown menu (showGroupMenu)
   // 3. Merge recentChats and groups into a single unified list
-  // Only include groups that have messages (actual conversations)
-  const groupsWithMessages = groups.filter(group => {
-    const groupMsgs = groupMessages[group._id] || [];
-    return groupMsgs.length > 0;
-  });
+  // Show all groups the user belongs to (even if no messages yet)
+  const groupsWithMessages = groups;
   
   const unifiedChats = [
     ...recentChats.map(chat => ({ ...chat, type: 'individual' })),
@@ -1315,10 +1312,12 @@ export default function Student_Chats() {
                           setSearchTerm(""); // Clear search after selecting
                         } else if (item.type === 'group') {
                           setSelectedChat({ ...item, isGroup: true });
+                          setIsGroupChat(true);
                           localStorage.setItem("selectedChatId_student", item._id);
                           setSearchTerm(""); // Clear search after selecting
                         } else {
                           setSelectedChat(item);
+                          setIsGroupChat(false);
                           localStorage.setItem("selectedChatId_student", item._id);
                           setSearchTerm(""); // Clear search after selecting
                         }

@@ -84,28 +84,6 @@ export default function VPE_Chats() {
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   // Highlight chats with new/unread messages
   const [highlightedChats, setHighlightedChats] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('highlightedChats_VPE') || '{}'); } catch { return {}; }
-  });
-  const addHighlight = (chatId) => {
-    if (!chatId) return;
-    setHighlightedChats(prev => {
-      const next = { ...prev, [chatId]: Date.now() };
-      try { localStorage.setItem('highlightedChats_VPE', JSON.stringify(next)); } catch {}
-      return next;
-    });
-  };
-  const clearHighlight = (chatId) => {
-    if (!chatId) return;
-    setHighlightedChats(prev => {
-      if (!prev[chatId]) return prev;
-      const { [chatId]: _omit, ...rest } = prev;
-      try { localStorage.setItem('highlightedChats_VPE', JSON.stringify(rest)); } catch {}
-      return rest;
-    });
-  };
-
-  // Track chats that should be highlighted due to new messages
-  const [highlightedChats, setHighlightedChats] = useState(() => {
     try { return JSON.parse(localStorage.getItem('highlightedChats_vpe') || '{}'); } catch { return {}; }
   });
   const addHighlight = (chatId) => {
@@ -120,11 +98,13 @@ export default function VPE_Chats() {
     if (!chatId) return;
     setHighlightedChats(prev => {
       if (!prev[chatId]) return prev;
-      const { [chatId]: _ignore, ...rest } = prev;
+      const { [chatId]: _omit, ...rest } = prev;
       try { localStorage.setItem('highlightedChats_vpe', JSON.stringify(rest)); } catch {}
       return rest;
     });
   };
+
+  // (helpers defined once above)
 
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
@@ -1008,8 +988,20 @@ export default function VPE_Chats() {
         : (messages[selectedChat._id] || []);
       const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
       if (lastMsg) {
-        let prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
-        let text = (lastMsg.message) ? lastMsg.message : (lastMsg.fileUrl ? "File sent" : "");
+        let prefix;
+        const text = lastMsg.message ? lastMsg.message : (lastMsg.fileUrl ? "File sent" : "");
+        if (isGroupChat) {
+          if (lastMsg.senderId === currentUserId) {
+            prefix = "You: ";
+          } else {
+            const fallbackUser = users.find(u => u._id === lastMsg.senderId);
+            const first = lastMsg.senderFirstname || lastMsg.senderName || fallbackUser?.firstname || "Unknown";
+            const last = lastMsg.senderLastname || fallbackUser?.lastname || "User";
+            prefix = `${first} ${last}: `;
+          }
+        } else {
+          prefix = (lastMsg.senderId === currentUserId) ? "You: " : `${selectedChat.lastname}, ${selectedChat.firstname}: `;
+        }
         setLastMessages(prev => ({
           ...prev,
           [selectedChat._id]: { prefix, text }
@@ -1026,7 +1018,7 @@ export default function VPE_Chats() {
         [selectedChat?._id]: null
       }));
     }
-  }, [selectedChat, messages, currentUserId, groupMessages, isGroupChat]);
+  }, [selectedChat, messages, currentUserId, groupMessages, isGroupChat, users]);
 
   // Preload last messages for all users in recentChats
   useEffect(() => {
@@ -1116,10 +1108,8 @@ export default function VPE_Chats() {
   // 2. Add state for dropdown menu (showGroupMenu)
   // 3. Merge recentChats and groups into a single unified list
   // Include groups that have messages OR are newly created/joined
-  const groupsWithMessages = groups.filter(group => {
-    const groupMsgs = groupMessages[group._id] || [];
-    return groupMsgs.length > 0;
-  });
+  // Show all groups you belong to (even if no messages yet)
+  const groupsWithMessages = groups;
   
   const unifiedChats = [
     ...recentChats.map(chat => ({ ...chat, type: 'individual' })),
@@ -1327,10 +1317,12 @@ export default function VPE_Chats() {
                           setSearchTerm(""); // Clear search after selecting
                         } else if (item.type === 'group') {
                           setSelectedChat({ ...item, isGroup: true });
+                          setIsGroupChat(true);
                           localStorage.setItem("selectedChatId_VPE", item._id);
                           setSearchTerm(""); // Clear search after selecting
                         } else {
                           setSelectedChat(item);
+                          setIsGroupChat(false);
                           localStorage.setItem("selectedChatId_VPE", item._id);
                           setSearchTerm(""); // Clear search after selecting
                         }
