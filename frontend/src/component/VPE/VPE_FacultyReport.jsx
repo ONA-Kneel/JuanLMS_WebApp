@@ -466,7 +466,14 @@ export default function VPE_FacultyReport() {
       if (!line.trim()) { closeLists(); html.push('<p style="margin: 0 0 8px 0;">&nbsp;</p>'); continue; }
       if (/^[-*_]{3,}$/.test(line)) { closeLists(); html.push('<hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0;"/>'); continue; }
       const hMatch = line.match(/^(#{1,6})\s*(.+)$/);
-      if (hMatch) { closeLists(); html.push(`<h4 style="font-size:16px;font-weight:700;margin:14px 0 8px;">${hMatch[2]}</h4>`); continue; }
+      if (hMatch) { 
+        closeLists(); 
+        const text = hMatch[2]
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.+?)\*/g, '<em>$1</em>');
+        html.push(`<h4 style="font-size:16px;font-weight:700;margin:14px 0 8px;">${text}</h4>`); 
+        continue; 
+      }
       const olMatch = line.match(/^\d+\.\s+(.+)$/);
       if (olMatch) { if (!inOl) { closeLists(); html.push('<ol style="margin:6px 0 8px 20px;">'); inOl = true; } html.push(`<li style="margin:2px 0;">${olMatch[1]}</li>`); continue; }
       const ulMatch = line.match(/^[-•]\s+(.+)$/);

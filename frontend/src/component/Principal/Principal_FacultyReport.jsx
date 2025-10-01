@@ -542,7 +542,9 @@ export default function Principal_FacultyReport() {
       const hMatch = line.match(/^(#{1,6})\s*(.+)$/);
       if (hMatch) {
         closeLists();
-        const text = hMatch[2];
+        const text = hMatch[2]
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.+?)\*/g, '<em>$1</em>');
         html.push(`<h4 style="font-size:16px;font-weight:700;margin:14px 0 8px;">${text}</h4>`);
         continue;
       }
