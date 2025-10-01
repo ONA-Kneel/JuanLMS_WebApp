@@ -104,6 +104,28 @@ export default function VPE_Chats() {
     });
   };
 
+  // Track chats that should be highlighted due to new messages
+  const [highlightedChats, setHighlightedChats] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('highlightedChats_vpe') || '{}'); } catch { return {}; }
+  });
+  const addHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      const next = { ...prev, [chatId]: Date.now() };
+      try { localStorage.setItem('highlightedChats_vpe', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const clearHighlight = (chatId) => {
+    if (!chatId) return;
+    setHighlightedChats(prev => {
+      if (!prev[chatId]) return prev;
+      const { [chatId]: _ignore, ...rest } = prev;
+      try { localStorage.setItem('highlightedChats_vpe', JSON.stringify(rest)); } catch {}
+      return rest;
+    });
+  };
+
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
     type: 'error',
@@ -116,6 +138,7 @@ export default function VPE_Chats() {
   const socket = useRef(null);
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
+  const groupsRef = useRef([]);
 
   const API_URL = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -140,7 +163,7 @@ export default function VPE_Chats() {
       if (existingIndex === -1) {
         // Add new chat to the top
         const updated = [chatUser, ...prev];
-        localStorage.setItem("recentChats_vpe", JSON.stringify(updated));
+        localStorage.setItem("recentChats_VPE", JSON.stringify(updated));
         return updated;
       } else if (existingIndex > 0) {
         // Move existing chat to the top
@@ -149,7 +172,7 @@ export default function VPE_Chats() {
           ...prev.slice(0, existingIndex),
           ...prev.slice(existingIndex + 1)
         ];
-        localStorage.setItem("recentChats_vpe", JSON.stringify(updated));
+        localStorage.setItem("recentChats_VPE", JSON.stringify(updated));
         return updated;
       }
       return prev;
@@ -169,6 +192,19 @@ export default function VPE_Chats() {
     });
 
     socket.current.emit("addUser", currentUserId);
+
+    // Rejoin all group rooms on connect/reconnect
+    const onConnect = () => {
+      try {
+        socket.current.emit('addUser', currentUserId);
+        (groupsRef.current || []).forEach(g => {
+          if (g && g._id) {
+            socket.current.emit('joinGroup', { userId: currentUserId, groupId: g._id });
+          }
+        });
+      } catch {}
+    };
+    socket.current.on('connect', onConnect);
 
     const handleIncomingDirect = (data) => {
       const incomingMessage = {
@@ -234,10 +270,13 @@ export default function VPE_Chats() {
             addHighlight(chat._id);
           }
           
-                  // Refresh recent conversations to update sidebar
-        setTimeout(() => {
-          fetchRecentConversations();
-        }, 100);
+          // Highlight if not currently open
+          if (!(selectedChat && !isGroupChat && selectedChat._id === chat._id)) {
+            try { addHighlight && addHighlight(chat._id); } catch {}
+          }
+          
+          // Refresh recent conversations to update sidebar
+          setTimeout(() => { fetchRecentConversations(); }, 100);
         }
         
         return newMessages;
@@ -340,9 +379,24 @@ export default function VPE_Chats() {
     });
 
     return () => {
+      socket.current.off('connect', onConnect);
       socket.current.disconnect();
     };
   }, [currentUserId, recentChats, selectedChat, isGroupChat]);
+
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
+
+  // (Re)join any groups when groups list changes and socket is connected
+  useEffect(() => {
+    if (!socket.current || !socket.current.connected || !currentUserId) return;
+    try {
+      groups.forEach(g => {
+        if (g && g._id) {
+          socket.current.emit('joinGroup', { userId: currentUserId, groupId: g._id });
+        }
+      });
+    } catch {}
+  }, [groups, currentUserId]);
 
   // ================= FETCH USERS =================
   useEffect(() => {
@@ -458,6 +512,15 @@ export default function VPE_Chats() {
     }
   }, [currentUserId, users]); // Dependencies ensure it runs when data is available
 
+  // Lightweight polling fallback for production where sockets may be blocked or cross-instance
+  useEffect(() => {
+    if (!currentUserId) return;
+    const id = setInterval(() => {
+      try { fetchRecentConversations(); } catch {}
+    }, 8000);
+    return () => clearInterval(id);
+  }, [currentUserId]);
+
   // Clean up any corrupted data in recentChats
   useEffect(() => {
     if (recentChats.length > 0) {
@@ -469,7 +532,7 @@ export default function VPE_Chats() {
       
       if (cleanedChats.length !== recentChats.length) {
         setRecentChats(cleanedChats);
-        localStorage.setItem("recentChats_vpe", JSON.stringify(cleanedChats));
+        localStorage.setItem("recentChats_VPE", JSON.stringify(cleanedChats));
       }
     }
   }, [recentChats]);
@@ -477,7 +540,7 @@ export default function VPE_Chats() {
   // Force cleanup of corrupted data on component mount
   useEffect(() => {
     const cleanupCorruptedData = () => {
-      const stored = localStorage.getItem("recentChats_vpe");
+      const stored = localStorage.getItem("recentChats_VPE");
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
@@ -487,11 +550,11 @@ export default function VPE_Chats() {
             chat.firstname !== undefined && chat.lastname !== undefined
           );
           if (cleaned.length !== parsed.length) {
-            localStorage.setItem("recentChats_vpe", JSON.stringify(cleaned));
+            localStorage.setItem("recentChats_VPE", JSON.stringify(cleaned));
             setRecentChats(cleaned);
           }
         } catch {
-          localStorage.removeItem("recentChats_vpe");
+          localStorage.removeItem("recentChats_VPE");
           setRecentChats([]);
         }
       }

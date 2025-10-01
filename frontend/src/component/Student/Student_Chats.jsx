@@ -116,6 +116,7 @@ export default function Student_Chats() {
   const socket = useRef(null);
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
+  const groupsRef = useRef([]);
   // Live refs to avoid stale closures in socket handlers
   const recentChatsRef = useRef([]);
   const selectedChatRef = useRef(null);
@@ -135,6 +136,7 @@ export default function Student_Chats() {
   useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
   useEffect(() => { isGroupChatRef.current = isGroupChat; }, [isGroupChat]);
   useEffect(() => { usersRef.current = users; }, [users]);
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
 
   // Fetch a single user by id and merge to cache/state (used when sender not in users list yet)
   const fetchUserIfMissing = async (userId) => {
@@ -180,7 +182,7 @@ export default function Student_Chats() {
   // ================= SOCKET.IO SETUP =================
   useEffect(() => {
     socket.current = io(SOCKET_URL, {
-      transports: ["websocket"],
+      transports: ["websocket", "polling"],
       reconnectionAttempts: 5,
       timeout: 10000,
       auth: {
@@ -190,6 +192,19 @@ export default function Student_Chats() {
     });
 
     socket.current.emit("addUser", currentUserId);
+
+    // Ensure we (re)join all group rooms on connect/reconnect
+    const onConnect = () => {
+      try {
+        socket.current.emit("addUser", currentUserId);
+        (groupsRef.current || []).forEach(g => {
+          if (g && g._id) {
+            socket.current.emit("joinGroup", { userId: currentUserId, groupId: g._id });
+          }
+        });
+      } catch {}
+    };
+    socket.current.on('connect', onConnect);
 
     const handleIncomingDirect = (data) => {
       const incomingMessage = {
@@ -373,9 +388,22 @@ export default function Student_Chats() {
     });
 
     return () => {
+      socket.current.off('connect', onConnect);
       socket.current.disconnect();
     };
   }, [currentUserId, recentChats]);
+
+  // Also (re)join any newly available groups when the list changes
+  useEffect(() => {
+    if (!socket.current || !socket.current.connected || !currentUserId) return;
+    try {
+      groups.forEach(g => {
+        if (g && g._id) {
+          socket.current.emit('joinGroup', { userId: currentUserId, groupId: g._id });
+        }
+      });
+    } catch {}
+  }, [groups, currentUserId]);
 
   // ================= FETCH USERS =================
   useEffect(() => {
