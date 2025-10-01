@@ -75,7 +75,8 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create a new student assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName } = req.body;
+    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate } = req.body;
+    console.log('Request body debug:', { studentId, studentName, studentSchoolID, firstName, lastName, trackName, strandName, sectionName, gradeLevel, termId, quarterName, enrollmentNo, enrollmentDate });
 
     // Get term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -83,27 +84,43 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Term not found' });
     }
 
+    console.log('Duplicate check will search for:', {
+      studentSchoolID,
+      schoolYear: term.schoolYear,
+      termName: term.termName,
+      quarterName: quarterName || null
+    });
+
     if (!gradeLevel) {
       return res.status(400).json({ message: 'gradeLevel is required' });
     }
 
     let actualStudentId = studentId;
-    if (!actualStudentId && studentName) {
-      console.log('Looking for student by name:', studentName);
+    // Construct studentName from firstName and lastName if not provided directly
+    const fullStudentName = studentName || (firstName && lastName ? `${firstName} ${lastName}` : null);
+    console.log('Name construction debug:', { studentName, firstName, lastName, fullStudentName });
+    
+    // For manual assignments, ensure we have a name
+    if (!actualStudentId && !fullStudentName && studentSchoolID) {
+      console.log('Warning: Manual assignment without proper name, using school ID as fallback');
+    }
+    
+    if (!actualStudentId && fullStudentName) {
+      console.log('Looking for student by name:', fullStudentName);
       let student = await User.findOne({
         $or: [
-          { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, studentName.toLowerCase()] } },
-          { firstname: { $regex: new RegExp(studentName.split(' ')[0], 'i') }, lastname: { $regex: new RegExp(studentName.split(' ').slice(-1)[0], 'i') } },
-          { $expr: { $regexMatch: { input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, regex: studentName.toLowerCase() } } },
-          { firstname: { $regex: new RegExp(studentName, 'i') } },
-          { lastname: { $regex: new RegExp(studentName, 'i') } }
+          { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, fullStudentName.toLowerCase()] } },
+          { firstname: { $regex: new RegExp(fullStudentName.split(' ')[0], 'i') }, lastname: { $regex: new RegExp(fullStudentName.split(' ').slice(-1)[0], 'i') } },
+          { $expr: { $regexMatch: { input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, regex: fullStudentName.toLowerCase() } } },
+          { firstname: { $regex: new RegExp(fullStudentName, 'i') } },
+          { lastname: { $regex: new RegExp(fullStudentName, 'i') } }
         ],
         role: 'students'
       });
 
       if (!student) {
         console.log('Student not found with regex, trying more flexible search...');
-        const nameParts = studentName.trim().split(/\s+/);
+        const nameParts = fullStudentName.trim().split(/\s+/);
         if (nameParts.length >= 2) {
           student = await User.findOne({
             $and: [
@@ -132,12 +149,14 @@ router.post('/', authenticateToken, async (req, res) => {
     // Check for existing assignment before creating new one
     console.log('Checking for duplicates with:', {
       actualStudentId,
-      studentName,
+      studentName: fullStudentName,
       studentSchoolID,
       schoolYear: term.schoolYear,
       termName: term.termName,
       quarterName: quarterName || null
     });
+    
+    console.log('About to query database for duplicates...');
     
     const existingAssignment = await StudentAssignment.findOne({
       $or: [
@@ -148,9 +167,9 @@ router.post('/', authenticateToken, async (req, res) => {
           termName: term.termName,
           quarterName: quarterName || null
         }] : []),
-        // Check by studentName AND studentSchoolID if no studentId - only prevent same student in same term and quarter
-        ...(!actualStudentId && studentName && studentSchoolID ? [{
-          studentName,
+        // Check by studentSchoolID if no studentId - only prevent same student in same term and quarter
+        // This ensures we're checking for the exact same student, not just similar names
+        ...(!actualStudentId && studentSchoolID ? [{
           studentSchoolID,
           schoolYear: term.schoolYear,
           termName: term.termName,
@@ -158,9 +177,30 @@ router.post('/', authenticateToken, async (req, res) => {
         }] : [])
       ]
     });
+    
+    console.log('Database query completed. Found assignment:', existingAssignment ? 'YES' : 'NO');
 
     if (existingAssignment) {
       console.log('Found existing assignment:', existingAssignment);
+      console.log('Duplicate check details:', {
+        searchCriteria: {
+          studentSchoolID,
+          schoolYear: term.schoolYear,
+          termName: term.termName,
+          quarterName: quarterName || null
+        },
+        foundAssignment: {
+          _id: existingAssignment._id,
+          studentSchoolID: existingAssignment.studentSchoolID,
+          studentName: existingAssignment.studentName,
+          firstName: existingAssignment.firstName,
+          lastName: existingAssignment.lastName,
+          schoolYear: existingAssignment.schoolYear,
+          termName: existingAssignment.termName,
+          quarterName: existingAssignment.quarterName,
+          sectionName: existingAssignment.sectionName
+        }
+      });
       const quarterText = quarterName ? ` (${quarterName})` : '';
       return res.status(400).json({ 
         message: 'This student is already enrolled in this term and quarter',
@@ -168,10 +208,12 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    const assignment = new StudentAssignment({
+    console.log('Creating new assignment with data:', {
       studentId: actualStudentId || undefined,
-      studentName: !actualStudentId ? studentName : undefined,
+      studentName: !actualStudentId ? (fullStudentName || `Student ${studentSchoolID}`) : undefined,
       studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
+      firstName: !actualStudentId ? firstName : undefined,
+      lastName: !actualStudentId ? lastName : undefined,
       trackName,
       strandName,
       sectionName,
@@ -182,7 +224,56 @@ router.post('/', authenticateToken, async (req, res) => {
       quarterName
     });
 
-    const newAssignment = await assignment.save();
+    const assignment = new StudentAssignment({
+      studentId: actualStudentId || undefined,
+      studentName: !actualStudentId ? (fullStudentName || `Student ${studentSchoolID}`) : undefined,
+      studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
+      firstName: !actualStudentId ? firstName : undefined,
+      lastName: !actualStudentId ? lastName : undefined,
+      enrollmentNo: !actualStudentId ? enrollmentNo : undefined,
+      enrollmentDate: !actualStudentId ? enrollmentDate : undefined,
+      trackName,
+      strandName,
+      sectionName,
+      gradeLevel,
+      termId,
+      schoolYear: term.schoolYear,
+      termName: term.termName,
+      quarterName
+    });
+
+    console.log('About to save assignment to database...');
+    
+    let newAssignment;
+    try {
+      newAssignment = await assignment.save();
+      console.log('Assignment saved successfully:', newAssignment._id);
+    } catch (saveError) {
+      console.log('SAVE ERROR:', saveError);
+      
+      // Handle the specific unique index error
+      if (saveError.code === 11000) {
+        console.log('Unique constraint violation - checking for existing assignment...');
+        
+        // Try to find the existing assignment that's causing the conflict
+        const existingAssignment = await StudentAssignment.findOne({
+          trackName,
+          strandName,
+          sectionName,
+          schoolYear: term.schoolYear,
+          termName: term.termName
+        });
+        
+        if (existingAssignment) {
+          return res.status(400).json({ 
+            message: 'A student is already assigned to this section in this term',
+            details: `Section "${sectionName}" in ${term.schoolYear} ${term.termName} already has a student assigned`
+          });
+        }
+      }
+      
+      throw saveError;
+    }
     res.status(201).json(newAssignment);
   } catch (err) {
     if (err.code === 11000) {
@@ -200,7 +291,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
   const errors = [];
 
   for (const assignmentData of assignments) {
-    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName } = assignmentData;
+    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName } = assignmentData;
 
     try {
       const term = await Term.findById(termId);
@@ -215,22 +306,25 @@ router.post('/bulk', authenticateToken, async (req, res) => {
       }
 
       let actualStudentId = studentId;
-      if (!actualStudentId && studentName) {
-        console.log('Looking for student by name:', studentName);
+      // Construct studentName from firstName and lastName if not provided directly
+      const fullStudentName = studentName || (firstName && lastName ? `${firstName} ${lastName}` : null);
+      
+      if (!actualStudentId && fullStudentName) {
+        console.log('Looking for student by name:', fullStudentName);
         let student = await User.findOne({
           $or: [
-            { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, studentName.toLowerCase()] } },
-            { firstname: { $regex: new RegExp(studentName.split(' ')[0], 'i') }, lastname: { $regex: new RegExp(studentName.split(' ').slice(-1)[0], 'i') } },
-            { $expr: { $regexMatch: { input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, regex: studentName.toLowerCase() } } },
-            { firstname: { $regex: new RegExp(studentName, 'i') } },
-            { lastname: { $regex: new RegExp(studentName, 'i') } }
+            { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, fullStudentName.toLowerCase()] } },
+            { firstname: { $regex: new RegExp(fullStudentName.split(' ')[0], 'i') }, lastname: { $regex: new RegExp(fullStudentName.split(' ').slice(-1)[0], 'i') } },
+            { $expr: { $regexMatch: { input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, regex: fullStudentName.toLowerCase() } } },
+            { firstname: { $regex: new RegExp(fullStudentName, 'i') } },
+            { lastname: { $regex: new RegExp(fullStudentName, 'i') } }
           ],
           role: 'students'
         });
 
         if (!student) {
           console.log('Student not found with regex, trying more flexible search...');
-          const nameParts = studentName.trim().split(/\s+/);
+          const nameParts = fullStudentName.trim().split(/\s+/);
           if (nameParts.length >= 2) {
             student = await User.findOne({
               $and: [
@@ -256,10 +350,43 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 
       // allow manual entries when no matching student is found
 
+      // Check for existing assignment before creating new one (same logic as single creation)
+      const existingAssignment = await StudentAssignment.findOne({
+        $or: [
+          // Check by studentId if it exists - only prevent same student in same term and quarter
+          ...(actualStudentId ? [{
+            studentId: actualStudentId,
+            schoolYear: term.schoolYear,
+            termName: term.termName,
+            quarterName: quarterName || null
+          }] : []),
+          // Check by studentSchoolID if no studentId - only prevent same student in same term and quarter
+          // This ensures we're checking for the exact same student, not just similar names
+          ...(!actualStudentId && studentSchoolID ? [{
+            studentSchoolID,
+            schoolYear: term.schoolYear,
+            termName: term.termName,
+            quarterName: quarterName || null
+          }] : [])
+        ]
+      });
+
+      if (existingAssignment) {
+        console.log('Found existing assignment in bulk creation:', existingAssignment);
+        const quarterText = quarterName ? ` (${quarterName})` : '';
+        errors.push({ 
+          assignment: assignmentData, 
+          message: `Student ${existingAssignment.studentName || 'Unknown'} is already enrolled in ${term.schoolYear} ${term.termName}${quarterText}` 
+        });
+        continue;
+      }
+
       const newAssignment = new StudentAssignment({
         studentId: actualStudentId || undefined,
-        studentName: !actualStudentId ? studentName : undefined,
+        studentName: !actualStudentId ? (fullStudentName || `Student ${studentSchoolID}`) : undefined,
         studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
+        firstName: !actualStudentId ? firstName : undefined,
+        lastName: !actualStudentId ? lastName : undefined,
         trackName,
         strandName,
         sectionName,

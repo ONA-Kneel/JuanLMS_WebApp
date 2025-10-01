@@ -1306,11 +1306,17 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               })));
             }
             // Also filter by name and school ID if the search term matches
+            // Make the search more strict to prevent false matches
             const filteredStudents = studentUsers.filter(student => {
-              const searchTerm = value.toLowerCase();
+              const searchTerm = value.toLowerCase().trim();
               const fullName = `${student.firstname || student.firstName || ''} ${student.lastname || student.lastName || ''}`.toLowerCase();
               const schoolID = (student.schoolID || '').toLowerCase();
-              return fullName.includes(searchTerm) || schoolID.includes(searchTerm);
+              
+              // Only match if the search term is at the beginning of the name or is an exact school ID match
+              const nameMatch = fullName.startsWith(searchTerm) || fullName.includes(` ${searchTerm}`);
+              const schoolIDMatch = schoolID === searchTerm;
+              
+              return nameMatch || schoolIDMatch;
             });
             console.log('✅ Filtered students:', filteredStudents);
             setStudentSearchResults(filteredStudents);
@@ -1357,7 +1363,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
   // Handle selection of a student from suggestions
   const handleSelectStudent = (student) => {
-    setStudentFormData(prev => ({ ...prev, studentId: student._id }));
+    // Clear any existing manual data first
+    setStudentFormData(prev => ({ 
+      ...prev, 
+      studentId: student._id,
+      firstName: '',
+      lastName: ''
+    }));
     const firstName = student.firstname || student.firstName || 'Unknown';
     const lastName = student.lastname || student.lastName || 'Student';
     setStudentSearchTerm(`${firstName} ${lastName} (${student.schoolID})`);
@@ -1477,10 +1489,30 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       return false;
     }
     
-    // For manual assignments (no studentId), consider them approved by default
-    if (!assignment.studentId && assignment.studentName) {
-      console.log('Manual assignment - considering approved by default');
-      return true;
+    // For manual assignments (no studentId), check if they are registered and approved
+    // Check if it's a manual assignment by looking for studentSchoolID without studentId
+    if (!assignment.studentId && (assignment.studentSchoolID || assignment.schoolID)) {
+      console.log('Manual assignment - checking against registrants');
+      
+      // Check if this student is registered and approved
+      const isRegisteredAndApproved = registrants.some(registrant => {
+        const registrantSchoolId = (registrant.schoolID || '').trim();
+        const match = registrant.status === 'approved' && 
+                     registrantSchoolId === assignmentSchoolId;
+        
+        console.log('Checking registrant:', {
+          registrantSchoolId,
+          assignmentSchoolId,
+          registrantStatus: registrant.status,
+          registrantName: `${registrant.firstName} ${registrant.lastName}`,
+          match
+        });
+        
+        return match;
+      });
+      
+      console.log('Manual assignment approval result:', isRegisteredAndApproved);
+      return isRegisteredAndApproved;
     }
     
     const isApproved = registrants.some(registrant => {
@@ -1918,7 +1950,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     // Use the student name from the assignment data (which includes archived students)
     // or fall back to looking up in the students array for active students
     const student = students.find(s => s._id === assignment.studentId);
-    if (assignment.studentName) {
+    if (assignment.firstName && assignment.lastName) {
+      setStudentSearchTerm(`${assignment.firstName} ${assignment.lastName}`);
+    } else if (assignment.studentName) {
       setStudentSearchTerm(assignment.studentName);
     } else if (student) {
       setStudentSearchTerm(`${student.firstname} ${student.lastname}`);
@@ -2438,7 +2472,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
                   
                   return `
                     <tr>
-                      <td>${assignment.studentName || 'Unknown'}</td>
+                      <td>${assignment.firstName && assignment.lastName ? `${assignment.firstName} ${assignment.lastName}` : assignment.studentName || 'Unknown'}</td>
                       <td>${schoolId}</td>
                       <td>${assignment.trackName}</td>
                       <td>${assignment.strandName}</td>
@@ -2654,7 +2688,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           const approvalStatus = isStudentApproved(assignment) ? 'Approved' : 'Pending Approval';
           
           return [
-            assignment.studentName || 'Unknown',
+            assignment.firstName && assignment.lastName ? `${assignment.firstName} ${assignment.lastName}` : assignment.studentName || 'Unknown',
             schoolId,
             assignment.trackName,
             assignment.strandName,
@@ -4331,7 +4365,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             `${assignment.lastname || ''} ${assignment.firstname || ''}`.trim() || 'Unknown',
             student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
             assignment.enrollmentNo || 'N/A',
-            assignment.enrollmentDate || 'N/A',
+            assignment.enrollmentDate ? 
+              new Date(assignment.enrollmentDate).toLocaleDateString('en-US', {
+                month: '2-digit',
+                day: '2-digit', 
+                year: 'numeric'
+              }) : 'N/A',
             assignment.lastname || '',
             assignment.firstname || '',
             assignment.strandName || 'N/A',
@@ -4788,7 +4827,24 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         const lastName = assignment['last_name'] || '';
         const studentSchoolID = assignment['student_no'] || assignment['Student School ID'] || '';
         const enrollmentNo = assignment['enrollment_no'] || '';
-        const enrollmentDate = assignment['date'] || '';
+        let enrollmentDate = assignment['date'] || '';
+        
+        // Format enrollment date properly if it exists
+        if (enrollmentDate) {
+          try {
+            // Handle different date formats from Excel
+            const date = new Date(enrollmentDate);
+            if (!isNaN(date.getTime())) {
+              // Convert to YYYY-MM-DD format for backend
+              enrollmentDate = date.toISOString().split('T')[0];
+            } else {
+              enrollmentDate = '';
+            }
+          } catch (error) {
+            console.warn('Invalid date format in Excel:', enrollmentDate);
+            enrollmentDate = '';
+          }
+        }
 
         const res = await fetch(`${API_BASE}/api/student-assignments`, {
           method: 'POST',
@@ -6148,7 +6204,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           // Find student by school ID
           const student = students.find(s => s.schoolID === assignment.studentSchoolID);
           
-          console.log(`Creating student assignment for ${assignment.studentName} in ${assignment.trackName}/${assignment.strandName}/${assignment.sectionName}`);
+          const displayName = assignment.firstName && assignment.lastName ? `${assignment.firstName} ${assignment.lastName}` : assignment.studentName;
+          console.log(`Creating student assignment for ${displayName} in ${assignment.trackName}/${assignment.strandName}/${assignment.sectionName}`);
 
           // Prepare payload based on whether student exists in system
           let payload;
@@ -6514,7 +6571,12 @@ Validation issues (${skippedCount} items):
             `${assignment.lastname || ''} ${assignment.firstname || ''}`.trim() || 'Unknown',
             student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
             assignment.enrollmentNo || 'N/A',
-            assignment.enrollmentDate || 'N/A',
+            assignment.enrollmentDate ? 
+              new Date(assignment.enrollmentDate).toLocaleDateString('en-US', {
+                month: '2-digit',
+                day: '2-digit', 
+                year: 'numeric'
+              }) : 'N/A',
             assignment.lastname || '',
             assignment.firstname || '',
             assignment.strandName || 'N/A',
@@ -9005,7 +9067,15 @@ Validation issues (${skippedCount} items):
                           return (
                             <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
                               <td className="p-3 border">{assignment.enrollmentNo || 'N/A'}</td>
-                              <td className="p-3 border">{assignment.enrollmentDate || 'N/A'}</td>
+                              <td className="p-3 border">
+                                {assignment.enrollmentDate ? 
+                                  new Date(assignment.enrollmentDate).toLocaleDateString('en-US', {
+                                    month: '2-digit',
+                                    day: '2-digit', 
+                                    year: 'numeric'
+                                  }) : 'N/A'
+                                }
+                              </td>
                               <td className="p-3 border">{student?.schoolID || assignment.studentSchoolID || assignment.schoolID || ''}</td>
                               <td className="p-3 border">{assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || 'N/A'}</td>
                               <td className="p-3 border">{assignment.firstname || assignment.studentName?.split(' ')[0] || 'N/A'}</td>
@@ -9407,7 +9477,7 @@ Validation issues (${skippedCount} items):
                       {importPreviewData.studentAssignments.map((assignment, index) => (
                         <tr key={index} className={importValidationStatus.studentAssignments[index]?.valid ? 'bg-white' : 'bg-red-50'}>
                           <td className="p-2 border">{assignment.studentSchoolID || ''}</td>
-                          <td className="p-2 border">{assignment.studentName}</td>
+                          <td className="p-2 border">{assignment.firstName && assignment.lastName ? `${assignment.firstName} ${assignment.lastName}` : assignment.studentName}</td>
                           <td className="p-2 border">{assignment.trackName}</td>
                           <td className="p-2 border">{assignment.strandName}</td>
                           <td className="p-2 border">{assignment.sectionName}</td>
