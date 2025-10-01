@@ -35,6 +35,9 @@ class EmailService {
       console.log('📧 [EMAIL SERVICE] From: juanlms.sjddefi@sjdefilms.com');
       console.log('📧 [EMAIL SERVICE] Purpose:', purpose);
       console.log('📧 [EMAIL SERVICE] OTP:', otp);
+      console.log('🔍 [DEBUG] personalEmail type:', typeof personalEmail);
+      console.log('🔍 [DEBUG] personalEmail value:', personalEmail);
+      console.log('🔍 [DEBUG] zohoEmail parameter:', zohoEmail);
 
       const subject = this.getOTPSubject(purpose);
       const content = this.getOTPContent(firstName, otp, purpose, zohoEmail);
@@ -161,9 +164,8 @@ class EmailService {
     content += `⏰ This OTP will expire in 15 minutes.\n\n`;
     content += `⚠️ If you did not request this ${purposeText}, please ignore this email and contact support.\n\n`;
     
-    if (zohoEmail && zohoEmail.includes('@sjdefilms.com')) {
-      content += `📧 This OTP was sent to your Zoho Mail address (${zohoEmail}).\n\n`;
-      content += `🌐 You can access your Zoho Mail at: mail.zoho.com\n\n`;
+    if (zohoEmail && !zohoEmail.includes('@sjdefilms.com')) {
+      content += `📧 This OTP was sent to your School email address (${zohoEmail}).\n\n`;
     }
     
     content += `Thank you,\nJuanLMS Team`;

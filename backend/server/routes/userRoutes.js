@@ -726,25 +726,26 @@ userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
         { _id: user._id },
         { $set: { resetOTP: otp, resetOTPExpires: otpExpiry } }
     );
-    // Send OTP via Brevo to Zoho Mail address
+    // Send OTP via Brevo to Personal Email address
     try {
-        // Decrypt the email address before sending
-        const { decrypt } = await import('../utils/encryption.js');
-        const decryptedEmail = decrypt(user.email);
-        console.log('Decrypted email for password change OTP:', decryptedEmail);
+        console.log('🔍 [DEBUG] Decrypted personal email for password change OTP:', decryptedPersonalEmail);
+        console.log('🔍 [DEBUG] User ID:', userId);
+        console.log('🔍 [DEBUG] User firstname:', user.firstname);
+        console.log('🔍 [DEBUG] OTP:', otp);
         
         const emailService = await import('../services/emailService.js');
-        await emailService.default.sendOTP(
-            decryptedEmail, // Send to decrypted Zoho Mail address
+        const result = await emailService.default.sendOTP(
+            decryptedPersonalEmail, // Send to personal email address
             user.firstname,
             otp,
             'password_change',
-            decryptedEmail
+            decryptedPersonalEmail
         );
+        console.log('🔍 [DEBUG] Email service result:', result);
     } catch (emailErr) {
-        console.error('Error sending OTP email to Zoho Mail via Brevo:', emailErr);
+        console.error('Error sending OTP email to personal email via Brevo:', emailErr);
     }
-    return res.json({ message: 'OTP sent to your Zoho Mail address.' });
+    return res.json({ message: 'OTP sent to your personal email address.' });
 });
 
 // Change password route (requires current password, after OTP is validated)
@@ -794,7 +795,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ message: 'Enter a valid email address.' });
     }
 
-    const genericMsg = 'If your email is registered, a reset link or OTP has been sent to your Zoho Mail address.';
+    const genericMsg = 'If your email is registered, a reset link or OTP has been sent to your personal email address.';
 
     try {
         // Find user by emailHash (deterministic hash for searching)
@@ -806,7 +807,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
         if (!user) {
             console.log('User not found with email:', email);
             // Explicitly inform user that the email is not registered
-            return res.status(404).json({ message: 'This Zoho Mail address is not registered. Please check that it\'s correct.' });
+            return res.status(404).json({ message: 'This email address is not registered. Please check that it\'s correct.' });
         }
         // --- Generate OTP and expiry ---
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -818,26 +819,36 @@ userRoutes.post('/forgot-password', async (req, res) => {
             { $set: { resetOTP: otp, resetOTPExpires: otpExpiry } }
         );
 
-        // --- Send OTP via Brevo to Zoho Mail address ---
-        console.log('About to send OTP to Zoho Mail via EmailService...');
+        // --- Send OTP via Brevo to Personal Email address ---
+        console.log('About to send OTP to Personal Email via EmailService...');
 
         try {
-            // Decrypt the email address before sending
+            // Decrypt the personal email address before sending
             const { decrypt } = await import('../utils/encryption.js');
-            const decryptedEmail = decrypt(user.email);
-            console.log('Decrypted email for OTP:', decryptedEmail);
+            const decryptedPersonalEmail = user.getDecryptedPersonalEmail
+              ? user.getDecryptedPersonalEmail()
+              : (typeof user.personalemail === 'string' ? decrypt(user.personalemail) : '');
+            console.log('🔍 [DEBUG] Decrypted personal email for OTP:', decryptedPersonalEmail);
+            console.log('🔍 [DEBUG] User ID:', user._id);
+            console.log('🔍 [DEBUG] User firstname:', user.firstname);
+            console.log('🔍 [DEBUG] OTP:', otp);
+            
+            if (!decryptedPersonalEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(decryptedPersonalEmail)) {
+                console.error('Invalid or missing personal email for user:', user);
+                return res.status(400).json({ message: 'User does not have a valid personal email for password reset.' });
+            }
             
             const emailService = await import('../services/emailService.js');
             const result = await emailService.default.sendOTP(
-                decryptedEmail, // Send to decrypted Zoho Mail address
+                decryptedPersonalEmail, // Send to personal email address
                 user.firstname,
                 otp,
                 'password_reset',
-                decryptedEmail
+                decryptedPersonalEmail
             );
-            console.log('OTP email sent to Zoho Mail:', decryptedEmail, 'Result:', result);
+            console.log('🔍 [DEBUG] OTP email sent to Personal Email:', decryptedPersonalEmail, 'Result:', result);
         } catch (emailErr) {
-            console.error('Error sending OTP email to Zoho Mail via Brevo:', emailErr);
+            console.error('Error sending OTP email to Personal Email via Brevo:', emailErr);
         }
 
         console.log('After sendTransacEmail call');
