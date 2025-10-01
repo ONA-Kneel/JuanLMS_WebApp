@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
+import { getLogoBase64, getFooterLogoBase64 } from '../../utils/imageToBase64';
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE = "http://localhost:5000";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -48,7 +49,7 @@ const validateFacultySchoolIDFormat = (schoolID) => {
   return facultySchoolIDPattern.test(trimmedID);
 };
 
-export default function TermDetails({ termData: propTermData, quarterData, refreshKey }) {
+export default function TermDetails({ termData: propTermData, quarterData }) {
   const { termId } = useParams();
   const navigate = useNavigate();
   const importFileInputRef = useRef(null); // Initialize useRef for the file input
@@ -115,7 +116,11 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     trackId: '',
     strandId: '',
     sectionIds: [],
-    gradeLevel: ''
+    gradeLevel: '',
+    enrollmentNo: '',
+    enrollmentDate: '',
+    lastName: '',
+    firstName: ''
   });
   const [studentAssignments, setStudentAssignments] = useState([]);
   const [studentError, setStudentError] = useState('');
@@ -124,6 +129,16 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
   const [students, setStudents] = useState([]); // To store student users for dropdown
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [registrants, setRegistrants] = useState([]);
+
+  // Filter states for student assignments
+  const [studentSectionFilter, setStudentSectionFilter] = useState('');
+  const [studentStatusFilter, setStudentStatusFilter] = useState('');
+  const [studentSearchFilter, setStudentSearchFilter] = useState('');
+
+  // Filter states for faculty assignments
+  const [facultySectionFilter, setFacultySectionFilter] = useState('');
+  const [facultyStatusFilter, setFacultyStatusFilter] = useState('');
+  const [facultySearchFilter, setFacultySearchFilter] = useState('');
 
   // Add state for search functionality for Faculty and Students
   const [facultySearchTerm, setFacultySearchTerm] = useState('');
@@ -259,6 +274,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     facultyAssignments: { valid: 0, invalid: 0, details: [] },
     studentAssignments: { valid: 0, invalid: 0, details: [] }
   });
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   const tabs = [
     { id: 'dashboard', label: 'Term Dashboard', icon: termDashboardIcon },
@@ -267,7 +283,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     { id: 'sections', label: 'Sections', icon: sectionsIcon },
     { id: 'subjects', label: 'Subjects', icon: subjectsIcon }, // <-- Move this line here
     { id: 'faculty', label: 'Faculty Assignment', icon: facultyIcon },
-    { id: 'students', label: 'Student Assignment', icon: studentIcon },
+    { id: 'students', label: 'Enrolled Students', icon: studentIcon },
   ];
 
   // In a real application, you would fetch term details here using termId
@@ -298,11 +314,11 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         }
         
         const data = await response.json();
-        console.log('Term details loaded:', data);
+        
         setTermDetails(data);
         setError(null);
       } catch (err) {
-        console.error('Error loading term details:', err);
+        
         setError("Failed to load term details.");
       } finally {
         setLoading(false);
@@ -649,7 +665,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             `• ${dependencies.strands.length} Strands\n` +
             `• ${dependencies.sections.length} Sections\n` +
             `• ${dependencies.subjects.length} Subjects\n` +
-            `• ${dependencies.studentAssignments.length} Student Assignments\n` +
+            `• ${dependencies.studentAssignments.length} Enrolled Students\n` +
             `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
             `Total: ${dependencies.totalConnections} connected records\n\n` +
             `This action CANNOT be undone!\n\n` +
@@ -880,7 +896,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             `📊 CONNECTED DATA:\n` +
             `• ${dependencies.sections.length} Sections\n` +
             `• ${dependencies.subjects.length} Subjects\n` +
-            `• ${dependencies.studentAssignments.length} Student Assignments\n` +
+            `• ${dependencies.studentAssignments.length} Enrolled Students\n` +
             `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
             `Total: ${dependencies.totalConnections} connected records\n\n` +
             `This action CANNOT be undone!\n\n` +
@@ -1101,7 +1117,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           // Show detailed dependency modal
           const message = `⚠️ WARNING: Deleting this section will also delete ALL connected data!\n\n` +
             `📊 CONNECTED DATA:\n` +
-            `• ${dependencies.studentAssignments.length} Student Assignments\n` +
+            `• ${dependencies.studentAssignments.length} Enrolled Students\n` +
             `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
             `Total: ${dependencies.totalConnections} connected records\n\n` +
             `This action CANNOT be undone!\n\n` +
@@ -1367,14 +1383,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       if (res.ok) {
         const data = await res.json();
         console.log("Fetched faculty assignments for template (after backend restart):", data); // Re-added console.log
-        console.log("Faculty assignments count:", data.length);
-        console.log("Faculty assignments details:", data.map(a => ({
-          id: a._id,
-          facultyName: a.facultyName,
-          termId: a.termId,
-          status: a.status,
-          quarterName: a.quarterName
-        })));
         setFacultyAssignments(data);
       } else {
         const errorData = await res.json();
@@ -1405,14 +1413,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       if (res.ok) {
         const data = await res.json();
         console.log("Fetched student assignments:", data);
-        console.log("Student assignments count:", data.length);
-        console.log("Student assignments details:", data.map(a => ({
-          id: a._id,
-          studentName: a.studentName,
-          termId: a.termId,
-          status: a.status,
-          quarterName: a.quarterName
-        })));
         setStudentAssignments(data);
       } else {
         const errorData = await res.json();
@@ -1460,55 +1460,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     }
   }, [termDetails, fetchStudentAssignments, fetchRegistrants]);
 
-  // Refresh assignments when quarter data changes (e.g., when quarter status changes)
-  useEffect(() => {
-    if (termDetails && quarterData) {
-      console.log('Quarter data changed, refreshing assignments...', quarterData);
-      fetchFacultyAssignments();
-      fetchStudentAssignments();
-    }
-  }, [quarterData, termDetails, fetchFacultyAssignments, fetchStudentAssignments]);
-
-  // Refresh assignments when refreshKey changes (triggered by parent component)
-  useEffect(() => {
-    if (termDetails && refreshKey) {
-      console.log('Refresh key changed, refreshing assignments...', refreshKey);
-      fetchFacultyAssignments();
-      fetchStudentAssignments();
-    }
-  }, [refreshKey, termDetails, fetchFacultyAssignments, fetchStudentAssignments]);
-
-  // Add a mechanism to refresh data when quarter status might have changed
-  useEffect(() => {
-    if (!termDetails || !quarterData) return;
-
-    // Listen for storage events (when quarter status changes in another tab/window)
-    const handleStorageChange = (e) => {
-      if (e.key === 'quarterStatusChanged') {
-        console.log('Quarter status changed detected, refreshing assignments...');
-        fetchFacultyAssignments();
-        fetchStudentAssignments();
-        // Clear the storage event
-        localStorage.removeItem('quarterStatusChanged');
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    // Also check for changes every 5 seconds when the component is active
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchFacultyAssignments();
-        fetchStudentAssignments();
-      }
-    }, 5000);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
-    };
-  }, [termDetails, quarterData, fetchFacultyAssignments, fetchStudentAssignments]);
-
   // Check if a student is approved in registrations
   const isStudentApproved = (assignment) => {
     // Use the same logic as the table display to get the school ID
@@ -1524,6 +1475,12 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     if (!assignmentSchoolId) {
       console.log('No school ID found for assignment');
       return false;
+    }
+    
+    // For manual assignments (no studentId), consider them approved by default
+    if (!assignment.studentId && assignment.studentName) {
+      console.log('Manual assignment - considering approved by default');
+      return true;
     }
     
     const isApproved = registrants.some(registrant => {
@@ -1843,10 +1800,10 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     e.preventDefault();
     setStudentError('');
 
-    // Allow either selecting an existing student (studentId) OR typing a name manually (studentSearchTerm)
-    const hasStudent = Boolean(studentFormData.studentId) || (studentSearchTerm && studentSearchTerm.trim().length > 0);
-    if (!hasStudent || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
-      setStudentError('All fields are required for student assignment. Select a student or type a name.');
+    // Check if we have required student information
+    const hasStudentInfo = Boolean(studentFormData.studentId) || (studentFormData.firstName && studentFormData.lastName);
+    if (!hasStudentInfo || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
+      setStudentError('All fields are required for student assignment. Provide student information.');
       return;
     }
 
@@ -1863,6 +1820,16 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     try {
       const token = localStorage.getItem('token');
 
+      // Debug logging
+      console.log('Creating student assignment with data:', {
+        studentToAssign,
+        studentFormData,
+        studentManualId,
+        selectedTrack,
+        selectedStrand,
+        selectedSection
+      });
+
       const res = await fetch(`${API_BASE}/api/student-assignments`, {
         method: 'POST',
         headers: {
@@ -1878,17 +1845,32 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             termId: termDetails._id,
             quarterName: quarterData ? quarterData.quarterName : undefined
           };
+          
+          let finalPayload;
           if (studentToAssign) {
-            return { ...basePayload, studentId: studentToAssign._id };
+            finalPayload = { 
+              ...basePayload, 
+              studentId: studentToAssign._id,
+              studentName: `${studentToAssign.firstname || studentToAssign.firstName} ${studentToAssign.lastname || studentToAssign.lastName}`,
+              studentSchoolID: studentToAssign.schoolID
+            };
+          } else {
+            // For manual entries, DO NOT send studentId (backend expects ObjectId). Send school ID and names instead.
+            const manualSchoolId = studentManualId.trim();
+            finalPayload = { 
+              ...basePayload, 
+              firstName: studentFormData.firstName,
+              lastName: studentFormData.lastName,
+              enrollmentNo: studentFormData.enrollmentNo,
+              enrollmentDate: studentFormData.enrollmentDate
+            };
+            if (manualSchoolId) {
+              finalPayload.studentSchoolID = manualSchoolId;
+            }
           }
-          // For manual entries, DO NOT send studentId (backend expects ObjectId). Send school ID and name instead.
-          const manualSchoolId = studentManualId.trim();
-          const manualName = studentSearchTerm.trim();
-          const payload = { ...basePayload, studentName: manualName };
-          if (manualSchoolId) {
-            payload.studentSchoolID = manualSchoolId;
-          }
-          return payload;
+          
+          console.log('Final payload being sent:', finalPayload);
+          return finalPayload;
         })())
       });
 
@@ -1904,7 +1886,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             },
             body: JSON.stringify({
               action: 'Student Assignment Added',
-              details: `Assigned Student "${studentToAssign ? `${studentToAssign.firstname} ${studentToAssign.lastname}` : studentSearchTerm.trim()}" to Section "${selectedSection.sectionName}" (Grade ${studentFormData.gradeLevel}) under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}${quarterData ? ` (${quarterData.quarterName})` : ''}`,
+              details: `Assigned Student "${studentToAssign ? `${studentToAssign.firstname} ${studentToAssign.lastname}` : `${studentFormData.firstName} ${studentFormData.lastName}`}" to Section "${selectedSection.sectionName}" (Grade ${studentFormData.gradeLevel}) under Track "${selectedTrack.trackName}" / Strand "${selectedStrand.strandName}" for ${termDetails.schoolYear} ${termDetails.termName}${quarterData ? ` (${quarterData.quarterName})` : ''}`,
               userRole: 'admin'
             })
           }).catch(() => {});
@@ -2115,8 +2097,15 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
 
   // Generate comprehensive PDF report with all term and quarter details
   const generateComprehensivePDFReport = async () => {
+    if (exportingPDF) return;
+    
+    setExportingPDF(true);
     try {
       console.log('Generating comprehensive PDF report...');
+      
+      // Get base64 encoded logos
+      const logoBase64 = await getLogoBase64();
+      const footerLogoBase64 = await getFooterLogoBase64();
       
       // Create a comprehensive HTML report
       const reportHTML = `
@@ -2229,7 +2218,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           <div class="header">
             <div class="logo-section">
               <div class="logo">
-                <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
+                <img src="${logoBase64 || '/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png'}" alt="San Juan de Dios Hospital Seal" />
               </div>
             </div>
             <div class="institution-info">
@@ -2281,7 +2270,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
                 <strong>Faculty Assignments:</strong><br>${facultyAssignments.filter(fa => fa.status === 'active').length}
               </div>
               <div class="stat-card">
-                <strong>Student Assignments:</strong><br>${studentAssignments.filter(sa => sa.status === 'active').length}
+                <strong>Enrolled Students:</strong><br>${studentAssignments.filter(sa => sa.status === 'active').length}
               </div>
               <div class="stat-card">
                 <strong>Active Students:</strong><br>${studentAssignments.filter(sa => sa.status === 'active' && isStudentApproved(sa)).length}
@@ -2470,7 +2459,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             </div>
             <div class="footer-right">
               <div class="footer-logo"> 
-                <img src="/src/assets/logo/images.png" alt="San Juan de Dios Hospital Seal" />
+                <img src="${footerLogoBase64 || '/src/assets/logo/images.png'}" alt="San Juan de Dios Hospital Seal" />
               </div>
             </div>
           </div>
@@ -2494,6 +2483,8 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     } catch (error) {
       console.error('Error generating comprehensive PDF report:', error);
       window.alert('Error generating comprehensive PDF report. Please try again.');
+    } finally {
+      setExportingPDF(false);
     }
   };
 
@@ -2548,7 +2539,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         ['Total Sections', sections.filter(s => s.status === 'active').length],
         ['Total Subjects', subjects.filter(s => s.status === 'active').length],
         ['Total Faculty Assignments', facultyAssignments.filter(fa => fa.status === 'active').length],
-        ['Total Student Assignments', studentAssignments.filter(sa => sa.status === 'active').length],
+        ['Total Enrolled Students', studentAssignments.filter(sa => sa.status === 'active').length],
         ['Active Students', studentAssignments.filter(sa => sa.status === 'active' && isStudentApproved(sa)).length],
         ['Pending Approval Students', studentAssignments.filter(sa => sa.status === 'active' && !isStudentApproved(sa)).length]
       ];
@@ -2558,14 +2549,13 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       
       // 2. TRACKS SHEET
       const tracksData = [
-        ['Track Name', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
+        ['Track Name', 'Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         tracks.filter(t => t.status === 'active').map(track => [
           track.trackName,
           track.status,
           track.schoolYear,
           track.termName,
-          track.quarterName || '',
           new Date(track.createdAt).toLocaleDateString()
         ])
       );
@@ -2575,7 +2565,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       
       // 3. STRANDS SHEET
       const strandsData = [
-        ['Strand Name', 'Track Name', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
+        ['Strand Name', 'Track Name', 'Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         strands.filter(s => s.status === 'active').map(strand => [
           strand.strandName,
@@ -2583,7 +2573,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           strand.status,
           strand.schoolYear,
           strand.termName,
-          strand.quarterName || '',
           new Date(strand.createdAt).toLocaleDateString()
         ])
       );
@@ -2593,7 +2582,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       
       // 4. SECTIONS SHEET
       const sectionsData = [
-        ['Section Name', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
+        ['Section Name', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         sections.filter(s => s.status === 'active').map(section => [
           section.sectionName,
@@ -2603,7 +2592,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           section.status,
           section.schoolYear,
           section.termName,
-          section.quarterName || '',
           new Date(section.createdAt).toLocaleDateString()
         ])
       );
@@ -2613,7 +2601,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       
       // 5. SUBJECTS SHEET
       const subjectsData = [
-        ['Subject Name', 'Subject Code', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
+        ['Subject Name', 'Subject Code', 'Track Name', 'Strand Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         subjects.filter(s => s.status === 'active').map(subject => [
           subject.subjectName,
@@ -2624,7 +2612,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           subject.status,
           subject.schoolYear,
           subject.termName,
-          subject.quarterName || '',
           new Date(subject.createdAt).toLocaleDateString()
         ])
       );
@@ -2634,7 +2621,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       
       // 6. FACULTY ASSIGNMENTS SHEET
       const facultyAssignmentsData = [
-        ['Faculty Name', 'Faculty School ID', 'Subject Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
+        ['Faculty Name', 'Faculty School ID', 'Subject Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         facultyAssignments.filter(fa => fa.status === 'active').map(assignment => {
           const faculty = faculties.find(f => f._id === assignment.facultyId);
@@ -2649,7 +2636,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             assignment.status,
             assignment.schoolYear,
             assignment.termName,
-            assignment.quarterName || '',
             new Date(assignment.createdAt).toLocaleDateString()
           ];
         })
@@ -2660,7 +2646,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       
       // 7. STUDENT ASSIGNMENTS SHEET
       const studentAssignmentsData = [
-        ['Student Name', 'Student School ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'Approval Status', 'School Year', 'Term Name', 'Quarter Name', 'Created At']
+        ['Student Name', 'Student School ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'Approval Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         studentAssignments.filter(sa => sa.status === 'active').map(assignment => {
           const student = students.find(s => s._id === assignment.studentId);
@@ -2678,14 +2664,13 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             approvalStatus,
             assignment.schoolYear,
             assignment.termName,
-            assignment.quarterName || '',
             new Date(assignment.createdAt).toLocaleDateString()
           ];
         })
       );
       
       const studentAssignmentsWs = XLSX.utils.aoa_to_sheet(addHeaderFooter([], 'STUDENT ASSIGNMENTS', studentAssignmentsData));
-      XLSX.utils.book_append_sheet(wb, studentAssignmentsWs, 'Student Assignments');
+      XLSX.utils.book_append_sheet(wb, studentAssignmentsWs, 'Enrolled Students');
       
       // 8. REGISTRANTS SHEET
       const registrantsData = [
@@ -2718,7 +2703,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         ['Sections', sections.length, sections.filter(s => s.status === 'active').length, sections.filter(s => s.status === 'archived').length, 0],
         ['Subjects', subjects.length, subjects.filter(s => s.status === 'active').length, subjects.filter(s => s.status === 'archived').length, 0],
         ['Faculty Assignments', facultyAssignments.length, facultyAssignments.filter(fa => fa.status === 'active').length, facultyAssignments.filter(fa => fa.status === 'archived').length, 0],
-        ['Student Assignments', studentAssignments.length, studentAssignments.filter(sa => sa.status === 'active').length, studentAssignments.filter(sa => sa.status === 'archived').length, 0],
+        ['Enrolled Students', studentAssignments.length, studentAssignments.filter(sa => sa.status === 'active').length, studentAssignments.filter(sa => sa.status === 'archived').length, 0],
         [''],
         ['STUDENT APPROVAL STATUS'],
         ['Approved Students', studentAssignments.filter(sa => sa.status === 'active' && isStudentApproved(sa)).length],
@@ -2755,18 +2740,39 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       // Create a workbook with two sheets
       const wb = XLSX.utils.book_new();
 
-      // Sheet 1: Template for adding new tracks
+      // Sheet 1: Template for adding new tracks with complete school details
       const templateWs = XLSX.utils.aoa_to_sheet([
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['ACADEMIC TRACKS MANAGEMENT'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
         ['Track Name to Add'], // Headers
       ]);
+      
+      // Set column widths
+      templateWs['!cols'] = [{ wch: 20 }];
+      
       XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Tracks');
 
-      // Sheet 2: Current tracks in the system (only active)
+      // Sheet 2: Current tracks in the system (only active) with complete school details
       const activeTracks = tracks.filter(track => track.status === 'active');
       const currentTracksData = [
-        ['Object ID', 'Track Name', 'School Year', 'Term Name', 'Status'], // Headers
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['CURRENT ACADEMIC TRACKS'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
+        ['Track Name', 'School Year', 'Term Name', 'Status'], // Headers
         ...activeTracks.map(track => [
-          track._id,
           track.trackName,
           track.schoolYear,
           track.termName,
@@ -2778,7 +2784,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
 
       // Set column widths for better readability
       const wscols = [
-        { wch: 30 }, // Object ID
         { wch: 20 }, // Track Name
         { wch: 15 }, // School Year
         { wch: 15 }, // Term Name
@@ -2861,28 +2866,54 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           const data = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: 'array' });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-          // Validate the data
-          if (jsonData.length === 0) {
-            setExcelError('The Excel file is empty');
+          
+          // Get raw data to find actual headers
+          const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+          console.log("Raw Excel Data for Tracks:", rawData);
+          
+          // Find the actual header row
+          const expectedHeaders = ['Track Name', 'School Year', 'Term Name', 'Status'];
+          const { headerRowIndex, headers } = findDataHeaders(rawData, expectedHeaders);
+          
+          // Get data rows starting after the header row
+          const dataRows = rawData.slice(headerRowIndex + 1);
+          console.log("Data rows for Tracks:", dataRows);
+          
+          if (dataRows.length === 0) {
+            setExcelError('No data rows found after headers');
             return;
           }
 
-          // Check if all required fields are present
-          const invalidRows = jsonData.filter(row => !row['Track Name to Add']);
-          if (invalidRows.length > 0) {
-            setExcelError('Some rows are missing Track Name to Add');
+          // Map data rows to objects using the found headers
+          console.log('Headers found:', headers);
+          console.log('Data rows to process:', dataRows);
+          
+          const tracksToPreview = dataRows.map((row, index) => {
+            console.log(`Processing row ${index}:`, row);
+            const trackObj = {};
+            headers.forEach((header, headerIndex) => {
+              const key = String(header).trim();
+              const value = String(row[headerIndex] || '').trim();
+              trackObj[key] = value;
+              console.log(`  ${key}: ${value}`);
+            });
+            
+            const track = {
+              trackName: trackObj['Track Name'] || trackObj['Track Name to Add'] || '',
+              schoolYear: trackObj['School Year'] || termDetails.schoolYear,
+              termName: trackObj['Term Name'] || termDetails.termName
+            };
+            
+            console.log(`Mapped track ${index}:`, track);
+            return track;
+          }).filter(track => track.trackName); // Only include tracks with names
+          
+          console.log('Final tracks to preview:', tracksToPreview);
+
+          if (tracksToPreview.length === 0) {
+            setExcelError('No valid track data found');
             return;
           }
-
-          // Prepare the data for preview
-          const tracksToPreview = jsonData.map(row => ({
-            trackName: row['Track Name to Add'].trim(),
-            schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName,
-            quarterName: quarterData ? quarterData.quarterName : undefined
-          }));
 
           // Validate tracks
           const validationResults = await validateTracks(tracksToPreview);
@@ -2920,7 +2951,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       const res = await fetch(`${API_BASE}/api/tracks/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tracks: validTracks.map(t => ({ ...t, quarterName: quarterData ? quarterData.quarterName : undefined })) })
+        body: JSON.stringify({ tracks: validTracks })
       });
 
       if (res.ok) {
@@ -2964,10 +2995,26 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     try {
       const wb = XLSX.utils.book_new();
 
-      // Sheet 1: Template for adding new strands
+      // Sheet 1: Template for adding new strands with complete school details
       const templateWs = XLSX.utils.aoa_to_sheet([
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['ACADEMIC STRANDS MANAGEMENT'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
         ['Track Name', 'Strand Name to Add'],
       ]);
+      
+      // Set column widths
+      templateWs['!cols'] = [
+        { wch: 20 }, // Track Name
+        { wch: 25 }  // Strand Name to Add
+      ];
+      
       XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Strands');
 
       // Sheet 2: Current strands in the system (only active)
@@ -2978,9 +3025,17 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       );
 
       const currentStrandsData = [
-        ['Object ID', 'Track Name', 'Strand Name', 'Status'],
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['CURRENT ACADEMIC STRANDS'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
+        ['Track Name', 'Strand Name', 'Status'],
         ...currentStrands.map(strand => [
-          strand._id,
           strand.trackName,
           strand.strandName,
           strand.status
@@ -2989,7 +3044,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
 
       const currentStrandsWs = XLSX.utils.aoa_to_sheet(currentStrandsData);
       currentStrandsWs['!cols'] = [
-        { wch: 30 }, // Object ID
         { wch: 20 }, // Track Name
         { wch: 20 }, // Strand Name
         { wch: 10 }  // Status
@@ -3125,23 +3179,40 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             return;
           }
 
-          // If headers are correct, proceed to convert sheet to JSON, assuming first row as headers
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-          // Remove the header row from jsonData since we've already processed it
-          jsonData.shift();
-
-          // Validate the data (now checks if there's actual data after headers)
-          if (jsonData.length === 0) {
-            setStrandError('The Excel file contains only headers or is empty after header parsing.');
+          // Get raw data to find actual headers
+          const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+          console.log("Raw Excel Data for Strands:", rawData);
+          
+          // Find the actual header row
+          const expectedHeaders = ['Track Name', 'Strand Name to Add', 'Strand Name'];
+          const { headerRowIndex, headers } = findDataHeaders(rawData, expectedHeaders);
+          
+          // Get data rows starting after the header row
+          const dataRows = rawData.slice(headerRowIndex + 1);
+          console.log("Data rows for Strands:", dataRows);
+          
+          if (dataRows.length === 0) {
+            setStrandError('No data rows found after headers');
             return;
           }
 
-          // Map jsonData to the expected format, using the actual headers found
-          const strandsToPreview = jsonData.map(row => ({
-            trackName: String(row[actualHeaders.indexOf('Track Name')] || '').trim(),
-            strandName: String(row[actualHeaders.indexOf('Strand Name to Add')] || '').trim()
-          }));
+          // Map data rows to objects using the found headers
+          const strandsToPreview = dataRows.map(row => {
+            const strandObj = {};
+            headers.forEach((header, index) => {
+              const key = String(header).trim();
+              strandObj[key] = String(row[index] || '').trim();
+            });
+            return {
+              trackName: strandObj['Track Name'] || '',
+              strandName: strandObj['Strand Name to Add'] || strandObj['Strand Name'] || ''
+            };
+          }).filter(strand => strand.trackName && strand.strandName); // Only include strands with both track and strand names
+
+          if (strandsToPreview.length === 0) {
+            setStrandError('No valid strand data found');
+            return;
+          }
 
           // Validate strands
           const validationResults = await validateStrands(strandsToPreview);
@@ -3195,8 +3266,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           body: JSON.stringify({
             ...strand,
             schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName,
-            quarterName: quarterData ? quarterData.quarterName : undefined
+            termName: termDetails.termName
           })
         });
 
@@ -3226,10 +3296,28 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     try {
       const wb = XLSX.utils.book_new();
 
-      // Sheet 1: Template for adding new sections
+      // Sheet 1: Template for adding new sections with complete school details
       const templateWs = XLSX.utils.aoa_to_sheet([
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['ACADEMIC SECTIONS MANAGEMENT'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
         ['Track Name', 'Strand Name', 'Section Name to Add', 'Grade Level'],
       ]);
+      
+      // Set column widths
+      templateWs['!cols'] = [
+        { wch: 20 }, // Track Name
+        { wch: 25 }, // Strand Name
+        { wch: 25 }, // Section Name to Add
+        { wch: 15 }  // Grade Level
+      ];
+      
       XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Sections');
 
       // Sheet 2: Current sections in the system (only active)
@@ -3241,9 +3329,17 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       );
 
       const currentSectionsData = [
-        ['Object ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status'],
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['CURRENT ACADEMIC SECTIONS'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
+        ['Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status'],
         ...currentSections.map(section => [
-          section._id,
           section.trackName,
           section.strandName,
           section.sectionName,
@@ -3254,7 +3350,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
 
       const currentSectionsWs = XLSX.utils.aoa_to_sheet(currentSectionsData);
       currentSectionsWs['!cols'] = [
-        { wch: 30 }, // Object ID
         { wch: 20 }, // Track Name
         { wch: 20 }, // Strand Name
         { wch: 20 }, // Section Name
@@ -3433,21 +3528,43 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           const data = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: 'array' });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-          // Validate the data
-          if (jsonData.length === 0) {
-            setSectionError('The Excel file is empty');
+          
+          // Get raw data to find actual headers
+          const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+          console.log("Raw Excel Data for Sections:", rawData);
+          
+          // Find the actual header row
+          const expectedHeaders = ['Track Name', 'Strand Name', 'Section Name', 'Grade Level'];
+          const { headerRowIndex, headers } = findDataHeaders(rawData, expectedHeaders);
+          
+          // Get data rows starting after the header row
+          const dataRows = rawData.slice(headerRowIndex + 1);
+          console.log("Data rows for Sections:", dataRows);
+          
+          if (dataRows.length === 0) {
+            setSectionError('No data rows found after headers');
             return;
           }
 
-          // Prepare the data for preview and validation
-          const sectionsToPreview = jsonData.map(row => ({
-            trackName: row['Track Name']?.trim() || '',
-            strandName: row['Strand Name']?.trim() || '',
-            sectionName: row['Section Name to Add']?.trim() || '',
-            gradeLevel: row['Grade Level']?.trim() || ''
-          }));
+          // Map data rows to objects using the found headers
+          const sectionsToPreview = dataRows.map(row => {
+            const sectionObj = {};
+            headers.forEach((header, index) => {
+              const key = String(header).trim();
+              sectionObj[key] = String(row[index] || '').trim();
+            });
+            return {
+              trackName: sectionObj['Track Name'] || '',
+              strandName: sectionObj['Strand Name'] || '',
+              sectionName: sectionObj['Section Name to Add'] || sectionObj['Section Name'] || '',
+              gradeLevel: sectionObj['Grade Level'] || ''
+            };
+          }).filter(section => section.trackName && section.strandName && section.sectionName); // Only include sections with required fields
+
+          if (sectionsToPreview.length === 0) {
+            setSectionError('No valid section data found');
+            return;
+          }
 
           // Validate sections
           const validationResults = await validateSections(sectionsToPreview);
@@ -3498,10 +3615,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         const res = await fetch(`${API_BASE}/api/sections`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...section,
-            quarterName: quarterData ? quarterData.quarterName : undefined
-          })
+          body: JSON.stringify(section)
         });
 
         if (res.ok) {
@@ -3546,15 +3660,46 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
   const downloadFacultyAssignmentTemplate = async () => {
     try {
       const wb = XLSX.utils.book_new();
-      // Sheet 1: Template for adding new faculty assignments
+      
+      // Sheet 1: Template for adding new faculty assignments with complete school details
       const templateWs = XLSX.utils.aoa_to_sheet([
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['FACULTY ASSIGNMENTS MANAGEMENT'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
         ['Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject'], // Updated headers to include both School ID and Name
       ]);
+      
+      // Set column widths
+      templateWs['!cols'] = [
+        { wch: 18 }, // Faculty School ID
+        { wch: 25 }, // Faculty Name
+        { wch: 20 }, // Track Name
+        { wch: 25 }, // Strand Name
+        { wch: 20 }, // Section Name
+        { wch: 15 }, // Grade Level
+        { wch: 25 }  // Subject
+      ];
+      
       XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Faculty Assignments');
 
       // Sheet 2: Current faculty assignments in the system (only active)
       const currentFacultyAssignments = facultyAssignments.filter(fa => fa.status === 'active');
       const currentFacultyAssignmentsData = [
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['CURRENT FACULTY ASSIGNMENTS'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
         ['Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject', 'Status'], // Updated headers to use School ID
         ...currentFacultyAssignments.map(assignment => [
           assignment.facultySchoolID || '', // Use school ID instead of object ID
@@ -3716,13 +3861,41 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       }
     }
 
-    // Get existing faculty assignments from the component state (more reliable)
-    const existingAssignments = facultyAssignments.filter(assignment => assignment.status === 'active');
+    // Fetch latest faculty assignments from backend for accurate validation
+    let existingAssignments = [];
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/faculty-assignments?termId=${termDetails._id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        existingAssignments = await res.json();
+        existingAssignments = existingAssignments.filter(assignment => assignment.status === 'active');
+      } else {
+        console.error('Failed to fetch existing faculty assignments for validation.');
+        // Fallback to component state
+        existingAssignments = facultyAssignments.filter(assignment => assignment.status === 'active');
+      }
+    } catch (err) {
+      console.error('Error fetching existing faculty assignments for validation:', err);
+      // Fallback to component state
+      existingAssignments = facultyAssignments.filter(assignment => assignment.status === 'active');
+    }
+    
     const existingAssignmentsInSystem = new Set(existingAssignments.map(assign => 
-      `${assign.facultyId}-${assign.trackName}-${assign.strandName}-${assign.sectionName}`
+      `${assign.facultyId}-${assign.trackName}-${assign.strandName}-${assign.sectionName}-${assign.subjectName || ''}`
     ));
     
     console.log('Existing faculty assignments in system:', Array.from(existingAssignmentsInSystem));
+    console.log('Total existing assignments fetched:', existingAssignments.length);
+    console.log('Detailed existing assignments:', existingAssignments.map(assign => ({
+      facultyId: assign.facultyId,
+      trackName: assign.trackName,
+      strandName: assign.strandName,
+      sectionName: assign.sectionName,
+      subjectName: assign.subjectName,
+      combo: `${assign.facultyId}-${assign.trackName}-${assign.strandName}-${assign.sectionName}-${assign.subjectName || ''}`
+    })));
 
     for (let i = 0; i < assignmentsToValidate.length; i++) {
       const assignment = assignmentsToValidate[i];
@@ -3737,6 +3910,8 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       let isValid = true;
       let message = 'Valid';
       let facultyId = ''; // To store the faculty ID for valid assignments
+      
+      console.log(`Row ${i + 1}: Starting validation for ${facultyName} (${facultySchoolID})`);
 
       // 1. Check for missing required fields
       if (!facultySchoolID || !facultyName || !trackName || !strandName || !sectionName || !gradeLevel || !subjectName) {
@@ -3773,6 +3948,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             message = `Faculty Name "${facultyName}" does not match School ID "${facultySchoolID}". Expected: "${facultyFound.firstname} ${facultyFound.lastname}"`;
           } else {
             facultyId = facultyFound._id;
+            console.log(`Row ${i + 1}: Found faculty ID: ${facultyId} for ${facultyName}`);
           }
         }
       }
@@ -3815,36 +3991,46 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         }
       }
 
-      // 7. Check for existing assignments in the system
-      if (isValid) {
-        const existingCombo = `${facultyId}-${trackName}-${strandName}-${sectionName}`;
+      // 7. Check for existing assignments in the system (including subject)
+      if (isValid && facultyId) {
+        const existingCombo = `${facultyId}-${trackName}-${strandName}-${sectionName}-${subjectName}`;
         console.log(`Row ${i + 1}: Checking if faculty assignment exists: "${existingCombo}"`);
         console.log(`Row ${i + 1}: Available existing assignments:`, Array.from(existingAssignmentsInSystem));
+        console.log(`Row ${i + 1}: Does combo exist?`, existingAssignmentsInSystem.has(existingCombo));
         if (existingAssignmentsInSystem.has(existingCombo)) {
           isValid = false;
           message = 'Faculty assignment already exists in the system';
           console.log(`Row ${i + 1}: Found existing assignment match`);
+        } else {
+          console.log(`Row ${i + 1}: No existing assignment match found`);
         }
       }
 
-      // 8. Check for subject-section conflicts (NEW VALIDATION)
+      // 8. Check for subject-section conflicts (only one faculty per subject-section)
       if (isValid) {
         const conflictingAssignment = existingAssignments.find(ea => 
           ea.subjectName.toLowerCase() === subjectName.toLowerCase() &&
           ea.sectionName.toLowerCase() === sectionName.toLowerCase() &&
-          ea.facultyId !== facultyId &&
           ea.status === 'active'
         );
         
         if (conflictingAssignment) {
-          isValid = false;
-          message = `Subject "${subjectName}" in Section "${sectionName}" is already assigned to another faculty`;
-          console.log(`Row ${i + 1}: Found subject-section conflict`);
+          // Check if it's the same faculty (allowed) or different faculty (not allowed)
+          if (conflictingAssignment.facultyId !== facultyId) {
+            isValid = false;
+            message = `Subject "${subjectName}" in Section "${sectionName}" is already assigned to another faculty`;
+            console.log(`Row ${i + 1}: Found subject-section conflict with different faculty`);
+          } else {
+            // Same faculty, same subject-section - this is a duplicate
+            isValid = false;
+            message = 'Faculty assignment already exists in the system';
+            console.log(`Row ${i + 1}: Found duplicate assignment for same faculty`);
+          }
         }
       }
 
       status[i] = { valid: isValid, message: message, facultyId: facultyId };
-      console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
+      console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}", facultyId: "${facultyId}"`);
     }
     return status;
   };
@@ -3870,40 +4056,45 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           const workbook = XLSX.read(data, { type: 'array' });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
 
-          const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:A1');
-          const actualHeaders = [];
-          for (let C = range.s.c; C <= range.e.c; ++C) {
-            const cell = worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
-            if (cell && cell.v) {
-              actualHeaders.push(String(cell.v).trim());
-            }
-          }
-
-          const requiredHeaders = ['Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject'];
-          const missingOrMismatchedHeaders = requiredHeaders.filter(header => !actualHeaders.includes(header));
-
-          if (missingOrMismatchedHeaders.length > 0) {
-            setFacultyError(`Missing or misspelled column(s) in Excel file: ${missingOrMismatchedHeaders.join(', ')}. Please ensure headers are exactly as in the template.`);
+          // Use the improved header detection
+          const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+          console.log("Raw Excel Data for Faculty Assignments:", rawData);
+          
+          // Find the actual header row
+          const expectedHeaders = ['Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Subject'];
+          const { headerRowIndex, headers } = findDataHeaders(rawData, expectedHeaders);
+          
+          // Get data rows starting after the header row
+          const dataRows = rawData.slice(headerRowIndex + 1);
+          console.log("Data rows for Faculty Assignments:", dataRows);
+          
+          if (dataRows.length === 0) {
+            setFacultyError('No data rows found after headers');
             return;
           }
 
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-          jsonData.shift();
-
-          if (jsonData.length === 0) {
-            setFacultyError('The Excel file contains only headers or is empty after header parsing.');
-            return;
-          }
-
-          const assignmentsToPreview = jsonData.map(row => ({
-            facultySchoolID: String(row[actualHeaders.indexOf('Faculty School ID')] || '').trim(),
-            facultyName: String(row[actualHeaders.indexOf('Faculty Name')] || '').trim(),
-            trackName: String(row[actualHeaders.indexOf('Track Name')] || '').trim(),
-            strandName: String(row[actualHeaders.indexOf('Strand Name')] || '').trim(),
-            sectionName: String(row[actualHeaders.indexOf('Section Name')] || '').trim(),
-            gradeLevel: String(row[actualHeaders.indexOf('Grade Level')] || '').trim(),
-            subjectName: String(row[actualHeaders.indexOf('Subject')] || '').trim(),
-          }));
+          // Map data rows to objects using the found headers
+          console.log('Headers found:', headers);
+          console.log('Data rows to process:', dataRows);
+          
+          const assignmentsToPreview = dataRows.map((row, index) => {
+            console.log(`Processing row ${index}:`, row);
+            const assignmentObj = {};
+            headers.forEach((header, headerIndex) => {
+              const key = String(header).trim();
+              const value = String(row[headerIndex] || '').trim();
+              assignmentObj[key] = value;
+            });
+            return {
+              facultySchoolID: assignmentObj['Faculty School ID'] || '',
+              facultyName: assignmentObj['Faculty Name'] || '',
+              trackName: assignmentObj['Track Name'] || '',
+              strandName: assignmentObj['Strand Name'] || '',
+              sectionName: assignmentObj['Section Name'] || '',
+              gradeLevel: assignmentObj['Grade Level'] || '',
+              subjectName: assignmentObj['Subject'] || '',
+            };
+          });
 
           const validationResults = await validateFacultyAssignments(assignmentsToPreview);
 
@@ -3972,8 +4163,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             gradeLevel: assignment.gradeLevel,
             subjectName: assignment.subjectName,
             termId: termDetails._id,
-            schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName,
             quarterName: quarterData ? quarterData.quarterName : undefined
           })
         });
@@ -4017,42 +4206,145 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       setIsFacultyAssignmentUploading(false);
     }
   };
+  // Helper function to find actual data headers in Excel files
+  const findDataHeaders = (rawData, expectedHeaders) => {
+    console.log('Searching for headers in raw data:', rawData);
+    console.log('Expected headers:', expectedHeaders);
+    
+    // Look for a row that contains most of the expected headers
+    for (let i = 0; i < rawData.length; i++) {
+      const row = rawData[i];
+      if (!row || row.length === 0) {
+        console.log(`Row ${i} is empty, skipping`);
+        continue;
+      }
+      
+      // Convert row to lowercase strings for comparison
+      const rowStrings = row.map(cell => String(cell || '').toLowerCase().trim());
+      console.log(`Row ${i} strings:`, rowStrings);
+      
+      // Skip rows that are mostly empty or contain only whitespace
+      const nonEmptyCells = rowStrings.filter(cell => cell.length > 0);
+      if (nonEmptyCells.length < 2) {
+        console.log(`Row ${i} has too few non-empty cells (${nonEmptyCells.length}), skipping`);
+        continue;
+      }
+      
+      // Check how many expected headers are found in this row
+      let matchCount = 0;
+      const matches = [];
+      for (const expectedHeader of expectedHeaders) {
+        const normalizedExpected = expectedHeader.toLowerCase().trim();
+        const found = rowStrings.some(cell => {
+          // More strict matching - cell must contain the expected header
+          const match = cell === normalizedExpected || 
+                       (cell.length > 0 && normalizedExpected.length > 0 && 
+                        (cell.includes(normalizedExpected) || normalizedExpected.includes(cell)));
+          if (match) {
+            matches.push(`${expectedHeader} -> ${cell}`);
+          }
+          return match;
+        });
+        if (found) matchCount++;
+      }
+      
+      console.log(`Row ${i} match count: ${matchCount}/${expectedHeaders.length}, matches:`, matches);
+      
+      // If we find at least 70% of expected headers AND the row has substantial content, this is likely the header row
+      if (matchCount >= Math.ceil(expectedHeaders.length * 0.7) && nonEmptyCells.length >= expectedHeaders.length * 0.5) {
+        console.log(`Found header row at index ${i}:`, row);
+        return { headerRowIndex: i, headers: row };
+      }
+    }
+    
+    // If no suitable header row is found, try to find the first row with substantial content
+    console.log('No suitable header row found, looking for first substantial row...');
+    for (let i = 0; i < rawData.length; i++) {
+      const row = rawData[i];
+      if (!row || row.length === 0) continue;
+      
+      const nonEmptyCells = row.filter(cell => String(cell || '').trim().length > 0);
+      if (nonEmptyCells.length >= 2) {
+        console.log(`Using row ${i} as fallback header row:`, row);
+        return { headerRowIndex: i, headers: row };
+      }
+    }
+    
+    // If no good match found, return the first row as fallback
+    console.warn('No suitable header row found, using first row as fallback');
+    return { headerRowIndex: 0, headers: rawData[0] || [] };
+  };
+
   // Download Student Assignment Template
   const downloadStudentAssignmentTemplate = async () => {
     try {
       const wb = XLSX.utils.book_new();
 
-      // Sheet 1: Template for adding new student assignments (San Juan Enrollment System Format)
+      // Sheet 1: Template for adding new student assignments with complete school details
       const templateWs = XLSX.utils.aoa_to_sheet([
-        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade'], // San Juan enrollment system format
-        [7180, '10/3/2024', '22-12345', 'Dela Cruz', 'Juan', 'STEM', 'STEM1', 'Grade 11'], // Sample data
-        [7179, '10/3/2024', '22-12346', 'Santos', 'Maria', 'STEM', 'STEM1', 'Grade 11'], // Sample data
-        [7178, '10/3/2024', '22-12347', 'Garcia', 'John', 'STEM', 'STEM1', 'Grade 11'], // Sample data
-        [7177, '10/3/2024', '22-12348', 'Rodriguez', 'Ana', 'STEM', 'STEM1', 'Grade 11'], // Sample data
-        [7176, '10/3/2024', '22-12349', 'Martinez', 'Carlos', 'STEM', 'STEM1', 'Grade 11'], // Sample data
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['ENROLLED STUDENTS MANAGEMENT'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
+        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade'], // Updated format
       ]);
+      
+      // Set column widths
+      templateWs['!cols'] = [
+        { wch: 15 }, // enrollment_no
+        { wch: 12 }, // date
+        { wch: 15 }, // student_no
+        { wch: 20 }, // last_name
+        { wch: 20 }, // first_name
+        { wch: 25 }, // strand
+        { wch: 20 }, // section
+        { wch: 10 }  // grade
+      ];
+      
       XLSX.utils.book_append_sheet(wb, templateWs, 'Enrolled Students Template');
 
-      // Sheet 2: Current student assignments in the system
+      // Sheet 2: Current student assignments in the system with school details
       const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
       const currentStudentAssignmentsData = [
-        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade', 'status'], // Updated headers to match San Juan format
-        ...currentStudentAssignments.map((assignment, index) => [
-          assignment.enrollmentNo || (7180 - index), // Use enrollment number or generate sequential
-          assignment.enrollmentDate || '10/3/2024', // Use enrollment date or default
-          assignment.schoolID || '', // Use school ID
-          assignment.studentName ? assignment.studentName.split(' ').slice(-1)[0] : '', // Last name
-          assignment.studentName ? assignment.studentName.split(' ').slice(0, -1).join(' ') : '', // First name
-          assignment.strandName,
-          assignment.sectionName,
-          assignment.gradeLevel || '',
-          assignment.status
-        ])
+        // Complete school details header
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['CURRENT ENROLLED STUDENTS'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
+        // Student data headers
+        ['Student N.', 'Student ID', 'Enrollment No.', 'Enrollment Date', 'Last Name', 'First Name', 'Strand', 'Section', 'Grade', 'Status'],
+        // Student data rows
+        ...currentStudentAssignments.map((assignment, index) => {
+          const student = students.find(s => s._id === assignment.studentId);
+          const status = isStudentApproved(assignment) ? 'Active' : 'Pending Approval';
+          return [
+            `${assignment.lastname || ''} ${assignment.firstname || ''}`.trim() || 'Unknown',
+            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
+            assignment.enrollmentNo || 'N/A',
+            assignment.enrollmentDate || 'N/A',
+            assignment.lastname || '',
+            assignment.firstname || '',
+            assignment.strandName || 'N/A',
+            assignment.sectionName || 'N/A',
+            assignment.gradeLevel || 'N/A',
+            status
+          ];
+        })
       ];
 
       const currentStudentAssignmentsWs = XLSX.utils.aoa_to_sheet(currentStudentAssignmentsData);
       const saWscols = [
-        { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 10 }
+        { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 15 }
       ];
       currentStudentAssignmentsWs['!cols'] = saWscols;
       XLSX.utils.book_append_sheet(wb, currentStudentAssignmentsWs, 'Current Enrolled Students');
@@ -4142,7 +4434,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     }
   };
 
-  // Validate Student Assignments for Batch Upload
+  // Validate Enrolled Students for Batch Upload
   const validateStudentAssignments = async (assignmentsToValidate) => {
     const status = {};
     const uploadedAssignmentCombos = new Set(); // For duplicates within the uploaded file
@@ -4199,7 +4491,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         data.forEach(assign => {
           existingAssignmentsInSystem.add(`${assign.studentId}-${assign.trackName}-${assign.strandName}-${assign.sectionName}`);
         });
-        console.log("Existing Student Assignments in System:", existingAssignmentsInSystem);
+        console.log("Existing Enrolled Students in System:", existingAssignmentsInSystem);
       } else {
         console.error('Failed to fetch existing student assignments for validation.');
       }
@@ -4211,9 +4503,12 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     for (let i = 0; i < assignmentsToValidate.length; i++) {
       const assignment = assignmentsToValidate[i];
       console.log(`Validating assignment ${i + 1}:`, assignment);
-      // Handle both old and new format for backward compatibility
+      // Handle new format with separate first_name and last_name
       const studentSchoolIDInput = assignment['student_no']?.trim() || assignment['Student School ID']?.trim() || '';
-      const studentNameInput = (assignment['first_name']?.trim() || '') + ' ' + (assignment['last_name']?.trim() || '') || assignment['Student Name']?.trim() || '';
+      const firstNameInput = assignment['first_name']?.trim() || '';
+      const lastNameInput = assignment['last_name']?.trim() || '';
+      const enrollmentNoInput = assignment['enrollment_no']?.trim() || '';
+      const enrollmentDateInput = assignment['date']?.trim() || '';
       const gradeLevel = assignment['grade']?.trim() || assignment['Grade Level']?.trim() || '';
       const trackName = assignment['Track Name']?.trim() || ''; // Track name not in new format, will be derived from strand
       const strandName = assignment['strand']?.trim() || assignment['Strand Name']?.trim() || '';
@@ -4240,17 +4535,17 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         }
       }
 
-      console.log(`Extracted: Student School ID: "${studentSchoolIDInput}", Student Name: "${studentNameInput}", Grade Level: "${gradeLevel}", Track: "${derivedTrackName}", Strand: "${strandName}", Section: "${sectionName}"`);
+      console.log(`Extracted: Student School ID: "${studentSchoolIDInput}", First Name: "${firstNameInput}", Last Name: "${lastNameInput}", Grade Level: "${gradeLevel}", Track: "${derivedTrackName}", Strand: "${strandName}", Section: "${sectionName}"`);
 
       let isValid = true;
       let message = 'Valid';
       let studentId = ''; // To store the student ID for valid assignments
 
       // 1. Check for missing required fields
-      if (!studentSchoolIDInput || !studentNameInput || !gradeLevel || !derivedTrackName || !strandName || !sectionName) {
+      if (!studentSchoolIDInput || !firstNameInput || !lastNameInput || !gradeLevel || !derivedTrackName || !strandName || !sectionName) {
         isValid = false;
-        message = 'Missing Student School ID, Student Name, Grade Level, Track Name, Strand Name, or Section Name';
-        console.log(`Row ${i + 1}: Missing required fields - studentSchoolIDInput: "${studentSchoolIDInput}", studentNameInput: "${studentNameInput}", gradeLevel: "${gradeLevel}", trackName: "${derivedTrackName}", strandName: "${strandName}", sectionName: "${sectionName}"`);
+        message = 'Missing Student School ID, First Name, Last Name, Grade Level, Track Name, Strand Name, or Section Name';
+        console.log(`Row ${i + 1}: Missing required fields - studentSchoolIDInput: "${studentSchoolIDInput}", firstNameInput: "${firstNameInput}", lastNameInput: "${lastNameInput}", gradeLevel: "${gradeLevel}", trackName: "${derivedTrackName}", strandName: "${strandName}", sectionName: "${sectionName}"`);
         status[i] = { valid: isValid, message: message, studentId: studentId };
         console.log(`Row ${i + 1}: Final validation result - valid: ${isValid}, message: "${message}"`);
         continue; // Skip all other validations for this row
@@ -4282,9 +4577,9 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         if (studentFound) {
           // If student exists, verify that the name matches the school ID
           const expectedName = `${studentFound.firstname} ${studentFound.lastname}`.toLowerCase();
-          const providedName = studentNameInput.toLowerCase();
+          const providedName = `${firstNameInput} ${lastNameInput}`.toLowerCase();
           if (expectedName !== providedName) {
-            console.log(`Name mismatch for existing student - will create new entry for "${studentNameInput}"`);
+            console.log(`Name mismatch for existing student - will create new entry for "${firstNameInput} ${lastNameInput}"`);
             studentId = null; // Will be created as new student
           } else {
             studentId = studentFound._id;
@@ -4355,7 +4650,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     }
     return status;
   };
-  // Handle Excel File Upload for Student Assignments
+  // Handle Excel File Upload for Enrolled Students
   const handleStudentAssignmentExcelFile = async (e) => {
     setStudentExcelError('');
     const file = e.target.files[0];
@@ -4380,7 +4675,20 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         return;
       }
 
-      const actualHeaders = rawData[0].map(h => String(h).trim()); // Get actual headers and trim them
+      // Find the actual header row
+      const expectedHeaders = ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade'];
+      const { headerRowIndex, headers } = findDataHeaders(rawData, expectedHeaders);
+      
+      // Get data rows starting after the header row
+      const dataRows = rawData.slice(headerRowIndex + 1);
+      console.log("Data rows for Student Assignments:", dataRows);
+      
+      if (dataRows.length === 0) {
+        setStudentExcelError('No data rows found after headers');
+        return;
+      }
+
+      const actualHeaders = headers.map(h => String(h).trim()); // Get actual headers and trim them
       console.log("Actual Headers from Excel:", actualHeaders);
 
       // Define expected headers and create a mapping for flexible matching (San Juan format)
@@ -4411,7 +4719,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       }
       console.log("Header Mapping (Expected to Actual):", headerMapping);
 
-      const dataRows = rawData.slice(1); // Get data rows, skipping the header row
+      // dataRows already sliced above, just log it
       console.log("Data Rows (excluding header):", dataRows);
 
       if (dataRows.length === 0) {
@@ -4476,10 +4784,11 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
 
         // Handle new students (studentId is null for enrollment data)
         // For enrollment data, send student info directly to assignment endpoint (same as manual assignment)
-        const studentName = assignment['first_name'] && assignment['last_name'] 
-          ? `${assignment['first_name']} ${assignment['last_name']}` 
-          : assignment['Student Name'] || '';
+        const firstName = assignment['first_name'] || '';
+        const lastName = assignment['last_name'] || '';
         const studentSchoolID = assignment['student_no'] || assignment['Student School ID'] || '';
+        const enrollmentNo = assignment['enrollment_no'] || '';
+        const enrollmentDate = assignment['date'] || '';
 
         const res = await fetch(`${API_BASE}/api/student-assignments`, {
           method: 'POST',
@@ -4494,8 +4803,6 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
               strandName: assignment['strand'] || assignment['Strand Name'],
               sectionName: assignment['section'] || assignment['Section Name'],
               termId: termDetails._id,
-              schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName,
               quarterName: quarterData ? quarterData.quarterName : undefined
             };
             
@@ -4504,7 +4811,13 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
               return { ...basePayload, studentId: studentId };
             } else {
               // New student - send student info directly (same as manual assignment)
-              const payload = { ...basePayload, studentName: studentName };
+              const payload = { 
+                ...basePayload, 
+                firstName: firstName,
+                lastName: lastName,
+                enrollmentNo: enrollmentNo,
+                enrollmentDate: enrollmentDate
+              };
               if (studentSchoolID) {
                 payload.studentSchoolID = studentSchoolID;
               }
@@ -4518,13 +4831,13 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           createdAssignments.push(newAssignment);
         } else {
           const data = await res.json();
-          throw new Error(data.message || `Failed to create assignment for ${assignment['Student Name']}`);
+          throw new Error(data.message || `Failed to create assignment for ${firstName} ${lastName}`);
         }
       }
 
       // Refresh the student assignments list after successful upload
       fetchStudentAssignments();
-      // Audit log: Batch Upload Student Assignments
+      // Audit log: Batch Upload Enrolled Students
       try {
         fetch(`${API_BASE}/audit-log`, {
           method: 'POST',
@@ -4533,8 +4846,8 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
-            action: 'Batch Upload Student Assignments',
-            details: `Uploaded ${createdAssignments.length} Student Assignments for ${termDetails.schoolYear} ${termDetails.termName}`,
+            action: 'Batch Upload Enrolled Students',
+            details: `Uploaded ${createdAssignments.length} Enrolled Students for ${termDetails.schoolYear} ${termDetails.termName}`,
             userRole: 'admin'
           })
         }).catch(() => {});
@@ -4813,16 +5126,43 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
   const downloadSubjectTemplate = async () => {
     try {
       const wb = XLSX.utils.book_new();
-      // Sheet 1: Template for adding new subjects
+      
+      // Sheet 1: Template for adding new subjects with complete school details
       const templateWs = XLSX.utils.aoa_to_sheet([
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['ACADEMIC SUBJECTS MANAGEMENT'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
         ['Track Name', 'Strand Name', 'Grade Level', 'Subject Name'],
       ]);
+      
+      // Set column widths
+      templateWs['!cols'] = [
+        { wch: 20 }, // Track Name
+        { wch: 25 }, // Strand Name
+        { wch: 15 }, // Grade Level
+        { wch: 25 }  // Subject Name
+      ];
+      
       XLSX.utils.book_append_sheet(wb, templateWs, 'Add New Subjects');
-      // Sheet 2: Current subjects
+      // Sheet 2: Current subjects with complete school details
       const currentSubjectsData = [
-        ['Object ID', 'Track Name', 'Strand Name', 'Grade Level', 'Subject Name', 'Status'],
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
+        [''], // Empty row
+        ['CURRENT ACADEMIC SUBJECTS'],
+        [`Generated on: ${new Date().toLocaleDateString()}`],
+        [`Academic Year: ${termDetails.schoolYear}`],
+        [`Term: ${termDetails.termName}`],
+        [''], // Empty row
+        ['Track Name', 'Strand Name', 'Grade Level', 'Subject Name', 'Status'],
         ...subjects.map(subject => [
-          subject._id,
           subject.trackName,
           subject.strandName,
           subject.gradeLevel,
@@ -4833,7 +5173,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
 
       const currentSubjectsWs = XLSX.utils.aoa_to_sheet(currentSubjectsData);
       currentSubjectsWs['!cols'] = [
-        { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 10 }
+        { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 10 }
       ];
       XLSX.utils.book_append_sheet(wb, currentSubjectsWs, 'Current Subjects');
 
@@ -4953,17 +5293,43 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           const data = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: 'array' });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          if (jsonData.length === 0) {
-            setSubjectExcelError('The Excel file is empty');
+          
+          // Get raw data to find actual headers
+          const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+          console.log("Raw Excel Data for Subjects:", rawData);
+          
+          // Find the actual header row
+          const expectedHeaders = ['Track Name', 'Strand Name', 'Grade Level', 'Subject Name'];
+          const { headerRowIndex, headers } = findDataHeaders(rawData, expectedHeaders);
+          
+          // Get data rows starting after the header row
+          const dataRows = rawData.slice(headerRowIndex + 1);
+          console.log("Data rows for Subjects:", dataRows);
+          
+          if (dataRows.length === 0) {
+            setSubjectExcelError('No data rows found after headers');
             return;
           }
-          const subjectsToPreview = jsonData.map(row => ({
-            trackName: row['Track Name']?.trim() || '',
-            strandName: row['Strand Name']?.trim() || '',
-            gradeLevel: row['Grade Level']?.trim() || '',
-            subjectName: row['Subject Name']?.trim() || ''
-          }));
+
+          // Map data rows to objects using the found headers
+          const subjectsToPreview = dataRows.map(row => {
+            const subjectObj = {};
+            headers.forEach((header, index) => {
+              const key = String(header).trim();
+              subjectObj[key] = String(row[index] || '').trim();
+            });
+            return {
+              trackName: subjectObj['Track Name'] || '',
+              strandName: subjectObj['Strand Name'] || '',
+              gradeLevel: subjectObj['Grade Level'] || '',
+              subjectName: subjectObj['Subject Name'] || ''
+            };
+          }).filter(subject => subject.trackName && subject.strandName && subject.subjectName); // Only include subjects with required fields
+
+          if (subjectsToPreview.length === 0) {
+            setSubjectExcelError('No valid subject data found');
+            return;
+          }
           const validationResults = await validateSubjectsBatch(subjectsToPreview);
           setSubjectPreviewData(subjectsToPreview);
           setSubjectValidationStatus(validationResults);
@@ -5003,8 +5369,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           body: JSON.stringify({
             ...subject,
             schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName,
-            quarterName: quarterData ? quarterData.quarterName : undefined
+            termName: termDetails.termName
           })
         });
         if (res.ok) {
@@ -5049,9 +5414,8 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       const wb = XLSX.utils.book_new();
       const activeTracks = tracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
       const tracksData = [
-        ['Object ID', 'Track Name', 'Status'],
+        ['Track Name', 'Status'],
         ...activeTracks.map(track => [
-          track._id,
           track.trackName,
           track.status
         ])
@@ -5091,9 +5455,8 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         s.termName === termDetails.termName
       );
       const strandsData = [
-        ['Object ID', 'Track Name', 'Strand Name', 'Status'],
+        ['Track Name', 'Strand Name', 'Status'],
         ...currentStrands.map(strand => [
-          strand._id,
           strand.trackName,
           strand.strandName,
           strand.status
@@ -5129,9 +5492,8 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       const wb = XLSX.utils.book_new();
       const activeSections = sections.filter(sec => sec.status === 'active' && tracks.find(t => t.trackName === sec.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active'));
       const sectionsData = [
-        ['Object ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status'],
+        ['Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status'],
         ...activeSections.map(section => [
-          section._id,
           section.trackName,
           section.strandName,
           section.sectionName,
@@ -5168,9 +5530,8 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       const wb = XLSX.utils.book_new();
       const activeSubjects = subjects.filter(sub => sub.status === 'active' && sub.schoolYear === termDetails.schoolYear && sub.termName === termDetails.termName);
       const subjectsData = [
-        ['Object ID', 'Track Name', 'Strand Name', 'Grade Level', 'Subject Name', 'Status'],
+        ['Track Name', 'Strand Name', 'Grade Level', 'Subject Name', 'Status'],
         ...activeSubjects.map(subject => [
-          subject._id,
           subject.trackName,
           subject.strandName,
           subject.gradeLevel,
@@ -5280,7 +5641,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           },
           body: JSON.stringify({
             action: 'Extract Student',
-            details: `Extracted Student Assignments for ${termDetails.schoolYear} ${termDetails.termName}`,
+            details: `Extracted Enrolled Students for ${termDetails.schoolYear} ${termDetails.termName}`,
             userRole: 'admin'
           })
         }).catch(() => {});
@@ -5325,52 +5686,80 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
             'Sections',
             'Subjects',
             'Faculty Assignments',
-            'Student Assignments'
+            'Enrolled Students'
           ];
 
           for (const sheetName of sheetNames) {
             if (workbook.Sheets[sheetName]) {
-              const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
-              if (sheetData.length > 1) { // Skip header row
-                const headers = sheetData[0];
-                const rows = sheetData.slice(1);
-
-                const normalizedRows = rows.map(row => {
-                  const obj = {};
-                  headers.forEach((header, index) => {
-                    const key = String(header).trim();
-                    obj[key] = String(row[index] || '').trim();
+              const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, raw: true });
+              
+              // Find the actual header row for each sheet
+              let expectedHeaders = [];
+              switch (sheetName) {
+                case 'Tracks':
+                  expectedHeaders = ['Track Name', 'School Year', 'Term Name', 'Status'];
+                  break;
+                case 'Strands':
+                  expectedHeaders = ['Track Name', 'Strand Name', 'Status'];
+                  break;
+                case 'Sections':
+                  expectedHeaders = ['Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status'];
+                  break;
+                case 'Subjects':
+                  expectedHeaders = ['Track Name', 'Strand Name', 'Grade Level', 'Subject Name', 'Status'];
+                  break;
+                case 'Faculty Assignments':
+                  expectedHeaders = ['Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Grade Level', 'Section Name', 'Subject', 'Status'];
+                  break;
+                case 'Enrolled Students':
+                  expectedHeaders = ['Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'];
+                  break;
+                default:
+                  expectedHeaders = [];
+              }
+              
+              if (expectedHeaders.length > 0) {
+                const { headerRowIndex, headers } = findDataHeaders(sheetData, expectedHeaders);
+                const rows = sheetData.slice(headerRowIndex + 1);
+                
+                if (rows.length > 0) {
+                  const normalizedRows = rows.map(row => {
+                    const obj = {};
+                    headers.forEach((header, index) => {
+                      const key = String(header).trim();
+                      obj[key] = String(row[index] || '').trim();
+                    });
+                    return obj;
                   });
-                  return obj;
-                });
 
-                if (sheetName === 'Tracks') {
-                  parsedData.tracks = normalizedRows.map(row => ({ trackName: row['Track Name'] }));
-                } else if (sheetName === 'Strands') {
-                  parsedData.strands = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'] }));
-                } else if (sheetName === 'Sections') {
-                  parsedData.sections = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], sectionName: row['Section Name'], gradeLevel: row['Grade Level'] }));
-                } else if (sheetName === 'Subjects') {
-                  parsedData.subjects = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], gradeLevel: row['Grade Level'], subjectName: row['Subject Name'] }));
-                } else if (sheetName === 'Faculty Assignments') {
-                  parsedData.facultyAssignments = normalizedRows.map(row => ({
-                    facultySchoolID: row['Faculty School ID'] || row['Faculty Sc'] || row['Faculty ID'],
-                    facultyName: row['Faculty Name'] || row['Faculty Na'] || row['Faculty'],
-                    trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
-                    strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
-                    sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
-                    gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
-                    subjectName: row['Subject'] || row['Subject Nam'] || row['Subject Name'],
-                  }));
-                } else if (sheetName === 'Student Assignments') {
-                  parsedData.studentAssignments = normalizedRows.map(row => ({
-                    studentSchoolID: row['Student School ID'] || row['Student Sc'] || row['Student ID'],
-                    studentName: row['Student Name'] || row['Student Nam'] || row['Student'],
-                    gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
-                    trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
-                    strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
-                    sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
-                  }));
+                  if (sheetName === 'Tracks') {
+                    parsedData.tracks = normalizedRows.map(row => ({ trackName: row['Track Name'] }));
+                  } else if (sheetName === 'Strands') {
+                    parsedData.strands = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'] }));
+                  } else if (sheetName === 'Sections') {
+                    parsedData.sections = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], sectionName: row['Section Name'], gradeLevel: row['Grade Level'] }));
+                  } else if (sheetName === 'Subjects') {
+                    parsedData.subjects = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], gradeLevel: row['Grade Level'], subjectName: row['Subject Name'] }));
+                  } else if (sheetName === 'Faculty Assignments') {
+                    parsedData.facultyAssignments = normalizedRows.map(row => ({
+                      facultySchoolID: row['Faculty School ID'] || row['Faculty Sc'] || row['Faculty ID'],
+                      facultyName: row['Faculty Name'] || row['Faculty Na'] || row['Faculty'],
+                      trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
+                      strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
+                      sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
+                      gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
+                      subjectName: row['Subject'] || row['Subject Nam'] || row['Subject Name'],
+                    }));
+                  } else if (sheetName === 'Enrolled Students') {
+                    parsedData.studentAssignments = normalizedRows.map(row => ({
+                      studentSchoolID: row['Student School ID'] || row['Student Sc'] || row['Student ID'],
+                      studentName: row['Student Name'] || row['Student Nam'] || row['Student'],
+                      gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
+                      trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
+                      strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
+                      sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
+                    }));
+                  }
                 }
               }
             }
@@ -5732,8 +6121,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
               sectionName: assignment.sectionName,
               gradeLevel: assignment.gradeLevel,
               subjectName: assignment.subjectName,
-              termId: termDetails._id,
-              quarterName: quarterData ? quarterData.quarterName : undefined
+              termId: termDetails._id
             })
           });
 
@@ -5799,16 +6187,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${localStorage.getItem('token')}`
             },
-            body: JSON.stringify({
-              studentId: student._id,
-              studentName: assignment.studentName,
-              trackName: assignment.trackName,
-              strandName: assignment.strandName,
-              sectionName: assignment.sectionName,
-              gradeLevel: assignment.gradeLevel,
-              termId: termDetails._id,
-              quarterName: quarterData ? quarterData.quarterName : undefined
-            })
+            body: JSON.stringify(payload)
           });
 
           if (res.ok) {
@@ -5922,43 +6301,23 @@ Validation issues (${skippedCount} items):
     return studentAssignments.filter(sa => sa.termId === termDetails._id).length;
   }
 
-  // Helper functions for quarter-filtered counts
-  function getFilteredFacultyCount(termDetails, filteredFacultyAssignments) {
-    if (!termDetails) return 0;
-    return filteredFacultyAssignments.length;
-  }
-
-  function getFilteredStudentCount(termDetails, filteredStudentAssignments) {
-    if (!termDetails) return 0;
-    return filteredStudentAssignments.length;
-  }
-
   // Place after all useState/useEffect, before return
   const filteredTracks = tracks.filter(t => {
     const matchesTerm = t.schoolYear === termDetails?.schoolYear && t.termName === termDetails?.termName;
-    // If quarterData is available, also filter by quarter
-    if (quarterData && quarterData.quarterName) {
-      return matchesTerm && t.quarterName === quarterData.quarterName;
-    }
+    // Entities should be visible across all quarters within the same term
     return matchesTerm;
   });
   
   const filteredSubjects = subjects.filter(s => {
     const matchesTerm = s.schoolYear === termDetails?.schoolYear && s.termName === termDetails?.termName;
-    // If quarterData is available, also filter by quarter
-    if (quarterData && quarterData.quarterName) {
-      return matchesTerm && s.quarterName === quarterData.quarterName;
-    }
+    // Entities should be visible across all quarters within the same term
     return matchesTerm;
   });
 
   // Before rendering the strands table, filter out duplicate strands by _id
   const filteredStrands = strands.filter(strand => {
     const matchesTerm = strand.schoolYear === termDetails.schoolYear && strand.termName === termDetails.termName;
-    // If quarterData is available, also filter by quarter
-    if (quarterData && quarterData.quarterName) {
-      return matchesTerm && strand.quarterName === quarterData.quarterName;
-    }
+    // Entities should be visible across all quarters within the same term
     return matchesTerm;
   });
 
@@ -5967,87 +6326,267 @@ Validation issues (${skippedCount} items):
       index === self.findIndex((s) => s._id === strand._id)
   );
 
-  // Filter sections by quarter as well
+  // Filter sections by term only - entities should be visible across all quarters within the same term
   const filteredSections = sections.filter(section => {
     const matchesTerm = section.schoolYear === termDetails?.schoolYear && section.termName === termDetails?.termName;
-    // If quarterData is available, also filter by quarter
-    if (quarterData && quarterData.quarterName) {
-      return matchesTerm && section.quarterName === quarterData.quarterName;
-    }
+    // Entities should be visible across all quarters within the same term
     return matchesTerm;
-  });
-
-  // Debug logging for term and quarter data
-  console.log('Current Term Details:', {
-    termId: termDetails?._id,
-    schoolYear: termDetails?.schoolYear,
-    termName: termDetails?.termName,
-    status: termDetails?.status
-  });
-  console.log('Current Quarter Data:', quarterData);
-  console.log('Faculty Assignments Raw:', facultyAssignments);
-  console.log('Student Assignments Raw:', studentAssignments);
-
-  // Filter faculty assignments by quarter and status
-  const filteredFacultyAssignments = facultyAssignments.filter(assignment => {
-    const matchesTerm = assignment.termId === termDetails?._id;
-    const matchesStatus = assignment.status === 'active'; // Only show active assignments
-    
-    // Debug logging
-    console.log('Faculty Assignment Filter Debug:', {
-      assignmentId: assignment._id,
-      assignmentTermId: assignment.termId,
-      currentTermId: termDetails?._id,
-      matchesTerm,
-      assignmentStatus: assignment.status,
-      matchesStatus,
-      assignmentQuarterName: assignment.quarterName,
-      currentQuarterName: quarterData?.quarterName,
-      facultyName: assignment.facultyName
-    });
-    
-    // Temporarily disable quarter filtering to debug
-    // If quarterData is available, also filter by quarter
-    // if (quarterData && quarterData.quarterName) {
-    //   const matchesQuarter = assignment.quarterName === quarterData.quarterName;
-    //   console.log('Quarter match:', matchesQuarter);
-    //   return matchesTerm && matchesStatus && matchesQuarter;
-    // }
-    return matchesTerm && matchesStatus;
-  });
-
-  // Filter student assignments by quarter and status
-  const filteredStudentAssignments = studentAssignments.filter(assignment => {
-    const matchesTerm = assignment.termId === termDetails?._id;
-    const matchesStatus = assignment.status === 'active'; // Only show active assignments
-    
-    // Debug logging
-    console.log('Student Assignment Filter Debug:', {
-      assignmentId: assignment._id,
-      assignmentTermId: assignment.termId,
-      currentTermId: termDetails?._id,
-      matchesTerm,
-      assignmentStatus: assignment.status,
-      matchesStatus,
-      assignmentQuarterName: assignment.quarterName,
-      currentQuarterName: quarterData?.quarterName,
-      studentName: assignment.studentName
-    });
-    
-    // Temporarily disable quarter filtering to debug
-    // If quarterData is available, also filter by quarter
-    // if (quarterData && quarterData.quarterName) {
-    //   const matchesQuarter = assignment.quarterName === quarterData.quarterName;
-    //   console.log('Quarter match:', matchesQuarter);
-    //   return matchesTerm && matchesStatus && matchesQuarter;
-    // }
-    return matchesTerm && matchesStatus;
   });
 
   // Update: Enforce absolute uniqueness for strand names
   const uniqueStrandNames = Array.from(
     new Set(filteredStrands.map(strand => strand.strandName))
   );
+
+  // Filtered student assignments based on filters
+  const filteredStudentAssignments = studentAssignments.filter(assignment => {
+    // If term is archived, show all assignments but they will display as archived
+    if (termDetails.status === 'archived') {
+      // Filter by section
+      if (studentSectionFilter && assignment.sectionName !== studentSectionFilter) {
+        return false;
+      }
+      
+      // Filter by search term
+      if (studentSearchFilter) {
+        const searchTerm = studentSearchFilter.toLowerCase();
+        const student = students.find(s => s._id === assignment.studentId);
+        const schoolId = student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '';
+        const studentName = assignment.studentName || 'Unknown';
+        
+        if (!schoolId.toLowerCase().includes(searchTerm) && 
+            !studentName.toLowerCase().includes(searchTerm)) {
+          return false;
+        }
+      }
+      
+      return true;
+    }
+    
+    // For active terms, use original filtering logic
+    // Filter by section
+    if (studentSectionFilter && assignment.sectionName !== studentSectionFilter) {
+      return false;
+    }
+    
+    // Filter by status
+    if (studentStatusFilter) {
+      if (studentStatusFilter === 'active' && !isStudentApproved(assignment)) {
+        return false;
+      }
+      if (studentStatusFilter === 'pending' && isStudentApproved(assignment)) {
+        return false;
+      }
+      if (studentStatusFilter === 'archived' && assignment.status !== 'archived') {
+        return false;
+      }
+    }
+    
+    // Filter by search term
+    if (studentSearchFilter) {
+      const searchTerm = studentSearchFilter.toLowerCase();
+      const student = students.find(s => s._id === assignment.studentId);
+      const schoolId = student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '';
+      const studentName = assignment.studentName || 'Unknown';
+      
+      if (!schoolId.toLowerCase().includes(searchTerm) && 
+          !studentName.toLowerCase().includes(searchTerm)) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+
+  // Filtered faculty assignments based on filters
+  const filteredFacultyAssignments = facultyAssignments.filter(assignment => {
+    // If term is archived, show all assignments but they will display as archived
+    if (termDetails.status === 'archived') {
+      // Filter by section
+      if (facultySectionFilter && assignment.sectionName !== facultySectionFilter) {
+        return false;
+      }
+      
+      // Filter by search term
+      if (facultySearchFilter) {
+        const searchTerm = facultySearchFilter.toLowerCase();
+        const facultyName = assignment.facultyName?.toLowerCase() || '';
+        const schoolId = (assignment.facultySchoolID || '').toLowerCase();
+        const trackName = assignment.trackName?.toLowerCase() || '';
+        const strandName = assignment.strandName?.toLowerCase() || '';
+        const sectionName = assignment.sectionName?.toLowerCase() || '';
+        const subjectName = assignment.subjectName?.toLowerCase() || '';
+        
+        if (!facultyName.includes(searchTerm) && 
+            !schoolId.includes(searchTerm) && 
+            !trackName.includes(searchTerm) && 
+            !strandName.includes(searchTerm) && 
+            !sectionName.includes(searchTerm) &&
+            !subjectName.includes(searchTerm)) {
+          return false;
+        }
+      }
+      
+      return true;
+    }
+    
+    // For active terms, use original filtering logic
+    // Filter by section
+    if (facultySectionFilter && assignment.sectionName !== facultySectionFilter) {
+      return false;
+    }
+    
+    // Filter by status
+    if (facultyStatusFilter) {
+      if (facultyStatusFilter === 'active' && assignment.status !== 'active') {
+        return false;
+      }
+      if (facultyStatusFilter === 'archived' && assignment.status !== 'archived') {
+        return false;
+      }
+    }
+    
+    // Filter by search term
+    if (facultySearchFilter) {
+      const searchTerm = facultySearchFilter.toLowerCase();
+      const facultyName = assignment.facultyName?.toLowerCase() || '';
+      const schoolId = (assignment.facultySchoolID || '').toLowerCase();
+      const trackName = assignment.trackName?.toLowerCase() || '';
+      const strandName = assignment.strandName?.toLowerCase() || '';
+      const sectionName = assignment.sectionName?.toLowerCase() || '';
+      const subjectName = assignment.subjectName?.toLowerCase() || '';
+      
+      if (!facultyName.includes(searchTerm) && 
+          !schoolId.includes(searchTerm) && 
+          !trackName.includes(searchTerm) && 
+          !strandName.includes(searchTerm) && 
+          !sectionName.includes(searchTerm) &&
+          !subjectName.includes(searchTerm)) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+
+  // Export student assignments to Excel with Breakdown of Grades format
+  const handleExportStudentAssignments = async () => {
+    try {
+      // Export all students (active and pending)
+      const allStudents = filteredStudentAssignments.filter(assignment => 
+        assignment.status === 'active' // Only include non-archived students
+      );
+
+      if (allStudents.length === 0) {
+        alert('No students found to export.');
+        return;
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+
+      // Create the main classlist sheet in "Breakdown of Grades" format
+      const classlistData = [
+        // Header information
+        ['San Juan De Dios Educational Foundation Inc.'],
+        ['Breakdown of Students'],
+        [`${new Date().toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        })}`],
+        [],
+        // Class information
+        ['Name of Subject:', 'Enrolled Students'],
+        ['Faculty Name:', 'System Administrator'],
+        ['Grade:', 'All Grades'],
+        ['Section:', 'All Sections'],
+        ['Strand:', 'All Strands'],
+        [],
+        // Student data headers
+        ['Student N.', 'Student ID', 'Enrollment No.', 'Enrollment Date', 'Last Name', 'First Name', 'Strand', 'Section', 'Grade', 'Status'],
+        // Student data rows
+        ...allStudents.map(assignment => {
+          const student = students.find(s => s._id === assignment.studentId);
+          const status = isStudentApproved(assignment) ? 'Active' : 'Pending Approval';
+          return [
+            `${assignment.lastname || ''} ${assignment.firstname || ''}`.trim() || 'Unknown',
+            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
+            assignment.enrollmentNo || 'N/A',
+            assignment.enrollmentDate || 'N/A',
+            assignment.lastname || '',
+            assignment.firstname || '',
+            assignment.strandName || 'N/A',
+            assignment.sectionName || 'N/A',
+            assignment.gradeLevel || 'N/A',
+            status
+          ];
+        }),
+        [],
+        [`Generated on ${new Date().toLocaleString('en-US', { 
+          month: 'numeric', 
+          day: 'numeric', 
+          year: 'numeric', 
+          hour: 'numeric', 
+          minute: '2-digit', 
+          second: '2-digit', 
+          hour12: true 
+        })}`],
+        ['San Juan De Dios Educational Foundation Inc.']
+      ];
+
+      const classlistWs = XLSX.utils.aoa_to_sheet(classlistData);
+      XLSX.utils.book_append_sheet(wb, classlistWs, 'Student Classlist');
+
+      // Generate filename
+      const fileName = `${termDetails?.schoolYear} - ${termDetails?.termName}${quarterData ? ` - ${quarterData.quarterName}` : ''} - Student Classlist.xlsx`;
+
+      // Save file
+      XLSX.writeFile(wb, fileName);
+    } catch (error) {
+      console.error('Error exporting student assignments:', error);
+      alert('Error exporting student assignments. Please try again.');
+    }
+  };
+
+  // Export classlist only (Strand, Section, Grade format)
+  const handleExportClasslist = async () => {
+    try {
+      // Export all students (active and pending)
+      const allStudents = filteredStudentAssignments.filter(assignment => 
+        assignment.status === 'active' // Only include non-archived students
+      );
+
+      if (allStudents.length === 0) {
+        alert('No students found to export.');
+        return;
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+
+      // Classlist Format (Strand, Section, Grade) - exactly like your example
+      const classlistData = allStudents.map(assignment => ({
+        'Strand': assignment.strandName || 'N/A',
+        'Section': assignment.sectionName || 'N/A', 
+        'Grade': assignment.gradeLevel || 'N/A'
+      }));
+
+      const classlistWs = XLSX.utils.json_to_sheet(classlistData);
+      XLSX.utils.book_append_sheet(wb, classlistWs, 'Classlist');
+
+      // Generate filename
+      const fileName = `${termDetails?.schoolYear} - ${termDetails?.termName}${quarterData ? ` - ${quarterData.quarterName}` : ''} - Classlist.xlsx`;
+
+      // Save file
+      XLSX.writeFile(wb, fileName);
+    } catch (error) {
+      console.error('Error exporting classlist:', error);
+      alert('Error exporting classlist. Please try again.');
+    }
+  };
+
   return (
     
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -6121,7 +6660,7 @@ Validation issues (${skippedCount} items):
                           ["2772-2774 Roxas Boulevard, Pasay City 1300 Philippines"],
                           ["PAASCU Accredited - COLLEGE"],
                           [""], // Empty row
-                          [`${sheetName.toUpperCase()} REPORT`],
+                          [`${sheetName.toUpperCase()} DETAILS`],
                           [`Generated on: ${new Date().toLocaleDateString()}`],
                           [`Academic Year: ${termDetails.schoolYear}`],
                           [`Term: ${termDetails.termName}`],
@@ -6156,9 +6695,8 @@ Validation issues (${skippedCount} items):
                       // Extract Tracks
                       const activeTracks = tracks.filter(t => t.status === 'active' && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName);
                       const tracksData = [
-                        ['Object ID', 'Track Name', 'School Year', 'Term Name', 'Status'],
+                        ['Track Name', 'School Year', 'Term Name', 'Status'],
                         ...activeTracks.map(track => [
-                          track._id,
                           track.trackName,
                           track.schoolYear,
                           track.termName,
@@ -6172,9 +6710,8 @@ Validation issues (${skippedCount} items):
                       // Extract Strands
                       const activeStrands = strands.filter(s => s.status === 'active' && tracks.find(t => t.trackName === s.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active'));
                       const strandsData = [
-                        ['Object ID', 'Track Name', 'Strand Name', 'Status'],
+                        ['Track Name', 'Strand Name', 'Status'],
                         ...activeStrands.map(strand => [
-                          strand._id,
                           strand.trackName,
                           strand.strandName,
                           strand.status
@@ -6187,9 +6724,8 @@ Validation issues (${skippedCount} items):
                       // Extract Sections
                       const activeSections = sections.filter(sec => sec.status === 'active' && tracks.find(t => t.trackName === sec.trackName && t.schoolYear === termDetails.schoolYear && t.termName === termDetails.termName && t.status === 'active'));
                       const sectionsData = [
-                        ['Object ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status'],
+                        ['Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status'],
                         ...activeSections.map(section => [
-                          section._id,
                           section.trackName,
                           section.strandName,
                           section.sectionName,
@@ -6204,9 +6740,8 @@ Validation issues (${skippedCount} items):
                       // Extract Subjects
                       const activeSubjects = subjects.filter(sub => sub.status === 'active' && sub.schoolYear === termDetails.schoolYear && sub.termName === termDetails.termName);
                       const subjectsData = [
-                        ['Object ID', 'Track Name', 'Strand Name', 'Grade Level', 'Subject Name', 'Status'],
+                        ['Track Name', 'Strand Name', 'Grade Level', 'Subject Name', 'Status'],
                         ...activeSubjects.map(subject => [
-                          subject._id,
                           subject.trackName,
                           subject.strandName,
                           subject.gradeLevel,
@@ -6221,9 +6756,8 @@ Validation issues (${skippedCount} items):
                       // Extract Faculty Assignments
                       const currentFacultyAssignments = facultyAssignments.filter(fa => fa.status === 'active');
                       const facultyAssignmentData = [
-                        ['Object ID', 'Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Grade Level', 'Section Name', 'Subject', 'Status'],
+                        ['Faculty School ID', 'Faculty Name', 'Track Name', 'Strand Name', 'Grade Level', 'Section Name', 'Subject', 'Status'],
                         ...currentFacultyAssignments.map(assignment => [
-                          assignment._id,
                           assignment.facultySchoolID || '',
                           assignment.facultyName,
                           assignment.trackName,
@@ -6238,12 +6772,11 @@ Validation issues (${skippedCount} items):
                       const facultyWsWithHeader = addHeaderToSheet(facultyWs, 'Faculty Assignments');
                       XLSX.utils.book_append_sheet(wb, facultyWsWithHeader, 'Faculty Assignments');
 
-                      // Extract Student Assignments
+                      // Extract Enrolled Students
                       const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
                       const studentAssignmentData = [
-                        ['Object ID', 'Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'],
+                        ['Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'],
                         ...currentStudentAssignments.map(assignment => [
-                          assignment._id,
                           assignment.schoolID || '',
                           assignment.studentName,
                           assignment.gradeLevel || '',
@@ -6254,8 +6787,8 @@ Validation issues (${skippedCount} items):
                         ])
                       ];
                       const studentWs = XLSX.utils.aoa_to_sheet(studentAssignmentData);
-                      const studentWsWithHeader = addHeaderToSheet(studentWs, 'Student Assignments');
-                      XLSX.utils.book_append_sheet(wb, studentWsWithHeader, 'Student Assignments');
+                      const studentWsWithHeader = addHeaderToSheet(studentWs, 'Enrolled Students');
+                      XLSX.utils.book_append_sheet(wb, studentWsWithHeader, 'Enrolled Students');
 
                       // Save the workbook
                       XLSX.writeFile(wb, `${termDetails.schoolYear}_${termDetails.termName}_data.xlsx`);
@@ -6290,15 +6823,20 @@ Validation issues (${skippedCount} items):
                   />
                   <button
                     onClick={() => importFileInputRef.current.click()} // Trigger file input click
-                    className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                    className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                   >
                     Import Term Data
                   </button>
                   <button
                     onClick={generateComprehensivePDFReport}
-                    className="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    disabled={exportingPDF}
+                    className={`py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                      exportingPDF
+                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                        : 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500'
+                    }`}
                   >
-                    Export PDF Report
+                    {exportingPDF ? 'Exporting...' : 'Export PDF Report'}
                   </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -6333,7 +6871,7 @@ Validation issues (${skippedCount} items):
                   <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('sections')}>
                     <img src={sectionsIcon} alt="Sections Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
-                      sections.filter(sec => sec.status === 'active' && filteredTracks.find(t => t.trackName === sec.trackName && t.status === 'active')).length
+                      filteredSections.filter(sec => sec.status === 'active' && filteredTracks.find(t => t.trackName === sec.trackName && t.status === 'active')).length
                     }</span>
                     <span className="text-gray-600 mt-2">Active Sections</span>
                     <button
@@ -6457,7 +6995,7 @@ Validation issues (${skippedCount} items):
                   <div className="space-y-2">
                     <button
                       type="submit"
-                      className={`w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                       disabled={termDetails.status === 'archived'}
                     >
                       {isEditMode ? 'Save Changes' : 'Add New Track'}
@@ -6495,7 +7033,7 @@ Validation issues (${skippedCount} items):
                   <h4 className="text-2xl font-semibold mb-2 ">Tracks List</h4>
                     <div className="flex justify-end mb-4">
                     <button
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded"
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
                       onClick={() => {
                         setShowTrackModal(true);
                         setIsEditMode(false);
@@ -6724,7 +7262,7 @@ Validation issues (${skippedCount} items):
                   <div className="space-y-2">
                     <button
                       type="submit"
-                      className={`w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                       disabled={termDetails.status === 'archived'}
                     >
                       {isStrandEditMode ? 'Save Changes' : 'Add New Strand'}
@@ -6757,7 +7295,7 @@ Validation issues (${skippedCount} items):
                   <div className="flex justify-end mb-4">
                   <button
                     type="button"
-                    className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
                     onClick={() => {
                       setIsStrandModalOpen(true);
                       setIsStrandEditMode(false);
@@ -6983,7 +7521,7 @@ Validation issues (${skippedCount} items):
                     <div className="flex gap-2">
                       <button
                         type="submit"
-                        className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                         disabled={termDetails.status === 'archived'}
                       >
                         {isSectionEditMode ? 'Save Changes' : 'Add New Section'}
@@ -7016,7 +7554,7 @@ Validation issues (${skippedCount} items):
                     <div className="flex justify-end">
                     <button
                       type="button"
-                      className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
                       onClick={() => {
                         setIsSectionModalOpen(true);
                         setIsSectionEditMode(false);
@@ -7032,18 +7570,19 @@ Validation issues (${skippedCount} items):
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                   <thead>
                     <tr className="bg-gray-100 text-left">
-                      <th className="p-3 border w-1/6">Track Name</th>
-                      <th className="p-3 border w-1/6">Strand Name</th>
-                      <th className="p-3 border w-1/6">Section Name</th>
-                      <th className="p-3 border w-1/6">Grade Level</th>
-                      <th className="p-3 border w-1/6">Status</th>
-                      <th className="p-3 border w-1/6">Actions</th>
+                      <th className="p-3 border w-1/7">Track Name</th>
+                      <th className="p-3 border w-1/7">Strand Name</th>
+                      <th className="p-3 border w-1/7">Section Name</th>
+                      <th className="p-3 border w-1/7">Section Code</th>
+                      <th className="p-3 border w-1/7">Grade Level</th>
+                      <th className="p-3 border w-1/7">Status</th>
+                      <th className="p-3 border w-1/7">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredSections.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="p-3 border text-center text-gray-500">
+                        <td colSpan="7" className="p-3 border text-center text-gray-500">
                           No sections found.
                         </td>
                       </tr>
@@ -7053,6 +7592,7 @@ Validation issues (${skippedCount} items):
                           <td className="p-3 border">{section.trackName}</td>
                           <td className="p-3 border">{section.strandName}</td>
                           <td className="p-3 border">{section.sectionName}</td>
+                          <td className="p-3 border">{section.sectionCode || 'N/A'}</td>
                           <td className="p-3 border">{section.gradeLevel}</td>
                           <td className="p-3 border">{section.status}</td>
                           <td className="p-3 border">
@@ -7168,7 +7708,7 @@ Validation issues (${skippedCount} items):
                         <button
                           onClick={handleConfirmSectionUpload}
                           disabled={isSectionUploading || !sectionPreviewData.some((_, index) => sectionValidationStatus[index]?.valid)}
-                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!sectionPreviewData.some((_, index) => sectionValidationStatus[index]?.valid) || isSectionUploading)
+                          className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${(!sectionPreviewData.some((_, index) => sectionValidationStatus[index]?.valid) || isSectionUploading)
                             ? 'opacity-50 cursor-not-allowed'
                             : ''
                             }`}
@@ -7195,7 +7735,7 @@ Validation issues (${skippedCount} items):
                   <div className="flex justify-end">
                     <button
                       type="button"
-                      className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
                       onClick={() => {
                         setIsSubjectModalOpen(true);
                         setIsSubjectEditMode(false);
@@ -7314,7 +7854,7 @@ Validation issues (${skippedCount} items):
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
-                            className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                             disabled={termDetails.status === 'archived'}
                           >
                             {isSubjectEditMode ? 'Save Changes' : 'Add New Subject'}
@@ -7481,7 +8021,7 @@ Validation issues (${skippedCount} items):
                         <button
                           onClick={handleConfirmSubjectUpload}
                           disabled={isSubjectUploading || !subjectPreviewData.some((_, index) => subjectValidationStatus[index]?.valid)}
-                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!subjectPreviewData.some((_, index) => subjectValidationStatus[index]?.valid) || isSubjectUploading)
+                          className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${(!subjectPreviewData.some((_, index) => subjectValidationStatus[index]?.valid) || isSubjectUploading)
                             ? 'opacity-50 cursor-not-allowed'
                             : ''
                             }`}
@@ -7508,7 +8048,7 @@ Validation issues (${skippedCount} items):
                   <div className="flex justify-end">
                     <button
                       type="button"
-                      className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
                       onClick={() => {
                         setIsFacultyModalOpen(true);
                         setIsFacultyEditMode(false);
@@ -7723,7 +8263,7 @@ Validation issues (${skippedCount} items):
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
-                            className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                             disabled={termDetails.status === 'archived'}
                           >
                             {isFacultyEditMode ? 'Save Changes' : 'Assign Faculty'}
@@ -7751,6 +8291,61 @@ Validation issues (${skippedCount} items):
                 )}
                 {/* Faculty Assignments List */}
                 <div className="mt-8">
+                  {/* Faculty Assignment Filters */}
+                  <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Section</label>
+                        <select
+                          value={facultySectionFilter}
+                          onChange={(e) => setFacultySectionFilter(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">All Sections</option>
+                          {filteredSections.map(section => (
+                            <option key={section._id} value={section.sectionName}>
+                              {section.sectionName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Status</label>
+                        <select
+                          value={facultyStatusFilter}
+                          onChange={(e) => setFacultyStatusFilter(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">All Status</option>
+                          <option value="active">Active</option>
+                          <option value="archived">Archived</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                        <input
+                          type="text"
+                          placeholder="Search faculty assignments..."
+                          value={facultySearchFilter}
+                          onChange={(e) => setFacultySearchFilter(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                    <button
+                          onClick={() => {
+                            setFacultySectionFilter('');
+                            setFacultyStatusFilter('');
+                            setFacultySearchFilter('');
+                          }}
+                           className="text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          Clear Filters
+                        </button>
+                    </div>
+                  </div>
+                  
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                   <thead>
                       <tr className="bg-gray-100 text-left">
@@ -7783,7 +8378,9 @@ Validation issues (${skippedCount} items):
                             <td className="p-3 border">{assignment.sectionName}</td>
                             <td className="p-3 border">{assignment.subjectName || ''}</td>
                             <td className="p-3 border">
-                              {assignment.status === 'archived' ? (
+                              {termDetails.status === 'archived' ? (
+                                <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
+                              ) : assignment.status === 'archived' ? (
                                 <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
                               ) : (
                                 <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Active</span>
@@ -7921,7 +8518,7 @@ Validation issues (${skippedCount} items):
                         <button
                           onClick={handleConfirmFacultyAssignmentUpload}
                           disabled={isFacultyAssignmentUploading || !facultyAssignmentPreviewData.some((_, index) => facultyAssignmentValidationStatus[index]?.valid)}
-                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!facultyAssignmentPreviewData.some((_, index) => facultyAssignmentValidationStatus[index]?.valid) || isFacultyAssignmentUploading)
+                          className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${(!facultyAssignmentPreviewData.some((_, index) => facultyAssignmentValidationStatus[index]?.valid) || isFacultyAssignmentUploading)
                             ? 'opacity-50 cursor-not-allowed'
                             : ''
                             }`}
@@ -7944,11 +8541,20 @@ Validation issues (${skippedCount} items):
                 )}
                 {/* Assign Enrolled Student Button */}
                 <div className="flex justify-between items-center mt-5 mb-4">
-                  <h4 className="text-2xl font-semibold mb-2">Student Assignments</h4>
-                  <div className="flex justify-end">
+                  <h4 className="text-2xl font-semibold mb-2">Enrolled Students</h4>
+                  <div className="flex gap-2">
+                   
                     <button
                       type="button"
-                      className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 mb-4"
+                      className="bg-blue-900 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 w-fit"
+                      onClick={handleExportStudentAssignments}
+                      disabled={termDetails.status === 'archived'}
+                    >
+                      Export Classlist
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       onClick={() => {
                         setIsStudentModalOpen(true);
                         setIsStudentEditMode(false);
@@ -7959,6 +8565,63 @@ Validation issues (${skippedCount} items):
                       disabled={termDetails.status === 'archived'}
                     >
                       Assign Enrolled Student
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filter Controls */}
+                <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Section</label>
+                      <select
+                        value={studentSectionFilter}
+                        onChange={(e) => setStudentSectionFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">All Sections</option>
+                        {filteredSections.map(section => (
+                          <option key={section._id} value={section.sectionName}>
+                            {section.sectionName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Status</label>
+                      <select
+                        value={studentStatusFilter}
+                        onChange={(e) => setStudentStatusFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="pending">Pending Approval</option>
+                        <option value="archived">Archived</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Search Student</label>
+                      <input
+                        type="text"
+                        value={studentSearchFilter}
+                        onChange={(e) => setStudentSearchFilter(e.target.value)}
+                        placeholder="Search by name or school ID..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-2 flex justify-between items-center">
+                    
+                    <button
+                      onClick={() => {
+                        setStudentSectionFilter('');
+                        setStudentStatusFilter('');
+                        setStudentSearchFilter('');
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Clear Filters
                     </button>
                   </div>
                 </div>
@@ -8033,6 +8696,33 @@ Validation issues (${skippedCount} items):
                       >
                         <div className="grid grid-cols-2 gap-4">
                           <div>
+                            <label htmlFor="enrollmentNo" className="block text-sm font-medium text-gray-700 mb-1">Enrollment No.</label>
+                            <input
+                              type="text"
+                              id="enrollmentNo"
+                              name="enrollmentNo"
+                              value={studentFormData.enrollmentNo || ''}
+                              onChange={handleChangeStudentForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter enrollment number"
+                              disabled={termDetails.status === 'archived'}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="enrollmentDate" className="block text-sm font-medium text-gray-700 mb-1">Enrollment Date</label>
+                            <input
+                              type="date"
+                              id="enrollmentDate"
+                              name="enrollmentDate"
+                              value={studentFormData.enrollmentDate || ''}
+                              onChange={handleChangeStudentForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              disabled={termDetails.status === 'archived'}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
                             <label htmlFor="studentManualId" className="block text-sm font-medium text-gray-700 mb-1">Student School ID</label>
                             <input
                               type="text"
@@ -8044,36 +8734,36 @@ Validation issues (${skippedCount} items):
                               disabled={termDetails.status === 'archived'}
                             />
                           </div>
-                          <div className="relative">
-                            <label htmlFor="studentSearch" className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
                             <input
                               type="text"
-                              id="studentSearch"
-                              name="studentSearch"
-                              value={studentSearchTerm}
+                              id="lastName"
+                              name="lastName"
+                              value={studentFormData.lastName || ''}
                               onChange={handleChangeStudentForm}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Type to search or enter a new name..."
-                              required
+                              placeholder="Enter last name"
                               disabled={termDetails.status === 'archived'}
                             />
-                            {showStudentSuggestions && studentSearchResults.length > 0 && (
-                              <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
-                                {studentSearchResults.map(student => (
-                                  <li
-                                    key={student._id}
-                                    onClick={() => handleSelectStudent(student)}
-                                    className="p-2 hover:bg-gray-100 cursor-pointer"
-                                  >
-                                    <div className="flex flex-col">
-                                      <span className="font-medium">{student.firstname || student.firstName || 'Unknown'} {student.lastname || student.lastName || 'Student'}</span>
-                                      <span className="text-sm text-gray-500">School ID: {student.schoolID}</span>
-                                    </div>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
                           </div>
+                          <div>
+                            <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                            <input
+                              type="text"
+                              id="firstName"
+                              name="firstName"
+                              value={studentFormData.firstName || ''}
+                              onChange={handleChangeStudentForm}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter first name"
+                              disabled={termDetails.status === 'archived'}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label htmlFor="trackNameStudent" className="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
                             <select
@@ -8093,8 +8783,6 @@ Validation issues (${skippedCount} items):
                               ))}
                             </select>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label htmlFor="strandNameStudent" className="block text-sm font-medium text-gray-700 mb-1">Strand Name</label>
                             <select
@@ -8114,6 +8802,8 @@ Validation issues (${skippedCount} items):
                               ))}
                             </select>
                           </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label htmlFor="gradeLevelStudent" className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
                             <select
@@ -8155,7 +8845,7 @@ Validation issues (${skippedCount} items):
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
-                            className={`flex-1 bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
                             disabled={termDetails.status === 'archived'}
                           >
                             {isStudentEditMode ? 'Save Changes' : 'Assign Enrolled Student'}
@@ -8186,7 +8876,7 @@ Validation issues (${skippedCount} items):
                 {studentPreviewModalOpen && (
                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 max-w-6xl w-full max-h-[90vh] overflow-auto">
-                      <h3 className="text-xl font-semibold mb-4">Preview Student Assignments to Upload</h3>
+                      <h3 className="text-xl font-semibold mb-4">Preview Enrolled Students to Upload</h3>
 
                       <div className="mb-4">
                         <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
@@ -8228,11 +8918,11 @@ Validation issues (${skippedCount} items):
                               const isValid = studentValidationStatus[index]?.valid;
                               const message = studentValidationStatus[index]?.message;
                               
-                              // Extract data from both old and new formats
+                              // Extract data from new format
                               const studentSchoolID = assignment['student_no'] || assignment['Student School ID'] || '';
-                              const studentName = assignment['first_name'] && assignment['last_name'] 
-                                ? `${assignment['first_name']} ${assignment['last_name']}` 
-                                : assignment['Student Name'] || '';
+                              const firstName = assignment['first_name'] || '';
+                              const lastName = assignment['last_name'] || '';
+                              const studentName = `${firstName} ${lastName}`.trim();
                               const gradeLevel = assignment['grade'] || assignment['Grade Level'] || '';
                               const trackName = assignment['Track Name'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track');
                               const strandName = assignment['strand'] || assignment['Strand Name'] || '';
@@ -8273,7 +8963,7 @@ Validation issues (${skippedCount} items):
                         <button
                           onClick={handleConfirmStudentAssignmentUpload}
                           disabled={isStudentUploading || !studentPreviewData.some((_, index) => studentValidationStatus[index]?.valid)}
-                          className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!studentPreviewData.some((_, index) => studentValidationStatus[index]?.valid) || isStudentUploading)
+                          className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${(!studentPreviewData.some((_, index) => studentValidationStatus[index]?.valid) || isStudentUploading)
                             ? 'opacity-50 cursor-not-allowed'
                             : ''
                             }`}
@@ -8285,17 +8975,19 @@ Validation issues (${skippedCount} items):
                   </div>
                 )}
                 
-                {/* Student Assignments List */}
+                {/* Enrolled Students List */}
                 <div className="mt-8">
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
                     <thead>
                       <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border">Student School ID</th>
-                        <th className="p-3 border">Student Name</th>
-                        <th className="p-3 border">Track Name</th>
-                        <th className="p-3 border">Strand Name</th>
-                        <th className="p-3 border">Grade Level</th>
+                        <th className="p-3 border">Enrollment No.</th>
+                        <th className="p-3 border">Enrollment Date</th>
+                        <th className="p-3 border">Student No.</th>
+                        <th className="p-3 border">Last Name</th>
+                        <th className="p-3 border">First Name</th>
+                        <th className="p-3 border">Strand</th>
                         <th className="p-3 border">Section</th>
+                        <th className="p-3 border">Grade</th>
                         <th className="p-3 border">Status</th>
                         <th className="p-3 border">Actions</th>
                       </tr>
@@ -8303,7 +8995,7 @@ Validation issues (${skippedCount} items):
                     <tbody>
                       {filteredStudentAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="8" className="p-3 border text-center text-gray-500">
+                          <td colSpan="10" className="p-3 border text-center text-gray-500">
                             No student assignments found.
                           </td>
                         </tr>
@@ -8312,14 +9004,18 @@ Validation issues (${skippedCount} items):
                           const student = students.find(s => s._id === assignment.studentId);
                           return (
                             <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
+                              <td className="p-3 border">{assignment.enrollmentNo || 'N/A'}</td>
+                              <td className="p-3 border">{assignment.enrollmentDate || 'N/A'}</td>
                               <td className="p-3 border">{student?.schoolID || assignment.studentSchoolID || assignment.schoolID || ''}</td>
-                              <td className="p-3 border">{assignment.studentName || 'Unknown'}</td>
-                              <td className="p-3 border">{assignment.trackName}</td>
+                              <td className="p-3 border">{assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || 'N/A'}</td>
+                              <td className="p-3 border">{assignment.firstname || assignment.studentName?.split(' ')[0] || 'N/A'}</td>
                               <td className="p-3 border">{assignment.strandName}</td>
-                              <td className="p-3 border">{assignment.gradeLevel}</td>
                               <td className="p-3 border">{assignment.sectionName}</td>
+                              <td className="p-3 border">{assignment.gradeLevel}</td>
                               <td className="p-3 border">
-                                {assignment.status === 'archived' ? (
+                                {termDetails.status === 'archived' ? (
+                                  <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
+                                ) : assignment.status === 'archived' ? (
                                   <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
                                 ) : isStudentApproved(assignment) ? (
                                   <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Active</span>
@@ -8369,11 +9065,11 @@ Validation issues (${skippedCount} items):
                       )}
                     </tbody>
                   </table>
-                  {filteredStudentAssignments.length > 0 && (
+                  {studentAssignments.length > 0 && (
                     <div className="flex justify-center items-center gap-2 mt-3">
                       <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStudentAssignPage(p => Math.max(1, p - 1))} disabled={studentAssignPage === 1}>{'<'}</button>
-                      <span className="text-xs">Page {paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).currentPage} of {paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}</span>
-                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStudentAssignPage(p => Math.min(paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={studentAssignPage === paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
+                      <span className="text-xs">Page {paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).currentPage} of {paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}</span>
+                      <button className="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs" onClick={() => setStudentAssignPage(p => Math.min(paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages, p + 1))} disabled={studentAssignPage === paginate(studentAssignments, studentAssignPage, ROWS_PER_PAGE).totalPages}>{'>'}</button>
                     </div>
                   )}
                 </div>
@@ -8442,7 +9138,7 @@ Validation issues (${skippedCount} items):
               <button
                 onClick={handleConfirmUpload}
                 disabled={isUploading || !previewTracks.some((_, index) => validationStatus[index]?.valid)}
-                className={`px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 ${(!previewTracks.some((_, index) => validationStatus[index]?.valid) || isUploading)
+                className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${(!previewTracks.some((_, index) => validationStatus[index]?.valid) || isUploading)
                   ? 'opacity-50 cursor-not-allowed'
                   : ''
                   }`}
@@ -8505,7 +9201,7 @@ Validation issues (${skippedCount} items):
                     onClick={() => setActiveImportTab('studentAssignments')}
                     className={`whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm ${activeImportTab === 'studentAssignments' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                   >
-                    Student Assignments ({importPreviewData.studentAssignments.length})
+                    Enrolled Students ({importPreviewData.studentAssignments.length})
                   </button>
                 </nav>
               </div>
@@ -8693,7 +9389,7 @@ Validation issues (${skippedCount} items):
 
               {activeImportTab === 'studentAssignments' && (
                 <div>
-                  <h4 className="text-lg font-medium mb-3">Student Assignments to Import</h4>
+                  <h4 className="text-lg font-medium mb-3">Enrolled Students to Import</h4>
                   <p className="text-sm text-gray-600 mb-2">Valid: {importValidationStatus.studentAssignments.filter(v => v.valid).length}, Invalid: {importValidationStatus.studentAssignments.filter(v => !v.valid).length}</p>
                   <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
                     <thead>
@@ -8884,10 +9580,10 @@ Validation issues (${skippedCount} items):
                 </div>
               </div>
 
-              {/* Student Assignments */}
+              {/* Enrolled Students */}
               <div className="border rounded-lg p-4">
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                  Student Assignments ({validationResults.studentAssignments.valid + validationResults.studentAssignments.invalid})
+                  Enrolled Students ({validationResults.studentAssignments.valid + validationResults.studentAssignments.invalid})
                   <span className="ml-2 text-sm font-normal">
                     <span className="text-green-600">✓ {validationResults.studentAssignments.valid} Valid</span>
                     {validationResults.studentAssignments.invalid > 0 && (
@@ -9152,15 +9848,8 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
       if (expectedName !== providedName) {
         console.log(`Name mismatch for existing student - will create new entry for "${assignment.studentName}"`);
       }
-    } else {
-      // Student doesn't exist in system - this is allowed for enrollment data
-      console.log(`Student with School ID '${assignment.studentSchoolID}' not found - will be created as new student`);
-    }
-
-    // Don't check if track/strand/section exist since they'll be created during import
-
-    // Check for duplicate assignment (only if student exists)
-    if (student) {
+      
+      // Check for duplicate assignment (only if student exists)
       const exists = activeAssignments.some(ea =>
         ea.studentId === student._id &&
         ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
@@ -9168,12 +9857,31 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
         ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
       );
       if (exists) {
-        results.push({ valid: false, message: 'Assignment already exists' });
+        results.push({ valid: false, message: `Student assignment for "${assignment.studentName}" already exists` });
+        continue;
+      }
+    } else {
+      // Student doesn't exist in system - this is allowed for enrollment data
+      console.log(`Student with School ID '${assignment.studentSchoolID}' not found - will be created as new student`);
+      
+      // For new students, check if there's already a manual assignment with the same details
+      const exists = activeAssignments.some(ea =>
+        !ea.studentId && // Manual assignment (no linked student)
+        ea.studentSchoolID === assignment.studentSchoolID &&
+        ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
+        ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
+        ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
+      );
+      if (exists) {
+        results.push({ valid: false, message: `Student assignment for "${assignment.studentName}" already exists` });
         continue;
       }
     }
+
+    // Don't check if track/strand/section exist since they'll be created during import
     
     results.push({ valid: true, studentId: student ? student._id : null });
   }
   return results;
 };
+

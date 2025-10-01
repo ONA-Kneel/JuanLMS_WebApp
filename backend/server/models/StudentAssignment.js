@@ -69,16 +69,14 @@ const studentAssignmentSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Keep a uniqueness guard. If studentId exists, enforce uniqueness by studentId.
-// For manual entries (no studentId), use studentName+schoolYear+termName+sectionName to reduce duplicates.
+// Keep a uniqueness guard. Only prevent the same student from being assigned multiple times to the same combination.
+// Allow multiple students in the same section/track/strand combination.
 studentAssignmentSchema.index(
   {
     studentId: 1,
-    trackName: 1,
-    strandName: 1,
-    sectionName: 1,
     schoolYear: 1,
-    termName: 1
+    termName: 1,
+    quarterName: 1
   },
   { unique: true, partialFilterExpression: { studentId: { $exists: true, $ne: null } } }
 );

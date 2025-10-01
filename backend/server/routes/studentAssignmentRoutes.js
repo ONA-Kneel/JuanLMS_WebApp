@@ -129,6 +129,45 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // For manual entries, allow creation without an existing student
 
+    // Check for existing assignment before creating new one
+    console.log('Checking for duplicates with:', {
+      actualStudentId,
+      studentName,
+      studentSchoolID,
+      schoolYear: term.schoolYear,
+      termName: term.termName,
+      quarterName: quarterName || null
+    });
+    
+    const existingAssignment = await StudentAssignment.findOne({
+      $or: [
+        // Check by studentId if it exists - only prevent same student in same term and quarter
+        ...(actualStudentId ? [{
+          studentId: actualStudentId,
+          schoolYear: term.schoolYear,
+          termName: term.termName,
+          quarterName: quarterName || null
+        }] : []),
+        // Check by studentName AND studentSchoolID if no studentId - only prevent same student in same term and quarter
+        ...(!actualStudentId && studentName && studentSchoolID ? [{
+          studentName,
+          studentSchoolID,
+          schoolYear: term.schoolYear,
+          termName: term.termName,
+          quarterName: quarterName || null
+        }] : [])
+      ]
+    });
+
+    if (existingAssignment) {
+      console.log('Found existing assignment:', existingAssignment);
+      const quarterText = quarterName ? ` (${quarterName})` : '';
+      return res.status(400).json({ 
+        message: 'This student is already enrolled in this term and quarter',
+        details: `Student ${existingAssignment.studentName || 'Unknown'} is already enrolled in ${term.schoolYear} ${term.termName}${quarterText}`
+      });
+    }
+
     const assignment = new StudentAssignment({
       studentId: actualStudentId || undefined,
       studentName: !actualStudentId ? studentName : undefined,
