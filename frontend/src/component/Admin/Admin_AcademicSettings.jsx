@@ -2181,10 +2181,16 @@ export default function Admin_AcademicSettings() {
                           <button
                             onClick={openAddQuarterModal}
                             className={`px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2 ${
-                              (quarters.filter(q => q.status !== 'archived').length >= 4) ? 'opacity-50 cursor-not-allowed' : ''
+                              (quarters.filter(q => q.status !== 'archived').length >= 4 || terms.length === 0) ? 'opacity-50 cursor-not-allowed' : ''
                             }`}
-                            disabled={quarters.filter(q => q.status !== 'archived').length >= 4}
-                            title={(quarters.filter(q => q.status !== 'archived').length >= 4) ? 'Maximum of 4 quarters per school year reached' : 'Add New Quarter'}
+                            disabled={quarters.filter(q => q.status !== 'archived').length >= 4 || terms.length === 0}
+                            title={
+                              terms.length === 0 
+                                ? 'No terms available. Create a term first.' 
+                                : (quarters.filter(q => q.status !== 'archived').length >= 4) 
+                                  ? 'Maximum of 4 quarters per school year reached' 
+                                  : 'Add New Quarter'
+                            }
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
