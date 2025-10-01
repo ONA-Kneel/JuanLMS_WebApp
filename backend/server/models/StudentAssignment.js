@@ -13,19 +13,6 @@ const studentAssignmentSchema = new mongoose.Schema({
   studentSchoolID: {
     type: String
   },
-  // New fields for detailed student information
-  enrollmentNo: {
-    type: String
-  },
-  enrollmentDate: {
-    type: Date
-  },
-  lastName: {
-    type: String
-  },
-  firstName: {
-    type: String
-  },
   trackName: {
     type: String,
     required: true

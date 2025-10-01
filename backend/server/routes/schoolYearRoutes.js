@@ -297,9 +297,6 @@ router.patch('/:id', authenticateToken, async (req, res) => {
           // Archive all terms for this school year
           Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' }),
           
-          // Archive all quarters for this school year
-          Quarter.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
-          
           // Archive all assignments for this school year
           StudentAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
           FacultyAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
@@ -543,9 +540,6 @@ router.patch('/:id/archive', async (req, res) => {
       // Archive all terms for this school year
       Term.updateMany({ schoolYear: schoolYearName }, { status: 'archived' }),
       
-      // Archive all quarters for this school year
-      Quarter.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
-      
       // Archive all assignments for this school year
       StudentAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
       FacultyAssignment.updateMany({ schoolYear: schoolYearName }, { $set: { status: 'archived' } }),
@@ -565,3 +559,4 @@ router.patch('/:id/archive', async (req, res) => {
 });
 
 export default router; 
+

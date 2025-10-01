@@ -6,12 +6,6 @@ const sectionSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  sectionCode: {
-    type: String,
-    required: true,
-    unique: true,
-    trim: true
-  },
   trackName: {
     type: String,
     required: true,
