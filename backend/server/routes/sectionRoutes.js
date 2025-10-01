@@ -6,6 +6,15 @@ import FacultyAssignment from '../models/FacultyAssignment.js';
 
 const router = express.Router();
 
+console.log('🚀 SECTION ROUTES LOADED - LOGGING IS ACTIVE!');
+
+// Middleware to log all requests to sections
+router.use((req, res, next) => {
+  console.log(`📡 SECTION ROUTE HIT: ${req.method} ${req.path}`);
+  console.log('Request body:', req.body);
+  next();
+});
+
 // Get all sections
 router.get('/', async (req, res) => {
   try {
@@ -66,8 +75,22 @@ router.get('/termId/:termId', async (req, res) => {
 
 // Helper function to generate section code
 const generateSectionCode = (sectionName) => {
+  console.log('generateSectionCode called with:', sectionName);
+  
+  if (!sectionName || typeof sectionName !== 'string') {
+    console.log('Invalid section name, returning default');
+    return 'SEC' + Math.floor(Math.random() * 1000);
+  }
+  
+  // Clean the section name
+  const cleanName = sectionName.trim();
+  if (cleanName.length === 0) {
+    console.log('Empty section name, returning default');
+    return 'SEC' + Math.floor(Math.random() * 1000);
+  }
+  
   // Extract first letter of each word and make it uppercase
-  const words = sectionName.split(' ').filter(word => word.length > 0);
+  const words = cleanName.split(' ').filter(word => word.length > 0);
   let code = '';
   
   for (const word of words) {
@@ -76,9 +99,35 @@ const generateSectionCode = (sectionName) => {
     }
   }
   
-  // If code is too short, add more characters
+  console.log('Initial code from words:', code);
+  
+  // If code is too short, add more characters from the section name
   if (code.length < 2) {
-    code += sectionName.charAt(1).toUpperCase();
+    const cleanNameNoSpaces = cleanName.replace(/\s+/g, ''); // Remove spaces
+    for (let i = 1; i < cleanNameNoSpaces.length && code.length < 3; i++) {
+      code += cleanNameNoSpaces.charAt(i).toUpperCase();
+    }
+  }
+  
+  console.log('Code after adding more characters:', code);
+  
+  // Ensure we have at least 2 characters
+  if (code.length < 2) {
+    code = cleanName.substring(0, Math.min(2, cleanName.length)).toUpperCase();
+  }
+  
+  // Final fallback
+  if (!code || code.length === 0) {
+    code = 'SEC' + Math.floor(Math.random() * 1000);
+  }
+  
+  console.log('Final generated code:', code);
+  
+  // Test the generated code
+  if (!code || code.trim() === '') {
+    console.error('CRITICAL: Generated code is empty!');
+    code = 'SEC' + Math.floor(Math.random() * 1000);
+    console.log('Emergency fallback code:', code);
   }
   
   return code;
@@ -86,31 +135,59 @@ const generateSectionCode = (sectionName) => {
 
 // Create a new section
 router.post('/', async (req, res) => {
+  console.log('🔥🔥🔥 SECTION POST ROUTE HIT! 🔥🔥🔥');
+  console.log('=== SECTION CREATION REQUEST STARTED ===');
+  console.log('Full request body:', req.body);
+  
   const { sectionName, trackName, strandName, gradeLevel, schoolYear, termName, quarterName } = req.body;
+  
+  console.log('Extracted fields:', { sectionName, trackName, strandName, gradeLevel, schoolYear, termName, quarterName });
 
-  if (!sectionName || !trackName || !strandName || !gradeLevel) {
-    return res.status(400).json({ message: 'Section name, track name, strand name, and grade level are required' });
+  // Validate required fields
+  const missingFields = [];
+  if (!sectionName || sectionName.trim() === '') missingFields.push('sectionName');
+  if (!trackName || trackName.trim() === '') missingFields.push('trackName');
+  if (!strandName || strandName.trim() === '') missingFields.push('strandName');
+  if (!gradeLevel || gradeLevel.trim() === '') missingFields.push('gradeLevel');
+
+  if (missingFields.length > 0) {
+    console.log('❌ MISSING REQUIRED FIELDS:', missingFields);
+    return res.status(400).json({ 
+      message: `Missing required fields: ${missingFields.join(', ')}`,
+      missingFields: missingFields
+    });
   }
+
   if (!['Grade 11', 'Grade 12'].includes(gradeLevel)) {
+    console.log('❌ INVALID GRADE LEVEL:', gradeLevel);
     return res.status(400).json({ message: 'Grade Level must be "Grade 11" or "Grade 12"' });
   }
+  
+  console.log('✅ VALIDATION PASSED - All required fields present');
 
   try {
+    console.log('🔍 CHECKING TERM INFORMATION...');
     // Use provided schoolYear and termName, or fall back to current active term
     let targetSchoolYear = schoolYear;
     let targetTermName = termName;
     let targetQuarterName = quarterName;
     
+    console.log('Target values:', { targetSchoolYear, targetTermName, targetQuarterName });
+    
     if (!targetSchoolYear || !targetTermName) {
+      console.log('⚠️ Missing schoolYear or termName, looking for active term...');
       const currentTerm = await Term.findOne({ status: 'active' });
       if (!currentTerm) {
+        console.log('❌ NO ACTIVE TERM FOUND');
         return res.status(400).json({ message: 'No active term found and no school year/term provided' });
       }
       targetSchoolYear = currentTerm.schoolYear;
       targetTermName = currentTerm.termName;
+      console.log('✅ Found active term:', { targetSchoolYear, targetTermName });
     }
 
     // Check for existing section with same name in the same track, strand, school year, and term
+    console.log('🔍 CHECKING FOR EXISTING SECTION...');
     const existingSection = await Section.findOne({ 
       sectionName: new RegExp(`^${sectionName}$`, 'i'),
       trackName,
@@ -119,19 +196,49 @@ router.post('/', async (req, res) => {
       termName: targetTermName
     });
     if (existingSection) {
+      console.log('❌ SECTION ALREADY EXISTS:', existingSection);
       return res.status(409).json({ message: 'Section already exists in this track, strand, school year, and term.' });
     }
+    console.log('✅ No existing section found, proceeding with creation...');
 
     // Generate unique section code
-    let sectionCode = generateSectionCode(sectionName);
+    console.log('=== STARTING SECTION CODE GENERATION ===');
+    console.log('Section name received:', sectionName);
+    
+    let sectionCode;
+    try {
+      sectionCode = generateSectionCode(sectionName);
+      console.log('Generated section code for', sectionName, ':', sectionCode);
+      
+      // Ensure section code is not empty
+      if (!sectionCode || sectionCode.trim() === '') {
+        sectionCode = 'SEC' + Math.floor(Math.random() * 1000);
+        console.log('Generated fallback section code:', sectionCode);
+      }
+    } catch (codeError) {
+      console.error('Error generating section code:', codeError);
+      sectionCode = 'SEC' + Math.floor(Math.random() * 1000);
+      console.log('Generated fallback section code due to error:', sectionCode);
+    }
+    
+    console.log('=== FINAL SECTION CODE ===', sectionCode);
+    
     let counter = 1;
     
     // Ensure section code is unique
     while (await Section.findOne({ sectionCode })) {
       sectionCode = generateSectionCode(sectionName) + counter.toString();
       counter++;
+      console.log('Section code conflict, trying:', sectionCode);
     }
 
+    // Final validation - ensure sectionCode is never empty
+    if (!sectionCode || sectionCode.trim() === '') {
+      sectionCode = 'SEC' + Math.floor(Math.random() * 1000);
+      console.log('⚠️ Section code was empty, generated fallback:', sectionCode);
+    }
+    
+    console.log('🏗️ CREATING SECTION OBJECT...');
     const newSection = new Section({ 
       sectionName, 
       sectionCode,
@@ -142,10 +249,51 @@ router.post('/', async (req, res) => {
       termName: targetTermName,
       quarterName: targetQuarterName
     });
-    await newSection.save();
-    res.status(201).json(newSection);
+    
+    console.log('📝 SECTION OBJECT CREATED:', {
+      sectionName,
+      sectionCode,
+      trackName,
+      strandName,
+      gradeLevel,
+      schoolYear: targetSchoolYear,
+      termName: targetTermName,
+      quarterName: targetQuarterName
+    });
+    
+    try {
+      console.log('💾 ATTEMPTING TO SAVE SECTION TO DATABASE...');
+      await newSection.save();
+      console.log('✅ SECTION SAVED SUCCESSFULLY! ID:', newSection._id);
+      res.status(201).json(newSection);
+    } catch (saveError) {
+      console.error('❌ DATABASE SAVE ERROR:', saveError);
+      console.error('Error name:', saveError.name);
+      console.error('Error message:', saveError.message);
+      console.error('Error code:', saveError.code);
+      console.error('Error keyPattern:', saveError.keyPattern);
+      console.error('Error keyValue:', saveError.keyValue);
+      
+      if (saveError.code === 11000) {
+        return res.status(400).json({ 
+          message: 'Section code already exists. Please try again.',
+          error: 'DUPLICATE_CODE'
+        });
+      }
+      throw saveError;
+    }
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('❌❌❌ SECTION CREATION FAILED ❌❌❌');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Full error object:', error);
+    
+    res.status(400).json({ 
+      message: error.message,
+      error: error.name,
+      details: error.keyPattern || error.keyValue
+    });
   }
 });
 

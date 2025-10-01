@@ -4,7 +4,7 @@ import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import { getLogoBase64, getFooterLogoBase64 } from '../../utils/imageToBase64';
 
-const API_BASE = "https://juanlms-webapp-server.onrender.com";
+const API_BASE = "http://localhost:5000";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -464,12 +464,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     if (tracks.length > 0) {
       fetchStrands();
     }
-  }, [tracks]);
+  }, [tracks, quarterData]);
 
   const fetchStrands = async () => {
     setStrandError('');
     try {
-      const res = await fetch(`${API_BASE}/api/strands/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}`);
+      const quarterParam = quarterData ? `?quarterName=${encodeURIComponent(quarterData.quarterName)}` : '';
+      const res = await fetch(`${API_BASE}/api/strands/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}${quarterParam}`);
       if (res.ok) {
         const data = await res.json();
         setStrands(data);
@@ -487,7 +488,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     if (tracks.length > 0 && strands.length > 0) {
       fetchSections();
     }
-  }, [tracks, strands]);
+  }, [tracks, strands, quarterData]);
 
   const fetchSections = async () => {
     setSectionError('');
@@ -496,7 +497,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       for (const track of tracks) {
         const strandsInTrack = strands.filter(strand => strand.trackName === track.trackName);
         for (const strand of strandsInTrack) {
-          const res = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
+          const quarterParam = quarterData ? `&quarterName=${encodeURIComponent(quarterData.quarterName)}` : '';
+          const res = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}${quarterParam}`);
           if (res.ok) {
             const data = await res.json();
             allSections.push(...data);
@@ -753,7 +755,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           strandName: strandFormData.strandType === 'custom' ? strandFormData.strandName.trim() : strandFormData.strandType,
           trackName: selectedTrack.trackName,
           schoolYear: termDetails.schoolYear,
-          termName: termDetails.termName
+          termName: termDetails.termName,
+          quarterName: quarterData ? quarterData.quarterName : undefined
         })
       });
 
@@ -971,10 +974,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/sections`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const requestData = {
           sectionName: sectionFormData.sectionName.trim(),
           trackName: selectedTrack.trackName,
           strandName: selectedStrand.strandName,
@@ -982,7 +982,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           schoolYear: termDetails.schoolYear,
           termName: termDetails.termName,
           quarterName: quarterData ? quarterData.quarterName : undefined
-        })
+      };
+      
+      console.log('Sending section creation request:', requestData);
+      
+      const res = await fetch(`${API_BASE}/api/sections`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData)
       });
 
       if (res.ok) {
@@ -1008,6 +1015,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' }); // Clear form
       } else {
         const data = await res.json();
+        console.error('Section creation failed:', data);
         setSectionError(data.message || 'Failed to add section');
       }
     } catch (err) {
@@ -4129,6 +4137,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             gradeLevel: assignment.gradeLevel,
             subjectName: assignment.subjectName,
             termId: termDetails._id,
+            quarterName: quarterData ? quarterData.quarterName : undefined
           })
         });
 
@@ -4835,12 +4844,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     if (termDetails) {
       fetchSubjects();
     }
-  }, [termDetails]);
+  }, [termDetails, quarterData]);
 
   const fetchSubjects = async () => {
     try {
       setSubjectError('');
-      const res = await fetch(`${API_BASE}/api/subjects/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}`);
+      const quarterParam = quarterData ? `?quarterName=${encodeURIComponent(quarterData.quarterName)}` : '';
+      const res = await fetch(`${API_BASE}/api/subjects/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}${quarterParam}`);
       if (res.ok) {
         const data = await res.json();
         setSubjects(data);
@@ -5948,7 +5958,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             body: JSON.stringify({
               trackName: track.trackName,
               schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName
+              termName: termDetails.termName,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             })
           });
 
@@ -5976,7 +5987,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               strandName: strand.strandName,
               trackName: strand.trackName,
               schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName
+              termName: termDetails.termName,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             })
           });
 
@@ -6006,7 +6018,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               strandName: section.strandName,
               gradeLevel: section.gradeLevel,
               schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName
+              termName: termDetails.termName,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             })
           });
 
@@ -6036,7 +6049,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               strandName: subject.strandName,
               gradeLevel: subject.gradeLevel,
               schoolYear: termDetails.schoolYear,
-              termName: termDetails.termName
+              termName: termDetails.termName,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             })
           });
 
@@ -6120,7 +6134,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               strandName: assignment.strandName,
               sectionName: assignment.sectionName,
               gradeLevel: assignment.gradeLevel,
-              termId: termDetails._id
+              termId: termDetails._id,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             };
           } else {
             // Student doesn't exist - create manual entry
@@ -6135,7 +6150,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               strandName: assignment.strandName,
               sectionName: assignment.sectionName,
               gradeLevel: assignment.gradeLevel,
-              termId: termDetails._id
+              termId: termDetails._id,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             };
           }
 

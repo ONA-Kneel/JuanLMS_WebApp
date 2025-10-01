@@ -128,6 +128,7 @@ router.get('/', authenticateToken, async (req, res) => {
           termId: assignment.termId,
           schoolYear: assignment.schoolYear,
           termName: assignment.termName,
+          quarterName: assignment.quarterName,
           status: assignment.status // Include the status field
         });
       }

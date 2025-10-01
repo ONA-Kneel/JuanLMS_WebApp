@@ -51,6 +51,7 @@ router.get('/', authenticateToken, async (req, res) => {
           lastname: assignment.studentId.getDecryptedLastname ? assignment.studentId.getDecryptedLastname() : assignment.studentId.lastname,
           enrollmentNo: assignment.enrollmentNo || '',
           enrollmentDate: assignment.enrollmentDate || null,
+          quarterName: assignment.quarterName,
           isApproved: isApproved
         };
       }
@@ -74,6 +75,7 @@ router.get('/', authenticateToken, async (req, res) => {
         enrollmentDate: assignment.enrollmentDate || null,
         firstname: assignment.firstName || '',
         lastname: assignment.lastName || '',
+        quarterName: assignment.quarterName,
         isApproved: isApproved
       };
     });
