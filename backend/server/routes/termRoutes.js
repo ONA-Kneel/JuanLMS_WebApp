@@ -166,6 +166,12 @@ router.patch('/:termId/archive', authenticateToken, async (req, res) => {
       StudentAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
       FacultyAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
       
+      // Archive quarters for this term
+      Quarter.updateMany(
+        { schoolYear: term.schoolYear, termName: term.termName }, 
+        { $set: { status: 'archived' } }
+      ),
+      
       // Archive structural entities by schoolYear and termName
       Track.updateMany(
         { schoolYear: term.schoolYear, termName: term.termName }, 
@@ -260,6 +266,12 @@ router.patch('/:id', authenticateToken, async (req, res) => {
           { $set: { status: 'active' } }
         ),
         
+        // Reactivate quarters for this term
+        Quarter.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'active' } }
+        ),
+        
         // Reactivate structural entities by schoolYear and termName
         Track.updateMany(
           { schoolYear: term.schoolYear, termName: term.termName }, 
@@ -336,6 +348,12 @@ router.patch('/:id', authenticateToken, async (req, res) => {
         // Archive assignments
         StudentAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
         FacultyAssignment.updateMany({ termId: term._id }, { $set: { status: 'archived' } }),
+        
+        // Archive quarters for this term
+        Quarter.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { $set: { status: 'archived' } }
+        ),
         
         // Archive structural entities by schoolYear and termName
         Track.updateMany(
@@ -629,4 +647,3 @@ router.delete('/:id', async (req, res) => {
 });
 
 export default router; 
-
