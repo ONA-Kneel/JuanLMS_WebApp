@@ -123,6 +123,7 @@ export default function Faculty_Chats() {
   const { socket: ctxSocket, isConnected } = useSocket();
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
+  const groupsRef = useRef([]);
   // Live refs to avoid stale closures in socket handlers
   const recentChatsRef = useRef([]);
   const selectedChatRef = useRef(null);
@@ -141,6 +142,7 @@ export default function Faculty_Chats() {
   useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
   useEffect(() => { isGroupChatRef.current = isGroupChat; }, [isGroupChat]);
   useEffect(() => { usersRef.current = users; }, [users]);
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -184,11 +186,11 @@ export default function Faculty_Chats() {
     ctxSocket.emit("addUser", currentUserId);
 
     const handleConnect = () => {
-      if (groups.length > 0) {
-        groups.forEach(group => {
+      (groupsRef.current || []).forEach(group => {
+        if (group && group._id) {
           ctxSocket.emit("joinGroup", { userId: currentUserId, groupId: group._id });
-        });
-      }
+        }
+      });
     };
     ctxSocket.on("connect", handleConnect);
 
@@ -375,6 +377,18 @@ export default function Faculty_Chats() {
     };
   }, [ctxSocket, isConnected, currentUserId, groups, selectedChat, isGroupChat, recentChats, users]);
 
+  // When the groups list changes, ensure we're joined to all rooms
+  useEffect(() => {
+    if (!ctxSocket || !isConnected || !currentUserId) return;
+    try {
+      groups.forEach(group => {
+        if (group && group._id) {
+          ctxSocket.emit('joinGroup', { userId: currentUserId, groupId: group._id });
+        }
+      });
+    } catch {}
+  }, [groups, ctxSocket, isConnected, currentUserId]);
+
   // ================= FETCH USERS =================
   useEffect(() => {
     const fetchUsers = async () => {
@@ -492,6 +506,15 @@ export default function Faculty_Chats() {
     fetchRecentConversations();
   }, [currentUserId, users]); // Wait for users to be loaded
 
+  // Lightweight polling fallback for production where sockets may be blocked or cross-instance
+  useEffect(() => {
+    if (!currentUserId) return;
+    const id = setInterval(() => {
+      try { fetchRecentConversations(); } catch {}
+    }, 8000);
+    return () => clearInterval(id);
+  }, [currentUserId]);
+
   // Clean up any corrupted data in recentChats
   useEffect(() => {
     if (recentChats.length > 0) {
@@ -545,7 +568,7 @@ export default function Faculty_Chats() {
         setGroups(res.data);
         // Join all groups in Socket.IO
         res.data.forEach(group => {
-          socket.current?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
+          ctxSocket?.emit("joinGroup", { userId: currentUserId, groupId: group._id });
         });
 
         // Lazy hydrate previews
@@ -920,7 +943,7 @@ export default function Faculty_Chats() {
       setMemberSearchTerm("");
 
       // Join the group in socket
-      socket.current?.emit("joinGroup", { userId: currentUserId, groupId: newGroup._id });
+      ctxSocket?.emit("joinGroup", { userId: currentUserId, groupId: newGroup._id });
     } catch (err) {
       setValidationModal({
         isOpen: true,
@@ -961,7 +984,7 @@ export default function Faculty_Chats() {
       axios.get(`${API_BASE}/group-chats/user/${currentUserId}`, { headers: { "Authorization": `Bearer ${token}` } })
         .then(res => setGroups(res.data)).catch(() => {});
 
-      socket.current?.emit("joinGroup", { userId: currentUserId, groupId: joinedGroup._id });
+      ctxSocket?.emit("joinGroup", { userId: currentUserId, groupId: joinedGroup._id });
       setSelectedChat(joinedGroup);
       setIsGroupChat(true);
       setShowJoinGroupModal(false);
@@ -1011,7 +1034,7 @@ export default function Faculty_Chats() {
       });
 
       // Leave the group in socket
-      socket.current?.emit("leaveGroup", { userId: currentUserId, groupId: groupToLeave._id });
+      ctxSocket?.emit("leaveGroup", { userId: currentUserId, groupId: groupToLeave._id });
       
       // Close modal and reset
       setShowLeaveGroupModal(false);

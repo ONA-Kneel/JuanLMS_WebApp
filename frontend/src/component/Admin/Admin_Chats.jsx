@@ -495,6 +495,15 @@ export default function Admin_Chats() {
     }
   }, [currentUserId, users]); // Dependencies ensure it runs when data is available
 
+  // Lightweight polling fallback for production where sockets may be blocked or cross-instance
+  useEffect(() => {
+    if (!currentUserId) return;
+    const id = setInterval(() => {
+      try { fetchRecentConversations(); } catch {}
+    }, 8000);
+    return () => clearInterval(id);
+  }, [currentUserId]);
+
   // Clean up any corrupted data in recentChats
   useEffect(() => {
     if (recentChats.length > 0) {
