@@ -448,12 +448,13 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     if (tracks.length > 0) {
       fetchStrands();
     }
-  }, [tracks]);
+  }, [tracks, quarterData]);
 
   const fetchStrands = async () => {
     setStrandError('');
     try {
-      const res = await fetch(`${API_BASE}/api/strands/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}`);
+      const quarterParam = quarterData ? `?quarterName=${encodeURIComponent(quarterData.quarterName)}` : '';
+      const res = await fetch(`${API_BASE}/api/strands/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}${quarterParam}`);
       if (res.ok) {
         const data = await res.json();
         setStrands(data);
@@ -471,7 +472,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     if (tracks.length > 0 && strands.length > 0) {
       fetchSections();
     }
-  }, [tracks, strands]);
+  }, [tracks, strands, quarterData]);
 
   const fetchSections = async () => {
     setSectionError('');
@@ -480,7 +481,8 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
       for (const track of tracks) {
         const strandsInTrack = strands.filter(strand => strand.trackName === track.trackName);
         for (const strand of strandsInTrack) {
-          const res = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}`);
+          const quarterParam = quarterData ? `&quarterName=${encodeURIComponent(quarterData.quarterName)}` : '';
+          const res = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}${quarterParam}`);
           if (res.ok) {
             const data = await res.json();
             allSections.push(...data);
@@ -956,10 +958,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/sections`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const requestData = {
           sectionName: sectionFormData.sectionName.trim(),
           trackName: selectedTrack.trackName,
           strandName: selectedStrand.strandName,
@@ -967,7 +966,14 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
           schoolYear: termDetails.schoolYear,
           termName: termDetails.termName,
           quarterName: quarterData ? quarterData.quarterName : undefined
-        })
+      };
+      
+      console.log('Sending section creation request:', requestData);
+      
+      const res = await fetch(`${API_BASE}/api/sections`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData)
       });
 
       if (res.ok) {
@@ -993,6 +999,7 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' }); // Clear form
       } else {
         const data = await res.json();
+        console.error('Section creation failed:', data);
         setSectionError(data.message || 'Failed to add section');
       }
     } catch (err) {
@@ -4550,12 +4557,13 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
     if (termDetails) {
       fetchSubjects();
     }
-  }, [termDetails]);
+  }, [termDetails, quarterData]);
 
   const fetchSubjects = async () => {
     try {
       setSubjectError('');
-      const res = await fetch(`${API_BASE}/api/subjects/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}`);
+      const quarterParam = quarterData ? `?quarterName=${encodeURIComponent(quarterData.quarterName)}` : '';
+      const res = await fetch(`${API_BASE}/api/subjects/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}${quarterParam}`);
       if (res.ok) {
         const data = await res.json();
         setSubjects(data);
@@ -5751,21 +5759,39 @@ export default function TermDetails({ termData: propTermData, quarterData, refre
         try {
           // Find student by school ID
           const student = students.find(s => s.schoolID === assignment.studentSchoolID);
-          if (!student) {
-            skippedCount++;
-            skippedMessages.push(`Student with School ID "${assignment.studentSchoolID}" not found`);
-            continue;
-          }
-
-          // Verify name matches
-          const expectedName = `${student.firstname} ${student.lastname}`;
-          if (assignment.studentName !== expectedName) {
-            skippedCount++;
-            skippedMessages.push(`Name "${assignment.studentName}" does not match School ID "${assignment.studentSchoolID}". Expected: "${expectedName}"`);
-            continue;
-          }
-
+          
           console.log(`Creating student assignment for ${assignment.studentName} in ${assignment.trackName}/${assignment.strandName}/${assignment.sectionName}`);
+
+          // Prepare payload based on whether student exists in system
+          let payload;
+          if (student) {
+            // Student exists in system - link to existing account
+            payload = {
+              studentId: student._id,
+              trackName: assignment.trackName,
+              strandName: assignment.strandName,
+              sectionName: assignment.sectionName,
+              gradeLevel: assignment.gradeLevel,
+              termId: termDetails._id,
+              quarterName: quarterData ? quarterData.quarterName : undefined
+            };
+          } else {
+            // Student doesn't exist - create manual entry
+            payload = {
+              studentName: assignment.studentName,
+              studentSchoolID: assignment.studentSchoolID,
+              firstName: assignment.firstName || assignment.studentName.split(' ')[0],
+              lastName: assignment.lastName || assignment.studentName.split(' ').slice(1).join(' '),
+              enrollmentNo: assignment.enrollmentNo || '',
+              enrollmentDate: assignment.enrollmentDate || new Date(),
+              trackName: assignment.trackName,
+              strandName: assignment.strandName,
+              sectionName: assignment.sectionName,
+              gradeLevel: assignment.gradeLevel,
+              termId: termDetails._id,
+              quarterName: quarterData ? quarterData.quarterName : undefined
+            };
+          }
 
           const res = await fetch(`${API_BASE}/api/student-assignments`, {
             method: 'POST',

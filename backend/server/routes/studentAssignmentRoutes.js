@@ -33,11 +33,15 @@ router.get('/', authenticateToken, async (req, res) => {
           sectionName: assignment.sectionName,
           termId: assignment.termId,
           status: assignment.status,
-          schoolID: assignment.studentId.getDecryptedSchoolID ? assignment.studentId.getDecryptedSchoolID() : assignment.studentId.schoolID,
-          email: assignment.studentId.email,
-          middlename: assignment.studentId.middlename,
-          firstname: assignment.studentId.firstname,
-          lastname: assignment.studentId.lastname,
+          schoolID: schoolID,
+          email: assignment.studentId.getDecryptedEmail ? assignment.studentId.getDecryptedEmail() : assignment.studentId.email,
+          middlename: assignment.studentId.getDecryptedMiddlename ? assignment.studentId.getDecryptedMiddlename() : assignment.studentId.middlename,
+          firstname: assignment.studentId.getDecryptedFirstname ? assignment.studentId.getDecryptedFirstname() : assignment.studentId.firstname,
+          lastname: assignment.studentId.getDecryptedLastname ? assignment.studentId.getDecryptedLastname() : assignment.studentId.lastname,
+          enrollmentNo: assignment.enrollmentNo || '',
+          enrollmentDate: assignment.enrollmentDate || null,
+          quarterName: assignment.quarterName,
+          isApproved: isApproved
         };
       }
       // Manual entry (no linked user)
@@ -52,6 +56,12 @@ router.get('/', authenticateToken, async (req, res) => {
         termId: assignment.termId,
         status: assignment.status,
         schoolID: assignment.studentSchoolID || '',
+        enrollmentNo: assignment.enrollmentNo || '',
+        enrollmentDate: assignment.enrollmentDate || null,
+        firstname: assignment.firstName || '',
+        lastname: assignment.lastName || '',
+        quarterName: assignment.quarterName,
+        isApproved: isApproved
       };
     });
 
