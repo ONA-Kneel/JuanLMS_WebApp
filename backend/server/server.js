@@ -45,6 +45,7 @@ import generalAnnouncementRoutes from './routes/generalAnnouncementRoutes.js';
 import gradeUploadRoutes from './routes/gradeUploadRoutes.js';
 import principalRoutes from './routes/principalRoutes.js';
 import aiAnalyticsRoutes from './routes/aiAnalyticsRoutes.js';
+import vpeReportsRoutes from './routes/vpeReportsRoutes.js';
 import zohoRoutes from './routes/zohoRoutes.js';
 
 
@@ -448,6 +449,7 @@ app.use('/api/general-announcements', generalAnnouncementRoutes);
 app.use('/api/grades', gradeUploadRoutes);
 app.use('/api/principal', principalRoutes);
 app.use('/api/ai-analytics', aiAnalyticsRoutes);
+app.use('/api/vpe-reports', vpeReportsRoutes);
 app.use('/', zohoRoutes);
 
 // Error handling middleware for multer fileFilter errors

@@ -102,4 +102,13 @@ export const gradeFileStorage = new CloudinaryStorage({
   },
 });
 
+export const vpeReportsStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'juanlms/vpe-reports',
+    allowed_formats: ['pdf'],
+    resource_type: 'raw', // For PDF files
+  },
+});
+
 export default cloudinary;

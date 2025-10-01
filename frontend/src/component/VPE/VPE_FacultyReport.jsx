@@ -297,6 +297,46 @@ export default function VPE_FacultyReport() {
   // Tab state
   const [activeTab, setActiveTab] = useState('activities');
 
+  // VPE Reports states
+  const [receivedReports, setReceivedReports] = useState([]);
+  const [loadingReceivedReports, setLoadingReceivedReports] = useState(false);
+  const [receivedReportsError, setReceivedReportsError] = useState(null);
+
+  // Fetch received reports from principals
+  const fetchReceivedReports = useCallback(async () => {
+    try {
+      setLoadingReceivedReports(true);
+      setReceivedReportsError(null);
+      const token = localStorage.getItem("token");
+      
+      console.log("VPE fetchReceivedReports - Token:", token ? "Present" : "Missing");
+      
+      if (!token) {
+        throw new Error("No authentication token found. Please log in again.");
+      }
+      
+      const res = await fetch(`${API_BASE}/api/vpe-reports/received`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err.error || 'Failed to load received reports');
+      }
+      const data = await res.json();
+      console.log("VPE Received reports data:", data);
+      console.log("VPE Reports array:", data.reports);
+      if (data.reports && data.reports.length > 0) {
+        console.log("First report sample:", data.reports[0]);
+      }
+      setReceivedReports(Array.isArray(data.reports) ? data.reports : []);
+    } catch (e) {
+      setReceivedReportsError(e.message);
+      setReceivedReports([]);
+    } finally {
+      setLoadingReceivedReports(false);
+    }
+  }, []);
+
   // VPE: fetch analyses shared to VPE when tab active
   const fetchAnalysisHistory = useCallback(async () => {
     try {
@@ -321,10 +361,33 @@ export default function VPE_FacultyReport() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'ai-analyses') {
-      fetchAnalysisHistory();
+    if (activeTab === 'vpe-reports') {
+      fetchReceivedReports();
     }
-  }, [activeTab, fetchAnalysisHistory]);
+  }, [activeTab, fetchReceivedReports]);
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    console.log("VPE Component - Token check:", token ? "Present" : "Missing");
+    
+    if (!token) {
+      console.error("VPE Component - No token found, user needs to log in");
+      // You could redirect to login here if needed
+    } else {
+      // Decode token to check role
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        console.log("VPE Component - Token payload:", {
+          role: payload.role,
+          name: payload.name,
+          email: payload.email
+        });
+      } catch (e) {
+        console.error("VPE Component - Invalid token format:", e);
+      }
+    }
+  }, []);
 
   const viewAnalysisById = useCallback(async (id) => {
     try {
@@ -1243,14 +1306,14 @@ export default function VPE_FacultyReport() {
               Faculty Last Logins
             </button>
             <button
-              onClick={() => setActiveTab('ai-analyses')}
+              onClick={() => setActiveTab('vpe-reports')}
               className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
-                activeTab === 'ai-analyses'
+                activeTab === 'vpe-reports'
                   ? "bg-white text-blue-900 border border-gray-300 border-b-0"
                   : "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
               }`}
             >
-              AI Analyses
+              Received Reports
             </button>
           </div>
 
@@ -1908,59 +1971,7 @@ export default function VPE_FacultyReport() {
                   </button>
                 </div>
               )}
-          {activeTab === 'ai-analyses' && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold text-gray-800">Shared AI Analyses</h3>
-                <button onClick={fetchAnalysisHistory} className="px-3 py-2 text-sm border rounded hover:bg-gray-50">Refresh</button>
-              </div>
-              {loadingHistory ? (
-                <div className="text-center py-8">
-                  <div className="inline-block w-8 h-8 border-4 border-blue-500 border-top-transparent rounded-full animate-spin"></div>
-                </div>
-              ) : historyError ? (
-                <div className="text-center py-8 bg-red-50 rounded-lg"><p className="text-red-600">{historyError}</p></div>
-              ) : analysisHistory.length === 0 ? (
-                <div className="text-center py-8 bg-gray-50 rounded-lg"><p className="text-gray-600">No analyses shared yet.</p></div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
-                    <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border">Created At</th>
-                        <th className="p-3 border">School Year</th>
-                        <th className="p-3 border">Term</th>
-                        <th className="p-3 border">Filters</th>
-                        <th className="p-3 border">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analysisHistory.map(item => (
-                        <tr key={item.id} className="hover:bg-gray-50">
-                          <td className="p-3 border whitespace-nowrap">{item.createdAt ? new Date(item.createdAt).toLocaleString('en-US') : '-'}</td>
-                          <td className="p-3 border whitespace-nowrap">{item.schoolYear}</td>
-                          <td className="p-3 border whitespace-nowrap">{item.termName}</td>
-                          <td className="p-3 border whitespace-normal">
-                            {(() => {
-                              const parts = [];
-                              if (item.filters?.strand) parts.push(`Strand: ${item.filters.strand}`);
-                              if (item.filters?.section) parts.push(`Section: ${item.filters.section}`);
-                              if (item.filters?.track) parts.push(`Track: ${item.filters.track}`);
-                              return parts.join(' | ') || 'Year-level report';
-                            })()}
-                          </td>
-                          <td className="p-3 border whitespace-nowrap flex gap-2">
-                            <button onClick={() => viewAnalysisById(item.id)} className="px-2 py-1 text-xs border rounded hover:bg-gray-50">View</button>
-                            <button onClick={() => downloadAnalysisPdfById(item.id, `AI_Analysis_${item.schoolYear}_${item.termName}`)} className="px-2 py-1 text-xs border rounded hover:bg-gray-50">PDF</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+
 
               {/* Legend */}
               <div className="mt-4 flex flex-wrap gap-4 text-xs">
@@ -1979,6 +1990,136 @@ export default function VPE_FacultyReport() {
               </div>
             </>
           )}
+              </div>
+            )}
+
+            {activeTab === 'vpe-reports' && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-semibold text-gray-800">Reports from Principals</h3>
+                  <button 
+                    onClick={fetchReceivedReports}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                  </button>
+                </div>
+
+                {loadingReceivedReports ? (
+                  <div className="text-center py-8">
+                    <div className="inline-block w-8 h-8 border-4 border-blue-500 border-top-transparent rounded-full animate-spin"></div>
+                    <p className="mt-2 text-gray-600">Loading received reports...</p>
+                  </div>
+                ) : receivedReportsError ? (
+                  <div className="text-center py-8 bg-red-50 rounded-lg">
+                    <p className="text-red-600">{receivedReportsError}</p>
+                    <button onClick={fetchReceivedReports} className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                      Retry
+                    </button>
+                  </div>
+                ) : receivedReports.length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg">
+                    <p className="text-gray-600">No reports received from principals yet.</p>
+                    <p className="text-sm text-gray-500 mt-2">Reports sent by principals will appear here.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                      <thead>
+                        <tr className="bg-gray-100 text-left">
+                          <th className="p-3 border">Received Date</th>
+                          <th className="p-3 border">From Principal</th>
+                          <th className="p-3 border">School Year</th>
+                          <th className="p-3 border">Term</th>
+                          <th className="p-3 border">Report Name</th>
+                          <th className="p-3 border">Message</th>
+                          <th className="p-3 border">Status</th>
+                          <th className="p-3 border">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {receivedReports.map(report => (
+                          <tr key={report.id} className="hover:bg-gray-50">
+                            <td className="p-3 border whitespace-nowrap">
+                              {report.sentAt ? new Date(report.sentAt).toLocaleString('en-US') : '-'}
+                            </td>
+                            <td className="p-3 border whitespace-nowrap">{report.sentBy}</td>
+                            <td className="p-3 border whitespace-nowrap">{report.schoolYear}</td>
+                            <td className="p-3 border whitespace-nowrap">{report.termName}</td>
+                            <td className="p-3 border whitespace-nowrap">{report.reportName}</td>
+                            <td className="p-3 border whitespace-normal max-w-xs truncate">
+                              {report.message || '-'}
+                            </td>
+                            <td className="p-3 border whitespace-nowrap">
+                              <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+                                report.status === 'sent' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                                report.status === 'delivered' ? 'bg-green-100 text-green-700 border border-green-200' :
+                                'bg-gray-100 text-gray-700 border border-gray-200'
+                              }`}>
+                                {report.status}
+                              </span>
+                            </td>
+                            <td className="p-3 border whitespace-nowrap">
+                            <button 
+                              onClick={async () => {
+                                console.log("VPE Download button clicked!");
+                                console.log("Report object:", report);
+                                
+                                try {
+                                  const token = localStorage.getItem('token');
+                                  if (!token) {
+                                    alert('Please log in to download reports.');
+                                    return;
+                                  }
+                                  
+                                  // Use backend download route for proper authentication and filename handling
+                                  const response = await fetch(`${API_BASE}/api/vpe-reports/download/${report.id}`, {
+                                    method: 'GET',
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`
+                                    }
+                                  });
+                                  
+                                  if (!response.ok) {
+                                    const errorData = await response.json();
+                                    throw new Error(errorData.error || 'Failed to download report');
+                                  }
+                                  
+                                  // Get the blob from response
+                                  const blob = await response.blob();
+                                  
+                                  // Create download link with proper filename
+                                  const url = window.URL.createObjectURL(blob);
+                                  const link = document.createElement('a');
+                                  link.href = url;
+                                  link.download = report.reportName;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  window.URL.revokeObjectURL(url);
+                                  
+                                } catch (error) {
+                                  console.error('Download error:', error);
+                                  alert(`Failed to download report: ${error.message}`);
+                                }
+                              }}
+                              className="px-2 py-1 text-xs border rounded hover:bg-gray-50 flex items-center gap-1"
+                            >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Download
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -305,6 +305,15 @@ export default function Principal_FacultyReport() {
   // Tab state
   const [activeTab, setActiveTab] = useState('activities');
 
+  // VPE Report Sending states
+  const [showSendReportModal, setShowSendReportModal] = useState(false);
+  const [selectedReportFile, setSelectedReportFile] = useState(null);
+  const [reportMessage, setReportMessage] = useState('');
+  const [sendingReport, setSendingReport] = useState(false);
+  const [sendReportError, setSendReportError] = useState(null);
+  const [sentReports, setSentReports] = useState([]);
+  const [loadingSentReports, setLoadingSentReports] = useState(false);
+
   // Fetch saved AI analyses history when tab is active
   const fetchAnalysisHistory = useCallback(async () => {
     try {
@@ -328,11 +337,36 @@ export default function Principal_FacultyReport() {
     }
   }, []);
 
+  // VPE Report Sending functions
+  const fetchSentReports = useCallback(async () => {
+    try {
+      setLoadingSentReports(true);
+      setSendReportError(null);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/vpe-reports/sent`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err.error || 'Failed to load sent reports');
+      }
+      const data = await res.json();
+      setSentReports(Array.isArray(data.reports) ? data.reports : []);
+    } catch (e) {
+      setSendReportError(e.message);
+      setSentReports([]);
+    } finally {
+      setLoadingSentReports(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'ai-analyses') {
       fetchAnalysisHistory();
+    } else if (activeTab === 'vpe-reports') {
+      fetchSentReports();
     }
-  }, [activeTab, fetchAnalysisHistory]);
+  }, [activeTab, fetchAnalysisHistory, fetchSentReports]);
 
   const viewAnalysisById = useCallback(async (id) => {
     try {
@@ -411,6 +445,60 @@ export default function Principal_FacultyReport() {
       setAnalysisError(e.message);
     }
   }, []);
+
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type === 'application/pdf') {
+      setSelectedReportFile(file);
+      setSendReportError(null);
+    } else {
+      setSendReportError('Please select a valid PDF file');
+    }
+  };
+
+  const sendReportToVPE = async () => {
+    if (!selectedReportFile) {
+      setSendReportError('Please select a PDF file to send');
+      return;
+    }
+
+    setSendingReport(true);
+    setSendReportError(null);
+
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
+      formData.append('reportFile', selectedReportFile);
+      formData.append('message', reportMessage);
+      formData.append('schoolYear', selectedSchoolYear || '');
+      formData.append('termName', selectedTerm || '');
+
+      const response = await fetch(`${API_BASE}/api/vpe-reports/send`, {
+        method: 'POST',
+        headers: { "Authorization": `Bearer ${token}` },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send report');
+      }
+
+      await response.json();
+      setShowSendReportModal(false);
+      setSelectedReportFile(null);
+      setReportMessage('');
+      await fetchSentReports();
+      
+      // Show success message
+      alert('Report sent to VPE successfully!');
+    } catch (error) {
+      console.error('Error sending report:', error);
+      setSendReportError(error.message || 'Failed to send report');
+    } finally {
+      setSendingReport(false);
+    }
+  };
 
   // New: report type modal state
   const [showReportTypeModal, setShowReportTypeModal] = useState(false);
@@ -1327,6 +1415,16 @@ export default function Principal_FacultyReport() {
             >
               AI Analyses
             </button>
+            <button
+              onClick={() => setActiveTab('vpe-reports')}
+              className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
+                activeTab === 'vpe-reports'
+                  ? "bg-white text-blue-900 border border-gray-300 border-b-0"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
+              }`}
+            >
+              Send Reports to VPE
+            </button>
           </div>
 
           {/* Tab Content */}
@@ -1981,6 +2079,27 @@ export default function Principal_FacultyReport() {
                   </button>
                 </div>
               )}
+
+              {/* Legend */}
+              <div className="mt-4 flex flex-wrap gap-4 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-100 border border-red-200 rounded"></div>
+                  <span>3+ days inactive</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-yellow-100 border border-yellow-200 rounded"></div>
+                  <span>2 days inactive</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-100 border border-green-200 rounded"></div>
+                  <span>Active (≤1 day)</span>
+                </div>
+              </div>
+            </>
+          )}
+              </div>
+            )}
+
           {activeTab === 'ai-analyses' && (
             <div>
               <div className="flex items-center justify-between mb-4">
@@ -2041,25 +2160,127 @@ export default function Principal_FacultyReport() {
             </div>
           )}
 
-              {/* Legend */}
-              <div className="mt-4 flex flex-wrap gap-4 text-xs">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-red-100 border border-red-200 rounded"></div>
-                  <span>3+ days inactive</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-yellow-100 border border-yellow-200 rounded"></div>
-                  <span>2 days inactive</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-green-100 border border-green-200 rounded"></div>
-                  <span>Active (≤1 day)</span>
-                </div>
+          {activeTab === 'vpe-reports' && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-800">Send Reports to VPE</h3>
+                <button 
+                  onClick={() => setShowSendReportModal(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Send New Report
+                </button>
               </div>
-            </>
+
+              {loadingSentReports ? (
+                <div className="text-center py-8">
+                  <div className="inline-block w-8 h-8 border-4 border-blue-500 border-top-transparent rounded-full animate-spin"></div>
+                  <p className="mt-2 text-gray-600">Loading sent reports...</p>
+                </div>
+              ) : sendReportError ? (
+                <div className="text-center py-8 bg-red-50 rounded-lg">
+                  <p className="text-red-600">{sendReportError}</p>
+                  <button onClick={fetchSentReports} className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    Retry
+                  </button>
+                </div>
+              ) : sentReports.length === 0 ? (
+                <div className="text-center py-8 bg-gray-50 rounded-lg">
+                  <p className="text-gray-600">No reports sent to VPE yet.</p>
+                  <p className="text-sm text-gray-500 mt-2">Click "Send New Report" to send your first report.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-3 border">Sent Date</th>
+                        <th className="p-3 border">School Year</th>
+                        <th className="p-3 border">Term</th>
+                        <th className="p-3 border">Report Name</th>
+                        <th className="p-3 border">Message</th>
+                        <th className="p-3 border">Status</th>
+                        <th className="p-3 border">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sentReports.map(report => (
+                        <tr key={report.id} className="hover:bg-gray-50">
+                          <td className="p-3 border whitespace-nowrap">
+                            {report.sentAt ? new Date(report.sentAt).toLocaleString('en-US') : '-'}
+                          </td>
+                          <td className="p-3 border whitespace-nowrap">{report.schoolYear}</td>
+                          <td className="p-3 border whitespace-nowrap">{report.termName}</td>
+                          <td className="p-3 border whitespace-nowrap">{report.reportName}</td>
+                          <td className="p-3 border whitespace-normal max-w-xs truncate">
+                            {report.message || '-'}
+                          </td>
+                          <td className="p-3 border whitespace-nowrap">
+                            <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+                              report.status === 'sent' ? 'bg-green-100 text-green-700 border border-green-200' :
+                              report.status === 'delivered' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                              'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                            }`}>
+                              {report.status}
+                            </span>
+                          </td>
+                          <td className="p-3 border whitespace-nowrap">
+                            <button 
+                              onClick={async () => {
+                                try {
+                                  const token = localStorage.getItem('token');
+                                  if (!token) {
+                                    alert('Please log in to download reports.');
+                                    return;
+                                  }
+                                  
+                                  // Use backend download route for proper authentication and filename handling
+                                  const response = await fetch(`${API_BASE}/api/vpe-reports/download/${report.id}`, {
+                                    method: 'GET',
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`
+                                    }
+                                  });
+                                  
+                                  if (!response.ok) {
+                                    const errorData = await response.json();
+                                    throw new Error(errorData.error || 'Failed to download report');
+                                  }
+                                  
+                                  // Get the blob from response
+                                  const blob = await response.blob();
+                                  
+                                  // Create download link with proper filename
+                                  const url = window.URL.createObjectURL(blob);
+                                  const link = document.createElement('a');
+                                  link.href = url;
+                                  link.download = report.reportName;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  window.URL.revokeObjectURL(url);
+                                  
+                                } catch (error) {
+                                  console.error('Download error:', error);
+                                  alert(`Failed to download report: ${error.message}`);
+                                }
+                              }}
+                              className="px-2 py-1 text-xs border rounded hover:bg-gray-50"
+                            >
+                              Download
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           )}
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -2235,6 +2456,115 @@ export default function Principal_FacultyReport() {
               <button onClick={()=>setShowReportTypeModal(false)} className="px-4 py-2 border rounded">Cancel</button>
               <button onClick={confirmCreateAnalysis} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50" disabled={loadingAnalysis || (reportType==='strand' && !modalStrand && !selectedStrand) || (reportType==='section' && !modalSection && !selectedSection)}>
                 Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send Report to VPE Modal */}
+      {showSendReportModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <div className="p-6 border-b">
+              <h3 className="text-xl font-semibold text-gray-800">Send Report to VPE</h3>
+              <p className="text-sm text-gray-600 mt-1">Upload a PDF report and send it to the Vice President of Education</p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {/* File Upload */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select PDF Report
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleFileSelect}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {selectedReportFile && (
+                  <p className="mt-2 text-sm text-green-600">
+                    ✓ Selected: {selectedReportFile.name}
+                  </p>
+                )}
+              </div>
+
+              {/* Message */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Message (Optional)
+                </label>
+                <textarea
+                  value={reportMessage}
+                  onChange={(e) => setReportMessage(e.target.value)}
+                  placeholder="Add a message to accompany the report..."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
+                />
+              </div>
+
+              {/* Report Info */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-800 mb-2">Report Details</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">School Year:</span>
+                    <span className="ml-2 font-medium">{selectedSchoolYear || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Term:</span>
+                    <span className="ml-2 font-medium">{selectedTerm || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Error Message */}
+              {sendReportError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-red-400 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <h4 className="font-medium">Error</h4>
+                      <p className="text-sm mt-1">{sendReportError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-6 border-t flex justify-end gap-3 bg-gray-50">
+              <button
+                onClick={() => {
+                  setShowSendReportModal(false);
+                  setSelectedReportFile(null);
+                  setReportMessage('');
+                  setSendReportError(null);
+                }}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                disabled={sendingReport}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={sendReportToVPE}
+                disabled={!selectedReportFile || sendingReport}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {sendingReport ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    Send Report
+                  </>
+                )}
               </button>
             </div>
           </div>
