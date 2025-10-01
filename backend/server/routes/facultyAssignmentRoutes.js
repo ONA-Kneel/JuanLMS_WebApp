@@ -3,7 +3,7 @@ import FacultyAssignment from '../models/FacultyAssignment.js';
 import User from '../models/User.js'; // To populate faculty details
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import Term from '../models/Term.js';
-
+//a
 // Validation function to check for faculty assignment conflicts
 const validateFacultyAssignment = async (facultyId, subjectName, sectionName, schoolYear, termName, excludeAssignmentId = null) => {
   try {
