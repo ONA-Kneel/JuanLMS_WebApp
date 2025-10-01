@@ -7,6 +7,7 @@ import { MoreVertical } from "lucide-react";
 import ValidationModal from './ValidationModal';
 import { getFileUrl } from "../utils/imageUtils";
 import { useSocket } from "../contexts/SocketContext";
+import { getLogoBase64, getFooterLogoBase64 } from "../utils/imageToBase64";
 // import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
@@ -268,6 +269,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
     setExportingPDF(true);
     
     try {
+      // Get base64 encoded logos
+      const logoBase64 = await getLogoBase64();
+      const footerLogoBase64 = await getFooterLogoBase64();
     // Fetch class details from faculty-classes endpoint
     const token = localStorage.getItem('token');
     let classDetails = {};
@@ -502,7 +506,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
         <div class="header">
           <div class="logo-section">
                  <div class="logo">
-              <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
+              <img src="${logoBase64 || '/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png'}" alt="San Juan de Dios Hospital Seal" />
             </div>
                  </div>
           <div class="institution-info">
@@ -590,7 +594,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
           </div>
           <div class="footer-right">
             <div class="footer-logo"> 
-              <img src="/src/assets/logo/images.png" alt="San Juan de Dios Hospital Seal  " />
+              <img src="${footerLogoBase64 || '/src/assets/logo/images.png'}" alt="San Juan de Dios Hospital Seal  " />
             </div>
                 
               

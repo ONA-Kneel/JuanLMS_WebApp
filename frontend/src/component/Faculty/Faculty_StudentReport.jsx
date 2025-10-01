@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import Faculty_Navbar from "./Faculty_Navbar";
 import ProfileMenu from "../ProfileMenu";
+import { getLogoBase64, getFooterLogoBase64 } from "../../utils/imageToBase64";
 
 // Use localhost for development - local server is running on port 5000
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
@@ -709,6 +710,10 @@ export default function Faculty_StudentReport() {
                 try {
                   setExportingPDF(true);
                   
+                  // Get base64 encoded logos
+                  const logoBase64 = await getLogoBase64();
+                  const footerLogoBase64 = await getFooterLogoBase64();
+                  
                   // Create HTML content for PDF
                   const htmlContent = `
                     <!DOCTYPE html>
@@ -870,7 +875,7 @@ export default function Faculty_StudentReport() {
                       <div class="header">
                         <div class="logo-section">
                           <div class="logo">
-                            <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
+                            <img src="${logoBase64 || '/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png'}" alt="San Juan de Dios Hospital Seal" />
                           </div>
                         </div>
                         <div class="institution-info">
@@ -925,7 +930,7 @@ export default function Faculty_StudentReport() {
                         </div>
                         <div class="footer-right">
                           <div class="footer-logo"> 
-                            <img src="/src/assets/logo/images.png" alt="San Juan de Dios Hospital Seal" />
+                            <img src="${footerLogoBase64 || '/src/assets/logo/images.png'}" alt="San Juan de Dios Hospital Seal" />
                           </div>
                         </div>
                       </div>

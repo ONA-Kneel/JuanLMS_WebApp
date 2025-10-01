@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
+import { getLogoBase64, getFooterLogoBase64 } from '../../utils/imageToBase64';
 
 const API_BASE = "https://juanlms-webapp-server.onrender.com";
 
@@ -2068,6 +2069,10 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     try {
       console.log('Generating comprehensive PDF report...');
       
+      // Get base64 encoded logos
+      const logoBase64 = await getLogoBase64();
+      const footerLogoBase64 = await getFooterLogoBase64();
+      
       // Create a comprehensive HTML report
       const reportHTML = `
         <!DOCTYPE html>
@@ -2179,7 +2184,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           <div class="header">
             <div class="logo-section">
               <div class="logo">
-                <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
+                <img src="${logoBase64 || '/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png'}" alt="San Juan de Dios Hospital Seal" />
               </div>
             </div>
             <div class="institution-info">
@@ -2420,7 +2425,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             </div>
             <div class="footer-right">
               <div class="footer-logo"> 
-                <img src="/src/assets/logo/images.png" alt="San Juan de Dios Hospital Seal" />
+                <img src="${footerLogoBase64 || '/src/assets/logo/images.png'}" alt="San Juan de Dios Hospital Seal" />
               </div>
             </div>
           </div>

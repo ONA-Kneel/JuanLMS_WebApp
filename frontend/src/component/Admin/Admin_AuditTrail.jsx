@@ -3,6 +3,7 @@ import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
+import { getLogoBase64, getFooterLogoBase64 } from '../../utils/imageToBase64';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com"; 
 
@@ -242,6 +243,10 @@ export default function Admin_AuditTrail() {
         return;
       }
 
+      // Get base64 encoded logos
+      const logoBase64 = await getLogoBase64();
+      const footerLogoBase64 = await getFooterLogoBase64();
+
       // Build query parameters for export
       const params = [];
       if (selectedAction && selectedAction !== 'all') params.push(`action=${encodeURIComponent(selectedAction)}`);
@@ -401,7 +406,7 @@ export default function Admin_AuditTrail() {
           <div class="header">
             <div class="logo-section">
               <div class="logo">
-                <img src="/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png" alt="San Juan de Dios Hospital Seal" />
+                <img src="${logoBase64 || '/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png'}" alt="San Juan de Dios Hospital Seal" />
               </div>
             </div>
             <div class="institution-info">
@@ -456,7 +461,7 @@ export default function Admin_AuditTrail() {
             </div>
             <div class="footer-right">
               <div class="footer-logo"> 
-                <img src="/src/assets/logo/images.png" alt="San Juan de Dios Hospital Seal" />
+                <img src="${footerLogoBase64 || '/src/assets/logo/images.png'}" alt="San Juan de Dios Hospital Seal" />
               </div>
             </div>
           </div>
