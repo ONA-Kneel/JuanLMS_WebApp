@@ -372,10 +372,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const fetchFaculties = async () => {
     try {
       console.log('🔍 Fetching faculties...');
+      console.log('🔍 API_BASE:', API_BASE);
+      console.log('🔍 Full URL:', `${API_BASE}/users/active`);
       const token = localStorage.getItem('token');
       console.log('🔑 Token:', token ? 'Present' : 'Missing');
       
-      const res = await fetch(`${API_BASE}/api/users/active`, {
+      const res = await fetch(`${API_BASE}/users/active`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -383,6 +385,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       
       console.log('📡 Faculty fetch response status:', res.status);
       console.log('📡 Faculty fetch response ok:', res.ok);
+      console.log('📡 Faculty fetch response headers:', res.headers);
       
       if (res.ok) {
         const data = await res.json();
@@ -407,12 +410,15 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         
         setFaculties(facultyUsers);
       } else {
-        const data = await res.json();
-        console.error('❌ Faculty fetch failed:', data);
-        setFacultyError(data.message || 'Failed to fetch faculties');
+        console.error('❌ Faculty fetch failed with status:', res.status);
+        console.error('❌ Faculty fetch response text:', await res.text());
+        setFacultyError(`Failed to fetch faculties (Status: ${res.status})`);
       }
     } catch (err) {
       console.error('💥 Error fetching faculties:', err);
+      console.error('💥 Error type:', typeof err);
+      console.error('💥 Error message:', err.message);
+      console.error('💥 Error stack:', err.stack);
       setFacultyError('Error fetching faculties');
     }
   };
@@ -423,7 +429,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const token = localStorage.getItem('token');
       console.log('🔑 Token:', token ? 'Present' : 'Missing');
       
-      const res = await fetch(`${API_BASE}/api/users/active`, {
+      const res = await fetch(`${API_BASE}/users/active`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -1274,7 +1280,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               const searchTerm = value.toLowerCase();
               const fullName = `${faculty.firstname} ${faculty.lastname}`.toLowerCase();
               const schoolID = (faculty.schoolID || '').toLowerCase();
-              return fullName.includes(searchTerm) || schoolID.includes(searchTerm);
+              
+              // Extract just the name part if the search term includes school ID in parentheses
+              const nameOnly = searchTerm.replace(/\s*\([^)]*\)\s*$/, '').trim();
+              
+              return fullName.includes(searchTerm) || 
+                     schoolID.includes(searchTerm) ||
+                     fullName.includes(nameOnly) ||
+                     schoolID.includes(nameOnly);
             });
             setFacultySearchResults(filteredFaculties);
           }

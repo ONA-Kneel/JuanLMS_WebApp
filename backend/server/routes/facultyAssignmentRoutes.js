@@ -7,14 +7,14 @@ import Term from '../models/Term.js';
 // Validation function to check for faculty assignment conflicts
 const validateFacultyAssignment = async (facultyId, subjectName, sectionName, schoolYear, termName, excludeAssignmentId = null) => {
   try {
-    // Check if the same subject-section combination is already assigned to a different faculty
+    // Check if the same faculty is already assigned to the same subject-section combination
     const existingAssignment = await FacultyAssignment.findOne({
       subjectName: subjectName,
       sectionName: sectionName,
       schoolYear: schoolYear,
       termName: termName,
       status: 'active',
-      facultyId: { $ne: facultyId }, // Different faculty
+      facultyId: facultyId, // Same faculty
       ...(excludeAssignmentId && { _id: { $ne: excludeAssignmentId } }) // Exclude current assignment when updating
     }).populate('facultyId', 'firstname lastname');
 
@@ -165,7 +165,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     if (!validation.isValid) {
       return res.status(400).json({ 
-        message: `Subject "${subjectName}" in Section "${sectionName}" is already assigned to ${validation.conflict.facultyName}`,
+        message: `This faculty is already assigned to Subject "${subjectName}" in Section "${sectionName}". A faculty cannot be assigned to the same subject in the same section.`,
         conflict: validation.conflict
       });
     }
@@ -275,7 +275,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         if (!validation.isValid) {
           errors.push({ 
             assignment: assignmentData, 
-            message: `Subject "${subjectName}" in Section "${sectionName}" is already assigned to ${validation.conflict.facultyName}`,
+            message: `This faculty is already assigned to Subject "${subjectName}" in Section "${sectionName}". A faculty cannot be assigned to the same subject in the same section.`,
             conflict: validation.conflict
           });
           continue;
@@ -398,7 +398,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 
     if (!validation.isValid) {
       return res.status(400).json({ 
-        message: `Subject "${newSubjectName}" in Section "${newSectionName}" is already assigned to ${validation.conflict.facultyName}. Please change the subject or section, or delete the conflicting assignment.`,
+        message: `This faculty is already assigned to Subject "${newSubjectName}" in Section "${newSectionName}". A faculty cannot be assigned to the same subject in the same section. Please change the subject or section, or delete the conflicting assignment.`,
         conflict: validation.conflict
       });
     }
