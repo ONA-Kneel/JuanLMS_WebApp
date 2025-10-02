@@ -1933,28 +1933,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       return;
     }
 
-    // Check if student is enrolled in current term and quarter
-    let schoolIdToCheck = '';
-    if (studentToAssign) {
-      schoolIdToCheck = studentToAssign.schoolID;
-    } else if (studentManualId) {
-      schoolIdToCheck = studentManualId.trim();
-    }
-
-    if (schoolIdToCheck) {
-      const isEnrolled = registrants.some(registrant => {
-        const registrantSchoolId = (registrant.schoolID || '').trim();
-        return registrant.status === 'approved' && 
-               registrantSchoolId === schoolIdToCheck &&
-               registrant.termName === termDetails.termName &&
-               registrant.schoolYear === termDetails.schoolYear;
-      });
-
-      if (!isEnrolled) {
-        setStudentError('Student is not enrolled in this term and quarter.');
-        return;
-      }
-    }
+    // Allow free input for new students - skip enrollment validation
+    // This allows adding students from San Juan system without requiring pre-enrollment
+    console.log('Allowing free input for new student assignment - skipping enrollment validation');
 
     try {
       const token = localStorage.getItem('token');
