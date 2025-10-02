@@ -34,6 +34,7 @@ export default function Admin_Registrants() {
   const [selectedDate, setSelectedDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [studentAssignments, setStudentAssignments] = useState([]);
+  const [students, setStudents] = useState([]);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectionNote, setRejectionNote] = useState('Application requirements not met');
@@ -117,9 +118,12 @@ export default function Admin_Registrants() {
         });
         if (res.ok) {
           const terms = await res.json();
+          console.log('Available terms:', terms);
           const active = terms.find(term => term.status === 'active');
+          console.log('Active term found:', active);
           setCurrentTerm(active || null);
         } else {
+          console.log('Failed to fetch terms, status:', res.status);
           setCurrentTerm(null);
         }
       } catch {
@@ -136,22 +140,51 @@ export default function Admin_Registrants() {
   // Fetch student assignments for the active term to validate registrants
   useEffect(() => {
     async function fetchStudentAssignments() {
-      if (!currentTerm) return;
+      if (!currentTerm) {
+        console.log('No current term available for fetching student assignments');
+        return;
+      }
       try {
+        console.log('Fetching student assignments for term:', currentTerm);
+        console.log('Term ID:', currentTerm._id);
         const token = localStorage.getItem("token");
         const res = await axios.get(`${API_BASE}/api/student-assignments`, {
           params: { termId: currentTerm._id },
           headers: { Authorization: `Bearer ${token}` }
         });
+        console.log('Student assignments response status:', res.status);
+        console.log('Fetched student assignments:', res.data);
         setStudentAssignments(res.data || []);
       } catch (err) {
         // Silent fail; validation column will show unknown
-        console.warn('Failed to fetch student assignments for validation');
+        console.warn('Failed to fetch student assignments for validation:', err);
+        console.warn('Error details:', err.response?.data);
         setStudentAssignments([]);
       }
     }
     fetchStudentAssignments();
   }, [currentTerm]);
+
+  // Fetch students to get school IDs for validation
+  useEffect(() => {
+    async function fetchStudents() {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/users/active`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log('Fetched users:', res.data);
+        // Filter to only get students
+        const studentUsers = (res.data || []).filter(user => user.role === 'students');
+        console.log('Filtered students:', studentUsers);
+        setStudents(studentUsers);
+      } catch (err) {
+        console.warn('Failed to fetch students for validation:', err);
+        setStudents([]);
+      }
+    }
+    fetchStudents();
+  }, []);
 
   const normalizeName = (first, middle, last) => {
     const parts = [first || '', middle || '', last || '']
@@ -163,22 +196,92 @@ export default function Admin_Registrants() {
   const validateAgainstAssignments = (r) => {
     const registrantName = normalizeName(r.firstName, r.middleName, r.lastName);
     const registrantSchoolId = (r.schoolID || '').trim();
-    const track = (r.trackName || '').trim().toLowerCase();
-    const strand = (r.strandName || '').trim().toLowerCase();
-    const section = (r.sectionName || '').trim().toLowerCase();
-
-    const matched = studentAssignments.find(a => {
-      const assignmentName = (a.studentName || '').trim().toLowerCase();
-      const assignmentSchoolId = (a.schoolID || a.studentSchoolID || '').trim();
-      const aTrack = (a.trackName || '').trim().toLowerCase();
-      const aStrand = (a.strandName || '').trim().toLowerCase();
-      const aSection = (a.sectionName || '').trim().toLowerCase();
-      return assignmentName === registrantName &&
-             assignmentSchoolId === registrantSchoolId &&
-             aTrack === track &&
-             aStrand === strand &&
-             aSection === section;
+    
+    console.log('=== VALIDATION DEBUG ===');
+    console.log('Registrant:', {
+      name: registrantName,
+      schoolId: registrantSchoolId,
+      firstName: r.firstName,
+      middleName: r.middleName,
+      lastName: r.lastName
     });
+    console.log('Available student assignments:', studentAssignments.length);
+    console.log('Student assignments data:', studentAssignments);
+    
+    // Try multiple matching strategies
+    const matched = studentAssignments.find(a => {
+      // Get all possible school ID fields
+      let assignmentSchoolId = (a.schoolID || a.studentSchoolID || a.schoolID || '').trim();
+      
+      // If no school ID in assignment, try to get it from the linked student record
+      if (!assignmentSchoolId && a.studentId) {
+        const linkedStudent = students.find(s => s._id === a.studentId);
+        if (linkedStudent) {
+          assignmentSchoolId = (linkedStudent.schoolID || '').trim();
+          console.log('Found school ID from linked student:', assignmentSchoolId);
+        }
+      }
+      
+      // Get all possible name fields and normalize them
+      const assignmentFullName = (a.studentName || '').trim().toLowerCase();
+      const assignmentFirstName = (a.firstname || a.firstName || '').trim().toLowerCase();
+      const assignmentLastName = (a.lastname || a.lastName || '').trim().toLowerCase();
+      const assignmentNormalizedName = normalizeName(assignmentFirstName, '', assignmentLastName);
+      
+      console.log('Checking assignment:', {
+        assignmentFullName,
+        assignmentFirstName,
+        assignmentLastName,
+        assignmentNormalizedName,
+        assignmentSchoolId,
+        registrantName,
+        registrantSchoolId,
+        fullAssignmentObject: a
+      });
+      
+      // Check school ID match first
+      const schoolIdMatch = assignmentSchoolId === registrantSchoolId;
+      
+      if (!schoolIdMatch) {
+        console.log('School ID does not match');
+        return false;
+      }
+      
+      // If school ID matches, check name matches
+      const nameMatch = assignmentFullName === registrantName || 
+                       assignmentNormalizedName === registrantName ||
+                       (assignmentFirstName === r.firstName?.toLowerCase() && 
+                        assignmentLastName === r.lastName?.toLowerCase());
+      
+      console.log('Match results:', { schoolIdMatch, nameMatch });
+      
+      return nameMatch;
+    });
+    
+    console.log('Primary match result:', matched);
+    
+    // If no exact match found, try to find by school ID only (fallback)
+    if (!matched) {
+      const schoolIdMatch = studentAssignments.find(a => {
+        let assignmentSchoolId = (a.schoolID || a.studentSchoolID || a.schoolID || '').trim();
+        
+        // If no school ID in assignment, try to get it from the linked student record
+        if (!assignmentSchoolId && a.studentId) {
+          const linkedStudent = students.find(s => s._id === a.studentId);
+          if (linkedStudent) {
+            assignmentSchoolId = (linkedStudent.schoolID || '').trim();
+          }
+        }
+        
+        console.log('Fallback check - assignment school ID:', assignmentSchoolId, 'vs registrant:', registrantSchoolId);
+        return assignmentSchoolId === registrantSchoolId;
+      });
+      console.log('Fallback match result:', schoolIdMatch);
+      return !!schoolIdMatch;
+    }
+    
+    console.log('Final result:', !!matched);
+    console.log('=== END VALIDATION DEBUG ===');
     return !!matched;
   };
 
@@ -497,9 +600,9 @@ export default function Admin_Registrants() {
                       <td className="p-3 border-b align-middle">{r.sectionName || '-'}</td>
                       <td className="p-3 border-b align-middle">
                         {validateAgainstAssignments(r) ? (
-                          <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Account exists in Student Assignment</span>
+                          <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Student is enrolled</span>
                         ) : (
-                          <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Account does not exist</span>
+                          <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Student not enrolled</span>
                         )}
                       </td>
                       <td className="p-3 border-b align-middle">{r.firstName}</td>

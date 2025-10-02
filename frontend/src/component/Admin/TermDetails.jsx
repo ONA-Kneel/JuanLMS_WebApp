@@ -1849,6 +1849,29 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       return;
     }
 
+    // Check if student is enrolled in current term and quarter
+    let schoolIdToCheck = '';
+    if (studentToAssign) {
+      schoolIdToCheck = studentToAssign.schoolID;
+    } else if (studentManualId) {
+      schoolIdToCheck = studentManualId.trim();
+    }
+
+    if (schoolIdToCheck) {
+      const isEnrolled = registrants.some(registrant => {
+        const registrantSchoolId = (registrant.schoolID || '').trim();
+        return registrant.status === 'approved' && 
+               registrantSchoolId === schoolIdToCheck &&
+               registrant.termName === termDetails.termName &&
+               registrant.schoolYear === termDetails.schoolYear;
+      });
+
+      if (!isEnrolled) {
+        setStudentError('Student is not enrolled in this term and quarter.');
+        return;
+      }
+    }
+
     try {
       const token = localStorage.getItem('token');
 
@@ -4608,11 +4631,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         continue; // Skip all other validations for this row
       }
 
-      // 2. For enrollment data, allow freely adding students without checking if they exist in the system
-      // This allows adding students from enrollment even if they don't have accounts yet
+      // 2. Check if student is enrolled in the current term and quarter
       if (isValid) {
         const studentFound = activeStudentsMap.get(studentSchoolIDInput);
         console.log(`Student with School ID "${studentSchoolIDInput}" found:`, studentFound);
+        
         if (studentFound) {
           // If student exists, verify that the name matches the school ID
           const expectedName = `${studentFound.firstname} ${studentFound.lastname}`.toLowerCase();
@@ -4623,10 +4646,46 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           } else {
             studentId = studentFound._id;
           }
+          
+          // Check if student is enrolled in current term and quarter
+          const isEnrolled = registrants.some(registrant => {
+            const registrantSchoolId = (registrant.schoolID || '').trim();
+            return registrant.status === 'approved' && 
+                   registrantSchoolId === studentSchoolIDInput &&
+                   registrant.termName === termDetails.termName &&
+                   registrant.schoolYear === termDetails.schoolYear;
+          });
+          
+          if (isEnrolled) {
+            console.log(`Student "${studentSchoolIDInput}" is enrolled in current term and quarter`);
+            message = 'Student is enrolled in this term and quarter';
+          } else {
+            console.log(`Student "${studentSchoolIDInput}" is not enrolled in current term and quarter`);
+            isValid = false;
+            message = 'Student is not enrolled in this term and quarter';
+          }
         } else {
-          // Student doesn't exist in system - this is allowed for enrollment data
-          console.log(`Student with School ID "${studentSchoolIDInput}" not found - will be created as new student`);
-          studentId = null; // Will be created during upload
+          // Student doesn't exist in system - check if they are registered
+          console.log(`Student with School ID "${studentSchoolIDInput}" not found in system`);
+          
+          // Check if student is registered and approved for current term and quarter
+          const isRegistered = registrants.some(registrant => {
+            const registrantSchoolId = (registrant.schoolID || '').trim();
+            return registrant.status === 'approved' && 
+                   registrantSchoolId === studentSchoolIDInput &&
+                   registrant.termName === termDetails.termName &&
+                   registrant.schoolYear === termDetails.schoolYear;
+          });
+          
+          if (isRegistered) {
+            console.log(`Student "${studentSchoolIDInput}" is registered and approved for current term and quarter`);
+            studentId = null; // Will be created during upload
+            message = 'Student is registered and approved for this term and quarter';
+          } else {
+            console.log(`Student "${studentSchoolIDInput}" is not registered for current term and quarter`);
+            isValid = false;
+            message = 'Student is not enrolled in this term and quarter';
+          }
         }
       }
 
@@ -5841,7 +5900,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               facultyAssignments: facultyAssignments,
               studentAssignments: studentAssignments
             },
-            termDetails
+            termDetails,
+            registrants
           );
           setImportValidationStatus(validationResults);
 
@@ -9691,7 +9751,7 @@ Validation issues (${skippedCount} items):
 
 // --- VALIDATION FUNCTIONS FOR IMPORT ---
 // This function will orchestrate the validation of all sheets
-const validateImportData = async (data, existingData, termDetails) => {
+const validateImportData = async (data, existingData, termDetails, registrants) => {
   const validationResults = {};
 
   validationResults.tracks = await validateTracksImport(data.tracks, existingData.tracks, termDetails);
@@ -9699,7 +9759,7 @@ const validateImportData = async (data, existingData, termDetails) => {
   validationResults.sections = await validateSectionsImport(data.sections, existingData.sections, termDetails);
   validationResults.subjects = await validateSubjectsImport(data.subjects, existingData.subjects, termDetails);
   validationResults.facultyAssignments = await validateFacultyAssignmentsImport(data.facultyAssignments, existingData.facultyAssignments, existingData.faculties, existingData.tracks, existingData.strands, existingData.sections, existingData.subjects, termDetails);
-  validationResults.studentAssignments = await validateStudentAssignmentsImport(data.studentAssignments, existingData.studentAssignments, existingData.students, existingData.tracks, existingData.strands, existingData.sections, termDetails);
+  validationResults.studentAssignments = await validateStudentAssignmentsImport(data.studentAssignments, existingData.studentAssignments, existingData.students, existingData.tracks, existingData.strands, existingData.sections, termDetails, registrants);
 
   return validationResults;
 };
@@ -9890,7 +9950,7 @@ const validateFacultyAssignmentsImport = async (assignmentsToValidate, existingA
   }
   return results;
 };
-const validateStudentAssignmentsImport = async (assignmentsToValidate, existingAssignments, allStudents, allTracks, allStrands, allSections, termDetails) => {
+const validateStudentAssignmentsImport = async (assignmentsToValidate, existingAssignments, allStudents, allTracks, allStrands, allSections, termDetails, registrants) => {
   const results = [];
   const activeAssignments = existingAssignments.filter(a => a.status === 'active' && a.schoolYear === termDetails.schoolYear && a.termName === termDetails.termName);
   const activeStudents = allStudents.filter(s => !s.isArchived);
@@ -9905,6 +9965,20 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
     // Check student school ID format
     if (!validateStudentSchoolIDFormat(assignment.studentSchoolID)) {
       results.push({ valid: false, message: `Invalid Student School ID format "${assignment.studentSchoolID}". Student School ID must be in format xx-xxxxx (e.g., 25-00017, 22-00014)` });
+      continue;
+    }
+
+    // Check if student is enrolled in current term and quarter
+    const isEnrolled = registrants.some(registrant => {
+      const registrantSchoolId = (registrant.schoolID || '').trim();
+      return registrant.status === 'approved' && 
+             registrantSchoolId === assignment.studentSchoolID &&
+             registrant.termName === termDetails.termName &&
+             registrant.schoolYear === termDetails.schoolYear;
+    });
+
+    if (!isEnrolled) {
+      results.push({ valid: false, message: 'Student is not enrolled in this term and quarter' });
       continue;
     }
 
