@@ -189,17 +189,13 @@ class EmailService {
   getWelcomeContent(firstName, zohoEmail, password) {
     return `Hello ${firstName || ''},\n\n` +
       `Your JuanLMS account has been successfully created!\n\n` +
-      `📧 Zoho Mail Account Created:\n` +
-      `   Email: ${zohoEmail}\n` +
-      `   Password: ${password}\n\n` +
+      
       `🔐 LMS Login Credentials:\n` +
       `   Email: ${zohoEmail}\n` +
       `   Password: ${password}\n\n` +
       `📱 What you can do now:\n` +
       `   • Login to JuanLMS with the credentials above\n` +
-      `   • Access your Zoho Mail at mail.zoho.com\n` +
-      `   • Change your password after first login\n` +
-      `   • Check your Zoho Mail for important notifications and OTPs\n\n` +
+      `   • Change your password after first login\n` + 
       `Thank you for joining JuanLMS!\n\n` +
       `Best regards,\nJuanLMS Team`;
   }

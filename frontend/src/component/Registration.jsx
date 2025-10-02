@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import ValidationModal from './ValidationModal';
@@ -26,6 +26,11 @@ export default function Registration() {
     title: '',
     message: ''
   });
+  const [tracks, setTracks] = useState([]);
+  const [strands, setStrands] = useState([]);
+  const [sections, setSections] = useState([]);
+  const [filteredSections, setFilteredSections] = useState([]);
+  const [loadingData, setLoadingData] = useState(false);
   const navigate = useNavigate();
 
   const handleReRegistrationSuccess = () => {
@@ -102,8 +107,6 @@ export default function Registration() {
       newValue = value.replace(/[^0-9]/g, '').slice(0, 11);
     } else if (name === 'firstName' || name === 'middleName' || name === 'lastName') {
       newValue = value.replace(/[^\p{L}\s'-]/gu, '');
-    } else if (name === 'trackName' || name === 'strandName' || name === 'sectionName') {
-      newValue = value.replace(/[^\p{L}0-9\s-]/gu, '');
     }
     setForm(prev => ({ ...prev, [name]: newValue }));
   };
@@ -129,10 +132,6 @@ export default function Registration() {
     }
     if (!form.firstName.trim() || !form.lastName.trim() || !form.personalEmail.trim() || !form.trackName.trim() || !form.strandName.trim() || !form.sectionName.trim()) {
       setValidationModal({ isOpen: true, type: 'warning', title: 'Missing Information', message: 'Please fill in all required fields.' });
-      setLoading(false); return;
-    }
-    if (!isValidAlphanumericName(form.trackName) || !isValidAlphanumericName(form.strandName) || !isValidAlphanumericName(form.sectionName)) {
-      setValidationModal({ isOpen: true, type: 'warning', title: 'Invalid Track/Strand/Section', message: 'Track, Strand, and Section may only include letters, numbers, spaces, or hyphens.' });
       setLoading(false); return;
     }
     const emailRegex = /^[^\s@]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
@@ -204,29 +203,44 @@ export default function Registration() {
               <input type="text" name="lastName" required placeholder="Last Name" className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.lastName} onChange={handleChange} disabled={loading} />
             </div>
             <div>
-              <label className="block text-base mb-2">Personal Email<span className="text-red-500">*</span></label>
-              <input type="email" name="personalEmail" required placeholder="username@gmail.com" className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.personalEmail} onChange={handleChange} disabled={loading} />
-              <p className="text-xs text-gray-500 mt-1">Note: Your Zoho Mail (role.firstname.lastname@sjdefilms.com) will be created upon approval.</p>
+              <label className="block text-base mb-2">School Email<span className="text-red-500">*</span></label>
+              <input type="email" name="personalEmail" required placeholder="username@sjdefi.edu.ph" className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.personalEmail} onChange={handleChange} disabled={loading} />
+              
             </div>
             <div>
               <label className="block text-base mb-2">Contact No.<span className="text-red-500">*</span></label>
               <input type="text" name="contactNo" required placeholder="09XXXXXXXXX" maxLength={11} className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.contactNo} onChange={handleChange} disabled={loading} />
             </div>
             <div>
-              <label className="block text-base mb-2">School ID<span className="text-red-500">*</span></label>
-              <input type="text" name="schoolID" required className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.schoolID} onChange={handleChange} disabled={loading} placeholder={getSchoolIdPlaceholder()} />
+              <label className="block text-base mb-2">Student ID<span className="text-red-500">*</span></label>
+              <input type="text" name="schoolID"  required className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.schoolID} onChange={handleChange} disabled={loading} placeholder={getSchoolIdPlaceholder()} />
             </div>
             <div>
               <label className="block text-base mb-2">Track<span className="text-red-500">*</span></label>
-              <input type="text" name="trackName" required placeholder="e.g., Academic" className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.trackName} onChange={handleChange} disabled={loading} />
+              <select name="trackName" required className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.trackName} onChange={handleChange} disabled={loading || loadingData}>
+                <option value="">Select Track</option>
+                {tracks.map((track, index) => (
+                  <option key={index} value={track.trackName}>{track.trackName}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-base mb-2">Strand<span className="text-red-500">*</span></label>
-              <input type="text" name="strandName" required placeholder="e.g., STEM" className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.strandName} onChange={handleChange} disabled={loading} />
+              <select name="strandName" required className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.strandName} onChange={handleChange} disabled={loading || loadingData}>
+                <option value="">Select Strand</option>
+                {strands.map((strand, index) => (
+                  <option key={index} value={strand.strandName}>{strand.strandName}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-base mb-2">Section<span className="text-red-500">*</span></label>
-              <input type="text" name="sectionName" required placeholder="e.g., St. Augustine" className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.sectionName} onChange={handleChange} disabled={loading} />
+              <select name="sectionName" required className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.sectionName} onChange={handleChange} disabled={loading || loadingData || !form.strandName}>
+                <option value="">Select Section</option>
+                {filteredSections.map((section, index) => (
+                  <option key={index} value={section.sectionName}>{section.sectionName}</option>
+                ))}
+              </select>
             </div>
           </div>
           <button type="submit" className="w-full bg-blue-900 text-white p-3 rounded-lg hover:bg-blue-950 transition" disabled={loading}>{loading ? 'Registering...' : 'Register'}</button>
