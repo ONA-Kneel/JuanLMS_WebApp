@@ -146,7 +146,6 @@ router.post('/', async (req, res) => {
   // Validate required fields
   const missingFields = [];
   if (!sectionName || sectionName.trim() === '') missingFields.push('sectionName');
-  if (!sectionCode || sectionCode.trim() === '') missingFields.push('sectionCode');
   if (!trackName || trackName.trim() === '') missingFields.push('trackName');
   if (!strandName || strandName.trim() === '') missingFields.push('strandName');
   if (!gradeLevel || gradeLevel.trim() === '') missingFields.push('gradeLevel');
@@ -205,44 +204,52 @@ router.post('/', async (req, res) => {
     // Generate unique section code
     console.log('=== STARTING SECTION CODE GENERATION ===');
     console.log('Section name received:', sectionName);
+    console.log('Section code provided:', sectionCode);
     
-    let sectionCode;
-    try {
-      sectionCode = generateSectionCode(sectionName);
-      console.log('Generated section code for', sectionName, ':', sectionCode);
-      
-      // Ensure section code is not empty
-      if (!sectionCode || sectionCode.trim() === '') {
-        sectionCode = 'SEC' + Math.floor(Math.random() * 1000);
-        console.log('Generated fallback section code:', sectionCode);
+    let finalSectionCode;
+    
+    // If sectionCode is provided and not empty, use it; otherwise generate one
+    if (sectionCode && sectionCode.trim() !== '') {
+      finalSectionCode = sectionCode.trim();
+      console.log('Using provided section code:', finalSectionCode);
+    } else {
+      try {
+        finalSectionCode = generateSectionCode(sectionName);
+        console.log('Generated section code for', sectionName, ':', finalSectionCode);
+        
+        // Ensure section code is not empty
+        if (!finalSectionCode || finalSectionCode.trim() === '') {
+          finalSectionCode = 'SEC' + Math.floor(Math.random() * 1000);
+          console.log('Generated fallback section code:', finalSectionCode);
+        }
+      } catch (codeError) {
+        console.error('Error generating section code:', codeError);
+        finalSectionCode = 'SEC' + Math.floor(Math.random() * 1000);
+        console.log('Generated fallback section code due to error:', finalSectionCode);
       }
-    } catch (codeError) {
-      console.error('Error generating section code:', codeError);
-      sectionCode = 'SEC' + Math.floor(Math.random() * 1000);
-      console.log('Generated fallback section code due to error:', sectionCode);
     }
     
-    console.log('=== FINAL SECTION CODE ===', sectionCode);
+    console.log('=== FINAL SECTION CODE ===', finalSectionCode);
     
     let counter = 1;
     
     // Ensure section code is unique
-    while (await Section.findOne({ sectionCode })) {
-      sectionCode = generateSectionCode(sectionName) + counter.toString();
+    while (await Section.findOne({ sectionCode: finalSectionCode })) {
+      finalSectionCode = generateSectionCode(sectionName) + counter.toString();
       counter++;
-      console.log('Section code conflict, trying:', sectionCode);
+      console.log('Section code conflict, trying:', finalSectionCode);
     }
 
     // Final validation - ensure sectionCode is never empty
-    if (!sectionCode || sectionCode.trim() === '') {
-      sectionCode = 'SEC' + Math.floor(Math.random() * 1000);
-      console.log('⚠️ Section code was empty, generated fallback:', sectionCode);
+    if (!finalSectionCode || finalSectionCode.trim() === '') {
+      finalSectionCode = 'SEC' + Math.floor(Math.random() * 1000);
+      console.log('⚠️ Section code was empty, generated fallback:', finalSectionCode);
     }
     
     console.log('🏗️ CREATING SECTION OBJECT...');
     const newSection = new Section({ 
       sectionName,
-      sectionCode,
+      sectionCode: finalSectionCode,
       trackName, 
       strandName, 
       gradeLevel,
@@ -253,7 +260,7 @@ router.post('/', async (req, res) => {
     
     console.log('📝 SECTION OBJECT CREATED:', {
       sectionName,
-      sectionCode,
+      sectionCode: finalSectionCode,
       trackName,
       strandName,
       gradeLevel,
