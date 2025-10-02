@@ -17,10 +17,162 @@ import SchoolYear from '../models/SchoolYear.js';
 import Term from '../models/Term.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import FacultyAssignment from '../models/FacultyAssignment.js';
+import Class from '../models/Class.js';
 // import bcrypt from "bcryptjs"; // If you want to use hashing in the future
 
 const userRoutes = e.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "yourSuperSecretKey123"; // 👈 use env variable in production
+
+// Function to add newly registered students to existing classes
+const addStudentToExistingClasses = async (student) => {
+  try {
+    console.log(`[ADD-STUDENT-TO-CLASSES] Checking if student ${student.userID} should be added to existing classes`);
+    
+    // Find student assignments for this student
+    const studentAssignments = await StudentAssignment.find({
+      $or: [
+        { studentId: student._id },
+        { studentSchoolID: student.schoolID },
+        { studentName: { $regex: `${student.firstname} ${student.lastname}`, $options: 'i' } }
+      ],
+      status: 'active'
+    });
+    
+    console.log(`[ADD-STUDENT-TO-CLASSES] Found ${studentAssignments.length} student assignments for student ${student.userID}`);
+    
+    if (studentAssignments.length === 0) {
+      console.log(`[ADD-STUDENT-TO-CLASSES] No student assignments found for ${student.userID}`);
+      return;
+    }
+    
+    // Get current academic year and term
+    const activeSchoolYear = await SchoolYear.findOne({ status: 'active' });
+    if (!activeSchoolYear) {
+      console.log(`[ADD-STUDENT-TO-CLASSES] No active school year found`);
+      return;
+    }
+    
+    const activeTerm = await Term.findOne({ 
+      schoolYear: `${activeSchoolYear.schoolYearStart}-${activeSchoolYear.schoolYearEnd}`,
+      status: 'active' 
+    });
+    
+    if (!activeTerm) {
+      console.log(`[ADD-STUDENT-TO-CLASSES] No active term found`);
+      return;
+    }
+    
+    // Find existing classes that match the student's assignments
+    for (const assignment of studentAssignments) {
+      console.log(`[ADD-STUDENT-TO-CLASSES] Processing assignment for section: ${assignment.sectionName}`);
+      
+      // Find classes that match this student's section, academic year, and term
+      const matchingClasses = await Class.find({
+        section: assignment.sectionName,
+        academicYear: `${activeSchoolYear.schoolYearStart}-${activeSchoolYear.schoolYearEnd}`,
+        termName: activeTerm.termName,
+        isArchived: { $ne: true }
+      });
+      
+      console.log(`[ADD-STUDENT-TO-CLASSES] Found ${matchingClasses.length} matching classes for section ${assignment.sectionName}`);
+      
+      for (const classDoc of matchingClasses) {
+        // Check if student is already a member
+        const isAlreadyMember = classDoc.members.some(memberId => 
+          String(memberId) === String(student._id)
+        );
+        
+        if (!isAlreadyMember) {
+          console.log(`[ADD-STUDENT-TO-CLASSES] Adding student ${student.userID} to class ${classDoc.classID}`);
+          
+          // Add student to class
+          await Class.findByIdAndUpdate(
+            classDoc._id,
+            { $addToSet: { members: student._id } },
+            { new: true }
+          );
+          
+          // Update student assignment to link to the student
+          if (!assignment.studentId) {
+            await StudentAssignment.findByIdAndUpdate(
+              assignment._id,
+              { 
+                studentId: student._id,
+                studentName: undefined, // Clear the name since we now have a linked student
+                studentSchoolID: undefined
+              },
+              { new: true }
+            );
+          }
+          
+          console.log(`[ADD-STUDENT-TO-CLASSES] ✅ Successfully added student ${student.userID} to class ${classDoc.classID}`);
+        } else {
+          console.log(`[ADD-STUDENT-TO-CLASSES] Student ${student.userID} is already a member of class ${classDoc.classID}`);
+        }
+      }
+    }
+    
+    console.log(`[ADD-STUDENT-TO-CLASSES] ✅ Completed adding student ${student.userID} to existing classes`);
+    
+  } catch (error) {
+    console.error(`[ADD-STUDENT-TO-CLASSES] ❌ Error adding student to existing classes:`, error);
+    throw error;
+  }
+};
+
+// Manual endpoint to retroactively assign students to existing classes
+userRoutes.post('/retroactive-class-assignment', authenticateToken, async (req, res) => {
+  try {
+    // Only allow admin to trigger this
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin only.' });
+    }
+    
+    console.log('[RETROACTIVE-ASSIGNMENT] Starting retroactive class assignment for all students');
+    
+    // Get all students
+    const students = await User.find({ 
+      role: 'students',
+      isArchived: { $ne: true }
+    });
+    
+    console.log(`[RETROACTIVE-ASSIGNMENT] Found ${students.length} students to process`);
+    
+    let processedCount = 0;
+    let assignedCount = 0;
+    
+    for (const student of students) {
+      try {
+        await addStudentToExistingClasses(student);
+        processedCount++;
+        
+        // Check if student was assigned to any classes
+        const studentClasses = await Class.find({
+          members: student._id,
+          isArchived: { $ne: true }
+        });
+        
+        if (studentClasses.length > 0) {
+          assignedCount++;
+        }
+        
+      } catch (error) {
+        console.error(`[RETROACTIVE-ASSIGNMENT] Error processing student ${student.userID}:`, error);
+      }
+    }
+    
+    res.json({
+      message: 'Retroactive class assignment completed',
+      totalStudents: students.length,
+      processedStudents: processedCount,
+      studentsAssignedToClasses: assignedCount
+    });
+    
+  } catch (error) {
+    console.error('[RETROACTIVE-ASSIGNMENT] Error:', error);
+    res.status(500).json({ error: 'Failed to perform retroactive class assignment' });
+  }
+});
 
 // ------------------ CRUD ROUTES ------------------
 
@@ -450,6 +602,16 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
         console.log("About to save user");
         await user.save(); // Triggers pre-save hook for hashing/encryption
         console.log("User saved:", user);
+
+        // If this is a student, check if they should be added to existing classes
+        if (role === 'students') {
+            try {
+                await addStudentToExistingClasses(user);
+            } catch (classError) {
+                console.error('Error adding student to existing classes:', classError);
+                // Don't fail user creation if class assignment fails
+            }
+        }
 
         const db = database.getDb();
         console.log("About to write audit log");

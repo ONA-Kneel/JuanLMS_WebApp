@@ -3,7 +3,230 @@ import FacultyAssignment from '../models/FacultyAssignment.js';
 import User from '../models/User.js'; // To populate faculty details
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import Term from '../models/Term.js';
-//a
+import Class from '../models/Class.js';
+import StudentAssignment from '../models/StudentAssignment.js';
+
+// Test if StudentAssignment import is working
+console.log('[FACULTY-ASSIGNMENT] StudentAssignment model loaded:', !!StudentAssignment);
+
+// Auto-create class when faculty assignment is created
+const autoCreateClass = async (facultyAssignment) => {
+  try {
+    console.log('[AUTO-CREATE-CLASS] Starting auto-creation for assignment:', facultyAssignment._id);
+    console.log('[AUTO-CREATE-CLASS] Assignment details:', {
+      subjectName: facultyAssignment.subjectName,
+      sectionName: facultyAssignment.sectionName,
+      facultyId: facultyAssignment.facultyId,
+      schoolYear: facultyAssignment.schoolYear,
+      termName: facultyAssignment.termName
+    });
+    
+    // Generate unique classID
+    const randomNum = Math.floor(100 + Math.random() * 900);
+    const classID = `C${randomNum}`;
+
+    // Generate unique class code with timestamp to ensure uniqueness
+    const subjectCode = facultyAssignment.subjectName.substring(0, 3).toUpperCase();
+    const sectionCode = facultyAssignment.sectionName.substring(0, 2).toUpperCase();
+    const yearCode = facultyAssignment.schoolYear.split('-')[0].slice(-2);
+    const timestamp = Date.now().toString().slice(-4); // Last 4 digits of timestamp
+    const classCode = `${subjectCode}-${sectionCode}-${yearCode}-${timestamp}`;
+    
+    console.log(`[AUTO-CREATE-CLASS] Generated classID: ${classID}, classCode: ${classCode}`);
+    
+    // Check if class already exists for this faculty assignment
+    const existingClass = await Class.findOne({
+      facultyID: facultyAssignment.facultyId,
+      className: facultyAssignment.subjectName,
+      section: facultyAssignment.sectionName,
+      academicYear: facultyAssignment.schoolYear,
+      termName: facultyAssignment.termName
+    });
+    
+    if (existingClass) {
+      console.log(`[AUTO-CREATE-CLASS] ⚠️ Class already exists for this assignment: ${existingClass.classID}`);
+      return existingClass;
+    }
+    
+          // Get students assigned to this section for this term (include both active and pending)
+          console.log(`[AUTO-CREATE-CLASS] Looking for students in section: ${facultyAssignment.sectionName}, term: ${facultyAssignment.termId}, year: ${facultyAssignment.schoolYear}`);
+
+          // Test StudentAssignment query
+          console.log('[AUTO-CREATE-CLASS] Testing StudentAssignment query...');
+          console.log('[AUTO-CREATE-CLASS] Query parameters:', {
+            sectionName: facultyAssignment.sectionName,
+            termId: facultyAssignment.termId,
+            schoolYear: facultyAssignment.schoolYear,
+            status: { $in: ['active', 'pending'] }
+          });
+
+          const studentAssignments = await StudentAssignment.find({
+            sectionName: facultyAssignment.sectionName,
+            termId: facultyAssignment.termId,
+            schoolYear: facultyAssignment.schoolYear,
+            status: { $in: ['active', 'pending'] } // Include both active and pending students
+          }).populate('studentId');
+    
+          console.log(`[AUTO-CREATE-CLASS] Found ${studentAssignments.length} student assignments`);
+    
+    // Debug: Show details of found assignments
+    if (studentAssignments.length > 0) {
+      console.log('[AUTO-CREATE-CLASS] Student assignment details:');
+      studentAssignments.forEach((assignment, index) => {
+        console.log(`  ${index + 1}. Section: ${assignment.sectionName}, Status: ${assignment.status}, Student: ${assignment.studentId ? assignment.studentId.userID : 'NOT LINKED'}`);
+      });
+    } else {
+      console.log('[AUTO-CREATE-CLASS] ❌ No student assignments found! This means no students are assigned to this section.');
+      console.log('[AUTO-CREATE-CLASS] Query was looking for:');
+      console.log(`  - Section: ${facultyAssignment.sectionName}`);
+      console.log(`  - Term ID: ${facultyAssignment.termId}`);
+      console.log(`  - School Year: ${facultyAssignment.schoolYear}`);
+      console.log(`  - Status: active or pending`);
+    }
+    
+    // Extract student IDs (ObjectIds) from assignments
+    const studentIds = studentAssignments
+      .filter(assignment => assignment.studentId) // Only include linked students
+      .map(assignment => assignment.studentId._id);
+    
+    // Also find students by name for assignments that don't have studentId
+    const studentsByName = studentAssignments
+      .filter(assignment => !assignment.studentId && assignment.studentName)
+      .map(assignment => assignment.studentName);
+    
+    if (studentsByName.length > 0) {
+      console.log(`[AUTO-CREATE-CLASS] Found ${studentsByName.length} students by name:`, studentsByName);
+      
+      // Find User records for these students by name (more flexible matching)
+      const usersByName = await User.find({
+        role: 'students',
+        $or: studentsByName.flatMap(name => {
+          const nameParts = name.toLowerCase().split(' ').filter(part => part.length > 0);
+          const firstName = nameParts[0];
+          const lastName = nameParts[nameParts.length - 1];
+          
+          return [
+            // Exact match
+            { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, name.toLowerCase()] } },
+            // Reverse order match
+            { $expr: { $eq: [{ $toLower: { $concat: ["$lastname", " ", "$firstname"] } }, name.toLowerCase()] } },
+            // First name contains
+            { firstname: { $regex: new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } },
+            // Last name contains
+            { lastname: { $regex: new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } },
+            // Both first and last name match (order independent)
+            { 
+              firstname: { $regex: new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+              lastname: { $regex: new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
+            },
+            // Reverse order both names
+            { 
+              firstname: { $regex: new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+              lastname: { $regex: new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
+            },
+            // Partial matches in full name
+            { $expr: { $regexMatch: { input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, regex: name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') } } }
+          ];
+        })
+      });
+      
+      console.log(`[AUTO-CREATE-CLASS] Found ${usersByName.length} User records for students by name`);
+      
+      // Debug: Show what users were found
+      if (usersByName.length > 0) {
+        console.log('[AUTO-CREATE-CLASS] Matched users:');
+        usersByName.forEach(user => {
+          console.log(`  - ${user.userID}: ${user.firstname} ${user.lastname}`);
+        });
+      } else {
+        console.log('[AUTO-CREATE-CLASS] No users found. Checking all students in database...');
+        const allStudents = await User.find({ role: 'students' }).select('userID firstname lastname').limit(5);
+        console.log('[AUTO-CREATE-CLASS] Sample students in database:');
+        allStudents.forEach(student => {
+          console.log(`  - ${student.userID}: ${student.firstname} ${student.lastname}`);
+        });
+      }
+      
+      // Add these user IDs to the studentIds array
+      const additionalStudentIds = usersByName.map(user => user._id);
+      studentIds.push(...additionalStudentIds);
+      
+      // For students that couldn't be matched, create temporary entries
+      const matchedNames = usersByName.map(user => 
+        `${user.firstname} ${user.lastname}`.toLowerCase()
+      );
+      const unmatchedStudents = studentsByName.filter(name => 
+        !matchedNames.some(matched => 
+          matched.includes(name.toLowerCase()) || 
+          name.toLowerCase().includes(matched)
+        )
+      );
+      
+      if (unmatchedStudents.length > 0) {
+        console.log(`[AUTO-CREATE-CLASS] Creating temporary entries for ${unmatchedStudents.length} unmatched students:`, unmatchedStudents);
+        
+        // Create temporary User records for unmatched students
+        const tempUsers = await Promise.all(unmatchedStudents.map(async (name, index) => {
+          const nameParts = name.split(' ');
+          const firstName = nameParts[0] || 'Student';
+          const lastName = nameParts.slice(1).join(' ') || 'Unknown';
+          
+          const tempUser = new User({
+            userID: `TEMP-${Date.now()}-${index}`,
+            firstname: firstName,
+            lastname: lastName,
+            email: `temp.${firstName.toLowerCase()}.${lastName.toLowerCase().replace(/\s+/g, '')}@temp.com`,
+            contactNo: '09123456789', // Valid 11-digit contact number
+            role: 'students',
+            isTemporary: true
+          });
+          
+          return await tempUser.save();
+        }));
+        
+        const tempUserIds = tempUsers.map(user => user._id);
+        studentIds.push(...tempUserIds);
+        
+        console.log(`[AUTO-CREATE-CLASS] Created ${tempUsers.length} temporary user records`);
+      }
+    }
+    
+    // Remove duplicate student IDs
+    const uniqueStudentIds = [...new Set(studentIds.map(id => String(id)))];
+    console.log(`[AUTO-CREATE-CLASS] Found ${studentIds.length} students, ${uniqueStudentIds.length} unique students for section ${facultyAssignment.sectionName}`);
+    
+    // Create the class
+    const classData = {
+      classID,
+      className: facultyAssignment.subjectName,
+      classCode,
+      classDesc: `${facultyAssignment.subjectName} - ${facultyAssignment.sectionName} (${facultyAssignment.gradeLevel})`,
+      members: uniqueStudentIds,
+      facultyID: facultyAssignment.facultyId,
+      section: facultyAssignment.sectionName,
+      academicYear: facultyAssignment.schoolYear,
+      termName: facultyAssignment.termName,
+      isArchived: false,
+      isAutoCreated: true, // Flag to indicate this was auto-created
+      needsConfirmation: true // Flag to indicate faculty needs to confirm
+    };
+    
+    console.log(`[AUTO-CREATE-CLASS] Creating class with data:`, classData);
+    
+    const newClass = new Class(classData);
+    const savedClass = await newClass.save();
+    
+    console.log(`[AUTO-CREATE-CLASS] ✅ Successfully created class ${classID} for ${facultyAssignment.subjectName} - ${facultyAssignment.sectionName}`);
+    
+    return savedClass;
+  } catch (error) {
+    console.error('[AUTO-CREATE-CLASS] ❌ Error creating class:', error);
+    console.error('[AUTO-CREATE-CLASS] Error message:', error.message);
+    console.error('[AUTO-CREATE-CLASS] Error stack:', error.stack);
+    throw error;
+  }
+};
+
 // Validation function to check for faculty assignment conflicts
 const validateFacultyAssignment = async (facultyId, subjectName, sectionName, schoolYear, termName, excludeAssignmentId = null) => {
   try {
@@ -184,6 +407,19 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     const newAssignment = await assignment.save();
+    
+    // Auto-create class for this faculty assignment
+    try {
+      console.log(`[FACULTY-ASSIGNMENT] Attempting to auto-create class for assignment ${newAssignment._id}`);
+      const createdClass = await autoCreateClass(newAssignment);
+      console.log(`[FACULTY-ASSIGNMENT] ✅ Auto-created class ${createdClass.classID} for assignment ${newAssignment._id}`);
+    } catch (classError) {
+      console.error('[FACULTY-ASSIGNMENT] ❌ Failed to auto-create class:', classError);
+      console.error('[FACULTY-ASSIGNMENT] Error details:', classError.message);
+      console.error('[FACULTY-ASSIGNMENT] Stack trace:', classError.stack);
+      // Don't fail the assignment creation if class creation fails
+    }
+    
     // Exclude hidden fields from response
     const response = newAssignment.toObject();
     delete response.schoolYear;
@@ -295,6 +531,16 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         });
 
         const savedAssignment = await newAssignment.save();
+        
+        // Auto-create class for this faculty assignment
+        try {
+          const createdClass = await autoCreateClass(savedAssignment);
+          console.log(`[FACULTY-ASSIGNMENT-BULK] Auto-created class ${createdClass.classID} for assignment ${savedAssignment._id}`);
+        } catch (classError) {
+          console.error('[FACULTY-ASSIGNMENT-BULK] Failed to auto-create class:', classError);
+          // Don't fail the assignment creation if class creation fails
+        }
+        
         createdAssignments.push(savedAssignment);
       } catch (err) {
         if (err.code === 11000) {

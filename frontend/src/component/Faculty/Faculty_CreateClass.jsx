@@ -2,231 +2,33 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
-import archiveIcon from "../../assets/archive.png";
-import createEventIcon from "../../assets/createEvent.png";
-import * as XLSX from "xlsx";
 import ValidationModal from "../ValidationModal";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function FacultyCreateClass() {
   const navigate = useNavigate();
-  const [studentName, setStudentName] = useState("");
-  const [students, setStudents] = useState([]);
-  const [error, setError] = useState("");
-  const [selectedStudents, setSelectedStudents] = useState([]);
-  const [batchLoading, setBatchLoading] = useState(false);
-  const [batchMessage, setBatchMessage] = useState('');
-  const [selectedGradeLevel, setSelectedGradeLevel] = useState("");
-  const [facultyAssignments, setFacultyAssignments] = useState([]);
-  const [filteredAssignments, setFilteredAssignments] = useState([]);
-  const [subjects, setSubjects] = useState([]);
-  const [selectedSubject, setSelectedSubject] = useState("");
-  const [sections, setSections] = useState([]);
-  const [selectedSection, setSelectedSection] = useState("");
+  const [pendingClasses, setPendingClasses] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
-  const [classImage, setClassImage] = useState(null);
-  const [classDesc, setClassDesc] = useState("");
-  const [existingClasses, setExistingClasses] = useState([]);
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
     type: 'error',
     title: '',
     message: ''
   });
+  const [confirmingClass, setConfirmingClass] = useState(null);
+  const [classImage, setClassImage] = useState(null);
+  const [classDesc, setClassDesc] = useState("");
 
-  // Fetch faculty assignments and existing classes on mount
+  // Fetch academic year and term first
   useEffect(() => {
-    async function fetchData() {
+    async function fetchAcademicData() {
       try {
         const token = localStorage.getItem('token');
-        let facultyID = localStorage.getItem('userID');
         
-                 // If userID is not in localStorage, try to get it from JWT token
-         if (!facultyID && token) {
-           try {
-             const payload = JSON.parse(atob(token.split('.')[1]));
-             facultyID = payload._id;
-           } catch {
-             console.error('Failed to parse JWT token');
-           }
-         }
-        
-        if (!facultyID) {
-          console.error('No faculty ID available');
-          setFacultyAssignments([]);
-          setExistingClasses([]);
-          return;
-        }
-        
-        // Fetch faculty assignments
-        const assignmentsRes = await fetch(`${API_BASE}/api/faculty-assignments`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (assignmentsRes.ok) {
-          const data = await assignmentsRes.json();
-          // Filter assignments for the current faculty user
-          const userAssignments = data.filter(assignment => 
-            assignment.facultyId === facultyID || assignment.facultyId === userMongoId
-          );
-          setFacultyAssignments(userAssignments);
-        } else {
-          console.error('Failed to fetch faculty assignments');
-          setFacultyAssignments([]);
-        }
-        
-        // Fetch existing classes for this faculty
-        const classesRes = await fetch(`${API_BASE}/api/classes/faculty-classes`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (classesRes.ok) {
-          const classesData = await classesRes.json();
-          setExistingClasses(classesData);
-        } else {
-          console.error('Failed to fetch existing classes');
-          setExistingClasses([]);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setFacultyAssignments([]);
-        setExistingClasses([]);
-      }
-    }
-    fetchData();
-  }, []);
-
-  // Debug: Log token and user info
-  const token = localStorage.getItem('token');
-  console.log('Token:', token);
-  let userMongoId = "";
-  if (token) {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      console.log('JWT payload:', payload);
-      userMongoId = payload._id;
-      console.log('userID:', localStorage.getItem('userID'));
-      console.log('_id:', userMongoId);
-    } catch {
-      userMongoId = "";
-    }
-  }
-
-  // When academicYear and currentTerm are loaded, filter assignments for those
-  useEffect(() => {
-    if (!academicYear || !currentTerm) return;
-    
-    console.log('Filtering assignments for:', { academicYear, currentTerm, facultyAssignments });
-    
-    // Filter assignments for current year and term
-    const yearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-    const filtered = facultyAssignments.filter(a =>
-      String(a.schoolYear) === String(yearName) &&
-      (String(a.termId) === String(currentTerm._id) || (a.termId && a.termId.$oid && String(a.termId.$oid) === String(currentTerm._id)))
-    );
-    
-    console.log('Filtered assignments:', filtered);
-    setFilteredAssignments(filtered);
-    
-    // Get unique grade levels for this faculty in this year/term
-    const uniqueGradeLevels = [...new Set(filtered.map(a => a.gradeLevel))];
-    console.log('Available grade levels:', uniqueGradeLevels);
-    
-    // Auto-select the first grade level if only one exists
-    if (uniqueGradeLevels.length === 1) {
-      setSelectedGradeLevel(uniqueGradeLevels[0]);
-    } else if (uniqueGradeLevels.length > 0 && !selectedGradeLevel) {
-      setSelectedGradeLevel(uniqueGradeLevels[0]);
-    }
-    
-    // Reset subject/section if not in filtered
-    if (!filtered.some(a => a.gradeLevel === selectedGradeLevel)) {
-      setSelectedSubject("");
-      setSelectedSection("");
-    }
-  }, [academicYear, currentTerm, facultyAssignments, selectedGradeLevel]);
-
-  // When grade level changes, update subjects
-  useEffect(() => {
-    if (!selectedGradeLevel) {
-      setSubjects([]);
-      setSelectedSubject("");
-      return;
-    }
-    
-    console.log('Updating subjects for grade level:', selectedGradeLevel);
-    
-    const filtered = filteredAssignments.filter(a =>
-      String(a.gradeLevel) === String(selectedGradeLevel)
-    );
-    
-    const uniqueSubjects = [...new Set(filtered.map(a => a.subjectName))];
-    console.log('Available subjects:', uniqueSubjects);
-    
-    // Filter out subjects that already have classes for THIS FACULTY MEMBER
-    // But allow the same subject for different sections
-    const availableSubjects = uniqueSubjects.filter(subject => {
-      // Check if THIS FACULTY already has a class for this subject in the current term/year
-      // We'll allow the same subject for different sections, so we don't filter here
-      // The real filtering will happen when a section is selected
-      return true; // Allow all subjects initially
-    });
-    
-    console.log('Available subjects (excluding existing classes):', availableSubjects);
-    setSubjects(availableSubjects);
-    
-    // Reset subject if current selection is not available
-    if (!availableSubjects.includes(selectedSubject)) {
-      setSelectedSubject("");
-    }
-  }, [filteredAssignments, selectedGradeLevel, selectedSubject, existingClasses, academicYear, currentTerm]);
-
-  // When subject changes, update sections
-  useEffect(() => {
-    if (!selectedSubject) {
-      setSections([]);
-      setSelectedSection("");
-      return;
-    }
-    
-    console.log('Updating sections for subject:', selectedSubject);
-    
-    const filtered = filteredAssignments.filter(a =>
-      String(a.gradeLevel) === String(selectedGradeLevel) &&
-      a.subjectName === selectedSubject
-    );
-    
-    const uniqueSections = [...new Set(filtered.map(a => a.sectionName))];
-    
-    // Filter out sections that already have classes for this subject by this faculty
-    const availableSections = uniqueSections.filter(section => {
-      // Check if THIS FACULTY already has a class for this subject AND section in the current term/year
-      const hasExistingClass = existingClasses.some(existingClass => {
-        return existingClass.className === selectedSubject && 
-               existingClass.section === section &&
-               existingClass.academicYear === `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}` &&
-               existingClass.termName === currentTerm?.termName &&
-               (existingClass.facultyID === userMongoId || existingClass.facultyID === localStorage.getItem('userID'));
-      });
-      
-      return !hasExistingClass;
-    });
-    
-    console.log('Available sections:', availableSections);
-    setSections(availableSections);
-    
-    // Reset section if current selection is not available
-    if (!availableSections.includes(selectedSection)) {
-      setSelectedSection("");
-    }
-  }, [filteredAssignments, selectedGradeLevel, selectedSubject, selectedSection]);
-
-  useEffect(() => {
-    async function fetchAcademicYear() {
-      try {
-        const token = localStorage.getItem("token");
+        // Fetch academic year
         const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
@@ -234,485 +36,142 @@ export default function FacultyCreateClass() {
           const year = await yearRes.json();
           setAcademicYear(year);
         }
-      } catch (err) {
-        console.error("Failed to fetch academic year", err);
+      } catch (error) {
+        console.error('Error fetching academic year:', error);
       }
     }
-    fetchAcademicYear();
+    fetchAcademicData();
   }, []);
 
+  // Fetch active term when academic year is available
   useEffect(() => {
-    async function fetchActiveTermForYear() {
+    async function fetchActiveTerm() {
       if (!academicYear) return;
+      
       try {
+        const token = localStorage.getItem('token');
         const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+        const termRes = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
-        if (res.ok) {
-          const terms = await res.json();
+        if (termRes.ok) {
+          const terms = await termRes.json();
           const active = terms.find(term => term.status === 'active');
           setCurrentTerm(active || null);
-        } else {
-          setCurrentTerm(null);
         }
-      } catch {
-        setCurrentTerm(null);
+      } catch (error) {
+        console.error('Error fetching active term:', error);
       }
     }
-    fetchActiveTermForYear();
+    fetchActiveTerm();
   }, [academicYear]);
 
+  // Fetch pending confirmation classes when both academic year and term are available
   useEffect(() => {
-    async function fetchSectionStudents() {
-      if (!selectedSection || !currentTerm || !academicYear) {
-        setSelectedStudents([]);
-        return;
-      }
-      const token = localStorage.getItem('token');
-      const res = await fetch(
-        `${API_BASE}/api/student-assignments?termId=${currentTerm._id}&sectionName=${selectedSection}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (res.ok) {
-        const assignments = await res.json();
-        setSelectedStudents(assignments.map(a => a.studentId));
-      } else {
-        setSelectedStudents([]);
-      }
-    }
-    fetchSectionStudents();
-  }, [selectedSection, currentTerm, academicYear]);
-
-  const handleSearch = async (e) => {
-    const query = e.target.value;
-    setStudentName(query);
-
-    if (!query) {
-      setStudents([]);
-      setError("");
-      return;
-    }
-
-    // Don't search if no section is selected
-    if (!selectedSection) {
-      setError("Please select a section first");
-      setStudents([]);
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
+    async function fetchPendingClasses() {
+      if (!academicYear || !currentTerm) return;
       
-      // Search directly within the selected section using student assignments
-      // Include both active and pending students (don't filter by status)
-      const response = await fetch(
-        `${API_BASE}/api/student-assignments?termId=${currentTerm._id}&sectionName=${selectedSection}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      if (!response.ok) {
-        if (response.status === 401) {
-          setError("Session expired. Please log in again.");
-        } else {
-          setError("Error fetching student data");
-        }
-        setStudents([]);
-        return;
-      }
-      
-      const assignments = await response.json();
-      console.log('[SEARCH] All assignments for section:', assignments);
-      console.log('[SEARCH] Searching for:', query);
-      
-      // Filter assignments by search query (search in student name or school ID)
-      const searchTerm = query.toLowerCase();
-      const filteredAssignments = assignments.filter(assignment => {
-        const studentName = assignment.studentName?.toLowerCase() || '';
-        const firstName = assignment.firstname?.toLowerCase() || '';
-        const lastName = assignment.lastname?.toLowerCase() || '';
-        const schoolID = assignment.schoolID?.toLowerCase() || '';
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
         
-        // Search in multiple fields
-        return studentName.includes(searchTerm) || 
-               firstName.includes(searchTerm) || 
-               lastName.includes(searchTerm) ||
-               schoolID.includes(searchTerm);
-      });
-      
-      console.log('[SEARCH] Filtered assignments:', filteredAssignments);
-
-      // Convert assignments to student objects and filter out already selected students
-      const availableStudents = filteredAssignments
-        .map(assignment => {
-          // Handle both linked students (with studentId) and manual entries (without studentId)
-          if (assignment.studentId) {
-            // Linked student - use the studentId as _id
-            return {
-              _id: assignment.studentId,
-              firstname: assignment.firstname || assignment.studentName?.split(' ')[0] || '',
-              lastname: assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || '',
-              middlename: assignment.middlename || '',
-              schoolID: assignment.schoolID || '',
-              email: assignment.email || '',
-              role: 'students'
-            };
-          } else {
-            // Manual entry - use assignment _id as _id
-            return {
-              _id: assignment._id,
-              firstname: assignment.firstname || assignment.studentName?.split(' ')[0] || '',
-              lastname: assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || '',
-              middlename: assignment.middlename || '',
-              schoolID: assignment.schoolID || '',
-              email: assignment.email || '',
-              role: 'students'
-            };
-          }
-        })
-        .filter(student => student && student._id && !selectedStudents.some(sel => sel && sel._id === student._id));
-
-      if (availableStudents.length === 0) {
-        setError("No students found in the selected section matching your search");
-      } else {
-        setStudents(availableStudents);
-        setError("");
+        // Fetch pending confirmation classes
+        const pendingRes = await fetch(`${API_BASE}/api/classes/pending-confirmation`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (pendingRes.ok) {
+          const pendingData = await pendingRes.json();
+          setPendingClasses(pendingData);
+        } else {
+          console.error('Failed to fetch pending classes');
+          setPendingClasses([]);
+        }
+      } catch (error) {
+        console.error('Error fetching pending classes:', error);
+        setPendingClasses([]);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching student data:", error);
-      setError("Error fetching student data");
     }
+    fetchPendingClasses();
+  }, [academicYear, currentTerm]);
+
+  // Handle class confirmation
+  const handleConfirmClass = async (classData) => {
+    setConfirmingClass(classData);
+    setClassDesc(classData.classDesc || "");
+    setClassImage(null);
   };
 
-  // Helper to check if a student is assigned to the selected section
-  // For local testing, temporarily disable section filtering
-  async function isStudentAssignedToSection(studentId) {
-    // TEMPORARY: Disable section filtering for local testing
-    if (import.meta.env.DEV) {
-      console.log('[CreateClass] Local testing mode: bypassing section assignment check for student:', studentId);
-      return true; // Allow any student to be added to any class during local testing
-    }
-    
-    if (!selectedSection || !currentTerm || !academicYear) return false;
-    const token = localStorage.getItem('token');
-    const res = await fetch(
-      `${API_BASE}/api/student-assignments?studentId=${studentId}&termId=${currentTerm._id}&sectionName=${selectedSection}&schoolYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const assignments = await res.json();
-    
-    // Check if student is assigned to the section (active or pending)
-    // Don't filter by status - include both active and pending students
-    const assignedToSection = assignments.find(assignment => 
-      assignment.status === 'active' // Only include non-archived students
-    );
-    
-    return assignedToSection !== undefined;
-  }
-
-  // Update handleAddStudent to check assignment
-  const handleAddStudent = async (student) => {
-    const assigned = await isStudentAssignedToSection(student._id);
-    if (assigned) {
-      setSelectedStudents(prev => [...prev, student]);
-      setStudentName("");
-      setStudents([]);
-      setError("");
-    } else {
-      setError("Student is not assigned to this section.");
-    }
-  };
-
-  const handleRemoveStudent = (studentId) => {
-    setSelectedStudents(prev => prev.filter(student => student._id !== studentId));
-  };
-
-  const handleCreateClass = async () => {
-    // Generate classID: C + 3 random digits
-    const randomNum = Math.floor(100 + Math.random() * 900);
-    const classID = `C${randomNum}`;
-    
-    // Auto-generate class code
-    let autoClassCode = "";
-    if (selectedSubject && selectedSection && academicYear) {
-      const subjectCode = selectedSubject.substring(0, 3).toUpperCase();
-      const sectionCode = selectedSection.substring(0, 2).toUpperCase();
-      const yearCode = academicYear.schoolYearStart.toString().slice(-2);
-      autoClassCode = `${subjectCode}-${sectionCode}-${yearCode}`;
-      
-      // Debug: Log the section being used
-      console.log('[CreateClass] Creating class with section:', selectedSection, '-> classCode:', autoClassCode);
-    }
-    
-    // Send ObjectId to backend (backend expects ObjectId, not schoolID)
-    const members = selectedStudents.map(s => s._id).filter(Boolean);
-    const facultyID = localStorage.getItem("userID"); // get the faculty's userID
-    const token = localStorage.getItem("token"); // or whatever you use for auth
-    
-    // Debug: Log the faculty ID being sent
-    console.log('[CreateClass] Faculty ID being sent:', facultyID);
-    console.log('[CreateClass] Faculty ID type:', typeof facultyID);
-    
-    // Faculty is handled separately via facultyID field - don't add to members array
-    // The members array should only contain students
-    console.log('[CreateClass] Faculty ID (separate field):', facultyID);
-    console.log('[CreateClass] Student members only:', members);
-
-    // Use dropdown values for className and classCode
-    if (!selectedSubject || !selectedSection || !classDesc.trim() || members.length === 0) {
-      setValidationModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Missing Information',
-        message: "Please fill in all fields and add at least one member."
-      });
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('classID', classID);
-    formData.append('className', selectedSubject);
-    formData.append('classCode', autoClassCode);
-    formData.append('classDesc', classDesc.trim());
-    formData.append('members', JSON.stringify(members));
-    formData.append('facultyID', facultyID);
-    formData.append('section', selectedSection); // Add the section field
-    if (classImage) {
-      formData.append('image', classImage);
-    }
+  const handleSubmitConfirmation = async () => {
+    if (!confirmingClass) return;
 
     try {
-      console.log('[CreateClass] submitting class create with members:', members);
-      console.log('[CreateClass] submitting class create with section:', selectedSection);
-      const res = await fetch(`${API_BASE}/classes`, {
-        method: "POST",
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('classDesc', classDesc);
+      if (classImage) {
+        formData.append('image', classImage);
+      }
+
+      const res = await fetch(`${API_BASE}/api/classes/${confirmingClass.classID}/confirm`, {
+        method: 'PATCH',
         headers: {
           ...(token && { Authorization: `Bearer ${token}` })
         },
-        body: formData,
+        body: formData
       });
+
       if (res.ok) {
-        const createdPayload = await res.json().catch(() => null);
-        console.log('[CreateClass] class created successfully, payload:', createdPayload);
-
-        // Try to persist members explicitly in case the create endpoint ignores the members field
-        try {
-          const createdClassId = createdPayload?.class?.classID || createdPayload?.classID || createdPayload?.ClassID || createdPayload?.id || createdPayload?.class?.id;
-          if (createdClassId) {
-            const memberIdsForPatch = members.map(String);
-            console.log('[CreateClass] patching members to class:', createdClassId, memberIdsForPatch);
-            await fetch(`${API_BASE}/classes/${createdClassId}/members`, {
-              method: 'PATCH',
-              headers: {
-                ...(token && { Authorization: `Bearer ${token}` }),
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ members: memberIdsForPatch })
-            }).catch(err => console.warn('[CreateClass] patch members failed:', err));
-          } else {
-            console.warn('[CreateClass] could not infer created classID from payload. Skipping members patch.');
-          }
-        } catch (e) {
-          console.warn('[CreateClass] error trying to patch members:', e);
-        }
-
         setValidationModal({
           isOpen: true,
           type: 'success',
-          title: 'Success',
-          message: "Class created successfully!"
+          title: 'Class Confirmed',
+          message: `Class "${confirmingClass.className}" has been confirmed successfully!`
         });
-        setSelectedSubject("");
-        setSelectedSection("");
+        
+        // Remove the confirmed class from pending list
+        setPendingClasses(prev => prev.filter(c => c.classID !== confirmingClass.classID));
+        setConfirmingClass(null);
         setClassDesc("");
-        setSelectedStudents([]);
         setClassImage(null);
       } else {
         const data = await res.json();
-        console.warn('[CreateClass] create failed payload:', data);
-        let errorMessage = data.error || "Failed to create class";
-        
-        // Handle specific error cases
-        if (res.status === 400) {
-          errorMessage = data.error || 'Invalid class data. Please check your input.';
-        } else if (res.status === 401) {
-          errorMessage = 'Your session has expired. Please log in again.';
-        } else if (res.status === 403) {
-          errorMessage = 'You do not have permission to create classes.';
-        } else if (res.status === 409) {
-          errorMessage = data.error || 'A class with this name already exists.';
-        } else if (res.status >= 500) {
-          errorMessage = 'Server error occurred. Please try again later.';
-        }
-        
         setValidationModal({
           isOpen: true,
           type: 'error',
-          title: 'Creation Failed',
-          message: "Error: " + errorMessage
+          title: 'Confirmation Failed',
+          message: data.error || 'Failed to confirm class'
         });
       }
-    } catch (err) {
-      console.error("Error creating class:", err);
+    } catch (error) {
+      console.error('Error confirming class:', error);
       setValidationModal({
         isOpen: true,
         type: 'error',
         title: 'Network Error',
-        message: "Network error. Please check your connection and try again."
+        message: 'Network error. Please check your connection and try again.'
       });
     }
   };
 
-  // Download template function
-  const handleDownloadTemplate = () => {
-    // Create template data with headers and sample rows matching student assignments export format
-    const templateData = [
-      {
-        'Student No.': '25-00016',
-        'Last Name': 'Reyes',
-        'First Name': 'Hannah',
-        'Status': 'Active'
-      },
-      {
-        'Student No.': '25-00070',
-        'Last Name': 'De Marco',
-        'First Name': 'Isabel',
-        'Status': 'Active'
-      }
-    ];
 
-    // Create workbook and worksheet
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(templateData);
-
-    // Set column widths
-    worksheet['!cols'] = [
-      { wch: 15 }, // Student No.
-      { wch: 20 }, // Last Name
-      { wch: 20 }, // First Name
-      { wch: 12 }  // Status
-    ];
-
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Student Assignments');
-
-    // Generate filename with current date
-    const currentDate = new Date().toISOString().split('T')[0];
-    const filename = `Student_Assignments_Template_${currentDate}.xlsx`;
-
-    // Download the file
-    XLSX.writeFile(workbook, filename);
-  };
-
-  // Update batch upload logic to search by School ID
-  const handleBatchUpload = async (e) => {
-    setBatchLoading(true);
-    setBatchMessage('');
-    const file = e.target.files[0];
-    if (!file) {
-      setBatchLoading(false);
-      return;
-    }
-
-    // Check if section is selected
-    if (!selectedSection) {
-      setBatchMessage('Please select a section first before uploading students');
-      setBatchLoading(false);
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const data = evt.target.result;
-      const workbook = XLSX.read(data, { type: "binary" });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const json = XLSX.utils.sheet_to_json(worksheet);
-
-      let added = 0;
-      let skipped = 0;
-      let notFound = 0;
-      let skippedNames = [];
-      let notFoundNames = [];
-
-      // Validate that the file has the expected columns
-      if (json.length > 0) {
-        const firstRow = json[0];
-        const hasRequiredColumns = firstRow['Student No.'] || firstRow['Student School ID'] || firstRow['School ID'] || firstRow['schoolID'];
-        if (!hasRequiredColumns) {
-          setBatchMessage('Error: The uploaded file does not have the correct format. Please download the template and use the correct column names.');
-          setBatchLoading(false);
-          return;
-        }
-      }
-
-      for (const row of json) {
-        // Try to get Student No. first, then fallback to other formats for backward compatibility
-        const schoolID = (row['Student No.'] || row['Student School ID'] || row['School ID'] || row['schoolID'] || row['SchoolID'] || "").trim();
-        const email = (row.Email || row["email"] || row["School Email"] || row["school email"] || "").trim();
-        
-        if (!schoolID && !email) {
-          continue;
-        }
-
-        try {
-          // Search by School ID first (preferred method)
-          let searchQuery = schoolID || email;
-          const res = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(searchQuery)}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-          });
-          const users = await res.json();
-          
-          // Find the user - prioritize exact School ID match if available
-          let found = null;
-          if (schoolID) {
-            // Look for exact School ID match first
-            found = users.find(user => user.schoolID && user.schoolID.toLowerCase() === schoolID.toLowerCase());
-            // If no exact match, look for partial match
-            if (!found) {
-              found = users.find(user => user.schoolID && user.schoolID.toLowerCase().includes(schoolID.toLowerCase()));
-            }
-          }
-          if (!found && email) {
-            found = users.find(user => user.email && user.email.toLowerCase() === email.toLowerCase());
-          }
-          if (!found && users.length > 0) {
-            found = users[0]; // fallback to first result
-          }
-
-          if (found && !selectedStudents.some(s => s._id === found._id)) {
-            const assigned = await isStudentAssignedToSection(found._id);
-            if (assigned) {
-              setSelectedStudents(prev => [...prev, found]);
-              added++;
-            } else {
-              skipped++;
-              skippedNames.push(`${found.lastname}, ${found.firstname} (${found.schoolID || found.email})`);
-            }
-          } else if (!found) {
-            notFound++;
-            notFoundNames.push(schoolID || email);
-          }
-        } catch (error) {
-          console.error('Error processing student:', schoolID || email, error);
-          notFound++;
-          notFoundNames.push(schoolID || email);
-        }
-      }
-      
-      setBatchLoading(false);
-      let msg = added > 0 ? `${added} member(s) added from Excel.` : '';
-      if (skipped > 0) {
-        msg += ` ${skipped} not added (not assigned to this section): ${skippedNames.join(', ')}`;
-      }
-      if (notFound > 0) {
-        msg += ` ${notFound} not found in system: ${notFoundNames.join(', ')}`;
-      }
-      setBatchMessage(msg);
-    };
-    reader.readAsBinaryString(file);
-  };
+  if (loading) {
+    return (
+      <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+        <Faculty_Navbar />
+        <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading pending classes...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
@@ -728,235 +187,124 @@ export default function FacultyCreateClass() {
               day: "numeric",
             })}</p>
           </div>
-
           <ProfileMenu />
         </div>
-        <h3 className="text-4xl font-bold mt-5">Create Class</h3>
 
-        {/* Responsive form layout to reduce right white space */}
-        <div className="mt-6 flex flex-col md:flex-row md:space-x-8 space-y-6 md:space-y-0 ml-5">
-          {/* Left column: image upload and class description */}
-          <div className="flex-1 flex flex-col space-y-6">
-            <label className="text-xl font-bold">Class Image</label>
-            <input
-              type="file"
-              accept="image/*"
-              className="w-full px-3 py-2 border rounded"
-              onChange={e => setClassImage(e.target.files[0])}
-            />
-            
-            <label className="text-xl font-bold">Class Description</label>
-            <input
-              type="text"
-              placeholder="Enter class description..."
-              className="w-full px-3 py-2 border rounded"
-              value={classDesc}
-              onChange={e => setClassDesc(e.target.value)}
-            />
-          </div>
-          
-          {/* Right column: dropdowns */}
-          <div className="flex-1 flex flex-col space-y-6">
-            <label className="text-xl font-bold">Grade Level</label>
-            <select
-              className="w-full px-3 py-2 border rounded"
-              value={selectedGradeLevel}
-              onChange={e => setSelectedGradeLevel(e.target.value)}
-            >
-              <option value="">Select Grade Level</option>
-              {filteredAssignments
-                .map(a => a.gradeLevel)
-                .filter((value, index, self) => self.indexOf(value) === index)
-                .map(grade => (
-                  <option key={grade} value={grade}>{grade}</option>
-                ))
-              }
-            </select>
-
-                         <label className="text-xl font-bold">Class Name (Subject)</label>
-             {subjects.length === 0 && selectedGradeLevel ? (
-               <div className="w-full px-3 py-2 border rounded bg-yellow-50 text-yellow-800 text-sm">
-                 You have already created classes for all available subjects in this grade level for the current term.
-               </div>
-             ) : (
-               <select
-                 className="w-full px-3 py-2 border rounded"
-                 value={selectedSubject}
-                 onChange={e => setSelectedSubject(e.target.value)}
-                 disabled={!selectedGradeLevel}
-               >
-                 <option value="">Select Subject</option>
-                 {subjects.map(s => (
-                   <option key={s} value={s}>{s}</option>
-                 ))}
-               </select>
-             )}
-
-                         <label className="text-xl font-bold">Section</label>
-             <select
-               className="w-full px-3 py-2 border rounded"
-               value={selectedSection}
-               onChange={e => setSelectedSection(e.target.value)}
-               disabled={!selectedSubject || subjects.length === 0}
-             >
-               <option value="">Select Section</option>
-               {sections.map(sec => (
-                 <option key={sec} value={sec}>{sec}</option>
-               ))}
-             </select>
-            
-            {selectedSubject && selectedSection && academicYear && (
-              <div className="bg-blue-50 p-3 rounded border">
-                <p className="text-sm text-blue-800">
-                  <strong>Auto-generated Class Code:</strong> {
-                    selectedSubject.substring(0, 3).toUpperCase() + 
-                    "-" + 
-                    selectedSection.substring(0, 2).toUpperCase() + 
-                    "-" + 
-                    academicYear.schoolYearStart.toString().slice(-2)
-                  }
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-
-        <h3 className="text-4xl font-bold mt-10 mb-7">Members</h3>
-          {/* Batch Upload Input - restyled to match Bulk Assign Students UI */}
-          <div className="md:space-x-8 space-y-6 md:space-y-0 ml-5">
-
-          
-            <div className="border rounded-lg p-4 bg-white mb-4 w-full ">
-              <div className="font-bold mb-2">Bulk Assign Students</div>
-              <div className="text-sm text-gray-600 mb-2">Upload Excel File with Student School ID, Student Name, Track Name, Strand Name, Section Name, Grade Level, and Status columns</div>
-              <div className="text-xs text-blue-600 mb-2">💡 Download the template to see the correct format. The system will search for students using School ID first.</div>
-              <div className="flex items-center gap-4 mb-2">
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  onChange={handleBatchUpload}
-                  className="border rounded px-2 py-1 text-sm w-full"
-                />
-                <button
-                  type="button"
-                  className="bg-blue-900 hover:bg-blue-800 text-white font-semibold rounded px-4 py-2 text-sm"
-                  onClick={handleDownloadTemplate}
-                >
-                  Download Template
-                </button>
-              </div>
-              {batchLoading && <span className="text-blue-600 block mt-2">Processing batch upload...</span>}
-              {batchMessage && <span className="text-green-600 block mt-2">{batchMessage}</span>}
-              
+        {pendingClasses.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-8 max-w-md mx-auto">
+              <div className="text-green-600 text-6xl mb-4">✅</div>
+              <h3 className="text-xl font-semibold text-green-800 mb-2">No Pending Classes</h3>
+              <p className="text-green-700">
+                All your classes have been confirmed! You can view your active classes in the Classes section.
+              </p>
+              <button
+                onClick={() => navigate('/faculty_classes')}
+                className="mt-4 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg transition-colors"
+              >
+                View My Classes
+              </button>
             </div>
-            <div className="flex items-center my-4">
-                <div className="flex-grow border-t border-gray-300"></div>
-                <span className="mx-4 text-gray-400 text-sm">Or assign manually</span>
-                <div className="flex-grow border-t border-gray-300"></div>
-              </div>
+          </div>
+        ) : (
+          <>
+            <h3 className="text-4xl font-bold mt-5 mb-6">Confirm Classes</h3>
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-blue-800">
+                <strong>Classes have been automatically created for you!</strong> Please review and confirm each class below. 
+                You can update the description and add a class image if needed.
+              </p>
+            </div>
 
-            {/* Manual Student Name Input - styled */}
-            <label className="block text-gray-700 text-sm font-semibold mb-1 mt-2">Student Name</label>
-            {!selectedSection ? (
-              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-sm">
-                ⚠️ Please select a section first to search for students
-              </div>
-            ) : (
-              <input
-                type="text"
-                placeholder="Search Student..."
-                className="w-full px-3 py-2 rounded border border-gray-300 bg-gray-50 text-base focus:outline-none focus:ring-2 focus:ring-[#00418b] mb-4"
-                value={studentName}
-                onChange={handleSearch}
-              />
-            )}
-
-              <div className="mt-4 w-1/2">
-                {error && <p className="text-red-500">{error}</p>}
-                <ul className="space-y-2 w-full">
-                  {students.map((student) => (
-                    <li
-                      key={student._id}
-                      className="flex items-center bg-gray-300 hover:bg-gray-400 transition-colors cursor-pointer px-4 py-2 rounded font-poppinsr"
-                      onClick={() => handleAddStudent(student)}
+            <div className="grid gap-6">
+              {pendingClasses.map((classData) => (
+                <div key={classData.classID} className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h4 className="text-xl font-bold text-gray-800">{classData.className}</h4>
+                      <p className="text-gray-600">Class Code: {classData.classCode}</p>
+                      <p className="text-gray-600">Section: {classData.section}</p>
+                      <p className="text-gray-600">Students: {classData.members?.length || 0}</p>
+                    </div>
+                    <button
+                      onClick={() => handleConfirmClass(classData)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
                     >
-                      <span className="font-bold mr-2">{student.lastname}, {student.firstname}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {selectedStudents.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="font-semibold mb-4">Class Members:</h4>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="p-3 border w-1/6">School ID</th>
-                          <th className="p-3 border w-1/6">Last Name</th>
-                          <th className="p-3 border w-1/6">First Name</th>
-                          <th className="p-3 border w-1/6">Middle Name</th>
-                          <th className="p-3 border w-1/6">Section</th>
-                          <th className="p-3 border w-1/6">Email</th>
-                          <th className="p-3 border w-1/6">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedStudents
-                          .filter(student => student && student.firstname && student.lastname)
-                          .map(student => (
-                            <tr key={student._id}>
-                              <td className="p-3 border">{student.schoolID || '-'}</td>
-                              <td className="p-3 border">{student.lastname}</td>
-                              <td className="p-3 border">{student.firstname}</td>
-                              <td className="p-3 border">{student.middlename}</td>
-                              <td className="p-3 border">{selectedSection || '-'}</td>
-                              <td className="p-3 border">{student.email}</td>
-                              <td className="p-3 border">
-                                <button
-                                  onClick={() => handleRemoveStudent(student._id)}
-                                  className="bg-white hover:bg-gray-200 text-red-600 rounded px-2 py-1 text-xs"
-                                  style={{ transition: 'background 0.2s' }}
-                                >
-                                  <img src={archiveIcon} alt="Remove" className="w-8 h-8 inline-block" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
+                      Confirm Class
+                    </button>
+                  </div>
+                  
+                  <div className="text-sm text-gray-500">
+                    <p>Academic Year: {classData.academicYear}</p>
+                    <p>Term: {classData.termName}</p>
                   </div>
                 </div>
-              )}
+              ))}
             </div>
-          <button
-          className="bg-blue-900 hover:bg-blue-800 rounded-2xl  w-full h-15 flex items-center justify-center shadow-lg transition-colors mt-10"
-          style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
-          onClick={handleCreateClass}
-          disabled={batchLoading}
-        >
-          <img src={createEventIcon} alt="Create" className="w-7 h-7 mr-2" />
-          <span className="mt-2 font-semibold text-white">Create</span>
-        </button>
-        
-        </div>
+          </>
+        )}
 
-        
-      
+        {/* Confirmation Modal */}
+        {confirmingClass && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-xl font-bold mb-4">Confirm Class: {confirmingClass.className}</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Class Description</label>
+                  <textarea
+                    value={classDesc}
+                    onChange={(e) => setClassDesc(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows="3"
+                    placeholder="Enter class description..."
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Class Image (Optional)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setClassImage(e.target.files[0])}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setConfirmingClass(null);
+                    setClassDesc("");
+                    setClassImage(null);
+                  }}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitConfirmation}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Confirm Class
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <ValidationModal
-        isOpen={validationModal.isOpen}
-        onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
-        type={validationModal.type}
-        title={validationModal.title}
-        message={validationModal.message}
-        onConfirm={validationModal.type === 'success' ? () => navigate('/faculty_classes') : undefined}
-        confirmText={validationModal.type === 'success' ? 'Go to Classes' : 'OK'}
-      />
-
+          isOpen={validationModal.isOpen}
+          onClose={() => setValidationModal({ ...validationModal, isOpen: false })}
+          type={validationModal.type}
+          title={validationModal.title}
+          message={validationModal.message}
+          onConfirm={validationModal.type === 'success' ? () => navigate('/faculty_classes') : undefined}
+          confirmText={validationModal.type === 'success' ? 'Go to Classes' : 'OK'}
+        />
       </div>
-      
-      
+    </div>
   );
 }

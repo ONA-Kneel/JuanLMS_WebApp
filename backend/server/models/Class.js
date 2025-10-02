@@ -11,7 +11,9 @@ const classSchema = new mongoose.Schema({
   section: { type: String }, // Section name from academic settings (e.g., "CKY111", "ABM111")
   academicYear: { type: String }, // e.g., "2025-2026"
   termName: { type: String }, // e.g., "Term 1"
-  isArchived: { type: Boolean, default: false }
+  isArchived: { type: Boolean, default: false },
+  isAutoCreated: { type: Boolean, default: false }, // Flag to indicate auto-created class
+  needsConfirmation: { type: Boolean, default: false } // Flag to indicate faculty needs to confirm
 });
 
 export default mongoose.model("Class", classSchema, "Classes"); 

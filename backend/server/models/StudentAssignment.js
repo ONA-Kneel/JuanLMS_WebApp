@@ -64,6 +64,10 @@ const studentAssignmentSchema = new mongoose.Schema({
     type: String,
     enum: ['active', 'archived'],
     default: 'active'
+  },
+  isApproved: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

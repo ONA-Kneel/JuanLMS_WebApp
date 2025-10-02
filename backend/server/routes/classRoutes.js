@@ -704,6 +704,121 @@ router.patch('/:classID/members', authenticateToken, async (req, res) => {
 });
 
 
+// Get all class members with registration status (active/pending)
+router.get('/:classID/members-with-status', authenticateToken, async (req, res) => {
+  try {
+    const { classID } = req.params;
+    
+    // Find the class
+    const classDoc = await Class.findOne({ classID });
+    if (!classDoc) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+    
+    console.log(`[GET-MEMBERS-STATUS] Getting members for class ${classID}`);
+    console.log(`[GET-MEMBERS-STATUS] Class section: ${classDoc.section}, academic year: ${classDoc.academicYear}, term: ${classDoc.termName}`);
+    
+    // Get faculty
+    const faculty = await User.findOne({ 
+      $or: [
+        { _id: classDoc.facultyID },
+        { userID: classDoc.facultyID }
+      ],
+      isArchived: { $ne: true } 
+    });
+    
+    // Get all student assignments for this section/term/year
+    const studentAssignments = await StudentAssignment.find({
+      sectionName: classDoc.section,
+      schoolYear: classDoc.academicYear,
+      termName: classDoc.termName,
+      status: { $in: ['active', 'pending'] }
+    }).populate('studentId');
+    
+    console.log(`[GET-MEMBERS-STATUS] Found ${studentAssignments.length} student assignments`);
+    
+    // Log assignment details for debugging
+    studentAssignments.forEach((assignment, index) => {
+      console.log(`[GET-MEMBERS-STATUS] Assignment ${index + 1}:`, {
+        studentName: assignment.studentName || (assignment.studentId ? `${assignment.studentId.firstname} ${assignment.studentId.lastname}` : 'Unknown'),
+        status: assignment.status,
+        isApproved: assignment.isApproved,
+        studentId: assignment.studentId ? 'Linked' : 'Not Linked'
+      });
+    });
+    
+    // Process students with their status
+    const studentsWithStatus = [];
+    
+    for (const assignment of studentAssignments) {
+      let studentData = null;
+      let registrationStatus = 'pending';
+      
+      if (assignment.studentId) {
+        // Student is properly linked to User record
+        studentData = {
+          _id: assignment.studentId._id,
+          userID: assignment.studentId.userID,
+          firstname: assignment.studentId.firstname,
+          lastname: assignment.studentId.lastname,
+          email: assignment.studentId.getDecryptedEmail ? assignment.studentId.getDecryptedEmail() : assignment.studentId.email,
+          schoolID: assignment.studentId.getDecryptedSchoolID ? assignment.studentId.getDecryptedSchoolID() : assignment.studentId.schoolID,
+          role: assignment.studentId.role
+        };
+        // Use the actual assignment status - if student has active assignment in current term, they are active
+        registrationStatus = (assignment.status === 'active') ? 'active' : 'pending';
+      } else if (assignment.studentName) {
+        // Student only has name, not linked to User record
+        studentData = {
+          _id: assignment._id, // Use assignment ID as temporary ID
+          userID: assignment.studentSchoolID || 'N/A',
+          firstname: assignment.firstName || assignment.studentName.split(' ')[0],
+          lastname: assignment.lastName || assignment.studentName.split(' ').slice(-1)[0],
+          email: 'Not registered',
+          schoolID: assignment.studentSchoolID || 'N/A',
+          role: 'students'
+        };
+        // Use the actual assignment status - if student has active assignment in current term, they are active
+        registrationStatus = (assignment.status === 'active') ? 'active' : 'pending';
+      }
+      
+      if (studentData) {
+        studentsWithStatus.push({
+          ...studentData,
+          registrationStatus,
+          assignmentId: assignment._id,
+          assignmentStatus: assignment.status
+        });
+      }
+    }
+    
+    console.log(`[GET-MEMBERS-STATUS] Returning ${studentsWithStatus.length} students with status`);
+    
+    // Decrypt faculty data
+    const decryptedFaculty = faculty ? {
+      _id: faculty._id,
+      userID: faculty.userID,
+      firstname: faculty.firstname,
+      lastname: faculty.lastname,
+      email: faculty.getDecryptedEmail ? faculty.getDecryptedEmail() : faculty.email,
+      schoolID: faculty.getDecryptedSchoolID ? faculty.getDecryptedSchoolID() : faculty.schoolID,
+      role: faculty.role
+    } : null;
+    
+    res.json({
+      faculty: decryptedFaculty,
+      students: studentsWithStatus,
+      totalStudents: studentsWithStatus.length,
+      activeStudents: studentsWithStatus.filter(s => s.registrationStatus === 'active').length,
+      pendingStudents: studentsWithStatus.filter(s => s.registrationStatus === 'pending').length
+    });
+    
+  } catch (err) {
+    console.error('[GET-MEMBERS-STATUS] Error:', err);
+    res.status(500).json({ error: 'Failed to fetch class members with status' });
+  }
+});
+
 // Get all classes for the logged-in user (student or faculty)
 router.get('/my-classes', authenticateToken, async (req, res) => {
   try {
@@ -720,10 +835,26 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
       console.log(`[MY-CLASSES] Processing as faculty user`);
       
       // Find classes where facultyID matches ObjectId or userID
+      // Only show confirmed classes in the main faculty classes view
       classes = await Class.find({ 
         $or: [
           { facultyID: userObjectId }, // ObjectId
           { facultyID: userID } // userID fallback
+        ],
+        isArchived: { $ne: true },
+        $and: [
+          {
+            $or: [
+              { needsConfirmation: { $ne: true } },
+              { needsConfirmation: { $exists: false } }
+            ]
+          },
+          {
+            $or: [
+              { isAutoCreated: { $ne: true } },
+              { isAutoCreated: { $exists: false } }
+            ]
+          }
         ]
       });
       console.log(`[MY-CLASSES] Found ${classes.length} classes as faculty`);
@@ -732,7 +863,9 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
         className: c.className, 
         facultyID: c.facultyID,
         academicYear: c.academicYear,
-        termName: c.termName
+        termName: c.termName,
+        needsConfirmation: c.needsConfirmation,
+        isAutoCreated: c.isAutoCreated
       })));
       
     } else if (userRole === 'students') {
@@ -740,14 +873,33 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
       console.log(`[MY-CLASSES] Processing as student user`);
       
       // Find classes where the student's ObjectId is in the members array
-      classes = await Class.find({ members: userObjectId });
+      // Only show confirmed classes (not auto-created or needing confirmation)
+      classes = await Class.find({ 
+        members: userObjectId,
+        $and: [
+          {
+            $or: [
+              { needsConfirmation: { $ne: true } },
+              { needsConfirmation: { $exists: false } }
+            ]
+          },
+          {
+            $or: [
+              { isAutoCreated: { $ne: true } },
+              { isAutoCreated: { $exists: false } }
+            ]
+          }
+        ]
+      });
       
       console.log(`[MY-CLASSES] Found ${classes.length} classes as student`);
       console.log(`[MY-CLASSES] Classes found:`, classes.map(c => ({ 
         classID: c.classID, 
         className: c.className, 
         members: c.members,
-        facultyID: c.facultyID 
+        facultyID: c.facultyID,
+        needsConfirmation: c.needsConfirmation,
+        isAutoCreated: c.isAutoCreated
       })));
       
     } else {
@@ -796,16 +948,191 @@ router.get('/faculty-classes', authenticateToken, async (req, res) => {
     }
     
     // Get classes where the logged-in faculty is assigned (support both ObjectId and legacy userID string)
+    // Only show confirmed classes in the main faculty classes view
     const classes = await Class.find({
       $or: [
         { facultyID: userObjectId },
         { facultyID: userID }
+      ],
+      isArchived: { $ne: true },
+      $and: [
+        {
+          $or: [
+            { needsConfirmation: { $ne: true } },
+            { needsConfirmation: { $exists: false } }
+          ]
+        },
+        {
+          $or: [
+            { isAutoCreated: { $ne: true } },
+            { isAutoCreated: { $exists: false } }
+          ]
+        }
       ]
     });
     res.json(classes);
   } catch (err) {
     console.error('Error fetching faculty classes:', err);
     res.status(500).json({ error: 'Failed to fetch faculty classes.' });
+  }
+});
+
+// Get classes that need confirmation (auto-created classes)
+router.get('/pending-confirmation', authenticateToken, async (req, res) => {
+  try {
+    const userID = req.user.userID;
+    const userObjectId = req.user._id;
+    
+    // Only allow faculty to access this endpoint
+    if (req.user.role !== 'faculty') {
+      return res.status(403).json({ error: 'Access denied. Faculty only.' });
+    }
+    
+    // Get auto-created classes that need confirmation for this faculty
+    const classes = await Class.find({
+      $or: [
+        { facultyID: userObjectId },
+        { facultyID: userID }
+      ],
+      isAutoCreated: true,
+      needsConfirmation: true,
+      isArchived: { $ne: true }
+    });
+    
+    res.json(classes);
+  } catch (err) {
+    console.error('Error fetching pending confirmation classes:', err);
+    res.status(500).json({ error: 'Failed to fetch pending confirmation classes.' });
+  }
+});
+
+// Get all faculty classes (including unconfirmed) - for admin or special views
+router.get('/faculty-all-classes', authenticateToken, async (req, res) => {
+  try {
+    const userID = req.user.userID;
+    const userObjectId = req.user._id;
+    
+    // Only allow faculty to access this endpoint
+    if (req.user.role !== 'faculty') {
+      return res.status(403).json({ error: 'Access denied. Faculty only.' });
+    }
+    
+    // Get all classes for this faculty (including unconfirmed)
+    const classes = await Class.find({
+      $or: [
+        { facultyID: userObjectId },
+        { facultyID: userID }
+      ],
+      isArchived: { $ne: true }
+    });
+    
+    res.json(classes);
+  } catch (err) {
+    console.error('Error fetching all faculty classes:', err);
+    res.status(500).json({ error: 'Failed to fetch all faculty classes.' });
+  }
+});
+
+// Confirm/update an auto-created class
+router.patch('/:classID/confirm', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    const { classID } = req.params;
+    const { classDesc } = req.body;
+    const userID = req.user.userID;
+    const userObjectId = req.user._id;
+    
+    // Find the class and verify faculty ownership
+    const classDoc = await Class.findOne({
+      classID,
+      $or: [
+        { facultyID: userObjectId },
+        { facultyID: userID }
+      ],
+      isAutoCreated: true,
+      needsConfirmation: true
+    });
+    
+    if (!classDoc) {
+      return res.status(404).json({ error: 'Class not found or not available for confirmation' });
+    }
+    
+    // Update the class
+    const updateData = {
+      needsConfirmation: false,
+      isAutoCreated: false // Mark as confirmed
+    };
+    
+    if (classDesc) {
+      updateData.classDesc = classDesc;
+    }
+    
+    // Handle image upload
+    if (req.file) {
+      // Handle both Cloudinary and local storage
+      updateData.image = req.file.secure_url || req.file.path || `/uploads/${req.file.filename}`;
+    }
+    
+    const updatedClass = await Class.findOneAndUpdate(
+      { classID },
+      updateData,
+      { new: true }
+    );
+    
+    // Update student assignments to reflect that students are now active in this confirmed class
+    try {
+      console.log(`[CONFIRM-CLASS] Updating student assignments for class ${classID}`);
+      console.log(`[CONFIRM-CLASS] Class details:`, {
+        section: classDoc.section,
+        academicYear: classDoc.academicYear,
+        termName: classDoc.termName,
+        members: classDoc.members
+      });
+      
+      // Update student assignments for students in this class
+      const studentAssignmentUpdate = await StudentAssignment.updateMany(
+        {
+          sectionName: classDoc.section,
+          schoolYear: classDoc.academicYear,
+          termName: classDoc.termName,
+          studentId: { $in: classDoc.members }
+        },
+        {
+          $set: { 
+            status: 'active',
+            isApproved: true // Add this field to track approval status
+          }
+        }
+      );
+      
+      console.log(`[CONFIRM-CLASS] Updated ${studentAssignmentUpdate.modifiedCount} student assignments to active status`);
+      
+      // Also update any student assignments that don't have studentId but match the section/year/term
+      const studentAssignmentUpdateByName = await StudentAssignment.updateMany(
+        {
+          sectionName: classDoc.section,
+          schoolYear: classDoc.academicYear,
+          termName: classDoc.termName,
+          studentId: { $exists: false }
+        },
+        {
+          $set: { 
+            status: 'active',
+            isApproved: true
+          }
+        }
+      );
+      
+      console.log(`[CONFIRM-CLASS] Updated ${studentAssignmentUpdateByName.modifiedCount} student assignments by name to active status`);
+      
+    } catch (studentUpdateError) {
+      console.error('[CONFIRM-CLASS] Error updating student assignments:', studentUpdateError);
+      // Don't fail the class confirmation if student assignment update fails
+    }
+    
+    res.json(updatedClass);
+  } catch (err) {
+    console.error('Error confirming class:', err);
+    res.status(500).json({ error: 'Failed to confirm class.' });
   }
 });
 

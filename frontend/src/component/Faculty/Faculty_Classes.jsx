@@ -148,7 +148,7 @@ export default function Faculty_Classes() {
           >
             <img src={createEvent} alt="Create Class" className="w-12 h-12" />
           </button>
-          <span className="font-bold text-xl text-[#222]">Create Class</span>
+          <span className="font-bold text-xl text-[#222]">Confirm Classes</span>
         </div>
 
         {/* Faculty's Classes */}

@@ -1037,9 +1037,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
           }
           setAllStudents(allStudentsData);
           
-          // Step 2: Try to get members from the dedicated endpoint
+          // Step 2: Try to get members from the dedicated endpoint with status
           try {
-            const membersRes = await fetch(`${API_BASE}/classes/${classId}/members`, {
+            const membersRes = await fetch(`${API_BASE}/classes/${classId}/members-with-status`, {
         headers: { 'Authorization': `Bearer ${token}` }
             });
                          if (membersRes.ok) {
@@ -2601,6 +2601,20 @@ export default function ClassContent({ selected, isFaculty = false }) {
                   </div>
                 )}
               </h3>
+              
+              {/* Show registration status summary */}
+              {members.students && members.students.length > 0 && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex gap-4 text-sm">
+                    <span className="text-green-600 font-medium">
+                      ✅ Active: {members.students.filter(s => s.registrationStatus === 'active').length}
+                    </span>
+                    <span className="text-yellow-600 font-medium">
+                      ⏳ Pending: {members.students.filter(s => s.registrationStatus === 'pending').length}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {editingMembers ? (
                 <div className="mt-4 space-y-4">
@@ -2632,7 +2646,16 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                 </div>
                               </div>
                               <div>
-                                <div className="font-semibold text-gray-900 mb-1">{student.firstname} {student.lastname}</div>
+                                <div className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                                  {student.firstname} {student.lastname}
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    student.registrationStatus === 'active' 
+                                      ? 'bg-green-100 text-green-800' 
+                                      : 'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {student.registrationStatus === 'active' ? '✅ Active' : '⏳ Pending'}
+                                  </span>
+                                </div>
                                 <div className="text-sm text-gray-600">{student.email}</div>
                                 <div className="text-sm text-blue-600 font-medium">ID: {student.schoolID || student.userID || 'N/A'}</div>
                               </div>
@@ -3100,7 +3123,16 @@ export default function ClassContent({ selected, isFaculty = false }) {
                             </div>
                           </div>
                           <div>
-                            <div className="font-medium">{s.firstname} {s.lastname}</div>
+                            <div className="font-medium flex items-center gap-2">
+                              {s.firstname} {s.lastname}
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                s.registrationStatus === 'active' 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {s.registrationStatus === 'active' ? '✅ Active' : '⏳ Pending'}
+                              </span>
+                            </div>
                             <div className="text-sm text-gray-600">{s.email}</div>
                             <div className="text-sm text-blue-600 font-medium">ID: {s.schoolID || s.userID || 'N/A'}</div>
                           </div>
