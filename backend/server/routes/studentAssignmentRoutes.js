@@ -77,6 +77,7 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate } = req.body;
     console.log('Request body debug:', { studentId, studentName, studentSchoolID, firstName, lastName, trackName, strandName, sectionName, gradeLevel, termId, quarterName, enrollmentNo, enrollmentDate });
+    console.log('Enrollment data specifically:', { enrollmentNo, enrollmentDate, type: typeof enrollmentNo });
 
     // Get term details to get schoolYear and termName
     const term = await Term.findById(termId);
@@ -214,6 +215,8 @@ router.post('/', authenticateToken, async (req, res) => {
       studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
       firstName: !actualStudentId ? firstName : undefined,
       lastName: !actualStudentId ? lastName : undefined,
+      enrollmentNo: !actualStudentId ? enrollmentNo : undefined,
+      enrollmentDate: !actualStudentId ? enrollmentDate : undefined,
       trackName,
       strandName,
       sectionName,
@@ -243,10 +246,22 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     console.log('About to save assignment to database...');
+    console.log('Assignment object before save:', {
+      enrollmentNo: assignment.enrollmentNo,
+      enrollmentDate: assignment.enrollmentDate,
+      studentName: assignment.studentName,
+      studentSchoolID: assignment.studentSchoolID
+    });
     
     let newAssignment;
     try {
       newAssignment = await assignment.save();
+      console.log('Assignment saved successfully:', {
+        _id: newAssignment._id,
+        enrollmentNo: newAssignment.enrollmentNo,
+        enrollmentDate: newAssignment.enrollmentDate,
+        studentName: newAssignment.studentName
+      });
       console.log('Assignment saved successfully:', newAssignment._id);
     } catch (saveError) {
       console.log('SAVE ERROR:', saveError);

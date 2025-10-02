@@ -58,6 +58,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Debug logging for props
+  console.log('TermDetails component props:', { propTermData, quarterData, termId });
+
   // State for Tracks management
   const [trackFormData, setTrackFormData] = useState({
     trackName: '',
@@ -86,6 +89,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     trackId: '',
     strandId: '',
     sectionName: '',
+    sectionCode: '',
     gradeLevel: ''
   });
   const [sections, setSections] = useState([]);
@@ -288,6 +292,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
   // In a real application, you would fetch term details here using termId
   useEffect(() => {
+    console.log('TermDetails useEffect triggered:', { propTermData, quarterData, termId });
+    
     // If termData is provided as props (from quarter view), use it directly
     if (propTermData) {
       console.log('Term details loaded from props:', propTermData);
@@ -369,7 +375,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const token = localStorage.getItem('token');
       console.log('🔑 Token:', token ? 'Present' : 'Missing');
       
-      const res = await fetch(`${API_BASE}/users/active`, {
+      const res = await fetch(`${API_BASE}/api/users/active`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -417,7 +423,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const token = localStorage.getItem('token');
       console.log('🔑 Token:', token ? 'Present' : 'Missing');
       
-      const res = await fetch(`${API_BASE}/users/active`, {
+      const res = await fetch(`${API_BASE}/api/users/active`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -955,6 +961,17 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
   };
 
+  // Function to auto-generate section code from section name
+  const generateSectionCode = (sectionName) => {
+    if (!sectionName.trim()) return '';
+    
+    // Split by spaces and get first letter of each word, then join
+    const words = sectionName.trim().split(/\s+/);
+    const code = words.map(word => word.charAt(0).toUpperCase()).join('');
+    
+    return code;
+  };
+
   // Handle Section form submission
   const handleAddSection = async (e) => {
     e.preventDefault();
@@ -974,8 +991,22 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
 
     try {
+      // Ensure section code is generated if it's empty
+      let finalSectionCode = sectionFormData.sectionCode?.trim() || '';
+      if (!finalSectionCode) {
+        finalSectionCode = generateSectionCode(sectionFormData.sectionName.trim());
+        console.log('Generated fallback section code:', finalSectionCode);
+      }
+      
+      // Final safety check - if still empty, create a basic one
+      if (!finalSectionCode) {
+        finalSectionCode = 'SEC' + Date.now().toString().slice(-4);
+        console.log('Emergency fallback section code:', finalSectionCode);
+      }
+      
       const requestData = {
           sectionName: sectionFormData.sectionName.trim(),
+          sectionCode: finalSectionCode,
           trackName: selectedTrack.trackName,
           strandName: selectedStrand.strandName,
           gradeLevel: sectionFormData.gradeLevel,
@@ -985,6 +1016,10 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       };
       
       console.log('Sending section creation request:', requestData);
+      console.log('Final section code being sent:', finalSectionCode);
+      console.log('Request data JSON string:', JSON.stringify(requestData));
+      console.log('Section code type:', typeof finalSectionCode);
+      console.log('Section code length:', finalSectionCode ? finalSectionCode.length : 'undefined');
       
       const res = await fetch(`${API_BASE}/api/sections`, {
         method: 'POST',
@@ -1012,7 +1047,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           }).catch(() => {});
         } catch {}
         window.alert('Section added successfully!');
-        setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' }); // Clear form
+        setSectionFormData({ trackId: '', strandId: '', sectionName: '', sectionCode: '', gradeLevel: '' }); // Clear form
       } else {
         const data = await res.json();
         console.error('Section creation failed:', data);
@@ -1030,6 +1065,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       trackId: tracks.find(track => track.trackName === section.trackName)?._id || '',
       strandId: strands.find(strand => strand.strandName === section.strandName && strand.trackName === section.trackName)?._id || '',
       sectionName: section.sectionName,
+      sectionCode: section.sectionCode || '',
       gradeLevel: section.gradeLevel || '', // Populate gradeLevel when editing
     });
     setIsSectionModalOpen(true);
@@ -1053,11 +1089,15 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
     if (window.confirm("Save changes to this section?")) {
       try {
+        // Ensure section code is generated if it's empty
+        const finalSectionCode = sectionFormData.sectionCode.trim() || generateSectionCode(sectionFormData.sectionName.trim());
+        
         const res = await fetch(`${API_BASE}/api/sections/${editingSection._id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             sectionName: sectionFormData.sectionName.trim(),
+            sectionCode: finalSectionCode,
             trackName: selectedTrack.trackName,
             strandName: selectedStrand.strandName,
             gradeLevel: sectionFormData.gradeLevel, // Update gradeLevel in the request body
@@ -1092,7 +1132,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           window.alert('Section updated successfully!');
           setIsSectionEditMode(false);
           setEditingSection(null);
-          setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' }); // Clear form including gradeLevel
+          setSectionFormData({ trackId: '', strandId: '', sectionName: '', sectionCode: '', gradeLevel: '' }); // Clear form including gradeLevel
         } else {
           const data = await res.json();
           setSectionError(data.message || 'Failed to update section');
@@ -1417,8 +1457,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       setStudentError('');
       const token = localStorage.getItem('token');
 
-      // Assuming a new endpoint for student assignments: /api/student-assignments
-      const res = await fetch(`${API_BASE}/api/student-assignments?termId=${termDetails._id}`, {
+      // Build query parameters including quarter filtering
+      const params = new URLSearchParams();
+      params.append('termId', termDetails._id);
+      if (quarterData && quarterData.quarterName) {
+        params.append('quarterName', quarterData.quarterName);
+      }
+
+      const res = await fetch(`${API_BASE}/api/student-assignments?${params.toString()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -1436,7 +1482,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } finally {
       setLoading(false);
     }
-  }, [termDetails]);
+  }, [termDetails, quarterData]);
 
   // Fetch registrants to check approval status
   const fetchRegistrants = useCallback(async () => {
@@ -1493,6 +1539,31 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     // Check if it's a manual assignment by looking for studentSchoolID without studentId
     if (!assignment.studentId && (assignment.studentSchoolID || assignment.schoolID)) {
       console.log('Manual assignment - checking against registrants');
+      
+      // For bulk upload scenarios, check if student is actually registered
+      // If this is a bulk upload assignment (has enrollment data), still check registrant status
+      if (assignment.enrollmentNo || assignment.enrollmentDate) {
+        console.log('Bulk upload assignment detected - checking registrant status');
+        // Still check if the student is registered and approved
+        const isRegisteredAndApproved = registrants.some(registrant => {
+          const registrantSchoolId = (registrant.schoolID || '').trim();
+          const match = registrant.status === 'approved' && 
+                       registrantSchoolId === assignmentSchoolId;
+          
+          console.log('Bulk upload - checking registrant:', {
+            registrantSchoolId,
+            assignmentSchoolId,
+            registrantStatus: registrant.status,
+            registrantName: `${registrant.firstName} ${registrant.lastName}`,
+            match
+          });
+          
+          return match;
+        });
+        
+        console.log('Bulk upload assignment approval result:', isRegisteredAndApproved);
+        return isRegisteredAndApproved;
+      }
       
       // Check if this student is registered and approved
       const isRegisteredAndApproved = registrants.some(registrant => {
@@ -4874,6 +4945,144 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const createdAssignments = [];
       const token = localStorage.getItem('token');
 
+      // First, create any missing academic structures (tracks, strands, sections, subjects)
+      const uniqueTracks = [...new Set(validAssignments.map(a => a['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track'))];
+      const uniqueStrands = [...new Set(validAssignments.map(a => a['strand']))];
+      const uniqueSections = [...new Set(validAssignments.map(a => a['section']))];
+      const uniqueSubjects = [...new Set(validAssignments.map(a => a['subject'] || 'General'))]; // Default subject if not provided
+
+      console.log('Creating academic structures:', { uniqueTracks, uniqueStrands, uniqueSections, uniqueSubjects });
+
+      // Create tracks
+      for (const trackName of uniqueTracks) {
+        if (trackName) {
+          try {
+            const res = await fetch(`${API_BASE}/api/tracks`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                trackName: trackName,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName,
+                quarterName: quarterData ? quarterData.quarterName : undefined
+              })
+            });
+            if (res.ok) {
+              console.log(`Created track: ${trackName}`);
+            } else {
+              const data = await res.json();
+              if (data.message && data.message.includes('already exists')) {
+                console.log(`Track ${trackName} already exists`);
+              }
+            }
+          } catch (err) {
+            console.error(`Error creating track ${trackName}:`, err);
+          }
+        }
+      }
+
+      // Create strands
+      for (const strandName of uniqueStrands) {
+        if (strandName) {
+          const trackName = strandName === 'STEM' ? 'Academic Track' : 'TVL Track';
+          try {
+            const res = await fetch(`${API_BASE}/api/strands`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                strandName: strandName,
+                trackName: trackName,
+                schoolYear: termDetails.schoolYear,
+                termName: termDetails.termName,
+                quarterName: quarterData ? quarterData.quarterName : undefined
+              })
+            });
+            if (res.ok) {
+              console.log(`Created strand: ${strandName}`);
+            } else {
+              const data = await res.json();
+              if (data.message && data.message.includes('already exists')) {
+                console.log(`Strand ${strandName} already exists`);
+              }
+            }
+          } catch (err) {
+            console.error(`Error creating strand ${strandName}:`, err);
+          }
+        }
+      }
+
+      // Create sections
+      for (const sectionName of uniqueSections) {
+        if (sectionName) {
+          const assignment = validAssignments.find(a => a['section'] === sectionName);
+          if (assignment) {
+            try {
+              const res = await fetch(`${API_BASE}/api/sections`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sectionName: sectionName,
+                  trackName: assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track',
+                  strandName: assignment['strand'],
+                  gradeLevel: assignment['grade'],
+                  schoolYear: termDetails.schoolYear,
+                  termName: termDetails.termName,
+                  quarterName: quarterData ? quarterData.quarterName : null
+                })
+              });
+              if (res.ok) {
+                console.log(`Created section: ${sectionName}`);
+              } else {
+                const data = await res.json();
+                console.log(`Failed to create section "${sectionName}":`, data);
+                if (data.message && data.message.includes('already exists')) {
+                  console.log(`Section ${sectionName} already exists`);
+                } else {
+                  console.error(`Error creating section ${sectionName}: ${data.message || 'Unknown error'}`);
+                }
+              }
+            } catch (err) {
+              console.error(`Error creating section ${sectionName}:`, err);
+            }
+          }
+        }
+      }
+
+      // Create subjects
+      for (const subjectName of uniqueSubjects) {
+        if (subjectName) {
+          const assignment = validAssignments.find(a => (a['subject'] || 'General') === subjectName);
+          if (assignment) {
+            try {
+              const res = await fetch(`${API_BASE}/api/subjects`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  subjectName: subjectName,
+                  trackName: assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track',
+                  strandName: assignment['strand'],
+                  gradeLevel: assignment['grade'],
+                  schoolYear: termDetails.schoolYear,
+                  termName: termDetails.termName,
+                  quarterName: quarterData ? quarterData.quarterName : undefined
+                })
+              });
+              if (res.ok) {
+                console.log(`Created subject: ${subjectName}`);
+              } else {
+                const data = await res.json();
+                if (data.message && data.message.includes('already exists')) {
+                  console.log(`Subject ${subjectName} already exists`);
+                }
+              }
+            } catch (err) {
+              console.error(`Error creating subject ${subjectName}:`, err);
+            }
+          }
+        }
+      }
+
+      // Now create the student assignments
       for (let i = 0; i < validAssignments.length; i++) {
         const assignment = validAssignments[i];
         // Get the studentId from the validation status of the original preview data
@@ -4887,6 +5096,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         const studentSchoolID = assignment['student_no'] || assignment['Student School ID'] || '';
         const enrollmentNo = assignment['enrollment_no'] || '';
         let enrollmentDate = assignment['date'] || '';
+        
+        // Debug logging for enrollment data
+        console.log(`Processing student ${firstName} ${lastName}:`, {
+          enrollmentNo,
+          enrollmentDate,
+          rawAssignment: assignment
+        });
         
         // Format enrollment date properly if it exists
         if (enrollmentDate) {
@@ -4950,8 +5166,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       }
 
-      // Refresh the student assignments list after successful upload
+      // Refresh all data after successful upload
       fetchStudentAssignments();
+      fetchTracks();
+      fetchStrands();
+      fetchSections();
+      fetchSubjects();
+      fetchFacultyAssignments();
       // Audit log: Batch Upload Enrolled Students
       try {
         fetch(`${API_BASE}/audit-log`, {
@@ -6060,27 +6281,52 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     try {
       // Filter out invalid data
       const validTracks = importPreviewData.tracks.filter((_, index) => 
-        importValidationStatus.tracks[index]?.valid
+        importValidationStatus.tracks[index]?.valid &&
+        !importValidationStatus.tracks[index]?.message?.includes('already exists')
       );
       const validStrands = importPreviewData.strands.filter((_, index) => 
-        importValidationStatus.strands[index]?.valid
+        importValidationStatus.strands[index]?.valid &&
+        !importValidationStatus.strands[index]?.message?.includes('already exists')
       );
       const validSections = importPreviewData.sections.filter((_, index) => 
-        importValidationStatus.sections[index]?.valid
+        importValidationStatus.sections[index]?.valid && 
+        !importValidationStatus.sections[index]?.message?.includes('already exists')
       );
       const validSubjects = importPreviewData.subjects.filter((_, index) => 
-        importValidationStatus.subjects[index]?.valid
+        importValidationStatus.subjects[index]?.valid &&
+        !importValidationStatus.subjects[index]?.message?.includes('already exists')
       );
       const validFacultyAssignments = importPreviewData.facultyAssignments.filter((_, index) => 
-        importValidationStatus.facultyAssignments[index]?.valid
+        importValidationStatus.facultyAssignments[index]?.valid &&
+        !importValidationStatus.facultyAssignments[index]?.message?.includes('already exists')
       );
       const validStudentAssignments = importPreviewData.studentAssignments.filter((_, index) => 
-        importValidationStatus.studentAssignments[index]?.valid
+        importValidationStatus.studentAssignments[index]?.valid &&
+        !importValidationStatus.studentAssignments[index]?.message?.includes('already exists')
       );
 
       let importedCount = 0;
       let skippedCount = 0;
       const skippedMessages = [];
+
+      // Count items that were marked as "already exists" during validation
+      const countSkippedItems = (data, validationStatus, type, nameField) => {
+        data.forEach((item, index) => {
+          const validation = validationStatus[index];
+          if (validation?.valid && validation?.message?.includes('already exists')) {
+            skippedCount++;
+            const itemName = item[nameField] || item.name || 'Unknown';
+            skippedMessages.push(`${type} "${itemName}" already exists`);
+          }
+        });
+      };
+
+      countSkippedItems(importPreviewData.tracks, importValidationStatus.tracks, 'Track', 'trackName');
+      countSkippedItems(importPreviewData.strands, importValidationStatus.strands, 'Strand', 'strandName');
+      countSkippedItems(importPreviewData.sections, importValidationStatus.sections, 'Section', 'sectionName');
+      countSkippedItems(importPreviewData.subjects, importValidationStatus.subjects, 'Subject', 'subjectName');
+      countSkippedItems(importPreviewData.facultyAssignments, importValidationStatus.facultyAssignments, 'Faculty assignment', 'facultyName');
+      countSkippedItems(importPreviewData.studentAssignments, importValidationStatus.studentAssignments, 'Student assignment', 'studentName');
 
       console.log('Starting import with data:', {
         validTracks,
@@ -6101,17 +6347,22 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               trackName: track.trackName,
               schoolYear: termDetails.schoolYear,
               termName: termDetails.termName,
-              quarterName: quarterData ? quarterData.quarterName : undefined
+              quarterName: quarterData ? quarterData.quarterName : null
             })
           });
 
           if (res.ok) {
             importedCount++;
+            console.log(`Successfully created track: ${track.trackName}`);
           } else {
             const data = await res.json();
-            if (data.message && data.message.includes('already exists')) {
+            console.log(`Failed to create track "${track.trackName}":`, data);
+            if (data.message && (data.message.includes('already exists') || data.message.includes('duplicate'))) {
               skippedCount++;
               skippedMessages.push(`Track "${track.trackName}" already exists`);
+            } else {
+              skippedCount++;
+              skippedMessages.push(`Track "${track.trackName}": ${data.message || 'Unknown error'}`);
             }
           }
         } catch (err) {
@@ -6130,7 +6381,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               trackName: strand.trackName,
               schoolYear: termDetails.schoolYear,
               termName: termDetails.termName,
-              quarterName: quarterData ? quarterData.quarterName : undefined
+              quarterName: quarterData ? quarterData.quarterName : null
             })
           });
 
@@ -6161,17 +6412,22 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               gradeLevel: section.gradeLevel,
               schoolYear: termDetails.schoolYear,
               termName: termDetails.termName,
-              quarterName: quarterData ? quarterData.quarterName : undefined
+              quarterName: quarterData ? quarterData.quarterName : null
             })
           });
 
           if (res.ok) {
             importedCount++;
+            console.log(`Successfully created section: ${section.sectionName}`);
           } else {
             const data = await res.json();
+            console.log(`Failed to create section "${section.sectionName}":`, data);
             if (data.message && data.message.includes('already exists')) {
               skippedCount++;
               skippedMessages.push(`Section "${section.sectionName}" already exists`);
+            } else {
+              skippedCount++;
+              skippedMessages.push(`Section "${section.sectionName}": ${data.message || 'Unknown error'}`);
             }
           }
         } catch (err) {
@@ -6192,7 +6448,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               gradeLevel: subject.gradeLevel,
               schoolYear: termDetails.schoolYear,
               termName: termDetails.termName,
-              quarterName: quarterData ? quarterData.quarterName : undefined
+              quarterName: quarterData ? quarterData.quarterName : null
             })
           });
 
@@ -6312,11 +6568,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             console.log(`Student assignment for ${assignment.studentName} imported successfully`);
           } else {
             const data = await res.json();
-            if (data.message && data.message.includes('already exists')) {
+            console.log(`Failed to import student assignment for ${assignment.studentName}:`, data);
+            if (data.message && (data.message.includes('already exists') || data.message.includes('already enrolled'))) {
               skippedCount++;
               skippedMessages.push(`Student assignment for "${assignment.studentName}" already exists`);
             } else {
-              console.error(`Failed to import student assignment for ${assignment.studentName}:`, data);
+              skippedCount++;
+              skippedMessages.push(`Student assignment for "${assignment.studentName}": ${data.message || 'Unknown error'}`);
             }
           }
         } catch (err) {
@@ -7512,7 +7770,7 @@ Validation issues (${skippedCount} items):
                           setIsSectionModalOpen(false);
                           setIsSectionEditMode(false);
                           setEditingSection(null);
-                          setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' });
+                          setSectionFormData({ trackId: '', strandId: '', sectionName: '', sectionCode: '', gradeLevel: '' });
                         }}
                       >
                         &times;
@@ -7564,7 +7822,7 @@ Validation issues (${skippedCount} items):
                             setIsSectionModalOpen(false);
                             setIsSectionEditMode(false);
                             setEditingSection(null);
-                            setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' });
+                            setSectionFormData({ trackId: '', strandId: '', sectionName: '', sectionCode: '', gradeLevel: '' });
                           }
                         }}
                         className="space-y-4 mt-6"
@@ -7633,11 +7891,20 @@ Validation issues (${skippedCount} items):
                           id="sectionName"
                           name="sectionName"
                           value={sectionFormData.sectionName}
-                          onChange={(e) => setSectionFormData({ ...sectionFormData, sectionName: e.target.value })}
+                          onChange={(e) => {
+                            const sectionName = e.target.value;
+                            const sectionCode = generateSectionCode(sectionName);
+                            setSectionFormData({ ...sectionFormData, sectionName, sectionCode });
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           required
                           disabled={termDetails.status === 'archived'}
                         />
+                        {sectionFormData.sectionCode && (
+                          <div className="mt-1 text-sm text-gray-600">
+                            <span className="font-medium">Auto-generated Section Code:</span> {sectionFormData.sectionCode}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -7654,7 +7921,7 @@ Validation issues (${skippedCount} items):
                           onClick={() => {
                             setIsSectionEditMode(false);
                             setEditingSection(null);
-                            setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' });
+                            setSectionFormData({ trackId: '', strandId: '', sectionName: '', sectionCode: '', gradeLevel: '' });
                                 setIsSectionModalOpen(false);
                           }}
                           className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
@@ -7681,7 +7948,7 @@ Validation issues (${skippedCount} items):
                         setIsSectionModalOpen(true);
                         setIsSectionEditMode(false);
                         setEditingSection(null);
-                        setSectionFormData({ trackId: '', strandId: '', sectionName: '', gradeLevel: '' });
+                            setSectionFormData({ trackId: '', strandId: '', sectionName: '', sectionCode: '', gradeLevel: '' });
                       }}
                       disabled={termDetails.status === 'archived'}
                     >
@@ -9782,9 +10049,12 @@ const validateTracksImport = async (tracksToValidate, existingTracks, termDetail
       continue;
     }
     
-    // Check if track already exists in the current term
-    if (existingTrackNames.has(track.trackName.toLowerCase())) {
-      results.push({ valid: false, message: `Track '${track.trackName}' already exists in current term` });
+    // Check if track already exists in the current term and quarter
+    // Allow importing tracks that exist in other quarters of the same term
+    const existingTrack = existingTracks.find(t => t.trackName.toLowerCase() === track.trackName.toLowerCase());
+    if (existingTrack && existingTrack.quarterName === termDetails.quarterName) {
+      // Track already exists in current quarter - skip but don't mark as invalid
+      results.push({ valid: true, message: `Track '${track.trackName}' already exists - will be skipped` });
       continue;
     }
     
@@ -9813,9 +10083,16 @@ const validateStrandsImport = async (strandsToValidate, existingStrands, termDet
       continue;
     }
     
-    // Check if strand already exists in the current term
-    if (existingStrandCombos.has(combo)) {
-      results.push({ valid: false, message: `Strand '${strand.strandName}' already exists in track '${strand.trackName}'` });
+    // Check if strand already exists in the current term and quarter
+    // Allow importing strands that exist in other quarters of the same term
+    const existingStrand = existingStrands.find(s => 
+      s.trackName.toLowerCase() === strand.trackName.toLowerCase() && 
+      s.strandName.toLowerCase() === strand.strandName.toLowerCase() &&
+      s.quarterName === termDetails.quarterName
+    );
+    if (existingStrand) {
+      // Strand already exists in current quarter - skip but don't mark as invalid
+      results.push({ valid: true, message: `Strand '${strand.strandName}' already exists - will be skipped` });
       continue;
     }
     
@@ -9844,9 +10121,18 @@ const validateSectionsImport = async (sectionsToValidate, existingSections, term
       continue;
     }
     
-    // Check if section already exists in the current term
-    if (existingSectionCombos.has(combo)) {
-      results.push({ valid: false, message: `Section '${section.sectionName}' already exists in track '${section.trackName}' strand '${section.strandName}' grade '${section.gradeLevel}'` });
+    // Check if section already exists in the current term and quarter
+    // Allow importing sections that exist in other quarters of the same term
+    const existingSection = existingSections.find(s => 
+      s.trackName.toLowerCase() === section.trackName.toLowerCase() && 
+      s.strandName.toLowerCase() === section.strandName.toLowerCase() &&
+      s.sectionName.toLowerCase() === section.sectionName.toLowerCase() &&
+      s.gradeLevel.toLowerCase() === section.gradeLevel.toLowerCase() &&
+      s.quarterName === termDetails.quarterName
+    );
+    if (existingSection) {
+      // Section already exists in current quarter - skip but don't mark as invalid
+      results.push({ valid: true, message: `Section '${section.sectionName}' already exists - will be skipped` });
       continue;
     }
     
@@ -9875,9 +10161,18 @@ const validateSubjectsImport = async (subjectsToValidate, existingSubjects, term
       continue;
     }
     
-    // Check if subject already exists in the current term
-    if (existingSubjectCombos.has(combo)) {
-      results.push({ valid: false, message: `Subject '${subject.subjectName}' already exists in track '${subject.trackName}' strand '${subject.strandName}' grade '${subject.gradeLevel}'` });
+    // Check if subject already exists in the current term and quarter
+    // Allow importing subjects that exist in other quarters of the same term
+    const existingSubject = existingSubjects.find(s => 
+      s.trackName.toLowerCase() === subject.trackName.toLowerCase() && 
+      s.strandName.toLowerCase() === subject.strandName.toLowerCase() &&
+      s.gradeLevel.toLowerCase() === subject.gradeLevel.toLowerCase() &&
+      s.subjectName.toLowerCase() === subject.subjectName.toLowerCase() &&
+      s.quarterName === termDetails.quarterName
+    );
+    if (existingSubject) {
+      // Subject already exists in current quarter - skip but don't mark as invalid
+      results.push({ valid: true, message: `Subject '${subject.subjectName}' already exists - will be skipped` });
       continue;
     }
     
@@ -9968,21 +10263,15 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
       continue;
     }
 
-    // Check if student is enrolled in current term and quarter
-    const isEnrolled = registrants.some(registrant => {
-      const registrantSchoolId = (registrant.schoolID || '').trim();
-      return registrant.status === 'approved' && 
-             registrantSchoolId === assignment.studentSchoolID &&
-             registrant.termName === termDetails.termName &&
-             registrant.schoolYear === termDetails.schoolYear;
-    });
+    // For bulk import, allow free import of students without enrollment validation
+    // Only check if student is enrolled if we're in a specific validation mode
+    // This allows importing new students who aren't yet enrolled in the system
+    console.log(`Allowing free import for student: ${assignment.studentName} (${assignment.studentSchoolID})`);
 
-    if (!isEnrolled) {
-      results.push({ valid: false, message: 'Student is not enrolled in this term and quarter' });
-      continue;
-    }
-
-    // For enrollment data, allow freely adding students without checking if they exist in the system
+    // For bulk import, skip all enrollment validation to allow free creation
+    // This is necessary because bulk uploads should be able to create academic structures
+    // without requiring students to be pre-approved registrants
+    console.log(`Bulk import mode: Skipping enrollment validation for ${assignment.studentName}`);
     // This allows adding students from enrollment even if they don't have accounts yet
     const student = activeStudents.find(s => s.schoolID === assignment.studentSchoolID && s.role === 'students');
     if (student) {
@@ -10001,7 +10290,8 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
         ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
       );
       if (exists) {
-        results.push({ valid: false, message: `Student assignment for "${assignment.studentName}" already exists` });
+        // Student assignment already exists - skip but don't mark as invalid
+        results.push({ valid: true, message: `Student assignment for "${assignment.studentName}" already exists - will be skipped` });
         continue;
       }
     } else {
@@ -10017,7 +10307,8 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
         ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
       );
       if (exists) {
-        results.push({ valid: false, message: `Student assignment for "${assignment.studentName}" already exists` });
+        // Student assignment already exists - skip but don't mark as invalid
+        results.push({ valid: true, message: `Student assignment for "${assignment.studentName}" already exists - will be skipped` });
         continue;
       }
     }

@@ -333,7 +333,8 @@ router.delete('/:id', async (req, res) => {
         strandName: subject.strandName,
         subjectName: subject.subjectName, 
         schoolYear: subject.schoolYear, 
-        termName: subject.termName 
+        termName: subject.termName,
+        quarterName: subject.quarterName
       });
       
       if (dependencyCount > 0) {
@@ -344,16 +345,17 @@ router.delete('/:id', async (req, res) => {
       }
     }
 
-    // Proceed with cascading deletion
-    console.log(`Cascading deletion of subject: ${subject.trackName}/${subject.strandName}/${subject.subjectName}`);
+    // Proceed with cascading deletion (quarter-specific)
+    console.log(`Cascading deletion of subject: ${subject.trackName}/${subject.strandName}/${subject.subjectName} for quarter: ${subject.quarterName}`);
     
-    // Delete all related faculty assignments
+    // Delete all related faculty assignments for this specific quarter only
     await FacultyAssignment.deleteMany({ 
       trackName: subject.trackName,
       strandName: subject.strandName,
       subjectName: subject.subjectName, 
       schoolYear: subject.schoolYear, 
-      termName: subject.termName 
+      termName: subject.termName,
+      quarterName: subject.quarterName
       });
     
     // Finally delete the subject

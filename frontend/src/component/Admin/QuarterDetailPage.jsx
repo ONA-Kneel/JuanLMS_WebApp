@@ -18,13 +18,16 @@ export default function QuarterDetailPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    console.log('QuarterDetailPage useEffect triggered:', { quarterId, quarter, quarterName });
     if (quarterId) {
       fetchQuarterAndTermData();
     } else if (quarter && quarterName) {
       // Fallback to location state if quarterId is not available
+      console.log('Using location state quarter data:', quarter);
       setQuarterData(quarter);
-      fetchTermForQuarter();
+      fetchTermForQuarter(quarter);
     } else {
+      console.log('No quarter information found');
       setError('Quarter information not found');
       setLoading(false);
     }
@@ -61,10 +64,16 @@ export default function QuarterDetailPage() {
     }
   };
 
-  const fetchTermForQuarter = async (quarter = quarterData) => {
+  const fetchTermForQuarter = async (quarter) => {
     try {
       const token = localStorage.getItem('token');
       console.log('Fetching term for quarter:', quarter);
+      
+      if (!quarter || !quarter.schoolYear) {
+        console.error('Invalid quarter data:', quarter);
+        setError('Invalid quarter data');
+        return;
+      }
       
       // Fetch the term that contains this quarter
       const termRes = await fetch(`${API_BASE}/api/terms/schoolyear/${quarter.schoolYear}`, {

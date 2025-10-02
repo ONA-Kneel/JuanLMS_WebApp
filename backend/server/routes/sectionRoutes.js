@@ -139,13 +139,14 @@ router.post('/', async (req, res) => {
   console.log('=== SECTION CREATION REQUEST STARTED ===');
   console.log('Full request body:', req.body);
   
-  const { sectionName, trackName, strandName, gradeLevel, schoolYear, termName, quarterName } = req.body;
+  const { sectionName, sectionCode, trackName, strandName, gradeLevel, schoolYear, termName, quarterName } = req.body;
   
-  console.log('Extracted fields:', { sectionName, trackName, strandName, gradeLevel, schoolYear, termName, quarterName });
+  console.log('Extracted fields:', { sectionName, sectionCode, trackName, strandName, gradeLevel, schoolYear, termName, quarterName });
 
   // Validate required fields
   const missingFields = [];
   if (!sectionName || sectionName.trim() === '') missingFields.push('sectionName');
+  if (!sectionCode || sectionCode.trim() === '') missingFields.push('sectionCode');
   if (!trackName || trackName.trim() === '') missingFields.push('trackName');
   if (!strandName || strandName.trim() === '') missingFields.push('strandName');
   if (!gradeLevel || gradeLevel.trim() === '') missingFields.push('gradeLevel');
@@ -240,7 +241,8 @@ router.post('/', async (req, res) => {
     
     console.log('🏗️ CREATING SECTION OBJECT...');
     const newSection = new Section({ 
-      sectionName, 
+      sectionName,
+      sectionCode,
       trackName, 
       strandName, 
       gradeLevel,
@@ -460,14 +462,16 @@ router.delete('/:id', async (req, res) => {
           strandName: section.strandName,
           sectionName: section.sectionName, 
           schoolYear: section.schoolYear, 
-          termName: section.termName 
+          termName: section.termName,
+          quarterName: section.quarterName
         }),
         FacultyAssignment.countDocuments({ 
           trackName: section.trackName,
           strandName: section.strandName,
           sectionName: section.sectionName, 
           schoolYear: section.schoolYear, 
-          termName: section.termName 
+          termName: section.termName,
+          quarterName: section.quarterName
         })
       ]);
 
@@ -481,24 +485,26 @@ router.delete('/:id', async (req, res) => {
       }
     }
 
-    // Proceed with cascading deletion
-    console.log(`Cascading deletion of section: ${section.trackName}/${section.strandName}/${section.sectionName}`);
+    // Proceed with cascading deletion (quarter-specific)
+    console.log(`Cascading deletion of section: ${section.trackName}/${section.strandName}/${section.sectionName} for quarter: ${section.quarterName}`);
     
     await Promise.all([
-      // Delete all related entities
+      // Delete all related entities for this specific quarter only
       StudentAssignment.deleteMany({ 
         trackName: section.trackName,
         strandName: section.strandName,
         sectionName: section.sectionName, 
         schoolYear: section.schoolYear, 
-        termName: section.termName 
+        termName: section.termName,
+        quarterName: section.quarterName
       }),
       FacultyAssignment.deleteMany({ 
         trackName: section.trackName,
         strandName: section.strandName,
         sectionName: section.sectionName, 
         schoolYear: section.schoolYear, 
-        termName: section.termName 
+        termName: section.termName,
+        quarterName: section.quarterName
       })
     ]);
 

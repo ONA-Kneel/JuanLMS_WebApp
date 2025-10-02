@@ -2,6 +2,12 @@ import express from 'express';
 import Quarter from '../models/Quarter.js';
 import SchoolYear from '../models/SchoolYear.js';
 import Term from '../models/Term.js';
+import Track from '../models/Track.js';
+import Strand from '../models/Strand.js';
+import Section from '../models/Section.js';
+import Subject from '../models/Subject.js';
+import StudentAssignment from '../models/StudentAssignment.js';
+import FacultyAssignment from '../models/FacultyAssignment.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -178,6 +184,42 @@ router.patch('/:id', authenticateToken, async (req, res) => {
         },
         { $set: { status: 'inactive' } }
       );
+
+      // Reactivate all structural entities for the active quarter
+      console.log(`Reactivating all entities for quarter: ${quarterName} (${schoolYearName} - ${parentTermName})`);
+      
+      await Promise.all([
+        // Reactivate tracks for this quarter
+        Track.updateMany(
+          { schoolYear: schoolYearName, termName: parentTermName, quarterName: quarterName }, 
+          { $set: { status: 'active' } }
+        ),
+        // Reactivate strands for this quarter
+        Strand.updateMany(
+          { schoolYear: schoolYearName, termName: parentTermName, quarterName: quarterName }, 
+          { $set: { status: 'active' } }
+        ),
+        // Reactivate sections for this quarter
+        Section.updateMany(
+          { schoolYear: schoolYearName, termName: parentTermName, quarterName: quarterName }, 
+          { $set: { status: 'active' } }
+        ),
+        // Reactivate subjects for this quarter
+        Subject.updateMany(
+          { schoolYear: schoolYearName, termName: parentTermName, quarterName: quarterName }, 
+          { $set: { status: 'active' } }
+        ),
+        // Reactivate student assignments for this quarter
+        StudentAssignment.updateMany(
+          { schoolYear: schoolYearName, termName: parentTermName, quarterName: quarterName }, 
+          { $set: { status: 'active' } }
+        ),
+        // Reactivate faculty assignments for this quarter
+        FacultyAssignment.updateMany(
+          { schoolYear: schoolYearName, termName: parentTermName, quarterName: quarterName }, 
+          { $set: { status: 'active' } }
+        )
+      ]);
     }
 
     // If quarter is being set to inactive and its term is active,

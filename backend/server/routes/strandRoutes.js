@@ -284,25 +284,29 @@ router.delete('/:id', async (req, res) => {
           trackName: strand.trackName,
           strandName: strand.strandName, 
           schoolYear: strand.schoolYear, 
-          termName: strand.termName 
+          termName: strand.termName,
+          quarterName: strand.quarterName
         }),
         Subject.countDocuments({ 
           trackName: strand.trackName,
           strandName: strand.strandName, 
           schoolYear: strand.schoolYear, 
-          termName: strand.termName 
+          termName: strand.termName,
+          quarterName: strand.quarterName
         }),
         StudentAssignment.countDocuments({ 
           trackName: strand.trackName,
           strandName: strand.strandName, 
           schoolYear: strand.schoolYear, 
-          termName: strand.termName 
+          termName: strand.termName,
+          quarterName: strand.quarterName
         }),
         FacultyAssignment.countDocuments({ 
           trackName: strand.trackName,
           strandName: strand.strandName, 
           schoolYear: strand.schoolYear, 
-          termName: strand.termName 
+          termName: strand.termName,
+          quarterName: strand.quarterName
         })
       ]);
 
@@ -316,34 +320,38 @@ router.delete('/:id', async (req, res) => {
       }
     }
 
-    // Proceed with cascading deletion
-    console.log(`Cascading deletion of strand: ${strand.trackName}/${strand.strandName}`);
+    // Proceed with cascading deletion (quarter-specific)
+    console.log(`Cascading deletion of strand: ${strand.trackName}/${strand.strandName} for quarter: ${strand.quarterName}`);
     
     await Promise.all([
-      // Delete all related entities
+      // Delete all related entities for this specific quarter only
       Section.deleteMany({ 
         trackName: strand.trackName,
         strandName: strand.strandName, 
         schoolYear: strand.schoolYear, 
-        termName: strand.termName 
+        termName: strand.termName,
+        quarterName: strand.quarterName
       }),
       Subject.deleteMany({ 
         trackName: strand.trackName,
         strandName: strand.strandName, 
         schoolYear: strand.schoolYear, 
-        termName: strand.termName 
+        termName: strand.termName,
+        quarterName: strand.quarterName
       }),
       StudentAssignment.deleteMany({ 
         trackName: strand.trackName,
         strandName: strand.strandName, 
         schoolYear: strand.schoolYear, 
-        termName: strand.termName 
+        termName: strand.termName,
+        quarterName: strand.quarterName
       }),
       FacultyAssignment.deleteMany({ 
         trackName: strand.trackName,
         strandName: strand.strandName, 
         schoolYear: strand.schoolYear, 
-        termName: strand.termName 
+        termName: strand.termName,
+        quarterName: strand.quarterName
       })
     ]);
 
