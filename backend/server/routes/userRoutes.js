@@ -33,12 +33,29 @@ const addStudentToExistingClasses = async (student) => {
       $or: [
         { studentId: student._id },
         { studentSchoolID: student.schoolID },
-        { studentName: { $regex: `${student.firstname} ${student.lastname}`, $options: 'i' } }
+        { studentName: { $regex: `${student.firstname} ${student.lastname}`, $options: 'i' } },
+        { studentName: { $regex: `${student.lastname} ${student.firstname}`, $options: 'i' } },
+        { firstName: { $regex: student.firstname, $options: 'i' } },
+        { lastName: { $regex: student.lastname, $options: 'i' } },
+        // Add more flexible matching for common name variations
+        { studentName: { $regex: student.firstname, $options: 'i' } },
+        { studentName: { $regex: student.lastname, $options: 'i' } }
       ],
       status: 'active'
     });
     
     console.log(`[ADD-STUDENT-TO-CLASSES] Found ${studentAssignments.length} student assignments for student ${student.userID}`);
+    
+    // Log details of found assignments
+    studentAssignments.forEach((assignment, index) => {
+      console.log(`[ADD-STUDENT-TO-CLASSES] Assignment ${index + 1}:`, {
+        studentName: assignment.studentName,
+        firstName: assignment.firstName,
+        lastName: assignment.lastName,
+        status: assignment.status,
+        studentId: assignment.studentId ? 'Already linked' : 'Not linked'
+      });
+    });
     
     if (studentAssignments.length === 0) {
       console.log(`[ADD-STUDENT-TO-CLASSES] No student assignments found for ${student.userID}`);
@@ -94,6 +111,7 @@ const addStudentToExistingClasses = async (student) => {
           
           // Update student assignment to link to the student
           if (!assignment.studentId) {
+            console.log(`[ADD-STUDENT-TO-CLASSES] Linking assignment ${assignment._id} to student ${student._id}`);
             await StudentAssignment.findByIdAndUpdate(
               assignment._id,
               { 
@@ -103,6 +121,9 @@ const addStudentToExistingClasses = async (student) => {
               },
               { new: true }
             );
+            console.log(`[ADD-STUDENT-TO-CLASSES] ✅ Successfully linked assignment to student`);
+          } else {
+            console.log(`[ADD-STUDENT-TO-CLASSES] Assignment already linked to student ${assignment.studentId}`);
           }
           
           console.log(`[ADD-STUDENT-TO-CLASSES] ✅ Successfully added student ${student.userID} to class ${classDoc.classID}`);
@@ -119,6 +140,79 @@ const addStudentToExistingClasses = async (student) => {
     throw error;
   }
 };
+
+// Manual endpoint to fix unlinked StudentAssignment records
+userRoutes.post('/fix-unlinked-assignments', authenticateToken, async (req, res) => {
+  try {
+    console.log('[FIX-UNLINKED] Starting to fix unlinked StudentAssignment records...');
+    
+    // Find all StudentAssignment records that don't have studentId linked
+    const unlinkedAssignments = await StudentAssignment.find({
+      studentId: { $exists: false },
+      studentName: { $exists: true, $ne: null }
+    });
+    
+    console.log(`[FIX-UNLINKED] Found ${unlinkedAssignments.length} unlinked assignments`);
+    
+    let fixedCount = 0;
+    
+    for (const assignment of unlinkedAssignments) {
+      try {
+        // Try to find matching User record by name
+        const matchingUser = await User.findOne({
+          $or: [
+            { 
+              firstname: { $regex: assignment.firstName || assignment.studentName.split(' ')[0], $options: 'i' },
+              lastname: { $regex: assignment.lastName || assignment.studentName.split(' ').slice(-1)[0], $options: 'i' }
+            },
+            {
+              firstname: { $regex: assignment.studentName.split(' ')[0], $options: 'i' },
+              lastname: { $regex: assignment.studentName.split(' ').slice(-1)[0], $options: 'i' }
+            }
+          ],
+          role: 'students',
+          isArchived: { $ne: true }
+        });
+        
+        if (matchingUser) {
+          // Link the assignment to the user
+          await StudentAssignment.findByIdAndUpdate(
+            assignment._id,
+            {
+              studentId: matchingUser._id,
+              studentName: undefined,
+              studentSchoolID: undefined
+            }
+          );
+          
+          console.log(`[FIX-UNLINKED] ✅ Linked ${assignment.studentName} to ${matchingUser.firstname} ${matchingUser.lastname}`);
+          fixedCount++;
+        } else {
+          console.log(`[FIX-UNLINKED] ❌ No matching user found for ${assignment.studentName}`);
+        }
+      } catch (error) {
+        console.error(`[FIX-UNLINKED] Error processing ${assignment.studentName}:`, error);
+      }
+    }
+    
+    console.log(`[FIX-UNLINKED] ✅ Fixed ${fixedCount} out of ${unlinkedAssignments.length} assignments`);
+    
+    res.json({
+      success: true,
+      message: `Fixed ${fixedCount} out of ${unlinkedAssignments.length} unlinked assignments`,
+      fixedCount,
+      totalUnlinked: unlinkedAssignments.length
+    });
+    
+  } catch (error) {
+    console.error('[FIX-UNLINKED] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fix unlinked assignments',
+      details: error.message
+    });
+  }
+});
 
 // Manual endpoint to retroactively assign students to existing classes
 userRoutes.post('/retroactive-class-assignment', authenticateToken, async (req, res) => {

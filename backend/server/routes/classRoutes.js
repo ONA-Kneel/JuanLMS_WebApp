@@ -9,6 +9,7 @@ import { ObjectId } from 'mongodb';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import User from '../models/User.js';
 import StudentAssignment from '../models/StudentAssignment.js';
+import Registrant from '../models/Registrant.js';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -731,8 +732,7 @@ router.get('/:classID/members-with-status', authenticateToken, async (req, res) 
     const studentAssignments = await StudentAssignment.find({
       sectionName: classDoc.section,
       schoolYear: classDoc.academicYear,
-      termName: classDoc.termName,
-      status: { $in: ['active', 'pending'] }
+      termName: classDoc.termName
     }).populate('studentId');
     
     console.log(`[GET-MEMBERS-STATUS] Found ${studentAssignments.length} student assignments`);
@@ -743,7 +743,10 @@ router.get('/:classID/members-with-status', authenticateToken, async (req, res) 
         studentName: assignment.studentName || (assignment.studentId ? `${assignment.studentId.firstname} ${assignment.studentId.lastname}` : 'Unknown'),
         status: assignment.status,
         isApproved: assignment.isApproved,
-        studentId: assignment.studentId ? 'Linked' : 'Not Linked'
+        studentId: assignment.studentId ? 'Linked' : 'Not Linked',
+        studentIdExists: !!assignment.studentId,
+        studentIdId: assignment.studentId ? assignment.studentId._id : 'N/A',
+        isArchived: assignment.studentId ? assignment.studentId.isArchived : 'N/A'
       });
     });
     
@@ -765,21 +768,77 @@ router.get('/:classID/members-with-status', authenticateToken, async (req, res) 
           schoolID: assignment.studentId.getDecryptedSchoolID ? assignment.studentId.getDecryptedSchoolID() : assignment.studentId.schoolID,
           role: assignment.studentId.role
         };
-        // Use the actual assignment status - if student has active assignment in current term, they are active
-        registrationStatus = (assignment.status === 'active') ? 'active' : 'pending';
+        // Use the actual assignment status from StudentAssignment record
+        // Only show as 'active' if student is registered AND has active assignment
+        // Check if studentId is properly populated and user is not archived
+        const isRegistered = assignment.studentId && assignment.studentId._id && !assignment.studentId.isArchived;
+        registrationStatus = (assignment.status === 'active' && isRegistered) ? 'active' : 'pending';
+        
+        console.log(`[GET-MEMBERS-STATUS] Student ${assignment.studentId.firstname} ${assignment.studentId.lastname}:`, {
+          assignmentStatus: assignment.status,
+          isRegistered: isRegistered,
+          finalStatus: registrationStatus
+        });
       } else if (assignment.studentName) {
         // Student only has name, not linked to User record
-        studentData = {
-          _id: assignment._id, // Use assignment ID as temporary ID
-          userID: assignment.studentSchoolID || 'N/A',
-          firstname: assignment.firstName || assignment.studentName.split(' ')[0],
-          lastname: assignment.lastName || assignment.studentName.split(' ').slice(-1)[0],
-          email: 'Not registered',
-          schoolID: assignment.studentSchoolID || 'N/A',
-          role: 'students'
-        };
-        // Use the actual assignment status - if student has active assignment in current term, they are active
-        registrationStatus = (assignment.status === 'active') ? 'active' : 'pending';
+        // But we should check if they exist in the User table and are approved
+        const studentFirstName = assignment.firstName || assignment.studentName.split(' ')[0];
+        const studentLastName = assignment.lastName || assignment.studentName.split(' ').slice(-1)[0];
+        
+        // Check if student is approved in REGISTRANTS table
+        const approvedRegistrant = await Registrant.findOne({
+          $or: [
+            { 
+              firstName: { $regex: studentFirstName, $options: 'i' },
+              lastName: { $regex: studentLastName, $options: 'i' }
+            },
+            {
+              firstName: { $regex: studentLastName, $options: 'i' },
+              lastName: { $regex: studentFirstName, $options: 'i' }
+            }
+          ],
+          status: 'approved'
+        });
+        
+        if (approvedRegistrant) {
+          // Student is approved in registrants! Use their real data
+          studentData = {
+            _id: assignment._id, // Use assignment ID as temporary ID
+            userID: approvedRegistrant.schoolID,
+            firstname: approvedRegistrant.firstName,
+            lastname: approvedRegistrant.lastName,
+            email: approvedRegistrant.personalEmail,
+            schoolID: approvedRegistrant.schoolID,
+            role: 'students'
+          };
+          
+          // If student is approved in registrants AND assignment is active, show as ACTIVE
+          registrationStatus = (assignment.status === 'active') ? 'active' : 'pending';
+          
+          console.log(`[GET-MEMBERS-STATUS] Found APPROVED registrant for ${assignment.studentName}:`, {
+            schoolID: approvedRegistrant.schoolID,
+            firstName: approvedRegistrant.firstName,
+            lastName: approvedRegistrant.lastName,
+            status: approvedRegistrant.status,
+            assignmentStatus: assignment.status,
+            finalStatus: registrationStatus
+          });
+        } else {
+          // Student not approved in registrants, use assignment data
+          studentData = {
+            _id: assignment._id, // Use assignment ID as temporary ID
+            userID: assignment.studentSchoolID || 'N/A',
+            firstname: studentFirstName,
+            lastname: studentLastName,
+            email: 'Not registered',
+            schoolID: assignment.studentSchoolID || 'N/A',
+            role: 'students'
+          };
+          // Students not approved in registrants should be pending
+          registrationStatus = 'pending';
+          
+          console.log(`[GET-MEMBERS-STATUS] No approved registrant found for ${assignment.studentName}, using assignment data`);
+        }
       }
       
       if (studentData) {
