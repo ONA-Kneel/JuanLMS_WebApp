@@ -2,6 +2,7 @@ import express from 'express';
 import StudentAssignment from '../models/StudentAssignment.js';
 import User from '../models/User.js'; // To populate student details
 import Term from '../models/Term.js';
+import Subject from '../models/Subject.js'; // To populate subjects
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -41,6 +42,7 @@ router.get('/', authenticateToken, async (req, res) => {
           enrollmentNo: assignment.enrollmentNo || '',
           enrollmentDate: assignment.enrollmentDate || null,
           quarterName: assignment.quarterName,
+          enrollmentType: assignment.enrollmentType || 'Regular',
           isApproved: assignment.status === 'active'
         };
       }
@@ -61,6 +63,7 @@ router.get('/', authenticateToken, async (req, res) => {
         firstname: assignment.firstName || '',
         lastname: assignment.lastName || '',
         quarterName: assignment.quarterName,
+        enrollmentType: assignment.enrollmentType || 'Regular',
         isApproved: assignment.status === 'active'
       };
     });
@@ -75,7 +78,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create a new student assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate } = req.body;
+    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate, enrollmentType, subjects: customSubjects } = req.body;
     console.log('Request body debug:', { studentId, studentName, studentSchoolID, firstName, lastName, trackName, strandName, sectionName, gradeLevel, termId, quarterName, enrollmentNo, enrollmentDate });
     console.log('Enrollment data specifically:', { enrollmentNo, enrollmentDate, type: typeof enrollmentNo });
 
@@ -215,8 +218,8 @@ router.post('/', authenticateToken, async (req, res) => {
       studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
       firstName: !actualStudentId ? firstName : undefined,
       lastName: !actualStudentId ? lastName : undefined,
-      enrollmentNo: !actualStudentId ? enrollmentNo : undefined,
-      enrollmentDate: !actualStudentId ? enrollmentDate : undefined,
+      enrollmentNo: enrollmentNo || undefined,
+      enrollmentDate: enrollmentDate || undefined,
       trackName,
       strandName,
       sectionName,
@@ -227,14 +230,37 @@ router.post('/', authenticateToken, async (req, res) => {
       quarterName
     });
 
+    // Determine subjects based on enrollment type
+    let subjects;
+    if (enrollmentType === 'Irregular' && customSubjects && customSubjects.length > 0) {
+      // Use custom subjects for irregular students
+      subjects = customSubjects;
+    } else {
+      // Fetch all subjects that match the track, strand, and grade level for regular students
+      const matchingSubjects = await Subject.find({
+        trackName,
+        strandName,
+        gradeLevel,
+        schoolYear: term.schoolYear,
+        termName: term.termName,
+        status: 'active'
+      });
+
+      // Prepare subjects array for the assignment
+      subjects = matchingSubjects.map(subject => ({
+        subjectId: subject._id,
+        subjectName: subject.subjectName
+      }));
+    }
+
     const assignment = new StudentAssignment({
       studentId: actualStudentId || undefined,
       studentName: !actualStudentId ? (fullStudentName || `Student ${studentSchoolID}`) : undefined,
       studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
       firstName: !actualStudentId ? firstName : undefined,
       lastName: !actualStudentId ? lastName : undefined,
-      enrollmentNo: !actualStudentId ? enrollmentNo : undefined,
-      enrollmentDate: !actualStudentId ? enrollmentDate : undefined,
+      enrollmentNo: enrollmentNo || undefined,
+      enrollmentDate: enrollmentDate || undefined,
       trackName,
       strandName,
       sectionName,
@@ -242,7 +268,9 @@ router.post('/', authenticateToken, async (req, res) => {
       termId,
       schoolYear: term.schoolYear,
       termName: term.termName,
-      quarterName
+      quarterName,
+      enrollmentType: enrollmentType || 'Regular',
+      subjects
     });
 
     console.log('About to save assignment to database...');
@@ -306,7 +334,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
   const errors = [];
 
   for (const assignmentData of assignments) {
-    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName } = assignmentData;
+    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate, enrollmentType } = assignmentData;
 
     try {
       const term = await Term.findById(termId);
@@ -396,12 +424,30 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         continue;
       }
 
+      // Fetch subjects that match the track, strand, and grade level for bulk creation
+      const bulkMatchingSubjects = await Subject.find({
+        trackName,
+        strandName,
+        gradeLevel,
+        schoolYear: term.schoolYear,
+        termName: term.termName,
+        status: 'active'
+      });
+
+      // Prepare subjects array for the bulk assignment
+      const bulkSubjects = bulkMatchingSubjects.map(subject => ({
+        subjectId: subject._id,
+        subjectName: subject.subjectName
+      }));
+
       const newAssignment = new StudentAssignment({
         studentId: actualStudentId || undefined,
         studentName: !actualStudentId ? (fullStudentName || `Student ${studentSchoolID}`) : undefined,
         studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
         firstName: !actualStudentId ? firstName : undefined,
         lastName: !actualStudentId ? lastName : undefined,
+        enrollmentNo: enrollmentNo || undefined,
+        enrollmentDate: enrollmentDate || undefined,
         trackName,
         strandName,
         sectionName,
@@ -410,6 +456,8 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         schoolYear: term.schoolYear,
         termName: term.termName,
         quarterName,
+        enrollmentType: enrollmentType || 'Regular',
+        subjects: bulkSubjects
       });
 
       const savedAssignment = await newAssignment.save();
@@ -499,6 +547,24 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     assignment.termName = term.termName;
     if (quarterName !== undefined) {
       assignment.quarterName = quarterName;
+    }
+
+    // Update subjects if track, strand, or grade level changed
+    if (trackName || strandName || gradeLevel) {
+      const updatedMatchingSubjects = await Subject.find({
+        trackName: assignment.trackName,
+        strandName: assignment.strandName,
+        gradeLevel: assignment.gradeLevel,
+        schoolYear: term.schoolYear,
+        termName: term.termName,
+        status: 'active'
+      });
+
+      // Update subjects array for the assignment
+      assignment.subjects = updatedMatchingSubjects.map(subject => ({
+        subjectId: subject._id,
+        subjectName: subject.subjectName
+      }));
     }
 
     const updatedAssignment = await assignment.save();

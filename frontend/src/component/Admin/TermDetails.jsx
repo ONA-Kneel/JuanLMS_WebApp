@@ -4,7 +4,7 @@ import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import { getLogoBase64, getFooterLogoBase64 } from '../../utils/imageToBase64';
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -32,6 +32,33 @@ const validateStudentSchoolIDFormat = (schoolID) => {
   const studentSchoolIDPattern = /^\d{2}-\d{5}$/;
   
   return studentSchoolIDPattern.test(trimmedID);
+};
+
+// Convert Excel date (serial number or date string) to ISO yyyy-mm-dd
+const parseExcelDateToISO = (value) => {
+  if (value === null || value === undefined || value === '') return '';
+  // Already a Date
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return value.toISOString().split('T')[0];
+  }
+  // Numeric: Excel serial
+  const isNumeric = typeof value === 'number' || (typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value.trim()));
+  if (isNumeric) {
+    const serial = Number(value);
+    if (!isNaN(serial) && serial > 0) {
+      const excelEpoch = Date.UTC(1899, 11, 30); // 1899-12-30
+      const days = serial > 59 ? serial - 1 : serial; // Adjust for Excel leap bug
+      const ms = excelEpoch + days * 24 * 60 * 60 * 1000;
+      const d = new Date(ms);
+      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    }
+  }
+  // String date
+  try {
+    const d = new Date(String(value));
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  } catch {}
+  return '';
 };
 
 // Faculty School ID validation function (F000 format)
@@ -126,8 +153,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     lastName: '',
     firstName: ''
   });
+  const [isIrregularStudent, setIsIrregularStudent] = useState(false);
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [studentAssignments, setStudentAssignments] = useState([]);
   const [studentError, setStudentError] = useState('');
+  const [isSubjectsModalOpen, setIsSubjectsModalOpen] = useState(false);
+  const [selectedStudentForSubjects, setSelectedStudentForSubjects] = useState(null);
   const [isStudentEditMode, setIsStudentEditMode] = useState(false);
   const [editingStudentAssignment, setEditingStudentAssignment] = useState(null);
   const [students, setStudents] = useState([]); // To store student users for dropdown
@@ -1432,6 +1464,46 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     console.log('✅ Selected student:', `${firstName} ${lastName}`);
   };
 
+  // Handle subject selection for irregular students
+  const handleSubjectSelection = (subjectId, isSelected) => {
+    if (isSelected) {
+      const subject = availableSubjects.find(s => s._id === subjectId);
+      if (subject && !selectedSubjects.find(s => s.subjectId === subjectId)) {
+        setSelectedSubjects(prev => [...prev, {
+          subjectId: subject._id,
+          subjectName: subject.subjectName
+        }]);
+      }
+    } else {
+      setSelectedSubjects(prev => prev.filter(s => s.subjectId !== subjectId));
+    }
+  };
+
+  // Handle select all subjects
+  const handleSelectAllSubjects = (selectAll) => {
+    if (selectAll) {
+      const allSubjects = availableSubjects.map(subject => ({
+        subjectId: subject._id,
+        subjectName: subject.subjectName
+      }));
+      setSelectedSubjects(allSubjects);
+    } else {
+      setSelectedSubjects([]);
+    }
+  };
+
+  // Handle opening subjects modal
+  const handleViewStudentSubjects = (assignment) => {
+    setSelectedStudentForSubjects(assignment);
+    setIsSubjectsModalOpen(true);
+  };
+
+  // Handle closing subjects modal
+  const handleCloseSubjectsModal = () => {
+    setIsSubjectsModalOpen(false);
+    setSelectedStudentForSubjects(null);
+  };
+
   // Fetch faculty assignments
   const fetchFacultyAssignments = useCallback(async () => {
     if (!termDetails || !termDetails._id) return;
@@ -1484,6 +1556,16 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       if (res.ok) {
         const data = await res.json();
         console.log("Fetched student assignments:", data);
+        
+        // Debug enrollment type data specifically
+        console.log("🔍 Enrollment Type Debug - Raw Data:", data.map(assignment => ({
+          id: assignment._id,
+          studentName: assignment.studentName,
+          enrollmentType: assignment.enrollmentType,
+          EnrollmentType: assignment.EnrollmentType,
+          allKeys: Object.keys(assignment)
+        })));
+        
         setStudentAssignments(data);
       } else {
         const errorData = await res.json();
@@ -1530,6 +1612,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       fetchRegistrants();
     }
   }, [termDetails, fetchStudentAssignments, fetchRegistrants]);
+
+  // Fetch available subjects when irregular student is selected and form data is complete
+  useEffect(() => {
+    if (isIrregularStudent && studentFormData.trackId && studentFormData.strandId && studentFormData.gradeLevel && termDetails) {
+      const selectedTrack = tracks.find(t => t._id === studentFormData.trackId);
+      const selectedStrand = strands.find(s => s._id === studentFormData.strandId);
+      
+      if (selectedTrack && selectedStrand) {
+        fetchAvailableSubjects(selectedTrack.trackName, selectedStrand.strandName, studentFormData.gradeLevel);
+      }
+    } else {
+      setAvailableSubjects([]);
+      setSelectedSubjects([]);
+    }
+  }, [isIrregularStudent, studentFormData.trackId, studentFormData.strandId, studentFormData.gradeLevel, tracks, strands, termDetails]);
 
   // Check if a student is approved in registrations
   const isStudentApproved = (assignment) => {
@@ -1923,6 +2020,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       return;
     }
 
+    // Validate irregular student requirements
+    if (isIrregularStudent && selectedSubjects.length === 0) {
+      setStudentError('Please select at least one subject for irregular student.');
+      return;
+    }
+
     const studentToAssign = students.find(s => s._id === studentFormData.studentId);
     const selectedTrack = tracks.find(track => track._id === studentFormData.trackId);
     const selectedStrand = strands.find(strand => strand._id === studentFormData.strandId);
@@ -1963,7 +2066,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             sectionName: selectedSection.sectionName,
             gradeLevel: studentFormData.gradeLevel,
             termId: termDetails._id,
-            quarterName: quarterData ? quarterData.quarterName : undefined
+            quarterName: quarterData ? quarterData.quarterName : undefined,
+            enrollmentType: isIrregularStudent ? 'Irregular' : 'Regular',
+            subjects: isIrregularStudent ? selectedSubjects : undefined
           };
           
           let finalPayload;
@@ -1972,11 +2077,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               ...basePayload, 
               studentId: studentToAssign._id,
               studentName: `${studentToAssign.firstname || studentToAssign.firstName} ${studentToAssign.lastname || studentToAssign.lastName}`,
-              studentSchoolID: studentToAssign.schoolID
+              studentSchoolID: studentToAssign.schoolID,
+              enrollmentNo: studentFormData.enrollmentNo || undefined,
+              enrollmentDate: studentFormData.enrollmentDate || undefined
             };
           } else {
             // For manual entries, DO NOT send studentId (backend expects ObjectId). Send school ID and names instead.
-            const manualSchoolId = studentManualId.trim();
+          const manualSchoolId = studentManualId.trim();
             finalPayload = { 
               ...basePayload, 
               firstName: studentFormData.firstName,
@@ -1984,9 +2091,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               enrollmentNo: studentFormData.enrollmentNo,
               enrollmentDate: studentFormData.enrollmentDate
             };
-            if (manualSchoolId) {
+          if (manualSchoolId) {
               finalPayload.studentSchoolID = manualSchoolId;
-            }
+          }
           }
           
           console.log('Final payload being sent:', finalPayload);
@@ -2016,6 +2123,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
         setStudentSearchTerm('');
         setStudentManualId('');
+        setIsIrregularStudent(false);
+        setSelectedSubjects([]);
+        setAvailableSubjects([]);
       } else {
         const data = await res.json();
         setStudentError(data.message || 'Failed to assign student');
@@ -2120,6 +2230,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           setIsStudentEditMode(false);
           setEditingStudentAssignment(null);
           setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+          setIsIrregularStudent(false);
+          setSelectedSubjects([]);
+          setAvailableSubjects([]);
         } else {
           const data = await res.json();
           setStudentError(data.message || 'Failed to update student assignment');
@@ -4139,8 +4252,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         if (conflictingAssignment) {
           // Check if it's the same faculty (allowed) or different faculty (not allowed)
           if (conflictingAssignment.facultyId !== facultyId) {
-            isValid = false;
-            message = `Subject "${subjectName}" in Section "${sectionName}" is already assigned to another faculty`;
+          isValid = false;
+          message = `Subject "${subjectName}" in Section "${sectionName}" is already assigned to another faculty`;
             console.log(`Row ${i + 1}: Found subject-section conflict with different faculty`);
           } else {
             // Same faculty, same subject-section - this is a duplicate
@@ -4413,7 +4526,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         [`Academic Year: ${termDetails.schoolYear}`],
         [`Term: ${termDetails.termName}`],
         [''], // Empty row
-        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade'], // Updated format
+        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'track', 'strand', 'section', 'grade'], // Updated format
       ]);
       
       // Set column widths
@@ -4423,6 +4536,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         { wch: 15 }, // student_no
         { wch: 20 }, // last_name
         { wch: 20 }, // first_name
+        { wch: 20 }, // track
         { wch: 25 }, // strand
         { wch: 20 }, // section
         { wch: 10 }  // grade
@@ -4696,61 +4810,27 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         continue; // Skip all other validations for this row
       }
 
-      // 2. Check if student is enrolled in the current term and quarter
+      // 2. Resolve student identity without enforcing enrollment/registration in current term/quarter
       if (isValid) {
         const studentFound = activeStudentsMap.get(studentSchoolIDInput);
         console.log(`Student with School ID "${studentSchoolIDInput}" found:`, studentFound);
-        
+
         if (studentFound) {
-          // If student exists, verify that the name matches the school ID
           const expectedName = `${studentFound.firstname} ${studentFound.lastname}`.toLowerCase();
           const providedName = `${firstNameInput} ${lastNameInput}`.toLowerCase();
           if (expectedName !== providedName) {
             console.log(`Name mismatch for existing student - will create new entry for "${firstNameInput} ${lastNameInput}"`);
-            studentId = null; // Will be created as new student
+            studentId = null; // Allow creating a new student record on upload
+            message = 'Will create new student record due to name mismatch';
           } else {
-            studentId = studentFound._id;
-          }
-          
-          // Check if student is enrolled in current term and quarter
-          const isEnrolled = registrants.some(registrant => {
-            const registrantSchoolId = (registrant.schoolID || '').trim();
-            return registrant.status === 'approved' && 
-                   registrantSchoolId === studentSchoolIDInput &&
-                   registrant.termName === termDetails.termName &&
-                   registrant.schoolYear === termDetails.schoolYear;
-          });
-          
-          if (isEnrolled) {
-            console.log(`Student "${studentSchoolIDInput}" is enrolled in current term and quarter`);
-            message = 'Student is enrolled in this term and quarter';
-          } else {
-            console.log(`Student "${studentSchoolIDInput}" is not enrolled in current term and quarter`);
-            isValid = false;
-            message = 'Student is not enrolled in this term and quarter';
+            studentId = studentFound._id; // Use existing student record
+            message = 'Student resolved';
           }
         } else {
-          // Student doesn't exist in system - check if they are registered
-          console.log(`Student with School ID "${studentSchoolIDInput}" not found in system`);
-          
-          // Check if student is registered and approved for current term and quarter
-          const isRegistered = registrants.some(registrant => {
-            const registrantSchoolId = (registrant.schoolID || '').trim();
-            return registrant.status === 'approved' && 
-                   registrantSchoolId === studentSchoolIDInput &&
-                   registrant.termName === termDetails.termName &&
-                   registrant.schoolYear === termDetails.schoolYear;
-          });
-          
-          if (isRegistered) {
-            console.log(`Student "${studentSchoolIDInput}" is registered and approved for current term and quarter`);
-            studentId = null; // Will be created during upload
-            message = 'Student is registered and approved for this term and quarter';
-          } else {
-            console.log(`Student "${studentSchoolIDInput}" is not registered for current term and quarter`);
-            isValid = false;
-            message = 'Student is not enrolled in this term and quarter';
-          }
+          // Student not found in current active list; allow free entry (will create)
+          console.log(`Student with School ID "${studentSchoolIDInput}" not found; allowing free entry`);
+          studentId = null;
+          message = 'New student will be created';
         }
       }
 
@@ -5098,22 +5178,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           rawAssignment: assignment
         });
         
-        // Format enrollment date properly if it exists
-        if (enrollmentDate) {
-          try {
-            // Handle different date formats from Excel
-            const date = new Date(enrollmentDate);
-            if (!isNaN(date.getTime())) {
-              // Convert to YYYY-MM-DD format for backend
-              enrollmentDate = date.toISOString().split('T')[0];
-            } else {
-              enrollmentDate = '';
-            }
-          } catch (error) {
-            console.warn('Invalid date format in Excel:', enrollmentDate);
-            enrollmentDate = '';
-          }
-        }
+        // Normalize Excel date (serial or string) to ISO for backend
+        enrollmentDate = parseExcelDateToISO(enrollmentDate);
 
         const res = await fetch(`${API_BASE}/api/student-assignments`, {
           method: 'POST',
@@ -5128,7 +5194,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               strandName: assignment['strand'] || assignment['Strand Name'],
               sectionName: assignment['section'] || assignment['Section Name'],
               termId: termDetails._id,
-              quarterName: quarterData ? quarterData.quarterName : undefined
+              quarterName: quarterData ? quarterData.quarterName : undefined,
+              enrollmentType: 'Regular'
             };
             
             if (studentId) {
@@ -5216,6 +5283,24 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
     } catch (err) {
       setSubjectError('Error fetching subjects');
+    }
+  };
+
+  // Fetch available subjects for irregular student assignment
+  const fetchAvailableSubjects = async (trackName, strandName, gradeLevel) => {
+    try {
+      const quarterParam = quarterData ? `?quarterName=${encodeURIComponent(quarterData.quarterName)}` : '';
+      const res = await fetch(`${API_BASE}/api/subjects/available?trackName=${encodeURIComponent(trackName)}&strandName=${encodeURIComponent(strandName)}&gradeLevel=${encodeURIComponent(gradeLevel)}&schoolYear=${encodeURIComponent(termDetails.schoolYear)}&termName=${encodeURIComponent(termDetails.termName)}${quarterParam ? '&' + quarterParam.substring(1) : ''}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableSubjects(data);
+      } else {
+        console.error('Failed to fetch available subjects');
+        setAvailableSubjects([]);
+      }
+    } catch (err) {
+      console.error('Error fetching available subjects:', err);
+      setAvailableSubjects([]);
     }
   };
 
@@ -6053,42 +6138,42 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
                 const rows = sheetData.slice(headerRowIndex + 1);
                 
                 if (rows.length > 0) {
-                  const normalizedRows = rows.map(row => {
-                    const obj = {};
-                    headers.forEach((header, index) => {
-                      const key = String(header).trim();
-                      obj[key] = String(row[index] || '').trim();
-                    });
-                    return obj;
+                const normalizedRows = rows.map(row => {
+                  const obj = {};
+                  headers.forEach((header, index) => {
+                    const key = String(header).trim();
+                    obj[key] = String(row[index] || '').trim();
                   });
+                  return obj;
+                });
 
-                  if (sheetName === 'Tracks') {
-                    parsedData.tracks = normalizedRows.map(row => ({ trackName: row['Track Name'] }));
-                  } else if (sheetName === 'Strands') {
-                    parsedData.strands = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'] }));
-                  } else if (sheetName === 'Sections') {
-                    parsedData.sections = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], sectionName: row['Section Name'], gradeLevel: row['Grade Level'] }));
-                  } else if (sheetName === 'Subjects') {
-                    parsedData.subjects = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], gradeLevel: row['Grade Level'], subjectName: row['Subject Name'] }));
-                  } else if (sheetName === 'Faculty Assignments') {
-                    parsedData.facultyAssignments = normalizedRows.map(row => ({
-                      facultySchoolID: row['Faculty School ID'] || row['Faculty Sc'] || row['Faculty ID'],
-                      facultyName: row['Faculty Name'] || row['Faculty Na'] || row['Faculty'],
-                      trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
-                      strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
-                      sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
-                      gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
-                      subjectName: row['Subject'] || row['Subject Nam'] || row['Subject Name'],
-                    }));
+                if (sheetName === 'Tracks') {
+                  parsedData.tracks = normalizedRows.map(row => ({ trackName: row['Track Name'] }));
+                } else if (sheetName === 'Strands') {
+                  parsedData.strands = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'] }));
+                } else if (sheetName === 'Sections') {
+                  parsedData.sections = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], sectionName: row['Section Name'], gradeLevel: row['Grade Level'] }));
+                } else if (sheetName === 'Subjects') {
+                  parsedData.subjects = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], gradeLevel: row['Grade Level'], subjectName: row['Subject Name'] }));
+                } else if (sheetName === 'Faculty Assignments') {
+                  parsedData.facultyAssignments = normalizedRows.map(row => ({
+                    facultySchoolID: row['Faculty School ID'] || row['Faculty Sc'] || row['Faculty ID'],
+                    facultyName: row['Faculty Name'] || row['Faculty Na'] || row['Faculty'],
+                    trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
+                    strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
+                    sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
+                    gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
+                    subjectName: row['Subject'] || row['Subject Nam'] || row['Subject Name'],
+                  }));
                   } else if (sheetName === 'Enrolled Students') {
-                    parsedData.studentAssignments = normalizedRows.map(row => ({
-                      studentSchoolID: row['Student School ID'] || row['Student Sc'] || row['Student ID'],
-                      studentName: row['Student Name'] || row['Student Nam'] || row['Student'],
-                      gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
-                      trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
-                      strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
-                      sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
-                    }));
+                  parsedData.studentAssignments = normalizedRows.map(row => ({
+                    studentSchoolID: row['Student School ID'] || row['Student Sc'] || row['Student ID'],
+                    studentName: row['Student Name'] || row['Student Nam'] || row['Student'],
+                    gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
+                    trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
+                    strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
+                    sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
+                  }));
                   }
                 }
               }
@@ -8926,10 +9011,9 @@ Validation issues (${skippedCount} items):
                 <div className="flex justify-between items-center mt-5 mb-4">
                   <h4 className="text-2xl font-semibold mb-2">Enrolled Students</h4>
                   <div className="flex gap-2">
-                   
                     <button
                       type="button"
-                      className="bg-blue-900 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 w-fit"
+                      className="bg-blue-900 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       onClick={handleExportStudentAssignments}
                       disabled={termDetails.status === 'archived'}
                     >
@@ -8937,12 +9021,15 @@ Validation issues (${skippedCount} items):
                     </button>
                     <button
                       type="button"
-                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       onClick={() => {
                         setIsStudentModalOpen(true);
                         setIsStudentEditMode(false);
                         setEditingStudentAssignment(null);
                         setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+          setIsIrregularStudent(false);
+          setSelectedSubjects([]);
+          setAvailableSubjects([]);
                         setStudentSearchTerm('');
                       }}
                       disabled={termDetails.status === 'archived'}
@@ -9011,7 +9098,7 @@ Validation issues (${skippedCount} items):
                 {/* Modal for Assign/Edit Student */}
                 {isStudentModalOpen && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 ">
-                    <div className="bg-white rounded-lg shadow-lg w-[1000px] max-w-lg p-6 relative">
+                    <div className={`bg-white rounded-lg shadow-lg w-[1000px] max-w-lg p-6 relative ${isIrregularStudent ? 'max-h-[90vh] overflow-y-auto' : ''}`}>
                       <button
                         className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
                         onClick={() => {
@@ -9019,6 +9106,9 @@ Validation issues (${skippedCount} items):
                           setIsStudentEditMode(false);
                           setEditingStudentAssignment(null);
                           setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+          setIsIrregularStudent(false);
+          setSelectedSubjects([]);
+          setAvailableSubjects([]);
                           setStudentSearchTerm('');
                         }}
                       >
@@ -9072,6 +9162,9 @@ Validation issues (${skippedCount} items):
                             setIsStudentEditMode(false);
                             setEditingStudentAssignment(null);
                             setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+          setIsIrregularStudent(false);
+          setSelectedSubjects([]);
+          setAvailableSubjects([]);
                             setStudentSearchTerm('');
                           }
                         }}
@@ -9131,7 +9224,7 @@ Validation issues (${skippedCount} items):
                               placeholder="Enter last name"
                               disabled={termDetails.status === 'archived'}
                             />
-                          </div>
+                                    </div>
                           <div>
                             <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
                             <input
@@ -9203,8 +9296,6 @@ Validation issues (${skippedCount} items):
                               <option value="Grade 12">Grade 12</option>
                             </select>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label htmlFor="sectionNameStudent" className="block text-sm font-medium text-gray-700 mb-1">Section</label>
                             <select
@@ -9225,6 +9316,83 @@ Validation issues (${skippedCount} items):
                             </select>
                           </div>
                         </div>
+                        
+                        {/* Irregular Student Checkbox */}
+                        <div className="mt-4 p-3 bg-gray-50 rounded-lg border">
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isIrregularStudent}
+                              onChange={(e) => setIsIrregularStudent(e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                              disabled={termDetails.status === 'archived'}
+                            />
+                            <span className="text-sm font-medium text-gray-700">
+                              Mark as Irregular Student
+                            </span>
+                          </label>
+                          <p className="text-xs text-gray-500 mt-1 ml-6">
+                            Check this if the student has a non-standard curriculum (failed subjects, shifted course, etc.)
+                          </p>
+                        </div>
+                        
+                        {/* Subject Selection for Irregular Students */}
+                        {isIrregularStudent && (
+                          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <h4 className="text-sm font-semibold text-blue-800 mb-3">
+                              Select Subjects for Irregular Student
+                            </h4>
+                            
+                            {availableSubjects.length > 0 ? (
+                              <div className="max-h-48 overflow-y-auto">
+                                <div className="mb-3">
+                                  <label className="flex items-center space-x-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedSubjects.length === availableSubjects.length && availableSubjects.length > 0}
+                                      onChange={(e) => handleSelectAllSubjects(e.target.checked)}
+                                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                                    />
+                                    <span className="text-sm font-medium text-blue-700">
+                                      Select All Subjects ({availableSubjects.length})
+                                    </span>
+                                  </label>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  {availableSubjects.map((subject) => (
+                                    <label key={subject._id} className="flex items-center space-x-2 cursor-pointer p-2 hover:bg-blue-100 rounded">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedSubjects.some(s => s.subjectId === subject._id)}
+                                        onChange={(e) => handleSubjectSelection(subject._id, e.target.checked)}
+                                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                                      />
+                                      <span className="text-sm text-gray-700">
+                                        {subject.subjectName}
+                                      </span>
+                                    </label>
+                                  ))}
+                                </div>
+                                
+                                <div className="mt-3 pt-3 border-t border-blue-200">
+                                  <p className="text-xs text-blue-600">
+                                    Selected: {selectedSubjects.length} of {availableSubjects.length} subjects
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-center py-4">
+                                {studentFormData.trackId && studentFormData.strandId && studentFormData.gradeLevel ? (
+                                  <p className="text-sm text-gray-500">No subjects available for the selected track, strand, and grade level.</p>
+                                ) : (
+                                  <p className="text-sm text-gray-500">Please select track, strand, and grade level to view available subjects.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
@@ -9240,6 +9408,9 @@ Validation issues (${skippedCount} items):
                                 setIsStudentEditMode(false);
                                 setEditingStudentAssignment(null);
                                 setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+          setIsIrregularStudent(false);
+          setSelectedSubjects([]);
+          setAvailableSubjects([]);
                                 setStudentSearchTerm('');
                                 setIsStudentModalOpen(false);
                               }}
@@ -9293,6 +9464,7 @@ Validation issues (${skippedCount} items):
                               <th className="p-3 border">Track Name</th>
                               <th className="p-3 border">Strand Name</th>
                               <th className="p-3 border">Section Name</th>
+                              <th className="p-3 border">Enrollment Type</th>
                               <th className="p-3 border">Status</th>
                             </tr>
                           </thead>
@@ -9319,6 +9491,7 @@ Validation issues (${skippedCount} items):
                                   <td className="p-3 border">{trackName}</td>
                                   <td className="p-3 border">{strandName}</td>
                                   <td className="p-3 border">{sectionName}</td>
+                                  <td className="p-3 border">Regular</td>
                                   <td className="p-3 border">
                                     <span className={`px-2 py-1 rounded text-xs ${isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                       {message}
@@ -9371,6 +9544,7 @@ Validation issues (${skippedCount} items):
                         <th className="p-3 border">Strand</th>
                         <th className="p-3 border">Section</th>
                         <th className="p-3 border">Grade</th>
+                        <th className="p-3 border">Enrollment Type</th>
                         <th className="p-3 border">Status</th>
                         <th className="p-3 border">Actions</th>
                       </tr>
@@ -9378,13 +9552,24 @@ Validation issues (${skippedCount} items):
                     <tbody>
                       {filteredStudentAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="10" className="p-3 border text-center text-gray-500">
+                          <td colSpan="11" className="p-3 border text-center text-gray-500">
                             No student assignments found.
                           </td>
                         </tr>
                       ) : (
                         paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).slice.map((assignment) => {
                           const student = students.find(s => s._id === assignment.studentId);
+                          
+                          // Debug logging for enrollment type
+                          console.log('🔍 Assignment Debug:', {
+                            studentId: assignment.studentId,
+                            studentName: assignment.studentName,
+                            enrollmentType: assignment.enrollmentType,
+                            EnrollmentType: assignment.EnrollmentType,
+                            allFields: Object.keys(assignment),
+                            fullAssignment: assignment
+                          });
+                          
                           return (
                             <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
                               <td className="p-3 border">{assignment.enrollmentNo || 'N/A'}</td>
@@ -9403,6 +9588,32 @@ Validation issues (${skippedCount} items):
                               <td className="p-3 border">{assignment.strandName}</td>
                               <td className="p-3 border">{assignment.sectionName}</td>
                               <td className="p-3 border">{assignment.gradeLevel}</td>
+                              <td className="p-3 border">
+                                {(() => {
+                                  const enrollmentTypeValue = assignment.enrollmentType || assignment.EnrollmentType || 'Regular';
+                                  const isIrregular = (assignment.enrollmentType === 'Irregular' || assignment.EnrollmentType === 'Irregular');
+                                  
+                                  console.log('🎯 Enrollment Type Display Debug:', {
+                                    studentId: assignment.studentId,
+                                    enrollmentType: assignment.enrollmentType,
+                                    EnrollmentType: assignment.EnrollmentType,
+                                    finalValue: enrollmentTypeValue,
+                                    isIrregular: isIrregular,
+                                    condition1: assignment.enrollmentType === 'Irregular',
+                                    condition2: assignment.EnrollmentType === 'Irregular'
+                                  });
+                                  
+                                  return (
+                                    <button
+                                      onClick={() => handleViewStudentSubjects(assignment)}
+                                      className={`px-2 py-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity ${isIrregular ? 'bg-orange-100 text-orange-800 hover:bg-orange-200' : 'bg-blue-100 text-blue-800 hover:bg-blue-200'}`}
+                                      title="Click to view enrolled subjects"
+                                    >
+                                      {enrollmentTypeValue}
+                                    </button>
+                                  );
+                                })()}
+                              </td>
                               <td className="p-3 border">
                                 {termDetails.status === 'archived' ? (
                                   <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
@@ -9791,6 +10002,7 @@ Validation issues (${skippedCount} items):
                         <th className="p-2 border">Strand Name</th>
                         <th className="p-2 border">Section Name</th>
                         <th className="p-2 border">Grade Level</th>
+                        <th className="p-2 border">Enrollment Type</th>
                         <th className="p-2 border">Status</th>
                       </tr>
                     </thead>
@@ -9803,6 +10015,7 @@ Validation issues (${skippedCount} items):
                           <td className="p-2 border">{assignment.strandName}</td>
                           <td className="p-2 border">{assignment.sectionName}</td>
                           <td className="p-2 border">{assignment.gradeLevel}</td>
+                          <td className="p-2 border">Regular</td>
                           <td className="p-2 border flex items-center gap-1">
                             {importValidationStatus.studentAssignments[index]?.valid ? (
                               <span className="text-green-600">✓ Valid</span>
@@ -9998,6 +10211,95 @@ Validation issues (${skippedCount} items):
             <div className="p-6 border-t border-gray-200 flex justify-end">
               <button
                 onClick={() => setValidationModalOpen(false)}
+                className="bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Student Subjects Modal */}
+      {isSubjectsModalOpen && selectedStudentForSubjects && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-lg shadow-lg w-[800px] max-w-4xl max-h-[90vh] overflow-y-auto p-6 relative">
+            <button
+              onClick={handleCloseSubjectsModal}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl font-bold"
+            >
+              ×
+            </button>
+            
+            <h3 className="text-xl font-semibold mb-4">
+              Enrolled Subjects - {selectedStudentForSubjects.firstname || selectedStudentForSubjects.studentName?.split(' ')[0] || 'N/A'} {selectedStudentForSubjects.lastname || selectedStudentForSubjects.studentName?.split(' ').slice(-1)[0] || 'N/A'}
+            </h3>
+            
+            <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="font-medium text-gray-600">Student ID:</span>
+                  <p>{selectedStudentForSubjects.schoolID || selectedStudentForSubjects.studentSchoolID || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Grade Level:</span>
+                  <p>{selectedStudentForSubjects.gradeLevel || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Track:</span>
+                  <p>{selectedStudentForSubjects.trackName || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Strand:</span>
+                  <p>{selectedStudentForSubjects.strandName || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Section:</span>
+                  <p>{selectedStudentForSubjects.sectionName || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Enrollment Type:</span>
+                  <p>
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      (selectedStudentForSubjects.enrollmentType === 'Irregular' || selectedStudentForSubjects.EnrollmentType === 'Irregular') 
+                        ? 'bg-orange-100 text-orange-800' 
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {selectedStudentForSubjects.enrollmentType || selectedStudentForSubjects.EnrollmentType || 'Regular'}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="border rounded-lg">
+              <div className="bg-gray-50 px-4 py-3 border-b">
+                <h4 className="font-medium text-gray-900">Enrolled Subjects</h4>
+              </div>
+              
+              <div className="p-4">
+                {selectedStudentForSubjects.subjects && selectedStudentForSubjects.subjects.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {selectedStudentForSubjects.subjects.map((subject, index) => (
+                      <div key={index} className="flex items-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                        <span className="text-sm font-medium text-blue-900">{subject.subjectName}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <div className="text-4xl mb-2">📚</div>
+                    <p className="text-lg font-medium">No subjects enrolled</p>
+                    <p className="text-sm">This student has no subjects assigned yet.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={handleCloseSubjectsModal}
                 className="bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
               >
                 Close
@@ -10291,7 +10593,7 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
     } else {
       // Student doesn't exist in system - this is allowed for enrollment data
       console.log(`Student with School ID '${assignment.studentSchoolID}' not found - will be created as new student`);
-      
+
       // For new students, check if there's already a manual assignment with the same details
       const exists = activeAssignments.some(ea =>
         !ea.studentId && // Manual assignment (no linked student)

@@ -60,6 +60,23 @@ const studentAssignmentSchema = new mongoose.Schema({
   quarterName: {
     type: String,
   },
+  // Subjects assigned to this student based on track, strand, and grade level
+  subjects: [{
+    subjectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subject'
+    },
+    subjectName: {
+      type: String,
+      required: true
+    }
+  }],
+  // Enrollment type to distinguish regular from irregular students
+  enrollmentType: {
+    type: String,
+    enum: ['Regular', 'Irregular'],
+    default: 'Regular'
+  },
   status: {
     type: String,
     enum: ['active', 'archived'],
