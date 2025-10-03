@@ -1050,7 +1050,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                  const studentsOnly = (membersData.students || []).filter(s => (s.role || '').toLowerCase() === 'students');
                  
                  // Store the students directly since they're already populated with full data
-                 setMembers({ faculty: membersData.faculty || [], students: studentsOnly });
+                 setMembers({ faculty: membersData.faculty ? [membersData.faculty] : [], students: studentsOnly });
                  
                  // Store class information for export
                  setClassWithMembers({
@@ -1070,8 +1070,8 @@ export default function ClassContent({ selected, isFaculty = false }) {
                }
                
                // If we got faculty but no students, store faculty and continue to fallback for students
-               if (Array.isArray(membersData.faculty) && membersData.faculty.length > 0) {
-                 setMembers(prev => ({ ...prev, faculty: membersData.faculty }));
+               if (membersData.faculty) {
+                 setMembers(prev => ({ ...prev, faculty: [membersData.faculty] }));
                }
              }
           } catch (err) {
@@ -2656,7 +2656,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                     {student.registrationStatus === 'active' ? '✅ Active' : '⏳ Pending'}
                                   </span>
                                 </div>
-                                <div className="text-sm text-gray-600">{student.email}</div>
+                                
                                 <div className="text-sm text-blue-600 font-medium">ID: {student.schoolID || student.userID || 'N/A'}</div>
                               </div>
                             </div>

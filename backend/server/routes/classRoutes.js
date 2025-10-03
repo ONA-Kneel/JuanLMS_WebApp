@@ -785,29 +785,26 @@ router.get('/:classID/members-with-status', authenticateToken, async (req, res) 
         const studentFirstName = assignment.firstName || assignment.studentName.split(' ')[0];
         const studentLastName = assignment.lastName || assignment.studentName.split(' ').slice(-1)[0];
         
-        // Check if student is approved in REGISTRANTS table
+        // Check if student is approved in REGISTRANTS table by SCHOOL ID
         const approvedRegistrant = await Registrant.findOne({
-          $or: [
-            { 
-              firstName: { $regex: studentFirstName, $options: 'i' },
-              lastName: { $regex: studentLastName, $options: 'i' }
-            },
-            {
-              firstName: { $regex: studentLastName, $options: 'i' },
-              lastName: { $regex: studentFirstName, $options: 'i' }
-            }
-          ],
+          schoolID: assignment.studentSchoolID,
           status: 'approved'
         });
         
         if (approvedRegistrant) {
-          // Student is approved in registrants! Use their real data
+          // Student is approved in registrants! Now find their User record for system email
+          const systemUser = await User.findOne({
+            schoolID: approvedRegistrant.schoolID,
+            role: 'students',
+            isArchived: { $ne: true }
+          });
+          
           studentData = {
             _id: assignment._id, // Use assignment ID as temporary ID
             userID: approvedRegistrant.schoolID,
             firstname: approvedRegistrant.firstName,
             lastname: approvedRegistrant.lastName,
-            email: approvedRegistrant.personalEmail,
+            email: systemUser ? (systemUser.getDecryptedEmail ? systemUser.getDecryptedEmail() : systemUser.email) : approvedRegistrant.personalEmail,
             schoolID: approvedRegistrant.schoolID,
             role: 'students'
           };
