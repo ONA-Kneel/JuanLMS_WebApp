@@ -636,9 +636,41 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 
     console.log('Found assignment:', assignment);
-    await assignment.deleteOne();
-    console.log('Assignment deleted successfully');
-    res.json({ message: 'Assignment deleted' });
+
+    // Also delete any auto-created class(es) linked to this assignment (same faculty/subject/section/term/year)
+    try {
+      const facultyIdStr = String(assignment.facultyId || '').trim();
+      const subjectName = String(assignment.subjectName || '').trim();
+      const sectionName = String(assignment.sectionName || '').trim();
+      const academicYear = String(assignment.schoolYear || '').trim();
+      const termName = String(assignment.termName || '').trim();
+
+      const match = {
+        isAutoCreated: true,
+        facultyID: facultyIdStr,
+        academicYear: academicYear,
+        termName: termName,
+        className: { $regex: new RegExp(`^${escapeRegex(subjectName)}$`, 'i') },
+        section: { $regex: new RegExp(`^${escapeRegex(sectionName)}$`, 'i') }
+      };
+
+      const classesToDelete = await Class.find(match);
+      let deletedClassesCount = 0;
+      if (classesToDelete && classesToDelete.length > 0) {
+        const delRes = await Class.deleteMany({ _id: { $in: classesToDelete.map(c => c._id) } });
+        deletedClassesCount = delRes.deletedCount || 0;
+        console.log(`[FACULTY-ASSIGNMENT] Deleted ${deletedClassesCount} auto-created class(es) for assignment ${assignment._id}`);
+      }
+
+      await assignment.deleteOne();
+      console.log('Assignment deleted successfully');
+      return res.json({ message: 'Assignment deleted', autoClassesDeleted: deletedClassesCount });
+    } catch (classDelErr) {
+      console.error('Failed to delete related auto-created class(es):', classDelErr);
+      // Proceed with assignment deletion even if class deletion fails
+      await assignment.deleteOne();
+      return res.json({ message: 'Assignment deleted (auto-created class deletion failed)', autoClassesDeleted: 0 });
+    }
   } catch (err) {
     console.error('Error deleting assignment:', err);
     res.status(500).json({ message: err.message });

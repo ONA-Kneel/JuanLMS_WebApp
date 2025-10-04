@@ -1833,25 +1833,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         const token = localStorage.getItem('token');
         setDeletingAssignmentId(assignment._id);
 
-        // Offer to delete related auto-created class first
-        const deleteAutoClass = window.confirm('Do you also want to delete the auto-created class for this assignment?');
-        if (deleteAutoClass) {
-          try {
-            const delClassRes = await fetch(`${API_BASE}/api/faculty-assignments/${assignment._id}/auto-class`, {
-              method: 'DELETE',
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
-            if (!delClassRes.ok) {
-              const errData = await delClassRes.json().catch(() => ({}));
-              console.warn('Failed to delete auto class:', errData.message || delClassRes.statusText);
-            }
-          } catch (e) {
-            console.warn('Error calling delete auto-class endpoint:', e);
-          }
-        }
-
         const res = await fetch(`${API_BASE}/api/faculty-assignments/${assignment._id}`, {
           method: 'DELETE',
           headers: {
