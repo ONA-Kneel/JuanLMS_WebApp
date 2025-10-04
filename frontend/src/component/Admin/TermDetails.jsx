@@ -71,6 +71,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [trackSuccess, setTrackSuccess] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingTrack, setEditingTrack] = useState(null);
+  const [isTrackSubmitting, setIsTrackSubmitting] = useState(false);
+  const [deletingTrackId, setDeletingTrackId] = useState(null);
 
   // State for Strands management
   const [strandFormData, setStrandFormData] = useState({
@@ -83,6 +85,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [isStrandEditMode, setIsStrandEditMode] = useState(false);
   const [editingStrand, setEditingStrand] = useState(null);
   const [isStrandModalOpen, setIsStrandModalOpen] = useState(false);
+  const [isStrandSubmitting, setIsStrandSubmitting] = useState(false);
+  const [deletingStrandId, setDeletingStrandId] = useState(null);
 
   // State for Sections management
   const [sectionFormData, setSectionFormData] = useState({
@@ -97,6 +101,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [isSectionEditMode, setIsSectionEditMode] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
+  const [isSectionSubmitting, setIsSectionSubmitting] = useState(false);
+  const [deletingSectionId, setDeletingSectionId] = useState(null);
 
   // State for Faculty Assignment management
   const [facultyFormData, setFacultyFormData] = useState({
@@ -112,6 +118,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [isFacultyEditMode, setIsFacultyEditMode] = useState(false);
   const [editingFacultyAssignment, setEditingFacultyAssignment] = useState(null);
   const [deletingAssignmentId, setDeletingAssignmentId] = useState(null);
+  const [isFacultySubmitting, setIsFacultySubmitting] = useState(false);
   const [faculties, setFaculties] = useState([]); // To store faculty users for dropdown
   const [isFacultyModalOpen, setIsFacultyModalOpen] = useState(false);
 
@@ -134,6 +141,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [students, setStudents] = useState([]); // To store student users for dropdown
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [registrants, setRegistrants] = useState([]);
+  const [isStudentSubmitting, setIsStudentSubmitting] = useState(false);
+  const [deletingStudentAssignmentId, setDeletingStudentAssignmentId] = useState(null);
 
   // Filter states for student assignments
   const [studentSectionFilter, setStudentSectionFilter] = useState('');
@@ -210,6 +219,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [isSubjectEditMode, setIsSubjectEditMode] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
+  const [isSubjectSubmitting, setIsSubjectSubmitting] = useState(false);
+  const [deletingSubjectId, setDeletingSubjectId] = useState(null);
   
   // Batch upload state for subjects
   const [subjectExcelFile, setSubjectExcelFile] = useState(null);
@@ -533,6 +544,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     e.preventDefault();
     if (termDetails.status === 'archived') return;
     setTrackError('');
+    setIsTrackSubmitting(true);
 
     if (!trackFormData.trackType) {
       setTrackError('Please select a track type.');
@@ -584,6 +596,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
     } catch (err) {
       setTrackError('Error adding track');
+    } finally {
+      setIsTrackSubmitting(false);
     }
   };
 
@@ -600,6 +614,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     e.preventDefault();
     if (termDetails.status === 'archived') return;
     setTrackError('');
+    setIsTrackSubmitting(true);
 
     if (!trackFormData.trackType) {
       setTrackError('Please select a track type.');
@@ -657,12 +672,15 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       } catch (err) {
         setTrackError('Error updating track');
+      } finally {
+        setIsTrackSubmitting(false);
       }
     }
   };
 
   const handleDeleteTrack = async (track) => {
     if (termDetails.status === 'archived') return;
+    setDeletingTrackId(track._id);
     
     try {
       // First, check dependencies
@@ -735,6 +753,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (err) {
       setTrackError('Error deleting track');
       console.error('Error in handleDeleteTrack:', err);
+    } finally {
+      setDeletingTrackId(null);
     }
   };
 
@@ -743,6 +763,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     e.preventDefault();
     if (termDetails.status === 'archived') return;
     setStrandError('');
+    setIsStrandSubmitting(true);
 
     if (!strandFormData.trackId || !strandFormData.strandType) {
       setStrandError('Track Name and Strand Type cannot be empty.');
@@ -801,6 +822,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
     } catch (err) {
       setStrandError('Error adding strand');
+    } finally {
+      setIsStrandSubmitting(false);
     }
   };
 
@@ -825,6 +848,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     e.preventDefault();
     if (termDetails.status === 'archived') return;
     setStrandError('');
+    setIsStrandSubmitting(true);
 
     if (!strandFormData.trackId || !strandFormData.strandType) {
       setStrandError('Track Name and Strand Type cannot be empty.');
@@ -889,12 +913,15 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       } catch (err) {
         setStrandError('Error updating strand');
+      } finally {
+        setIsStrandSubmitting(false);
       }
     }
   };
 
   const handleDeleteStrand = async (strand) => {
     if (termDetails.status === 'archived') return;
+    setDeletingStrandId(strand._id);
     
     try {
       // First, check dependencies
@@ -965,6 +992,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (err) {
       setStrandError('Error deleting strand');
       console.error('Error in handleDeleteStrand:', err);
+    } finally {
+      setDeletingStrandId(null);
     }
   };
 
@@ -983,6 +1012,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleAddSection = async (e) => {
     e.preventDefault();
     setSectionError('');
+    setIsSectionSubmitting(true);
 
     if (!sectionFormData.trackId || !sectionFormData.strandId || !sectionFormData.sectionName.trim() || !sectionFormData.gradeLevel) {
       setSectionError('All fields are required.');
@@ -1062,6 +1092,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
     } catch (err) {
       setSectionError('Error adding section');
+    } finally {
+      setIsSectionSubmitting(false);
     }
   };
 
@@ -1080,6 +1112,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleUpdateSection = async (e) => {
     e.preventDefault();
     setSectionError('');
+    setIsSectionSubmitting(true);
 
     if (!sectionFormData.trackId || !sectionFormData.strandId || !sectionFormData.sectionName.trim() || !sectionFormData.gradeLevel) {
       setSectionError('All fields are required.');
@@ -1146,12 +1179,15 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       } catch (err) {
         setSectionError('Error updating section');
+      } finally {
+        setIsSectionSubmitting(false);
       }
     }
   };
 
   const handleDeleteSection = async (section) => {
     if (termDetails.status === 'archived') return;
+    setDeletingSectionId(section._id);
     
     try {
       // First, check dependencies
@@ -1218,6 +1254,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (err) {
       setSectionError('Error deleting section');
       console.error('Error in handleDeleteSection:', err);
+    } finally {
+      setDeletingSectionId(null);
     }
   };
 
@@ -1627,6 +1665,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleAddFacultyAssignment = async (e) => {
     e.preventDefault();
     setFacultyError('');
+    setIsFacultySubmitting(true);
 
     // Ensure facultyId is set from selection or if directly typed and matches exactly
     let facultyToAssign = faculties.find(f => f._id === facultyFormData.facultyId);
@@ -1708,6 +1747,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (err) {
       setFacultyError('Error assigning faculty');
       console.error("Error in handleAddFacultyAssignment:", err);
+    } finally {
+      setIsFacultySubmitting(false);
     }
   };
 
@@ -1742,6 +1783,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleUpdateFacultyAssignment = async (e) => {
     e.preventDefault();
     setFacultyError('');
+    setIsFacultySubmitting(true);
 
     let facultyToAssign = faculties.find(f => f._id === facultyFormData.facultyId);
     if (!facultyToAssign && facultySearchTerm) {
@@ -1823,6 +1865,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch (err) {
         setFacultyError('Error updating faculty assignment');
         console.error("Error in handleUpdateFacultyAssignment:", err);
+      } finally {
+        setIsFacultySubmitting(false);
       }
     }
   };
@@ -1919,6 +1963,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleAddStudentAssignment = async (e) => {
     e.preventDefault();
     setStudentError('');
+    setIsStudentSubmitting(true);
 
     // Check if we have ALL required student information
     const hasStudentInfo = Boolean(studentFormData.studentId) || (studentFormData.firstName && studentFormData.lastName);
@@ -2040,6 +2085,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (err) {
       setStudentError('Error assigning student');
       console.error("Error in handleAddStudentAssignment:", err);
+    } finally {
+      setIsStudentSubmitting(false);
     }
   };
 
@@ -2076,6 +2123,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleUpdateStudentAssignment = async (e) => {
     e.preventDefault();
     setStudentError('');
+    setIsStudentSubmitting(true);
 
     if (!studentFormData.studentId || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
       setStudentError('All fields are required for student assignment.');
@@ -2144,6 +2192,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch (err) {
         setStudentError('Error updating student assignment');
         console.error("Error in handleUpdateStudentAssignment:", err);
+      } finally {
+        setIsStudentSubmitting(false);
       }
     }
   };
@@ -2152,6 +2202,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     if (window.confirm("Are you sure you want to remove this student assignment?")) {
       try {
         const token = localStorage.getItem('token');
+        setDeletingStudentAssignmentId(assignment._id);
 
         const res = await fetch(`${API_BASE}/api/student-assignments/${assignment._id}`, {
           method: 'DELETE',
@@ -2187,6 +2238,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch (err) {
         setStudentError('Error removing student assignment');
         console.error("Error in handleDeleteStudentAssignment:", err);
+      } finally {
+        setDeletingStudentAssignmentId(null);
       }
     }
   };
@@ -5247,6 +5300,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleAddSubject = async (e) => {
     e.preventDefault();
     setSubjectError('');
+    setIsSubjectSubmitting(true);
     if (!subjectFormData.subjectName || !subjectFormData.trackName || !subjectFormData.strandName || !subjectFormData.gradeLevel) {
       setSubjectError('All fields are required.');
       return;
@@ -5289,6 +5343,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
     } catch (err) {
       setSubjectError('Error adding subject');
+    } finally {
+      setIsSubjectSubmitting(false);
     }
   };
   const handleEditSubject = (subject) => {
@@ -5306,6 +5362,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleUpdateSubject = async (e) => {
     e.preventDefault();
     setSubjectError('');
+    setIsSubjectSubmitting(true);
     if (!subjectFormData.subjectName || !subjectFormData.trackName || !subjectFormData.strandName || !subjectFormData.gradeLevel) {
       setSubjectError('All fields are required.');
       return;
@@ -5353,11 +5410,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
     } catch (err) {
       setSubjectError('Error updating subject');
+    } finally {
+      setIsSubjectSubmitting(false);
     }
   };
 
   const handleDeleteSubject = async (subject) => {
     if (termDetails.status === 'archived') return;
+    setDeletingSubjectId(subject._id);
     
     try {
       // First, check dependencies
@@ -5422,6 +5482,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (err) {
       setSubjectError('Error deleting subject');
       console.error('Error in handleDeleteSubject:', err);
+    } finally {
+      setDeletingSubjectId(null);
     }
   };
 
@@ -7391,10 +7453,10 @@ Validation issues (${skippedCount} items):
                   <div className="space-y-2">
                     <button
                       type="submit"
-                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      disabled={termDetails.status === 'archived'}
+                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' || isTrackSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={termDetails.status === 'archived' || isTrackSubmitting}
                     >
-                      {isEditMode ? 'Save Changes' : 'Add New Track'}
+                      {isTrackSubmitting ? (isEditMode ? 'Saving...' : 'Adding...') : (isEditMode ? 'Save Changes' : 'Add New Track')}
                     </button>
                     {isEditMode && (
                       <button
@@ -7404,8 +7466,8 @@ Validation issues (${skippedCount} items):
                           setEditingTrack(null);
                           setTrackFormData({ trackName: '', trackType: '' });
                         }}
-                        className="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
-                        disabled={termDetails.status === 'archived'}
+                        className={`w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isTrackSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={termDetails.status === 'archived' || isTrackSubmitting}
                       >
                         Cancel Edit
                       </button>
@@ -7465,9 +7527,9 @@ Validation issues (${skippedCount} items):
                               <div className="inline-flex space-x-2">
                                 <button
                                   onClick={() => handleEditTrack(track)}
-                                  className="p-1 rounded hover:bg-yellow-100 group relative"
+                                  className={`p-1 rounded hover:bg-yellow-100 group relative ${deletingTrackId === track._id ? 'opacity-50 cursor-not-allowed' : ''}`}
                                   title="Edit"
-                                  disabled={termDetails.status === 'archived'}
+                                  disabled={termDetails.status === 'archived' || deletingTrackId === track._id}
                                 >
                                   {/* Heroicons Pencil Square (black) */}
                                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
@@ -7476,14 +7538,21 @@ Validation issues (${skippedCount} items):
                                 </button>
                                 <button
                                   onClick={() => handleDeleteTrack(track)}
-                                  className="p-1 rounded hover:bg-red-100 group relative"
+                                  className={`p-1 rounded hover:bg-red-100 group relative ${deletingTrackId === track._id ? 'opacity-50 cursor-not-allowed' : ''}`}
                                   title="Delete"
-                                  disabled={termDetails.status === 'archived'}
+                                  disabled={termDetails.status === 'archived' || deletingTrackId === track._id}
                                 >
                                   {/* Heroicons Trash (red) */}
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                  </svg>
+                                  {deletingTrackId === track._id ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6 text-red-600 animate-spin">
+                                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
+                                      <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
+                                    </svg>
+                                  ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                    </svg>
+                                  )}
                                 </button>
                               </div>
                             </td>
@@ -7658,10 +7727,10 @@ Validation issues (${skippedCount} items):
                   <div className="space-y-2">
                     <button
                       type="submit"
-                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      disabled={termDetails.status === 'archived'}
+                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' || isStrandSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={termDetails.status === 'archived' || isStrandSubmitting}
                     >
-                      {isStrandEditMode ? 'Save Changes' : 'Add New Strand'}
+                      {isStrandSubmitting ? (isStrandEditMode ? 'Saving...' : 'Adding...') : (isStrandEditMode ? 'Save Changes' : 'Add New Strand')}
                     </button>
                     {isStrandEditMode && (
                       <button
@@ -7670,10 +7739,10 @@ Validation issues (${skippedCount} items):
                           setIsStrandEditMode(false);
                           setEditingStrand(null);
                           setStrandFormData({ trackId: '', strandName: '', strandType: '' });
-                                setIsStrandModalOpen(false);
+                          setIsStrandModalOpen(false);
                         }}
-                        className="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
-                        disabled={termDetails.status === 'archived'}
+                        className={`w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isStrandSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={termDetails.status === 'archived' || isStrandSubmitting}
                       >
                         Cancel Edit
                       </button>
@@ -7740,13 +7809,20 @@ Validation issues (${skippedCount} items):
                               </button>
                               <button
                                 onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteStrand(strand)}
-                          className="p-1 rounded hover:bg-red-100 group relative"
+                                className={`p-1 rounded hover:bg-red-100 group relative ${deletingStrandId === strand._id ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 title="Delete"
-                                disabled={termDetails.status === 'archived'}
+                                disabled={termDetails.status === 'archived' || deletingStrandId === strand._id}
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                {deletingStrandId === strand._id ? (
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6 text-red-600 animate-spin">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
+                                    <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
+                                  </svg>
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
+                                )}
                               </button>
                             </div>
                           </td>
@@ -7926,10 +8002,10 @@ Validation issues (${skippedCount} items):
                     <div className="flex gap-2">
                       <button
                         type="submit"
-                        className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        disabled={termDetails.status === 'archived'}
+                        className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' || isSectionSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={termDetails.status === 'archived' || isSectionSubmitting}
                       >
-                        {isSectionEditMode ? 'Save Changes' : 'Add New Section'}
+                        {isSectionSubmitting ? (isSectionEditMode ? 'Saving...' : 'Adding...') : (isSectionEditMode ? 'Save Changes' : 'Add New Section')}
                       </button>
                       {isSectionEditMode && (
                         <button
@@ -7940,8 +8016,8 @@ Validation issues (${skippedCount} items):
                             setSectionFormData({ trackId: '', strandId: '', sectionName: '', sectionCode: '', gradeLevel: '' });
                                 setIsSectionModalOpen(false);
                           }}
-                          className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
-                          disabled={termDetails.status === 'archived'}
+                          className={`flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isSectionSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          disabled={termDetails.status === 'archived' || isSectionSubmitting}
                         >
                           Cancel Edit
                         </button>
@@ -8014,13 +8090,20 @@ Validation issues (${skippedCount} items):
                               </button>
                               <button
                                 onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteSection(section)}
-                                className="p-1 rounded hover:bg-red-100 group relative"
+                                className={`p-1 rounded hover:bg-red-100 group relative ${deletingSectionId === section._id ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 title="Delete"
-                                disabled={termDetails.status === 'archived'}
+                                disabled={termDetails.status === 'archived' || deletingSectionId === section._id}
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                {deletingSectionId === section._id ? (
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6 text-red-600 animate-spin">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
+                                    <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
+                                  </svg>
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
+                                )}
                               </button>
                             </div>
                           </td>
@@ -8259,10 +8342,10 @@ Validation issues (${skippedCount} items):
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
-                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            disabled={termDetails.status === 'archived'}
+                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' || isSubjectSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={termDetails.status === 'archived' || isSubjectSubmitting}
                           >
-                            {isSubjectEditMode ? 'Save Changes' : 'Add New Subject'}
+                            {isSubjectSubmitting ? (isSubjectEditMode ? 'Saving...' : 'Adding...') : (isSubjectEditMode ? 'Save Changes' : 'Add New Subject')}
                           </button>
                           {isSubjectEditMode && (
                             <button
@@ -8273,8 +8356,8 @@ Validation issues (${skippedCount} items):
                                 setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' });
                                 setIsSubjectModalOpen(false);
                               }}
-                              className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
-                              disabled={termDetails.status === 'archived'}
+                              className={`flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isSubjectSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              disabled={termDetails.status === 'archived' || isSubjectSubmitting}
                             >
                               Cancel Edit
                             </button>
@@ -8326,13 +8409,20 @@ Validation issues (${skippedCount} items):
                               </button>
                               <button
                                 onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteSubject(subject)}
-                        className="p-1 rounded hover:bg-red-100 group relative"
+                                className={`p-1 rounded hover:bg-red-100 group relative ${deletingSubjectId === subject._id ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 title="Delete"
-                                disabled={termDetails.status === 'archived'}
+                                disabled={termDetails.status === 'archived' || deletingSubjectId === subject._id}
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                {deletingSubjectId === subject._id ? (
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6 text-red-600 animate-spin">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
+                                    <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
+                                  </svg>
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
+                                )}
                               </button>
                             </div>
                           </td>
@@ -8668,10 +8758,10 @@ Validation issues (${skippedCount} items):
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
-                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            disabled={termDetails.status === 'archived'}
+                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' || isFacultySubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={termDetails.status === 'archived' || isFacultySubmitting}
                           >
-                            {isFacultyEditMode ? 'Save Changes' : 'Assign Faculty'}
+                            {isFacultySubmitting ? (isFacultyEditMode ? 'Saving...' : 'Assigning...') : (isFacultyEditMode ? 'Save Changes' : 'Assign Faculty')}
                           </button>
                           {isFacultyEditMode && (
                             <button
@@ -8683,8 +8773,8 @@ Validation issues (${skippedCount} items):
                                 setFacultySearchTerm('');
                                 setIsFacultyModalOpen(false);
                               }}
-                              className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
-                              disabled={termDetails.status === 'archived'}
+                              className={`flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isFacultySubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              disabled={termDetails.status === 'archived' || isFacultySubmitting}
                             >
                               Cancel Edit
                             </button>
@@ -9262,10 +9352,10 @@ Validation issues (${skippedCount} items):
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
-                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            disabled={termDetails.status === 'archived'}
+                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' || isStudentSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={termDetails.status === 'archived' || isStudentSubmitting}
                           >
-                            {isStudentEditMode ? 'Save Changes' : 'Assign Enrolled Student'}
+                            {isStudentSubmitting ? (isStudentEditMode ? 'Saving...' : 'Assigning...') : (isStudentEditMode ? 'Save Changes' : 'Assign Enrolled Student')}
                           </button>
                           {isStudentEditMode && (
                             <button
@@ -9277,8 +9367,8 @@ Validation issues (${skippedCount} items):
                                 setStudentSearchTerm('');
                                 setIsStudentModalOpen(false);
                               }}
-                              className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
-                              disabled={termDetails.status === 'archived'}
+                              className={`flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isStudentSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              disabled={termDetails.status === 'archived' || isStudentSubmitting}
                             >
                               Cancel Edit
                             </button>
@@ -9462,13 +9552,20 @@ Validation issues (${skippedCount} items):
                                   </button>
                                   <button
                                     onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteStudentAssignment(assignment)}
-                                    className="p-1 rounded hover:bg-red-100 group relative"
+                                    className={`p-1 rounded hover:bg-red-100 group relative ${deletingStudentAssignmentId === assignment._id ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     title="Delete"
-                                    disabled={termDetails.status === 'archived'}
+                                    disabled={termDetails.status === 'archived' || deletingStudentAssignmentId === assignment._id}
                                   >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                    </svg>
+                                    {deletingStudentAssignmentId === assignment._id ? (
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6 text-red-600 animate-spin">
+                                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
+                                        <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
+                                      </svg>
+                                    ) : (
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                      </svg>
+                                    )}
                                   </button>
                                   {assignment.status === 'archived' && (
                                     <button

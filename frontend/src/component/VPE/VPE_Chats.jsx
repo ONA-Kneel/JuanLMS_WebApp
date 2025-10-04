@@ -64,6 +64,7 @@ export default function VPE_Chats() {
   const [joinGroupCode, setJoinGroupCode] = useState("");
   const [isGroupChat, setIsGroupChat] = useState(false);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   // Add state for member search
   const [memberSearchTerm, setMemberSearchTerm] = useState("");
@@ -119,6 +120,7 @@ export default function VPE_Chats() {
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
   const groupsRef = useRef([]);
+  const lastSendRef = useRef(0);
 
   const API_URL = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -700,7 +702,9 @@ export default function VPE_Chats() {
   const handleSendMessage = async () => {
     if (!newMessage.trim() && !selectedFile) return;
     if (!selectedChat) return;
+    if (isSending) return;
 
+    setIsSending(true);
     if (isGroupChat) {
       // Send group message
       const formData = new FormData();
@@ -759,6 +763,8 @@ export default function VPE_Chats() {
         setSelectedFile(null);
       } catch (err) {
         console.error("Error sending group message:", err);
+      } finally {
+        setIsSending(false);
       }
     } else {
       // Send individual message
@@ -814,6 +820,8 @@ export default function VPE_Chats() {
         setSelectedFile(null);
       } catch (err) {
         console.error("Error sending message:", err);
+      } finally {
+        setIsSending(false);
       }
     }
   };
@@ -821,6 +829,10 @@ export default function VPE_Chats() {
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      if (isSending) return;
+      const now = Date.now();
+      if (now - (lastSendRef.current || 0) < 400) return;
+      lastSendRef.current = now;
       handleSendMessage();
     }
   };
@@ -1522,10 +1534,10 @@ export default function VPE_Chats() {
                     />
                     <button
                       onClick={handleSendMessage}
-                      disabled={!newMessage.trim() && !selectedFile}
+                      disabled={isSending || (!newMessage.trim() && !selectedFile)}
                       className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <span className="material-icons">send</span>
+                      {isSending ? 'Sending...' : <span className="material-icons">send</span>}
                     </button>
                   </div>
                   {selectedFile && (

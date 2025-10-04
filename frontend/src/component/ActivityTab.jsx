@@ -813,8 +813,20 @@ export default function ActivityTab({ onAssignmentCreated }) {
                             )}
                 </div>
                 <div className="flex gap-4 mt-8 justify-end">
-                    <button className="bg-blue-900 hover:bg-blue-950 text-white px-6 py-2 rounded font-poppins" onClick={handleSave}>Save Assignment</button>
-                    <button className="bg-gray-500 text-white px-6 py-2 rounded font-poppins" onClick={() => window.history.length > 1 ? window.history.back() : window.location.assign('/faculty_activities')}>Cancel</button>
+                    <button 
+                        className={`bg-blue-900 text-white px-6 py-2 rounded font-poppins ${loading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-blue-950'}`}
+                        onClick={async () => { if (!loading) { setLoading(true); try { await handleSave(); } finally { setLoading(false); } } }}
+                        disabled={loading}
+                    >
+                        {loading ? 'Saving…' : 'Save Assignment'}
+                    </button>
+                    <button 
+                        className="bg-gray-500 text-white px-6 py-2 rounded font-poppins"
+                        onClick={() => window.history.length > 1 ? window.history.back() : window.location.assign('/faculty_activities')}
+                        disabled={loading}
+                    >
+                        Cancel
+                    </button>
                 </div>
                 {/* Success confirmation modal */}
                 {showSuccess && (

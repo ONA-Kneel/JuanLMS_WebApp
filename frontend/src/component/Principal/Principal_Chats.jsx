@@ -84,6 +84,7 @@ export default function Principal_Chats() {
 
   // Add loading state for chat list
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   // Highlight chats with new/unread messages
   const [highlightedChats, setHighlightedChats] = useState(() => {
     try { return JSON.parse(localStorage.getItem('highlightedChats_principal') || '{}'); } catch { return {}; }
@@ -118,6 +119,7 @@ export default function Principal_Chats() {
   const socket = useRef(null);
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
+  const lastSendRef = useRef(0);
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -672,7 +674,9 @@ export default function Principal_Chats() {
   const handleSendMessage = async () => {
     if (!newMessage.trim() && !selectedFile) return;
     if (!selectedChat) return;
+    if (isSending) return;
 
+    setIsSending(true);
     if (isGroupChat) {
       // Send group message
       const formData = new FormData();
@@ -745,6 +749,8 @@ export default function Principal_Chats() {
         setSelectedFile(null);
       } catch (err) {
         console.error("Error sending group message:", err);
+      } finally {
+        setIsSending(false);
       }
     } else {
       // Send individual message
@@ -814,6 +820,8 @@ export default function Principal_Chats() {
         setSelectedFile(null);
       } catch (err) {
         console.error("Error sending message:", err);
+      } finally {
+        setIsSending(false);
       }
     }
   };
@@ -821,6 +829,10 @@ export default function Principal_Chats() {
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      if (isSending) return;
+      const now = Date.now();
+      if (now - (lastSendRef.current || 0) < 400) return;
+      lastSendRef.current = now;
       handleSendMessage();
     }
   };
@@ -1592,12 +1604,12 @@ export default function Principal_Chats() {
 
                   <button
                     onClick={handleSendMessage}
-                    disabled={!newMessage.trim() && !selectedFile}
+                    disabled={isSending || (!newMessage.trim() && !selectedFile)}
                     className={`px-4 py-2 rounded-lg text-sm ${
-                      newMessage.trim() || selectedFile ? "bg-blue-900 text-white" : "bg-gray-400 text-white cursor-not-allowed"
+                      (newMessage.trim() || selectedFile) && !isSending ? "bg-blue-900 text-white" : "bg-gray-400 text-white cursor-not-allowed"
                     }`}
                   >
-                    Send
+                    {isSending ? "Sending..." : "Send"}
                   </button>
                 </div>
               </>

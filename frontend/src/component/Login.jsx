@@ -46,6 +46,7 @@ export default function Login() {
     title: '',
     message: ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- EFFECT: Auto-login if credentials are stored in localStorage ---
   useEffect(() => {
@@ -111,7 +112,7 @@ export default function Login() {
             message: `Unknown role: ${role}. Please contact administrator.`
           });
         }
-      } catch (error) {
+      } catch {
         // Auto-login failed
         // Clear stored credentials if auto-login fails
         localStorage.removeItem('rememberedEmail');
@@ -244,7 +245,7 @@ export default function Login() {
   // --- HANDLER: Manual login form submission ---
   const handleLogin = async (e) => {
     e.preventDefault();
-    
+    if (isSubmitting) return;
     // Check if account is locked
     if (isLocked) {
       return;
@@ -254,6 +255,7 @@ export default function Login() {
     const password = e.target.elements[1].value;
   
     try {
+      setIsSubmitting(true);
       const response = await axios.post(
         `${API_BASE}/login`,
         { email, password },
@@ -311,14 +313,14 @@ export default function Login() {
         });
       }
   
-    } catch (error) {
+    } catch (err) {
       // Login failed
       
       // Handle archived account case first
       if (
-        error.response &&
-        error.response.data &&
-        error.response.data.message === 'Account is archived. Please contact admin.'
+        err.response &&
+        err.response.data &&
+        err.response.data.message === 'Account is archived. Please contact admin.'
       ) {
         setShowArchivedModal(true);
         return;
@@ -341,9 +343,9 @@ export default function Login() {
       let errorMessage = 'Invalid email or password.';
       let currentErrorType = '';
       
-      if (error.response) {
-        const status = error.response.status;
-        const data = error.response.data;
+      if (err.response) {
+        const status = err.response.status;
+        const data = err.response.data;
         // Custom error handling for email/password
         if (status === 401) {
           if (data.message === 'Invalid email') {
@@ -368,10 +370,10 @@ export default function Login() {
         } else {
           errorMessage = data.message || `Login failed (${status}).`;
         }
-      } else if (error.request) {
+      } else if (err.request) {
         errorMessage = 'Network error. Please check your connection and try again.';
       } else {
-        errorMessage = error.message || 'An unexpected error occurred.';
+        errorMessage = err.message || 'An unexpected error occurred.';
       }
       
       // Track error types and show combined message if both email and password have been wrong
@@ -393,6 +395,9 @@ export default function Login() {
         message: errorMessage
       });
     }
+    finally {
+      setIsSubmitting(false);
+    }
   };
   
   //heheh
@@ -411,7 +416,7 @@ export default function Login() {
               <input
                 type="text"
                 required
-                disabled={isLocked}
+                disabled={isLocked || isSubmitting}
                 inputMode="email"
                 autoComplete="email"
                 spellCheck="false"
@@ -426,7 +431,7 @@ export default function Login() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
-                  disabled={isLocked}
+                  disabled={isLocked || isSubmitting}
                   className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900 pr-12"
                   placeholder="********"
                 />
@@ -434,7 +439,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  disabled={isLocked}
+                  disabled={isLocked || isSubmitting}
                   className="absolute top-1/2 right-3 transform -translate-y-1/2 text-gray-600 hover:text-blue-700"
                 >
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -462,7 +467,7 @@ export default function Login() {
                   className="mr-2" 
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  disabled={isLocked}
+                  disabled={isLocked || isSubmitting}
                 />
                 Remember Me
               </label>
@@ -473,14 +478,14 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={isLocked}
+            disabled={isLocked || isSubmitting}
               className={`w-full p-3 rounded-t-lg transition font-poppinsr text-base ${
-                isLocked 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-blue-900 text-white hover:bg-blue-950'
+              isLocked || isSubmitting
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-blue-900 text-white hover:bg-blue-950'
               }`}
             >
-              {isLocked ? `Locked (${lockoutTime}s)` : 'Login'}
+            {isLocked ? `Locked (${lockoutTime}s)` : (isSubmitting ? 'Logging in...' : 'Login')}
             </button>
             {/* Register Link - directly below the button, no margin */}
             <div className="text-center text-sm">

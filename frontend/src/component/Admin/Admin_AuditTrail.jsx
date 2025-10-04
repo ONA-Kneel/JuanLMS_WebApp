@@ -519,27 +519,7 @@ export default function Admin_AuditTrail() {
               })}
             </p>
           </div>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={fetchAuditLogs}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-            >
-              Refresh
-            </button>
-            <button
-              onClick={handleExport}
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
-            >
-              Export to Excel
-            </button>
-            <button
-              onClick={handleExportPDF}
-              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-            >
-              Export to PDF
-            </button>
-            <ProfileMenu />
-          </div>
+          <ProfileMenu />
         </div>
 
         {/* Filters */}
@@ -563,6 +543,27 @@ export default function Admin_AuditTrail() {
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
+          <div className="flex items-center gap-4">
+            {/* <button
+              onClick={fetchAuditLogs}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            >
+              Refresh
+            </button> */}
+            <button
+              onClick={handleExport}
+              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+            >
+              Export to Excel
+            </button>
+            <button
+              onClick={handleExportPDF}
+              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+            >
+              Export to PDF
+            </button>
+            
+          </div>
         </div>
 
         {/* Audit Logs Table */}

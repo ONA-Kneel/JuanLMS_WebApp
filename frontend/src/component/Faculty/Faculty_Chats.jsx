@@ -89,6 +89,7 @@ export default function Faculty_Chats() {
 
   // Add loading state for chat list
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   // Highlight chats with new/unread messages
   const [highlightedChats, setHighlightedChats] = useState(() => {
     try { return JSON.parse(localStorage.getItem('highlightedChats_faculty') || '{}'); } catch { return {}; }
@@ -129,6 +130,7 @@ export default function Faculty_Chats() {
   const selectedChatRef = useRef(null);
   const isGroupChatRef = useRef(false);
   const usersRef = useRef([]);
+  const lastSendRef = useRef(0);
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -710,7 +712,9 @@ export default function Faculty_Chats() {
   const handleSendMessage = async () => {
     if (!newMessage.trim() && !selectedFile) return;
     if (!selectedChat) return;
+    if (isSending) return;
 
+    setIsSending(true);
     if (isGroupChat) {
       // Send group message
       const formData = new FormData();
@@ -769,6 +773,8 @@ export default function Faculty_Chats() {
         setSelectedFile(null);
       } catch (err) {
         console.error("Error sending group message:", err);
+      } finally {
+        setIsSending(false);
       }
     } else {
       // Send individual message
@@ -840,6 +846,8 @@ export default function Faculty_Chats() {
         setSelectedFile(null);
       } catch (err) {
         console.error("Error sending message:", err);
+      } finally {
+        setIsSending(false);
       }
     }
   };
@@ -896,6 +904,10 @@ export default function Faculty_Chats() {
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      if (isSending) return;
+      const now = Date.now();
+      if (now - (lastSendRef.current || 0) < 400) return;
+      lastSendRef.current = now;
       handleSendMessage();
     }
   };
@@ -1739,10 +1751,10 @@ export default function Faculty_Chats() {
                       )}
                       <button
                         onClick={handleSendMessage}
-                        disabled={!newMessage.trim() && !selectedFile}
+                        disabled={isSending || (!newMessage.trim() && !selectedFile)}
                         className="px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        Send
+                        {isSending ? 'Sending...' : 'Send'}
                       </button>
                     </div>
                   </div>

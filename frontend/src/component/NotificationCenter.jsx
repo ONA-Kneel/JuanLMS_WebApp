@@ -117,10 +117,16 @@ const NotificationCenter = ({
             </div>
             {unreadCount > 0 && (
               <button
-                onClick={onMarkAllAsRead}
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (isLoadingAnnouncements) return;
+                  setIsLoadingAnnouncements(true);
+                  try { await onMarkAllAsRead(); } finally { setIsLoadingAnnouncements(false); }
+                }}
+                disabled={isLoadingAnnouncements}
+                className={`text-sm font-medium ${isLoadingAnnouncements ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800'}`}
               >
-                Mark all as read
+                {isLoadingAnnouncements ? 'Marking…' : 'Mark all as read'}
               </button>
             )}
           </div>

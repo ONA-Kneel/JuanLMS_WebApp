@@ -67,8 +67,11 @@ const SessionExpiredModal = ({ isOpen, onClose }) => {
     navigate('/', { replace: true });
   };
 
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const handleLogoutNow = () => {
-    handleLogout();
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try { handleLogout(); } finally { setIsLoggingOut(false); }
   };
 
   if (!isOpen) return null;
@@ -114,9 +117,10 @@ const SessionExpiredModal = ({ isOpen, onClose }) => {
         <div className="flex flex-col gap-3">
           <button
             onClick={handleLogoutNow}
-            className="w-full bg-red-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-red-700 transition-colors focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            className={`w-full text-white py-3 px-4 rounded-lg font-semibold transition-colors focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${isLoggingOut ? 'bg-red-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}`}
+            disabled={isLoggingOut}
           >
-            Logout Now
+            {isLoggingOut ? 'Logging out…' : 'Logout Now'}
           </button>
           <button
             onClick={onClose}
