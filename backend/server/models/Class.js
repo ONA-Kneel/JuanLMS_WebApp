@@ -16,4 +16,11 @@ const classSchema = new mongoose.Schema({
   needsConfirmation: { type: Boolean, default: false } // Flag to indicate faculty needs to confirm
 });
 
+// Enforce uniqueness for auto-created classes within (faculty, subject, section, term, schoolYear)
+// Using a partial index to avoid affecting manually created classes
+classSchema.index(
+  { facultyID: 1, className: 1, section: 1, academicYear: 1, termName: 1 },
+  { unique: true, name: 'uniq_auto_class_faculty_subject_section_term_year', partialFilterExpression: { isAutoCreated: true } }
+);
+
 export default mongoose.model("Class", classSchema, "Classes"); 

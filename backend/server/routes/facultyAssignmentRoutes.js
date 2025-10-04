@@ -6,6 +6,10 @@ import Term from '../models/Term.js';
 import Class from '../models/Class.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 
+// Utility to escape user-provided strings for use in regex
+const escapeRegex = (str) => String(str || '')
+  .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // Test if StudentAssignment import is working
 console.log('[FACULTY-ASSIGNMENT] StudentAssignment model loaded:', !!StudentAssignment);
 
@@ -21,26 +25,33 @@ const autoCreateClass = async (facultyAssignment) => {
       termName: facultyAssignment.termName
     });
     
+    // Normalize/prepare values for matching and saving
+    const facultyIdStr = String(facultyAssignment.facultyId || '').trim();
+    const subjectName = String(facultyAssignment.subjectName || '').trim();
+    const sectionName = String(facultyAssignment.sectionName || '').trim();
+    const academicYear = String(facultyAssignment.schoolYear || '').trim();
+    const termName = String(facultyAssignment.termName || '').trim();
+
     // Generate unique classID
     const randomNum = Math.floor(100 + Math.random() * 900);
     const classID = `C${randomNum}`;
 
     // Generate unique class code with timestamp to ensure uniqueness
-    const subjectCode = facultyAssignment.subjectName.substring(0, 3).toUpperCase();
-    const sectionCode = facultyAssignment.sectionName.substring(0, 2).toUpperCase();
-    const yearCode = facultyAssignment.schoolYear.split('-')[0].slice(-2);
+    const subjectCode = subjectName.substring(0, 3).toUpperCase();
+    const sectionCode = sectionName.substring(0, 2).toUpperCase();
+    const yearCode = academicYear.split('-')[0].slice(-2);
     const timestamp = Date.now().toString().slice(-4); // Last 4 digits of timestamp
     const classCode = `${subjectCode}-${sectionCode}-${yearCode}-${timestamp}`;
     
     console.log(`[AUTO-CREATE-CLASS] Generated classID: ${classID}, classCode: ${classCode}`);
     
-    // Check if class already exists for this faculty assignment
+    // Check if class already exists for this faculty assignment (same term & schoolYear)
     const existingClass = await Class.findOne({
-      facultyID: facultyAssignment.facultyId,
-      className: facultyAssignment.subjectName,
-      section: facultyAssignment.sectionName,
-      academicYear: facultyAssignment.schoolYear,
-      termName: facultyAssignment.termName
+      facultyID: facultyIdStr,
+      className: { $regex: new RegExp(`^${escapeRegex(subjectName)}$`, 'i') },
+      section: { $regex: new RegExp(`^${escapeRegex(sectionName)}$`, 'i') },
+      academicYear: academicYear,
+      termName: termName
     });
     
     if (existingClass) {
@@ -49,14 +60,14 @@ const autoCreateClass = async (facultyAssignment) => {
     }
     
           // Get students assigned to this section for this term (include both active and pending)
-          console.log(`[AUTO-CREATE-CLASS] Looking for students in section: ${facultyAssignment.sectionName}, term: ${facultyAssignment.termId}, year: ${facultyAssignment.schoolYear}`);
+          console.log(`[AUTO-CREATE-CLASS] Looking for students in section: ${sectionName}, term: ${facultyAssignment.termId}, year: ${academicYear}`);
 
           // Test StudentAssignment query
           console.log('[AUTO-CREATE-CLASS] Testing StudentAssignment query...');
           console.log('[AUTO-CREATE-CLASS] Query parameters:', {
-            sectionName: facultyAssignment.sectionName,
+            sectionName: sectionName,
             termId: facultyAssignment.termId,
-            schoolYear: facultyAssignment.schoolYear,
+            schoolYear: academicYear,
             status: { $in: ['active', 'pending'] }
           });
 
@@ -78,9 +89,9 @@ const autoCreateClass = async (facultyAssignment) => {
     } else {
       console.log('[AUTO-CREATE-CLASS] ❌ No student assignments found! This means no students are assigned to this section.');
       console.log('[AUTO-CREATE-CLASS] Query was looking for:');
-      console.log(`  - Section: ${facultyAssignment.sectionName}`);
+      console.log(`  - Section: ${sectionName}`);
       console.log(`  - Term ID: ${facultyAssignment.termId}`);
-      console.log(`  - School Year: ${facultyAssignment.schoolYear}`);
+      console.log(`  - School Year: ${academicYear}`);
       console.log(`  - Status: active or pending`);
     }
     
@@ -244,14 +255,14 @@ const autoCreateClass = async (facultyAssignment) => {
     // Create the class
     const classData = {
       classID,
-      className: facultyAssignment.subjectName,
+      className: subjectName,
       classCode,
-      classDesc: `${facultyAssignment.subjectName} - ${facultyAssignment.sectionName} (${facultyAssignment.gradeLevel})`,
+      classDesc: `${subjectName} - ${sectionName} (${facultyAssignment.gradeLevel})`,
       members: uniqueStudentIds,
-      facultyID: facultyAssignment.facultyId,
-      section: facultyAssignment.sectionName,
-      academicYear: facultyAssignment.schoolYear,
-      termName: facultyAssignment.termName,
+      facultyID: facultyIdStr,
+      section: sectionName,
+      academicYear: academicYear,
+      termName: termName,
       isArchived: false,
       isAutoCreated: true, // Flag to indicate this was auto-created
       needsConfirmation: true // Flag to indicate faculty needs to confirm
