@@ -96,13 +96,15 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'gradeLevel is required' });
     }
     
+    // Validate required fields - schoolID is always required
+    if (!studentSchoolID) {
+      return res.status(400).json({ message: 'Student School ID is required for all assignments' });
+    }
+    
     // Validate required fields for manual assignments
     if (!studentId) {
       if (!enrollmentNo || !enrollmentDate) {
         return res.status(400).json({ message: 'Enrollment number and enrollment date are required for manual assignments' });
-      }
-      if (!studentSchoolID) {
-        return res.status(400).json({ message: 'Student School ID is required for manual assignments' });
       }
       if (!firstName || !lastName) {
         return res.status(400).json({ message: 'First name and last name are required for manual assignments' });
@@ -119,7 +121,9 @@ router.post('/', authenticateToken, async (req, res) => {
       console.log('Warning: Manual assignment without proper name, using school ID as fallback');
     }
     
-    if (!actualStudentId && fullStudentName) {
+    // Only try to link by NAME when no schoolID is provided. If a schoolID is present,
+    // we keep this as a manual entry to avoid mis-linking to a different user with a similar name.
+    if (!actualStudentId && fullStudentName && !studentSchoolID) {
       console.log('Looking for student by name:', fullStudentName);
       let student = await User.findOne({
         $or: [
@@ -333,14 +337,16 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         continue;
       }
       
+      // Validate required fields - schoolID is always required
+      if (!studentSchoolID) {
+        errors.push({ assignment: assignmentData, message: 'Student School ID is required for all assignments' });
+        continue;
+      }
+      
       // Validate required fields for manual assignments in bulk
       if (!studentId) {
         if (!assignmentData.enrollmentNo || !assignmentData.enrollmentDate) {
           errors.push({ assignment: assignmentData, message: 'Enrollment number and enrollment date are required for manual assignments' });
-          continue;
-        }
-        if (!studentSchoolID) {
-          errors.push({ assignment: assignmentData, message: 'Student School ID is required for manual assignments' });
           continue;
         }
         if (!firstName || !lastName) {
@@ -353,7 +359,8 @@ router.post('/bulk', authenticateToken, async (req, res) => {
       // Construct studentName from firstName and lastName if not provided directly
       const fullStudentName = studentName || (firstName && lastName ? `${firstName} ${lastName}` : null);
       
-      if (!actualStudentId && fullStudentName) {
+    // Same rule for bulk: never auto-link by name when a schoolID is present
+    if (!actualStudentId && fullStudentName && !studentSchoolID) {
         console.log('Looking for student by name:', fullStudentName);
         let student = await User.findOne({
           $or: [

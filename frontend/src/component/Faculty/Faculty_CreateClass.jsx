@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
@@ -21,6 +21,34 @@ export default function FacultyCreateClass() {
   const [confirmingClass, setConfirmingClass] = useState(null);
   const [classImage, setClassImage] = useState(null);
   const [classDesc, setClassDesc] = useState("");
+
+  // Fetch pending classes function
+  const fetchPendingClasses = useCallback(async () => {
+    if (!academicYear || !currentTerm) return;
+    
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      
+      // Fetch pending confirmation classes
+      const pendingRes = await fetch(`${API_BASE}/api/classes/pending-confirmation`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (pendingRes.ok) {
+        const pendingData = await pendingRes.json();
+        setPendingClasses(pendingData);
+      } else {
+        console.error('Failed to fetch pending classes');
+        setPendingClasses([]);
+      }
+    } catch (error) {
+      console.error('Error fetching pending classes:', error);
+      setPendingClasses([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [academicYear, currentTerm]);
 
   // Fetch academic year and term first
   useEffect(() => {
@@ -68,34 +96,8 @@ export default function FacultyCreateClass() {
 
   // Fetch pending confirmation classes when both academic year and term are available
   useEffect(() => {
-    async function fetchPendingClasses() {
-      if (!academicYear || !currentTerm) return;
-      
-      try {
-        setLoading(true);
-        const token = localStorage.getItem('token');
-        
-        // Fetch pending confirmation classes
-        const pendingRes = await fetch(`${API_BASE}/api/classes/pending-confirmation`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (pendingRes.ok) {
-          const pendingData = await pendingRes.json();
-          setPendingClasses(pendingData);
-        } else {
-          console.error('Failed to fetch pending classes');
-          setPendingClasses([]);
-        }
-      } catch (error) {
-        console.error('Error fetching pending classes:', error);
-        setPendingClasses([]);
-      } finally {
-        setLoading(false);
-      }
-    }
     fetchPendingClasses();
-  }, [academicYear, currentTerm]);
+  }, [academicYear, currentTerm, fetchPendingClasses]);
 
   // Handle class confirmation
   const handleConfirmClass = async (classData) => {
@@ -214,6 +216,105 @@ export default function FacultyCreateClass() {
                 <strong>Classes have been automatically created for you!</strong> Please review and confirm each class below. 
                 You can update the description and add a class image if needed.
               </p>
+            </div>
+
+            {/* Fix and Sync Buttons */}
+            <div className="mb-6 flex gap-4">
+              <button
+                className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center gap-2"
+                onClick={async () => {
+                  try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch(`${API_BASE}/fix-assignment-schoolids`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                      }
+                    });
+                    
+                    if (response.ok) {
+                      const result = await response.json();
+                      setValidationModal({
+                        isOpen: true,
+                        type: 'success',
+                        title: 'SchoolIDs Fixed',
+                        message: `Fixed ${result.fixedCount} student assignments with incorrect schoolIDs.`
+                      });
+                    } else {
+                      const error = await response.json();
+                      setValidationModal({
+                        isOpen: true,
+                        type: 'error',
+                        title: 'Fix Failed',
+                        message: error.message || 'Failed to fix schoolIDs. Please try again.'
+                      });
+                    }
+                  } catch (error) {
+                    console.error('Fix error:', error);
+                    setValidationModal({
+                      isOpen: true,
+                      type: 'error',
+                      title: 'Network Error',
+                      message: 'Failed to fix schoolIDs. Please check your connection and try again.'
+                    });
+                  }
+                }}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 011-1h1a2 2 0 100-4H7a1 1 0 01-1-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
+                </svg>
+                Fix SchoolIDs
+              </button>
+              
+              <button
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center gap-2"
+                onClick={async () => {
+                  try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch(`${API_BASE}/sync-students-to-auto-classes`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                      }
+                    });
+                    
+                    if (response.ok) {
+                      const result = await response.json();
+                      setValidationModal({
+                        isOpen: true,
+                        type: 'success',
+                        title: 'Sync Completed',
+                        message: `Successfully added ${result.totalStudentsAdded} students to ${result.classesProcessed} classes.`
+                      });
+                      // Refresh the pending classes to show updated student counts
+                      fetchPendingClasses();
+                    } else {
+                      const error = await response.json();
+                      setValidationModal({
+                        isOpen: true,
+                        type: 'error',
+                        title: 'Sync Failed',
+                        message: error.message || 'Failed to sync students. Please try again.'
+                      });
+                    }
+                  } catch (error) {
+                    console.error('Sync error:', error);
+                    setValidationModal({
+                      isOpen: true,
+                      type: 'error',
+                      title: 'Network Error',
+                      message: 'Failed to sync students. Please check your connection and try again.'
+                    });
+                  }
+                }}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Sync Students to Classes
+              </button>
             </div>
 
             <div className="grid gap-6">

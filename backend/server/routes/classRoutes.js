@@ -282,16 +282,37 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
         console.log('[CREATE-CLASS] ObjectIds:', objectIds);
         console.log('[CREATE-CLASS] Custom IDs:', customIds);
         
-        const validStudents = await User.find({
-          role: 'students',
-          $or: [
-            // Only include ObjectId query if we have valid ObjectIds
-            ...(objectIds.length > 0 ? [{ _id: { $in: objectIds } }] : []),
-            // Include custom ID queries
-            ...(customIds.length > 0 ? [{ userID: { $in: customIds } }] : []),
-            ...(customIds.length > 0 ? [{ schoolID: { $in: customIds } }] : [])
-          ]
-        }).select('_id userID schoolID');
+        // For ObjectIds and userIDs, we can query directly
+        let validStudents = [];
+        
+        if (objectIds.length > 0 || customIds.filter(id => !id.includes('-')).length > 0) {
+          const directQuery = await User.find({
+            role: 'students',
+            $or: [
+              // Only include ObjectId query if we have valid ObjectIds
+              ...(objectIds.length > 0 ? [{ _id: { $in: objectIds } }] : []),
+              // Include userID queries (non-schoolID format)
+              ...(customIds.filter(id => !id.includes('-')).length > 0 ? [{ userID: { $in: customIds.filter(id => !id.includes('-')) } }] : [])
+            ]
+          }).select('_id userID schoolID');
+          validStudents.push(...directQuery);
+        }
+        
+        // For schoolIDs (format: XX-XXXXX), we need to fetch all students and filter by decrypted schoolID
+        const schoolIDCustomIds = customIds.filter(id => id.includes('-')); // schoolID format: 24-09015
+        if (schoolIDCustomIds.length > 0) {
+          console.log('[CREATE-CLASS] Searching for students by schoolID:', schoolIDCustomIds);
+          const allStudents = await User.find({ role: 'students' }).select('_id userID schoolID');
+          
+          // Filter by decrypted schoolID
+          const matchedBySchoolID = allStudents.filter(student => {
+            const decryptedSchoolID = student.getDecryptedSchoolID ? student.getDecryptedSchoolID() : student.schoolID;
+            return schoolIDCustomIds.includes(decryptedSchoolID);
+          });
+          
+          console.log('[CREATE-CLASS] Found students by decrypted schoolID:', matchedBySchoolID.length);
+          validStudents.push(...matchedBySchoolID);
+        }
         
         // Filter to only include students who are active AND approved in the current term
         const activeStudentIds = validStudents.map(student => student._id);
@@ -303,19 +324,34 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
         }).select('studentId isApproved');
 
         // Only include students who are both active and approved
-        const approvedStudentIdsSet = new Set(
-          studentAssignments
-            .filter(assignment => assignment.isApproved === true)
-            .map(assignment => String(assignment.studentId))
-        );
+        const approvedAssignments = studentAssignments.filter(assignment => assignment.isApproved === true);
         
+        // Map studentId -> schoolID coming from StudentAssignment (source of truth)
+        const studentIdToSchoolId = new Map();
+        approvedAssignments.forEach(assignment => {
+          if (assignment.studentId) {
+            studentIdToSchoolId.set(String(assignment.studentId), assignment.studentSchoolID);
+          }
+        });
+        
+        // Keep only students whose _id is approved, then map to SCHOOL IDs
         const filteredActiveStudents = validStudents.filter(student => 
-          approvedStudentIdsSet.has(String(student._id))
+          studentIdToSchoolId.has(String(student._id))
         );
         
-        const allowed = filteredActiveStudents.map(u => String(u._id));
-        classData.members = allowed;
-        console.log('[CREATE-CLASS] Filtered/normalized members (approved active students only):', classData.members.length);
+        // Resolve final member identifiers strictly as schoolIDs (fallback to decrypted schoolID or userID if needed)
+        const allowed = filteredActiveStudents
+          .filter(u => !(u.userID && String(u.userID).startsWith('TEMP-')))
+          .map(u => {
+          const fromAssignments = studentIdToSchoolId.get(String(u._id));
+          if (fromAssignments) return String(fromAssignments);
+          const decryptedSchoolID = u.getDecryptedSchoolID ? u.getDecryptedSchoolID() : u.schoolID;
+          return String(decryptedSchoolID || u.userID);
+        });
+        
+        // Ensure uniqueness
+        classData.members = Array.from(new Set(allowed.filter(Boolean)));
+        console.log('[CREATE-CLASS] Members set from StudentAssignment schoolIDs:', classData.members.length);
       } else {
         classData.members = [];
       }
@@ -459,17 +495,36 @@ router.get('/:classID/members', async (req, res) => {
       console.log(`[GET-MEMBERS] ObjectIds:`, objectIds);
       console.log(`[GET-MEMBERS] Custom IDs:`, customIds);
       
-      students = await User.find({ 
-        role: 'students',
-        $or: [
-          // Only include ObjectId query if we have valid ObjectIds
-          ...(objectIds.length > 0 ? [{ _id: { $in: objectIds } }] : []),
-          // Include custom ID queries
-          ...(customIds.length > 0 ? [{ userID: { $in: customIds } }] : []),
-          ...(customIds.length > 0 ? [{ schoolID: { $in: customIds } }] : [])
-        ],
-        isArchived: { $ne: true } 
-      });
+      // For ObjectIds and userIDs, we can query directly
+      if (objectIds.length > 0 || customIds.filter(id => !id.includes('-')).length > 0) {
+        const directQuery = await User.find({ 
+          role: 'students',
+          $or: [
+            // Only include ObjectId query if we have valid ObjectIds
+            ...(objectIds.length > 0 ? [{ _id: { $in: objectIds } }] : []),
+            // Include userID queries (non-schoolID format)
+            ...(customIds.filter(id => !id.includes('-')).length > 0 ? [{ userID: { $in: customIds.filter(id => !id.includes('-')) } }] : [])
+          ],
+          isArchived: { $ne: true } 
+        });
+        students.push(...directQuery);
+      }
+      
+      // For schoolIDs (format: XX-XXXXX), we need to fetch all students and filter by decrypted schoolID
+      const schoolIDCustomIds = customIds.filter(id => id.includes('-')); // schoolID format: 24-09015
+      if (schoolIDCustomIds.length > 0) {
+        console.log('[GET-MEMBERS] Searching for students by schoolID:', schoolIDCustomIds);
+        const allStudents = await User.find({ role: 'students', isArchived: { $ne: true } });
+        
+        // Filter by decrypted schoolID
+        const matchedBySchoolID = allStudents.filter(student => {
+          const decryptedSchoolID = student.getDecryptedSchoolID ? student.getDecryptedSchoolID() : student.schoolID;
+          return schoolIDCustomIds.includes(decryptedSchoolID);
+        });
+        
+        console.log('[GET-MEMBERS] Found students by decrypted schoolID:', matchedBySchoolID.length);
+        students.push(...matchedBySchoolID);
+      }
       
       console.log(`[GET-MEMBERS] Found ${students.length} students for class ${classID}`);
     }
@@ -649,16 +704,37 @@ router.patch('/:classID/members', authenticateToken, async (req, res) => {
       console.log(`[PATCH-MEMBERS] ObjectIds:`, objectIds);
       console.log(`[PATCH-MEMBERS] Custom IDs:`, customIds);
       
-      const validStudents = await User.find({
-        role: 'students',
-        $or: [
-          // Only include ObjectId query if we have valid ObjectIds
-          ...(objectIds.length > 0 ? [{ _id: { $in: objectIds } }] : []),
-          // Include custom ID queries
-          ...(customIds.length > 0 ? [{ userID: { $in: customIds } }] : []),
-          ...(customIds.length > 0 ? [{ schoolID: { $in: customIds } }] : [])
-        ]
-      }).select('_id userID schoolID');
+      // For ObjectIds and userIDs, we can query directly
+      let validStudents = [];
+      
+      if (objectIds.length > 0 || customIds.filter(id => !id.includes('-')).length > 0) {
+        const directQuery = await User.find({
+          role: 'students',
+          $or: [
+            // Only include ObjectId query if we have valid ObjectIds
+            ...(objectIds.length > 0 ? [{ _id: { $in: objectIds } }] : []),
+            // Include userID queries (non-schoolID format)
+            ...(customIds.filter(id => !id.includes('-')).length > 0 ? [{ userID: { $in: customIds.filter(id => !id.includes('-')) } }] : [])
+          ]
+        }).select('_id userID schoolID');
+        validStudents.push(...directQuery);
+      }
+      
+      // For schoolIDs (format: XX-XXXXX), we need to fetch all students and filter by decrypted schoolID
+      const schoolIDCustomIds = customIds.filter(id => id.includes('-')); // schoolID format: 24-09015
+      if (schoolIDCustomIds.length > 0) {
+        console.log('[CREATE-CLASS] Searching for students by schoolID:', schoolIDCustomIds);
+        const allStudents = await User.find({ role: 'students' }).select('_id userID schoolID');
+        
+        // Filter by decrypted schoolID
+        const matchedBySchoolID = allStudents.filter(student => {
+          const decryptedSchoolID = student.getDecryptedSchoolID ? student.getDecryptedSchoolID() : student.schoolID;
+          return schoolIDCustomIds.includes(decryptedSchoolID);
+        });
+        
+        console.log('[CREATE-CLASS] Found students by decrypted schoolID:', matchedBySchoolID.length);
+        validStudents.push(...matchedBySchoolID);
+      }
       
       console.log(`[PATCH-MEMBERS] Found ${validStudents.length} valid students`);
       
@@ -758,15 +834,28 @@ router.get('/:classID/members-with-status', authenticateToken, async (req, res) 
       let registrationStatus = 'pending';
       
       if (assignment.studentId) {
-        // Student is properly linked to User record
+        // Student is linked to a User record. Prefer the SCHOOL ID for display, never show TEMP userID.
+        const linkedUser = assignment.studentId;
+        const linkedSchoolID = assignment.studentSchoolID || (linkedUser.getDecryptedSchoolID ? linkedUser.getDecryptedSchoolID() : linkedUser.schoolID);
+
+        // If the linked user looks temporary, try to find the real system user by schoolID for better display email
+        let displayEmail = linkedUser.getDecryptedEmail ? linkedUser.getDecryptedEmail() : linkedUser.email;
+        if (linkedUser.isTemporary || (linkedUser.userID && String(linkedUser.userID).startsWith('TEMP-'))) {
+          const realUser = await User.findOne({ role: 'students', schoolID: linkedSchoolID, isArchived: { $ne: true } });
+          if (realUser) {
+            displayEmail = realUser.getDecryptedEmail ? realUser.getDecryptedEmail() : realUser.email;
+          }
+        }
+
         studentData = {
-          _id: assignment.studentId._id,
-          userID: assignment.studentId.userID,
-          firstname: assignment.studentId.firstname,
-          lastname: assignment.studentId.lastname,
-          email: assignment.studentId.getDecryptedEmail ? assignment.studentId.getDecryptedEmail() : assignment.studentId.email,
-          schoolID: assignment.studentId.getDecryptedSchoolID ? assignment.studentId.getDecryptedSchoolID() : assignment.studentId.schoolID,
-          role: assignment.studentId.role
+          _id: linkedUser._id,
+          // Use schoolID as the visible ID to avoid TEMP IDs
+          userID: linkedSchoolID || linkedUser.userID,
+          firstname: linkedUser.firstname,
+          lastname: linkedUser.lastname,
+          email: displayEmail,
+          schoolID: linkedSchoolID,
+          role: linkedUser.role
         };
         // Use the actual assignment status from StudentAssignment record
         // Only show as 'active' if student is registered AND has active assignment
@@ -1233,15 +1322,34 @@ router.get('/:classID/analyze-members', authenticateToken, async (req, res) => {
       console.log(`[ANALYZE-MEMBERS] ObjectIds:`, objectIds);
       console.log(`[ANALYZE-MEMBERS] Custom IDs:`, customIds);
       
-      students = await User.find({ 
-        $or: [
-          // Only include ObjectId query if we have valid ObjectIds
-          ...(objectIds.length > 0 ? [{ _id: { $in: objectIds } }] : []),
-          // Include custom ID queries
-          ...(customIds.length > 0 ? [{ userID: { $in: customIds } }] : []),
-          ...(customIds.length > 0 ? [{ schoolID: { $in: customIds } }] : [])
-        ]
-      });
+      // For ObjectIds and userIDs, we can query directly
+      if (objectIds.length > 0 || customIds.filter(id => !id.includes('-')).length > 0) {
+        const directQuery = await User.find({ 
+          $or: [
+            // Only include ObjectId query if we have valid ObjectIds
+            ...(objectIds.length > 0 ? [{ _id: { $in: objectIds } }] : []),
+            // Include userID queries (non-schoolID format)
+            ...(customIds.filter(id => !id.includes('-')).length > 0 ? [{ userID: { $in: customIds.filter(id => !id.includes('-')) } }] : [])
+          ]
+        });
+        students.push(...directQuery);
+      }
+      
+      // For schoolIDs (format: XX-XXXXX), we need to fetch all students and filter by decrypted schoolID
+      const schoolIDCustomIds = customIds.filter(id => id.includes('-')); // schoolID format: 24-09015
+      if (schoolIDCustomIds.length > 0) {
+        console.log('[ANALYZE-MEMBERS] Searching for students by schoolID:', schoolIDCustomIds);
+        const allStudents = await User.find({ role: 'students' });
+        
+        // Filter by decrypted schoolID
+        const matchedBySchoolID = allStudents.filter(student => {
+          const decryptedSchoolID = student.getDecryptedSchoolID ? student.getDecryptedSchoolID() : student.schoolID;
+          return schoolIDCustomIds.includes(decryptedSchoolID);
+        });
+        
+        console.log('[ANALYZE-MEMBERS] Found students by decrypted schoolID:', matchedBySchoolID.length);
+        students.push(...matchedBySchoolID);
+      }
     }
     
     // Check for conflicts

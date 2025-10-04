@@ -3133,7 +3133,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                 {s.registrationStatus === 'active' ? '✅ Active' : '⏳ Pending'}
                               </span>
                             </div>
-                            <div className="text-sm text-gray-600">{s.email}</div>
                             <div className="text-sm text-blue-600 font-medium">ID: {s.schoolID || s.userID || 'N/A'}</div>
                           </div>
                         </div>

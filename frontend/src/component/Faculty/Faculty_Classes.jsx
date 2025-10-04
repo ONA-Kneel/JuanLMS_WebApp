@@ -151,6 +151,7 @@ export default function Faculty_Classes() {
           <span className="font-bold text-xl text-[#222]">Confirm Classes</span>
         </div>
 
+
         {/* Faculty's Classes */}
         <h3 className="text-2xl font-semibold mb-4">Your Classes</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">

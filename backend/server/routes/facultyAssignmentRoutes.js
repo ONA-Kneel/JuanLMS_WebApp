@@ -108,28 +108,47 @@ const autoCreateClass = async (facultyAssignment) => {
       // Find User records by schoolID
       const usersBySchoolId = await User.find({
         role: 'students',
-        schoolID: { $in: studentSchoolIds }
+        schoolID: { $in: studentSchoolIds },
+        isTemporary: { $ne: true },
+        userID: { $not: /^TEMP-/ }
       });
       
       console.log(`[AUTO-CREATE-CLASS] Found ${usersBySchoolId.length} User records for students by schoolID`);
       
-      // Add these user IDs to the final list
-      const schoolIdUserIds = usersBySchoolId.map(user => user._id);
+      // Add schoolIDs to the final list instead of ObjectIds - decrypt schoolID first
+      const schoolIdUserIds = usersBySchoolId.map(user => {
+        const schoolID = user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID;
+        return schoolID || user.userID;
+      });
       finalStudentIds.push(...schoolIdUserIds);
       
       // Debug: Show what users were found by schoolID
       if (usersBySchoolId.length > 0) {
         console.log('[AUTO-CREATE-CLASS] Matched users by schoolID:');
         usersBySchoolId.forEach(user => {
-          console.log(`  - ${user.userID} (${user.schoolID}): ${user.firstname} ${user.lastname}`);
+          const schoolID = user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID;
+          console.log(`  - ${user.userID} (${schoolID}): ${user.firstname} ${user.lastname}`);
         });
       }
     }
     
-    // Also add students found by ObjectId (fallback)
+    // Also add students found by ObjectId (fallback) - convert to schoolIDs
     if (studentIds.length > 0) {
-      console.log(`[AUTO-CREATE-CLASS] Adding ${studentIds.length} students found by ObjectId`);
-      finalStudentIds.push(...studentIds);
+      console.log(`[AUTO-CREATE-CLASS] Converting ${studentIds.length} ObjectIds to schoolIDs`);
+      
+      // Find users by ObjectId and get their schoolIDs
+      const usersById = await User.find({
+        _id: { $in: studentIds },
+        role: 'students',
+        isTemporary: { $ne: true },
+        userID: { $not: /^TEMP-/ }
+      });
+      
+      const schoolIdsFromObjectIds = usersById.map(user => {
+        const schoolID = user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID;
+        return schoolID || user.userID;
+      });
+      finalStudentIds.push(...schoolIdsFromObjectIds);
     }
     
     // Handle students found by name (last resort)
@@ -139,6 +158,8 @@ const autoCreateClass = async (facultyAssignment) => {
       // Find User records for these students by name (more flexible matching)
       const usersByName = await User.find({
         role: 'students',
+        isTemporary: { $ne: true },
+        userID: { $not: /^TEMP-/ },
         $or: studentsByName.flatMap(name => {
           const nameParts = name.toLowerCase().split(' ').filter(part => part.length > 0);
           const firstName = nameParts[0];
@@ -186,8 +207,13 @@ const autoCreateClass = async (facultyAssignment) => {
         });
       }
       
-      // Add these user IDs to the final list
-      const additionalStudentIds = usersByName.map(user => user._id);
+      // Add schoolIDs to the final list instead of ObjectIds - decrypt schoolID first
+      const additionalStudentIds = usersByName
+        .filter(user => !(user.userID && String(user.userID).startsWith('TEMP-')))
+        .map(user => {
+        const schoolID = user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID;
+        return schoolID || user.userID;
+      });
       finalStudentIds.push(...additionalStudentIds);
       
       // For students that couldn't be matched, create temporary entries
@@ -202,36 +228,17 @@ const autoCreateClass = async (facultyAssignment) => {
       );
       
       if (unmatchedStudents.length > 0) {
-        console.log(`[AUTO-CREATE-CLASS] Creating temporary entries for ${unmatchedStudents.length} unmatched students:`, unmatchedStudents);
-        
-        // Create temporary User records for unmatched students
-        const tempUsers = await Promise.all(unmatchedStudents.map(async (name, index) => {
-          const nameParts = name.split(' ');
-          const firstName = nameParts[0] || 'Student';
-          const lastName = nameParts.slice(1).join(' ') || 'Unknown';
-          
-          const tempUser = new User({
-            userID: `TEMP-${Date.now()}-${index}`,
-            firstname: firstName,
-            lastname: lastName,
-            email: `temp.${firstName.toLowerCase()}.${lastName.toLowerCase().replace(/\s+/g, '')}@temp.com`,
-            contactNo: '09123456789', // Valid 11-digit contact number
-            role: 'students',
-            isTemporary: true
-          });
-          
-          return await tempUser.save();
-        }));
-        
-        const tempUserIds = tempUsers.map(user => user._id);
-        finalStudentIds.push(...tempUserIds);
-        
-        console.log(`[AUTO-CREATE-CLASS] Created ${tempUsers.length} temporary user records`);
+        console.log(`[AUTO-CREATE-CLASS] ⚠️ Found ${unmatchedStudents.length} unmatched students - these will be excluded from class creation:`, unmatchedStudents);
+        console.log(`[AUTO-CREATE-CLASS] ⚠️ Please ensure all students have proper schoolID assignments before creating classes`);
       }
     }
     
     // Remove duplicate student IDs
-    const uniqueStudentIds = [...new Set(finalStudentIds.map(id => String(id)))];
+    // Ensure no TEMP IDs leak through
+    const uniqueStudentIds = [...new Set(finalStudentIds
+      .map(id => String(id))
+      .filter(id => !id.startsWith('TEMP-'))
+    )];
     console.log(`[AUTO-CREATE-CLASS] Found ${finalStudentIds.length} students, ${uniqueStudentIds.length} unique students for section ${facultyAssignment.sectionName}`);
     
     // Create the class

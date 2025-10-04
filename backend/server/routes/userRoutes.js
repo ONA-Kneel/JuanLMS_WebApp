@@ -556,6 +556,239 @@ userRoutes.post('/fix-missing-schoolids', authenticateToken, async (req, res) =>
   }
 });
 
+// Endpoint to fix student assignments with incorrect schoolIDs
+userRoutes.post('/fix-assignment-schoolids', authenticateToken, async (req, res) => {
+  try {
+    console.log('[FIX-ASSIGNMENT-SCHOOLIDS] Starting to fix student assignments with incorrect schoolIDs...');
+    
+    // Find all student assignments that have a linked studentId but wrong studentSchoolID
+    const assignmentsToFix = await StudentAssignment.find({
+      studentId: { $exists: true, $ne: null },
+      $or: [
+        { studentSchoolID: { $regex: /^TEMP-/ } }, // TEMP IDs
+        { studentSchoolID: { $exists: false } },
+        { studentSchoolID: null },
+        { studentSchoolID: '' }
+      ]
+    }).populate('studentId');
+    
+    console.log(`[FIX-ASSIGNMENT-SCHOOLIDS] Found ${assignmentsToFix.length} assignments to fix`);
+    
+    let fixedCount = 0;
+    const results = [];
+    
+    for (const assignment of assignmentsToFix) {
+      if (assignment.studentId) {
+        const student = assignment.studentId;
+        const correctSchoolID = student.schoolID || student.userID;
+        
+        if (correctSchoolID && correctSchoolID !== assignment.studentSchoolID) {
+          try {
+            await StudentAssignment.findByIdAndUpdate(assignment._id, {
+              studentSchoolID: correctSchoolID
+            });
+            
+            fixedCount++;
+            results.push({
+              assignmentId: assignment._id,
+              studentName: assignment.studentName,
+              oldSchoolID: assignment.studentSchoolID,
+              newSchoolID: correctSchoolID,
+              studentUserID: student.userID
+            });
+            
+            console.log(`[FIX-ASSIGNMENT-SCHOOLIDS] ✅ Fixed assignment for ${assignment.studentName}: ${assignment.studentSchoolID} -> ${correctSchoolID}`);
+          } catch (error) {
+            console.error(`[FIX-ASSIGNMENT-SCHOOLIDS] ❌ Error fixing assignment ${assignment._id}:`, error.message);
+          }
+        }
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Fixed ${fixedCount} student assignments with incorrect schoolIDs`,
+      fixedCount: fixedCount,
+      totalFound: assignmentsToFix.length,
+      results: results
+    });
+    
+  } catch (error) {
+    console.error('[FIX-ASSIGNMENT-SCHOOLIDS] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fix assignment schoolIDs',
+      error: error.message
+    });
+  }
+});
+
+// Endpoint to sync students to auto-created classes
+userRoutes.post('/sync-students-to-auto-classes', authenticateToken, async (req, res) => {
+  try {
+    console.log('[SYNC-AUTO-CLASSES] Starting to sync students to auto-created classes...');
+    
+    // Find all auto-created classes that need confirmation
+    const autoCreatedClasses = await Class.find({
+      isAutoCreated: true,
+      needsConfirmation: true,
+      isArchived: { $ne: true }
+    });
+    
+    console.log(`[SYNC-AUTO-CLASSES] Found ${autoCreatedClasses.length} auto-created classes`);
+    
+    let totalStudentsAdded = 0;
+    const results = [];
+    
+    for (const classDoc of autoCreatedClasses) {
+      console.log(`[SYNC-AUTO-CLASSES] Processing class: ${classDoc.className} (${classDoc.classID})`);
+      console.log(`[SYNC-AUTO-CLASSES] Section: ${classDoc.section}, Term: ${classDoc.termName}, Year: ${classDoc.academicYear}`);
+      
+      // Find student assignments for this section/term/year (include active and pending)
+      const studentAssignments = await StudentAssignment.find({
+        sectionName: classDoc.section,
+        termName: classDoc.termName,
+        schoolYear: classDoc.academicYear,
+        status: { $in: ['active', 'pending'] }
+      });
+      
+      console.log(`[SYNC-AUTO-CLASSES] Found ${studentAssignments.length} student assignments for class ${classDoc.className}`);
+      
+      let classStudentsAdded = 0;
+      
+      for (const assignment of studentAssignments) {
+        let student = null;
+        
+        // Try to find student by schoolID first (PRIORITY)
+        // Since schoolID is encrypted, we need to fetch all students and filter by decrypted schoolID
+        if (assignment.studentSchoolID) {
+          const allStudents = await User.find({ role: 'students' });
+          student = allStudents.find(s => {
+            const decryptedSchoolID = s.getDecryptedSchoolID ? s.getDecryptedSchoolID() : s.schoolID;
+            return decryptedSchoolID === assignment.studentSchoolID;
+          });
+          console.log(`[SYNC-AUTO-CLASSES] Found student by schoolID: ${assignment.studentSchoolID} -> ${student ? student.userID : 'Not found'}`);
+        }
+        
+        // If not found by schoolID, try by linked studentId
+        if (!student && assignment.studentId) {
+          student = await User.findById(assignment.studentId);
+          console.log(`[SYNC-AUTO-CLASSES] Found student by linked ID: ${assignment.studentId} -> ${student ? student.userID : 'Not found'}`);
+        }
+        
+        // If still not found, try by name
+        if (!student && assignment.studentName) {
+          const nameParts = assignment.studentName.split(' ');
+          const firstName = nameParts[0];
+          const lastName = nameParts.slice(1).join(' ');
+          
+          student = await User.findOne({
+            role: 'students',
+            $or: [
+              { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, assignment.studentName.toLowerCase()] } },
+              { $expr: { $eq: [{ $toLower: { $concat: ["$lastname", " ", "$firstname"] } }, assignment.studentName.toLowerCase()] } },
+              { firstname: { $regex: new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } },
+              { lastname: { $regex: new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } }
+            ]
+          });
+          console.log(`[SYNC-AUTO-CLASSES] Found student by name: ${assignment.studentName} -> ${student ? student.userID : 'Not found'}`);
+        }
+        
+        if (student) {
+          // PRIORITIZE the studentSchoolID from the assignment over the student's current schoolID
+          // This ensures we use the correct schoolID even if the student was created with a TEMP ID
+          // Decrypt schoolID if needed
+          const decryptedSchoolID = student.getDecryptedSchoolID ? student.getDecryptedSchoolID() : student.schoolID;
+          // Prefer the user's schoolID when we have a linked user; fallback to assignment value
+          const studentIdentifier = decryptedSchoolID || assignment.studentSchoolID || student._id;
+          
+          console.log(`[SYNC-AUTO-CLASSES] Student identifier priority: assignment.studentSchoolID=${assignment.studentSchoolID}, student.schoolID=${decryptedSchoolID}, student.userID=${student.userID}`);
+          
+          // Check if student is already a member (check all possible identifiers)
+          const isAlreadyMember = classDoc.members.some(memberId => 
+            String(memberId) === String(student._id) || 
+            String(memberId) === String(decryptedSchoolID) ||
+            (assignment.studentSchoolID && String(memberId) === String(assignment.studentSchoolID))
+          );
+          
+          if (!isAlreadyMember) {
+            try {
+              // Use the assignment's studentSchoolID if available, otherwise fall back to student's schoolID
+              const finalStudentId = decryptedSchoolID || assignment.studentSchoolID;
+              if (!finalStudentId) {
+                console.log('[SYNC-AUTO-CLASSES] Skipping student with no schoolID');
+                continue;
+              }
+              
+              await Class.findByIdAndUpdate(
+                classDoc._id,
+                { $addToSet: { members: finalStudentId } },
+                { new: true }
+              );
+              classStudentsAdded++;
+              totalStudentsAdded++;
+              console.log(`[SYNC-AUTO-CLASSES] ✅ Added student ${finalStudentId} (${student.userID}) to class ${classDoc.className}`);
+            } catch (error) {
+              console.error(`[SYNC-AUTO-CLASSES] ❌ Error adding student to class:`, error.message);
+            }
+          } else {
+            console.log(`[SYNC-AUTO-CLASSES] Student ${assignment.studentSchoolID || decryptedSchoolID} is already a member of class ${classDoc.className}`);
+          }
+        } else {
+          // If no User record found, still add by assignment schoolID if present
+          if (assignment.studentSchoolID) {
+            const isAlreadyMemberBySchoolId = classDoc.members.some(memberId => 
+              String(memberId) === String(assignment.studentSchoolID)
+            );
+            if (!isAlreadyMemberBySchoolId) {
+              try {
+                await Class.findByIdAndUpdate(
+                  classDoc._id,
+                  { $addToSet: { members: assignment.studentSchoolID } },
+                  { new: true }
+                );
+                classStudentsAdded++;
+                totalStudentsAdded++;
+                console.log(`[SYNC-AUTO-CLASSES] ✅ Added by schoolID only (no User): ${assignment.studentSchoolID} to class ${classDoc.className}`);
+              } catch (e) {
+                console.error(`[SYNC-AUTO-CLASSES] ❌ Error adding schoolID-only member:`, e.message);
+              }
+            } else {
+              console.log(`[SYNC-AUTO-CLASSES] SchoolID ${assignment.studentSchoolID} already present in class ${classDoc.className}`);
+            }
+          } else {
+            console.log(`[SYNC-AUTO-CLASSES] ⚠️ No student found and no schoolID on assignment: ${assignment.studentName || 'Unknown'}`);
+          }
+        }
+      }
+      
+      results.push({
+        classID: classDoc.classID,
+        className: classDoc.className,
+        section: classDoc.section,
+        studentsAdded: classStudentsAdded,
+        totalAssignments: studentAssignments.length
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `Sync completed. Added ${totalStudentsAdded} students to ${autoCreatedClasses.length} auto-created classes`,
+      totalStudentsAdded: totalStudentsAdded,
+      classesProcessed: autoCreatedClasses.length,
+      results: results
+    });
+    
+  } catch (error) {
+    console.error('[SYNC-AUTO-CLASSES] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to sync students to auto-created classes',
+      error: error.message
+    });
+  }
+});
+
 // Manual endpoint to fix unlinked StudentAssignment records
 userRoutes.post('/fix-unlinked-assignments', authenticateToken, async (req, res) => {
   try {

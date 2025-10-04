@@ -5145,8 +5145,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             };
             
             if (studentId) {
-              // Existing student - send studentId
-              return { ...basePayload, studentId: studentId };
+              // Existing student - send studentId AND schoolID
+              return { 
+                ...basePayload, 
+                studentId: studentId,
+                studentSchoolID: studentSchoolID // ALWAYS include schoolID
+              };
             } else {
               // New student - send student info directly (same as manual assignment)
               const payload = { 
@@ -6536,6 +6540,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             // Student exists in system - link to existing account
             payload = {
               studentId: student._id,
+              studentSchoolID: assignment.studentSchoolID || student.schoolID, // ALWAYS include schoolID
               trackName: assignment.trackName,
               strandName: assignment.strandName,
               sectionName: assignment.sectionName,
