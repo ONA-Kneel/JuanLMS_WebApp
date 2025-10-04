@@ -194,15 +194,15 @@ export default function FacultyCreateClass() {
 
         {pendingClasses.length === 0 ? (
           <div className="text-center py-12">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-8 max-w-md mx-auto">
-              <div className="text-green-600 text-6xl mb-4">✅</div>
-              <h3 className="text-xl font-semibold text-green-800 mb-2">No Pending Classes</h3>
-              <p className="text-green-700">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 max-w-md mx-auto">
+              
+              <h3 className="text-xl font-semibold text-blue-800 mb-2">No Pending Classes</h3>
+              <p className="text-blue-900">
                 All your classes have been confirmed! You can view your active classes in the Classes section.
               </p>
               <button
                 onClick={() => navigate('/faculty_classes')}
-                className="mt-4 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg transition-colors"
+                className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
               >
                 View My Classes
               </button>
@@ -220,55 +220,10 @@ export default function FacultyCreateClass() {
 
             {/* Fix and Sync Buttons */}
             <div className="mb-6 flex gap-4">
-              <button
-                className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center gap-2"
-                onClick={async () => {
-                  try {
-                    const token = localStorage.getItem('token');
-                    const response = await fetch(`${API_BASE}/fix-assignment-schoolids`, {
-                      method: 'POST',
-                      headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                      }
-                    });
-                    
-                    if (response.ok) {
-                      const result = await response.json();
-                      setValidationModal({
-                        isOpen: true,
-                        type: 'success',
-                        title: 'SchoolIDs Fixed',
-                        message: `Fixed ${result.fixedCount} student assignments with incorrect schoolIDs.`
-                      });
-                    } else {
-                      const error = await response.json();
-                      setValidationModal({
-                        isOpen: true,
-                        type: 'error',
-                        title: 'Fix Failed',
-                        message: error.message || 'Failed to fix schoolIDs. Please try again.'
-                      });
-                    }
-                  } catch (error) {
-                    console.error('Fix error:', error);
-                    setValidationModal({
-                      isOpen: true,
-                      type: 'error',
-                      title: 'Network Error',
-                      message: 'Failed to fix schoolIDs. Please check your connection and try again.'
-                    });
-                  }
-                }}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 011-1h1a2 2 0 100-4H7a1 1 0 01-1-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
-                </svg>
-                Fix SchoolIDs
-              </button>
+              
               
               <button
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center gap-2"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center gap-2"
                 onClick={async () => {
                   try {
                     const token = localStorage.getItem('token');
