@@ -975,6 +975,117 @@ userRoutes.get('/users/students', authenticateToken, async (req, res) => {
   }
 });
 
+// Get students assigned to a section for a given school year and term
+userRoutes.get('/students/by-section', authenticateToken, async (req, res) => {
+  try {
+    const sectionName = (req.query.sectionName || '').toString();
+    const termName = (req.query.termName || '').toString();
+    const schoolYear = (req.query.schoolYear || '').toString();
+
+    if (!sectionName || !termName || !schoolYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required query params: sectionName, termName, schoolYear'
+      });
+    }
+
+    // Find all student assignments for this section/term/year
+    const assignments = await StudentAssignment.find({
+      sectionName: sectionName,
+      termName: termName,
+      schoolYear: schoolYear,
+      status: { $in: ['active', 'pending'] }
+    }).lean();
+
+    if (!assignments || assignments.length === 0) {
+      return res.json([]);
+    }
+
+    // Fetch user docs for linked studentIds (if any)
+    const linkedIds = assignments
+      .map(a => a.studentId)
+      .filter(Boolean);
+    const users = linkedIds.length > 0
+      ? await User.find({ _id: { $in: linkedIds } }).lean()
+      : [];
+    const usersById = new Map(users.map(u => [String(u._id), u]));
+
+    const results = [];
+    const seen = new Set();
+    for (const a of assignments) {
+      const key = String(a.studentId || a.studentSchoolID || a._id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const u = a.studentId ? usersById.get(String(a.studentId)) : null;
+      const schoolIdVal = u
+        ? (u.getDecryptedSchoolID ? u.getDecryptedSchoolID() : u.schoolID)
+        : a.studentSchoolID;
+      results.push({
+        _id: u?._id || a.studentId || a.studentSchoolID,
+        userID: u?.userID,
+        schoolID: schoolIdVal,
+        name: u ? `${u.firstname || ''} ${u.lastname || ''}`.trim() : (a.studentName || ''),
+        section: a.sectionName,
+        role: 'students'
+      });
+    }
+
+    return res.json(results);
+  } catch (error) {
+    console.error('Error fetching students by section:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch students by section' });
+  }
+});
+
+// Alias with /users/ prefix for frontend callers
+userRoutes.get('/users/students/by-section', authenticateToken, async (req, res) => {
+  try {
+    const sectionName = (req.query.sectionName || '').toString();
+    const termName = (req.query.termName || '').toString();
+    const schoolYear = (req.query.schoolYear || '').toString();
+
+    if (!sectionName || !termName || !schoolYear) {
+      return res.status(400).json({ success: false, message: 'Missing required query params: sectionName, termName, schoolYear' });
+    }
+
+    const assignments = await StudentAssignment.find({
+      sectionName: sectionName,
+      termName: termName,
+      schoolYear: schoolYear,
+      status: { $in: ['active', 'pending'] }
+    }).lean();
+
+    if (!assignments || assignments.length === 0) return res.json([]);
+
+    const linkedIds = assignments.map(a => a.studentId).filter(Boolean);
+    const users = linkedIds.length > 0 ? await User.find({ _id: { $in: linkedIds } }).lean() : [];
+    const usersById = new Map(users.map(u => [String(u._id), u]));
+
+    const results = [];
+    const seen = new Set();
+    for (const a of assignments) {
+      const key = String(a.studentId || a.studentSchoolID || a._id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const u = a.studentId ? usersById.get(String(a.studentId)) : null;
+      const schoolIdVal = u ? (u.getDecryptedSchoolID ? u.getDecryptedSchoolID() : u.schoolID) : a.studentSchoolID;
+      results.push({
+        _id: u?._id || a.studentId || a.studentSchoolID,
+        userID: u?.userID,
+        schoolID: schoolIdVal,
+        name: u ? `${u.firstname || ''} ${u.lastname || ''}`.trim() : (a.studentName || ''),
+        section: a.sectionName,
+        role: 'students'
+      });
+    }
+
+    return res.json(results);
+  } catch (error) {
+    console.error('Error fetching students by section (alias):', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch students by section' });
+  }
+});
+
 // Get user counts for Admin, Faculty, and Students
 userRoutes.get('/user-counts', authenticateToken, async (req, res) => {
   try {

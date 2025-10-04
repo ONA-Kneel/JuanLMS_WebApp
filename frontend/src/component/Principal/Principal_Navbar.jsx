@@ -43,6 +43,7 @@ const Principal_Navbar = () => {
         { path: "/principal_post_announcement", icon: postAnnouncementIcon, label: "ANNOUNCEMENT" },
         { path: "/principal_faculty_report", icon: facultyReportIcon, label: "FACULTY REPORT" },
         // { path: "/principal_audit_trail", icon: progressIcon, label: "AUDIT TRAIL" },
+        { path: "/principal_grades", icon: gradesIcon, label: "GRADES" },
         { path: "/principal_calendar", icon: calendarIcon, label: "CALENDAR" },
         { path: "/principal_meeting", icon: Video, label: "MEETING", isIcon: true },
         { path: "/principal_chats", icon: chatsIcon, label: "CHATS" },

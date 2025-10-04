@@ -10,11 +10,17 @@ export default function Principal_Grades() {
   const [currentTerm, setCurrentTerm] = useState(null);
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedClass, setSelectedClass] = useState(null);
+  const [selectedClass] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [grades, setGrades] = useState({});
   const [students, setStudents] = useState([]);
+  const [selectedGradeLevel, setSelectedGradeLevel] = useState("");
+  const [availableSections, setAvailableSections] = useState([]);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [showStudentResults, setShowStudentResults] = useState(false);
+  const [studentSubjectRows, setStudentSubjectRows] = useState([]);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -100,6 +106,50 @@ export default function Principal_Grades() {
       fetchStudents();
     }
   }, [selectedClass]);
+
+  // Build sections when grade level changes (fetch from Sections API for current year/term)
+  useEffect(() => {
+    const run = async () => {
+      if (!selectedGradeLevel || !academicYear || !currentTerm) {
+        setAvailableSections([]);
+        setSelectedSection(null);
+        setStudents([]);
+        setSelectedStudentId("");
+        setStudentSearch("");
+        setStudentSubjectRows([]);
+        return;
+      }
+      try {
+        const normalized = normalizeGradeLevel(selectedGradeLevel);
+        const token = localStorage.getItem("token");
+        const yearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        const res = await fetch(`${API_BASE}/api/sections?schoolYear=${encodeURIComponent(yearName)}&termName=${encodeURIComponent(currentTerm.termName)}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = res.ok ? await res.json() : [];
+        const sections = Array.from(new Set(
+          (Array.isArray(data) ? data : [])
+            .filter(s => normalizeGradeLevel(s.gradeLevel) === normalized)
+            .map(s => s.sectionName || s.section || "default")
+        ));
+        setAvailableSections(sections);
+        setSelectedSection("");
+        setStudents([]);
+        setSelectedStudentId("");
+        setStudentSearch("");
+        setStudentSubjectRows([]);
+      } catch {
+        setAvailableSections([]);
+      }
+    };
+    run();
+  }, [selectedGradeLevel, academicYear, currentTerm]);
+
+  // Fetch students when grade and section are chosen (new flow)
+  useEffect(() => {
+    if (!selectedGradeLevel || !selectedSection) return;
+    fetchStudentsForGradeSection();
+  }, [selectedGradeLevel, selectedSection]);
 
   const fetchSubjects = async () => {
     try {
@@ -319,6 +369,41 @@ export default function Principal_Grades() {
     }
   };
 
+  // New: fetch students for selected grade level and section (using first matching class)
+  const fetchStudentsForGradeSection = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      // Fetch directly by section (backend aggregates StudentAssignments)
+      const yearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+      const res = await fetch(`${API_BASE}/users/students/by-section?sectionName=${encodeURIComponent(selectedSection)}&termName=${encodeURIComponent(currentTerm?.termName || '')}&schoolYear=${encodeURIComponent(yearName)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const studentsData = res.ok ? await res.json() : [];
+
+      const transformed = studentsData.map(student => ({
+        _id: student._id || student.userID || student.studentID,
+        userID: student.userID || student.studentID || student._id,
+        name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+        schoolID: student.schoolID || student.userID || student.studentID,
+        section: student.section || student.sectionName || 'default',
+        grades: currentTerm?.termName === 'Term 2'
+          ? { quarter3: '', quarter4: '', semesterFinal: '', remarks: '' }
+          : { quarter1: '', quarter2: '', semesterFinal: '', remarks: '' }
+      }));
+
+      setStudents(transformed);
+      const initial = {};
+      transformed.forEach(s => { initial[s._id] = { ...s.grades }; });
+      setGrades(initial);
+      if (transformed.length > 0) {
+        // Prefer loading grades by section (no classes involved)
+        await loadSectionGrades(selectedSection, transformed);
+      }
+    } catch {
+      setStudents([]);
+    }
+  };
+
   // Load saved grades from database
   const loadSavedGradesFromDatabase = async (classID, studentsList) => {
     try {
@@ -439,12 +524,7 @@ export default function Principal_Grades() {
             
             if (data.success && data.grades && data.grades.length > 0) {
               // Find grades for this specific class
-              const classGrades = data.grades.find(g => 
-                g.classID === classes[selectedClass].classID ||
-                g.subjectCode === classes[selectedClass].classCode ||
-                g.subjectName === classes[selectedClass].className ||
-                g.className === classes[selectedClass].className
-              );
+              const classGrades = data.grades[0];
               
                              if (classGrades) {
                  console.log('✅ Found grades for student:', student.name, classGrades);
@@ -499,18 +579,64 @@ export default function Principal_Grades() {
     }
   };
 
-  const handleClassChange = (e) => {
-    const classIndex = parseInt(e.target.value);
-    setSelectedClass(classIndex);
-    setSelectedSection(null);
-    setSubjects([]);
-    setGrades({});
-    setStudents([]);
+  // Load grades for an entire section
+  const loadSectionGrades = async (sectionName, studentsList) => {
+    try {
+      const token = localStorage.getItem("token");
+      const yearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+      // Attempt section-based grades endpoint (if available)
+      const res = await fetch(`${API_BASE}/api/semestral-grades/section/${encodeURIComponent(sectionName)}?termName=${encodeURIComponent(currentTerm.termName)}&academicYear=${encodeURIComponent(yearName)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data?.grades) ? data.grades : Array.isArray(data) ? data : [];
+        if (list.length > 0) {
+          setGrades(prev => {
+            const updated = { ...prev };
+            studentsList.forEach(student => {
+              const rec = list.find(g => g.studentID === student._id || g.schoolID === student.schoolID);
+              if (rec && rec.grades) {
+                const sg = rec.grades;
+                const mapped = {
+                  quarter1: sg.quarter1 || sg.q1 || '',
+                  quarter2: sg.quarter2 || sg.q2 || '',
+                  quarter3: sg.quarter3 || sg.q3 || '',
+                  quarter4: sg.quarter4 || sg.q4 || '',
+                  semesterFinal: sg.semesterFinal || sg.final || sg.semester || '',
+                  remarks: sg.remarks || sg.remark || ''
+                };
+                updated[student._id] = { ...(updated[student._id] || {}), ...mapped, isLocked: !!rec.isLocked };
+              }
+            });
+            return updated;
+          });
+          return;
+        }
+      }
+    } catch { /* noop */ }
+
+    // Fallback to per-student lookup
+    await loadGradesByIndividualStudents(studentsList);
   };
+
+  // Legacy: kept for reference; not used in grade/section flow (intentionally unused)
+  // const handleClassChange = () => {};
 
   const handleSectionChange = (e) => {
     const section = e.target.value;
     setSelectedSection(section);
+    setSelectedStudentId("");
+    setStudentSearch("");
+    setStudentSubjectRows([]);
+  };
+
+  // Normalize any grade level value into one of the two supported values
+  const normalizeGradeLevel = (value) => {
+    const s = String(value || '').toLowerCase();
+    if (s.includes('11')) return 'Grade 11';
+    if (s.includes('12')) return 'Grade 12';
+    return '';
   };
 
   // Helper function to calculate semester grade
@@ -596,79 +722,35 @@ export default function Principal_Grades() {
         </div>
 
 
-        {/* Class Selection */}
+        {/* Grade Level Selection */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Select Class:</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Select Grade Level:</label>
           <select
             className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={selectedClass !== null ? selectedClass : ""}
-            onChange={handleClassChange}
+            value={selectedGradeLevel}
+            onChange={(e) => setSelectedGradeLevel(e.target.value)}
             disabled={loading}
           >
-            <option value="">Choose a class...</option>
-            {classes.map((cls, index) => (
-              <option key={cls.classID} value={index}>
-                {cls.className} - {cls.section || cls.classCode || 'No Section'}
-              </option>
+            <option value="">Choose a grade level...</option>
+            {['Grade 11','Grade 12'].map(g => (
+              <option key={g} value={g}>{g}</option>
             ))}
           </select>
-          
-          {/* Loading state */}
-          {loading && (
-            <p className="mt-2 text-sm text-blue-600">
-              🔄 Loading classes for {currentTerm?.termName || 'current term'}...
-            </p>
-          )}
-          
-          {/* Warning when no classes available */}
-          {!loading && classes.length === 0 && (
-            <div className="mt-2 p-3 bg-orange-50 border border-orange-200 rounded-md">
-              <p className="text-sm text-orange-800 font-medium">
-                ⚠️ No classes available for the current term and academic year.
-              </p>
-              <div className="text-xs text-orange-700 mt-1 space-y-1">
-                <p>• Current Term: {currentTerm?.termName || 'Not set'}</p>
-                <p>• Academic Year: {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : 'Not set'}</p>
               </div>
-            </div>
-          )}
-          
-          {/* Success message when classes are found */}
-          {!loading && classes.length > 0 && (
-            <p className="mt-2 text-sm text-green-600">
-              ✅ Found {classes.length} class{classes.length !== 1 ? 'es' : ''} for {currentTerm?.termName || 'current term'}
-            </p>
-          )}
-        </div>
 
-        {/* Section Selection */}
-        {selectedClass !== null && classes[selectedClass] && (
+        {/* Section Selection (by Grade Level) */}
+        {selectedGradeLevel && (
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select Section:</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select Section (Grade {selectedGradeLevel}):</label>
             <select
               className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={selectedSection || ""}
               onChange={handleSectionChange}
             >
               <option value="">Choose a section...</option>
-              {/* Show the class's assigned section */}
-              {classes[selectedClass].section && (
-                <option key={classes[selectedClass].section} value={classes[selectedClass].section}>
-                  {classes[selectedClass].section}
-                </option>
-              )}
-              {/* Also show any additional sections from students if they exist */}
-              {students.length > 0 && Array.from(new Set(students.map(student => student.section || 'default')))
-                .filter(section => section !== classes[selectedClass].section && section !== 'default')
-                .map(section => (
-                  <option key={section} value={section}>
-                    {section}
-                  </option>
-                ))}
-              {/* Add a default section option if no sections are available */}
-              {(!classes[selectedClass].section || classes[selectedClass].section === '') && (
-                <option value="default">Default Section</option>
-              )}
+              {availableSections.map(sec => (
+                <option key={sec} value={sec}>{sec}</option>
+              ))}
             </select>
             
             {/* Show section info */}
@@ -695,8 +777,65 @@ export default function Principal_Grades() {
           </div>
         )}
 
+        {/* Student Search (by name or school ID) */}
+        {selectedGradeLevel && selectedSection && students.length > 0 && (
+          <div className="mb-6 relative">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Search Student (Name or School ID):</label>
+            <input
+              type="text"
+              value={studentSearch}
+              onChange={(e) => { setStudentSearch(e.target.value); setShowStudentResults(true); }}
+              onFocus={() => setShowStudentResults(true)}
+              placeholder="Type name or school ID..."
+              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {showStudentResults && studentSearch.trim() !== '' && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow max-h-60 overflow-auto">
+                {students
+                  .filter(s => {
+                    const q = studentSearch.toLowerCase();
+                    const name = (s.name || '').toLowerCase();
+                    const id = String(s.schoolID || s.userID || s._id || '').toLowerCase();
+                    return name.includes(q) || id.includes(q);
+                  })
+                  .slice(0, 20)
+                  .map(s => (
+                    <button
+                      key={s._id}
+                      onClick={() => { setSelectedStudentId(s._id); setStudentSearch(`${s.name} (${s.schoolID || s._id})`); setShowStudentResults(false); }}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100"
+                    >
+                      <div className="text-sm font-medium">{s.name}</div>
+                      <div className="text-xs text-gray-500">{s.schoolID || s.userID || s._id}</div>
+                    </button>
+                  ))}
+                {students.filter(s => {
+                  const q = studentSearch.toLowerCase();
+                  const name = (s.name || '').toLowerCase();
+                  const id = String(s.schoolID || s.userID || s._id || '').toLowerCase();
+                  return name.includes(q) || id.includes(q);
+                }).length === 0 && (
+                  <div className="px-3 py-2 text-sm text-gray-500">No matches</div>
+                )}
+              </div>
+            )}
+            {selectedStudentId && (
+              <div className="mt-2 flex items-center gap-2 text-sm">
+                <span className="text-gray-600">Viewing grades for:</span>
+                <strong>{(students.find(s => s._id === selectedStudentId)?.name) || 'Selected student'}</strong>
+                <button
+                  onClick={() => { setSelectedStudentId(''); setStudentSearch(''); setShowStudentResults(false); }}
+                  className="ml-2 px-2 py-1 text-xs bg-gray-200 rounded hover:bg-gray-300"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Grades Status Summary */}
-        {selectedClass !== null && selectedSection && students.length > 0 && (
+        {selectedGradeLevel && selectedSection && students.length > 0 && (
           <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
@@ -733,7 +872,69 @@ export default function Principal_Grades() {
           </h1>
         </div>
 
-        {/* Only show tables when both class and section are selected */}
+        {/* Student-per-subject table when a student is selected */}
+        {selectedGradeLevel && selectedSection && selectedStudentId && (
+          <div className="mb-8">
+            <div className="mb-4">
+              <h2 className="text-xl font-bold text-gray-800">
+                {currentTerm?.termName === 'Term 2' ? 'Second Semester (Q3 & Q4)' : 'First Semester (Q1 & Q2)'}
+                <span className="text-sm font-normal text-gray-600 ml-2">- Student: {(students.find(s => s._id === selectedStudentId)?.name) || ''}</span>
+              </h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border border-gray-300 text-sm">
+                <thead>
+                  <tr>
+                    <th className="border border-gray-300 p-3 text-left font-semibold bg-gray-50">Subject Description</th>
+                    {currentTerm?.termName === 'Term 2' ? (
+                      <>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">3rd Quarter</th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">4th Quarter</th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">1st Quarter</th>
+                        <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">2nd Quarter</th>
+                      </>
+                    )}
+                    <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Semester Final Grade</th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold bg-gray-50">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {studentSubjectRows.length > 0 ? (
+                    studentSubjectRows.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="border border-gray-300 p-2">{row.subject}</td>
+                        {currentTerm?.termName === 'Term 2' ? (
+                          <>
+                            <td className="border border-gray-300 p-2 text-center bg-gray-100">{row.quarter3 || '-'}</td>
+                            <td className="border border-gray-300 p-2 text-center bg-gray-100">{row.quarter4 || '-'}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="border border-gray-300 p-2 text-center bg-gray-100">{row.quarter1 || '-'}</td>
+                            <td className="border border-gray-300 p-2 text-center bg-gray-100">{row.quarter2 || '-'}</td>
+                          </>
+                        )}
+                        <td className="border border-gray-300 p-2 text-center bg-gray-100">{row.final || '-'}</td>
+                        <td className="border border-gray-300 p-2 text-center bg-gray-100">{row.remarks || '-'}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="5" className="border border-gray-300 p-4 text-center text-gray-500">
+                        No grade records found for this student in Grade {selectedGradeLevel} - {selectedSection}.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Only show tables when both class and section are selected (legacy view) */}
         {selectedClass !== null && selectedSection && (
           <>
             {/* First Semester Section - Only show if Term 1 is active */}
@@ -783,7 +984,7 @@ export default function Principal_Grades() {
                     </thead>
                     <tbody>
                       {students.length > 0 ? (
-                        students.map((student) => {
+                        (selectedStudentId ? students.filter(st => st._id === selectedStudentId) : students).map((student) => {
                           const studentGrades = grades[student._id] || {};
                           const semesterGrade = calculateSemesterGrade(studentGrades.quarter1, studentGrades.quarter2);
                           const remarks = calculateRemarks(semesterGrade);
@@ -832,13 +1033,13 @@ export default function Principal_Grades() {
                       <tr className="bg-yellow-100">
                         <td className="border border-gray-300 p-2 font-bold text-gray-800" colSpan="2">General Average</td>
                         <td className="border border-gray-300 p-2 text-center font-bold">
-                          {students.length > 0 ? calculateGeneralAverage('quarter1') : ''}
+                          {students.length > 0 ? (selectedStudentId ? (grades[selectedStudentId]?.quarter1 || '') : calculateGeneralAverage('quarter1')) : ''}
                         </td>
                         <td className="border border-gray-300 p-2 text-center font-bold">
-                          {students.length > 0 ? calculateGeneralAverage('quarter2') : ''}
+                          {students.length > 0 ? (selectedStudentId ? (grades[selectedStudentId]?.quarter2 || '') : calculateGeneralAverage('quarter2')) : ''}
                         </td>
                         <td className="border border-gray-300 p-2 text-center font-bold">
-                          {students.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
+                          {students.length > 0 ? (selectedStudentId ? (grades[selectedStudentId]?.semesterFinal || calculateSemesterGrade(grades[selectedStudentId]?.quarter1, grades[selectedStudentId]?.quarter2) || '') : calculateGeneralAverage('semesterFinal')) : ''}
                         </td>
                         <td className="border border-gray-300 p-2 text-center font-bold">
                           {/* Remarks column for General Average */}
@@ -897,7 +1098,7 @@ export default function Principal_Grades() {
                     </thead>
                     <tbody>
                       {students.length > 0 ? (
-                        students.map((student) => {
+                        (selectedStudentId ? students.filter(st => st._id === selectedStudentId) : students).map((student) => {
                           const studentGrades = grades[student._id] || {};
                           const semesterGrade = calculateSemesterGrade(studentGrades.quarter3, studentGrades.quarter4);
                           const remarks = calculateRemarks(semesterGrade);
@@ -945,13 +1146,13 @@ export default function Principal_Grades() {
                       <tr className="bg-yellow-100">
                         <td className="border border-gray-300 p-2 font-bold text-gray-800" colSpan="2">General Average</td>
                         <td className="border border-gray-300 p-2 text-center font-bold">
-                          {students.length > 0 ? calculateGeneralAverage('quarter3') : ''}
+                          {students.length > 0 ? (selectedStudentId ? (grades[selectedStudentId]?.quarter3 || '') : calculateGeneralAverage('quarter3')) : ''}
                         </td>
                         <td className="border border-gray-300 p-2 text-center font-bold">
-                          {students.length > 0 ? calculateGeneralAverage('quarter4') : ''}
+                          {students.length > 0 ? (selectedStudentId ? (grades[selectedStudentId]?.quarter4 || '') : calculateGeneralAverage('quarter4')) : ''}
                         </td>
                         <td className="border border-gray-300 p-2 text-center font-bold">
-                          {students.length > 0 ? calculateGeneralAverage('semesterFinal') : ''}
+                          {students.length > 0 ? (selectedStudentId ? (grades[selectedStudentId]?.semesterFinal || calculateSemesterGrade(grades[selectedStudentId]?.quarter3, grades[selectedStudentId]?.quarter4) || '') : calculateGeneralAverage('semesterFinal')) : ''}
                         </td>
                         <td className="border border-gray-300 p-2 text-center font-bold">
                           {/* Remarks column for General Average */}
@@ -972,27 +1173,25 @@ export default function Principal_Grades() {
           </>
         )}
 
-        {/* Show message when class or section not selected */}
-        {(selectedClass === null || !selectedSection) && (
+        {/* Show message when grade or section not selected (new flow) */}
+        {((!selectedGradeLevel || !selectedSection) && selectedClass === null) && (
           <div className="text-center py-8 text-gray-600">
-            {selectedClass === null ? (
-              <p>Please select a class to view available sections and the grading table.</p>
+            {!selectedGradeLevel ? (
+              <p>Please select a grade level to view available sections.</p>
             ) : !selectedSection ? (
-              <p>Please select a section to view the grading table for the selected class.</p>
-            ) : (
-              <p>Please select both a class and section to view the grading table.</p>
-            )}
+              <p>Please select a section to search for a student and view grades.</p>
+            ) : null}
           </div>
         )}
 
         {/* Instructions */}
-        {(!selectedClass || !selectedSection) && (
+        {((!selectedGradeLevel || !selectedSection) && selectedClass === null) && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
             <h3 className="text-lg font-semibold text-blue-800 mb-2">How to View Grades</h3>
             <p className="text-blue-700">
-              1. Select a <strong>Class</strong> from the dropdown above<br/>
-              2. Choose a <strong>Section</strong> for that class<br/>
-              3. View the grading table with all student grades
+              1. Select a <strong>Grade Level</strong><br/>
+              2. Choose a <strong>Section</strong><br/>
+              3. Search a <strong>Student</strong> to view grades per subject
             </p>
             <p className="text-sm text-blue-600 mt-2">
               💡 <strong>Read-Only View:</strong> As a Principal, you can view all grades but cannot edit them
