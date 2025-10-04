@@ -645,6 +645,47 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Delete auto-created class associated with a faculty assignment
+router.delete('/:id/auto-class', authenticateToken, async (req, res) => {
+  try {
+    // Restrict to admin or principal
+    if (!req.user || !req.user.role || (req.user.role !== 'admin' && req.user.role !== 'principal')) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const assignment = await FacultyAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    const facultyIdStr = String(assignment.facultyId || '').trim();
+    const subjectName = String(assignment.subjectName || '').trim();
+    const sectionName = String(assignment.sectionName || '').trim();
+    const academicYear = String(assignment.schoolYear || '').trim();
+    const termName = String(assignment.termName || '').trim();
+
+    const match = {
+      isAutoCreated: true,
+      facultyID: facultyIdStr,
+      academicYear: academicYear,
+      termName: termName,
+      className: { $regex: new RegExp(`^${escapeRegex(subjectName)}$`, 'i') },
+      section: { $regex: new RegExp(`^${escapeRegex(sectionName)}$`, 'i') }
+    };
+
+    const classes = await Class.find(match);
+    if (!classes || classes.length === 0) {
+      return res.status(404).json({ message: 'No auto-created class found for this assignment' });
+    }
+
+    const result = await Class.deleteMany({ _id: { $in: classes.map(c => c._id) } });
+    return res.json({ message: 'Auto-created class(es) deleted', deletedCount: result.deletedCount });
+  } catch (err) {
+    console.error('Error deleting auto-created class for assignment:', err);
+    return res.status(500).json({ message: err.message });
+  }
+});
+
 // Unarchive a faculty assignment (must come before the general PATCH route)
 router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
   try {

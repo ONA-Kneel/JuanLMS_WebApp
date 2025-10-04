@@ -111,6 +111,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [facultyError, setFacultyError] = useState('');
   const [isFacultyEditMode, setIsFacultyEditMode] = useState(false);
   const [editingFacultyAssignment, setEditingFacultyAssignment] = useState(null);
+  const [deletingAssignmentId, setDeletingAssignmentId] = useState(null);
   const [faculties, setFaculties] = useState([]); // To store faculty users for dropdown
   const [isFacultyModalOpen, setIsFacultyModalOpen] = useState(false);
 
@@ -1830,6 +1831,26 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     if (window.confirm("Are you sure you want to remove this faculty assignment?")) {
       try {
         const token = localStorage.getItem('token');
+        setDeletingAssignmentId(assignment._id);
+
+        // Offer to delete related auto-created class first
+        const deleteAutoClass = window.confirm('Do you also want to delete the auto-created class for this assignment?');
+        if (deleteAutoClass) {
+          try {
+            const delClassRes = await fetch(`${API_BASE}/api/faculty-assignments/${assignment._id}/auto-class`, {
+              method: 'DELETE',
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            if (!delClassRes.ok) {
+              const errData = await delClassRes.json().catch(() => ({}));
+              console.warn('Failed to delete auto class:', errData.message || delClassRes.statusText);
+            }
+          } catch (e) {
+            console.warn('Error calling delete auto-class endpoint:', e);
+          }
+        }
 
         const res = await fetch(`${API_BASE}/api/faculty-assignments/${assignment._id}`, {
           method: 'DELETE',
@@ -1865,6 +1886,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch (err) {
         setFacultyError('Error removing faculty assignment');
         console.error("Error in handleDeleteFacultyAssignment:", err);
+      } finally {
+        setDeletingAssignmentId(null);
       }
     }
   };
@@ -8801,13 +8824,20 @@ Validation issues (${skippedCount} items):
                                 </button>
                                 <button
                                   onClick={() => handleDeleteFacultyAssignment(assignment)}
-                          className="p-1 rounded hover:bg-red-100 group relative"
+                                  className="p-1 rounded hover:bg-red-100 group relative"
                                   title="Delete"
-                                  disabled={termDetails.status === 'archived'}
+                                  disabled={termDetails.status === 'archived' || deletingAssignmentId === assignment._id}
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                  </svg>
+                                  {deletingAssignmentId === assignment._id ? (
+                                    <svg className="animate-spin h-6 w-6 text-red-600" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                    </svg>
+                                  ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                    </svg>
+                                  )}
                                 </button>
                                 {assignment.status === 'archived' && (
                                   <button
