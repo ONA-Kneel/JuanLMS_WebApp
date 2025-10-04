@@ -929,26 +929,14 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
       console.log(`[MY-CLASSES] Processing as student user`);
       
       // Find classes where the student's ObjectId is in the members array
-      // Only show confirmed classes (not auto-created or needing confirmation)
+      // Show ALL classes where student is a member (including auto-created and needing confirmation)
       classes = await Class.find({ 
         members: userObjectId,
-        $and: [
-          {
-            $or: [
-              { needsConfirmation: { $ne: true } },
-              { needsConfirmation: { $exists: false } }
-            ]
-          },
-          {
-            $or: [
-              { isAutoCreated: { $ne: true } },
-              { isAutoCreated: { $exists: false } }
-            ]
-          }
-        ]
+        isArchived: { $ne: true } // Only exclude archived classes
       });
       
       console.log(`[MY-CLASSES] Found ${classes.length} classes as student`);
+      console.log(`[MY-CLASSES] Student ObjectId: ${userObjectId}`);
       console.log(`[MY-CLASSES] Classes found:`, classes.map(c => ({ 
         classID: c.classID, 
         className: c.className, 
@@ -957,6 +945,14 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
         needsConfirmation: c.needsConfirmation,
         isAutoCreated: c.isAutoCreated
       })));
+      
+      // Debug: Check if student ObjectId is in any class members
+      const allClasses = await Class.find({ isArchived: { $ne: true } });
+      console.log(`[MY-CLASSES] DEBUG: Checking all classes for student ObjectId ${userObjectId}`);
+      allClasses.forEach(cls => {
+        const isMember = cls.members.some(memberId => String(memberId) === String(userObjectId));
+        console.log(`[MY-CLASSES] DEBUG: Class ${cls.className} (${cls.classID}) - Is member: ${isMember}, Members: ${cls.members.map(m => String(m)).join(', ')}`);
+      });
       
     } else {
       // Other roles: return both sets (union, no duplicates)

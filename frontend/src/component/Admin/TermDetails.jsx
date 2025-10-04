@@ -1916,10 +1916,23 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     e.preventDefault();
     setStudentError('');
 
-    // Check if we have required student information
+    // Check if we have ALL required student information
     const hasStudentInfo = Boolean(studentFormData.studentId) || (studentFormData.firstName && studentFormData.lastName);
+    const hasEnrollmentData = studentFormData.enrollmentNo && studentFormData.enrollmentDate;
+    const hasSchoolId = studentManualId && studentManualId.trim() !== '';
+    
     if (!hasStudentInfo || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
-      setStudentError('All fields are required for student assignment. Provide student information.');
+      setStudentError('All fields are required for student assignment. Please provide student information, track, strand, section, and grade level.');
+      return;
+    }
+    
+    if (!hasEnrollmentData) {
+      setStudentError('Enrollment number and enrollment date are required.');
+      return;
+    }
+    
+    if (!hasSchoolId) {
+      setStudentError('Student School ID is required.');
       return;
     }
 
@@ -9088,6 +9101,7 @@ Validation issues (${skippedCount} items):
                               onChange={handleChangeStudentForm}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="Enter enrollment number"
+                              required
                               disabled={termDetails.status === 'archived'}
                             />
                           </div>
@@ -9100,6 +9114,7 @@ Validation issues (${skippedCount} items):
                               value={studentFormData.enrollmentDate || ''}
                               onChange={handleChangeStudentForm}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
                               disabled={termDetails.status === 'archived'}
                             />
                           </div>
@@ -9114,6 +9129,7 @@ Validation issues (${skippedCount} items):
                               onChange={handleSchoolIdChange}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="YY-00000 or any ID"
+                              required
                               disabled={termDetails.status === 'archived'}
                             />
                           </div>
@@ -9129,6 +9145,7 @@ Validation issues (${skippedCount} items):
                               onChange={handleChangeStudentForm}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="Enter last name"
+                              required
                               disabled={termDetails.status === 'archived'}
                             />
                           </div>
@@ -9142,6 +9159,7 @@ Validation issues (${skippedCount} items):
                               onChange={handleChangeStudentForm}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="Enter first name"
+                              required
                               disabled={termDetails.status === 'archived'}
                             />
                           </div>

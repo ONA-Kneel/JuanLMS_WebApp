@@ -28,21 +28,34 @@ const addStudentToExistingClasses = async (student) => {
   try {
     console.log(`[ADD-STUDENT-TO-CLASSES] Checking if student ${student.userID} should be added to existing classes`);
     
-    // Find student assignments for this student
-    const studentAssignments = await StudentAssignment.find({
-      $or: [
-        { studentId: student._id },
-        { studentSchoolID: student.schoolID },
-        { studentName: { $regex: `${student.firstname} ${student.lastname}`, $options: 'i' } },
-        { studentName: { $regex: `${student.lastname} ${student.firstname}`, $options: 'i' } },
-        { firstName: { $regex: student.firstname, $options: 'i' } },
-        { lastName: { $regex: student.lastname, $options: 'i' } },
-        // Add more flexible matching for common name variations
-        { studentName: { $regex: student.firstname, $options: 'i' } },
-        { studentName: { $regex: student.lastname, $options: 'i' } }
-      ],
+    // Find student assignments for this student - PRIORITIZE SCHOOL ID MATCHING
+    console.log(`[ADD-STUDENT-TO-CLASSES] Looking for assignments with schoolID: ${student.schoolID}`);
+    
+    // First try to find by schoolID (PRIORITY)
+    let studentAssignments = await StudentAssignment.find({
+      studentSchoolID: student.schoolID,
       status: 'active'
     });
+    
+    console.log(`[ADD-STUDENT-TO-CLASSES] Found ${studentAssignments.length} assignments by schoolID`);
+    
+    // If no assignments found by schoolID, try other methods
+    if (studentAssignments.length === 0) {
+      studentAssignments = await StudentAssignment.find({
+        $or: [
+          { studentId: student._id },
+          { studentName: { $regex: `${student.firstname} ${student.lastname}`, $options: 'i' } },
+          { studentName: { $regex: `${student.lastname} ${student.firstname}`, $options: 'i' } },
+          { firstName: { $regex: student.firstname, $options: 'i' } },
+          { lastName: { $regex: student.lastname, $options: 'i' } },
+          // Add more flexible matching for common name variations
+          { studentName: { $regex: student.firstname, $options: 'i' } },
+          { studentName: { $regex: student.lastname, $options: 'i' } }
+        ],
+        status: 'active'
+      });
+      console.log(`[ADD-STUDENT-TO-CLASSES] Found ${studentAssignments.length} assignments by other methods`);
+    }
     
     console.log(`[ADD-STUDENT-TO-CLASSES] Found ${studentAssignments.length} student assignments for student ${student.userID}`);
     
@@ -52,13 +65,99 @@ const addStudentToExistingClasses = async (student) => {
         studentName: assignment.studentName,
         firstName: assignment.firstName,
         lastName: assignment.lastName,
+        studentSchoolID: assignment.studentSchoolID,
         status: assignment.status,
-        studentId: assignment.studentId ? 'Already linked' : 'Not linked'
+        studentId: assignment.studentId ? 'Already linked' : 'Not linked',
+        sectionName: assignment.sectionName
       });
     });
     
+    // If no assignments found by school ID, try a more specific search
+    if (studentAssignments.length === 0 && student.schoolID) {
+      console.log(`[ADD-STUDENT-TO-CLASSES] No assignments found, trying specific school ID search for: ${student.schoolID}`);
+      
+      const schoolIdAssignments = await StudentAssignment.find({
+        studentSchoolID: student.schoolID,
+        status: 'active'
+      });
+      
+      console.log(`[ADD-STUDENT-TO-CLASSES] Found ${schoolIdAssignments.length} assignments by school ID`);
+      
+      if (schoolIdAssignments.length > 0) {
+        studentAssignments.push(...schoolIdAssignments);
+      }
+    }
+    
     if (studentAssignments.length === 0) {
-      console.log(`[ADD-STUDENT-TO-CLASSES] No student assignments found for ${student.userID}`);
+      console.log(`[ADD-STUDENT-TO-CLASSES] No student assignments found for ${student.userID}, checking for section-based classes`);
+      
+      // Get current academic year and term
+      const activeSchoolYear = await SchoolYear.findOne({ status: 'active' });
+      if (!activeSchoolYear) {
+        console.log(`[ADD-STUDENT-TO-CLASSES] No active school year found`);
+        return;
+      }
+      
+      const activeTerm = await Term.findOne({ 
+        schoolYear: `${activeSchoolYear.schoolYearStart}-${activeSchoolYear.schoolYearEnd}`,
+        status: 'active' 
+      });
+      
+      if (!activeTerm) {
+        console.log(`[ADD-STUDENT-TO-CLASSES] No active term found`);
+        return;
+      }
+      
+      const currentAcademicYear = `${activeSchoolYear.schoolYearStart}-${activeSchoolYear.schoolYearEnd}`;
+      
+      // Find all classes for current academic year and term
+      const allClasses = await Class.find({
+        academicYear: currentAcademicYear,
+        termName: activeTerm.termName,
+        isArchived: { $ne: true }
+      });
+      
+      console.log(`[ADD-STUDENT-TO-CLASSES] Found ${allClasses.length} classes for current term`);
+      
+      // Add student to classes that match their section (if they have one)
+      // First, try to find the student's section from their school ID or other data
+      let studentSection = null;
+      
+      // Try to find section from existing data
+      if (student.section) {
+        studentSection = student.section;
+      } else {
+        // Try to infer section from school ID or other patterns
+        console.log(`[ADD-STUDENT-TO-CLASSES] No section found for student, will add to all active classes`);
+      }
+      
+      for (const classDoc of allClasses) {
+        // If we have a specific section, only add to classes in that section
+        if (studentSection && classDoc.section !== studentSection) {
+          console.log(`[ADD-STUDENT-TO-CLASSES] Skipping class ${classDoc.className} - section mismatch (student: ${studentSection}, class: ${classDoc.section})`);
+          continue;
+        }
+        
+        const isAlreadyMember = classDoc.members.some(memberId => 
+          String(memberId) === String(student._id)
+        );
+        
+        if (!isAlreadyMember) {
+          try {
+            await Class.findByIdAndUpdate(
+              classDoc._id,
+              { $addToSet: { members: student._id } },
+              { new: true }
+            );
+            console.log(`[ADD-STUDENT-TO-CLASSES] ✅ Added student ${student.userID} to class ${classDoc.className} (${classDoc.classID}) - Section: ${classDoc.section}`);
+          } catch (error) {
+            console.error(`[ADD-STUDENT-TO-CLASSES] ❌ Error adding student to class ${classDoc.className}:`, error.message);
+          }
+        } else {
+          console.log(`[ADD-STUDENT-TO-CLASSES] Student ${student.userID} is already a member of class ${classDoc.className}`);
+        }
+      }
+      
       return;
     }
     
@@ -140,6 +239,322 @@ const addStudentToExistingClasses = async (student) => {
     throw error;
   }
 };
+
+// Manual endpoint to add a specific student to classes by school ID
+userRoutes.post('/add-student-to-classes-by-school-id', authenticateToken, async (req, res) => {
+  try {
+    const { schoolID } = req.body;
+    
+    if (!schoolID) {
+      return res.status(400).json({
+        success: false,
+        message: 'School ID is required'
+      });
+    }
+    
+    console.log(`[MANUAL-ADD] Looking for student with school ID: ${schoolID}`);
+    
+    // Find the student by school ID
+    const student = await User.findOne({ 
+      schoolID: schoolID,
+      role: 'students'
+    });
+    
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: `Student with school ID ${schoolID} not found`
+      });
+    }
+    
+    console.log(`[MANUAL-ADD] Found student: ${student.firstname} ${student.lastname} (${student.userID})`);
+    
+    // Add student to existing classes
+    await addStudentToExistingClasses(student);
+    
+    // Check how many classes the student is now in
+    const studentClasses = await Class.find({
+      members: student._id,
+      isArchived: { $ne: true }
+    });
+    
+    res.json({
+      success: true,
+      message: `Student ${student.firstname} ${student.lastname} has been added to ${studentClasses.length} classes`,
+      student: {
+        _id: student._id,
+        userID: student.userID,
+        schoolID: student.schoolID,
+        name: `${student.firstname} ${student.lastname}`
+      },
+      classesCount: studentClasses.length
+    });
+    
+  } catch (error) {
+    console.error('[MANUAL-ADD] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add student to classes',
+      error: error.message
+    });
+  }
+});
+
+// Bulk endpoint to add students to existing classes when they are assigned to sections
+userRoutes.post('/bulk-add-students-to-classes', authenticateToken, async (req, res) => {
+  try {
+    const { sectionName, termName, schoolYear } = req.body;
+    
+    if (!sectionName || !termName || !schoolYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'Section name, term name, and school year are required'
+      });
+    }
+    
+    console.log(`[BULK-ADD] Adding students to classes for section: ${sectionName}, term: ${termName}, year: ${schoolYear}`);
+    
+    // Find all student assignments for this section/term/year
+    const studentAssignments = await StudentAssignment.find({
+      sectionName: sectionName,
+      termName: termName,
+      schoolYear: schoolYear,
+      status: 'active'
+    });
+    
+    console.log(`[BULK-ADD] Found ${studentAssignments.length} student assignments`);
+    
+    if (studentAssignments.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No student assignments found for the specified criteria',
+        studentsAdded: 0,
+        classesUpdated: 0
+      });
+    }
+    
+    // Find existing classes for this section/term/year
+    const existingClasses = await Class.find({
+      section: sectionName,
+      termName: termName,
+      academicYear: schoolYear,
+      isArchived: { $ne: true }
+    });
+    
+    console.log(`[BULK-ADD] Found ${existingClasses.length} existing classes`);
+    
+    if (existingClasses.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No existing classes found for the specified criteria',
+        studentsAdded: 0,
+        classesUpdated: 0
+      });
+    }
+    
+    let studentsAdded = 0;
+    let classesUpdated = 0;
+    const results = [];
+    
+    // Process each student assignment
+    for (const assignment of studentAssignments) {
+      let student = null;
+      
+      // Try to find the student by schoolID first (PRIORITY)
+      if (assignment.studentSchoolID) {
+        student = await User.findOne({
+          schoolID: assignment.studentSchoolID,
+          role: 'students'
+        });
+        console.log(`[BULK-ADD] Found student by schoolID: ${assignment.studentSchoolID} -> ${student ? student.userID : 'Not found'}`);
+      }
+      
+      // If not found by schoolID, try by name
+      if (!student && assignment.studentName) {
+        const nameParts = assignment.studentName.split(' ');
+        const firstName = nameParts[0];
+        const lastName = nameParts.slice(1).join(' ');
+        
+        student = await User.findOne({
+          role: 'students',
+          $or: [
+            { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, assignment.studentName.toLowerCase()] } },
+            { $expr: { $eq: [{ $toLower: { $concat: ["$lastname", " ", "$firstname"] } }, assignment.studentName.toLowerCase()] } },
+            { firstname: { $regex: new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } },
+            { lastname: { $regex: new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } }
+          ]
+        });
+        console.log(`[BULK-ADD] Found student by name: ${assignment.studentName} -> ${student ? student.userID : 'Not found'}`);
+      }
+      
+      // If still not found, try by linked studentId
+      if (!student && assignment.studentId) {
+        student = await User.findById(assignment.studentId);
+        console.log(`[BULK-ADD] Found student by linked ID: ${assignment.studentId} -> ${student ? student.userID : 'Not found'}`);
+      }
+      
+      if (!student) {
+        console.log(`[BULK-ADD] ⚠️ No student found for assignment: ${assignment.studentName || assignment.studentSchoolID || 'Unknown'}`);
+        results.push({
+          assignment: assignment._id,
+          studentName: assignment.studentName,
+          studentSchoolID: assignment.studentSchoolID,
+          status: 'Student not found',
+          classesAdded: 0
+        });
+        continue;
+      }
+      
+      // Add student to all matching classes
+      let classesAdded = 0;
+      for (const classDoc of existingClasses) {
+        const isAlreadyMember = classDoc.members.some(memberId => 
+          String(memberId) === String(student._id)
+        );
+        
+        if (!isAlreadyMember) {
+          try {
+            await Class.findByIdAndUpdate(
+              classDoc._id,
+              { $addToSet: { members: student._id } },
+              { new: true }
+            );
+            classesAdded++;
+            classesUpdated++;
+            console.log(`[BULK-ADD] ✅ Added student ${student.userID} to class ${classDoc.className} (${classDoc.classID})`);
+          } catch (error) {
+            console.error(`[BULK-ADD] ❌ Error adding student to class ${classDoc.className}:`, error.message);
+          }
+        } else {
+          console.log(`[BULK-ADD] Student ${student.userID} is already a member of class ${classDoc.className}`);
+        }
+      }
+      
+      // Link the assignment to the student if not already linked
+      if (!assignment.studentId && student) {
+        try {
+          await StudentAssignment.findByIdAndUpdate(
+            assignment._id,
+            { 
+              studentId: student._id,
+              studentName: undefined,
+              studentSchoolID: undefined
+            },
+            { new: true }
+          );
+          console.log(`[BULK-ADD] ✅ Linked assignment ${assignment._id} to student ${student._id}`);
+        } catch (error) {
+          console.error(`[BULK-ADD] ❌ Error linking assignment:`, error.message);
+        }
+      }
+      
+      if (classesAdded > 0) {
+        studentsAdded++;
+      }
+      
+      results.push({
+        assignment: assignment._id,
+        studentName: student.firstname + ' ' + student.lastname,
+        studentSchoolID: student.schoolID,
+        studentUserID: student.userID,
+        status: 'Success',
+        classesAdded: classesAdded
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `Bulk assignment completed. ${studentsAdded} students added to ${classesUpdated} class memberships`,
+      studentsAdded: studentsAdded,
+      classesUpdated: classesUpdated,
+      results: results
+    });
+    
+  } catch (error) {
+    console.error('[BULK-ADD] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to bulk add students to classes',
+      error: error.message
+    });
+  }
+});
+
+// Endpoint to fix StudentAssignment records missing schoolID
+userRoutes.post('/fix-missing-schoolids', authenticateToken, async (req, res) => {
+  try {
+    console.log('[FIX-SCHOOLIDS] Starting to fix StudentAssignment records missing schoolID...');
+    
+    // Find all StudentAssignment records that have studentId but no studentSchoolID
+    const assignmentsToFix = await StudentAssignment.find({
+      studentId: { $exists: true, $ne: null },
+      $or: [
+        { studentSchoolID: { $exists: false } },
+        { studentSchoolID: null },
+        { studentSchoolID: '' }
+      ]
+    }).populate('studentId');
+    
+    console.log(`[FIX-SCHOOLIDS] Found ${assignmentsToFix.length} assignments to fix`);
+    
+    let fixedCount = 0;
+    const results = [];
+    
+    for (const assignment of assignmentsToFix) {
+      if (assignment.studentId && assignment.studentId.schoolID) {
+        try {
+          await StudentAssignment.findByIdAndUpdate(
+            assignment._id,
+            { studentSchoolID: assignment.studentId.schoolID },
+            { new: true }
+          );
+          
+          fixedCount++;
+          results.push({
+            assignmentId: assignment._id,
+            studentName: assignment.studentName || `${assignment.studentId.firstname} ${assignment.studentId.lastname}`,
+            schoolID: assignment.studentId.schoolID,
+            status: 'Fixed'
+          });
+          
+          console.log(`[FIX-SCHOOLIDS] ✅ Fixed assignment ${assignment._id} with schoolID ${assignment.studentId.schoolID}`);
+        } catch (error) {
+          console.error(`[FIX-SCHOOLIDS] ❌ Error fixing assignment ${assignment._id}:`, error.message);
+          results.push({
+            assignmentId: assignment._id,
+            studentName: assignment.studentName || 'Unknown',
+            schoolID: 'Error',
+            status: 'Failed'
+          });
+        }
+      } else {
+        console.log(`[FIX-SCHOOLIDS] ⚠️ Assignment ${assignment._id} has no linked student or student has no schoolID`);
+        results.push({
+          assignmentId: assignment._id,
+          studentName: assignment.studentName || 'Unknown',
+          schoolID: 'No schoolID found',
+          status: 'Skipped'
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Fixed ${fixedCount} out of ${assignmentsToFix.length} assignments`,
+      fixedCount: fixedCount,
+      totalFound: assignmentsToFix.length,
+      results: results
+    });
+    
+  } catch (error) {
+    console.error('[FIX-SCHOOLIDS] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fix missing schoolIDs',
+      error: error.message
+    });
+  }
+});
 
 // Manual endpoint to fix unlinked StudentAssignment records
 userRoutes.post('/fix-unlinked-assignments', authenticateToken, async (req, res) => {

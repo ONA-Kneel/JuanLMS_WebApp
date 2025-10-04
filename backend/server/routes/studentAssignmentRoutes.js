@@ -95,6 +95,19 @@ router.post('/', authenticateToken, async (req, res) => {
     if (!gradeLevel) {
       return res.status(400).json({ message: 'gradeLevel is required' });
     }
+    
+    // Validate required fields for manual assignments
+    if (!studentId) {
+      if (!enrollmentNo || !enrollmentDate) {
+        return res.status(400).json({ message: 'Enrollment number and enrollment date are required for manual assignments' });
+      }
+      if (!studentSchoolID) {
+        return res.status(400).json({ message: 'Student School ID is required for manual assignments' });
+      }
+      if (!firstName || !lastName) {
+        return res.status(400).json({ message: 'First name and last name are required for manual assignments' });
+      }
+    }
 
     let actualStudentId = studentId;
     // Construct studentName from firstName and lastName if not provided directly
@@ -230,7 +243,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const assignment = new StudentAssignment({
       studentId: actualStudentId || undefined,
       studentName: !actualStudentId ? (fullStudentName || `Student ${studentSchoolID}`) : undefined,
-      studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
+      studentSchoolID: studentSchoolID || undefined, // ALWAYS store schoolID if provided, regardless of whether student exists
       firstName: !actualStudentId ? firstName : undefined,
       lastName: !actualStudentId ? lastName : undefined,
       enrollmentNo: !actualStudentId ? enrollmentNo : undefined,
@@ -319,6 +332,22 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         errors.push({ assignment: assignmentData, message: 'gradeLevel is required' });
         continue;
       }
+      
+      // Validate required fields for manual assignments in bulk
+      if (!studentId) {
+        if (!assignmentData.enrollmentNo || !assignmentData.enrollmentDate) {
+          errors.push({ assignment: assignmentData, message: 'Enrollment number and enrollment date are required for manual assignments' });
+          continue;
+        }
+        if (!studentSchoolID) {
+          errors.push({ assignment: assignmentData, message: 'Student School ID is required for manual assignments' });
+          continue;
+        }
+        if (!firstName || !lastName) {
+          errors.push({ assignment: assignmentData, message: 'First name and last name are required for manual assignments' });
+          continue;
+        }
+      }
 
       let actualStudentId = studentId;
       // Construct studentName from firstName and lastName if not provided directly
@@ -399,7 +428,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
       const newAssignment = new StudentAssignment({
         studentId: actualStudentId || undefined,
         studentName: !actualStudentId ? (fullStudentName || `Student ${studentSchoolID}`) : undefined,
-        studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
+        studentSchoolID: studentSchoolID || undefined, // ALWAYS store schoolID if provided, regardless of whether student exists
         firstName: !actualStudentId ? firstName : undefined,
         lastName: !actualStudentId ? lastName : undefined,
         trackName,

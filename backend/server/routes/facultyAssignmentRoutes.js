@@ -84,7 +84,12 @@ const autoCreateClass = async (facultyAssignment) => {
       console.log(`  - Status: active or pending`);
     }
     
-    // Extract student IDs (ObjectIds) from assignments
+    // Extract student schoolIDs from assignments (prioritize schoolID over ObjectId)
+    const studentSchoolIds = studentAssignments
+      .filter(assignment => assignment.studentSchoolID) // Only include assignments with schoolID
+      .map(assignment => assignment.studentSchoolID);
+    
+    // Also get ObjectIds for assignments that have linked students
     const studentIds = studentAssignments
       .filter(assignment => assignment.studentId) // Only include linked students
       .map(assignment => assignment.studentId._id);
@@ -94,6 +99,40 @@ const autoCreateClass = async (facultyAssignment) => {
       .filter(assignment => !assignment.studentId && assignment.studentName)
       .map(assignment => assignment.studentName);
     
+    // First, try to find students by schoolID (PRIORITY METHOD)
+    let finalStudentIds = [];
+    
+    if (studentSchoolIds.length > 0) {
+      console.log(`[AUTO-CREATE-CLASS] Found ${studentSchoolIds.length} students by schoolID:`, studentSchoolIds);
+      
+      // Find User records by schoolID
+      const usersBySchoolId = await User.find({
+        role: 'students',
+        schoolID: { $in: studentSchoolIds }
+      });
+      
+      console.log(`[AUTO-CREATE-CLASS] Found ${usersBySchoolId.length} User records for students by schoolID`);
+      
+      // Add these user IDs to the final list
+      const schoolIdUserIds = usersBySchoolId.map(user => user._id);
+      finalStudentIds.push(...schoolIdUserIds);
+      
+      // Debug: Show what users were found by schoolID
+      if (usersBySchoolId.length > 0) {
+        console.log('[AUTO-CREATE-CLASS] Matched users by schoolID:');
+        usersBySchoolId.forEach(user => {
+          console.log(`  - ${user.userID} (${user.schoolID}): ${user.firstname} ${user.lastname}`);
+        });
+      }
+    }
+    
+    // Also add students found by ObjectId (fallback)
+    if (studentIds.length > 0) {
+      console.log(`[AUTO-CREATE-CLASS] Adding ${studentIds.length} students found by ObjectId`);
+      finalStudentIds.push(...studentIds);
+    }
+    
+    // Handle students found by name (last resort)
     if (studentsByName.length > 0) {
       console.log(`[AUTO-CREATE-CLASS] Found ${studentsByName.length} students by name:`, studentsByName);
       
@@ -134,7 +173,7 @@ const autoCreateClass = async (facultyAssignment) => {
       
       // Debug: Show what users were found
       if (usersByName.length > 0) {
-        console.log('[AUTO-CREATE-CLASS] Matched users:');
+        console.log('[AUTO-CREATE-CLASS] Matched users by name:');
         usersByName.forEach(user => {
           console.log(`  - ${user.userID}: ${user.firstname} ${user.lastname}`);
         });
@@ -147,9 +186,9 @@ const autoCreateClass = async (facultyAssignment) => {
         });
       }
       
-      // Add these user IDs to the studentIds array
+      // Add these user IDs to the final list
       const additionalStudentIds = usersByName.map(user => user._id);
-      studentIds.push(...additionalStudentIds);
+      finalStudentIds.push(...additionalStudentIds);
       
       // For students that couldn't be matched, create temporary entries
       const matchedNames = usersByName.map(user => 
@@ -185,15 +224,15 @@ const autoCreateClass = async (facultyAssignment) => {
         }));
         
         const tempUserIds = tempUsers.map(user => user._id);
-        studentIds.push(...tempUserIds);
+        finalStudentIds.push(...tempUserIds);
         
         console.log(`[AUTO-CREATE-CLASS] Created ${tempUsers.length} temporary user records`);
       }
     }
     
     // Remove duplicate student IDs
-    const uniqueStudentIds = [...new Set(studentIds.map(id => String(id)))];
-    console.log(`[AUTO-CREATE-CLASS] Found ${studentIds.length} students, ${uniqueStudentIds.length} unique students for section ${facultyAssignment.sectionName}`);
+    const uniqueStudentIds = [...new Set(finalStudentIds.map(id => String(id)))];
+    console.log(`[AUTO-CREATE-CLASS] Found ${finalStudentIds.length} students, ${uniqueStudentIds.length} unique students for section ${facultyAssignment.sectionName}`);
     
     // Create the class
     const classData = {

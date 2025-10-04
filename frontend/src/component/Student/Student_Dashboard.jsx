@@ -118,6 +118,8 @@ export default function Student_Dashboard() {
         console.log("Student Dashboard - My classes from backend:", data);
         console.log("Student Dashboard - Current userID:", currentUserID);
         console.log("Student Dashboard - Current user from localStorage:", localStorage.getItem("user"));
+        console.log("Student Dashboard - Academic Year:", academicYear);
+        console.log("Student Dashboard - Current Term:", currentTerm);
         
         // Filter like faculty: active year/term (allow missing) and not archived
         const requiredYear = `${academicYear?.schoolYearStart}-${academicYear?.schoolYearEnd}`;
