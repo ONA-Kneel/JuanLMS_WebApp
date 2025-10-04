@@ -180,16 +180,16 @@ export default function ForgotPassword() {
         {step === 1 && (
           <form onSubmit={handleRequestOTP} className="space-y-4">
             <div>
-              <label className="block text-base mb-2">Enter your Zoho Mail address</label>
+              <label className="block text-base mb-2">Enter your school (LMS) email address</label>
               <input
                 type="email"
                 required
                 className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900"
-                placeholder="role.firstname.lastname@sjdefilms.com"
+                placeholder="e.g., role.firstname.lastname@sjdefilms.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
               />
-              <p className="text-xs text-gray-500 mt-1">Note: OTP will be sent to this Zoho Mail address</p>
+              <p className="text-xs text-gray-500 mt-1">Note: We will send the OTP to your School email on file.</p>
             </div>
             <button
               type="submit"

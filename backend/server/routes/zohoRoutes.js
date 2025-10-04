@@ -252,7 +252,8 @@ router.post("/zoho/create-email", async (req, res) => {
 
     // Generate email address if not provided
     const emailAddress = email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}@sjdefilms.com`;
-    const userPassword = password || `SecurePass${Math.random().toString(36).substring(2, 8)}!`;
+    // Simple password (letters + numbers only) when not provided
+    const userPassword = password || `Pass${Math.random().toString(36).substring(2, 10)}`;
 
     const accessToken = await getZohoAccessToken();
     const zoid = "898669091"; // Your organization ID

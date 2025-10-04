@@ -177,23 +177,22 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
       schoolEmail = `vpe.${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjdefilms.com`;
     }
 
-    // Generate a secure temporary password that meets Zoho requirements
-    const generateSecurePassword = () => {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-      let password = '';
-      // Ensure at least one uppercase, lowercase, number, and special character
-      password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
-      password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)];
-      password += '0123456789'[Math.floor(Math.random() * 10)];
-      password += '!@#$%^&*'[Math.floor(Math.random() * 8)];
-      // Add 8 more random characters
-      for (let i = 0; i < 8; i++) {
-        password += chars[Math.floor(Math.random() * chars.length)];
+    // Generate a simple temporary password (letters and numbers only)
+    const generateSimplePassword = () => {
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+      const digits = '0123456789';
+      let pwd = '';
+      // Ensure at least one uppercase, one lowercase, and one digit
+      pwd += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
+      pwd += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)];
+      pwd += digits[Math.floor(Math.random() * 10)];
+      const pool = letters + digits;
+      for (let i = 0; i < 7; i++) { // total length 10
+        pwd += pool[Math.floor(Math.random() * pool.length)];
       }
-      // Shuffle the password
-      return password.split('').sort(() => Math.random() - 0.5).join('');
+      return pwd;
     };
-    const tempPassword = generateSecurePassword();
+    const tempPassword = generateSimplePassword();
     const user = new User({
       firstname: registrant.firstName,
       middlename: registrant.middleName,
@@ -529,23 +528,21 @@ router.post('/test-approval', async (req, res) => {
       schoolEmail = `vpe.${clean(registrant.firstName)}.${clean(registrant.lastName)}@sjdefilms.com`;
     }
 
-    // Generate a secure temporary password that meets Zoho requirements
-    const generateSecurePassword = () => {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-      let password = '';
-      // Ensure at least one uppercase, lowercase, number, and special character
-      password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
-      password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)];
-      password += '0123456789'[Math.floor(Math.random() * 10)];
-      password += '!@#$%^&*'[Math.floor(Math.random() * 8)];
-      // Add 8 more random characters
-      for (let i = 0; i < 8; i++) {
-        password += chars[Math.floor(Math.random() * chars.length)];
+    // Generate a simple temporary password (letters and numbers only)
+    const generateSimplePassword2 = () => {
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+      const digits = '0123456789';
+      let pwd = '';
+      pwd += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
+      pwd += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)];
+      pwd += digits[Math.floor(Math.random() * 10)];
+      const pool = letters + digits;
+      for (let i = 0; i < 7; i++) {
+        pwd += pool[Math.floor(Math.random() * pool.length)];
       }
-      // Shuffle the password
-      return password.split('').sort(() => Math.random() - 0.5).join('');
+      return pwd;
     };
-    const tempPassword = generateSecurePassword();
+    const tempPassword = generateSimplePassword2();
 
     // Create user account
     const user = new User({

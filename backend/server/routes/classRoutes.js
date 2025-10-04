@@ -1014,33 +1014,52 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
       })));
       
     } else if (userRole === 'students') {
-      // Student: classes where members includes the student's ObjectId
+      // Student: classes where members includes any of the student's identifiers
       console.log(`[MY-CLASSES] Processing as student user`);
-      
-      // Find classes where the student's ObjectId is in the members array
+
+      // Collect possible identifiers used in Classes.members
+      // Historically, members may contain ObjectIds, legacy userIDs, or SCHOOL IDs (e.g., 24-09015)
+      const identifiers = [userObjectId, String(userObjectId)];
+      if (userID) identifiers.push(String(userID));
+
+      // Fetch user to derive decrypted schoolID if needed
+      try {
+        const studentDoc = await User.findById(userObjectId).select('_id userID schoolID');
+        if (studentDoc) {
+          const schoolIdPlain = studentDoc.getDecryptedSchoolID ? studentDoc.getDecryptedSchoolID() : studentDoc.schoolID;
+          if (schoolIdPlain) identifiers.push(String(schoolIdPlain));
+        }
+      } catch (e) {
+        console.warn('[MY-CLASSES] Could not load student for schoolID resolution:', e.message);
+      }
+
+      console.log('[MY-CLASSES] Student identifiers used for membership match:', identifiers);
+
       // Show ALL classes where student is a member (including auto-created and needing confirmation)
-      classes = await Class.find({ 
-        members: userObjectId,
+      classes = await Class.find({
+        $or: identifiers.map(id => ({ members: id })),
         isArchived: { $ne: true } // Only exclude archived classes
       });
-      
+
       console.log(`[MY-CLASSES] Found ${classes.length} classes as student`);
       console.log(`[MY-CLASSES] Student ObjectId: ${userObjectId}`);
-      console.log(`[MY-CLASSES] Classes found:`, classes.map(c => ({ 
-        classID: c.classID, 
-        className: c.className, 
+      console.log(`[MY-CLASSES] Classes found:`, classes.map(c => ({
+        classID: c.classID,
+        className: c.className,
         members: c.members,
         facultyID: c.facultyID,
         needsConfirmation: c.needsConfirmation,
         isAutoCreated: c.isAutoCreated
       })));
-      
-      // Debug: Check if student ObjectId is in any class members
+
+      // Debug: Check if any of the identifiers appear in each class members list
+      const idStrings = identifiers.map(v => String(v));
       const allClasses = await Class.find({ isArchived: { $ne: true } });
-      console.log(`[MY-CLASSES] DEBUG: Checking all classes for student ObjectId ${userObjectId}`);
+      console.log(`[MY-CLASSES] DEBUG: Checking all classes for identifiers ${idStrings.join(', ')}`);
       allClasses.forEach(cls => {
-        const isMember = cls.members.some(memberId => String(memberId) === String(userObjectId));
-        console.log(`[MY-CLASSES] DEBUG: Class ${cls.className} (${cls.classID}) - Is member: ${isMember}, Members: ${cls.members.map(m => String(m)).join(', ')}`);
+        const membersAsString = (cls.members || []).map(m => String(m));
+        const isMember = membersAsString.some(m => idStrings.includes(m));
+        console.log(`[MY-CLASSES] DEBUG: Class ${cls.className} (${cls.classID}) - Is member: ${isMember}, Members: ${membersAsString.join(', ')}`);
       });
       
     } else {
