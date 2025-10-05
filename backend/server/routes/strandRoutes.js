@@ -393,4 +393,224 @@ router.patch('/quarter/:quarterName/schoolyear/:schoolYear', async (req, res) =>
   }
 });
 
+// Copy all academic structure from one quarter to another
+router.post('/copy-quarter', async (req, res) => {
+  try {
+    const { sourceQuarter, targetQuarter, schoolYear, termName } = req.body;
+
+    if (!sourceQuarter || !targetQuarter || !schoolYear || !termName) {
+      return res.status(400).json({ 
+        message: 'Source quarter, target quarter, school year, and term name are required' 
+      });
+    }
+
+    if (sourceQuarter === targetQuarter) {
+      return res.status(400).json({ 
+        message: 'Source and target quarters cannot be the same' 
+      });
+    }
+
+    console.log(`Starting quarter copy from ${sourceQuarter} to ${targetQuarter} for ${schoolYear} - ${termName}`);
+
+    // Get all strands from source quarter
+    const sourceStrands = await Strand.find({
+      quarterName: sourceQuarter,
+      schoolYear: schoolYear,
+      termName: termName
+    });
+
+    if (sourceStrands.length === 0) {
+      return res.status(404).json({ 
+        message: `No strands found in source quarter: ${sourceQuarter}` 
+      });
+    }
+
+    // Check if target quarter already has strands
+    const existingTargetStrands = await Strand.find({
+      quarterName: targetQuarter,
+      schoolYear: schoolYear,
+      termName: termName
+    });
+
+    if (existingTargetStrands.length > 0) {
+      return res.status(409).json({ 
+        message: `Target quarter ${targetQuarter} already has ${existingTargetStrands.length} strands. Cannot copy to avoid duplicates.` 
+      });
+    }
+
+    // Copy strands to target quarter
+    const copiedStrands = [];
+    for (const strand of sourceStrands) {
+      const newStrand = new Strand({
+        strandName: strand.strandName,
+        trackName: strand.trackName,
+        schoolYear: strand.schoolYear,
+        termName: strand.termName,
+        quarterName: targetQuarter,
+        status: strand.status
+      });
+      
+      const savedStrand = await newStrand.save();
+      copiedStrands.push(savedStrand);
+    }
+
+    console.log(`Successfully copied ${copiedStrands.length} strands from ${sourceQuarter} to ${targetQuarter}`);
+
+    // Now copy related entities (sections, subjects, etc.)
+    await copyRelatedEntities(sourceQuarter, targetQuarter, schoolYear, termName);
+
+    res.json({ 
+      message: `Successfully copied all academic structure from ${sourceQuarter} to ${targetQuarter}`,
+      copiedStrands: copiedStrands.length,
+      details: {
+        strands: copiedStrands.length,
+        // Will be populated by copyRelatedEntities
+        sections: 0,
+        subjects: 0,
+        studentAssignments: 0,
+        facultyAssignments: 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Error copying quarter data:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Helper function to copy related entities
+async function copyRelatedEntities(sourceQuarter, targetQuarter, schoolYear, termName) {
+  const Track = (await import('../models/Track.js')).default;
+  const Section = (await import('../models/Section.js')).default;
+  const Subject = (await import('../models/Subject.js')).default;
+  const StudentAssignment = (await import('../models/StudentAssignment.js')).default;
+  const FacultyAssignment = (await import('../models/FacultyAssignment.js')).default;
+
+  let copiedCounts = {
+    tracks: 0,
+    sections: 0,
+    subjects: 0,
+    studentAssignments: 0,
+    facultyAssignments: 0
+  };
+
+  try {
+    // Copy tracks
+    const sourceTracks = await Track.find({
+      quarterName: sourceQuarter,
+      schoolYear: schoolYear,
+      termName: termName
+    });
+
+    for (const track of sourceTracks) {
+      const newTrack = new Track({
+        trackName: track.trackName,
+        schoolYear: track.schoolYear,
+        termName: track.termName,
+        quarterName: targetQuarter,
+        status: track.status
+      });
+      await newTrack.save();
+      copiedCounts.tracks++;
+    }
+
+    // Copy sections
+    const sourceSections = await Section.find({
+      quarterName: sourceQuarter,
+      schoolYear: schoolYear,
+      termName: termName
+    });
+
+    for (const section of sourceSections) {
+      const newSection = new Section({
+        sectionName: section.sectionName,
+        trackName: section.trackName,
+        strandName: section.strandName,
+        gradeLevel: section.gradeLevel,
+        schoolYear: section.schoolYear,
+        termName: section.termName,
+        quarterName: targetQuarter,
+        status: section.status
+      });
+      await newSection.save();
+      copiedCounts.sections++;
+    }
+
+    // Copy subjects
+    const sourceSubjects = await Subject.find({
+      quarterName: sourceQuarter,
+      schoolYear: schoolYear,
+      termName: termName
+    });
+
+    for (const subject of sourceSubjects) {
+      const newSubject = new Subject({
+        subjectName: subject.subjectName,
+        trackName: subject.trackName,
+        strandName: subject.strandName,
+        gradeLevel: subject.gradeLevel,
+        schoolYear: subject.schoolYear,
+        termName: subject.termName,
+        quarterName: targetQuarter,
+        status: subject.status
+      });
+      await newSubject.save();
+      copiedCounts.subjects++;
+    }
+
+    // Copy student assignments
+    const sourceStudentAssignments = await StudentAssignment.find({
+      quarterName: sourceQuarter,
+      schoolYear: schoolYear,
+      termName: termName
+    });
+
+    for (const assignment of sourceStudentAssignments) {
+      const newAssignment = new StudentAssignment({
+        studentId: assignment.studentId,
+        trackName: assignment.trackName,
+        strandName: assignment.strandName,
+        sectionName: assignment.sectionName,
+        subjectName: assignment.subjectName,
+        schoolYear: assignment.schoolYear,
+        termName: assignment.termName,
+        quarterName: targetQuarter,
+        status: assignment.status
+      });
+      await newAssignment.save();
+      copiedCounts.studentAssignments++;
+    }
+
+    // Copy faculty assignments
+    const sourceFacultyAssignments = await FacultyAssignment.find({
+      quarterName: sourceQuarter,
+      schoolYear: schoolYear,
+      termName: termName
+    });
+
+    for (const assignment of sourceFacultyAssignments) {
+      const newAssignment = new FacultyAssignment({
+        facultyId: assignment.facultyId,
+        trackName: assignment.trackName,
+        strandName: assignment.strandName,
+        sectionName: assignment.sectionName,
+        subjectName: assignment.subjectName,
+        schoolYear: assignment.schoolYear,
+        termName: assignment.termName,
+        quarterName: targetQuarter,
+        status: assignment.status
+      });
+      await newAssignment.save();
+      copiedCounts.facultyAssignments++;
+    }
+
+    console.log(`Copied related entities:`, copiedCounts);
+    return copiedCounts;
+
+  } catch (error) {
+    console.error('Error copying related entities:', error);
+    throw error;
+  }
+}
+
 export default router; 
