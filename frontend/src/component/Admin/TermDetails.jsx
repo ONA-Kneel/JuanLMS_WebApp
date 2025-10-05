@@ -3297,17 +3297,26 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
   };
 
-  // Update: Enforce uniqueness for strand names within the same term (across all quarters)
+  // Update: Enforce absolute uniqueness for strand names
   const validateStrands = async (strandsToValidate) => {
     const status = {};
     const uploadedStrandNames = new Set();
-    // Fetch existing strands in the current term (for term-level uniqueness)
-    const existingStrandsInTerm = new Set();
-    strands.forEach(strand => {
-      if (strand.schoolYear === termDetails.schoolYear && strand.termName === termDetails.termName) {
-        existingStrandsInTerm.add(`${strand.trackName.toLowerCase()}-${strand.strandName.toLowerCase()}`);
+    // Fetch all existing strands in the system (for absolute uniqueness)
+    const allStrands = [];
+    for (const track of tracks) {
+      if (track.status === 'active') {
+        try {
+          const res = await fetch(`${API_BASE}/api/strands/track/${track.trackName}`);
+          if (res.ok) {
+            const fetchedStrands = await res.json();
+            allStrands.push(...fetchedStrands);
+          }
+        } catch (err) {
+          // ignore
+        }
       }
-    });
+    }
+    const allStrandNamesInSystem = new Set(allStrands.map(s => s.strandName.trim().toLowerCase()));
 
     for (let i = 0; i < strandsToValidate.length; i++) {
       const strand = strandsToValidate[i];
@@ -3321,12 +3330,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         isValid = false;
         message = 'Missing Track Name or Strand Name';
       }
-      // 2. Check if strand name exists in the current term (across all quarters)
+      // 2. Absolute uniqueness: check if strand name exists anywhere
       if (isValid) {
-        const strandKey = `${trackName.toLowerCase()}-${strandName.toLowerCase()}`;
-        if (existingStrandsInTerm.has(strandKey)) {
+        if (allStrandNamesInSystem.has(strandName.toLowerCase())) {
           isValid = false;
-          message = 'Strand name already exists in this term (across all quarters)';
+          message = 'Strand name already exists in the system (must be unique)';
         }
       }
       // 3. Check for duplicates within the uploaded data (absolute uniqueness)
@@ -3623,16 +3631,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
     console.log('All active strands in system:', activeStrandsInSystem);
 
-    // Get all existing sections from the current term (for term-level uniqueness)
-    const existingSections = sections.filter(section => 
-      section.status === 'active' && 
-      section.schoolYear === termDetails.schoolYear && 
-      section.termName === termDetails.termName
-    );
+    // Get all existing sections from the component state (more reliable)
+    const existingSections = sections.filter(section => section.status === 'active');
     existingSections.forEach(section => {
       existingSectionsInSystem.add(`${section.trackName}-${section.strandName}-${section.sectionName}-${section.gradeLevel}`);
     });
-    console.log('Existing sections in current term:', Array.from(existingSectionsInSystem));
+    console.log('Existing sections in system:', Array.from(existingSectionsInSystem));
 
     // Track section names in the uploaded file for duplicates
     const uploadedSectionNames = new Set();
@@ -3673,14 +3677,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       }
 
-      // 4. Check if section already exists in the current term (across all quarters)
+      // 4. Check if section already exists in the system
       if (isValid) {
         const sectionKey = `${trackName}-${strandName}-${sectionName}-${gradeLevel}`;
-        console.log(`Checking if section exists in current term: "${sectionKey}"`);
-        console.log('Available existing sections in current term:', Array.from(existingSectionsInSystem));
+        console.log(`Checking if section exists: "${sectionKey}"`);
+        console.log('Available existing sections:', Array.from(existingSectionsInSystem));
         if (existingSectionsInSystem.has(sectionKey)) {
           isValid = false;
-          message = `Section "${sectionName}" already exists in ${trackName} - ${strandName} - ${gradeLevel} for this term`;
+          message = `Section "${sectionName}" already exists in ${trackName} - ${strandName} - ${gradeLevel}`;
         }
       }
 
@@ -10256,14 +10260,15 @@ const validateStrandsImport = async (strandsToValidate, existingStrands, termDet
       continue;
     }
     
-    // Check if strand already exists in the current term (across all quarters)
+    // Check if strand already exists in the current term and quarter
     // Allow importing strands that exist in other quarters of the same term
     const existingStrand = existingStrands.find(s => 
       s.trackName.toLowerCase() === strand.trackName.toLowerCase() && 
-      s.strandName.toLowerCase() === strand.strandName.toLowerCase()
+      s.strandName.toLowerCase() === strand.strandName.toLowerCase() &&
+      s.quarterName === termDetails.quarterName
     );
     if (existingStrand) {
-      // Strand already exists in current term - skip but don't mark as invalid
+      // Strand already exists in current quarter - skip but don't mark as invalid
       results.push({ valid: true, message: `Strand '${strand.strandName}' already exists - will be skipped` });
       continue;
     }
@@ -10293,16 +10298,17 @@ const validateSectionsImport = async (sectionsToValidate, existingSections, term
       continue;
     }
     
-    // Check if section already exists in the current term (across all quarters)
+    // Check if section already exists in the current term and quarter
     // Allow importing sections that exist in other quarters of the same term
     const existingSection = existingSections.find(s => 
       s.trackName.toLowerCase() === section.trackName.toLowerCase() && 
       s.strandName.toLowerCase() === section.strandName.toLowerCase() &&
       s.sectionName.toLowerCase() === section.sectionName.toLowerCase() &&
-      s.gradeLevel.toLowerCase() === section.gradeLevel.toLowerCase()
+      s.gradeLevel.toLowerCase() === section.gradeLevel.toLowerCase() &&
+      s.quarterName === termDetails.quarterName
     );
     if (existingSection) {
-      // Section already exists in current term - skip but don't mark as invalid
+      // Section already exists in current quarter - skip but don't mark as invalid
       results.push({ valid: true, message: `Section '${section.sectionName}' already exists - will be skipped` });
       continue;
     }
