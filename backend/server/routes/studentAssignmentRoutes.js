@@ -184,23 +184,39 @@ router.post('/', authenticateToken, async (req, res) => {
     console.log('  - quarterName:', quarterName || null);
     console.log('  - actualStudentId:', actualStudentId);
     
+    // Enhanced duplicate check - check multiple combinations to catch all possible duplicates
     const existingAssignment = await StudentAssignment.findOne({
       $or: [
-        // Check by studentId if it exists - only prevent same student in same term and quarter
+        // Check by studentId if it exists
         ...(actualStudentId ? [{
           studentId: actualStudentId,
           schoolYear: term.schoolYear,
           termName: term.termName,
           quarterName: quarterName || null
         }] : []),
-        // Check by studentSchoolID - this is the primary check to prevent duplicates
-        // This ensures we're checking for the exact same student, regardless of whether they have a studentId
+        // Check by studentSchoolID - primary check
         ...(studentSchoolID ? [{
           studentSchoolID,
           schoolYear: term.schoolYear,
           termName: term.termName,
           quarterName: quarterName || null
-        }] : [])
+        }] : []),
+        // Additional check: same studentSchoolID in same term regardless of quarter
+        ...(studentSchoolID ? [{
+          studentSchoolID,
+          schoolYear: term.schoolYear,
+          termName: term.termName
+        }] : []),
+        // Check for exact same assignment details
+        {
+          studentSchoolID,
+          trackName,
+          strandName,
+          sectionName,
+          schoolYear: term.schoolYear,
+          termName: term.termName,
+          quarterName: quarterName || null
+        }
       ]
     });
     
@@ -421,24 +437,39 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 
       // allow manual entries when no matching student is found
 
-      // Check for existing assignment before creating new one (same logic as single creation)
+      // Enhanced duplicate check for bulk import - check multiple combinations to catch all possible duplicates
       const existingAssignment = await StudentAssignment.findOne({
         $or: [
-          // Check by studentId if it exists - only prevent same student in same term and quarter
+          // Check by studentId if it exists
           ...(actualStudentId ? [{
             studentId: actualStudentId,
             schoolYear: term.schoolYear,
             termName: term.termName,
             quarterName: quarterName || null
           }] : []),
-          // Check by studentSchoolID - this is the primary check to prevent duplicates
-          // This ensures we're checking for the exact same student, regardless of whether they have a studentId
+          // Check by studentSchoolID - primary check
           ...(studentSchoolID ? [{
             studentSchoolID,
             schoolYear: term.schoolYear,
             termName: term.termName,
             quarterName: quarterName || null
-          }] : [])
+          }] : []),
+          // Additional check: same studentSchoolID in same term regardless of quarter
+          ...(studentSchoolID ? [{
+            studentSchoolID,
+            schoolYear: term.schoolYear,
+            termName: term.termName
+          }] : []),
+          // Check for exact same assignment details
+          {
+            studentSchoolID,
+            trackName,
+            strandName,
+            sectionName,
+            schoolYear: term.schoolYear,
+            termName: term.termName,
+            quarterName: quarterName || null
+          }
         ]
       });
 

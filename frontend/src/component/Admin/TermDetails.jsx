@@ -5182,7 +5182,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       }
 
-      // Now create the student assignments
+      // Prepare all student assignments for bulk upload
+      const assignmentsToCreate = [];
+      
       for (let i = 0; i < validAssignments.length; i++) {
         const assignment = validAssignments[i];
         // Get the studentId from the validation status of the original preview data
@@ -5221,53 +5223,67 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           }
         }
 
-        const res = await fetch(`${API_BASE}/api/student-assignments`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify((() => {
-            const basePayload = {
-              gradeLevel: assignment['grade'] || assignment['Grade Level'],
-              trackName: assignment['Track Name'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track'),
-              strandName: assignment['strand'] || assignment['Strand Name'],
-              sectionName: assignment['section'] || assignment['Section Name'],
-              termId: termDetails._id,
-              quarterName: quarterData ? quarterData.quarterName : undefined
-            };
+        // Prepare assignment data for bulk upload
+        const assignmentData = {
+          gradeLevel: assignment['grade'] || assignment['Grade Level'],
+          trackName: assignment['Track Name'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track'),
+          strandName: assignment['strand'] || assignment['Strand Name'],
+          sectionName: assignment['section'] || assignment['Section Name'],
+          termId: termDetails._id,
+          quarterName: quarterData ? quarterData.quarterName : undefined
+        };
             
-            if (studentId) {
-              // Existing student - send studentId AND schoolID
-              return { 
-                ...basePayload, 
-                studentId: studentId,
-                studentSchoolID: studentSchoolID // ALWAYS include schoolID
-              };
-            } else {
-              // New student - send student info directly (same as manual assignment)
-              const payload = { 
-                ...basePayload, 
-                firstName: firstName,
-                lastName: lastName,
-                enrollmentNo: enrollmentNo,
-                enrollmentDate: enrollmentDate
-              };
-              if (studentSchoolID) {
-                payload.studentSchoolID = studentSchoolID;
-              }
-              return payload;
-            }
-          })())
-        });
-
-        if (res.ok) {
-          const newAssignment = await res.json();
-          createdAssignments.push(newAssignment);
+        if (studentId) {
+          // Existing student - send studentId AND schoolID
+          assignmentsToCreate.push({ 
+            ...assignmentData, 
+            studentId: studentId,
+            studentSchoolID: studentSchoolID // ALWAYS include schoolID
+          });
         } else {
-          const data = await res.json();
-          throw new Error(data.message || `Failed to create assignment for ${firstName} ${lastName}`);
+          // New student - send student info directly (same as manual assignment)
+          const payload = { 
+            ...assignmentData, 
+            firstName: firstName,
+            lastName: lastName,
+            enrollmentNo: enrollmentNo,
+            enrollmentDate: enrollmentDate
+          };
+          if (studentSchoolID) {
+            payload.studentSchoolID = studentSchoolID;
+          }
+          assignmentsToCreate.push(payload);
         }
+      }
+
+      // Make single bulk request instead of individual requests
+      console.log(`Making bulk request for ${assignmentsToCreate.length} student assignments`);
+      const res = await fetch(`${API_BASE}/api/student-assignments/bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(assignmentsToCreate)
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        console.log('Bulk student assignment creation result:', result);
+        
+        if (result.created) {
+          createdAssignments.push(...result.created);
+        }
+        
+        if (result.errors && result.errors.length > 0) {
+          console.warn('Some student assignments failed:', result.errors);
+          // Show errors to user but don't fail the entire operation
+          const errorMessages = result.errors.map(err => err.message).join(', ');
+          console.warn('Student assignment errors:', errorMessages);
+        }
+      } else {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to create student assignments');
       }
 
       // Refresh all data after successful upload
@@ -6438,6 +6454,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       let importedCount = 0;
       let skippedCount = 0;
       const skippedMessages = [];
+      
+      // Separate counters for different import types
+      let tracksImported = 0;
+      let strandsImported = 0;
+      let sectionsImported = 0;
+      let subjectsImported = 0;
+      let facultyImported = 0;
+      let studentsImported = 0;
 
       // Count items that were marked as "already exists" during validation
       const countSkippedItems = (data, validationStatus, type, nameField) => {
@@ -6483,6 +6507,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
           if (res.ok) {
             importedCount++;
+            tracksImported++;
             console.log(`Successfully created track: ${track.trackName}`);
           } else {
             const data = await res.json();
@@ -6517,6 +6542,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
           if (res.ok) {
             importedCount++;
+            strandsImported++;
           } else {
             const data = await res.json();
             if (data.message && data.message.includes('already exists')) {
@@ -6548,6 +6574,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
           if (res.ok) {
             importedCount++;
+            sectionsImported++;
             console.log(`Successfully created section: ${section.sectionName}`);
           } else {
             const data = await res.json();
@@ -6584,6 +6611,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
           if (res.ok) {
             importedCount++;
+            subjectsImported++;
           } else {
             const data = await res.json();
             if (data.message && data.message.includes('already exists')) {
@@ -6597,8 +6625,22 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
 
       // Import faculty assignments
+      const processedFacultyAssignments = new Set(); // Track processed assignments to prevent duplicates within the same import
+      
       for (const assignment of validFacultyAssignments) {
         try {
+          // Create a unique key for this assignment to prevent duplicates within the same import batch
+          const assignmentKey = `${assignment.facultyName}-${assignment.trackName}-${assignment.strandName}-${assignment.sectionName}`;
+          
+          if (processedFacultyAssignments.has(assignmentKey)) {
+            console.log(`Skipping duplicate faculty assignment within import batch: ${assignment.facultyName}`);
+            skippedCount++;
+            skippedMessages.push(`Faculty assignment for "${assignment.facultyName}" is duplicate within import batch`);
+            continue;
+          }
+          
+          processedFacultyAssignments.add(assignmentKey);
+          
           // Find faculty by name
           const faculty = faculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === assignment.facultyName.toLowerCase());
           if (!faculty) {
@@ -6629,6 +6671,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
           if (res.ok) {
             importedCount++;
+            facultyImported++;
             console.log(`Faculty assignment for ${assignment.facultyName} imported successfully`);
           } else {
             const data = await res.json();
@@ -6645,8 +6688,22 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
 
       // Import student assignments
+      const processedStudentAssignments = new Set(); // Track processed assignments to prevent duplicates within the same import
+      
       for (const assignment of validStudentAssignments) {
         try {
+          // Create a unique key for this assignment to prevent duplicates within the same import batch
+          const assignmentKey = `${assignment.studentSchoolID}-${assignment.trackName}-${assignment.strandName}-${assignment.sectionName}`;
+          
+          if (processedStudentAssignments.has(assignmentKey)) {
+            console.log(`Skipping duplicate assignment within import batch: ${assignment.studentName} (${assignment.studentSchoolID})`);
+            skippedCount++;
+            skippedMessages.push(`Student assignment for "${assignment.studentName}" is duplicate within import batch`);
+            continue;
+          }
+          
+          processedStudentAssignments.add(assignmentKey);
+          
           // Find student by school ID
           const student = students.find(s => s.schoolID === assignment.studentSchoolID);
           
@@ -6696,6 +6753,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
           if (res.ok) {
             importedCount++;
+            studentsImported++;
             console.log(`Student assignment for ${assignment.studentName} imported successfully`);
           } else {
             const data = await res.json();
@@ -6714,12 +6772,18 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
 
       let alertMessage = `Import process complete.
-Successfully processed ${importedCount} new entries.`;
+Successfully processed ${importedCount} new entries:
+- Tracks: ${tracksImported}
+- Strands: ${strandsImported}
+- Sections: ${sectionsImported}
+- Subjects: ${subjectsImported}
+- Faculty Assignments: ${facultyImported}
+- Student Assignments: ${studentsImported}`;
 
       if (skippedCount > 0) {
         alertMessage += `
+
 Skipped ${skippedCount} duplicate or invalid entries:
-Validation issues (${skippedCount} items):
 - ${skippedMessages.join('\n- ')}`;
       }
 
@@ -6765,7 +6829,7 @@ Validation issues (${skippedCount} items):
           },
           body: JSON.stringify({
             action: 'Import Term Data',
-            details: `Imported term data for ${termDetails.schoolYear} ${termDetails.termName} (Imported: ${importedCount}, Skipped: ${skippedCount})`,
+            details: `Imported term data for ${termDetails.schoolYear} ${termDetails.termName} (Tracks: ${tracksImported}, Strands: ${strandsImported}, Sections: ${sectionsImported}, Subjects: ${subjectsImported}, Faculty: ${facultyImported}, Students: ${studentsImported}, Skipped: ${skippedCount})`,
             userRole: 'admin'
           })
         }).catch(() => {});
@@ -10478,13 +10542,24 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
         results.push({ valid: true, message: `Student assignment for "${assignment.studentName}" already exists - will be skipped` });
         continue;
       }
+      
+      // Additional check: prevent duplicate by schoolID even for existing students
+      const existsBySchoolID = activeAssignments.some(ea =>
+        ea.studentSchoolID === assignment.studentSchoolID &&
+        ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
+        ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
+        ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
+      );
+      if (existsBySchoolID) {
+        results.push({ valid: true, message: `Student assignment for "${assignment.studentName}" (${assignment.studentSchoolID}) already exists - will be skipped` });
+        continue;
+      }
     } else {
       // Student doesn't exist in system - this is allowed for enrollment data
       console.log(`Student with School ID '${assignment.studentSchoolID}' not found - will be created as new student`);
       
       // For new students, check if there's already a manual assignment with the same details
       const exists = activeAssignments.some(ea =>
-        !ea.studentId && // Manual assignment (no linked student)
         ea.studentSchoolID === assignment.studentSchoolID &&
         ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
         ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
@@ -10492,7 +10567,7 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
       );
       if (exists) {
         // Student assignment already exists - skip but don't mark as invalid
-        results.push({ valid: true, message: `Student assignment for "${assignment.studentName}" already exists - will be skipped` });
+        results.push({ valid: true, message: `Student assignment for "${assignment.studentName}" (${assignment.studentSchoolID}) already exists - will be skipped` });
         continue;
       }
     }
