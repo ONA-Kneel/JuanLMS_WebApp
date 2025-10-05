@@ -412,9 +412,9 @@ router.post('/bulk', authenticateToken, async (req, res) => {
             termName: term.termName,
             quarterName: quarterName || null
           }] : []),
-          // Check by studentSchoolID if no studentId - only prevent same student in same term and quarter
-          // This ensures we're checking for the exact same student, not just similar names
-          ...(!actualStudentId && studentSchoolID ? [{
+          // Check by studentSchoolID - this is the primary check to prevent duplicates
+          // This ensures we're checking for the exact same student, regardless of whether they have a studentId
+          ...(studentSchoolID ? [{
             studentSchoolID,
             schoolYear: term.schoolYear,
             termName: term.termName,

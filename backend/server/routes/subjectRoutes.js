@@ -69,10 +69,11 @@ router.post('/', async (req, res) => {
       strandName,
       gradeLevel,
       termName,
-      schoolYear
+      schoolYear,
+      quarterName
     });
     if (existingSubject) {
-      return res.status(400).json({ message: 'Subject already exists in this track, strand, grade, term, and school year.' });
+      return res.status(400).json({ message: 'Subject already exists in this track, strand, grade, term, school year, and quarter.' });
     }
 
     const subject = new Subject({
@@ -111,10 +112,11 @@ router.patch('/:id', async (req, res) => {
       gradeLevel,
       termName,
       schoolYear,
+      quarterName,
       _id: { $ne: id }
     });
     if (existingSubject) {
-      return res.status(400).json({ message: 'Subject already exists in this track, strand, grade, term, and school year.' });
+      return res.status(400).json({ message: 'Subject already exists in this track, strand, grade, term, school year, and quarter.' });
     }
 
     // Get the original subject to compare for cascading updates
