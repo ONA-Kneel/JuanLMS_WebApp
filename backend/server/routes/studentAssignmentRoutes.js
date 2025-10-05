@@ -184,30 +184,24 @@ router.post('/', authenticateToken, async (req, res) => {
     console.log('  - quarterName:', quarterName || null);
     console.log('  - actualStudentId:', actualStudentId);
     
-    // Enhanced duplicate check - check multiple combinations to catch all possible duplicates
+    // Enhanced duplicate check - only prevent exact duplicates (same student, same quarter)
     const existingAssignment = await StudentAssignment.findOne({
       $or: [
-        // Check by studentId if it exists
+        // Check by studentId if it exists - only prevent same student in same term and quarter
         ...(actualStudentId ? [{
           studentId: actualStudentId,
           schoolYear: term.schoolYear,
           termName: term.termName,
           quarterName: quarterName || null
         }] : []),
-        // Check by studentSchoolID - primary check
+        // Check by studentSchoolID - only prevent same student in same term and quarter
         ...(studentSchoolID ? [{
           studentSchoolID,
           schoolYear: term.schoolYear,
           termName: term.termName,
           quarterName: quarterName || null
         }] : []),
-        // Additional check: same studentSchoolID in same term regardless of quarter
-        ...(studentSchoolID ? [{
-          studentSchoolID,
-          schoolYear: term.schoolYear,
-          termName: term.termName
-        }] : []),
-        // Check for exact same assignment details
+        // Check for exact same assignment details (same student, same quarter)
         {
           studentSchoolID,
           trackName,
@@ -437,30 +431,24 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 
       // allow manual entries when no matching student is found
 
-      // Enhanced duplicate check for bulk import - check multiple combinations to catch all possible duplicates
+      // Enhanced duplicate check for bulk import - only prevent exact duplicates (same student, same quarter)
       const existingAssignment = await StudentAssignment.findOne({
         $or: [
-          // Check by studentId if it exists
+          // Check by studentId if it exists - only prevent same student in same term and quarter
           ...(actualStudentId ? [{
             studentId: actualStudentId,
             schoolYear: term.schoolYear,
             termName: term.termName,
             quarterName: quarterName || null
           }] : []),
-          // Check by studentSchoolID - primary check
+          // Check by studentSchoolID - only prevent same student in same term and quarter
           ...(studentSchoolID ? [{
             studentSchoolID,
             schoolYear: term.schoolYear,
             termName: term.termName,
             quarterName: quarterName || null
           }] : []),
-          // Additional check: same studentSchoolID in same term regardless of quarter
-          ...(studentSchoolID ? [{
-            studentSchoolID,
-            schoolYear: term.schoolYear,
-            termName: term.termName
-          }] : []),
-          // Check for exact same assignment details
+          // Check for exact same assignment details (same student, same quarter)
           {
             studentSchoolID,
             trackName,

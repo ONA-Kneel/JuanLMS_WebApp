@@ -85,7 +85,7 @@ studentAssignmentSchema.index(
   { unique: true, partialFilterExpression: { studentId: { $exists: true, $ne: null } } }
 );
 
-// Add unique constraint for studentSchoolID to prevent duplicates
+// Add unique constraint for studentSchoolID to prevent duplicates within the same quarter
 studentAssignmentSchema.index(
   {
     studentSchoolID: 1,
@@ -96,7 +96,7 @@ studentAssignmentSchema.index(
   { unique: true, partialFilterExpression: { studentSchoolID: { $exists: true, $ne: null } } }
 );
 
-// Add comprehensive unique constraint to prevent exact duplicate assignments
+// Add comprehensive unique constraint to prevent exact duplicate assignments within the same quarter
 studentAssignmentSchema.index(
   {
     studentSchoolID: 1,
