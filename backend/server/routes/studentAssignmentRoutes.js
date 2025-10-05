@@ -176,6 +176,7 @@ router.post('/', authenticateToken, async (req, res) => {
     
     console.log('About to query database for duplicates...');
     
+    // Enhanced duplicate checking - check both studentId and studentSchoolID
     const existingAssignment = await StudentAssignment.findOne({
       $or: [
         // Check by studentId if it exists - only prevent same student in same term and quarter
@@ -185,9 +186,9 @@ router.post('/', authenticateToken, async (req, res) => {
           termName: term.termName,
           quarterName: quarterName || null
         }] : []),
-        // Check by studentSchoolID if no studentId - only prevent same student in same term and quarter
-        // This ensures we're checking for the exact same student, not just similar names
-        ...(!actualStudentId && studentSchoolID ? [{
+        // Check by studentSchoolID - this is the primary check to prevent duplicates
+        // This ensures we're checking for the exact same student, regardless of whether they have a studentId
+        ...(studentSchoolID ? [{
           studentSchoolID,
           schoolYear: term.schoolYear,
           termName: term.termName,

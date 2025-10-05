@@ -85,6 +85,18 @@ studentAssignmentSchema.index(
   { unique: true, partialFilterExpression: { studentId: { $exists: true, $ne: null } } }
 );
 
+// Add unique constraint for studentSchoolID to prevent duplicates
+studentAssignmentSchema.index(
+  {
+    studentSchoolID: 1,
+    schoolYear: 1,
+    termName: 1,
+    quarterName: 1
+  },
+  { unique: true, partialFilterExpression: { studentSchoolID: { $exists: true, $ne: null } } }
+);
+
+// Add index for manual entries (when studentId doesn't exist)
 studentAssignmentSchema.index(
   {
     studentName: 1,
