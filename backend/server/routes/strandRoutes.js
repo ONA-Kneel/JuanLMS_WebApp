@@ -82,16 +82,15 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    // Check for existing strand with same name in the same track, school year, term, and quarter
+    // Check for existing strand with same name in the same track, school year, and term (across all quarters)
     const existingStrand = await Strand.findOne({ 
       strandName: new RegExp(`^${strandName}$`, 'i'),
       trackName,
       schoolYear,
-      termName,
-      quarterName
+      termName
     });
     if (existingStrand) {
-      return res.status(409).json({ message: 'Strand name must be unique within the same track, school year, term, and quarter.' });
+      return res.status(409).json({ message: 'Strand name must be unique within the same track, school year, and term across all quarters.' });
     }
 
     const newStrand = new Strand({ 
@@ -129,17 +128,16 @@ router.patch('/:id', async (req, res) => {
       return res.status(400).json({ message: 'No active term found' });
     }
 
-    // Check for existing strand with same name in the same track, school year, term, and quarter, excluding current
+    // Check for existing strand with same name in the same track, school year, and term (across all quarters), excluding current
     const existingStrand = await Strand.findOne({ 
       strandName: new RegExp(`^${strandName}$`, 'i'),
       trackName,
       schoolYear: currentTerm.schoolYear,
       termName: currentTerm.termName,
-      quarterName: strand.quarterName,
       _id: { $ne: id }
     });
     if (existingStrand) {
-      return res.status(409).json({ message: 'Strand name must be unique within the same track, school year, term, and quarter.' });
+      return res.status(409).json({ message: 'Strand name must be unique within the same track, school year, and term across all quarters.' });
     }
 
     // Store original values for cascading updates
@@ -389,6 +387,58 @@ router.patch('/quarter/:quarterName/schoolyear/:schoolYear', async (req, res) =>
     res.json({ 
       message: `Updated ${result.modifiedCount} strands to status: ${status}`,
       modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Copy strand to all quarters within the same term
+router.post('/:id/copy-to-quarters', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quarterNames } = req.body; // Array of quarter names to copy to
+
+    if (!quarterNames || !Array.isArray(quarterNames) || quarterNames.length === 0) {
+      return res.status(400).json({ message: 'Quarter names array is required' });
+    }
+
+    const originalStrand = await Strand.findById(id);
+    if (!originalStrand) {
+      return res.status(404).json({ message: 'Strand not found' });
+    }
+
+    const copiedStrands = [];
+    
+    for (const quarterName of quarterNames) {
+      // Check if strand already exists in this quarter
+      const existingStrand = await Strand.findOne({
+        strandName: originalStrand.strandName,
+        trackName: originalStrand.trackName,
+        schoolYear: originalStrand.schoolYear,
+        termName: originalStrand.termName,
+        quarterName: quarterName
+      });
+
+      if (!existingStrand) {
+        const newStrand = new Strand({
+          strandName: originalStrand.strandName,
+          trackName: originalStrand.trackName,
+          schoolYear: originalStrand.schoolYear,
+          termName: originalStrand.termName,
+          quarterName: quarterName,
+          status: originalStrand.status
+        });
+        
+        await newStrand.save();
+        copiedStrands.push(newStrand);
+      }
+    }
+
+    res.status(201).json({
+      message: `Successfully copied strand to ${copiedStrands.length} quarters`,
+      copiedStrands: copiedStrands,
+      skipped: quarterNames.length - copiedStrands.length
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

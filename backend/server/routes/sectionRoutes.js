@@ -186,19 +186,18 @@ router.post('/', async (req, res) => {
       console.log('✅ Found active term:', { targetSchoolYear, targetTermName });
     }
 
-    // Check for existing section with same name in the same track, strand, school year, term, and quarter
+    // Check for existing section with same name in the same track, strand, school year, and term (across all quarters)
     console.log('🔍 CHECKING FOR EXISTING SECTION...');
     const existingSection = await Section.findOne({ 
       sectionName: new RegExp(`^${sectionName}$`, 'i'),
       trackName,
       strandName,
       schoolYear: targetSchoolYear,
-      termName: targetTermName,
-      quarterName: targetQuarterName
+      termName: targetTermName
     });
     if (existingSection) {
       console.log('❌ SECTION ALREADY EXISTS:', existingSection);
-      return res.status(409).json({ message: 'Section already exists in this track, strand, school year, term, and quarter.' });
+      return res.status(409).json({ message: 'Section already exists in this track, strand, school year, and term across all quarters.' });
     }
     console.log('✅ No existing section found, proceeding with creation...');
 
@@ -330,7 +329,7 @@ router.patch('/:id', async (req, res) => {
       return res.status(400).json({ message: 'No active term found' });
     }
 
-    // Check for existing section with same name in the same track, strand, school year, and term, excluding current
+    // Check for existing section with same name in the same track, strand, school year, and term (across all quarters), excluding current
     const existingSection = await Section.findOne({ 
       sectionName: new RegExp(`^${sectionName}$`, 'i'),
       trackName,
@@ -340,7 +339,7 @@ router.patch('/:id', async (req, res) => {
       _id: { $ne: id }
     });
     if (existingSection) {
-      return res.status(409).json({ message: 'Section name must be unique within the same track, strand, school year, and term.' });
+      return res.status(409).json({ message: 'Section name must be unique within the same track, strand, school year, and term across all quarters.' });
     }
 
     // Store original values for cascading updates
@@ -548,6 +547,73 @@ router.patch('/quarter/:quarterName/schoolyear/:schoolYear', async (req, res) =>
     res.json({ 
       message: `Updated ${result.modifiedCount} sections to status: ${status}`,
       modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Copy section to all quarters within the same term
+router.post('/:id/copy-to-quarters', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quarterNames } = req.body; // Array of quarter names to copy to
+
+    if (!quarterNames || !Array.isArray(quarterNames) || quarterNames.length === 0) {
+      return res.status(400).json({ message: 'Quarter names array is required' });
+    }
+
+    const originalSection = await Section.findById(id);
+    if (!originalSection) {
+      return res.status(404).json({ message: 'Section not found' });
+    }
+
+    const copiedSections = [];
+    
+    for (const quarterName of quarterNames) {
+      // Check if section already exists in this quarter
+      const existingSection = await Section.findOne({
+        sectionName: originalSection.sectionName,
+        trackName: originalSection.trackName,
+        strandName: originalSection.strandName,
+        gradeLevel: originalSection.gradeLevel,
+        schoolYear: originalSection.schoolYear,
+        termName: originalSection.termName,
+        quarterName: quarterName
+      });
+
+      if (!existingSection) {
+        // Generate unique section code for the new quarter
+        let newSectionCode = originalSection.sectionCode + '-' + quarterName;
+        let counter = 1;
+        
+        // Ensure section code is unique
+        while (await Section.findOne({ sectionCode: newSectionCode })) {
+          newSectionCode = originalSection.sectionCode + '-' + quarterName + '-' + counter;
+          counter++;
+        }
+
+        const newSection = new Section({
+          sectionName: originalSection.sectionName,
+          sectionCode: newSectionCode,
+          trackName: originalSection.trackName,
+          strandName: originalSection.strandName,
+          gradeLevel: originalSection.gradeLevel,
+          schoolYear: originalSection.schoolYear,
+          termName: originalSection.termName,
+          quarterName: quarterName,
+          status: originalSection.status
+        });
+        
+        await newSection.save();
+        copiedSections.push(newSection);
+      }
+    }
+
+    res.status(201).json({
+      message: `Successfully copied section to ${copiedSections.length} quarters`,
+      copiedSections: copiedSections,
+      skipped: quarterNames.length - copiedSections.length
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
