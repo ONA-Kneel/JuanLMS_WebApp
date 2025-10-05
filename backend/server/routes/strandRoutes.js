@@ -82,15 +82,16 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    // Check for existing strand with same name in the same track, school year, and term (across all quarters)
+    // Check for existing strand with same name in the same track, school year, term, and quarter
     const existingStrand = await Strand.findOne({ 
       strandName: new RegExp(`^${strandName}$`, 'i'),
       trackName,
       schoolYear,
-      termName
+      termName,
+      quarterName
     });
     if (existingStrand) {
-      return res.status(409).json({ message: 'Strand name must be unique within the same track, school year, and term across all quarters.' });
+      return res.status(409).json({ message: 'Strand name must be unique within the same track, school year, term, and quarter.' });
     }
 
     const newStrand = new Strand({ 
@@ -128,16 +129,17 @@ router.patch('/:id', async (req, res) => {
       return res.status(400).json({ message: 'No active term found' });
     }
 
-    // Check for existing strand with same name in the same track, school year, and term (across all quarters), excluding current
+    // Check for existing strand with same name in the same track, school year, term, and quarter, excluding current
     const existingStrand = await Strand.findOne({ 
       strandName: new RegExp(`^${strandName}$`, 'i'),
       trackName,
       schoolYear: currentTerm.schoolYear,
       termName: currentTerm.termName,
+      quarterName: quarterName,
       _id: { $ne: id }
     });
     if (existingStrand) {
-      return res.status(409).json({ message: 'Strand name must be unique within the same track, school year, and term across all quarters.' });
+      return res.status(409).json({ message: 'Strand name must be unique within the same track, school year, term, and quarter.' });
     }
 
     // Store original values for cascading updates

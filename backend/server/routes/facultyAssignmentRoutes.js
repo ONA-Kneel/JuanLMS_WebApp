@@ -204,14 +204,15 @@ const autoCreateClass = async (facultyAssignment) => {
 };
 
 // Validation function to check for faculty assignment conflicts
-const validateFacultyAssignment = async (facultyId, subjectName, sectionName, schoolYear, termName, excludeAssignmentId = null) => {
+const validateFacultyAssignment = async (facultyId, subjectName, sectionName, schoolYear, termName, quarterName, excludeAssignmentId = null) => {
   try {
-    // Check if the same faculty is already assigned to the same subject-section combination
+    // Check if the same faculty is already assigned to the same subject-section combination within the same quarter
     const existingAssignment = await FacultyAssignment.findOne({
       subjectName: subjectName,
       sectionName: sectionName,
       schoolYear: schoolYear,
       termName: termName,
+      quarterName: quarterName,
       status: 'active',
       facultyId: facultyId, // Same faculty
       ...(excludeAssignmentId && { _id: { $ne: excludeAssignmentId } }) // Exclude current assignment when updating
@@ -359,7 +360,8 @@ router.post('/', authenticateToken, async (req, res) => {
       subjectName, 
       sectionName, 
       term.schoolYear, 
-      term.termName
+      term.termName,
+      quarterName
     );
 
     if (!validation.isValid) {
@@ -481,7 +483,8 @@ router.post('/bulk', authenticateToken, async (req, res) => {
           subjectName, 
           sectionName, 
           term.schoolYear, 
-          term.termName
+          term.termName,
+          quarterName
         );
 
         if (!validation.isValid) {
@@ -688,6 +691,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       newSectionName,
       term.schoolYear,
       term.termName,
+      quarterName,
       req.params.id // Exclude current assignment
     );
 
