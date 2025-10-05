@@ -76,6 +76,7 @@ export default function Admin_AcademicSettings() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Confirmation modal states
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -386,7 +387,10 @@ export default function Admin_AcademicSettings() {
     };
 
   const createSchoolYear = async (startYear, setAsActive, activeTermName, activeQuarterName) => {
+    if (isSubmitting) return; // Prevent double submission
+    
     try {
+      setIsSubmitting(true);
       console.info('[AcademicSettings] createSchoolYear(): start', { startYear, setAsActive });
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE}/api/schoolyears`, {
@@ -426,6 +430,8 @@ export default function Admin_AcademicSettings() {
       console.error('[AcademicSettings] createSchoolYear(): error', error);
       setErrorMessage("Error creating school year");
       setShowErrorModal(true);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -2438,9 +2444,14 @@ export default function Admin_AcademicSettings() {
                   <div className="flex gap-2">
                     <button
                       type="submit"
-                      className="flex-1 bg-emerald-600 text-white py-3 px-4 rounded-md text-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                      disabled={isSubmitting}
+                      className={`flex-1 py-3 px-4 rounded-md text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                        isSubmitting 
+                          ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                          : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      }`}
                     >
-                      {isEditMode ? 'Save Changes' : 'Add School Year'}
+                      {isSubmitting ? 'Creating...' : (isEditMode ? 'Save Changes' : 'Add School Year')}
                     </button>
                     {isEditMode && (
                       <button
@@ -2481,18 +2492,28 @@ export default function Admin_AcademicSettings() {
                     Cancel
                   </button>
                   <button
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    disabled={isSubmitting}
+                    className={`px-4 py-2 rounded hover:bg-blue-700 ${
+                      isSubmitting 
+                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                        : 'bg-blue-600 text-white'
+                    }`}
                     onClick={handleAddSchoolYearInactive}
                   >
-                    Add as Inactive SY
+                    {isSubmitting ? 'Creating...' : 'Add as Inactive SY'}
                   </button>
                   <button
-                    className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                    disabled={isSubmitting}
+                    className={`px-4 py-2 rounded hover:bg-emerald-700 ${
+                      isSubmitting 
+                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                        : 'bg-emerald-600 text-white'
+                    }`}
                     onClick={() => {
                       createSchoolYear(pendingSchoolYear.schoolYearStart, true);
                     }}
                   >
-                    Add and set is as Active SY
+                    {isSubmitting ? 'Creating...' : 'Add and set is as Active SY'}
                   </button>
                 </div>
               </div>
