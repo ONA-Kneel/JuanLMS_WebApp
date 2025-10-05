@@ -57,6 +57,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [termDetails, setTermDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Lock editing when term is archived or quarter is not active
+  const isLocked = (termDetails?.status === 'archived') || (quarterData && quarterData.status !== 'active');
 
   // Debug logging for props
   console.log('TermDetails component props:', { propTermData, quarterData, termId });
@@ -542,7 +544,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   // Handle Track form submission
   const handleAddTrack = async (e) => {
     e.preventDefault();
-    if (termDetails.status === 'archived') return;
+    if (isLocked) return;
     setTrackError('');
     setIsTrackSubmitting(true);
 
@@ -612,7 +614,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   };
   const handleUpdateTrack = async (e) => {
     e.preventDefault();
-    if (termDetails.status === 'archived') return;
+    if (isLocked) return;
     setTrackError('');
     setIsTrackSubmitting(true);
 
@@ -679,7 +681,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   };
 
   const handleDeleteTrack = async (track) => {
-    if (termDetails.status === 'archived') return;
+    if (isLocked) return;
     setDeletingTrackId(track._id);
     
     try {
@@ -761,7 +763,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   // Handle Strand form submission
   const handleAddStrand = async (e) => {
     e.preventDefault();
-    if (termDetails.status === 'archived') return;
+    if (isLocked) return;
     setStrandError('');
     setIsStrandSubmitting(true);
 
@@ -846,7 +848,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   };
   const handleUpdateStrand = async (e) => {
     e.preventDefault();
-    if (termDetails.status === 'archived') return;
+    if (isLocked) return;
     setStrandError('');
     setIsStrandSubmitting(true);
 
@@ -920,7 +922,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   };
 
   const handleDeleteStrand = async (strand) => {
-    if (termDetails.status === 'archived') return;
+    if (isLocked) return;
     setDeletingStrandId(strand._id);
     
     try {
@@ -1186,7 +1188,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   };
 
   const handleDeleteSection = async (section) => {
-    if (termDetails.status === 'archived') return;
+    if (isLocked) return;
     setDeletingSectionId(section._id);
     
     try {
@@ -2112,12 +2114,37 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       setStudentSearchTerm('');
     }
 
+    // Prepare additional editable fields
+    let enrollmentDateFormatted = '';
+    try {
+      if (assignment.enrollmentDate) {
+        const d = new Date(assignment.enrollmentDate);
+        if (!isNaN(d.getTime())) {
+          enrollmentDateFormatted = d.toISOString().split('T')[0];
+        }
+      }
+    } catch {}
+
+    const computedFirstName = assignment.firstName
+      || (assignment.studentName ? assignment.studentName.split(' ')[0] : (student?.firstname || ''));
+    const computedLastName = assignment.lastName
+      || (assignment.studentName ? assignment.studentName.split(' ').slice(-1)[0] : (student?.lastname || ''));
+
+    // Populate school ID field used in the modal
+    try {
+      setStudentManualId(assignment.studentSchoolID || assignment.schoolID || student?.schoolID || '');
+    } catch {}
+
     setStudentFormData({
       studentId: assignment.studentId,
       trackId: trackId,
       strandId: strandId,
       sectionIds: sectionId ? [sectionId] : [],
       gradeLevel: assignment.gradeLevel || '', // Populate gradeLevel
+      enrollmentNo: assignment.enrollmentNo || '',
+      enrollmentDate: enrollmentDateFormatted,
+      firstName: computedFirstName || '',
+      lastName: computedLastName || '',
     });
   };
   const handleUpdateStudentAssignment = async (e) => {
@@ -4785,15 +4812,15 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           // Check if student is enrolled in current term and quarter
           const isEnrolled = registrants.some(registrant => {
             const registrantSchoolId = (registrant.schoolID || '').trim();
-            return registrant.status === 'approved' && 
+            return (registrant.status === 'approved' || registrant.status === 'pending') && 
                    registrantSchoolId === studentSchoolIDInput &&
                    registrant.termName === termDetails.termName &&
                    registrant.schoolYear === termDetails.schoolYear;
           });
           
           if (isEnrolled) {
-            console.log(`Student "${studentSchoolIDInput}" is enrolled in current term and quarter`);
-            message = 'Student is enrolled in this term and quarter';
+            console.log(`Student "${studentSchoolIDInput}" is enrolled/registered (approved or pending) in current term and quarter`);
+            message = 'Student is enrolled/registered (approved or pending) in this term and quarter';
           } else {
             console.log(`Student "${studentSchoolIDInput}" is not enrolled in current term and quarter`);
             isValid = false;
@@ -4806,16 +4833,16 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           // Check if student is registered and approved for current term and quarter
           const isRegistered = registrants.some(registrant => {
             const registrantSchoolId = (registrant.schoolID || '').trim();
-            return registrant.status === 'approved' && 
+            return (registrant.status === 'approved' || registrant.status === 'pending') && 
                    registrantSchoolId === studentSchoolIDInput &&
                    registrant.termName === termDetails.termName &&
                    registrant.schoolYear === termDetails.schoolYear;
           });
           
           if (isRegistered) {
-            console.log(`Student "${studentSchoolIDInput}" is registered and approved for current term and quarter`);
+            console.log(`Student "${studentSchoolIDInput}" is registered (approved or pending) for current term and quarter`);
             studentId = null; // Will be created during upload
-            message = 'Student is registered and approved for this term and quarter';
+            message = 'Student is registered (approved or pending) for this term and quarter';
           } else {
             console.log(`Student "${studentSchoolIDInput}" is not registered for current term and quarter`);
             isValid = false;
@@ -5776,22 +5803,39 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     try {
       const createdSubjects = [];
       for (const subject of validSubjects) {
+        // Always include quarterName if available
+        const payload = {
+          ...subject,
+          schoolYear: termDetails.schoolYear,
+          termName: termDetails.termName,
+          ...(quarterData?.quarterName ? { quarterName: quarterData.quarterName } : {})
+        };
+
         const res = await fetch(`${API_BASE}/api/subjects`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...subject,
-            schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName
-          })
+          body: JSON.stringify(payload)
         });
+
         if (res.ok) {
           const newSubject = await res.json();
           createdSubjects.push(newSubject);
-        } else {
-          const data = await res.json();
-          throw new Error(data.message || 'Failed to create subject');
+          continue;
         }
+
+        // Gracefully skip duplicates or existing subjects instead of failing the whole upload
+        let errorMessage = 'Failed to create subject';
+        try {
+          const data = await res.json();
+          errorMessage = data.message || errorMessage;
+        } catch {}
+
+        if (typeof errorMessage === 'string' && errorMessage.toLowerCase().includes('subject already exists')) {
+          // Skip and continue uploading remaining subjects
+          continue;
+        }
+
+        throw new Error(errorMessage);
       }
       await fetchSubjects();
       // Audit log: Batch Upload Subjects
@@ -7051,7 +7095,10 @@ Validation issues (${skippedCount} items):
       <Admin_Navbar />
       
 
-      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+      <div className="flex-1 relative bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+        {isLocked && (
+          <div className="absolute inset-0 bg-transparent" style={{ zIndex: 9999, pointerEvents: 'auto' }} />
+        )}
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
@@ -7069,6 +7116,11 @@ Validation issues (${skippedCount} items):
           </div>
           <ProfileMenu />
         </div>
+        {isLocked && (
+          <div className="mb-4 p-3 bg-yellow-100 text-yellow-800 rounded text-center font-semibold">
+            {termDetails?.status === 'archived' ? 'This term is archived. Editing is disabled.' : 'This quarter is inactive. Editing is disabled.'}
+          </div>
+        )}
 
         {/* Back Button */}
         <div className="mb-4">
@@ -7425,7 +7477,7 @@ Validation issues (${skippedCount} items):
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
-                        disabled={termDetails.status === 'archived'}
+                        disabled={isLocked}
                       >
                         <option value="">Select Track Type</option>
                         <option value="Academic Track">Academic Track</option>
@@ -7445,7 +7497,7 @@ Validation issues (${skippedCount} items):
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="Enter custom track name"
                         required
-                        disabled={termDetails.status === 'archived'}
+                        disabled={isLocked}
                       />
                     </div>
                     )}
@@ -7453,8 +7505,8 @@ Validation issues (${skippedCount} items):
                   <div className="space-y-2">
                     <button
                       type="submit"
-                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' || isTrackSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      disabled={termDetails.status === 'archived' || isTrackSubmitting}
+                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isLocked || isTrackSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={isLocked || isTrackSubmitting}
                     >
                       {isTrackSubmitting ? (isEditMode ? 'Saving...' : 'Adding...') : (isEditMode ? 'Save Changes' : 'Add New Track')}
                     </button>
@@ -7467,7 +7519,7 @@ Validation issues (${skippedCount} items):
                           setTrackFormData({ trackName: '', trackType: '' });
                         }}
                         className={`w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isTrackSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        disabled={termDetails.status === 'archived' || isTrackSubmitting}
+                        disabled={isLocked || isTrackSubmitting}
                       >
                         Cancel Edit
                       </button>
@@ -9158,13 +9210,13 @@ Validation issues (${skippedCount} items):
                               accept=".xlsx,.xls"
                               onChange={handleStudentAssignmentExcelFile}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              disabled={termDetails.status === 'archived'}
+                              disabled={isLocked}
                             />
                           </div>
                           <button
                             onClick={downloadStudentAssignmentTemplate}
                             className="bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003366] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2"
-                            disabled={termDetails.status === 'archived'}
+                            disabled={isLocked}
                           >
                             Download Template
                           </button>

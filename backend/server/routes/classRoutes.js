@@ -316,12 +316,17 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
         
         // Filter to only include students who are active AND approved in the current term
         const activeStudentIds = validStudents.map(student => student._id);
-        const studentAssignments = await StudentAssignment.find({
+        const assignmentFilter = {
           studentId: { $in: activeStudentIds },
           schoolYear: classData.academicYear,
           termName: classData.termName,
-          status: 'active'
-        }).select('studentId isApproved');
+          status: { $in: ['active', 'pending'] }
+        };
+        // If the request specified a section, only allow students assigned to that section
+        if (section) {
+          assignmentFilter.sectionName = section;
+        }
+        const studentAssignments = await StudentAssignment.find(assignmentFilter).select('studentId isApproved studentSchoolID');
 
         // Only include students who are both active and approved
         const approvedAssignments = studentAssignments.filter(assignment => assignment.isApproved === true);
@@ -526,6 +531,15 @@ router.get('/:classID/members', async (req, res) => {
         students.push(...matchedBySchoolID);
       }
       
+      // Deduplicate any students that may have been fetched via multiple identifier types
+      if (students.length > 0) {
+        const uniqueById = new Map();
+        for (const s of students) {
+          const key = String(s._id || s.userID);
+          if (!uniqueById.has(key)) uniqueById.set(key, s);
+        }
+        students = Array.from(uniqueById.values());
+      }
       console.log(`[GET-MEMBERS] Found ${students.length} students for class ${classID}`);
     }
     
@@ -937,7 +951,15 @@ router.get('/:classID/members-with-status', authenticateToken, async (req, res) 
       }
     }
     
-    console.log(`[GET-MEMBERS-STATUS] Returning ${studentsWithStatus.length} students with status`);
+    // Deduplicate by stable key (prefer schoolID, fallback to _id)
+    const dedupedByKey = new Map();
+    for (const s of studentsWithStatus) {
+      const key = String(s.schoolID || s._id || s.userID);
+      if (!dedupedByKey.has(key)) dedupedByKey.set(key, s);
+    }
+    const uniqueStudents = Array.from(dedupedByKey.values());
+
+    console.log(`[GET-MEMBERS-STATUS] Returning ${uniqueStudents.length} students with status (deduped from ${studentsWithStatus.length})`);
     
     // Decrypt faculty data
     const decryptedFaculty = faculty ? {
@@ -952,10 +974,10 @@ router.get('/:classID/members-with-status', authenticateToken, async (req, res) 
     
     res.json({
       faculty: decryptedFaculty,
-      students: studentsWithStatus,
-      totalStudents: studentsWithStatus.length,
-      activeStudents: studentsWithStatus.filter(s => s.registrationStatus === 'active').length,
-      pendingStudents: studentsWithStatus.filter(s => s.registrationStatus === 'pending').length
+      students: uniqueStudents,
+      totalStudents: uniqueStudents.length,
+      activeStudents: uniqueStudents.filter(s => s.registrationStatus === 'active').length,
+      pendingStudents: uniqueStudents.filter(s => s.registrationStatus === 'pending').length
     });
     
   } catch (err) {

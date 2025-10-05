@@ -71,12 +71,12 @@ const autoCreateClass = async (facultyAssignment) => {
             status: { $in: ['active', 'pending'] }
           });
 
-          const studentAssignments = await StudentAssignment.find({
-            sectionName: facultyAssignment.sectionName,
-            termId: facultyAssignment.termId,
-            schoolYear: facultyAssignment.schoolYear,
-            status: { $in: ['active', 'pending'] } // Include both active and pending students
-          }).populate('studentId');
+    const studentAssignments = await StudentAssignment.find({
+      sectionName: facultyAssignment.sectionName,
+      termId: facultyAssignment.termId,
+      schoolYear: facultyAssignment.schoolYear,
+      status: { $in: ['active', 'pending'] } // Include both active and pending students
+    }).populate('studentId');
     
           console.log(`[AUTO-CREATE-CLASS] Found ${studentAssignments.length} student assignments`);
     
@@ -105,10 +105,8 @@ const autoCreateClass = async (facultyAssignment) => {
       .filter(assignment => assignment.studentId) // Only include linked students
       .map(assignment => assignment.studentId._id);
     
-    // Also find students by name for assignments that don't have studentId
-    const studentsByName = studentAssignments
-      .filter(assignment => !assignment.studentId && assignment.studentName)
-      .map(assignment => assignment.studentName);
+    // Remove fuzzy name-based matching to avoid accidental cross-matches
+    const studentsByName = [];
     
     // First, try to find students by schoolID (PRIORITY METHOD)
     let finalStudentIds = [];
@@ -163,86 +161,7 @@ const autoCreateClass = async (facultyAssignment) => {
     }
     
     // Handle students found by name (last resort)
-    if (studentsByName.length > 0) {
-      console.log(`[AUTO-CREATE-CLASS] Found ${studentsByName.length} students by name:`, studentsByName);
-      
-      // Find User records for these students by name (more flexible matching)
-      const usersByName = await User.find({
-        role: 'students',
-        isTemporary: { $ne: true },
-        userID: { $not: /^TEMP-/ },
-        $or: studentsByName.flatMap(name => {
-          const nameParts = name.toLowerCase().split(' ').filter(part => part.length > 0);
-          const firstName = nameParts[0];
-          const lastName = nameParts[nameParts.length - 1];
-          
-          return [
-            // Exact match
-            { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, name.toLowerCase()] } },
-            // Reverse order match
-            { $expr: { $eq: [{ $toLower: { $concat: ["$lastname", " ", "$firstname"] } }, name.toLowerCase()] } },
-            // First name contains
-            { firstname: { $regex: new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } },
-            // Last name contains
-            { lastname: { $regex: new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } },
-            // Both first and last name match (order independent)
-            { 
-              firstname: { $regex: new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
-              lastname: { $regex: new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
-            },
-            // Reverse order both names
-            { 
-              firstname: { $regex: new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
-              lastname: { $regex: new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
-            },
-            // Partial matches in full name
-            { $expr: { $regexMatch: { input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, regex: name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') } } }
-          ];
-        })
-      });
-      
-      console.log(`[AUTO-CREATE-CLASS] Found ${usersByName.length} User records for students by name`);
-      
-      // Debug: Show what users were found
-      if (usersByName.length > 0) {
-        console.log('[AUTO-CREATE-CLASS] Matched users by name:');
-        usersByName.forEach(user => {
-          console.log(`  - ${user.userID}: ${user.firstname} ${user.lastname}`);
-        });
-      } else {
-        console.log('[AUTO-CREATE-CLASS] No users found. Checking all students in database...');
-        const allStudents = await User.find({ role: 'students' }).select('userID firstname lastname').limit(5);
-        console.log('[AUTO-CREATE-CLASS] Sample students in database:');
-        allStudents.forEach(student => {
-          console.log(`  - ${student.userID}: ${student.firstname} ${student.lastname}`);
-        });
-      }
-      
-      // Add schoolIDs to the final list instead of ObjectIds - decrypt schoolID first
-      const additionalStudentIds = usersByName
-        .filter(user => !(user.userID && String(user.userID).startsWith('TEMP-')))
-        .map(user => {
-        const schoolID = user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID;
-        return schoolID || user.userID;
-      });
-      finalStudentIds.push(...additionalStudentIds);
-      
-      // For students that couldn't be matched, create temporary entries
-      const matchedNames = usersByName.map(user => 
-        `${user.firstname} ${user.lastname}`.toLowerCase()
-      );
-      const unmatchedStudents = studentsByName.filter(name => 
-        !matchedNames.some(matched => 
-          matched.includes(name.toLowerCase()) || 
-          name.toLowerCase().includes(matched)
-        )
-      );
-      
-      if (unmatchedStudents.length > 0) {
-        console.log(`[AUTO-CREATE-CLASS] ⚠️ Found ${unmatchedStudents.length} unmatched students - these will be excluded from class creation:`, unmatchedStudents);
-        console.log(`[AUTO-CREATE-CLASS] ⚠️ Please ensure all students have proper schoolID assignments before creating classes`);
-      }
-    }
+    // Enforce section restriction hard: do not add anyone outside assignment list
     
     // Remove duplicate student IDs
     // Ensure no TEMP IDs leak through

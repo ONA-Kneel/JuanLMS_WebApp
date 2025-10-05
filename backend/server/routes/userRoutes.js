@@ -89,75 +89,7 @@ const addStudentToExistingClasses = async (student) => {
     }
     
     if (studentAssignments.length === 0) {
-      console.log(`[ADD-STUDENT-TO-CLASSES] No student assignments found for ${student.userID}, checking for section-based classes`);
-      
-      // Get current academic year and term
-      const activeSchoolYear = await SchoolYear.findOne({ status: 'active' });
-      if (!activeSchoolYear) {
-        console.log(`[ADD-STUDENT-TO-CLASSES] No active school year found`);
-        return;
-      }
-      
-      const activeTerm = await Term.findOne({ 
-        schoolYear: `${activeSchoolYear.schoolYearStart}-${activeSchoolYear.schoolYearEnd}`,
-        status: 'active' 
-      });
-      
-      if (!activeTerm) {
-        console.log(`[ADD-STUDENT-TO-CLASSES] No active term found`);
-        return;
-      }
-      
-      const currentAcademicYear = `${activeSchoolYear.schoolYearStart}-${activeSchoolYear.schoolYearEnd}`;
-      
-      // Find all classes for current academic year and term
-      const allClasses = await Class.find({
-        academicYear: currentAcademicYear,
-        termName: activeTerm.termName,
-        isArchived: { $ne: true }
-      });
-      
-      console.log(`[ADD-STUDENT-TO-CLASSES] Found ${allClasses.length} classes for current term`);
-      
-      // Add student to classes that match their section (if they have one)
-      // First, try to find the student's section from their school ID or other data
-      let studentSection = null;
-      
-      // Try to find section from existing data
-      if (student.section) {
-        studentSection = student.section;
-      } else {
-        // Try to infer section from school ID or other patterns
-        console.log(`[ADD-STUDENT-TO-CLASSES] No section found for student, will add to all active classes`);
-      }
-      
-      for (const classDoc of allClasses) {
-        // If we have a specific section, only add to classes in that section
-        if (studentSection && classDoc.section !== studentSection) {
-          console.log(`[ADD-STUDENT-TO-CLASSES] Skipping class ${classDoc.className} - section mismatch (student: ${studentSection}, class: ${classDoc.section})`);
-          continue;
-        }
-        
-        const isAlreadyMember = classDoc.members.some(memberId => 
-          String(memberId) === String(student._id)
-        );
-        
-        if (!isAlreadyMember) {
-          try {
-            await Class.findByIdAndUpdate(
-              classDoc._id,
-              { $addToSet: { members: student._id } },
-              { new: true }
-            );
-            console.log(`[ADD-STUDENT-TO-CLASSES] ✅ Added student ${student.userID} to class ${classDoc.className} (${classDoc.classID}) - Section: ${classDoc.section}`);
-          } catch (error) {
-            console.error(`[ADD-STUDENT-TO-CLASSES] ❌ Error adding student to class ${classDoc.className}:`, error.message);
-          }
-        } else {
-          console.log(`[ADD-STUDENT-TO-CLASSES] Student ${student.userID} is already a member of class ${classDoc.className}`);
-        }
-      }
-      
+      console.log(`[ADD-STUDENT-TO-CLASSES] No student assignments found for ${student.userID}. Will not auto-add to any class.`);
       return;
     }
     
@@ -194,17 +126,24 @@ const addStudentToExistingClasses = async (student) => {
       
       for (const classDoc of matchingClasses) {
         // Check if student is already a member
-        const isAlreadyMember = classDoc.members.some(memberId => 
-          String(memberId) === String(student._id)
-        );
+        const decryptedSchoolID = student.getDecryptedSchoolID ? student.getDecryptedSchoolID() : student.schoolID;
+        const candidateIds = [String(student._id), String(student.userID || ''), String(decryptedSchoolID || '')].filter(Boolean);
+        const isAlreadyMember = (classDoc.members || []).some(memberId => candidateIds.includes(String(memberId)));
         
         if (!isAlreadyMember) {
           console.log(`[ADD-STUDENT-TO-CLASSES] Adding student ${student.userID} to class ${classDoc.classID}`);
           
-          // Add student to class
+          // Add student to class using predominant identifier format
+          const membersArray = (classDoc.members || []).map(v => String(v));
+          const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+          const countObjectIds = membersArray.filter(id => objectIdPattern.test(id)).length;
+          const countSchoolIds = membersArray.filter(id => id.includes('-')).length;
+          const useObjectId = countObjectIds >= countSchoolIds; // default to ObjectId when unclear
+          const valueToAdd = useObjectId ? student._id : (decryptedSchoolID || student.userID || student._id);
+
           await Class.findByIdAndUpdate(
             classDoc._id,
-            { $addToSet: { members: student._id } },
+            { $addToSet: { members: valueToAdd } },
             { new: true }
           );
           

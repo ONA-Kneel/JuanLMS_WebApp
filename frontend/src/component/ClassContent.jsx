@@ -87,6 +87,21 @@ export default function ClassContent({ selected, isFaculty = false }) {
     message: ''
   });
 
+  // Helper: deduplicate students by their stable identifier
+  const dedupeStudentsById = (studentsArray) => {
+    try {
+      const seen = new Set();
+      return (studentsArray || []).filter(s => {
+        const id = String(s?._id || s?.userID || s?.id || '');
+        if (!id || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+    } catch {
+      return Array.isArray(studentsArray) ? studentsArray : [];
+    }
+  };
+
   // Export functions
   const exportToExcel = async () => {
     if (!gradesData || !members.students || exportingExcel) return;
@@ -1049,8 +1064,8 @@ export default function ClassContent({ selected, isFaculty = false }) {
                if (Array.isArray(membersData.students) && membersData.students.length > 0) {
                  const studentsOnly = (membersData.students || []).filter(s => (s.role || '').toLowerCase() === 'students');
                  
-                 // Store the students directly since they're already populated with full data
-                 setMembers({ faculty: membersData.faculty ? [membersData.faculty] : [], students: studentsOnly });
+                 // Store the students directly since they're already populated with full data (deduped)
+                 setMembers({ faculty: membersData.faculty ? [membersData.faculty] : [], students: dedupeStudentsById(studentsOnly) });
                  
                  // Store class information for export
                  setClassWithMembers({
@@ -1103,11 +1118,11 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     memberIds.includes(String(s._id))
                   );
                   
-                  // Set the results, preserving any faculty data we already have
+                  // Set the results, preserving any faculty data we already have (deduped)
                   setMemberIdsRaw(memberIds);
                   setMembers(prev => ({ 
                     faculty: prev.faculty.length > 0 ? prev.faculty : (foundClass.faculty || []), 
-                    students: mappedStudents 
+                    students: dedupeStudentsById(mappedStudents) 
                   }));
                   setHasMappedMembers(true);
                 } else {
@@ -2624,9 +2639,29 @@ export default function ClassContent({ selected, isFaculty = false }) {
                       <span className="text-lg">👥</span>
                       Current Class Members ({members.students.length})
                     </h4>
+                    {/* Search/filter within current members to find pending students quickly */}
+                    {members.students.length > 0 && (
+                      <div className="mb-3">
+                        <input
+                          type="text"
+                          placeholder="Search current members by name or ID..."
+                          value={studentSearchTerm}
+                          onChange={(e) => setStudentSearchTerm(e.target.value)}
+                          className="w-full px-3 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        />
+                      </div>
+                    )}
                     {members.students.length > 0 ? (
                       <div className="space-y-3">
-                        {members.students.map(student => (
+                        {members.students
+                          .filter(student => {
+                            if (!studentSearchTerm.trim()) return true;
+                            const q = studentSearchTerm.toLowerCase();
+                            const name = `${student.firstname || ''} ${student.lastname || ''}`.toLowerCase();
+                            const sid = String(student.schoolID || student.userID || '').toLowerCase();
+                            return name.includes(q) || sid.includes(q);
+                          })
+                          .map(student => (
                           <div key={student._id || student.userID} className="flex items-center justify-between bg-white p-4 rounded-lg border border-blue-200 shadow-sm hover:shadow-md transition-all duration-200">
                             <div className="flex items-center gap-4">
                               <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-lg overflow-hidden">
@@ -2898,7 +2933,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
                                           // Also immediately add them to the current members display for better UX
                                           setMembers(prev => ({
                                             ...prev,
-                                            students: [...prev.students, student]
+                                            students: dedupeStudentsById([...prev.students, student])
                                           }));
                                           
                                           
@@ -3002,13 +3037,10 @@ export default function ClassContent({ selected, isFaculty = false }) {
                               
                               // Update both the raw IDs and the mapped members
                               setMemberIdsRaw(ids);
-                              setMembers(prev => {
-                                const newState = { 
-                                  faculty: prev.faculty, // Keep existing faculty
-                                  students: mapped 
-                                };
-                                return newState;
-                              });
+                              setMembers(prev => ({
+                                faculty: prev.faculty, // Keep existing faculty
+                                students: dedupeStudentsById(mapped)
+                              }));
                               
                               // Reset the editing state
                               setEditingMembers(false);
