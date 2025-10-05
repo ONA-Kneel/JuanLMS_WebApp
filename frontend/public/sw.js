@@ -1,5 +1,5 @@
 // Service Worker for Push Notifications
-const CACHE_NAME = 'juanlms-v2'; // Increment version to force cache refresh
+const CACHE_NAME = 'juanlms-v1';
 const urlsToCache = [
   '/',
   '/static/js/bundle.js',
@@ -15,37 +15,10 @@ self.addEventListener('install', (event) => {
         return cache.addAll(urlsToCache);
       })
   );
-  // Force activation of new service worker
-  self.skipWaiting();
-});
-
-// Activate event - clean up old caches
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
-  // Take control of all clients immediately
-  self.clients.claim();
 });
 
 // Fetch event
 self.addEventListener('fetch', (event) => {
-  // Skip caching for API calls and authentication-related requests
-  if (event.request.url.includes('/api/') || 
-      event.request.url.includes('/login') ||
-      event.request.url.includes('/users/') ||
-      event.request.url.includes('juanlms-webapp-server.onrender.com')) {
-    return fetch(event.request);
-  }
-  
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
@@ -120,7 +93,7 @@ self.addEventListener('notificationclick', (event) => {
   const urlToOpen = event.notification.data?.url || '/';
   
   event.waitUntil(
-    self.clients.matchAll({
+    clients.matchAll({
       type: 'window',
       includeUncontrolled: true
     }).then((clientList) => {
@@ -133,8 +106,8 @@ self.addEventListener('notificationclick', (event) => {
       }
       
       // If no existing window, open a new one
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(urlToOpen);
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
       }
     })
   );
