@@ -121,37 +121,27 @@ router.post('/', authenticateToken, async (req, res) => {
       );
     }
 
+    const newTerm = await term.save();
+    // Audit: Term added
     try {
-      const newTerm = await term.save();
-      // Audit: Term added
-      try {
-        const token = req.headers.authorization?.split(' ')[1];
-        const url = `${req.protocol}://${req.get('host')}/audit-log`;
-        await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            action: 'Term Added',
-            details: `Added ${newTerm.termName} for School Year ${newTerm.schoolYear}`,
-            userRole: req.user?.role || 'system'
-          })
-        });
-      } catch (auditErr) {
-        console.warn('[Audit] Failed to log term addition:', auditErr);
-      }
-      res.status(201).json(newTerm);
-    } catch (saveError) {
-      // Handle duplicate key error
-      if (saveError.code === 11000) {
-        return res.status(409).json({ 
-          message: `A term with the same name already exists for this school year. Please refresh the page and try again.` 
-        });
-      }
-      throw saveError; // Re-throw other errors
+      const token = req.headers.authorization?.split(' ')[1];
+      const url = `${req.protocol}://${req.get('host')}/audit-log`;
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'Term Added',
+          details: `Added ${newTerm.termName} for School Year ${newTerm.schoolYear}`,
+          userRole: req.user?.role || 'system'
+        })
+      });
+    } catch (auditErr) {
+      console.warn('[Audit] Failed to log term addition:', auditErr);
     }
+    res.status(201).json(newTerm);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
