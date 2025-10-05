@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+
 const submissionSchema = new mongoose.Schema({
   assignment: { type: mongoose.Schema.Types.ObjectId, ref: 'Assignment', required: true },
   student: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -14,5 +15,11 @@ const submissionSchema = new mongoose.Schema({
   status: { type: String, enum: ['turned-in', 'graded'], default: 'turned-in' },
   grade: { type: Number },
   feedback: { type: String }
+}, {
+  timestamps: true // Add timestamps for better tracking
 });
+
+// Add unique compound index to prevent duplicate submissions
+submissionSchema.index({ assignment: 1, student: 1 }, { unique: true });
+
 export default mongoose.model("Submission", submissionSchema, "Submissions"); 

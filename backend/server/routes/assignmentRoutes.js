@@ -541,19 +541,47 @@ router.post('/:id/submit', authenticateToken, uploadMiddleware.submissionUpload.
     // Get context from form data if provided
     const context = req.body.context || '';
     
-    // Check if already submitted
-    let submission = await Submission.findOne({ assignment, student });
+    // Check if already submitted - use ObjectId conversion for consistency
+    const studentObjectId = new mongoose.Types.ObjectId(student);
+    const assignmentObjectId = new mongoose.Types.ObjectId(assignment);
+    
+    let submission = await Submission.findOne({ 
+      assignment: assignmentObjectId, 
+      student: studentObjectId 
+    });
+    
     if (submission) {
+      // Update existing submission
       submission.files = files;
       submission.links = links;
       submission.context = context;
       submission.submittedAt = new Date();
       submission.status = 'turned-in';
       await submission.save();
+      console.log(`✅ Updated existing submission ${submission._id}`);
     } else {
       // Create new submission - files and links can be empty arrays for empty submissions
-      submission = new Submission({ assignment, student, files, links, context });
-      await submission.save();
+      submission = new Submission({ 
+        assignment: assignmentObjectId, 
+        student: studentObjectId, 
+        files, 
+        links, 
+        context 
+      });
+      
+      try {
+        await submission.save();
+        console.log(`✅ Created new submission ${submission._id}`);
+      } catch (saveError) {
+        // Handle unique constraint violation
+        if (saveError.code === 11000) {
+          console.error('❌ Duplicate submission detected during creation:', saveError);
+          return res.status(409).json({ 
+            error: 'Submission already exists. Please refresh and try again.' 
+          });
+        }
+        throw saveError;
+      }
     }
     
     res.json(submission);
@@ -566,8 +594,14 @@ router.post('/:id/submit', authenticateToken, uploadMiddleware.submissionUpload.
 // Faculty gets all submissions for an assignment
 router.get('/:id/submissions', authenticateToken, async (req, res) => {
   try {
-    const assignment = req.params.id;
-    const submissions = await Submission.find({ assignment }).populate('student', 'userID firstname lastname email');
+    const assignmentId = req.params.id;
+    const assignmentObjectId = new mongoose.Types.ObjectId(assignmentId);
+    
+    const submissions = await Submission.find({ assignment: assignmentObjectId })
+      .populate('student', 'userID firstname lastname email schoolID')
+      .sort({ submittedAt: -1 }); // Sort by most recent first
+    
+    console.log(`📋 Fetched ${submissions.length} submissions for assignment ${assignmentId}`);
     res.json(submissions);
   } catch (err) {
     console.error('Error fetching submissions:', err);
@@ -588,9 +622,17 @@ router.post('/:id/grade', authenticateToken, async (req, res) => {
       submission = await Submission.findById(submissionId);
       if (!submission) return res.status(404).json({ error: 'Submission not found' });
     } 
-    // If studentId is provided, find or create submission
+    // If studentId is provided, find existing submission or return error
     else if (studentId) {
-      submission = await Submission.findOne({ assignment: assignmentId, student: studentId });
+      // Convert to ObjectId to ensure proper type matching
+      const studentObjectId = new mongoose.Types.ObjectId(studentId);
+      const assignmentObjectId = new mongoose.Types.ObjectId(assignmentId);
+      
+      submission = await Submission.findOne({ 
+        assignment: assignmentObjectId, 
+        student: studentObjectId 
+      });
+      
       if (!submission) {
         // Create a new submission for the student if none exists
         submission = new Submission({
@@ -606,16 +648,41 @@ router.post('/:id/grade', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Either submissionId or studentId is required' });
     }
     
-    // Enforce max score of 100
-    let finalGrade = grade;
-    if (typeof finalGrade === 'number' && finalGrade > 100) {
-      finalGrade = 100;
+    // Validate grade
+    if (grade === undefined || grade === null) {
+      return res.status(400).json({ error: 'Grade is required' });
     }
     
+    // Enforce max score of 100 and min score of 0
+    let finalGrade = parseFloat(grade);
+    if (isNaN(finalGrade)) {
+      return res.status(400).json({ error: 'Grade must be a valid number' });
+    }
+    
+    if (finalGrade > 100) {
+      finalGrade = 100;
+    } else if (finalGrade < 0) {
+      finalGrade = 0;
+    }
+    
+    // Update submission
     submission.grade = finalGrade;
-    submission.feedback = feedback;
+    submission.feedback = feedback || '';
     submission.status = 'graded';
-    await submission.save();
+    
+    try {
+      await submission.save();
+      console.log(`✅ Successfully graded submission ${submission._id} with grade ${finalGrade}`);
+    } catch (saveError) {
+      // Handle unique constraint violation
+      if (saveError.code === 11000) {
+        console.error('❌ Duplicate submission detected:', saveError);
+        return res.status(409).json({ 
+          error: 'Duplicate submission detected. Please refresh and try again.' 
+        });
+      }
+      throw saveError;
+    }
     
     res.json(submission);
   } catch (err) {
