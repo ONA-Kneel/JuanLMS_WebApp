@@ -31,9 +31,11 @@ const strandSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Add a compound unique index to prevent duplicate strand names within the same track, school year, and term
-// This allows the same strand name to exist across all quarters within the same term/school year
-strandSchema.index({ strandName: 1, trackName: 1, schoolYear: 1, termName: 1 }, { unique: true });
+// Uniqueness should be scoped by quarter as well, so the same strand can exist in Q1 and Q2
+strandSchema.index(
+  { strandName: 1, trackName: 1, schoolYear: 1, termName: 1, quarterName: 1 },
+  { unique: true, name: 'uniq_strand_track_year_term_quarter' }
+);
 
 const Strand = mongoose.model('Strand', strandSchema);
 

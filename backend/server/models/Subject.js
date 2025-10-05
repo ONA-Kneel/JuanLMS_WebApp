@@ -42,8 +42,11 @@ const subjectSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound index to ensure unique subjects within a term
-subjectSchema.index({ subjectName: 1, trackName: 1, strandName: 1, gradeLevel: 1, termName: 1, schoolYear: 1 }, { unique: true });
+// Scope subject uniqueness by quarterName as well
+subjectSchema.index(
+  { subjectName: 1, trackName: 1, strandName: 1, gradeLevel: 1, termName: 1, schoolYear: 1, quarterName: 1 },
+  { unique: true, name: 'uniq_subject_track_strand_grade_year_term_quarter' }
+);
 
 const Subject = mongoose.model('Subject', subjectSchema);
 

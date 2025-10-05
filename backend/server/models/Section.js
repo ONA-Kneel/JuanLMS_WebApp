@@ -46,9 +46,11 @@ const sectionSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Add a compound unique index to prevent duplicate section names within the same track, strand, school year, and term
-// This allows the same section name to exist across all quarters within the same term/school year
-sectionSchema.index({ sectionName: 1, trackName: 1, strandName: 1, schoolYear: 1, termName: 1 }, { unique: true });
+// Scope uniqueness by quarterName so sections can repeat across quarters
+sectionSchema.index(
+  { sectionName: 1, trackName: 1, strandName: 1, schoolYear: 1, termName: 1, quarterName: 1 },
+  { unique: true, name: 'uniq_section_track_strand_year_term_quarter' }
+);
 
 const Section = mongoose.model('Section', sectionSchema);
 
