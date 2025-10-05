@@ -1589,7 +1589,6 @@ export default function Admin_AcademicSettings() {
         setTermFormData({ startDate: '', endDate: '' });
         setSuccessMessage('Term created successfully');
         setShowSuccessModal(true);
-        fetchTerms(selectedYear);
       } else {
         const data = await res.json();
         setTermError(data.message || 'Failed to create term');
