@@ -177,6 +177,13 @@ router.post('/', authenticateToken, async (req, res) => {
     console.log('About to query database for duplicates...');
     
     // Enhanced duplicate checking - check both studentId and studentSchoolID
+    console.log('🔍 DUPLICATE CHECK - Searching for existing assignments with:');
+    console.log('  - studentSchoolID:', studentSchoolID);
+    console.log('  - schoolYear:', term.schoolYear);
+    console.log('  - termName:', term.termName);
+    console.log('  - quarterName:', quarterName || null);
+    console.log('  - actualStudentId:', actualStudentId);
+    
     const existingAssignment = await StudentAssignment.findOne({
       $or: [
         // Check by studentId if it exists - only prevent same student in same term and quarter
@@ -196,6 +203,18 @@ router.post('/', authenticateToken, async (req, res) => {
         }] : [])
       ]
     });
+    
+    console.log('🔍 DUPLICATE CHECK RESULT:', existingAssignment ? 'FOUND EXISTING' : 'NO DUPLICATE FOUND');
+    if (existingAssignment) {
+      console.log('🔍 EXISTING ASSIGNMENT DETAILS:', {
+        _id: existingAssignment._id,
+        studentSchoolID: existingAssignment.studentSchoolID,
+        studentName: existingAssignment.studentName,
+        schoolYear: existingAssignment.schoolYear,
+        termName: existingAssignment.termName,
+        quarterName: existingAssignment.quarterName
+      });
+    }
     
     console.log('Database query completed. Found assignment:', existingAssignment ? 'YES' : 'NO');
 
