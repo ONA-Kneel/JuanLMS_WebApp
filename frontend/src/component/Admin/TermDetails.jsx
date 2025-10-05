@@ -509,64 +509,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
   };
 
-  const handleCopyFromQuarter = async () => {
-    if (!quarterData || !quarterData.quarterName) {
-      alert('No quarter data available for copying');
-      return;
-    }
-
-    const currentQuarter = quarterData.quarterName;
-    const sourceQuarter = currentQuarter === 'Quarter 2' ? 'Quarter 1' : 
-                         currentQuarter === 'Quarter 3' ? 'Quarter 2' :
-                         currentQuarter === 'Quarter 4' ? 'Quarter 3' : null;
-
-    if (!sourceQuarter) {
-      alert('Cannot determine source quarter for copying');
-      return;
-    }
-
-    const confirmMessage = `Are you sure you want to copy all academic structure (strands, sections, subjects, etc.) from ${sourceQuarter} to ${currentQuarter}?\n\nThis will copy:\n- All strands\n- All sections\n- All subjects\n- All student assignments\n- All faculty assignments\n\nThis action cannot be undone.`;
-    
-    if (!confirm(confirmMessage)) {
-      return;
-    }
-
-    try {
-      setStrandError('');
-      
-      const res = await fetch(`${API_BASE}/api/strands/copy-quarter`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sourceQuarter: sourceQuarter,
-          targetQuarter: currentQuarter,
-          schoolYear: termDetails.schoolYear,
-          termName: termDetails.termName
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        alert(`Successfully copied academic structure from ${sourceQuarter} to ${currentQuarter}!\n\nCopied:\n- ${data.details.strands} strands\n- ${data.details.sections} sections\n- ${data.details.subjects} subjects\n- ${data.details.studentAssignments} student assignments\n- ${data.details.facultyAssignments} faculty assignments`);
-        
-        // Refresh the data
-        await fetchStrands();
-        await fetchSections();
-        await fetchSubjects();
-      } else {
-        const errorData = await res.json();
-        alert(`Failed to copy quarter data: ${errorData.message}`);
-        setStrandError(errorData.message || 'Failed to copy quarter data');
-      }
-    } catch (err) {
-      console.error('Error copying quarter data:', err);
-      alert('Error copying quarter data. Please try again.');
-      setStrandError('Error copying quarter data');
-    }
-  };
-
   // Fetch sections when track or strand data changes
   useEffect(() => {
     if (tracks.length > 0 && strands.length > 0) {
@@ -7866,26 +7808,16 @@ Validation issues (${skippedCount} items):
                 <div className="mt-5">
                   <div className="flex justify-between items-center"> 
                   <h4 className="text-2xl font-semibold mb-2 ">Strands List</h4>
-                  {/* Action Buttons */}
-                  <div className="flex gap-2 justify-end mb-4">
-                    {/* Copy from Quarter Button */}
-                    <button
-                      type="button"
-                      className="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 mb-4"
-                      onClick={handleCopyFromQuarter}
-                      disabled={strands.length > 0}
-                    >
-                      {strands.length > 0 ? 'Copy from Quarter (Already has data)' : 'Copy from Quarter 1'}
-                    </button>
-                    {/* Add New Strand Button */}
-                    <button
-                      type="button"
-                      className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
-                      onClick={() => {
-                        setIsStrandModalOpen(true);
-                        setIsStrandEditMode(false);
-                        setEditingStrand(null);
-                        setStrandFormData({ trackId: '', strandName: '', strandType: '' });
+                  {/* Add New Strand Button */}
+                  <div className="flex justify-end mb-4">
+                  <button
+                    type="button"
+                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
+                    onClick={() => {
+                      setIsStrandModalOpen(true);
+                      setIsStrandEditMode(false);
+                      setEditingStrand(null);
+                      setStrandFormData({ trackId: '', strandName: '', strandType: '' });
                     }}
                     disabled={termDetails.status === 'archived'}
                   >
