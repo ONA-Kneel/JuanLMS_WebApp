@@ -3170,7 +3170,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const res = await fetch(`${API_BASE}/api/tracks/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tracks: validTracks })
+        body: JSON.stringify({ 
+          tracks: validTracks.map(t => ({
+            ...t,
+            schoolYear: termDetails.schoolYear,
+            termName: termDetails.termName,
+            ...(quarterData?.quarterName ? { quarterName: quarterData.quarterName } : {})
+          })) 
+        })
       });
 
       if (res.ok) {
@@ -3477,7 +3484,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           body: JSON.stringify({
             ...strand,
             schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName
+            termName: termDetails.termName,
+            ...(quarterData?.quarterName ? { quarterName: quarterData.quarterName } : {})
           })
         });
 
@@ -3830,7 +3838,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         const res = await fetch(`${API_BASE}/api/sections`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(section)
+          body: JSON.stringify({
+            ...section,
+            schoolYear: termDetails.schoolYear,
+            termName: termDetails.termName,
+            ...(quarterData?.quarterName ? { quarterName: quarterData.quarterName } : {})
+          })
         });
 
         if (res.ok) {
@@ -5104,7 +5117,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           const assignment = validAssignments.find(a => a['section'] === sectionName);
           if (assignment) {
             try {
-              const res = await fetch(`${API_BASE}/api/sections`, {
+        const res = await fetch(`${API_BASE}/api/sections`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -5114,7 +5127,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
                   gradeLevel: assignment['grade'],
                   schoolYear: termDetails.schoolYear,
                   termName: termDetails.termName,
-                  quarterName: quarterData ? quarterData.quarterName : null
+            quarterName: quarterData ? quarterData.quarterName : null
                 })
               });
               if (res.ok) {
