@@ -26,6 +26,9 @@ const termSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Add compound unique index to prevent duplicate terms with same name and school year
+termSchema.index({ termName: 1, schoolYear: 1 }, { unique: true });
+
 // Validate that endDate is after startDate
 termSchema.pre('save', function(next) {
   if (this.endDate <= this.startDate) {
