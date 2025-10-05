@@ -186,18 +186,19 @@ router.post('/', async (req, res) => {
       console.log('✅ Found active term:', { targetSchoolYear, targetTermName });
     }
 
-    // Check for existing section with same name in the same track, strand, school year, and term
+    // Check for existing section with same name in the same track, strand, school year, term, and quarter
     console.log('🔍 CHECKING FOR EXISTING SECTION...');
     const existingSection = await Section.findOne({ 
       sectionName: new RegExp(`^${sectionName}$`, 'i'),
       trackName,
       strandName,
       schoolYear: targetSchoolYear,
-      termName: targetTermName
+      termName: targetTermName,
+      quarterName: targetQuarterName
     });
     if (existingSection) {
       console.log('❌ SECTION ALREADY EXISTS:', existingSection);
-      return res.status(409).json({ message: 'Section already exists in this track, strand, school year, and term.' });
+      return res.status(409).json({ message: 'Section already exists in this track, strand, school year, term, and quarter.' });
     }
     console.log('✅ No existing section found, proceeding with creation...');
 
