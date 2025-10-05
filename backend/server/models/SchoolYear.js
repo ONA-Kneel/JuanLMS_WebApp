@@ -31,9 +31,6 @@ const schoolYearSchema = new mongoose.Schema({
   collection: 'schoolyears'
 });
 
-// Add unique index to prevent duplicate school year start years
-schoolYearSchema.index({ schoolYearStart: 1 }, { unique: true });
-
 // Ensure only one active school year exists
 schoolYearSchema.pre('save', async function(next) {
   if (this.status === 'active') {

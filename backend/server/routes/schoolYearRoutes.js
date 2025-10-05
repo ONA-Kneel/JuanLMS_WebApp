@@ -65,7 +65,7 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Invalid school year start' });
     }
 
-    // Check for duplicates (additional safeguard)
+    // Check for duplicates
     const existing = await SchoolYear.findOne({ schoolYearStart });
     if (existing) {
       return res.status(400).json({ message: 'A school year with this start already exists.' });
@@ -121,10 +121,6 @@ router.post('/', authenticateToken, async (req, res) => {
     // Return only the created school year
     res.status(201).json(savedYear);
   } catch (error) {
-    // Handle duplicate key error specifically
-    if (error.code === 11000) {
-      return res.status(400).json({ message: 'A school year with this start already exists.' });
-    }
     res.status(500).json({ message: error.message });
   }
 });
