@@ -11,14 +11,14 @@ import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
 import { getProfileImageUrl } from "../../utils/imageUtils";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Admin_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
@@ -122,6 +122,7 @@ export default function Admin_Chats() {
   const { socket: ctxSocket, isConnected } = useSocket();
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
+  const missingUserIdsRef = useRef(new Set());
   // Live refs to avoid stale closures in socket handlers
   const recentChatsRef = useRef([]);
   const selectedChatRef = useRef(null);
@@ -143,6 +144,9 @@ export default function Admin_Chats() {
   // Fetch a single user by id and merge to cache/state
   const fetchUserIfMissing = async (userId) => {
     if (!userId) return null;
+    const isValidObjectId = typeof userId === 'string' && /^[a-f\d]{24}$/i.test(userId);
+    if (!isValidObjectId) return null;
+    if (missingUserIdsRef.current.has(userId)) return null;
     const existing = users.find(u => u._id === userId);
     if (existing) return existing;
     try {
@@ -160,7 +164,7 @@ export default function Admin_Chats() {
         return fetched;
       }
     } catch (e) {
-      // ignore
+      try { missingUserIdsRef.current.add(userId); } catch {}
     }
     return null;
   };
@@ -452,7 +456,7 @@ export default function Admin_Chats() {
           if (messages.length > 0) {
             // Find the user object
             let otherUser = users.find(u => u._id === otherUserId);
-            if (!otherUser) {
+            if (!otherUser && !(missingUserIdsRef.current && missingUserIdsRef.current.has(otherUserId))) {
               // fetch minimal user profile if missing to avoid "Unknown User"
               // eslint-disable-next-line no-await-in-loop
               otherUser = await fetchUserIfMissing(otherUserId);
@@ -507,11 +511,14 @@ export default function Admin_Chats() {
   // Clean up any corrupted data in recentChats
   useEffect(() => {
     if (recentChats.length > 0) {
-      const cleanedChats = recentChats.filter(chat => 
-        chat && chat._id && chat.firstname && chat.lastname && 
-        chat.firstname !== 'undefined' && chat.lastname !== 'undefined' &&
-        chat.firstname !== undefined && chat.lastname !== undefined
-      );
+      const cleanedChats = recentChats.filter(chat => {
+        const validId = chat && chat._id && /^[a-f\d]{24}$/i.test(chat._id);
+        return (
+          validId && chat.firstname && chat.lastname &&
+          chat.firstname !== 'undefined' && chat.lastname !== 'undefined' &&
+          chat.firstname !== undefined && chat.lastname !== undefined
+        );
+      });
       
       if (cleanedChats.length !== recentChats.length) {
         setRecentChats(cleanedChats);
@@ -527,11 +534,14 @@ export default function Admin_Chats() {
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          const cleaned = parsed.filter(chat => 
-            chat && chat._id && chat.firstname && chat.lastname && 
-            chat.firstname !== 'undefined' && chat.lastname !== 'undefined' &&
-            chat.firstname !== undefined && chat.lastname !== undefined
-          );
+          const cleaned = parsed.filter(chat => {
+            const validId = chat && chat._id && /^[a-f\d]{24}$/i.test(chat._id);
+            return (
+              validId && chat.firstname && chat.lastname &&
+              chat.firstname !== 'undefined' && chat.lastname !== 'undefined' &&
+              chat.firstname !== undefined && chat.lastname !== undefined
+            );
+          });
           if (cleaned.length !== parsed.length) {
             localStorage.setItem("recentChats_admin", JSON.stringify(cleaned));
             setRecentChats(cleaned);
@@ -551,7 +561,10 @@ export default function Admin_Chats() {
     const fetchMessages = async () => {
       if (!selectedChat) return;
       try {
-        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         setMessages((prev) => {
           const newMessages = { ...prev, [selectedChat._id]: res.data };
           
@@ -591,9 +604,10 @@ export default function Admin_Chats() {
   // ================= HANDLERS =================
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() && !selectedFile) return;
+    if (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0)) return;
     if (!selectedChat) return;
 
+<<<<<<< Updated upstream
     const formData = new FormData();
     formData.append("senderId", currentUserId);
     formData.append("receiverId", selectedChat._id);
@@ -602,45 +616,82 @@ export default function Admin_Chats() {
       formData.append("file", selectedFile);
     }
 
+=======
+    setIsSending(true);
+>>>>>>> Stashed changes
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.post(`${API_BASE}/messages`, formData, {
-        headers: { 
-          "Content-Type": "multipart/form-data",
-          "Authorization": `Bearer ${token}`
-        },
-      });
 
-      const sentMessage = res.data;
+      // 1) Send text message first if present (no file)
+      if (newMessage.trim()) {
+        const textForm = new FormData();
+        textForm.append("senderId", currentUserId);
+        textForm.append("receiverId", selectedChat._id);
+        textForm.append("message", newMessage.trim());
 
-      ctxSocket?.emit("sendMessage", {
-        senderId: currentUserId,
-        receiverId: selectedChat._id,
-        text: sentMessage.message,
-        fileUrl: sentMessage.fileUrl || null,
-      });
+        const textRes = await axios.post(`${API_BASE}/messages`, textForm, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          },
+        });
 
-      setMessages((prev) => ({
-        ...prev,
-        [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
-      }));
+        const textMessage = textRes.data;
+        ctxSocket?.emit("sendMessage", {
+          senderId: currentUserId,
+          receiverId: selectedChat._id,
+          text: textMessage.message,
+          fileUrl: textMessage.fileUrl || null,
+        });
 
-      // Update last message preview immediately for individual chat
-      setLastMessages(prev => ({
-        ...prev,
-        [selectedChat._id]: {
-          prefix: 'You: ',
-          text: sentMessage.message ? sentMessage.message : (sentMessage.fileUrl ? 'File sent' : '')
-        }
-      }));
+        setMessages((prev) => ({
+          ...prev,
+          [selectedChat._id]: [...(prev[selectedChat._id] || []), textMessage],
+        }));
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix: 'You: ', text: textMessage.message }
+        }));
+        bumpChatToTop(selectedChat);
+      }
 
-      // Ensure selected chat is at the top of recent chats
-      bumpChatToTop(selectedChat);
+      // 2) Send each selected file as its own message with empty text
+      for (const file of (selectedFiles || [])) {
+        const fileForm = new FormData();
+        fileForm.append("senderId", currentUserId);
+        fileForm.append("receiverId", selectedChat._id);
+        fileForm.append("message", "");
+        fileForm.append("file", file);
 
-      // Avoid delayed refresh; sidebar preview already updated
+        const fileRes = await axios.post(`${API_BASE}/messages`, fileForm, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          },
+        });
 
+        const fileMessage = fileRes.data;
+        ctxSocket?.emit("sendMessage", {
+          senderId: currentUserId,
+          receiverId: selectedChat._id,
+          text: fileMessage.message,
+          fileUrl: fileMessage.fileUrl || null,
+        });
+
+        setMessages((prev) => ({
+          ...prev,
+          [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
+        }));
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix: 'You: ', text: fileMessage.fileUrl ? 'File sent' : '' }
+        }));
+        bumpChatToTop(selectedChat);
+      }
+
+      // Clear inputs
       setNewMessage("");
-      setSelectedFile(null);
+      setSelectedFiles([]);
     } catch (err) {
       console.error("Error sending message:", err);
     }
@@ -658,9 +709,13 @@ export default function Admin_Chats() {
   };
 
   const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setSelectedFile(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setSelectedFiles((prev) => {
+        const existingNames = new Set(prev.map(f => `${f.name}|${f.size}|${f.lastModified}`));
+        const additions = files.filter(f => !existingNames.has(`${f.name}|${f.size}|${f.lastModified}`));
+        return [...prev, ...additions];
+      });
       e.target.value = null;
     }
   };
@@ -691,6 +746,41 @@ export default function Admin_Chats() {
     
     setShowNewChatModal(false);
     setUserSearchTerm("");
+  };
+
+  // Group consecutive attachment-only messages from the same sender into a single render group
+  const groupMessagesForDisplay = (rawList) => {
+    const list = Array.isArray(rawList) ? rawList : [];
+    const groups = [];
+    for (let i = 0; i < list.length; i += 1) {
+      const msg = list[i];
+      const isAttachmentOnly = !!msg.fileUrl && (!msg.message || msg.message.trim() === "");
+      if (!isAttachmentOnly) {
+        groups.push({ type: 'message', msg });
+        continue;
+      }
+      // Start a new attachment group
+      const attachments = [msg];
+      let j = i + 1;
+      while (j < list.length) {
+        const next = list[j];
+        const nextIsAttachmentOnly = !!next.fileUrl && (!next.message || next.message.trim() === "");
+        if (!nextIsAttachmentOnly) break;
+        if (next.senderId !== msg.senderId) break;
+        // Same sender and consecutive attachment-only -> group
+        attachments.push(next);
+        j += 1;
+      }
+      groups.push({ type: 'attachment_group', senderId: msg.senderId, items: attachments });
+      i = j - 1; // advance outer loop
+    }
+    return groups;
+  };
+
+  const isImageUrl = (fileUrl) => {
+    if (!fileUrl || typeof fileUrl !== 'string') return false;
+    const cleaned = fileUrl.split('?')[0];
+    return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(cleaned);
   };
 
   // Keep recentChats in sync with localStorage
@@ -1069,9 +1159,10 @@ export default function Admin_Chats() {
   };
 
   const handleSendGroupMessage = async () => {
-    if (!newMessage.trim() && !selectedFile) return;
+    if (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0)) return;
     if (!selectedChat || !selectedChat.isGroup) return;
 
+<<<<<<< Updated upstream
     const formData = new FormData();
     formData.append("groupId", selectedChat._id);
     formData.append("senderId", currentUserId);
@@ -1080,27 +1171,38 @@ export default function Admin_Chats() {
       formData.append("file", selectedFile);
     }
 
+=======
+    setIsSending(true);
+>>>>>>> Stashed changes
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.post(`${API_BASE}/group-messages`, formData, {
-        headers: { 
-          "Content-Type": "multipart/form-data",
-          "Authorization": `Bearer ${token}`
-        },
-      });
+      const parsedUser = storedUser ? JSON.parse(storedUser) : null;
 
-      const sentMessage = res.data;
+      // 1) Send text message first if present
+      if (newMessage.trim()) {
+        const textForm = new FormData();
+        textForm.append("groupId", selectedChat._id);
+        textForm.append("senderId", currentUserId);
+        textForm.append("message", newMessage.trim());
 
-              ctxSocket?.emit("sendGroupMessage", {
+        const textRes = await axios.post(`${API_BASE}/group-messages`, textForm, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          },
+        });
+        const textMessage = textRes.data;
+        ctxSocket?.emit("sendGroupMessage", {
           senderId: currentUserId,
           groupId: selectedChat._id,
-          text: sentMessage.message,
-          fileUrl: sentMessage.fileUrl || null,
-          senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
-          senderFirstname: storedUser ? JSON.parse(storedUser).firstname : "Unknown",
-          senderLastname: storedUser ? JSON.parse(storedUser).lastname : "User",
-          senderProfilePic: storedUser ? JSON.parse(storedUser).profilePic : null,
+          text: textMessage.message,
+          fileUrl: textMessage.fileUrl || null,
+          senderName: parsedUser ? `${parsedUser.firstname} ${parsedUser.lastname}` : "Unknown",
+          senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
+          senderLastname: parsedUser ? parsedUser.lastname : "User",
+          senderProfilePic: parsedUser ? parsedUser.profilePic : null,
         });
+<<<<<<< Updated upstream
 
       setGroupMessages((prev) => ({
         ...prev,
@@ -1127,8 +1229,66 @@ export default function Admin_Chats() {
           title: 'Send Failed',
           message: err.response?.data?.error || "Error sending group message"
         });
+=======
+        setGroupMessages((prev) => ({
+          ...prev,
+          [selectedChat._id]: [...(prev[selectedChat._id] || []), textMessage],
+        }));
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix: 'You: ', text: textMessage.message }
+        }));
+>>>>>>> Stashed changes
       }
-    };
+
+      // 2) Send each selected file as its own message with empty text
+      for (const file of (selectedFiles || [])) {
+        const fileForm = new FormData();
+        fileForm.append("groupId", selectedChat._id);
+        fileForm.append("senderId", currentUserId);
+        fileForm.append("message", "");
+        fileForm.append("file", file);
+
+        const fileRes = await axios.post(`${API_BASE}/group-messages`, fileForm, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          },
+        });
+        const fileMessage = fileRes.data;
+        ctxSocket?.emit("sendGroupMessage", {
+          senderId: currentUserId,
+          groupId: selectedChat._id,
+          text: fileMessage.message,
+          fileUrl: fileMessage.fileUrl || null,
+          senderName: parsedUser ? `${parsedUser.firstname} ${parsedUser.lastname}` : "Unknown",
+          senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
+          senderLastname: parsedUser ? parsedUser.lastname : "User",
+          senderProfilePic: parsedUser ? parsedUser.profilePic : null,
+        });
+        setGroupMessages((prev) => ({
+          ...prev,
+          [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
+        }));
+        setLastMessages(prev => ({
+          ...prev,
+          [selectedChat._id]: { prefix: 'You: ', text: fileMessage.fileUrl ? 'File sent' : '' }
+        }));
+      }
+
+      setNewMessage("");
+      setSelectedFiles([]);
+    } catch (err) {
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Send Failed',
+        message: err.response?.data?.error || "Error sending group message"
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
 
 
 
@@ -1450,41 +1610,83 @@ export default function Admin_Chats() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
-                  {(selectedChat.isGroup ? groupMessages[selectedChat._id] || [] : messages[selectedChat._id] || []).map((msg, index, arr) => {
-                    const sender = users.find(u => u._id === msg.senderId);
-                    const prevMsg = arr[index - 1];
-                    const showHeader =
-                      index === 0 ||
-                      msg.senderId !== prevMsg?.senderId ||
-                      Math.abs(new Date(msg.createdAt || msg.updatedAt) - new Date(prevMsg?.createdAt || prevMsg?.updatedAt)) > 5 * 60 * 1000;
-                    return (
-                      <div key={msg._id} className={`flex ${msg.senderId !== currentUserId ? "justify-start" : "justify-end"}`}>
-                        <div className={`max-w-xs lg:max-w-md ${msg.senderId !== currentUserId ? "order-1" : "order-2"}`}>
-                          {showHeader && msg.senderId !== currentUserId && (
-                            <div className="text-xs text-gray-500 mb-1">
-                              {selectedChat.isGroup ? (msg.senderName || "Unknown User") : (sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown User")}
-                            </div>
-                          )}
-                          <div className={`rounded-lg px-4 py-2 ${msg.senderId !== currentUserId ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>
-                            {msg.message && <p className="break-words">{msg.message}</p>}
-                            {msg.fileUrl && (
-                              <div className="mt-2">
-                                <a
-                                  href={`${API_BASE}/${msg.fileUrl}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-400 hover:underline"
-                                >
-                                  📎 Attachment
-                                </a>
+                  {groupMessagesForDisplay(selectedChat.isGroup ? groupMessages[selectedChat._id] || [] : messages[selectedChat._id] || []).map((entry, index, arr) => {
+                    if (entry.type === 'message') {
+                      const msg = entry.msg;
+                      const sender = users.find(u => u._id === msg.senderId);
+                      const prev = index > 0 ? arr[index - 1] : null;
+                      const prevMsg = prev && prev.type === 'message' ? prev.msg : null;
+                      const prevSenderId = prevMsg ? prevMsg.senderId : (prev && prev.type === 'attachment_group' ? prev.senderId : null);
+                      const prevTime = prevMsg ? (prevMsg.createdAt || prevMsg.updatedAt) : (prev && prev.type === 'attachment_group' && prev.items.length > 0 ? (prev.items[prev.items.length - 1].createdAt || prev.items[prev.items.length - 1].updatedAt) : null);
+                      const showHeader = index === 0 || msg.senderId !== prevSenderId || Math.abs(new Date(msg.createdAt || msg.updatedAt) - new Date(prevTime)) > 5 * 60 * 1000;
+                      return (
+                        <div key={msg._id} className={`flex ${msg.senderId !== currentUserId ? "justify-start" : "justify-end"}`}>
+                          <div className={`max-w-xs lg:max-w-md ${msg.senderId !== currentUserId ? "order-1" : "order-2"}`}>
+                            {showHeader && msg.senderId !== currentUserId && (
+                              <div className="text-xs text-gray-500 mb-1">
+                                {selectedChat.isGroup ? (msg.senderName || "Unknown User") : (sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown User")}
                               </div>
                             )}
-                            <div className={`text-xs mt-1 ${msg.senderId !== currentUserId ? "text-gray-500" : "text-blue-100"}`}>
-                              {(() => {
-                                const ts = msg.createdAt || msg.updatedAt;
-                                const d = ts ? new Date(ts) : null;
-                                return d && !isNaN(d.getTime()) ? d.toLocaleTimeString() : '';
-                              })()}
+                            <div className={`rounded-lg px-4 py-2 ${msg.senderId !== currentUserId ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>
+                              {msg.message && <p className="break-words">{msg.message}</p>}
+                              {msg.fileUrl && (
+                                <div className="mt-2">
+                                  {isImageUrl(msg.fileUrl) ? (
+                                    <a href={`${API_BASE}/${msg.fileUrl}`} target="_blank" rel="noopener noreferrer">
+                                      <img
+                                        src={`${API_BASE}/${msg.fileUrl}`}
+                                        alt="Attachment preview"
+                                        className="rounded-md max-h-56 max-w-full object-contain border border-white/30"
+                                        loading="lazy"
+                                      />
+                                    </a>
+                                  ) : (
+                                    <a href={`${API_BASE}/${msg.fileUrl}`} target="_blank" rel="noopener noreferrer" className="text-blue-100 underline decoration-white/40 hover:decoration-white">📎 Attachment</a>
+                                  )}
+                                </div>
+                              )}
+                              <div className={`text-xs mt-1 ${msg.senderId !== currentUserId ? "text-gray-500" : "text-blue-100"}`}>
+                                {(() => { const ts = msg.createdAt || msg.updatedAt; const d = ts ? new Date(ts) : null; return d && !isNaN(d.getTime()) ? d.toLocaleTimeString() : ''; })()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    // attachment group bubble
+                    const first = entry.items[0];
+                    const sender = users.find(u => u._id === entry.senderId);
+                    return (
+                      <div key={`ag-${index}-${entry.senderId}-${entry.items.length}`} className={`flex ${entry.senderId !== currentUserId ? "justify-start" : "justify-end"}`}>
+                        <div className={`max-w-xs lg:max-w-md ${entry.senderId !== currentUserId ? "order-1" : "order-2"}`}>
+                          {entry.senderId !== currentUserId && (
+                            <div className="text-xs text-gray-500 mb-1">
+                              {selectedChat.isGroup ? (first.senderName || "Unknown User") : (sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown User")}
+                            </div>
+                          )}
+                          <div className={`rounded-lg px-4 py-2 ${entry.senderId !== currentUserId ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>
+                            <div className="space-y-2">
+                              {entry.items.map((att, i) => (
+                                <div key={att._id || `${att.fileUrl}-${i}`} className="pt-1 first:pt-0 border-t border-white/20 first:border-t-0">
+                                  {isImageUrl(att.fileUrl) ? (
+                                    <a href={`${API_BASE}/${att.fileUrl}`} target="_blank" rel="noopener noreferrer">
+                                      <img
+                                        src={`${API_BASE}/${att.fileUrl}`}
+                                        alt={`Attachment ${i + 1}`}
+                                        className="rounded-md max-h-56 max-w-full object-contain border border-white/30"
+                                        loading="lazy"
+                                      />
+                                    </a>
+                                  ) : (
+                                    <a href={`${API_BASE}/${att.fileUrl}`} target="_blank" rel="noopener noreferrer" className={`${entry.senderId !== currentUserId ? "text-blue-700" : "text-blue-100"} underline decoration-current/40 hover:decoration-current`}>
+                                      📎 Attachment {entry.items.length > 1 ? `(${i + 1})` : ''}
+                                    </a>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                            <div className={`text-xs mt-2 ${entry.senderId !== currentUserId ? "text-gray-500" : "text-blue-100"}`}>
+                              {(() => { const ts = entry.items[entry.items.length - 1].createdAt || entry.items[entry.items.length - 1].updatedAt; const d = ts ? new Date(ts) : null; return d && !isNaN(d.getTime()) ? d.toLocaleTimeString() : ''; })()}
                             </div>
                           </div>
                         </div>
@@ -1508,6 +1710,7 @@ export default function Admin_Chats() {
                       ref={fileInputRef}
                       onChange={handleFileSelect}
                       className="hidden"
+                      multiple
                     />
                     <input
                       type="text"
@@ -1519,19 +1722,35 @@ export default function Admin_Chats() {
                     />
                     <button
                       onClick={selectedChat.isGroup ? handleSendGroupMessage : handleSendMessage}
+<<<<<<< Updated upstream
                       className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+=======
+                      disabled={isSending || (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0))}
+                      className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+>>>>>>> Stashed changes
                     >
                       Send
                     </button>
                   </div>
-                  {selectedFile && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Selected: {selectedFile.name}</span>
+                  {selectedFiles && selectedFiles.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {selectedFiles.map((file, idx) => (
+                        <div key={`${file.name}-${file.size}-${file.lastModified}-${idx}`} className="flex items-center gap-2 bg-gray-100 px-2 py-1 rounded">
+                          <span className="text-sm text-gray-700 truncate max-w-[160px]" title={file.name}>{file.name}</span>
+                          <button
+                            onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-red-500 hover:text-red-700"
+                            title="Remove"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
                       <button
-                        onClick={() => setSelectedFile(null)}
-                        className="text-red-500 hover:text-red-700"
+                        onClick={openFilePicker}
+                        className="text-blue-600 hover:text-blue-800 text-sm"
                       >
-                        <img src={uploadfile} alt="Remove" className="w-4 h-4" />
+                        + Add more
                       </button>
                     </div>
                   )}
