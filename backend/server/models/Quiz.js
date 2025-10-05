@@ -79,6 +79,18 @@ const quizSchema = new mongoose.Schema({
   }
 });
 
+// Add unique compound index to prevent duplicate quizzes
+quizSchema.index({ 
+  classID: 1, 
+  title: 1, 
+  quarter: 1, 
+  termName: 1, 
+  academicYear: 1 
+}, { 
+  unique: true,
+  name: 'unique_quiz_per_class_quarter'
+});
+
 // Ensure total points are synchronized and within 1–100 on save/update
 quizSchema.pre('validate', function(next) {
   try {

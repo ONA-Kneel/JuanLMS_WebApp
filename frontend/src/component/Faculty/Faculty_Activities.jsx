@@ -19,6 +19,9 @@ export default function Faculty_Activities() {
   const [currentTerm, setCurrentTerm] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef();
+  
+  // Add refresh trigger for activities
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const [activities, setActivities] = useState([]);
   const [quizzes, setQuizzes] = useState([]);
@@ -168,6 +171,24 @@ export default function Faculty_Activities() {
         console.log('[Faculty_Activities] Filtered activities by quarter:', filteredActivities);
         console.log('[Faculty_Activities] Raw quiz data:', allQuizzes);
         console.log('[Faculty_Activities] Filtered quizzes by quarter:', filteredQuizzes);
+        
+        // Log HPS calculation for debugging
+        const writtenWorksHPS = [...filteredActivities, ...filteredQuizzes]
+          .filter(activity => {
+            const isFuturePost = new Date(activity.postAt) > new Date();
+            return !isFuturePost && activity.activityType === 'written';
+          })
+          .reduce((sum, activity) => sum + (activity.points || 100), 0);
+        
+        const performanceTasksHPS = [...filteredActivities, ...filteredQuizzes]
+          .filter(activity => {
+            const isFuturePost = new Date(activity.postAt) > new Date();
+            return !isFuturePost && activity.activityType === 'performance';
+          })
+          .reduce((sum, activity) => sum + (activity.points || 100), 0);
+        
+        console.log('[Faculty_Activities] HPS Calculation - Written Works:', writtenWorksHPS);
+        console.log('[Faculty_Activities] HPS Calculation - Performance Tasks:', performanceTasksHPS);
           
           setActivities(filteredActivities);
           setQuizzes(filteredQuizzes);
@@ -201,6 +222,26 @@ export default function Faculty_Activities() {
       setGradedItems([]);
     }
   }, [facultyClasses]);
+
+  // Add refresh trigger effect
+  useEffect(() => {
+    if (facultyClasses.length > 0 && refreshTrigger > 0) {
+      fetchActivitiesAndQuizzes();
+    }
+  }, [refreshTrigger]);
+
+  // Function to trigger refresh
+  const triggerRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  // Expose refresh function globally for activity/quiz creation callbacks
+  useEffect(() => {
+    window.refreshFacultyActivities = triggerRefresh;
+    return () => {
+      delete window.refreshFacultyActivities;
+    };
+  }, []);
 
   const fetchReadyToGradeItems = async (activityData, quizData, token) => {
     try {
@@ -407,7 +448,19 @@ export default function Faculty_Activities() {
             <div>
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-black text-2xl font-bold mb-2">Activities & Quizzes</h3>
+                  <div className="flex items-center gap-4 mb-2">
+                    <h3 className="text-black text-2xl font-bold">Activities & Quizzes</h3>
+                    <button
+                      onClick={triggerRefresh}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-2"
+                      title="Refresh activities and quizzes"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </button>
+                  </div>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-600">Type:</span>
@@ -698,7 +751,19 @@ export default function Faculty_Activities() {
             <div>
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-black text-2xl font-bold mb-2">Ready to Grade</h3>
+                  <div className="flex items-center gap-4 mb-2">
+                    <h3 className="text-black text-2xl font-bold">Ready to Grade</h3>
+                    <button
+                      onClick={triggerRefresh}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-2"
+                      title="Refresh activities and quizzes"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </button>
+                  </div>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-600">Type:</span>
@@ -927,7 +992,19 @@ export default function Faculty_Activities() {
             <div>
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-black text-2xl font-bold mb-2">Graded Activities</h3>
+                  <div className="flex items-center gap-4 mb-2">
+                    <h3 className="text-black text-2xl font-bold">Graded Activities</h3>
+                    <button
+                      onClick={triggerRefresh}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-2"
+                      title="Refresh activities and quizzes"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </button>
+                  </div>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-600">Type:</span>

@@ -10,6 +10,8 @@ import { authenticateToken } from '../middleware/authMiddleware.js';
 import User from '../models/User.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import Registrant from '../models/Registrant.js';
+import SchoolYear from '../models/SchoolYear.js';
+import Term from '../models/Term.js';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -110,6 +112,11 @@ router.get('/sections', authenticateToken, async (req, res) => {
 // --- POST / - Create a new class with image upload ---
 router.post('/', authenticateToken, upload.single('image'), async (req, res) => {
   try {
+    // Check if req.body exists
+    if (!req.body) {
+      return res.status(400).json({ error: 'Request body is missing or invalid. Please ensure Content-Type is application/json.' });
+    }
+    
     const { classID, className, classCode, classDesc, members, facultyID, section } = req.body;
     let membersArr = members;
     if (typeof members === 'string') {
@@ -389,8 +396,40 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     
     console.log('[CREATE-CLASS] Final classData before save:', classData);
     
-    const newClass = new Class(classData);
-    await newClass.save();
+    let newClass;
+    try {
+      newClass = new Class(classData);
+      await newClass.save();
+    } catch (saveError) {
+      if (saveError.code === 11000) {
+        console.log('[CREATE-CLASS] ⚠️ Duplicate class detected');
+        
+        // Check if a similar class already exists
+        const existingClass = await Class.findOne({
+          facultyID: classData.facultyID,
+          className: classData.className,
+          section: classData.section,
+          academicYear: classData.academicYear,
+          termName: classData.termName
+        });
+        
+        if (existingClass) {
+          return res.status(400).json({ 
+            error: 'A class with this name already exists for this faculty in this term and section',
+            existingClass: {
+              classID: existingClass.classID,
+              className: existingClass.className,
+              section: existingClass.section
+            }
+          });
+        } else {
+          return res.status(400).json({ error: 'A class with this ID or code already exists' });
+        }
+      } else {
+        console.error('[CREATE-CLASS] ❌ Error saving class:', saveError);
+        throw saveError;
+      }
+    }
     
     console.log('[CREATE-CLASS] Class created successfully:', {
       classID: newClass.classID,
@@ -1170,7 +1209,24 @@ router.get('/pending-confirmation', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied. Faculty only.' });
     }
     
+    // Get current active academic year and term
+    const activeYear = await SchoolYear.findOne({ status: 'active' });
+    if (!activeYear) {
+      return res.json([]); // No active year, no classes to show
+    }
+    
+    const schoolYearName = `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`;
+    const activeTerm = await Term.findOne({ 
+      schoolYear: schoolYearName, 
+      status: 'active' 
+    });
+    
+    if (!activeTerm) {
+      return res.json([]); // No active term, no classes to show
+    }
+    
     // Get auto-created classes that need confirmation for this faculty
+    // ONLY for the current active term and academic year
     const classes = await Class.find({
       $or: [
         { facultyID: userObjectId },
@@ -1178,8 +1234,12 @@ router.get('/pending-confirmation', authenticateToken, async (req, res) => {
       ],
       isAutoCreated: true,
       needsConfirmation: true,
-      isArchived: { $ne: true }
+      isArchived: { $ne: true },
+      academicYear: schoolYearName,
+      termName: activeTerm.termName
     });
+    
+    console.log(`[PENDING-CONFIRMATION] Found ${classes.length} pending classes for faculty ${userID} in term ${activeTerm.termName}`);
     
     res.json(classes);
   } catch (err) {

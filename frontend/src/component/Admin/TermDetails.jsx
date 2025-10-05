@@ -2657,7 +2657,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
                   
                   return `
                     <tr>
-                      <td>${assignment.firstName && assignment.lastName ? `${assignment.firstName} ${assignment.lastName}` : assignment.studentName || 'Unknown'}</td>
+                      <td>${assignment.firstname && assignment.lastname ? `${assignment.firstname} ${assignment.lastname}` : assignment.studentName || 'Unknown'}</td>
                       <td>${schoolId}</td>
                       <td>${assignment.trackName}</td>
                       <td>${assignment.strandName}</td>
@@ -4519,7 +4519,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         [`Academic Year: ${termDetails.schoolYear}`],
         [`Term: ${termDetails.termName}`],
         [''], // Empty row
-        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade'], // Updated format
+        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade'], // Match enrolled students format
       ]);
       
       // Set column widths
@@ -4549,15 +4549,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         [`Academic Year: ${termDetails.schoolYear}`],
         [`Term: ${termDetails.termName}`],
         [''], // Empty row
-        // Student data headers
-        ['Student N.', 'Student ID', 'Enrollment No.', 'Enrollment Date', 'Last Name', 'First Name', 'Strand', 'Section', 'Grade', 'Status'],
+        // Student data headers (match enrolled students format)
+        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade', 'status'],
         // Student data rows
         ...currentStudentAssignments.map((assignment, index) => {
           const student = students.find(s => s._id === assignment.studentId);
           const status = isStudentApproved(assignment) ? 'Active' : 'Pending Approval';
           return [
-            `${assignment.lastname || ''} ${assignment.firstname || ''}`.trim() || 'Unknown',
-            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
             assignment.enrollmentNo || 'N/A',
             assignment.enrollmentDate ? 
               new Date(assignment.enrollmentDate).toLocaleDateString('en-US', {
@@ -4565,6 +4563,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
                 day: '2-digit', 
                 year: 'numeric'
               }) : 'N/A',
+            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
             assignment.lastname || '',
             assignment.firstname || '',
             assignment.strandName || 'N/A',
@@ -4577,7 +4576,15 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
       const currentStudentAssignmentsWs = XLSX.utils.aoa_to_sheet(currentStudentAssignmentsData);
       const saWscols = [
-        { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 15 }
+        { wch: 15 }, // enrollment_no
+        { wch: 12 }, // date
+        { wch: 15 }, // student_no
+        { wch: 20 }, // last_name
+        { wch: 20 }, // first_name
+        { wch: 25 }, // strand
+        { wch: 20 }, // section
+        { wch: 10 }, // grade
+        { wch: 15 }  // status
       ];
       currentStudentAssignmentsWs['!cols'] = saWscols;
       XLSX.utils.book_append_sheet(wb, currentStudentAssignmentsWs, 'Current Enrolled Students');
@@ -6234,12 +6241,16 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
                     }));
                   } else if (sheetName === 'Enrolled Students') {
                     parsedData.studentAssignments = normalizedRows.map(row => ({
-                      studentSchoolID: row['Student School ID'] || row['Student Sc'] || row['Student ID'],
+                      studentSchoolID: row['student_no'] || row['Student School ID'] || row['Student Sc'] || row['Student ID'],
                       studentName: row['Student Name'] || row['Student Nam'] || row['Student'],
-                      gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
+                      firstName: row['first_name'] || row['First Name'] || row['First Nam'] || row['First'],
+                      lastName: row['last_name'] || row['Last Name'] || row['Last Nam'] || row['Last'],
+                      enrollmentNo: row['enrollment_no'] || row['Enrollment No'] || row['Enrollment'] || '',
+                      enrollmentDate: row['date'] || row['Date'] || '',
+                      gradeLevel: row['grade'] || row['Grade Level'] || row['Grade'] || row['Level'],
                       trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
-                      strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
-                      sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
+                      strandName: row['strand'] || row['Strand Name'] || row['Strand Nam'] || row['Strand'],
+                      sectionName: row['section'] || row['Section Name'] || row['Section Nam'] || row['Section'],
                     }));
                   }
                 }
@@ -6687,87 +6698,93 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       }
 
-      // Import student assignments
+      // Import student assignments using bulk upload (same as enrolled students)
+      const assignmentsToCreate = [];
       const processedStudentAssignments = new Set(); // Track processed assignments to prevent duplicates within the same import
       
       for (const assignment of validStudentAssignments) {
-        try {
-          // Create a unique key for this assignment to prevent duplicates within the same import batch
-          const assignmentKey = `${assignment.studentSchoolID}-${assignment.trackName}-${assignment.strandName}-${assignment.sectionName}`;
+        // Create a unique key for this assignment to prevent duplicates within the same import batch
+        const assignmentKey = `${assignment.studentSchoolID}-${assignment.trackName}-${assignment.strandName}-${assignment.sectionName}`;
+        
+        if (processedStudentAssignments.has(assignmentKey)) {
+          console.log(`Skipping duplicate assignment within import batch: ${assignment.studentName} (${assignment.studentSchoolID})`);
+          skippedCount++;
+          skippedMessages.push(`Student assignment for "${assignment.studentName}" is duplicate within import batch`);
+          continue;
+        }
+        
+        processedStudentAssignments.add(assignmentKey);
+        
+        // Find student by school ID
+        const student = students.find(s => s.schoolID === assignment.studentSchoolID);
+        
+        // Prepare assignment data for bulk upload (same format as enrolled students)
+        const assignmentData = {
+          gradeLevel: assignment.gradeLevel,
+          trackName: assignment.trackName,
+          strandName: assignment.strandName,
+          sectionName: assignment.sectionName,
+          termId: termDetails._id,
+          quarterName: quarterData ? quarterData.quarterName : undefined
+        };
           
-          if (processedStudentAssignments.has(assignmentKey)) {
-            console.log(`Skipping duplicate assignment within import batch: ${assignment.studentName} (${assignment.studentSchoolID})`);
-            skippedCount++;
-            skippedMessages.push(`Student assignment for "${assignment.studentName}" is duplicate within import batch`);
-            continue;
-          }
-          
-          processedStudentAssignments.add(assignmentKey);
-          
-          // Find student by school ID
-          const student = students.find(s => s.schoolID === assignment.studentSchoolID);
-          
-          const displayName = assignment.firstName && assignment.lastName ? `${assignment.firstName} ${assignment.lastName}` : assignment.studentName;
-          console.log(`Creating student assignment for ${displayName} in ${assignment.trackName}/${assignment.strandName}/${assignment.sectionName}`);
-
-          // Prepare payload based on whether student exists in system
-          let payload;
-          if (student) {
-            // Student exists in system - link to existing account
-            payload = {
-              studentId: student._id,
-              studentSchoolID: assignment.studentSchoolID || student.schoolID, // ALWAYS include schoolID
-              trackName: assignment.trackName,
-              strandName: assignment.strandName,
-              sectionName: assignment.sectionName,
-              gradeLevel: assignment.gradeLevel,
-              termId: termDetails._id,
-              quarterName: quarterData ? quarterData.quarterName : undefined
-            };
-          } else {
-            // Student doesn't exist - create manual entry
-            payload = {
-              studentName: assignment.studentName,
-              studentSchoolID: assignment.studentSchoolID,
-              firstName: assignment.firstName || assignment.studentName.split(' ')[0],
-              lastName: assignment.lastName || assignment.studentName.split(' ').slice(1).join(' '),
-              enrollmentNo: assignment.enrollmentNo || '',
-              enrollmentDate: assignment.enrollmentDate || new Date(),
-              trackName: assignment.trackName,
-              strandName: assignment.strandName,
-              sectionName: assignment.sectionName,
-              gradeLevel: assignment.gradeLevel,
-              termId: termDetails._id,
-              quarterName: quarterData ? quarterData.quarterName : undefined
-            };
-          }
-
-          const res = await fetch(`${API_BASE}/api/student-assignments`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify(payload)
+        if (student) {
+          // Existing student - send studentId AND schoolID
+          assignmentsToCreate.push({ 
+            ...assignmentData, 
+            studentId: student._id,
+            studentSchoolID: assignment.studentSchoolID // ALWAYS include schoolID
           });
-
-          if (res.ok) {
-            importedCount++;
-            studentsImported++;
-            console.log(`Student assignment for ${assignment.studentName} imported successfully`);
-          } else {
-            const data = await res.json();
-            console.log(`Failed to import student assignment for ${assignment.studentName}:`, data);
-            if (data.message && (data.message.includes('already exists') || data.message.includes('already enrolled'))) {
-              skippedCount++;
-              skippedMessages.push(`Student assignment for "${assignment.studentName}" already exists`);
-            } else {
-              skippedCount++;
-              skippedMessages.push(`Student assignment for "${assignment.studentName}": ${data.message || 'Unknown error'}`);
-            }
+        } else {
+          // New student - send student info directly (same as manual assignment)
+          const payload = { 
+            ...assignmentData, 
+            firstname: assignment.firstName || assignment.studentName?.split(' ')[0] || '',
+            lastname: assignment.lastName || assignment.studentName?.split(' ').slice(1).join(' ') || '',
+            enrollmentNo: assignment.enrollmentNo || `ENR-${assignment.studentSchoolID}`,
+            enrollmentDate: assignment.enrollmentDate || new Date().toISOString()
+          };
+          if (assignment.studentSchoolID) {
+            payload.studentSchoolID = assignment.studentSchoolID;
           }
-        } catch (err) {
-          console.error('Error importing student assignment:', err);
+          assignmentsToCreate.push(payload);
+        }
+      }
+
+      // Make single bulk request instead of individual requests (same as enrolled students)
+      if (assignmentsToCreate.length > 0) {
+        console.log(`Making bulk request for ${assignmentsToCreate.length} student assignments`);
+        const res = await fetch(`${API_BASE}/api/student-assignments/bulk`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify(assignmentsToCreate)
+        });
+
+        if (res.ok) {
+          const result = await res.json();
+          console.log('Bulk student assignment creation result:', result);
+          
+          if (result.created) {
+            importedCount += result.created.length;
+            studentsImported += result.created.length;
+            console.log(`Successfully created ${result.created.length} student assignments`);
+          }
+          
+          if (result.errors && result.errors.length > 0) {
+            console.warn('Some student assignments failed:', result.errors);
+            // Show errors to user but don't fail the entire operation
+            const errorMessages = result.errors.map(err => err.message).join(', ');
+            skippedCount += result.errors.length;
+            skippedMessages.push(...result.errors.map(err => err.message));
+          }
+        } else {
+          const data = await res.json();
+          console.error('Bulk student assignment creation failed:', data);
+          skippedCount += assignmentsToCreate.length;
+          skippedMessages.push(`Failed to create student assignments: ${data.message || 'Unknown error'}`);
         }
       }
 
@@ -6788,6 +6805,15 @@ Skipped ${skippedCount} duplicate or invalid entries:
       }
 
       window.alert(alertMessage);
+
+      // Refresh data after import
+      fetchStudentAssignments();
+      fetchTracks();
+      fetchStrands();
+      fetchSections();
+      fetchSubjects();
+      fetchFaculties();
+      fetchStudents();
 
       setImportModalOpen(false);
       setImportExcelFile(null);
@@ -10500,7 +10526,10 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
   // Don't check for existing tracks/strands/sections since they'll be created during import
 
   for (const assignment of assignmentsToValidate) {
-    if (!assignment.studentSchoolID || !assignment.studentName || !assignment.trackName || !assignment.strandName || !assignment.sectionName || !assignment.gradeLevel) {
+    // Handle both old format (studentName) and new format (firstName + lastName)
+    const studentName = assignment.studentName || `${assignment.firstName || ''} ${assignment.lastName || ''}`.trim();
+    
+    if (!assignment.studentSchoolID || !studentName || !assignment.trackName || !assignment.strandName || !assignment.sectionName || !assignment.gradeLevel) {
       results.push({ valid: false, message: 'Missing required fields' });
       continue;
     }

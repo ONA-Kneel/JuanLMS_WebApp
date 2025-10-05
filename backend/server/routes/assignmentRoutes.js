@@ -15,6 +15,10 @@ import { getIO } from '../server.js';
 
 const router = express.Router();
 
+// Add body parsing middleware
+router.use(express.json());
+router.use(express.urlencoded({ extended: true }));
+
 // Storage configuration
 const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
 
@@ -203,6 +207,11 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Update assignment (for posting status, etc.)
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
+    // Check if req.body exists
+    if (!req.body) {
+      return res.status(400).json({ error: 'Request body is missing or invalid. Please ensure Content-Type is application/json.' });
+    }
+    
     const { postAt } = req.body;
     const assignment = await Assignment.findById(req.params.id);
     
@@ -229,6 +238,11 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 // Create assignment or quiz
 router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('attachmentFile'), async (req, res) => {
   try {
+    // Check if req.body exists
+    if (!req.body) {
+      return res.status(400).json({ error: 'Request body is missing or invalid. Please ensure Content-Type is application/json.' });
+    }
+    
     let { classIDs, classID, title, instructions, type, activityType, description, dueDate, points, fileUploadRequired, allowedFileTypes, fileInstructions, questions, assignedTo, attachmentLink, postAt, quarter, termName, academicYear } = req.body;
     const createdBy = req.user._id;
     
@@ -316,8 +330,17 @@ router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('at
           termName,
           academicYear
         });
-        await assignment.save();
-        assignments.push(assignment);
+        try {
+          await assignment.save();
+          assignments.push(assignment);
+        } catch (saveError) {
+          if (saveError.code === 11000) {
+            console.log(`[ASSIGNMENT-CREATE] Duplicate assignment detected: ${title} for class ${cid}`);
+            // Skip this assignment as it already exists
+            continue;
+          }
+          throw saveError;
+        }
         
         // Create notifications for students in this class
         await createAssignmentNotification(cid, assignment);
@@ -356,7 +379,14 @@ router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('at
         termName,
         academicYear
       });
-      await assignment.save();
+      try {
+        await assignment.save();
+      } catch (saveError) {
+        if (saveError.code === 11000) {
+          return res.status(400).json({ error: 'An assignment with this title already exists for this class in this quarter.' });
+        }
+        throw saveError;
+      }
       
       // Create notifications for students in this class
       await createAssignmentNotification(classID, assignment);
@@ -388,7 +418,12 @@ router.post('/', authenticateToken, uploadMiddleware.assignmentUpload.single('at
 // Edit assignment
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { title, instructions, description, dueDate, points, attachmentLink, postAt, classIDs } = req.body;
+    // Check if req.body exists
+    if (!req.body) {
+      return res.status(400).json({ error: 'Request body is missing or invalid. Please ensure Content-Type is application/json.' });
+    }
+    
+    const { title, instructions, description, dueDate, points, attachmentLink, postAt, classIDs, quarter, termName, academicYear } = req.body;
     
     // Validate required fields
     if (!title || !title.trim()) {
@@ -397,6 +432,15 @@ router.put('/:id', authenticateToken, async (req, res) => {
     
     if (points !== undefined && (points < 1 || points > 100)) {
       return res.status(400).json({ error: 'Points must be between 1 and 100.' });
+    }
+    
+    // Validate required quarter fields if provided
+    if (quarter && !['Q1', 'Q2', 'Q3', 'Q4'].includes(quarter)) {
+      return res.status(400).json({ error: 'Quarter must be Q1, Q2, Q3, or Q4.' });
+    }
+    
+    if (termName && !['Term 1', 'Term 2'].includes(termName)) {
+      return res.status(400).json({ error: 'Term name must be "Term 1" or "Term 2".' });
     }
     
     const assignment = await Assignment.findById(req.params.id);
@@ -421,16 +465,39 @@ router.put('/:id', authenticateToken, async (req, res) => {
       assignment.classID = classIDs[0]; // For now, just use the first class ID
     }
     
+    // Update quarter fields if provided, or use existing values if not provided
+    if (quarter !== undefined) assignment.quarter = quarter;
+    if (termName !== undefined) assignment.termName = termName;
+    if (academicYear !== undefined) assignment.academicYear = academicYear;
+    
+    // Ensure required fields are present (for existing assignments that might not have them)
+    if (!assignment.quarter) {
+      assignment.quarter = quarter || 'Q1'; // Default to Q1 if not provided
+    }
+    if (!assignment.termName) {
+      assignment.termName = termName || 'Term 1'; // Default to Term 1 if not provided
+    }
+    if (!assignment.academicYear) {
+      assignment.academicYear = academicYear || '2024-2025'; // Default academic year if not provided
+    }
+    
     await assignment.save();
     res.json(assignment);
   } catch (err) {
     console.error('Error updating assignment:', err);
+    console.error('Request body:', req.body);
+    console.error('Assignment ID:', req.params.id);
+    
     if (err.name === 'CastError') {
       return res.status(400).json({ error: 'Invalid assignment ID format.' });
     }
     if (err.name === 'ValidationError') {
       const errors = Object.values(err.errors).map(e => e.message);
+      console.error('Validation errors:', errors);
       return res.status(400).json({ error: errors.join(', ') });
+    }
+    if (err.code === 11000) {
+      return res.status(400).json({ error: 'An assignment with this title already exists for this class in this quarter.' });
     }
     res.status(500).json({ error: 'Failed to update assignment. Please try again.' });
   }

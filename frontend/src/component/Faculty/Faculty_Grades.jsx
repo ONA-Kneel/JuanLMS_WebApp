@@ -325,6 +325,7 @@ export default function Faculty_Grades() {
   }, [selectedClass, selectedSection, classes, selectedQuarter, fetchAssignmentsAndQuizzes]);
 
 
+
   const fetchSubjects = async () => {
     if (!selectedClass || !currentTerm) return;
     
@@ -601,7 +602,7 @@ export default function Faculty_Grades() {
     if (selectedClass && selectedSection && selectedQuarter) {
       loadQuarterData();
     }
-  }, [selectedQuarter]);
+  }, [selectedQuarter, loadQuarterData, selectedClass, selectedSection]);
 
   // Load saved grades when class and section are selected
   useEffect(() => {

@@ -75,6 +75,11 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create a new student assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
+    // Check if req.body exists
+    if (!req.body) {
+      return res.status(400).json({ message: 'Request body is missing or invalid. Please ensure Content-Type is application/json.' });
+    }
+    
     const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate } = req.body;
     console.log('Request body debug:', { studentId, studentName, studentSchoolID, firstName, lastName, trackName, strandName, sectionName, gradeLevel, termId, quarterName, enrollmentNo, enrollmentDate });
     console.log('Enrollment data specifically:', { enrollmentNo, enrollmentDate, type: typeof enrollmentNo });
@@ -551,6 +556,11 @@ router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
 // Update a student assignment (e.g., if track/strand/section changes)
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
+    // Check if req.body exists
+    if (!req.body) {
+      return res.status(400).json({ message: 'Request body is missing or invalid. Please ensure Content-Type is application/json.' });
+    }
+    
     const { trackName, strandName, sectionName, gradeLevel, termId, quarterName } = req.body;
 
     const assignment = await StudentAssignment.findById(req.params.id);

@@ -15,6 +15,10 @@ import { getIO } from '../server.js';
 
 const router = express.Router();
 
+// Add body parsing middleware
+router.use(express.json());
+router.use(express.urlencoded({ extended: true }));
+
 // Storage configuration
 const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
 
@@ -118,8 +122,34 @@ router.post('/', authenticateToken, async (req, res) => {
       }
     }
 
+    // Check for duplicate quiz before creating
+    const existingQuiz = await Quiz.findOne({
+      classID: req.body.classID,
+      title: req.body.title,
+      quarter: req.body.quarter,
+      termName: req.body.termName,
+      academicYear: req.body.academicYear
+    });
+    
+    if (existingQuiz) {
+      console.log(`[QuizRoutes] Duplicate quiz detected: ${req.body.title} for class ${req.body.classID}`);
+      return res.status(400).json({ 
+        error: 'A quiz with this title already exists for this class in this quarter.' 
+      });
+    }
+
     const quiz = new Quiz(req.body);
+    try {
     await quiz.save();
+    } catch (saveError) {
+      if (saveError.code === 11000) {
+        console.log(`[QuizRoutes] Duplicate quiz detected during save: ${req.body.title} for class ${req.body.classID}`);
+        return res.status(400).json({ 
+          error: 'A quiz with this title already exists for this class in this quarter.' 
+        });
+      }
+      throw saveError;
+    }
     
     console.log('[QuizRoutes] Quiz created successfully:', quiz._id);
     console.log('[QuizRoutes] Saved timing data:', quiz.timing);
@@ -290,9 +320,26 @@ router.get('/:quizId', authenticateToken, async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
   try {
+    // Check if req.body exists
+    if (!req.body) {
+      return res.status(400).json({ error: 'Request body is missing or invalid. Please ensure Content-Type is application/json.' });
+    }
+    
     console.log('[QuizRoutes] Updating quiz:', req.params.id);
     console.log('[QuizRoutes] Update data:', req.body);
     console.log('[QuizRoutes] Update timing data:', req.body.timing);
+    
+    const { quarter, termName, academicYear } = req.body;
+    
+    // Validate required quarter fields if provided
+    if (quarter && !['Q1', 'Q2', 'Q3', 'Q4'].includes(quarter)) {
+      return res.status(400).json({ error: 'Quarter must be Q1, Q2, Q3, or Q4.' });
+    }
+    
+    if (termName && !['Term 1', 'Term 2'].includes(termName)) {
+      return res.status(400).json({ error: 'Term name must be "Term 1" or "Term 2".' });
+    }
+    
     // Validate points boundaries before updating
     const total = Array.isArray(req.body.questions)
       ? req.body.questions.reduce((sum, q) => sum + (Number(q.points) || 0), 0)
@@ -308,7 +355,23 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    const quiz = await Quiz.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    // Get existing quiz to check for required fields
+    const existingQuiz = await Quiz.findById(req.params.id);
+    if (!existingQuiz) return res.status(404).json({ error: 'Quiz not found' });
+    
+    // Ensure required fields are present (for existing quizzes that might not have them)
+    const updateData = { ...req.body };
+    if (!existingQuiz.quarter && !updateData.quarter) {
+      updateData.quarter = quarter || 'Q1'; // Default to Q1 if not provided
+    }
+    if (!existingQuiz.termName && !updateData.termName) {
+      updateData.termName = termName || 'Term 1'; // Default to Term 1 if not provided
+    }
+    if (!existingQuiz.academicYear && !updateData.academicYear) {
+      updateData.academicYear = academicYear || '2024-2025'; // Default academic year if not provided
+    }
+
+    const quiz = await Quiz.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
     
     console.log('[QuizRoutes] Quiz updated successfully');
@@ -317,6 +380,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
     res.json(quiz);
   } catch (err) {
     console.error('[QuizRoutes] Error updating quiz:', err);
+    console.error('[QuizRoutes] Request body:', req.body);
+    console.error('[QuizRoutes] Quiz ID:', req.params.id);
+    
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      console.error('[QuizRoutes] Validation errors:', errors);
+      return res.status(400).json({ error: errors.join(', ') });
+    }
+    if (err.code === 11000) {
+      return res.status(400).json({ error: 'A quiz with this title already exists for this class in this quarter.' });
+    }
     res.status(400).json({ error: err.message });
   }
 });
@@ -325,10 +399,54 @@ router.put('/:id', authenticateToken, async (req, res) => {
 router.patch('/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'faculty') return res.status(403).json({ error: 'Forbidden' });
   try {
-    const quiz = await Quiz.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    // Check if req.body exists
+    if (!req.body) {
+      return res.status(400).json({ error: 'Request body is missing or invalid. Please ensure Content-Type is application/json.' });
+    }
+    
+    const { quarter, termName, academicYear } = req.body;
+    
+    // Validate required quarter fields if provided
+    if (quarter && !['Q1', 'Q2', 'Q3', 'Q4'].includes(quarter)) {
+      return res.status(400).json({ error: 'Quarter must be Q1, Q2, Q3, or Q4.' });
+    }
+    
+    if (termName && !['Term 1', 'Term 2'].includes(termName)) {
+      return res.status(400).json({ error: 'Term name must be "Term 1" or "Term 2".' });
+    }
+    
+    // Get existing quiz to check for required fields
+    const existingQuiz = await Quiz.findById(req.params.id);
+    if (!existingQuiz) return res.status(404).json({ error: 'Quiz not found' });
+    
+    // Ensure required fields are present (for existing quizzes that might not have them)
+    const updateData = { ...req.body };
+    if (!existingQuiz.quarter && !updateData.quarter) {
+      updateData.quarter = quarter || 'Q1'; // Default to Q1 if not provided
+    }
+    if (!existingQuiz.termName && !updateData.termName) {
+      updateData.termName = termName || 'Term 1'; // Default to Term 1 if not provided
+    }
+    if (!existingQuiz.academicYear && !updateData.academicYear) {
+      updateData.academicYear = academicYear || '2024-2025'; // Default academic year if not provided
+    }
+    
+    const quiz = await Quiz.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
     res.json(quiz);
   } catch (err) {
+    console.error('[QuizRoutes] Error updating quiz:', err);
+    console.error('[QuizRoutes] Request body:', req.body);
+    console.error('[QuizRoutes] Quiz ID:', req.params.id);
+    
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      console.error('[QuizRoutes] Validation errors:', errors);
+      return res.status(400).json({ error: errors.join(', ') });
+    }
+    if (err.code === 11000) {
+      return res.status(400).json({ error: 'A quiz with this title already exists for this class in this quarter.' });
+    }
     res.status(400).json({ error: err.message });
   }
 });

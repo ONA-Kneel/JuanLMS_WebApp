@@ -32,9 +32,26 @@ const autoCreateClass = async (facultyAssignment) => {
     const academicYear = String(facultyAssignment.schoolYear || '').trim();
     const termName = String(facultyAssignment.termName || '').trim();
 
-    // Generate unique classID
-    const randomNum = Math.floor(100 + Math.random() * 900);
-    const classID = `C${randomNum}`;
+    // Generate unique classID with better collision avoidance
+    let classID;
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    do {
+      const randomNum = Math.floor(100 + Math.random() * 900);
+      classID = `C${randomNum}`;
+      attempts++;
+      
+      // Check if this classID already exists
+      const existingClass = await Class.findOne({ classID });
+      if (!existingClass) break;
+      
+      if (attempts >= maxAttempts) {
+        // Fallback to timestamp-based ID if random generation fails
+        classID = `C${Date.now().toString().slice(-6)}`;
+        break;
+      }
+    } while (attempts < maxAttempts);
 
     // Generate unique class code with timestamp to ensure uniqueness
     const subjectCode = subjectName.substring(0, 3).toUpperCase();
@@ -46,12 +63,17 @@ const autoCreateClass = async (facultyAssignment) => {
     console.log(`[AUTO-CREATE-CLASS] Generated classID: ${classID}, classCode: ${classCode}`);
     
     // Check if class already exists for this faculty assignment (same term & schoolYear)
+    // Also check if it's already confirmed to prevent re-creation
     const existingClass = await Class.findOne({
       facultyID: facultyIdStr,
       className: { $regex: new RegExp(`^${escapeRegex(subjectName)}$`, 'i') },
       section: { $regex: new RegExp(`^${escapeRegex(sectionName)}$`, 'i') },
       academicYear: academicYear,
-      termName: termName
+      termName: termName,
+      $or: [
+        { needsConfirmation: { $ne: true } },
+        { needsConfirmation: { $exists: false } }
+      ]
     });
     
     if (existingClass) {
@@ -189,12 +211,36 @@ const autoCreateClass = async (facultyAssignment) => {
     
     console.log(`[AUTO-CREATE-CLASS] Creating class with data:`, classData);
     
-    const newClass = new Class(classData);
-    const savedClass = await newClass.save();
-    
-    console.log(`[AUTO-CREATE-CLASS] ✅ Successfully created class ${classID} for ${facultyAssignment.subjectName} - ${facultyAssignment.sectionName}`);
-    
-    return savedClass;
+    try {
+      const newClass = new Class(classData);
+      const savedClass = await newClass.save();
+      console.log(`[AUTO-CREATE-CLASS] ✅ Successfully created class ${savedClass.classID}`);
+      return savedClass;
+    } catch (saveError) {
+      if (saveError.code === 11000) {
+        console.log(`[AUTO-CREATE-CLASS] ⚠️ Duplicate class detected, checking for existing class...`);
+        
+        // Check if a similar class already exists
+        const existingClass = await Class.findOne({
+          facultyID: facultyIdStr,
+          className: subjectName,
+          section: sectionName,
+          academicYear: academicYear,
+          termName: termName
+        });
+        
+        if (existingClass) {
+          console.log(`[AUTO-CREATE-CLASS] ✅ Found existing class ${existingClass.classID}, returning it`);
+          return existingClass;
+        } else {
+          console.log(`[AUTO-CREATE-CLASS] ❌ Duplicate key error but no existing class found, this is unexpected`);
+          throw saveError;
+        }
+      } else {
+        console.error(`[AUTO-CREATE-CLASS] ❌ Error saving class:`, saveError);
+        throw saveError;
+      }
+    }
   } catch (error) {
     console.error('[AUTO-CREATE-CLASS] ❌ Error creating class:', error);
     console.error('[AUTO-CREATE-CLASS] Error message:', error.message);

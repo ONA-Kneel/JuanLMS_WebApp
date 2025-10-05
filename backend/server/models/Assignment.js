@@ -40,6 +40,18 @@ const assignmentSchema = new mongoose.Schema({
   }
 });
 
+// Add unique compound index to prevent duplicate assignments
+assignmentSchema.index({ 
+  classID: 1, 
+  title: 1, 
+  quarter: 1, 
+  termName: 1, 
+  academicYear: 1 
+}, { 
+  unique: true,
+  name: 'unique_assignment_per_class_quarter'
+});
+
 // Pre-save hook to ensure no duplicate views
 assignmentSchema.pre('save', function(next) {
   if (this.views && this.views.length > 0) {

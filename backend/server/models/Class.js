@@ -23,4 +23,10 @@ classSchema.index(
   { unique: true, name: 'uniq_auto_class_faculty_subject_section_term_year', partialFilterExpression: { isAutoCreated: true } }
 );
 
+// Add additional unique constraint for classID to prevent duplicates
+classSchema.index({ classID: 1 }, { unique: true, name: 'unique_class_id' });
+
+// Add unique constraint for classCode to prevent duplicate codes
+classSchema.index({ classCode: 1 }, { unique: true, name: 'unique_class_code' });
+
 export default mongoose.model("Class", classSchema, "Classes"); 

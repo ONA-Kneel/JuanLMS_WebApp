@@ -862,6 +862,8 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
                 timeLimitEnabled: timingLimitEnabled
             },
             createdBy: userId,
+            // Add classID for duplicate checking (use first selected class)
+            classID: selectedClassIDs[0],
             // Add quarter parameters (convert to short format for backend)
             quarter: (() => {
                 const quarterName = currentQuarter?.quarterName || quarterFromUrl || 'Quarter 1';
@@ -947,6 +949,13 @@ export default function QuizTab({ onQuizCreated, onPointsChange }) {
             if (res.ok) {
                 setShowSuccess(true);
                 if (typeof onQuizCreated === 'function') onQuizCreated();
+                // Trigger global refresh for faculty activities and grades pages
+                if (window.refreshFacultyActivities) {
+                    window.refreshFacultyActivities();
+                }
+                if (window.refreshFacultyGrades) {
+                    window.refreshFacultyGrades();
+                }
                 setTimeout(() => {
                     if (window.history.length > 1) {
                         window.history.back();
