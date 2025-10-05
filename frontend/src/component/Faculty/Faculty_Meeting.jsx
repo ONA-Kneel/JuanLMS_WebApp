@@ -500,12 +500,12 @@ const Faculty_Meeting = () => {
             onLeave={handleLeaveMeeting}
             isOpen={!!activeMeeting}
             isHost={true}
-            hostUserId={'Melted_English'}
+            hostUserId={'Humdrum_Cough'}
             credentials={{
               apiKey: 'mmhfdzb5evj2',
-              token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Byb250by5nZXRzdHJlYW0uaW8iLCJzdWIiOiJ1c2VyL01lbHRlZF9FbmdsaXNoIiwidXNlcl9pZCI6Ik1lbHRlZF9FbmdsaXNoIiwidmFsaWRpdHlfaW5fc2Vjb25kcyI6NjA0ODAwLCJpYXQiOjE3NTkzNzA5ODMsImV4cCI6MTc1OTk3NTc4M30.w8oy3j79AxgfSBV_RmpFadH8X4f9m0Jiz36dHEYXQ7k',
-              userId: 'Melted_English',
-              callId: '7P2FSQRYpAji9w5keTAVD',
+              token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Byb250by5nZXRzdHJlYW0uaW8iLCJzdWIiOiJ1c2VyL0h1bWRydW1fQ291Z2giLCJ1c2VyX2lkIjoiSHVtZHJ1bV9Db3VnaCIsInZhbGlkaXR5X2luX3NlY29uZHMiOjYwNDgwMCwiaWF0IjoxNzU5NjM5ODMxLCJleHAiOjE3NjAyNDQ2MzF9.wEPHERMdeknpq-pmwFnN4f5GX41_KYfi7KQOwuoOtCQ',
+              userId: 'Humdrum_Cough',
+              callId: 'j5JdDuiklZegHe7Rwjx6D',
             }}
           />
         )}
