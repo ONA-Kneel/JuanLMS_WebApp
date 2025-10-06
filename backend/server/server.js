@@ -271,7 +271,6 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
-app.use(zohoRoutes);
 
 // MongoDB connection
 mongoose.connect(process.env.ATLAS_URI)
@@ -336,10 +335,24 @@ async function initializeServerStorage() {
 // Initialize upload middleware
 const upload = await initializeServerStorage();
 
-// Debug middleware to log all requests
+// Debug middleware to log all requests (with duplicate prevention)
+const requestLog = new Set();
 app.use((req, res, next) => {
+  const requestKey = `${req.method}:${req.path}:${Date.now()}`;
+  if (requestLog.has(requestKey)) {
+    console.log(`[DUPLICATE REQUEST DETECTED] ${req.method} ${req.path}`);
+    return res.status(429).json({ error: 'Duplicate request detected' });
+  }
+  requestLog.add(requestKey);
+  
+  // Clean up old entries (keep only last 1000)
+  if (requestLog.size > 1000) {
+    const entries = Array.from(requestLog);
+    requestLog.clear();
+    entries.slice(-500).forEach(entry => requestLog.add(entry));
+  }
+  
   console.log(`[DEBUG] ${req.method} ${req.path}`);
-  console.log('[DEBUG] Headers:', req.headers);
   next();
 });
 
@@ -411,20 +424,30 @@ app.get('/api/health', (req, res) => {
 });
 
 
-// ✅ Routes
+// ✅ Routes - ORGANIZED AND DEDUPLICATED
+// Core user and authentication routes
 app.use('/', userRoutes);
+app.use('/', zohoRoutes);
+
+// Communication routes
 app.use('/messages', messageRoutes);
 app.use('/group-chats', groupChatRoutes);
 app.use('/group-messages', groupMessageRoutes);
+
+// Static file serving
 app.use('/uploads', express.static('uploads'));
+app.use('/uploads/lessons', express.static('uploads/lessons'));
+app.use('/uploads/quiz-images', express.static('uploads/quiz-images'));
+
+// Core application routes
 app.use("/events", eventRoutes);
 app.use("/classes", classRoutes);
 app.use("/", auditTrailRoutes);
 app.use("/lessons", lessonRoutes);
-app.use('/uploads/lessons', express.static('uploads/lessons'));
-app.use('/uploads/quiz-images', express.static('uploads/quiz-images'));
 app.use("/announcements", announcementRoutes);
 app.use("/assignments", assignmentRoutes);
+
+// API routes
 app.use('/api/tickets', ticketsRouter);
 app.use('/api/schoolyears', schoolYearRoutes);
 app.use('/api/terms', termRoutes);
@@ -433,7 +456,6 @@ app.use('/api/tracks', trackRoutes);
 app.use('/api/strands', strandRoutes);
 app.use('/api/sections', sectionRoutes);
 app.use('/api/meetings', meetingRoutes);
-app.use('/api/classes', classRoutes);
 app.use("/api/faculty-assignments", facultyAssignmentRoutes);
 app.use("/api/student-assignments", studentAssignmentRoutes);
 app.use("/api/subjects", subjectRoutes);
@@ -450,7 +472,6 @@ app.use('/api/grades', gradeUploadRoutes);
 app.use('/api/principal', principalRoutes);
 app.use('/api/ai-analytics', aiAnalyticsRoutes);
 app.use('/api/vpe-reports', vpeReportsRoutes);
-app.use('/', zohoRoutes);
 
 // Error handling middleware for multer fileFilter errors
 app.use((error, req, res, next) => {

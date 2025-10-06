@@ -564,16 +564,7 @@ router.post('/:id/view', authenticateToken, async (req, res) => {
   }
 });
 
-// Get assignment by ID
-router.get('/:id', authenticateToken, async (req, res) => {
-  try {
-    const assignment = await Assignment.findById(req.params.id);
-    if (!assignment) return res.status(404).json({ error: 'Assignment not found' });
-    res.json(assignment);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch assignment.' });
-  }
-});
+// Note: Assignment by ID route is already defined above at line 191
 
 // Student submits an assignment (with file upload)
 router.post('/:id/submit', authenticateToken, uploadMiddleware.submissionUpload.array('files', 5), async (req, res) => {

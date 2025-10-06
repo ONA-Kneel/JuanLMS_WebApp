@@ -48,6 +48,14 @@ const upload = multer({
 // POST /api/vpe-reports/send - Send report to VPE (Principal only)
 router.post("/send", authenticateToken, upload.single('reportFile'), async (req, res) => {
   try {
+    console.log("📤 VPE Report Send Request:", {
+      userId: req.user._id,
+      userRole: req.user.role,
+      timestamp: new Date().toISOString(),
+      hasFile: !!req.file,
+      fileName: req.file?.originalname
+    });
+
     console.log("🔍 Cloudinary config check:", {
       hasCloudName: !!cloudinary.config().cloud_name,
       hasApiKey: !!cloudinary.config().api_key,
@@ -88,6 +96,21 @@ router.post("/send", authenticateToken, upload.single('reportFile'), async (req,
       db = database.getDb();
     }
 
+    // Check for recent duplicate submissions (within last 5 minutes)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const recentReport = await db.collection('VPEReports').findOne({
+      sentBy: req.user._id,
+      reportName: req.file.originalname,
+      sentAt: { $gte: fiveMinutesAgo }
+    });
+
+    if (recentReport) {
+      console.log("⚠️ Duplicate report submission detected within 5 minutes");
+      return res.status(400).json({ 
+        error: "A report with the same name was recently sent. Please wait a few minutes before sending another report." 
+      });
+    }
+
     // Get user details from database to ensure we have the correct name
     const userDetails = await db.collection('users').findOne({ _id: new ObjectId(req.user._id) });
     const principalName = userDetails ? 
@@ -123,8 +146,23 @@ router.post("/send", authenticateToken, upload.single('reportFile'), async (req,
         status: { $ne: 'archived' }
       }).toArray();
 
+      console.log(`📧 Found ${vpeUsers.length} VPE users to notify`);
+
       if (vpeUsers.length > 0) {
+        // Use Set to track sent emails to prevent duplicates
+        const sentEmails = new Set();
+        
         for (const vpeUser of vpeUsers) {
+          const emailAddress = vpeUser.zohoEmail || vpeUser.email;
+          
+          // Skip if we've already sent to this email address
+          if (sentEmails.has(emailAddress)) {
+            console.log(`📧 Skipping duplicate email to: ${emailAddress}`);
+            continue;
+          }
+          
+          sentEmails.add(emailAddress);
+          
           const subject = `New Faculty Report from Principal - ${schoolYear} ${termName}`;
           const emailContent = `
 Dear ${vpeUser.firstName},
@@ -145,13 +183,16 @@ Best regards,
 JuanLMS System
           `;
 
+          console.log(`📧 Sending email to VPE: ${emailAddress}`);
           await emailService.sendZohoNotification(
-            vpeUser.zohoEmail || vpeUser.email,
+            emailAddress,
             vpeUser.firstName,
             subject,
             emailContent
           );
         }
+        
+        console.log(`📧 Successfully sent ${sentEmails.size} unique email notifications`);
       }
     } catch (emailError) {
       console.error('Error sending email notification:', emailError);
