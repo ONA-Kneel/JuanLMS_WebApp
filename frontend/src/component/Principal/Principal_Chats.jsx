@@ -26,7 +26,7 @@ export default function Principal_Chats() {
   });
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
@@ -838,9 +838,14 @@ export default function Principal_Chats() {
   };
 
   const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setSelectedFile(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setSelectedFiles((prev) => {
+        const existingNames = new Set(prev.map(f => `${f.name}|${f.size}|${f.lastModified}`));
+        const additions = files.filter(f => !existingNames.has(`${f.name}|${f.size}|${f.lastModified}`));
+        return [...prev, ...additions];
+      });
+      e.target.value = null;
     }
   };
 

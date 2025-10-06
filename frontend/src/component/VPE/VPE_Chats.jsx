@@ -24,7 +24,7 @@ export default function VPE_Chats() {
   });
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
@@ -700,67 +700,96 @@ export default function VPE_Chats() {
   // ================= HANDLERS =================
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() && !selectedFile) return;
+    if (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0)) return;
     if (!selectedChat) return;
     if (isSending) return;
 
     setIsSending(true);
     if (isGroupChat) {
-      // Send group message
-      const formData = new FormData();
-      formData.append("senderId", currentUserId);
-      formData.append("groupId", selectedChat._id);
-      formData.append("message", newMessage);
-      if (selectedFile) {
-        formData.append("file", selectedFile);
-      }
-
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.post(`${API_BASE}/group-messages`, formData, {
-          headers: { 
-            "Content-Type": "multipart/form-data",
-            "Authorization": `Bearer ${token}`
-          },
-        });
+        const parsedUser = storedUser ? JSON.parse(storedUser) : null;
 
-        const sentMessage = res.data;
+        // 1) Send text message first if present
+        if (newMessage.trim()) {
+          const textForm = new FormData();
+          textForm.append("senderId", currentUserId);
+          textForm.append("groupId", selectedChat._id);
+          textForm.append("message", newMessage.trim());
 
-        socket.current.emit("sendGroupMessage", {
-          senderId: currentUserId,
-          groupId: selectedChat._id,
-          text: sentMessage.message,
-          fileUrl: sentMessage.fileUrl || null,
-          senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
-          senderFirstname: storedUser ? JSON.parse(storedUser).firstname : "Unknown",
-          senderLastname: storedUser ? JSON.parse(storedUser).lastname : "User",
-          senderProfilePic: storedUser ? JSON.parse(storedUser).profilePic : null,
-        });
+          const textRes = await axios.post(`${API_BASE}/group-messages`, textForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
 
-        setGroupMessages((prev) => ({
-          ...prev,
-          [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
-        }));
+          const textMessage = textRes.data;
+          socket.current.emit("sendGroupMessage", {
+            senderId: currentUserId,
+            groupId: selectedChat._id,
+            text: textMessage.message,
+            fileUrl: textMessage.fileUrl || null,
+            senderName: parsedUser ? `${parsedUser.firstname} ${parsedUser.lastname}` : "Unknown",
+            senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
+            senderLastname: parsedUser ? parsedUser.lastname : "User",
+            senderProfilePic: parsedUser ? parsedUser.profilePic : null,
+          });
 
-        // Update last message for this group chat
-        const text = sentMessage.message 
-          ? sentMessage.message 
-          : (sentMessage.fileUrl ? "File sent" : "");
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: { prefix: "You: ", text }
-        }));
+          setGroupMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), textMessage],
+          }));
 
-        // Bump group chat to top of recent
-        bumpChatToTop(selectedChat);
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: "You: ", text: textMessage.message }
+          }));
+          bumpChatToTop(selectedChat);
+        }
 
-        // Refresh recent conversations to update sidebar
-        setTimeout(() => {
-          fetchRecentConversations();
-        }, 100);
+        // 2) Send each selected file as its own message with empty text
+        for (const file of (selectedFiles || [])) {
+          const fileForm = new FormData();
+          fileForm.append("senderId", currentUserId);
+          fileForm.append("groupId", selectedChat._id);
+          fileForm.append("message", "");
+          fileForm.append("file", file);
+
+          const fileRes = await axios.post(`${API_BASE}/group-messages`, fileForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
+
+          const fileMessage = fileRes.data;
+          socket.current.emit("sendGroupMessage", {
+            senderId: currentUserId,
+            groupId: selectedChat._id,
+            text: fileMessage.message,
+            fileUrl: fileMessage.fileUrl || null,
+            senderName: parsedUser ? `${parsedUser.firstname} ${parsedUser.lastname}` : "Unknown",
+            senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
+            senderLastname: parsedUser ? parsedUser.lastname : "User",
+            senderProfilePic: parsedUser ? parsedUser.profilePic : null,
+          });
+
+          setGroupMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
+          }));
+
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: "You: ", text: fileMessage.fileUrl ? "File sent" : "" }
+          }));
+          bumpChatToTop(selectedChat);
+        }
 
         setNewMessage("");
-        setSelectedFile(null);
+        setSelectedFiles([]);
+        setTimeout(() => { fetchRecentConversations(); }, 100);
       } catch (err) {
         console.error("Error sending group message:", err);
       } finally {
@@ -768,56 +797,81 @@ export default function VPE_Chats() {
       }
     } else {
       // Send individual message
-      const formData = new FormData();
-      formData.append("senderId", currentUserId);
-      formData.append("receiverId", selectedChat._id);
-      formData.append("message", newMessage);
-      if (selectedFile) {
-        formData.append("file", selectedFile);
-      }
-
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.post(`${API_BASE}/messages`, formData, {
-          headers: { 
-            "Content-Type": "multipart/form-data",
-            "Authorization": `Bearer ${token}`
-          },
-        });
 
-        const sentMessage = res.data;
+        // 1) Send text message first if present
+        if (newMessage.trim()) {
+          const textForm = new FormData();
+          textForm.append("senderId", currentUserId);
+          textForm.append("receiverId", selectedChat._id);
+          textForm.append("message", newMessage.trim());
 
-        socket.current.emit("sendMessage", {
-          senderId: currentUserId,
-          receiverId: selectedChat._id,
-          text: sentMessage.message,
-          fileUrl: sentMessage.fileUrl || null,
-        });
+          const textRes = await axios.post(`${API_BASE}/messages`, textForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
 
-        setMessages((prev) => ({
-          ...prev,
-          [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
-        }));
+          const textMessage = textRes.data;
+          socket.current.emit("sendMessage", {
+            senderId: currentUserId,
+            receiverId: selectedChat._id,
+            text: textMessage.message,
+            fileUrl: textMessage.fileUrl || null,
+          });
 
-        // Update last message for this individual chat
-        const text = sentMessage.message 
-          ? sentMessage.message 
-          : (sentMessage.fileUrl ? "File sent" : "");
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: { prefix: "You: ", text }
-        }));
+          setMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), textMessage],
+          }));
 
-        // Bump individual chat to top of recent
-        bumpChatToTop(selectedChat);
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: "You: ", text: textMessage.message }
+          }));
+          bumpChatToTop(selectedChat);
+        }
 
-        // Refresh recent conversations to update sidebar
-        setTimeout(() => {
-          fetchRecentConversations();
-        }, 100);
+        // 2) Send each selected file as its own message with empty text
+        for (const file of (selectedFiles || [])) {
+          const fileForm = new FormData();
+          fileForm.append("senderId", currentUserId);
+          fileForm.append("receiverId", selectedChat._id);
+          fileForm.append("message", "");
+          fileForm.append("file", file);
+
+          const fileRes = await axios.post(`${API_BASE}/messages`, fileForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
+
+          const fileMessage = fileRes.data;
+          socket.current.emit("sendMessage", {
+            senderId: currentUserId,
+            receiverId: selectedChat._id,
+            text: fileMessage.message,
+            fileUrl: fileMessage.fileUrl || null,
+          });
+
+          setMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
+          }));
+
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: "You: ", text: fileMessage.fileUrl ? "File sent" : "" }
+          }));
+          bumpChatToTop(selectedChat);
+        }
 
         setNewMessage("");
-        setSelectedFile(null);
+        setSelectedFiles([]);
+        setTimeout(() => { fetchRecentConversations(); }, 100);
       } catch (err) {
         console.error("Error sending message:", err);
       } finally {
@@ -838,9 +892,14 @@ export default function VPE_Chats() {
   };
 
   const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setSelectedFile(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setSelectedFiles((prev) => {
+        const existingNames = new Set(prev.map(f => `${f.name}|${f.size}|${f.lastModified}`));
+        const additions = files.filter(f => !existingNames.has(`${f.name}|${f.size}|${f.lastModified}`));
+        return [...prev, ...additions];
+      });
+      e.target.value = null;
     }
   };
 
@@ -1472,25 +1531,31 @@ export default function VPE_Chats() {
                             <p className="text-sm">{msg.message}</p>
                           ) : msg.fileUrl ? (
                             <div className="space-y-2">
-                              {msg.fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                                <img
-                                  src={getFileUrl(msg.fileUrl, API_BASE)}
-                                  alt="Uploaded file"
-                                  className="max-w-full h-auto rounded"
-                                  onError={e => { e.target.style.display = 'none'; }}
-                                />
-                              ) : (
-                                <div className="flex items-center space-x-2">
-                                  <img src={uploadfile} alt="File" className="w-8 h-8" />
-                                  <a
-                                    href={getFileUrl(msg.fileUrl, API_BASE)}
-                                    download
-                                    className="text-blue-600 hover:underline"
-                                  >
-                                    Download File
+                              {(() => {
+                                const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(msg.fileUrl.split('?')[0]);
+                                return isImage ? (
+                                  <a href={getFileUrl(msg.fileUrl, API_BASE)} target="_blank" rel="noopener noreferrer">
+                                    <img
+                                      src={getFileUrl(msg.fileUrl, API_BASE)}
+                                      alt="Attachment preview"
+                                      className="rounded-md max-h-56 max-w-full object-contain border border-white/30"
+                                      loading="lazy"
+                                    />
                                   </a>
-                                </div>
-                              )}
+                                ) : (
+                                  <div className="flex items-center space-x-2">
+                                    <img src={uploadfile} alt="File" className="w-8 h-8" />
+                                    <a
+                                      href={getFileUrl(msg.fileUrl, API_BASE)}
+                                      download
+                                      className={`${msg.senderId !== currentUserId ? "text-blue-700" : "text-blue-100"} underline decoration-current/40 hover:decoration-current`}
+                                    >
+                                      Download File
+                                    </a>
+                                  </div>
+                                );
+                              })()
+                              }
                             </div>
                           ) : null}
                         </div>
@@ -1522,6 +1587,7 @@ export default function VPE_Chats() {
                       ref={fileInputRef}
                       onChange={handleFileSelect}
                       className="hidden"
+                      multiple
                       accept="image/*,.pdf,.doc,.docx,.txt"
                     />
                     <input
@@ -1534,20 +1600,31 @@ export default function VPE_Chats() {
                     />
                     <button
                       onClick={handleSendMessage}
-                      disabled={isSending || (!newMessage.trim() && !selectedFile)}
+                      disabled={isSending || (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0))}
                       className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSending ? 'Sending...' : <span className="material-icons">send</span>}
                     </button>
                   </div>
-                  {selectedFile && (
-                    <div className="mt-2 flex items-center space-x-2">
-                      <span className="text-sm text-gray-600">Selected: {selectedFile.name}</span>
+                  {selectedFiles && selectedFiles.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {selectedFiles.map((file, idx) => (
+                        <div key={`${file.name}-${file.size}-${file.lastModified}-${idx}`} className="flex items-center gap-2 bg-gray-100 px-2 py-1 rounded">
+                          <span className="text-sm text-gray-700 truncate max-w-[160px]" title={file.name}>{file.name}</span>
+                          <button
+                            onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-red-500 hover:text-red-700"
+                            title="Remove"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
                       <button
-                        onClick={() => setSelectedFile(null)}
-                        className="text-red-600 hover:text-red-800"
+                        onClick={openFilePicker}
+                        className="text-blue-600 hover:text-blue-800 text-sm"
                       >
-                        <span className="material-icons">close</span>
+                        + Add more
                       </button>
                     </div>
                   )}

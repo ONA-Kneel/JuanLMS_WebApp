@@ -26,7 +26,7 @@ export default function Faculty_Chats() {
   });
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
@@ -710,67 +710,96 @@ export default function Faculty_Chats() {
   // ================= HANDLERS =================
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() && !selectedFile) return;
+    if (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0)) return;
     if (!selectedChat) return;
     if (isSending) return;
 
     setIsSending(true);
     if (isGroupChat) {
-      // Send group message
-      const formData = new FormData();
-      formData.append("senderId", currentUserId);
-      formData.append("groupId", selectedChat._id);
-      formData.append("message", newMessage);
-      if (selectedFile) {
-        formData.append("file", selectedFile);
-      }
-
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.post(`${API_BASE}/group-messages`, formData, {
-          headers: { 
-            "Content-Type": "multipart/form-data",
-            "Authorization": `Bearer ${token}`
-          },
-        });
+        const parsedUser = storedUser ? JSON.parse(storedUser) : null;
 
-        const sentMessage = res.data;
+        // 1) Send text message first if present
+        if (newMessage.trim()) {
+          const textForm = new FormData();
+          textForm.append("senderId", currentUserId);
+          textForm.append("groupId", selectedChat._id);
+          textForm.append("message", newMessage.trim());
 
-        ctxSocket?.emit("sendGroupMessage", {
-          senderId: currentUserId,
-          groupId: selectedChat._id,
-          text: sentMessage.message,
-          fileUrl: sentMessage.fileUrl || null,
-          senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
-          senderFirstname: storedUser ? JSON.parse(storedUser).firstname : "Unknown",
-          senderLastname: storedUser ? JSON.parse(storedUser).lastname : "User",
-          senderProfilePic: storedUser ? JSON.parse(storedUser).profilePic : null,
-        });
+          const textRes = await axios.post(`${API_BASE}/group-messages`, textForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
 
-        setGroupMessages((prev) => ({
-          ...prev,
-          [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
-        }));
+          const textMessage = textRes.data;
+          ctxSocket?.emit("sendGroupMessage", {
+            senderId: currentUserId,
+            groupId: selectedChat._id,
+            text: textMessage.message,
+            fileUrl: textMessage.fileUrl || null,
+            senderName: parsedUser ? `${parsedUser.firstname} ${parsedUser.lastname}` : "Unknown",
+            senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
+            senderLastname: parsedUser ? parsedUser.lastname : "User",
+            senderProfilePic: parsedUser ? parsedUser.profilePic : null,
+          });
 
-        // Update last message for this group chat
-        const text = sentMessage.message 
-          ? sentMessage.message 
-          : (sentMessage.fileUrl ? "File sent" : "");
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: { prefix: "You: ", text }
-        }));
+          setGroupMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), textMessage],
+          }));
 
-        // Bump group chat to top of recent
-        bumpChatToTop(selectedChat);
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: "You: ", text: textMessage.message }
+          }));
+          bumpChatToTop(selectedChat);
+        }
 
-        // Refresh recent conversations to update sidebar
-        setTimeout(() => {
-          fetchRecentConversations();
-        }, 100);
+        // 2) Send each selected file as its own message with empty text
+        for (const file of (selectedFiles || [])) {
+          const fileForm = new FormData();
+          fileForm.append("senderId", currentUserId);
+          fileForm.append("groupId", selectedChat._id);
+          fileForm.append("message", "");
+          fileForm.append("file", file);
+
+          const fileRes = await axios.post(`${API_BASE}/group-messages`, fileForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
+
+          const fileMessage = fileRes.data;
+          ctxSocket?.emit("sendGroupMessage", {
+            senderId: currentUserId,
+            groupId: selectedChat._id,
+            text: fileMessage.message,
+            fileUrl: fileMessage.fileUrl || null,
+            senderName: parsedUser ? `${parsedUser.firstname} ${parsedUser.lastname}` : "Unknown",
+            senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
+            senderLastname: parsedUser ? parsedUser.lastname : "User",
+            senderProfilePic: parsedUser ? parsedUser.profilePic : null,
+          });
+
+          setGroupMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
+          }));
+
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: "You: ", text: fileMessage.fileUrl ? "File sent" : "" }
+          }));
+          bumpChatToTop(selectedChat);
+        }
 
         setNewMessage("");
-        setSelectedFile(null);
+        setSelectedFiles([]);
+        setTimeout(() => { fetchRecentConversations(); }, 100);
       } catch (err) {
         console.error("Error sending group message:", err);
       } finally {
@@ -778,72 +807,93 @@ export default function Faculty_Chats() {
       }
     } else {
       // Send individual message
-      const formData = new FormData();
-      formData.append("senderId", currentUserId);
-      formData.append("receiverId", selectedChat._id);
-      formData.append("message", newMessage);
-      if (selectedFile) {
-        formData.append("file", selectedFile);
-      }
-
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.post(`${API_BASE}/messages`, formData, {
-          headers: { 
-            "Content-Type": "multipart/form-data",
-            "Authorization": `Bearer ${token}`
-          },
-        });
 
-        const sentMessage = res.data;
+        // 1) Send text message first if present
+        if (newMessage.trim()) {
+          const textForm = new FormData();
+          textForm.append("senderId", currentUserId);
+          textForm.append("receiverId", selectedChat._id);
+          textForm.append("message", newMessage.trim());
 
-        ctxSocket?.emit("sendMessage", {
-          senderId: currentUserId,
-          receiverId: selectedChat._id,
-          text: sentMessage.message,
-          fileUrl: sentMessage.fileUrl || null,
-        });
+          const textRes = await axios.post(`${API_BASE}/messages`, textForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
 
-        setMessages((prev) => ({
-          ...prev,
-          [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
-        }));
+          const textMessage = textRes.data;
+          ctxSocket?.emit("sendMessage", {
+            senderId: currentUserId,
+            receiverId: selectedChat._id,
+            text: textMessage.message,
+            fileUrl: textMessage.fileUrl || null,
+          });
 
-        // Add to recent chats if not already there, or move to top if exists
-        setRecentChats((prev) => {
-          const exists = prev.some((c) => c._id === selectedChat._id);
-          if (!exists) {
-            // Add new chat to recent chats
-            const updated = [selectedChat, ...prev];
-            localStorage.setItem("recentChats_faculty", JSON.stringify(updated));
-            return updated;
-          } else {
-            // Move existing chat to top
-            const filtered = prev.filter((c) => c._id !== selectedChat._id);
-            const updated = [selectedChat, ...filtered];
-            localStorage.setItem("recentChats_faculty", JSON.stringify(updated));
-            return updated;
-          }
-        });
+          setMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), textMessage],
+          }));
 
+          setRecentChats((prev) => {
+            const exists = prev.some((c) => c._id === selectedChat._id);
+            if (!exists) {
+              const updated = [selectedChat, ...prev];
+              localStorage.setItem("recentChats_faculty", JSON.stringify(updated));
+              return updated;
+            } else {
+              const filtered = prev.filter((c) => c._id !== selectedChat._id);
+              const updated = [selectedChat, ...filtered];
+              localStorage.setItem("recentChats_faculty", JSON.stringify(updated));
+              return updated;
+            }
+          });
 
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: "You: ", text: textMessage.message }
+          }));
+        }
 
-        // Update last message for this individual chat
-        const text = sentMessage.message 
-          ? sentMessage.message 
-          : (sentMessage.fileUrl ? "File sent" : "");
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: { prefix: "You: ", text }
-        }));
+        // 2) Send each selected file as its own message with empty text
+        for (const file of (selectedFiles || [])) {
+          const fileForm = new FormData();
+          fileForm.append("senderId", currentUserId);
+          fileForm.append("receiverId", selectedChat._id);
+          fileForm.append("message", "");
+          fileForm.append("file", file);
 
-        // Refresh recent conversations to update sidebar
-        setTimeout(() => {
-          fetchRecentConversations();
-        }, 100);
+          const fileRes = await axios.post(`${API_BASE}/messages`, fileForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
+
+          const fileMessage = fileRes.data;
+          ctxSocket?.emit("sendMessage", {
+            senderId: currentUserId,
+            receiverId: selectedChat._id,
+            text: fileMessage.message,
+            fileUrl: fileMessage.fileUrl || null,
+          });
+
+          setMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
+          }));
+
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: "You: ", text: fileMessage.fileUrl ? "File sent" : "" }
+          }));
+        }
 
         setNewMessage("");
-        setSelectedFile(null);
+        setSelectedFiles([]);
+        setTimeout(() => { fetchRecentConversations(); }, 100);
       } catch (err) {
         console.error("Error sending message:", err);
       } finally {
@@ -913,9 +963,14 @@ export default function Faculty_Chats() {
   };
 
   const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setSelectedFile(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setSelectedFiles((prev) => {
+        const existingNames = new Set(prev.map(f => `${f.name}|${f.size}|${f.lastModified}`));
+        const additions = files.filter(f => !existingNames.has(`${f.name}|${f.size}|${f.lastModified}`));
+        return [...prev, ...additions];
+      });
+      e.target.value = null;
     }
   };
 
@@ -1655,14 +1710,29 @@ export default function Faculty_Chats() {
                                 <div className="text-sm">{msg.message}</div>
                                 {msg.fileUrl && (
                                   <div className="mt-2">
-                                    <a
-                                      href={getFileUrl(msg.fileUrl, API_BASE)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-200 hover:text-blue-100 underline"
-                                    >
-                                      📎 File attached
-                                    </a>
+                                    {(() => {
+                                      const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(msg.fileUrl.split('?')[0]);
+                                      return isImage ? (
+                                        <a href={getFileUrl(msg.fileUrl, API_BASE)} target="_blank" rel="noopener noreferrer">
+                                          <img
+                                            src={getFileUrl(msg.fileUrl, API_BASE)}
+                                            alt="Attachment preview"
+                                            className="rounded-md max-h-56 max-w-full object-contain border border-white/30"
+                                            loading="lazy"
+                                          />
+                                        </a>
+                                      ) : (
+                                        <a
+                                          href={getFileUrl(msg.fileUrl, API_BASE)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-blue-200 hover:text-blue-100 underline"
+                                        >
+                                          📎 File attached
+                                        </a>
+                                      );
+                                    })()
+                                    }
                                   </div>
                                 )}
                               </div>
@@ -1689,14 +1759,29 @@ export default function Faculty_Chats() {
                                 <div className="text-sm">{msg.message}</div>
                                 {msg.fileUrl && (
                                   <div className="mt-2">
-                                    <a
-                                      href={getFileUrl(msg.fileUrl, API_BASE)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-600 hover:text-blue-800 underline"
-                                    >
-                                      📎 File attached
-                                    </a>
+                                    {(() => {
+                                      const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(msg.fileUrl.split('?')[0]);
+                                      return isImage ? (
+                                        <a href={getFileUrl(msg.fileUrl, API_BASE)} target="_blank" rel="noopener noreferrer">
+                                          <img
+                                            src={getFileUrl(msg.fileUrl, API_BASE)}
+                                            alt="Attachment preview"
+                                            className="rounded-md max-h-56 max-w-full object-contain border border-gray-300"
+                                            loading="lazy"
+                                          />
+                                        </a>
+                                      ) : (
+                                        <a
+                                          href={getFileUrl(msg.fileUrl, API_BASE)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-blue-600 hover:text-blue-800 underline"
+                                        >
+                                          📎 File attached
+                                        </a>
+                                      );
+                                    })()
+                                    }
                                   </div>
                                 )}
                               </div>
@@ -1736,22 +1821,34 @@ export default function Faculty_Chats() {
                         type="file"
                         onChange={handleFileSelect}
                         style={{ display: "none" }}
+                        multiple
                         accept="image/*,.pdf,.doc,.docx,.txt"
                       />
-                      {selectedFile && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <span className="truncate max-w-20">{selectedFile.name}</span>
+                      {selectedFiles && selectedFiles.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {selectedFiles.map((file, idx) => (
+                            <div key={`${file.name}-${file.size}-${file.lastModified}-${idx}`} className="flex items-center gap-2 bg-gray-100 px-2 py-1 rounded">
+                              <span className="text-sm text-gray-700 truncate max-w-[100px]" title={file.name}>{file.name}</span>
+                              <button
+                                onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))}
+                                className="text-red-500 hover:text-red-700"
+                                title="Remove"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
                           <button
-                            onClick={() => setSelectedFile(null)}
-                            className="text-red-500 hover:text-red-700"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="text-blue-600 hover:text-blue-800 text-sm"
                           >
-                            ✕
+                            + Add more
                           </button>
                         </div>
                       )}
                       <button
                         onClick={handleSendMessage}
-                        disabled={isSending || (!newMessage.trim() && !selectedFile)}
+                        disabled={isSending || (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0))}
                         className="px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {isSending ? 'Sending...' : 'Send'}
