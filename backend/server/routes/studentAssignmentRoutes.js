@@ -2,6 +2,7 @@ import express from 'express';
 import StudentAssignment from '../models/StudentAssignment.js';
 import User from '../models/User.js'; // To populate student details
 import Term from '../models/Term.js';
+import Subject from '../models/Subject.js'; // To populate subjects
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -41,6 +42,7 @@ router.get('/', authenticateToken, async (req, res) => {
           enrollmentNo: assignment.enrollmentNo || '',
           enrollmentDate: assignment.enrollmentDate || null,
           quarterName: assignment.quarterName,
+          enrollmentType: assignment.enrollmentType || 'Regular',
           isApproved: assignment.status === 'active'
         };
       }
@@ -61,6 +63,7 @@ router.get('/', authenticateToken, async (req, res) => {
         firstname: assignment.firstName || '',
         lastname: assignment.lastName || '',
         quarterName: assignment.quarterName,
+        enrollmentType: assignment.enrollmentType || 'Regular',
         isApproved: assignment.status === 'active'
       };
     });
@@ -75,12 +78,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create a new student assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    // Check if req.body exists
-    if (!req.body) {
-      return res.status(400).json({ message: 'Request body is missing or invalid. Please ensure Content-Type is application/json.' });
-    }
-    
-    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate } = req.body;
+    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate, enrollmentType, subjects: customSubjects } = req.body;
     console.log('Request body debug:', { studentId, studentName, studentSchoolID, firstName, lastName, trackName, strandName, sectionName, gradeLevel, termId, quarterName, enrollmentNo, enrollmentDate });
     console.log('Enrollment data specifically:', { enrollmentNo, enrollmentDate, type: typeof enrollmentNo });
 
@@ -100,21 +98,6 @@ router.post('/', authenticateToken, async (req, res) => {
     if (!gradeLevel) {
       return res.status(400).json({ message: 'gradeLevel is required' });
     }
-    
-    // Validate required fields - schoolID is always required
-    if (!studentSchoolID) {
-      return res.status(400).json({ message: 'Student School ID is required for all assignments' });
-    }
-    
-    // Validate required fields for manual assignments
-    if (!studentId) {
-      if (!enrollmentNo || !enrollmentDate) {
-        return res.status(400).json({ message: 'Enrollment number and enrollment date are required for manual assignments' });
-      }
-      if (!firstName || !lastName) {
-        return res.status(400).json({ message: 'First name and last name are required for manual assignments' });
-      }
-    }
 
     let actualStudentId = studentId;
     // Construct studentName from firstName and lastName if not provided directly
@@ -126,9 +109,7 @@ router.post('/', authenticateToken, async (req, res) => {
       console.log('Warning: Manual assignment without proper name, using school ID as fallback');
     }
     
-    // Only try to link by NAME when no schoolID is provided. If a schoolID is present,
-    // we keep this as a manual entry to avoid mis-linking to a different user with a similar name.
-    if (!actualStudentId && fullStudentName && !studentSchoolID) {
+    if (!actualStudentId && fullStudentName) {
       console.log('Looking for student by name:', fullStudentName);
       let student = await User.findOne({
         $or: [
@@ -181,15 +162,6 @@ router.post('/', authenticateToken, async (req, res) => {
     
     console.log('About to query database for duplicates...');
     
-    // Enhanced duplicate checking - check both studentId and studentSchoolID
-    console.log('🔍 DUPLICATE CHECK - Searching for existing assignments with:');
-    console.log('  - studentSchoolID:', studentSchoolID);
-    console.log('  - schoolYear:', term.schoolYear);
-    console.log('  - termName:', term.termName);
-    console.log('  - quarterName:', quarterName || null);
-    console.log('  - actualStudentId:', actualStudentId);
-    
-    // Enhanced duplicate check - only prevent exact duplicates (same student, same quarter)
     const existingAssignment = await StudentAssignment.findOne({
       $or: [
         // Check by studentId if it exists - only prevent same student in same term and quarter
@@ -197,39 +169,18 @@ router.post('/', authenticateToken, async (req, res) => {
           studentId: actualStudentId,
           schoolYear: term.schoolYear,
           termName: term.termName,
-          quarterName: quarterName || null
+          quarterName: normalizedQuarter
         }] : []),
-        // Check by studentSchoolID - only prevent same student in same term and quarter
-        ...(studentSchoolID ? [{
+        // Check by studentSchoolID if no studentId - only prevent same student in same term and quarter
+        // This ensures we're checking for the exact same student, not just similar names
+        ...(!actualStudentId && studentSchoolID ? [{
           studentSchoolID,
           schoolYear: term.schoolYear,
           termName: term.termName,
           quarterName: quarterName || null
-        }] : []),
-        // Check for exact same assignment details (same student, same quarter)
-        {
-          studentSchoolID,
-          trackName,
-          strandName,
-          sectionName,
-          schoolYear: term.schoolYear,
-          termName: term.termName,
-          quarterName: quarterName || null
-        }
+        }] : [])
       ]
     });
-    
-    console.log('🔍 DUPLICATE CHECK RESULT:', existingAssignment ? 'FOUND EXISTING' : 'NO DUPLICATE FOUND');
-    if (existingAssignment) {
-      console.log('🔍 EXISTING ASSIGNMENT DETAILS:', {
-        _id: existingAssignment._id,
-        studentSchoolID: existingAssignment.studentSchoolID,
-        studentName: existingAssignment.studentName,
-        schoolYear: existingAssignment.schoolYear,
-        termName: existingAssignment.termName,
-        quarterName: existingAssignment.quarterName
-      });
-    }
     
     console.log('Database query completed. Found assignment:', existingAssignment ? 'YES' : 'NO');
 
@@ -267,8 +218,8 @@ router.post('/', authenticateToken, async (req, res) => {
       studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
       firstName: !actualStudentId ? firstName : undefined,
       lastName: !actualStudentId ? lastName : undefined,
-      enrollmentNo: !actualStudentId ? enrollmentNo : undefined,
-      enrollmentDate: !actualStudentId ? enrollmentDate : undefined,
+      enrollmentNo: enrollmentNo || undefined,
+      enrollmentDate: enrollmentDate || undefined,
       trackName,
       strandName,
       sectionName,
@@ -276,17 +227,40 @@ router.post('/', authenticateToken, async (req, res) => {
       termId,
       schoolYear: term.schoolYear,
       termName: term.termName,
-      quarterName
+      quarterName: normalizedQuarter
     });
+
+    // Determine subjects based on enrollment type
+    let subjects;
+    if (enrollmentType === 'Irregular' && customSubjects && customSubjects.length > 0) {
+      // Use custom subjects for irregular students
+      subjects = customSubjects;
+    } else {
+      // Fetch all subjects that match the track, strand, and grade level for regular students
+      const matchingSubjects = await Subject.find({
+        trackName,
+        strandName,
+        gradeLevel,
+        schoolYear: term.schoolYear,
+        termName: term.termName,
+        status: 'active'
+      });
+
+      // Prepare subjects array for the assignment
+      subjects = matchingSubjects.map(subject => ({
+        subjectId: subject._id,
+        subjectName: subject.subjectName
+      }));
+    }
 
     const assignment = new StudentAssignment({
       studentId: actualStudentId || undefined,
       studentName: !actualStudentId ? (fullStudentName || `Student ${studentSchoolID}`) : undefined,
-      studentSchoolID: studentSchoolID || undefined, // ALWAYS store schoolID if provided, regardless of whether student exists
+      studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
       firstName: !actualStudentId ? firstName : undefined,
       lastName: !actualStudentId ? lastName : undefined,
-      enrollmentNo: !actualStudentId ? enrollmentNo : undefined,
-      enrollmentDate: !actualStudentId ? enrollmentDate : undefined,
+      enrollmentNo: enrollmentNo || undefined,
+      enrollmentDate: enrollmentDate || undefined,
       trackName,
       strandName,
       sectionName,
@@ -294,7 +268,9 @@ router.post('/', authenticateToken, async (req, res) => {
       termId,
       schoolYear: term.schoolYear,
       termName: term.termName,
-      quarterName
+      quarterName,
+      enrollmentType: enrollmentType || 'Regular',
+      subjects
     });
 
     console.log('About to save assignment to database...');
@@ -358,7 +334,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
   const errors = [];
 
   for (const assignmentData of assignments) {
-    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName } = assignmentData;
+    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate, enrollmentType } = assignmentData;
 
     try {
       const term = await Term.findById(termId);
@@ -371,31 +347,12 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         errors.push({ assignment: assignmentData, message: 'gradeLevel is required' });
         continue;
       }
-      
-      // Validate required fields - schoolID is always required
-      if (!studentSchoolID) {
-        errors.push({ assignment: assignmentData, message: 'Student School ID is required for all assignments' });
-        continue;
-      }
-      
-      // Validate required fields for manual assignments in bulk
-      if (!studentId) {
-        if (!assignmentData.enrollmentNo || !assignmentData.enrollmentDate) {
-          errors.push({ assignment: assignmentData, message: 'Enrollment number and enrollment date are required for manual assignments' });
-          continue;
-        }
-        if (!firstName || !lastName) {
-          errors.push({ assignment: assignmentData, message: 'First name and last name are required for manual assignments' });
-          continue;
-        }
-      }
 
       let actualStudentId = studentId;
       // Construct studentName from firstName and lastName if not provided directly
       const fullStudentName = studentName || (firstName && lastName ? `${firstName} ${lastName}` : null);
       
-    // Same rule for bulk: never auto-link by name when a schoolID is present
-    if (!actualStudentId && fullStudentName && !studentSchoolID) {
+      if (!actualStudentId && fullStudentName) {
         console.log('Looking for student by name:', fullStudentName);
         let student = await User.findOne({
           $or: [
@@ -436,7 +393,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 
       // allow manual entries when no matching student is found
 
-      // Enhanced duplicate check for bulk import - only prevent exact duplicates (same student, same quarter)
+      // Check for existing assignment before creating new one (same logic as single creation)
       const existingAssignment = await StudentAssignment.findOne({
         $or: [
           // Check by studentId if it exists - only prevent same student in same term and quarter
@@ -444,25 +401,16 @@ router.post('/bulk', authenticateToken, async (req, res) => {
             studentId: actualStudentId,
             schoolYear: term.schoolYear,
             termName: term.termName,
-            quarterName: quarterName || null
+            quarterName: normalizedQuarter
           }] : []),
-          // Check by studentSchoolID - only prevent same student in same term and quarter
-          ...(studentSchoolID ? [{
+          // Check by studentSchoolID if no studentId - only prevent same student in same term and quarter
+          // This ensures we're checking for the exact same student, not just similar names
+          ...(!actualStudentId && studentSchoolID ? [{
             studentSchoolID,
             schoolYear: term.schoolYear,
             termName: term.termName,
             quarterName: quarterName || null
-          }] : []),
-          // Check for exact same assignment details (same student, same quarter)
-          {
-            studentSchoolID,
-            trackName,
-            strandName,
-            sectionName,
-            schoolYear: term.schoolYear,
-            termName: term.termName,
-            quarterName: quarterName || null
-          }
+          }] : [])
         ]
       });
 
@@ -476,12 +424,30 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         continue;
       }
 
+      // Fetch subjects that match the track, strand, and grade level for bulk creation
+      const bulkMatchingSubjects = await Subject.find({
+        trackName,
+        strandName,
+        gradeLevel,
+        schoolYear: term.schoolYear,
+        termName: term.termName,
+        status: 'active'
+      });
+
+      // Prepare subjects array for the bulk assignment
+      const bulkSubjects = bulkMatchingSubjects.map(subject => ({
+        subjectId: subject._id,
+        subjectName: subject.subjectName
+      }));
+
       const newAssignment = new StudentAssignment({
         studentId: actualStudentId || undefined,
         studentName: !actualStudentId ? (fullStudentName || `Student ${studentSchoolID}`) : undefined,
-        studentSchoolID: studentSchoolID || undefined, // ALWAYS store schoolID if provided, regardless of whether student exists
+        studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
         firstName: !actualStudentId ? firstName : undefined,
         lastName: !actualStudentId ? lastName : undefined,
+        enrollmentNo: enrollmentNo || undefined,
+        enrollmentDate: enrollmentDate || undefined,
         trackName,
         strandName,
         sectionName,
@@ -490,6 +456,8 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         schoolYear: term.schoolYear,
         termName: term.termName,
         quarterName,
+        enrollmentType: enrollmentType || 'Regular',
+        subjects: bulkSubjects
       });
 
       const savedAssignment = await newAssignment.save();
@@ -556,11 +524,6 @@ router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
 // Update a student assignment (e.g., if track/strand/section changes)
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
-    // Check if req.body exists
-    if (!req.body) {
-      return res.status(400).json({ message: 'Request body is missing or invalid. Please ensure Content-Type is application/json.' });
-    }
-    
     const { trackName, strandName, sectionName, gradeLevel, termId, quarterName } = req.body;
 
     const assignment = await StudentAssignment.findById(req.params.id);
@@ -584,6 +547,24 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     assignment.termName = term.termName;
     if (quarterName !== undefined) {
       assignment.quarterName = quarterName;
+    }
+
+    // Update subjects if track, strand, or grade level changed
+    if (trackName || strandName || gradeLevel) {
+      const updatedMatchingSubjects = await Subject.find({
+        trackName: assignment.trackName,
+        strandName: assignment.strandName,
+        gradeLevel: assignment.gradeLevel,
+        schoolYear: term.schoolYear,
+        termName: term.termName,
+        status: 'active'
+      });
+
+      // Update subjects array for the assignment
+      assignment.subjects = updatedMatchingSubjects.map(subject => ({
+        subjectId: subject._id,
+        subjectName: subject.subjectName
+      }));
     }
 
     const updatedAssignment = await assignment.save();

@@ -240,36 +240,37 @@ router.delete('/:id', async (req, res) => {
 
     // If cascade confirmation is not provided, check dependencies first
     if (!confirmCascade) {
+      const quarterOrNull = [track.quarterName, null];
       const dependencies = await Promise.all([
         Strand.countDocuments({ 
           trackName: track.trackName, 
           schoolYear: track.schoolYear, 
           termName: track.termName,
-          quarterName: track.quarterName
+          $or: [{ quarterName: track.quarterName }, { quarterName: null }, { quarterName: { $exists: false } }]
         }),
         Section.countDocuments({ 
           trackName: track.trackName, 
           schoolYear: track.schoolYear, 
           termName: track.termName,
-          quarterName: track.quarterName
+          $or: [{ quarterName: track.quarterName }, { quarterName: null }, { quarterName: { $exists: false } }]
         }),
         Subject.countDocuments({ 
           trackName: track.trackName, 
           schoolYear: track.schoolYear, 
           termName: track.termName,
-          quarterName: track.quarterName
+          $or: [{ quarterName: track.quarterName }, { quarterName: null }, { quarterName: { $exists: false } }]
         }),
         StudentAssignment.countDocuments({ 
           trackName: track.trackName, 
           schoolYear: track.schoolYear, 
           termName: track.termName,
-          quarterName: track.quarterName
+          $or: [{ quarterName: track.quarterName }, { quarterName: null }, { quarterName: { $exists: false } }]
         }),
         FacultyAssignment.countDocuments({ 
           trackName: track.trackName, 
           schoolYear: track.schoolYear, 
           termName: track.termName,
-          quarterName: track.quarterName
+          $or: [{ quarterName: track.quarterName }, { quarterName: null }, { quarterName: { $exists: false } }]
         })
       ]);
 
@@ -287,36 +288,36 @@ router.delete('/:id', async (req, res) => {
     console.log(`Cascading deletion of track: ${track.trackName} for quarter: ${track.quarterName}`);
     
     await Promise.all([
-      // Delete all related entities for this specific quarter only
+      // Delete all related entities for this specific quarter; include legacy records with null/absent quarter
       Strand.deleteMany({ 
         trackName: track.trackName, 
         schoolYear: track.schoolYear, 
         termName: track.termName,
-        quarterName: track.quarterName
+        $or: [{ quarterName: track.quarterName }, { quarterName: null }, { quarterName: { $exists: false } }]
       }),
       Section.deleteMany({ 
         trackName: track.trackName, 
         schoolYear: track.schoolYear, 
         termName: track.termName,
-        quarterName: track.quarterName
+        $or: [{ quarterName: track.quarterName }, { quarterName: null }, { quarterName: { $exists: false } }]
       }),
       Subject.deleteMany({ 
         trackName: track.trackName, 
         schoolYear: track.schoolYear, 
         termName: track.termName,
-        quarterName: track.quarterName
+        $or: [{ quarterName: track.quarterName }, { quarterName: null }, { quarterName: { $exists: false } }]
       }),
       StudentAssignment.deleteMany({ 
         trackName: track.trackName, 
         schoolYear: track.schoolYear, 
         termName: track.termName,
-        quarterName: track.quarterName
+        $or: [{ quarterName: track.quarterName }, { quarterName: null }, { quarterName: { $exists: false } }]
       }),
       FacultyAssignment.deleteMany({ 
         trackName: track.trackName, 
         schoolYear: track.schoolYear, 
         termName: track.termName,
-        quarterName: track.quarterName
+        $or: [{ quarterName: track.quarterName }, { quarterName: null }, { quarterName: { $exists: false } }]
       })
     ]);
 

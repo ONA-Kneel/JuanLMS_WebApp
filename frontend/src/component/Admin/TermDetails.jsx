@@ -4,7 +4,7 @@ import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import { getLogoBase64, getFooterLogoBase64 } from '../../utils/imageToBase64';
 
-const API_BASE = "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -34,6 +34,33 @@ const validateStudentSchoolIDFormat = (schoolID) => {
   return studentSchoolIDPattern.test(trimmedID);
 };
 
+// Convert Excel date (serial number or date string) to ISO yyyy-mm-dd
+const parseExcelDateToISO = (value) => {
+  if (value === null || value === undefined || value === '') return '';
+  // Already a Date
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return value.toISOString().split('T')[0];
+  }
+  // Numeric: Excel serial
+  const isNumeric = typeof value === 'number' || (typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value.trim()));
+  if (isNumeric) {
+    const serial = Number(value);
+    if (!isNaN(serial) && serial > 0) {
+      const excelEpoch = Date.UTC(1899, 11, 30); // 1899-12-30
+      const days = serial > 59 ? serial - 1 : serial; // Adjust for Excel leap bug
+      const ms = excelEpoch + days * 24 * 60 * 60 * 1000;
+      const d = new Date(ms);
+      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    }
+  }
+  // String date
+  try {
+    const d = new Date(String(value));
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  } catch {}
+  return '';
+};
+
 // Faculty School ID validation function (F000 format)
 const validateFacultySchoolIDFormat = (schoolID) => {
   if (!schoolID || typeof schoolID !== 'string') {
@@ -57,8 +84,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [termDetails, setTermDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  // Lock editing when term is archived or quarter is not active
-  const isLocked = (termDetails?.status === 'archived') || (quarterData && quarterData.status !== 'active');
 
   // Debug logging for props
   console.log('TermDetails component props:', { propTermData, quarterData, termId });
@@ -73,8 +98,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [trackSuccess, setTrackSuccess] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingTrack, setEditingTrack] = useState(null);
-  const [isTrackSubmitting, setIsTrackSubmitting] = useState(false);
-  const [deletingTrackId, setDeletingTrackId] = useState(null);
 
   // State for Strands management
   const [strandFormData, setStrandFormData] = useState({
@@ -87,8 +110,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [isStrandEditMode, setIsStrandEditMode] = useState(false);
   const [editingStrand, setEditingStrand] = useState(null);
   const [isStrandModalOpen, setIsStrandModalOpen] = useState(false);
-  const [isStrandSubmitting, setIsStrandSubmitting] = useState(false);
-  const [deletingStrandId, setDeletingStrandId] = useState(null);
 
   // State for Sections management
   const [sectionFormData, setSectionFormData] = useState({
@@ -103,8 +124,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [isSectionEditMode, setIsSectionEditMode] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
-  const [isSectionSubmitting, setIsSectionSubmitting] = useState(false);
-  const [deletingSectionId, setDeletingSectionId] = useState(null);
 
   // State for Faculty Assignment management
   const [facultyFormData, setFacultyFormData] = useState({
@@ -119,8 +138,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [facultyError, setFacultyError] = useState('');
   const [isFacultyEditMode, setIsFacultyEditMode] = useState(false);
   const [editingFacultyAssignment, setEditingFacultyAssignment] = useState(null);
-  const [deletingAssignmentId, setDeletingAssignmentId] = useState(null);
-  const [isFacultySubmitting, setIsFacultySubmitting] = useState(false);
   const [faculties, setFaculties] = useState([]); // To store faculty users for dropdown
   const [isFacultyModalOpen, setIsFacultyModalOpen] = useState(false);
 
@@ -136,15 +153,18 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     lastName: '',
     firstName: ''
   });
+  const [isIrregularStudent, setIsIrregularStudent] = useState(false);
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [studentAssignments, setStudentAssignments] = useState([]);
   const [studentError, setStudentError] = useState('');
+  const [isSubjectsModalOpen, setIsSubjectsModalOpen] = useState(false);
+  const [selectedStudentForSubjects, setSelectedStudentForSubjects] = useState(null);
   const [isStudentEditMode, setIsStudentEditMode] = useState(false);
   const [editingStudentAssignment, setEditingStudentAssignment] = useState(null);
   const [students, setStudents] = useState([]); // To store student users for dropdown
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [registrants, setRegistrants] = useState([]);
-  const [isStudentSubmitting, setIsStudentSubmitting] = useState(false);
-  const [deletingStudentAssignmentId, setDeletingStudentAssignmentId] = useState(null);
 
   // Filter states for student assignments
   const [studentSectionFilter, setStudentSectionFilter] = useState('');
@@ -221,8 +241,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [isSubjectEditMode, setIsSubjectEditMode] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
-  const [isSubjectSubmitting, setIsSubjectSubmitting] = useState(false);
-  const [deletingSubjectId, setDeletingSubjectId] = useState(null);
   
   // Batch upload state for subjects
   const [subjectExcelFile, setSubjectExcelFile] = useState(null);
@@ -544,9 +562,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   // Handle Track form submission
   const handleAddTrack = async (e) => {
     e.preventDefault();
-    if (isLocked) return;
+    if (termDetails.status === 'archived') return;
     setTrackError('');
-    setIsTrackSubmitting(true);
 
     if (!trackFormData.trackType) {
       setTrackError('Please select a track type.');
@@ -598,8 +615,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
     } catch (err) {
       setTrackError('Error adding track');
-    } finally {
-      setIsTrackSubmitting(false);
     }
   };
 
@@ -614,9 +629,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   };
   const handleUpdateTrack = async (e) => {
     e.preventDefault();
-    if (isLocked) return;
+    if (termDetails.status === 'archived') return;
     setTrackError('');
-    setIsTrackSubmitting(true);
 
     if (!trackFormData.trackType) {
       setTrackError('Please select a track type.');
@@ -674,15 +688,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       } catch (err) {
         setTrackError('Error updating track');
-      } finally {
-        setIsTrackSubmitting(false);
       }
     }
   };
 
   const handleDeleteTrack = async (track) => {
-    if (isLocked) return;
-    setDeletingTrackId(track._id);
+    if (termDetails.status === 'archived') return;
     
     try {
       // First, check dependencies
@@ -755,17 +766,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (err) {
       setTrackError('Error deleting track');
       console.error('Error in handleDeleteTrack:', err);
-    } finally {
-      setDeletingTrackId(null);
     }
   };
 
   // Handle Strand form submission
   const handleAddStrand = async (e) => {
     e.preventDefault();
-    if (isLocked) return;
+    if (termDetails.status === 'archived') return;
     setStrandError('');
-    setIsStrandSubmitting(true);
 
     if (!strandFormData.trackId || !strandFormData.strandType) {
       setStrandError('Track Name and Strand Type cannot be empty.');
@@ -824,8 +832,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
     } catch (err) {
       setStrandError('Error adding strand');
-    } finally {
-      setIsStrandSubmitting(false);
     }
   };
 
@@ -848,9 +854,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   };
   const handleUpdateStrand = async (e) => {
     e.preventDefault();
-    if (isLocked) return;
+    if (termDetails.status === 'archived') return;
     setStrandError('');
-    setIsStrandSubmitting(true);
 
     if (!strandFormData.trackId || !strandFormData.strandType) {
       setStrandError('Track Name and Strand Type cannot be empty.');
@@ -915,15 +920,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       } catch (err) {
         setStrandError('Error updating strand');
-      } finally {
-        setIsStrandSubmitting(false);
       }
     }
   };
 
   const handleDeleteStrand = async (strand) => {
-    if (isLocked) return;
-    setDeletingStrandId(strand._id);
+    if (termDetails.status === 'archived') return;
     
     try {
       // First, check dependencies
@@ -994,8 +996,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (err) {
       setStrandError('Error deleting strand');
       console.error('Error in handleDeleteStrand:', err);
-    } finally {
-      setDeletingStrandId(null);
     }
   };
 
@@ -1014,7 +1014,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleAddSection = async (e) => {
     e.preventDefault();
     setSectionError('');
-    setIsSectionSubmitting(true);
 
     if (!sectionFormData.trackId || !sectionFormData.strandId || !sectionFormData.sectionName.trim() || !sectionFormData.gradeLevel) {
       setSectionError('All fields are required.');
@@ -1094,8 +1093,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
     } catch (err) {
       setSectionError('Error adding section');
-    } finally {
-      setIsSectionSubmitting(false);
     }
   };
 
@@ -1114,7 +1111,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleUpdateSection = async (e) => {
     e.preventDefault();
     setSectionError('');
-    setIsSectionSubmitting(true);
 
     if (!sectionFormData.trackId || !sectionFormData.strandId || !sectionFormData.sectionName.trim() || !sectionFormData.gradeLevel) {
       setSectionError('All fields are required.');
@@ -1181,15 +1177,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       } catch (err) {
         setSectionError('Error updating section');
-      } finally {
-        setIsSectionSubmitting(false);
       }
     }
   };
 
   const handleDeleteSection = async (section) => {
-    if (isLocked) return;
-    setDeletingSectionId(section._id);
+    if (termDetails.status === 'archived') return;
     
     try {
       // First, check dependencies
@@ -1256,8 +1249,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (err) {
       setSectionError('Error deleting section');
       console.error('Error in handleDeleteSection:', err);
-    } finally {
-      setDeletingSectionId(null);
     }
   };
 
@@ -1473,6 +1464,46 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     console.log('✅ Selected student:', `${firstName} ${lastName}`);
   };
 
+  // Handle subject selection for irregular students
+  const handleSubjectSelection = (subjectId, isSelected) => {
+    if (isSelected) {
+      const subject = availableSubjects.find(s => s._id === subjectId);
+      if (subject && !selectedSubjects.find(s => s.subjectId === subjectId)) {
+        setSelectedSubjects(prev => [...prev, {
+          subjectId: subject._id,
+          subjectName: subject.subjectName
+        }]);
+      }
+    } else {
+      setSelectedSubjects(prev => prev.filter(s => s.subjectId !== subjectId));
+    }
+  };
+
+  // Handle select all subjects
+  const handleSelectAllSubjects = (selectAll) => {
+    if (selectAll) {
+      const allSubjects = availableSubjects.map(subject => ({
+        subjectId: subject._id,
+        subjectName: subject.subjectName
+      }));
+      setSelectedSubjects(allSubjects);
+    } else {
+      setSelectedSubjects([]);
+    }
+  };
+
+  // Handle opening subjects modal
+  const handleViewStudentSubjects = (assignment) => {
+    setSelectedStudentForSubjects(assignment);
+    setIsSubjectsModalOpen(true);
+  };
+
+  // Handle closing subjects modal
+  const handleCloseSubjectsModal = () => {
+    setIsSubjectsModalOpen(false);
+    setSelectedStudentForSubjects(null);
+  };
+
   // Fetch faculty assignments
   const fetchFacultyAssignments = useCallback(async () => {
     if (!termDetails || !termDetails._id) return;
@@ -1525,6 +1556,16 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       if (res.ok) {
         const data = await res.json();
         console.log("Fetched student assignments:", data);
+        
+        // Debug enrollment type data specifically
+        console.log("🔍 Enrollment Type Debug - Raw Data:", data.map(assignment => ({
+          id: assignment._id,
+          studentName: assignment.studentName,
+          enrollmentType: assignment.enrollmentType,
+          EnrollmentType: assignment.EnrollmentType,
+          allKeys: Object.keys(assignment)
+        })));
+        
         setStudentAssignments(data);
       } else {
         const errorData = await res.json();
@@ -1571,6 +1612,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       fetchRegistrants();
     }
   }, [termDetails, fetchStudentAssignments, fetchRegistrants]);
+
+  // Fetch available subjects when irregular student is selected and form data is complete
+  useEffect(() => {
+    if (isIrregularStudent && studentFormData.trackId && studentFormData.strandId && studentFormData.gradeLevel && termDetails) {
+      const selectedTrack = tracks.find(t => t._id === studentFormData.trackId);
+      const selectedStrand = strands.find(s => s._id === studentFormData.strandId);
+      
+      if (selectedTrack && selectedStrand) {
+        fetchAvailableSubjects(selectedTrack.trackName, selectedStrand.strandName, studentFormData.gradeLevel);
+      }
+    } else {
+      setAvailableSubjects([]);
+      setSelectedSubjects([]);
+    }
+  }, [isIrregularStudent, studentFormData.trackId, studentFormData.strandId, studentFormData.gradeLevel, tracks, strands, termDetails]);
 
   // Check if a student is approved in registrations
   const isStudentApproved = (assignment) => {
@@ -1667,7 +1723,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleAddFacultyAssignment = async (e) => {
     e.preventDefault();
     setFacultyError('');
-    setIsFacultySubmitting(true);
 
     // Ensure facultyId is set from selection or if directly typed and matches exactly
     let facultyToAssign = faculties.find(f => f._id === facultyFormData.facultyId);
@@ -1749,8 +1804,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (err) {
       setFacultyError('Error assigning faculty');
       console.error("Error in handleAddFacultyAssignment:", err);
-    } finally {
-      setIsFacultySubmitting(false);
     }
   };
 
@@ -1785,7 +1838,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleUpdateFacultyAssignment = async (e) => {
     e.preventDefault();
     setFacultyError('');
-    setIsFacultySubmitting(true);
 
     let facultyToAssign = faculties.find(f => f._id === facultyFormData.facultyId);
     if (!facultyToAssign && facultySearchTerm) {
@@ -1867,8 +1919,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch (err) {
         setFacultyError('Error updating faculty assignment');
         console.error("Error in handleUpdateFacultyAssignment:", err);
-      } finally {
-        setIsFacultySubmitting(false);
       }
     }
   };
@@ -1877,7 +1927,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     if (window.confirm("Are you sure you want to remove this faculty assignment?")) {
       try {
         const token = localStorage.getItem('token');
-        setDeletingAssignmentId(assignment._id);
 
         const res = await fetch(`${API_BASE}/api/faculty-assignments/${assignment._id}`, {
           method: 'DELETE',
@@ -1913,8 +1962,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch (err) {
         setFacultyError('Error removing faculty assignment');
         console.error("Error in handleDeleteFacultyAssignment:", err);
-      } finally {
-        setDeletingAssignmentId(null);
       }
     }
   };
@@ -1965,25 +2012,17 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleAddStudentAssignment = async (e) => {
     e.preventDefault();
     setStudentError('');
-    setIsStudentSubmitting(true);
 
-    // Check if we have ALL required student information
+    // Check if we have required student information
     const hasStudentInfo = Boolean(studentFormData.studentId) || (studentFormData.firstName && studentFormData.lastName);
-    const hasEnrollmentData = studentFormData.enrollmentNo && studentFormData.enrollmentDate;
-    const hasSchoolId = studentManualId && studentManualId.trim() !== '';
-    
     if (!hasStudentInfo || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
-      setStudentError('All fields are required for student assignment. Please provide student information, track, strand, section, and grade level.');
+      setStudentError('All fields are required for student assignment. Provide student information.');
       return;
     }
-    
-    if (!hasEnrollmentData) {
-      setStudentError('Enrollment number and enrollment date are required.');
-      return;
-    }
-    
-    if (!hasSchoolId) {
-      setStudentError('Student School ID is required.');
+
+    // Validate irregular student requirements
+    if (isIrregularStudent && selectedSubjects.length === 0) {
+      setStudentError('Please select at least one subject for irregular student.');
       return;
     }
 
@@ -2027,7 +2066,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             sectionName: selectedSection.sectionName,
             gradeLevel: studentFormData.gradeLevel,
             termId: termDetails._id,
-            quarterName: quarterData ? quarterData.quarterName : undefined
+            quarterName: quarterData ? quarterData.quarterName : undefined,
+            enrollmentType: isIrregularStudent ? 'Irregular' : 'Regular',
+            subjects: isIrregularStudent ? selectedSubjects : undefined
           };
           
           let finalPayload;
@@ -2036,11 +2077,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               ...basePayload, 
               studentId: studentToAssign._id,
               studentName: `${studentToAssign.firstname || studentToAssign.firstName} ${studentToAssign.lastname || studentToAssign.lastName}`,
-              studentSchoolID: studentToAssign.schoolID
+              studentSchoolID: studentToAssign.schoolID,
+              enrollmentNo: studentFormData.enrollmentNo || undefined,
+              enrollmentDate: studentFormData.enrollmentDate || undefined
             };
           } else {
             // For manual entries, DO NOT send studentId (backend expects ObjectId). Send school ID and names instead.
-            const manualSchoolId = studentManualId.trim();
+          const manualSchoolId = studentManualId.trim();
             finalPayload = { 
               ...basePayload, 
               firstName: studentFormData.firstName,
@@ -2048,9 +2091,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               enrollmentNo: studentFormData.enrollmentNo,
               enrollmentDate: studentFormData.enrollmentDate
             };
-            if (manualSchoolId) {
+          if (manualSchoolId) {
               finalPayload.studentSchoolID = manualSchoolId;
-            }
+          }
           }
           
           console.log('Final payload being sent:', finalPayload);
@@ -2080,6 +2123,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
         setStudentSearchTerm('');
         setStudentManualId('');
+        setIsIrregularStudent(false);
+        setSelectedSubjects([]);
+        setAvailableSubjects([]);
       } else {
         const data = await res.json();
         setStudentError(data.message || 'Failed to assign student');
@@ -2087,8 +2133,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (err) {
       setStudentError('Error assigning student');
       console.error("Error in handleAddStudentAssignment:", err);
-    } finally {
-      setIsStudentSubmitting(false);
     }
   };
 
@@ -2114,43 +2158,17 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       setStudentSearchTerm('');
     }
 
-    // Prepare additional editable fields
-    let enrollmentDateFormatted = '';
-    try {
-      if (assignment.enrollmentDate) {
-        const d = new Date(assignment.enrollmentDate);
-        if (!isNaN(d.getTime())) {
-          enrollmentDateFormatted = d.toISOString().split('T')[0];
-        }
-      }
-    } catch {}
-
-    const computedFirstName = assignment.firstName
-      || (assignment.studentName ? assignment.studentName.split(' ')[0] : (student?.firstname || ''));
-    const computedLastName = assignment.lastName
-      || (assignment.studentName ? assignment.studentName.split(' ').slice(-1)[0] : (student?.lastname || ''));
-
-    // Populate school ID field used in the modal
-    try {
-      setStudentManualId(assignment.studentSchoolID || assignment.schoolID || student?.schoolID || '');
-    } catch {}
-
     setStudentFormData({
       studentId: assignment.studentId,
       trackId: trackId,
       strandId: strandId,
       sectionIds: sectionId ? [sectionId] : [],
       gradeLevel: assignment.gradeLevel || '', // Populate gradeLevel
-      enrollmentNo: assignment.enrollmentNo || '',
-      enrollmentDate: enrollmentDateFormatted,
-      firstName: computedFirstName || '',
-      lastName: computedLastName || '',
     });
   };
   const handleUpdateStudentAssignment = async (e) => {
     e.preventDefault();
     setStudentError('');
-    setIsStudentSubmitting(true);
 
     if (!studentFormData.studentId || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
       setStudentError('All fields are required for student assignment.');
@@ -2212,6 +2230,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           setIsStudentEditMode(false);
           setEditingStudentAssignment(null);
           setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+          setIsIrregularStudent(false);
+          setSelectedSubjects([]);
+          setAvailableSubjects([]);
         } else {
           const data = await res.json();
           setStudentError(data.message || 'Failed to update student assignment');
@@ -2219,8 +2240,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch (err) {
         setStudentError('Error updating student assignment');
         console.error("Error in handleUpdateStudentAssignment:", err);
-      } finally {
-        setIsStudentSubmitting(false);
       }
     }
   };
@@ -2229,7 +2248,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     if (window.confirm("Are you sure you want to remove this student assignment?")) {
       try {
         const token = localStorage.getItem('token');
-        setDeletingStudentAssignmentId(assignment._id);
 
         const res = await fetch(`${API_BASE}/api/student-assignments/${assignment._id}`, {
           method: 'DELETE',
@@ -2265,8 +2283,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch (err) {
         setStudentError('Error removing student assignment');
         console.error("Error in handleDeleteStudentAssignment:", err);
-      } finally {
-        setDeletingStudentAssignmentId(null);
       }
     }
   };
@@ -2437,7 +2453,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           <div class="header">
             <div class="logo-section">
               <div class="logo">
-                <img src="${logoBase64}" alt="San Juan de Dios Hospital Seal" />
+                <img src="${logoBase64 || '/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png'}" alt="San Juan de Dios Hospital Seal" />
               </div>
             </div>
             <div class="institution-info">
@@ -2657,7 +2673,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
                   
                   return `
                     <tr>
-                      <td>${assignment.firstname && assignment.lastname ? `${assignment.firstname} ${assignment.lastname}` : assignment.studentName || 'Unknown'}</td>
+                      <td>${assignment.firstName && assignment.lastName ? `${assignment.firstName} ${assignment.lastName}` : assignment.studentName || 'Unknown'}</td>
                       <td>${schoolId}</td>
                       <td>${assignment.trackName}</td>
                       <td>${assignment.strandName}</td>
@@ -2678,7 +2694,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             </div>
             <div class="footer-right">
               <div class="footer-logo"> 
-                <img src="${footerLogoBase64}" alt="San Juan de Dios Hospital Seal" />
+                <img src="${footerLogoBase64 || '/src/assets/logo/images.png'}" alt="San Juan de Dios Hospital Seal" />
               </div>
             </div>
           </div>
@@ -3170,14 +3186,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const res = await fetch(`${API_BASE}/api/tracks/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          tracks: validTracks.map(t => ({
-            ...t,
-            schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName,
-            ...(quarterData?.quarterName ? { quarterName: quarterData.quarterName } : {})
-          })) 
-        })
+        body: JSON.stringify({ tracks: validTracks })
       });
 
       if (res.ok) {
@@ -3304,17 +3313,26 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
   };
 
-  // Update: Enforce uniqueness for strand names within the same term (across all quarters)
+  // Update: Enforce absolute uniqueness for strand names
   const validateStrands = async (strandsToValidate) => {
     const status = {};
     const uploadedStrandNames = new Set();
-    // Fetch existing strands in the current term (for term-level uniqueness)
-    const existingStrandsInTerm = new Set();
-    strands.forEach(strand => {
-      if (strand.schoolYear === termDetails.schoolYear && strand.termName === termDetails.termName) {
-        existingStrandsInTerm.add(`${strand.trackName.toLowerCase()}-${strand.strandName.toLowerCase()}`);
+    // Fetch all existing strands in the system (for absolute uniqueness)
+    const allStrands = [];
+    for (const track of tracks) {
+      if (track.status === 'active') {
+        try {
+          const res = await fetch(`${API_BASE}/api/strands/track/${track.trackName}`);
+          if (res.ok) {
+            const fetchedStrands = await res.json();
+            allStrands.push(...fetchedStrands);
+          }
+        } catch (err) {
+          // ignore
+        }
       }
-    });
+    }
+    const allStrandNamesInSystem = new Set(allStrands.map(s => s.strandName.trim().toLowerCase()));
 
     for (let i = 0; i < strandsToValidate.length; i++) {
       const strand = strandsToValidate[i];
@@ -3328,12 +3346,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         isValid = false;
         message = 'Missing Track Name or Strand Name';
       }
-      // 2. Check if strand name exists in the current term (across all quarters)
+      // 2. Absolute uniqueness: check if strand name exists anywhere
       if (isValid) {
-        const strandKey = `${trackName.toLowerCase()}-${strandName.toLowerCase()}`;
-        if (existingStrandsInTerm.has(strandKey)) {
+        if (allStrandNamesInSystem.has(strandName.toLowerCase())) {
           isValid = false;
-          message = 'Strand name already exists in this term (across all quarters)';
+          message = 'Strand name already exists in the system (must be unique)';
         }
       }
       // 3. Check for duplicates within the uploaded data (absolute uniqueness)
@@ -3484,8 +3501,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           body: JSON.stringify({
             ...strand,
             schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName,
-            ...(quarterData?.quarterName ? { quarterName: quarterData.quarterName } : {})
+            termName: termDetails.termName
           })
         });
 
@@ -3631,16 +3647,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
     console.log('All active strands in system:', activeStrandsInSystem);
 
-    // Get all existing sections from the current term (for term-level uniqueness)
-    const existingSections = sections.filter(section => 
-      section.status === 'active' && 
-      section.schoolYear === termDetails.schoolYear && 
-      section.termName === termDetails.termName
-    );
+    // Get all existing sections from the component state (more reliable)
+    const existingSections = sections.filter(section => section.status === 'active');
     existingSections.forEach(section => {
       existingSectionsInSystem.add(`${section.trackName}-${section.strandName}-${section.sectionName}-${section.gradeLevel}`);
     });
-    console.log('Existing sections in current term:', Array.from(existingSectionsInSystem));
+    console.log('Existing sections in system:', Array.from(existingSectionsInSystem));
 
     // Track section names in the uploaded file for duplicates
     const uploadedSectionNames = new Set();
@@ -3681,14 +3693,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       }
 
-      // 4. Check if section already exists in the current term (across all quarters)
+      // 4. Check if section already exists in the system
       if (isValid) {
         const sectionKey = `${trackName}-${strandName}-${sectionName}-${gradeLevel}`;
-        console.log(`Checking if section exists in current term: "${sectionKey}"`);
-        console.log('Available existing sections in current term:', Array.from(existingSectionsInSystem));
+        console.log(`Checking if section exists: "${sectionKey}"`);
+        console.log('Available existing sections:', Array.from(existingSectionsInSystem));
         if (existingSectionsInSystem.has(sectionKey)) {
           isValid = false;
-          message = `Section "${sectionName}" already exists in ${trackName} - ${strandName} - ${gradeLevel} for this term`;
+          message = `Section "${sectionName}" already exists in ${trackName} - ${strandName} - ${gradeLevel}`;
         }
       }
 
@@ -3838,12 +3850,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         const res = await fetch(`${API_BASE}/api/sections`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...section,
-            schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName,
-            ...(quarterData?.quarterName ? { quarterName: quarterData.quarterName } : {})
-          })
+          body: JSON.stringify(section)
         });
 
         if (res.ok) {
@@ -4111,7 +4118,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
     
     const existingAssignmentsInSystem = new Set(existingAssignments.map(assign => 
-      `${assign.facultyId}-${assign.trackName}-${assign.strandName}-${assign.sectionName}-${assign.subjectName || ''}`
+      `${assign.facultyId}-${String(assign.trackName||'').toLowerCase()}-${String(assign.strandName||'').toLowerCase()}-${String(assign.sectionName||'').toLowerCase()}-${String(assign.subjectName||'').toLowerCase()}`
     ));
     
     console.log('Existing faculty assignments in system:', Array.from(existingAssignmentsInSystem));
@@ -4210,7 +4217,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
       // 6. Check for duplicates within the uploaded data
       if (isValid) {
-        const currentCombo = `${facultyId || facultySchoolID}-${trackName}-${strandName}-${sectionName}`;
+        // Include subjectName in the combo so same faculty can have multiple subjects in the same section
+        const currentCombo = `${facultyId || facultySchoolID}-${trackName}-${strandName}-${sectionName}-${subjectName}`;
         if (uploadedAssignmentCombos.has(currentCombo)) {
           isValid = false;
           message = 'Duplicate faculty assignment in uploaded file';
@@ -4221,7 +4229,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
       // 7. Check for existing assignments in the system (including subject)
       if (isValid && facultyId) {
-        const existingCombo = `${facultyId}-${trackName}-${strandName}-${sectionName}-${subjectName}`;
+        // Use lowercase for normalized comparison
+        const existingCombo = `${facultyId}-${trackName.toLowerCase()}-${strandName.toLowerCase()}-${sectionName.toLowerCase()}-${subjectName.toLowerCase()}`;
         console.log(`Row ${i + 1}: Checking if faculty assignment exists: "${existingCombo}"`);
         console.log(`Row ${i + 1}: Available existing assignments:`, Array.from(existingAssignmentsInSystem));
         console.log(`Row ${i + 1}: Does combo exist?`, existingAssignmentsInSystem.has(existingCombo));
@@ -4245,8 +4254,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         if (conflictingAssignment) {
           // Check if it's the same faculty (allowed) or different faculty (not allowed)
           if (conflictingAssignment.facultyId !== facultyId) {
-            isValid = false;
-            message = `Subject "${subjectName}" in Section "${sectionName}" is already assigned to another faculty`;
+          isValid = false;
+          message = `Subject "${subjectName}" in Section "${sectionName}" is already assigned to another faculty`;
             console.log(`Row ${i + 1}: Found subject-section conflict with different faculty`);
           } else {
             // Same faculty, same subject-section - this is a duplicate
@@ -4519,7 +4528,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         [`Academic Year: ${termDetails.schoolYear}`],
         [`Term: ${termDetails.termName}`],
         [''], // Empty row
-        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade'], // Match enrolled students format
+        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'track', 'strand', 'section', 'grade'], // Updated format
       ]);
       
       // Set column widths
@@ -4529,6 +4538,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         { wch: 15 }, // student_no
         { wch: 20 }, // last_name
         { wch: 20 }, // first_name
+        { wch: 20 }, // track
         { wch: 25 }, // strand
         { wch: 20 }, // section
         { wch: 10 }  // grade
@@ -4549,13 +4559,15 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         [`Academic Year: ${termDetails.schoolYear}`],
         [`Term: ${termDetails.termName}`],
         [''], // Empty row
-        // Student data headers (match enrolled students format)
-        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade', 'status'],
+        // Student data headers
+        ['Student N.', 'Student ID', 'Enrollment No.', 'Enrollment Date', 'Last Name', 'First Name', 'Strand', 'Section', 'Grade', 'Status'],
         // Student data rows
         ...currentStudentAssignments.map((assignment, index) => {
           const student = students.find(s => s._id === assignment.studentId);
           const status = isStudentApproved(assignment) ? 'Active' : 'Pending Approval';
           return [
+            `${assignment.lastname || ''} ${assignment.firstname || ''}`.trim() || 'Unknown',
+            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
             assignment.enrollmentNo || 'N/A',
             assignment.enrollmentDate ? 
               new Date(assignment.enrollmentDate).toLocaleDateString('en-US', {
@@ -4563,7 +4575,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
                 day: '2-digit', 
                 year: 'numeric'
               }) : 'N/A',
-            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
             assignment.lastname || '',
             assignment.firstname || '',
             assignment.strandName || 'N/A',
@@ -4576,15 +4587,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
       const currentStudentAssignmentsWs = XLSX.utils.aoa_to_sheet(currentStudentAssignmentsData);
       const saWscols = [
-        { wch: 15 }, // enrollment_no
-        { wch: 12 }, // date
-        { wch: 15 }, // student_no
-        { wch: 20 }, // last_name
-        { wch: 20 }, // first_name
-        { wch: 25 }, // strand
-        { wch: 20 }, // section
-        { wch: 10 }, // grade
-        { wch: 15 }  // status
+        { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 15 }
       ];
       currentStudentAssignmentsWs['!cols'] = saWscols;
       XLSX.utils.book_append_sheet(wb, currentStudentAssignmentsWs, 'Current Enrolled Students');
@@ -4809,61 +4812,27 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         continue; // Skip all other validations for this row
       }
 
-      // 2. Check if student is enrolled in the current term and quarter
+      // 2. Resolve student identity without enforcing enrollment/registration in current term/quarter
       if (isValid) {
         const studentFound = activeStudentsMap.get(studentSchoolIDInput);
         console.log(`Student with School ID "${studentSchoolIDInput}" found:`, studentFound);
-        
+
         if (studentFound) {
-          // If student exists, verify that the name matches the school ID
           const expectedName = `${studentFound.firstname} ${studentFound.lastname}`.toLowerCase();
           const providedName = `${firstNameInput} ${lastNameInput}`.toLowerCase();
           if (expectedName !== providedName) {
             console.log(`Name mismatch for existing student - will create new entry for "${firstNameInput} ${lastNameInput}"`);
-            studentId = null; // Will be created as new student
+            studentId = null; // Allow creating a new student record on upload
+            message = 'Will create new student record due to name mismatch';
           } else {
-            studentId = studentFound._id;
-          }
-          
-          // Check if student is enrolled in current term and quarter
-          const isEnrolled = registrants.some(registrant => {
-            const registrantSchoolId = (registrant.schoolID || '').trim();
-            return (registrant.status === 'approved' || registrant.status === 'pending') && 
-                   registrantSchoolId === studentSchoolIDInput &&
-                   registrant.termName === termDetails.termName &&
-                   registrant.schoolYear === termDetails.schoolYear;
-          });
-          
-          if (isEnrolled) {
-            console.log(`Student "${studentSchoolIDInput}" is enrolled/registered (approved or pending) in current term and quarter`);
-            message = 'Student is enrolled/registered (approved or pending) in this term and quarter';
-          } else {
-            console.log(`Student "${studentSchoolIDInput}" is not enrolled in current term and quarter`);
-            isValid = false;
-            message = 'Student is not enrolled in this term and quarter';
+            studentId = studentFound._id; // Use existing student record
+            message = 'Student resolved';
           }
         } else {
-          // Student doesn't exist in system - check if they are registered
-          console.log(`Student with School ID "${studentSchoolIDInput}" not found in system`);
-          
-          // Check if student is registered and approved for current term and quarter
-          const isRegistered = registrants.some(registrant => {
-            const registrantSchoolId = (registrant.schoolID || '').trim();
-            return (registrant.status === 'approved' || registrant.status === 'pending') && 
-                   registrantSchoolId === studentSchoolIDInput &&
-                   registrant.termName === termDetails.termName &&
-                   registrant.schoolYear === termDetails.schoolYear;
-          });
-          
-          if (isRegistered) {
-            console.log(`Student "${studentSchoolIDInput}" is registered (approved or pending) for current term and quarter`);
-            studentId = null; // Will be created during upload
-            message = 'Student is registered (approved or pending) for this term and quarter';
-          } else {
-            console.log(`Student "${studentSchoolIDInput}" is not registered for current term and quarter`);
-            isValid = false;
-            message = 'Student is not enrolled in this term and quarter';
-          }
+          // Student not found in current active list; allow free entry (will create)
+          console.log(`Student with School ID "${studentSchoolIDInput}" not found; allowing free entry`);
+          studentId = null;
+          message = 'New student will be created';
         }
       }
 
@@ -5124,7 +5093,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           const assignment = validAssignments.find(a => a['section'] === sectionName);
           if (assignment) {
             try {
-        const res = await fetch(`${API_BASE}/api/sections`, {
+              const res = await fetch(`${API_BASE}/api/sections`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -5134,7 +5103,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
                   gradeLevel: assignment['grade'],
                   schoolYear: termDetails.schoolYear,
                   termName: termDetails.termName,
-            quarterName: quarterData ? quarterData.quarterName : null
+                  quarterName: quarterData ? quarterData.quarterName : null
                 })
               });
               if (res.ok) {
@@ -5189,9 +5158,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       }
 
-      // Prepare all student assignments for bulk upload
-      const assignmentsToCreate = [];
-      
+      // Now create the student assignments
       for (let i = 0; i < validAssignments.length; i++) {
         const assignment = validAssignments[i];
         // Get the studentId from the validation status of the original preview data
@@ -5213,84 +5180,53 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           rawAssignment: assignment
         });
         
-        // Format enrollment date properly if it exists
-        if (enrollmentDate) {
-          try {
-            // Handle different date formats from Excel
-            const date = new Date(enrollmentDate);
-            if (!isNaN(date.getTime())) {
-              // Convert to YYYY-MM-DD format for backend
-              enrollmentDate = date.toISOString().split('T')[0];
-            } else {
-              enrollmentDate = '';
-            }
-          } catch (error) {
-            console.warn('Invalid date format in Excel:', enrollmentDate);
-            enrollmentDate = '';
-          }
-        }
+        // Normalize Excel date (serial or string) to ISO for backend
+        enrollmentDate = parseExcelDateToISO(enrollmentDate);
 
-        // Prepare assignment data for bulk upload
-        const assignmentData = {
-          gradeLevel: assignment['grade'] || assignment['Grade Level'],
-          trackName: assignment['Track Name'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track'),
-          strandName: assignment['strand'] || assignment['Strand Name'],
-          sectionName: assignment['section'] || assignment['Section Name'],
-          termId: termDetails._id,
-          quarterName: quarterData ? quarterData.quarterName : undefined
-        };
+        const res = await fetch(`${API_BASE}/api/student-assignments`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify((() => {
+            const basePayload = {
+              gradeLevel: assignment['grade'] || assignment['Grade Level'],
+              trackName: assignment['Track Name'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track'),
+              strandName: assignment['strand'] || assignment['Strand Name'],
+              sectionName: assignment['section'] || assignment['Section Name'],
+              termId: termDetails._id,
+              quarterName: quarterData ? quarterData.quarterName : undefined,
+              enrollmentType: 'Regular'
+            };
             
-        if (studentId) {
-          // Existing student - send studentId AND schoolID
-          assignmentsToCreate.push({ 
-            ...assignmentData, 
-            studentId: studentId,
-            studentSchoolID: studentSchoolID // ALWAYS include schoolID
-          });
+            if (studentId) {
+              // Existing student - send studentId
+              return { ...basePayload, studentId: studentId };
+            } else {
+              // New student - send student info directly (same as manual assignment)
+              const payload = { 
+                ...basePayload, 
+                firstName: firstName,
+                lastName: lastName,
+                enrollmentNo: enrollmentNo,
+                enrollmentDate: enrollmentDate
+              };
+              if (studentSchoolID) {
+                payload.studentSchoolID = studentSchoolID;
+              }
+              return payload;
+            }
+          })())
+        });
+
+        if (res.ok) {
+          const newAssignment = await res.json();
+          createdAssignments.push(newAssignment);
         } else {
-          // New student - send student info directly (same as manual assignment)
-          const payload = { 
-            ...assignmentData, 
-            firstName: firstName,
-            lastName: lastName,
-            enrollmentNo: enrollmentNo,
-            enrollmentDate: enrollmentDate
-          };
-          if (studentSchoolID) {
-            payload.studentSchoolID = studentSchoolID;
-          }
-          assignmentsToCreate.push(payload);
+          const data = await res.json();
+          throw new Error(data.message || `Failed to create assignment for ${firstName} ${lastName}`);
         }
-      }
-
-      // Make single bulk request instead of individual requests
-      console.log(`Making bulk request for ${assignmentsToCreate.length} student assignments`);
-      const res = await fetch(`${API_BASE}/api/student-assignments/bulk`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(assignmentsToCreate)
-      });
-
-      if (res.ok) {
-        const result = await res.json();
-        console.log('Bulk student assignment creation result:', result);
-        
-        if (result.created) {
-          createdAssignments.push(...result.created);
-        }
-        
-        if (result.errors && result.errors.length > 0) {
-          console.warn('Some student assignments failed:', result.errors);
-          // Show errors to user but don't fail the entire operation
-          const errorMessages = result.errors.map(err => err.message).join(', ');
-          console.warn('Student assignment errors:', errorMessages);
-        }
-      } else {
-        const data = await res.json();
-        throw new Error(data.message || 'Failed to create student assignments');
       }
 
       // Refresh all data after successful upload
@@ -5352,6 +5288,24 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
   };
 
+  // Fetch available subjects for irregular student assignment
+  const fetchAvailableSubjects = async (trackName, strandName, gradeLevel) => {
+    try {
+      const quarterParam = quarterData ? `?quarterName=${encodeURIComponent(quarterData.quarterName)}` : '';
+      const res = await fetch(`${API_BASE}/api/subjects/available?trackName=${encodeURIComponent(trackName)}&strandName=${encodeURIComponent(strandName)}&gradeLevel=${encodeURIComponent(gradeLevel)}&schoolYear=${encodeURIComponent(termDetails.schoolYear)}&termName=${encodeURIComponent(termDetails.termName)}${quarterParam ? '&' + quarterParam.substring(1) : ''}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableSubjects(data);
+      } else {
+        console.error('Failed to fetch available subjects');
+        setAvailableSubjects([]);
+      }
+    } catch (err) {
+      console.error('Error fetching available subjects:', err);
+      setAvailableSubjects([]);
+    }
+  };
+
   const handleChangeSubjectForm = (e) => {
     const { name, value } = e.target;
     setSubjectFormData(prev => ({ ...prev, [name]: value }));
@@ -5359,7 +5313,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleAddSubject = async (e) => {
     e.preventDefault();
     setSubjectError('');
-    setIsSubjectSubmitting(true);
     if (!subjectFormData.subjectName || !subjectFormData.trackName || !subjectFormData.strandName || !subjectFormData.gradeLevel) {
       setSubjectError('All fields are required.');
       return;
@@ -5402,8 +5355,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
     } catch (err) {
       setSubjectError('Error adding subject');
-    } finally {
-      setIsSubjectSubmitting(false);
     }
   };
   const handleEditSubject = (subject) => {
@@ -5421,7 +5372,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const handleUpdateSubject = async (e) => {
     e.preventDefault();
     setSubjectError('');
-    setIsSubjectSubmitting(true);
     if (!subjectFormData.subjectName || !subjectFormData.trackName || !subjectFormData.strandName || !subjectFormData.gradeLevel) {
       setSubjectError('All fields are required.');
       return;
@@ -5469,14 +5419,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
     } catch (err) {
       setSubjectError('Error updating subject');
-    } finally {
-      setIsSubjectSubmitting(false);
     }
   };
 
   const handleDeleteSubject = async (subject) => {
     if (termDetails.status === 'archived') return;
-    setDeletingSubjectId(subject._id);
     
     try {
       // First, check dependencies
@@ -5541,8 +5488,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     } catch (err) {
       setSubjectError('Error deleting subject');
       console.error('Error in handleDeleteSubject:', err);
-    } finally {
-      setDeletingSubjectId(null);
     }
   };
 
@@ -5835,39 +5780,22 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     try {
       const createdSubjects = [];
       for (const subject of validSubjects) {
-        // Always include quarterName if available
-        const payload = {
-          ...subject,
-          schoolYear: termDetails.schoolYear,
-          termName: termDetails.termName,
-          ...(quarterData?.quarterName ? { quarterName: quarterData.quarterName } : {})
-        };
-
         const res = await fetch(`${API_BASE}/api/subjects`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({
+            ...subject,
+            schoolYear: termDetails.schoolYear,
+            termName: termDetails.termName
+          })
         });
-
         if (res.ok) {
           const newSubject = await res.json();
           createdSubjects.push(newSubject);
-          continue;
-        }
-
-        // Gracefully skip duplicates or existing subjects instead of failing the whole upload
-        let errorMessage = 'Failed to create subject';
-        try {
+        } else {
           const data = await res.json();
-          errorMessage = data.message || errorMessage;
-        } catch {}
-
-        if (typeof errorMessage === 'string' && errorMessage.toLowerCase().includes('subject already exists')) {
-          // Skip and continue uploading remaining subjects
-          continue;
+          throw new Error(data.message || 'Failed to create subject');
         }
-
-        throw new Error(errorMessage);
       }
       await fetchSubjects();
       // Audit log: Batch Upload Subjects
@@ -6212,46 +6140,42 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
                 const rows = sheetData.slice(headerRowIndex + 1);
                 
                 if (rows.length > 0) {
-                  const normalizedRows = rows.map(row => {
-                    const obj = {};
-                    headers.forEach((header, index) => {
-                      const key = String(header).trim();
-                      obj[key] = String(row[index] || '').trim();
-                    });
-                    return obj;
+                const normalizedRows = rows.map(row => {
+                  const obj = {};
+                  headers.forEach((header, index) => {
+                    const key = String(header).trim();
+                    obj[key] = String(row[index] || '').trim();
                   });
+                  return obj;
+                });
 
-                  if (sheetName === 'Tracks') {
-                    parsedData.tracks = normalizedRows.map(row => ({ trackName: row['Track Name'] }));
-                  } else if (sheetName === 'Strands') {
-                    parsedData.strands = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'] }));
-                  } else if (sheetName === 'Sections') {
-                    parsedData.sections = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], sectionName: row['Section Name'], gradeLevel: row['Grade Level'] }));
-                  } else if (sheetName === 'Subjects') {
-                    parsedData.subjects = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], gradeLevel: row['Grade Level'], subjectName: row['Subject Name'] }));
-                  } else if (sheetName === 'Faculty Assignments') {
-                    parsedData.facultyAssignments = normalizedRows.map(row => ({
-                      facultySchoolID: row['Faculty School ID'] || row['Faculty Sc'] || row['Faculty ID'],
-                      facultyName: row['Faculty Name'] || row['Faculty Na'] || row['Faculty'],
-                      trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
-                      strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
-                      sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
-                      gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
-                      subjectName: row['Subject'] || row['Subject Nam'] || row['Subject Name'],
-                    }));
+                if (sheetName === 'Tracks') {
+                  parsedData.tracks = normalizedRows.map(row => ({ trackName: row['Track Name'] }));
+                } else if (sheetName === 'Strands') {
+                  parsedData.strands = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'] }));
+                } else if (sheetName === 'Sections') {
+                  parsedData.sections = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], sectionName: row['Section Name'], gradeLevel: row['Grade Level'] }));
+                } else if (sheetName === 'Subjects') {
+                  parsedData.subjects = normalizedRows.map(row => ({ trackName: row['Track Name'], strandName: row['Strand Name'], gradeLevel: row['Grade Level'], subjectName: row['Subject Name'] }));
+                } else if (sheetName === 'Faculty Assignments') {
+                  parsedData.facultyAssignments = normalizedRows.map(row => ({
+                    facultySchoolID: row['Faculty School ID'] || row['Faculty Sc'] || row['Faculty ID'],
+                    facultyName: row['Faculty Name'] || row['Faculty Na'] || row['Faculty'],
+                    trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
+                    strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
+                    sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
+                    gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
+                    subjectName: row['Subject'] || row['Subject Nam'] || row['Subject Name'],
+                  }));
                   } else if (sheetName === 'Enrolled Students') {
-                    parsedData.studentAssignments = normalizedRows.map(row => ({
-                      studentSchoolID: row['student_no'] || row['Student School ID'] || row['Student Sc'] || row['Student ID'],
-                      studentName: row['Student Name'] || row['Student Nam'] || row['Student'],
-                      firstName: row['first_name'] || row['First Name'] || row['First Nam'] || row['First'],
-                      lastName: row['last_name'] || row['Last Name'] || row['Last Nam'] || row['Last'],
-                      enrollmentNo: row['enrollment_no'] || row['Enrollment No'] || row['Enrollment'] || '',
-                      enrollmentDate: row['date'] || row['Date'] || '',
-                      gradeLevel: row['grade'] || row['Grade Level'] || row['Grade'] || row['Level'],
-                      trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
-                      strandName: row['strand'] || row['Strand Name'] || row['Strand Nam'] || row['Strand'],
-                      sectionName: row['section'] || row['Section Name'] || row['Section Nam'] || row['Section'],
-                    }));
+                  parsedData.studentAssignments = normalizedRows.map(row => ({
+                    studentSchoolID: row['Student School ID'] || row['Student Sc'] || row['Student ID'],
+                    studentName: row['Student Name'] || row['Student Nam'] || row['Student'],
+                    gradeLevel: row['Grade Level'] || row['Grade'] || row['Level'],
+                    trackName: row['Track Name'] || row['Track Nam'] || row['Track'],
+                    strandName: row['Strand Name'] || row['Strand Nam'] || row['Strand'],
+                    sectionName: row['Section Name'] || row['Section Nam'] || row['Section'],
+                  }));
                   }
                 }
               }
@@ -6465,14 +6389,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       let importedCount = 0;
       let skippedCount = 0;
       const skippedMessages = [];
-      
-      // Separate counters for different import types
-      let tracksImported = 0;
-      let strandsImported = 0;
-      let sectionsImported = 0;
-      let subjectsImported = 0;
-      let facultyImported = 0;
-      let studentsImported = 0;
 
       // Count items that were marked as "already exists" during validation
       const countSkippedItems = (data, validationStatus, type, nameField) => {
@@ -6518,7 +6434,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
           if (res.ok) {
             importedCount++;
-            tracksImported++;
             console.log(`Successfully created track: ${track.trackName}`);
           } else {
             const data = await res.json();
@@ -6553,7 +6468,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
           if (res.ok) {
             importedCount++;
-            strandsImported++;
           } else {
             const data = await res.json();
             if (data.message && data.message.includes('already exists')) {
@@ -6585,7 +6499,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
           if (res.ok) {
             importedCount++;
-            sectionsImported++;
             console.log(`Successfully created section: ${section.sectionName}`);
           } else {
             const data = await res.json();
@@ -6622,7 +6535,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
           if (res.ok) {
             importedCount++;
-            subjectsImported++;
           } else {
             const data = await res.json();
             if (data.message && data.message.includes('already exists')) {
@@ -6636,22 +6548,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
 
       // Import faculty assignments
-      const processedFacultyAssignments = new Set(); // Track processed assignments to prevent duplicates within the same import
-      
       for (const assignment of validFacultyAssignments) {
         try {
-          // Create a unique key for this assignment to prevent duplicates within the same import batch
-          const assignmentKey = `${assignment.facultyName}-${assignment.trackName}-${assignment.strandName}-${assignment.sectionName}`;
-          
-          if (processedFacultyAssignments.has(assignmentKey)) {
-            console.log(`Skipping duplicate faculty assignment within import batch: ${assignment.facultyName}`);
-            skippedCount++;
-            skippedMessages.push(`Faculty assignment for "${assignment.facultyName}" is duplicate within import batch`);
-            continue;
-          }
-          
-          processedFacultyAssignments.add(assignmentKey);
-          
           // Find faculty by name
           const faculty = faculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === assignment.facultyName.toLowerCase());
           if (!faculty) {
@@ -6676,13 +6574,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               sectionName: assignment.sectionName,
               gradeLevel: assignment.gradeLevel,
               subjectName: assignment.subjectName,
-              termId: termDetails._id
+              termId: termDetails._id,
+              quarterName: quarterData ? quarterData.quarterName : undefined
             })
           });
 
           if (res.ok) {
             importedCount++;
-            facultyImported++;
             console.log(`Faculty assignment for ${assignment.facultyName} imported successfully`);
           } else {
             const data = await res.json();
@@ -6698,122 +6596,85 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
       }
 
-      // Import student assignments using bulk upload (same as enrolled students)
-      const assignmentsToCreate = [];
-      const processedStudentAssignments = new Set(); // Track processed assignments to prevent duplicates within the same import
-      
+      // Import student assignments
       for (const assignment of validStudentAssignments) {
-        // Create a unique key for this assignment to prevent duplicates within the same import batch
-        const assignmentKey = `${assignment.studentSchoolID}-${assignment.trackName}-${assignment.strandName}-${assignment.sectionName}`;
-        
-        if (processedStudentAssignments.has(assignmentKey)) {
-          console.log(`Skipping duplicate assignment within import batch: ${assignment.studentName} (${assignment.studentSchoolID})`);
-          skippedCount++;
-          skippedMessages.push(`Student assignment for "${assignment.studentName}" is duplicate within import batch`);
-          continue;
-        }
-        
-        processedStudentAssignments.add(assignmentKey);
-        
-        // Find student by school ID
-        const student = students.find(s => s.schoolID === assignment.studentSchoolID);
-        
-        // Prepare assignment data for bulk upload (same format as enrolled students)
-        const assignmentData = {
-          gradeLevel: assignment.gradeLevel,
-          trackName: assignment.trackName,
-          strandName: assignment.strandName,
-          sectionName: assignment.sectionName,
-          termId: termDetails._id,
-          quarterName: quarterData ? quarterData.quarterName : undefined
-        };
+        try {
+          // Find student by school ID
+          const student = students.find(s => s.schoolID === assignment.studentSchoolID);
           
-        if (student) {
-          // Existing student - send studentId AND schoolID
-          assignmentsToCreate.push({ 
-            ...assignmentData, 
-            studentId: student._id,
-            studentSchoolID: assignment.studentSchoolID // ALWAYS include schoolID
+          const displayName = assignment.firstName && assignment.lastName ? `${assignment.firstName} ${assignment.lastName}` : assignment.studentName;
+          console.log(`Creating student assignment for ${displayName} in ${assignment.trackName}/${assignment.strandName}/${assignment.sectionName}`);
+
+          // Prepare payload based on whether student exists in system
+          let payload;
+          if (student) {
+            // Student exists in system - link to existing account
+            payload = {
+              studentId: student._id,
+              trackName: assignment.trackName,
+              strandName: assignment.strandName,
+              sectionName: assignment.sectionName,
+              gradeLevel: assignment.gradeLevel,
+              termId: termDetails._id,
+              quarterName: quarterData ? quarterData.quarterName : undefined
+            };
+          } else {
+            // Student doesn't exist - create manual entry
+            payload = {
+              studentName: assignment.studentName,
+              studentSchoolID: assignment.studentSchoolID,
+              firstName: assignment.firstName || assignment.studentName.split(' ')[0],
+              lastName: assignment.lastName || assignment.studentName.split(' ').slice(1).join(' '),
+              enrollmentNo: assignment.enrollmentNo || '',
+              enrollmentDate: assignment.enrollmentDate || new Date(),
+              trackName: assignment.trackName,
+              strandName: assignment.strandName,
+              sectionName: assignment.sectionName,
+              gradeLevel: assignment.gradeLevel,
+              termId: termDetails._id,
+              quarterName: quarterData ? quarterData.quarterName : undefined
+            };
+          }
+
+          const res = await fetch(`${API_BASE}/api/student-assignments`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(payload)
           });
-        } else {
-          // New student - send student info directly (same as manual assignment)
-          const payload = { 
-            ...assignmentData, 
-            firstname: assignment.firstName || assignment.studentName?.split(' ')[0] || '',
-            lastname: assignment.lastName || assignment.studentName?.split(' ').slice(1).join(' ') || '',
-            enrollmentNo: assignment.enrollmentNo || `ENR-${assignment.studentSchoolID}`,
-            enrollmentDate: assignment.enrollmentDate || new Date().toISOString()
-          };
-          if (assignment.studentSchoolID) {
-            payload.studentSchoolID = assignment.studentSchoolID;
-          }
-          assignmentsToCreate.push(payload);
-        }
-      }
 
-      // Make single bulk request instead of individual requests (same as enrolled students)
-      if (assignmentsToCreate.length > 0) {
-        console.log(`Making bulk request for ${assignmentsToCreate.length} student assignments`);
-        const res = await fetch(`${API_BASE}/api/student-assignments/bulk`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify(assignmentsToCreate)
-        });
-
-        if (res.ok) {
-          const result = await res.json();
-          console.log('Bulk student assignment creation result:', result);
-          
-          if (result.created) {
-            importedCount += result.created.length;
-            studentsImported += result.created.length;
-            console.log(`Successfully created ${result.created.length} student assignments`);
+          if (res.ok) {
+            importedCount++;
+            console.log(`Student assignment for ${assignment.studentName} imported successfully`);
+          } else {
+            const data = await res.json();
+            console.log(`Failed to import student assignment for ${assignment.studentName}:`, data);
+            if (data.message && (data.message.includes('already exists') || data.message.includes('already enrolled'))) {
+              skippedCount++;
+              skippedMessages.push(`Student assignment for "${assignment.studentName}" already exists`);
+            } else {
+              skippedCount++;
+              skippedMessages.push(`Student assignment for "${assignment.studentName}": ${data.message || 'Unknown error'}`);
+            }
           }
-          
-          if (result.errors && result.errors.length > 0) {
-            console.warn('Some student assignments failed:', result.errors);
-            // Show errors to user but don't fail the entire operation
-            const errorMessages = result.errors.map(err => err.message).join(', ');
-            skippedCount += result.errors.length;
-            skippedMessages.push(...result.errors.map(err => err.message));
-          }
-        } else {
-          const data = await res.json();
-          console.error('Bulk student assignment creation failed:', data);
-          skippedCount += assignmentsToCreate.length;
-          skippedMessages.push(`Failed to create student assignments: ${data.message || 'Unknown error'}`);
+        } catch (err) {
+          console.error('Error importing student assignment:', err);
         }
       }
 
       let alertMessage = `Import process complete.
-Successfully processed ${importedCount} new entries:
-- Tracks: ${tracksImported}
-- Strands: ${strandsImported}
-- Sections: ${sectionsImported}
-- Subjects: ${subjectsImported}
-- Faculty Assignments: ${facultyImported}
-- Student Assignments: ${studentsImported}`;
+Successfully processed ${importedCount} new entries.`;
 
       if (skippedCount > 0) {
         alertMessage += `
-
 Skipped ${skippedCount} duplicate or invalid entries:
+Validation issues (${skippedCount} items):
 - ${skippedMessages.join('\n- ')}`;
       }
 
       window.alert(alertMessage);
-
-      // Refresh data after import
-      fetchStudentAssignments();
-      fetchTracks();
-      fetchStrands();
-      fetchSections();
-      fetchSubjects();
-      fetchFaculties();
-      fetchStudents();
 
       setImportModalOpen(false);
       setImportExcelFile(null);
@@ -6855,7 +6716,7 @@ Skipped ${skippedCount} duplicate or invalid entries:
           },
           body: JSON.stringify({
             action: 'Import Term Data',
-            details: `Imported term data for ${termDetails.schoolYear} ${termDetails.termName} (Tracks: ${tracksImported}, Strands: ${strandsImported}, Sections: ${sectionsImported}, Subjects: ${subjectsImported}, Faculty: ${facultyImported}, Students: ${studentsImported}, Skipped: ${skippedCount})`,
+            details: `Imported term data for ${termDetails.schoolYear} ${termDetails.termName} (Imported: ${importedCount}, Skipped: ${skippedCount})`,
             userRole: 'admin'
           })
         }).catch(() => {});
@@ -7194,10 +7055,7 @@ Skipped ${skippedCount} duplicate or invalid entries:
       <Admin_Navbar />
       
 
-      <div className="flex-1 relative bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
-        {isLocked && (
-          <div className="absolute inset-0 bg-transparent" style={{ zIndex: 9999, pointerEvents: 'auto' }} />
-        )}
+      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
@@ -7215,11 +7073,6 @@ Skipped ${skippedCount} duplicate or invalid entries:
           </div>
           <ProfileMenu />
         </div>
-        {isLocked && (
-          <div className="mb-4 p-3 bg-yellow-100 text-yellow-800 rounded text-center font-semibold">
-            {termDetails?.status === 'archived' ? 'This term is archived. Editing is disabled.' : 'This quarter is inactive. Editing is disabled.'}
-          </div>
-        )}
 
         {/* Back Button */}
         <div className="mb-4">
@@ -7576,7 +7429,7 @@ Skipped ${skippedCount} duplicate or invalid entries:
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
-                        disabled={isLocked}
+                        disabled={termDetails.status === 'archived'}
                       >
                         <option value="">Select Track Type</option>
                         <option value="Academic Track">Academic Track</option>
@@ -7596,7 +7449,7 @@ Skipped ${skippedCount} duplicate or invalid entries:
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="Enter custom track name"
                         required
-                        disabled={isLocked}
+                        disabled={termDetails.status === 'archived'}
                       />
                     </div>
                     )}
@@ -7604,10 +7457,10 @@ Skipped ${skippedCount} duplicate or invalid entries:
                   <div className="space-y-2">
                     <button
                       type="submit"
-                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isLocked || isTrackSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      disabled={isLocked || isTrackSubmitting}
+                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={termDetails.status === 'archived'}
                     >
-                      {isTrackSubmitting ? (isEditMode ? 'Saving...' : 'Adding...') : (isEditMode ? 'Save Changes' : 'Add New Track')}
+                      {isEditMode ? 'Save Changes' : 'Add New Track'}
                     </button>
                     {isEditMode && (
                       <button
@@ -7617,8 +7470,8 @@ Skipped ${skippedCount} duplicate or invalid entries:
                           setEditingTrack(null);
                           setTrackFormData({ trackName: '', trackType: '' });
                         }}
-                        className={`w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isTrackSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        disabled={isLocked || isTrackSubmitting}
+                        className="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
+                        disabled={termDetails.status === 'archived'}
                       >
                         Cancel Edit
                       </button>
@@ -7678,9 +7531,9 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               <div className="inline-flex space-x-2">
                                 <button
                                   onClick={() => handleEditTrack(track)}
-                                  className={`p-1 rounded hover:bg-yellow-100 group relative ${deletingTrackId === track._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  className="p-1 rounded hover:bg-yellow-100 group relative"
                                   title="Edit"
-                                  disabled={termDetails.status === 'archived' || deletingTrackId === track._id}
+                                  disabled={termDetails.status === 'archived'}
                                 >
                                   {/* Heroicons Pencil Square (black) */}
                                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
@@ -7689,21 +7542,14 @@ Skipped ${skippedCount} duplicate or invalid entries:
                                 </button>
                                 <button
                                   onClick={() => handleDeleteTrack(track)}
-                                  className={`p-1 rounded hover:bg-red-100 group relative ${deletingTrackId === track._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  className="p-1 rounded hover:bg-red-100 group relative"
                                   title="Delete"
-                                  disabled={termDetails.status === 'archived' || deletingTrackId === track._id}
+                                  disabled={termDetails.status === 'archived'}
                                 >
                                   {/* Heroicons Trash (red) */}
-                                  {deletingTrackId === track._id ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6 text-red-600 animate-spin">
-                                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
-                                      <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
-                                    </svg>
-                                  ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                    </svg>
-                                  )}
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                  </svg>
                                 </button>
                               </div>
                             </td>
@@ -7878,10 +7724,10 @@ Skipped ${skippedCount} duplicate or invalid entries:
                   <div className="space-y-2">
                     <button
                       type="submit"
-                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' || isStrandSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      disabled={termDetails.status === 'archived' || isStrandSubmitting}
+                      className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={termDetails.status === 'archived'}
                     >
-                      {isStrandSubmitting ? (isStrandEditMode ? 'Saving...' : 'Adding...') : (isStrandEditMode ? 'Save Changes' : 'Add New Strand')}
+                      {isStrandEditMode ? 'Save Changes' : 'Add New Strand'}
                     </button>
                     {isStrandEditMode && (
                       <button
@@ -7890,10 +7736,10 @@ Skipped ${skippedCount} duplicate or invalid entries:
                           setIsStrandEditMode(false);
                           setEditingStrand(null);
                           setStrandFormData({ trackId: '', strandName: '', strandType: '' });
-                          setIsStrandModalOpen(false);
+                                setIsStrandModalOpen(false);
                         }}
-                        className={`w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isStrandSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        disabled={termDetails.status === 'archived' || isStrandSubmitting}
+                        className="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
+                        disabled={termDetails.status === 'archived'}
                       >
                         Cancel Edit
                       </button>
@@ -7960,20 +7806,13 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               </button>
                               <button
                                 onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteStrand(strand)}
-                                className={`p-1 rounded hover:bg-red-100 group relative ${deletingStrandId === strand._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          className="p-1 rounded hover:bg-red-100 group relative"
                                 title="Delete"
-                                disabled={termDetails.status === 'archived' || deletingStrandId === strand._id}
+                                disabled={termDetails.status === 'archived'}
                               >
-                                {deletingStrandId === strand._id ? (
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6 text-red-600 animate-spin">
-                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
-                                    <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
-                                  </svg>
-                                ) : (
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
-                                )}
                               </button>
                             </div>
                           </td>
@@ -8153,10 +7992,10 @@ Skipped ${skippedCount} duplicate or invalid entries:
                     <div className="flex gap-2">
                       <button
                         type="submit"
-                        className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' || isSectionSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        disabled={termDetails.status === 'archived' || isSectionSubmitting}
+                        className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={termDetails.status === 'archived'}
                       >
-                        {isSectionSubmitting ? (isSectionEditMode ? 'Saving...' : 'Adding...') : (isSectionEditMode ? 'Save Changes' : 'Add New Section')}
+                        {isSectionEditMode ? 'Save Changes' : 'Add New Section'}
                       </button>
                       {isSectionEditMode && (
                         <button
@@ -8167,8 +8006,8 @@ Skipped ${skippedCount} duplicate or invalid entries:
                             setSectionFormData({ trackId: '', strandId: '', sectionName: '', sectionCode: '', gradeLevel: '' });
                                 setIsSectionModalOpen(false);
                           }}
-                          className={`flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isSectionSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          disabled={termDetails.status === 'archived' || isSectionSubmitting}
+                          className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
+                          disabled={termDetails.status === 'archived'}
                         >
                           Cancel Edit
                         </button>
@@ -8241,20 +8080,13 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               </button>
                               <button
                                 onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteSection(section)}
-                                className={`p-1 rounded hover:bg-red-100 group relative ${deletingSectionId === section._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className="p-1 rounded hover:bg-red-100 group relative"
                                 title="Delete"
-                                disabled={termDetails.status === 'archived' || deletingSectionId === section._id}
+                                disabled={termDetails.status === 'archived'}
                               >
-                                {deletingSectionId === section._id ? (
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6 text-red-600 animate-spin">
-                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
-                                    <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
-                                  </svg>
-                                ) : (
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
-                                )}
                               </button>
                             </div>
                           </td>
@@ -8493,10 +8325,10 @@ Skipped ${skippedCount} duplicate or invalid entries:
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
-                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' || isSubjectSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            disabled={termDetails.status === 'archived' || isSubjectSubmitting}
+                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={termDetails.status === 'archived'}
                           >
-                            {isSubjectSubmitting ? (isSubjectEditMode ? 'Saving...' : 'Adding...') : (isSubjectEditMode ? 'Save Changes' : 'Add New Subject')}
+                            {isSubjectEditMode ? 'Save Changes' : 'Add New Subject'}
                           </button>
                           {isSubjectEditMode && (
                             <button
@@ -8507,8 +8339,8 @@ Skipped ${skippedCount} duplicate or invalid entries:
                                 setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' });
                                 setIsSubjectModalOpen(false);
                               }}
-                              className={`flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isSubjectSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              disabled={termDetails.status === 'archived' || isSubjectSubmitting}
+                              className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
+                              disabled={termDetails.status === 'archived'}
                             >
                               Cancel Edit
                             </button>
@@ -8560,20 +8392,13 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               </button>
                               <button
                                 onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteSubject(subject)}
-                                className={`p-1 rounded hover:bg-red-100 group relative ${deletingSubjectId === subject._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className="p-1 rounded hover:bg-red-100 group relative"
                                 title="Delete"
-                                disabled={termDetails.status === 'archived' || deletingSubjectId === subject._id}
+                                disabled={termDetails.status === 'archived'}
                               >
-                                {deletingSubjectId === subject._id ? (
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6 text-red-600 animate-spin">
-                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
-                                    <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
-                                  </svg>
-                                ) : (
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
-                                )}
                               </button>
                             </div>
                           </td>
@@ -8909,10 +8734,10 @@ Skipped ${skippedCount} duplicate or invalid entries:
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
-                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' || isFacultySubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            disabled={termDetails.status === 'archived' || isFacultySubmitting}
+                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={termDetails.status === 'archived'}
                           >
-                            {isFacultySubmitting ? (isFacultyEditMode ? 'Saving...' : 'Assigning...') : (isFacultyEditMode ? 'Save Changes' : 'Assign Faculty')}
+                            {isFacultyEditMode ? 'Save Changes' : 'Assign Faculty'}
                           </button>
                           {isFacultyEditMode && (
                             <button
@@ -8924,8 +8749,8 @@ Skipped ${skippedCount} duplicate or invalid entries:
                                 setFacultySearchTerm('');
                                 setIsFacultyModalOpen(false);
                               }}
-                              className={`flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isFacultySubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              disabled={termDetails.status === 'archived' || isFacultySubmitting}
+                              className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
+                              disabled={termDetails.status === 'archived'}
                             >
                               Cancel Edit
                             </button>
@@ -9046,20 +8871,13 @@ Skipped ${skippedCount} duplicate or invalid entries:
                                 </button>
                                 <button
                                   onClick={() => handleDeleteFacultyAssignment(assignment)}
-                                  className="p-1 rounded hover:bg-red-100 group relative"
+                          className="p-1 rounded hover:bg-red-100 group relative"
                                   title="Delete"
-                                  disabled={termDetails.status === 'archived' || deletingAssignmentId === assignment._id}
+                                  disabled={termDetails.status === 'archived'}
                                 >
-                                  {deletingAssignmentId === assignment._id ? (
-                                    <svg className="animate-spin h-6 w-6 text-red-600" viewBox="0 0 24 24">
-                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                                    </svg>
-                                  ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                    </svg>
-                                  )}
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                  </svg>
                                 </button>
                                 {assignment.status === 'archived' && (
                                   <button
@@ -9196,10 +9014,9 @@ Skipped ${skippedCount} duplicate or invalid entries:
                 <div className="flex justify-between items-center mt-5 mb-4">
                   <h4 className="text-2xl font-semibold mb-2">Enrolled Students</h4>
                   <div className="flex gap-2">
-                   
                     <button
                       type="button"
-                      className="bg-blue-900 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 w-fit"
+                      className="bg-blue-900 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       onClick={handleExportStudentAssignments}
                       disabled={termDetails.status === 'archived'}
                     >
@@ -9207,12 +9024,15 @@ Skipped ${skippedCount} duplicate or invalid entries:
                     </button>
                     <button
                       type="button"
-                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       onClick={() => {
                         setIsStudentModalOpen(true);
                         setIsStudentEditMode(false);
                         setEditingStudentAssignment(null);
                         setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+          setIsIrregularStudent(false);
+          setSelectedSubjects([]);
+          setAvailableSubjects([]);
                         setStudentSearchTerm('');
                       }}
                       disabled={termDetails.status === 'archived'}
@@ -9281,7 +9101,7 @@ Skipped ${skippedCount} duplicate or invalid entries:
                 {/* Modal for Assign/Edit Student */}
                 {isStudentModalOpen && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 ">
-                    <div className="bg-white rounded-lg shadow-lg w-[1000px] max-w-lg p-6 relative">
+                    <div className={`bg-white rounded-lg shadow-lg w-[1000px] max-w-lg p-6 relative ${isIrregularStudent ? 'max-h-[90vh] overflow-y-auto' : ''}`}>
                       <button
                         className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
                         onClick={() => {
@@ -9289,6 +9109,9 @@ Skipped ${skippedCount} duplicate or invalid entries:
                           setIsStudentEditMode(false);
                           setEditingStudentAssignment(null);
                           setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+          setIsIrregularStudent(false);
+          setSelectedSubjects([]);
+          setAvailableSubjects([]);
                           setStudentSearchTerm('');
                         }}
                       >
@@ -9309,13 +9132,13 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               accept=".xlsx,.xls"
                               onChange={handleStudentAssignmentExcelFile}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              disabled={isLocked}
+                              disabled={termDetails.status === 'archived'}
                             />
                           </div>
                           <button
                             onClick={downloadStudentAssignmentTemplate}
                             className="bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003366] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2"
-                            disabled={isLocked}
+                            disabled={termDetails.status === 'archived'}
                           >
                             Download Template
                           </button>
@@ -9342,6 +9165,9 @@ Skipped ${skippedCount} duplicate or invalid entries:
                             setIsStudentEditMode(false);
                             setEditingStudentAssignment(null);
                             setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+          setIsIrregularStudent(false);
+          setSelectedSubjects([]);
+          setAvailableSubjects([]);
                             setStudentSearchTerm('');
                           }
                         }}
@@ -9358,7 +9184,6 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               onChange={handleChangeStudentForm}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="Enter enrollment number"
-                              required
                               disabled={termDetails.status === 'archived'}
                             />
                           </div>
@@ -9371,7 +9196,6 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               value={studentFormData.enrollmentDate || ''}
                               onChange={handleChangeStudentForm}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              required
                               disabled={termDetails.status === 'archived'}
                             />
                           </div>
@@ -9386,7 +9210,6 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               onChange={handleSchoolIdChange}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="YY-00000 or any ID"
-                              required
                               disabled={termDetails.status === 'archived'}
                             />
                           </div>
@@ -9402,10 +9225,9 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               onChange={handleChangeStudentForm}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="Enter last name"
-                              required
                               disabled={termDetails.status === 'archived'}
                             />
-                          </div>
+                                    </div>
                           <div>
                             <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
                             <input
@@ -9416,7 +9238,6 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               onChange={handleChangeStudentForm}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="Enter first name"
-                              required
                               disabled={termDetails.status === 'archived'}
                             />
                           </div>
@@ -9478,8 +9299,6 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               <option value="Grade 12">Grade 12</option>
                             </select>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label htmlFor="sectionNameStudent" className="block text-sm font-medium text-gray-700 mb-1">Section</label>
                             <select
@@ -9500,13 +9319,90 @@ Skipped ${skippedCount} duplicate or invalid entries:
                             </select>
                           </div>
                         </div>
+                        
+                        {/* Irregular Student Checkbox */}
+                        <div className="mt-4 p-3 bg-gray-50 rounded-lg border">
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isIrregularStudent}
+                              onChange={(e) => setIsIrregularStudent(e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                              disabled={termDetails.status === 'archived'}
+                            />
+                            <span className="text-sm font-medium text-gray-700">
+                              Mark as Irregular Student
+                            </span>
+                          </label>
+                          <p className="text-xs text-gray-500 mt-1 ml-6">
+                            Check this if the student has a non-standard curriculum (failed subjects, shifted course, etc.)
+                          </p>
+                        </div>
+                        
+                        {/* Subject Selection for Irregular Students */}
+                        {isIrregularStudent && (
+                          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <h4 className="text-sm font-semibold text-blue-800 mb-3">
+                              Select Subjects for Irregular Student
+                            </h4>
+                            
+                            {availableSubjects.length > 0 ? (
+                              <div className="max-h-48 overflow-y-auto">
+                                <div className="mb-3">
+                                  <label className="flex items-center space-x-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedSubjects.length === availableSubjects.length && availableSubjects.length > 0}
+                                      onChange={(e) => handleSelectAllSubjects(e.target.checked)}
+                                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                                    />
+                                    <span className="text-sm font-medium text-blue-700">
+                                      Select All Subjects ({availableSubjects.length})
+                                    </span>
+                                  </label>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  {availableSubjects.map((subject) => (
+                                    <label key={subject._id} className="flex items-center space-x-2 cursor-pointer p-2 hover:bg-blue-100 rounded">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedSubjects.some(s => s.subjectId === subject._id)}
+                                        onChange={(e) => handleSubjectSelection(subject._id, e.target.checked)}
+                                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                                      />
+                                      <span className="text-sm text-gray-700">
+                                        {subject.subjectName}
+                                      </span>
+                                    </label>
+                                  ))}
+                                </div>
+                                
+                                <div className="mt-3 pt-3 border-t border-blue-200">
+                                  <p className="text-xs text-blue-600">
+                                    Selected: {selectedSubjects.length} of {availableSubjects.length} subjects
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-center py-4">
+                                {studentFormData.trackId && studentFormData.strandId && studentFormData.gradeLevel ? (
+                                  <p className="text-sm text-gray-500">No subjects available for the selected track, strand, and grade level.</p>
+                                ) : (
+                                  <p className="text-sm text-gray-500">Please select track, strand, and grade level to view available subjects.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
                         <div className="flex gap-2 mt-4">
                           <button
                             type="submit"
-                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' || isStudentSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            disabled={termDetails.status === 'archived' || isStudentSubmitting}
+                            className={`flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${termDetails.status === 'archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={termDetails.status === 'archived'}
                           >
-                            {isStudentSubmitting ? (isStudentEditMode ? 'Saving...' : 'Assigning...') : (isStudentEditMode ? 'Save Changes' : 'Assign Enrolled Student')}
+                            {isStudentEditMode ? 'Save Changes' : 'Assign Enrolled Student'}
                           </button>
                           {isStudentEditMode && (
                             <button
@@ -9515,11 +9411,14 @@ Skipped ${skippedCount} duplicate or invalid entries:
                                 setIsStudentEditMode(false);
                                 setEditingStudentAssignment(null);
                                 setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+          setIsIrregularStudent(false);
+          setSelectedSubjects([]);
+          setAvailableSubjects([]);
                                 setStudentSearchTerm('');
                                 setIsStudentModalOpen(false);
                               }}
-                              className={`flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md ${isStudentSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              disabled={termDetails.status === 'archived' || isStudentSubmitting}
+                              className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
+                              disabled={termDetails.status === 'archived'}
                             >
                               Cancel Edit
                             </button>
@@ -9568,6 +9467,7 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               <th className="p-3 border">Track Name</th>
                               <th className="p-3 border">Strand Name</th>
                               <th className="p-3 border">Section Name</th>
+                              <th className="p-3 border">Enrollment Type</th>
                               <th className="p-3 border">Status</th>
                             </tr>
                           </thead>
@@ -9594,6 +9494,7 @@ Skipped ${skippedCount} duplicate or invalid entries:
                                   <td className="p-3 border">{trackName}</td>
                                   <td className="p-3 border">{strandName}</td>
                                   <td className="p-3 border">{sectionName}</td>
+                                  <td className="p-3 border">Regular</td>
                                   <td className="p-3 border">
                                     <span className={`px-2 py-1 rounded text-xs ${isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                       {message}
@@ -9646,6 +9547,7 @@ Skipped ${skippedCount} duplicate or invalid entries:
                         <th className="p-3 border">Strand</th>
                         <th className="p-3 border">Section</th>
                         <th className="p-3 border">Grade</th>
+                        <th className="p-3 border">Enrollment Type</th>
                         <th className="p-3 border">Status</th>
                         <th className="p-3 border">Actions</th>
                       </tr>
@@ -9653,13 +9555,24 @@ Skipped ${skippedCount} duplicate or invalid entries:
                     <tbody>
                       {filteredStudentAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="10" className="p-3 border text-center text-gray-500">
+                          <td colSpan="11" className="p-3 border text-center text-gray-500">
                             No student assignments found.
                           </td>
                         </tr>
                       ) : (
                         paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).slice.map((assignment) => {
                           const student = students.find(s => s._id === assignment.studentId);
+                          
+                          // Debug logging for enrollment type
+                          console.log('🔍 Assignment Debug:', {
+                            studentId: assignment.studentId,
+                            studentName: assignment.studentName,
+                            enrollmentType: assignment.enrollmentType,
+                            EnrollmentType: assignment.EnrollmentType,
+                            allFields: Object.keys(assignment),
+                            fullAssignment: assignment
+                          });
+                          
                           return (
                             <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
                               <td className="p-3 border">{assignment.enrollmentNo || 'N/A'}</td>
@@ -9678,6 +9591,32 @@ Skipped ${skippedCount} duplicate or invalid entries:
                               <td className="p-3 border">{assignment.strandName}</td>
                               <td className="p-3 border">{assignment.sectionName}</td>
                               <td className="p-3 border">{assignment.gradeLevel}</td>
+                              <td className="p-3 border">
+                                {(() => {
+                                  const enrollmentTypeValue = assignment.enrollmentType || assignment.EnrollmentType || 'Regular';
+                                  const isIrregular = (assignment.enrollmentType === 'Irregular' || assignment.EnrollmentType === 'Irregular');
+                                  
+                                  console.log('🎯 Enrollment Type Display Debug:', {
+                                    studentId: assignment.studentId,
+                                    enrollmentType: assignment.enrollmentType,
+                                    EnrollmentType: assignment.EnrollmentType,
+                                    finalValue: enrollmentTypeValue,
+                                    isIrregular: isIrregular,
+                                    condition1: assignment.enrollmentType === 'Irregular',
+                                    condition2: assignment.EnrollmentType === 'Irregular'
+                                  });
+                                  
+                                  return (
+                                    <button
+                                      onClick={() => handleViewStudentSubjects(assignment)}
+                                      className={`px-2 py-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity ${isIrregular ? 'bg-orange-100 text-orange-800 hover:bg-orange-200' : 'bg-blue-100 text-blue-800 hover:bg-blue-200'}`}
+                                      title="Click to view enrolled subjects"
+                                    >
+                                      {enrollmentTypeValue}
+                                    </button>
+                                  );
+                                })()}
+                              </td>
                               <td className="p-3 border">
                                 {termDetails.status === 'archived' ? (
                                   <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
@@ -9703,20 +9642,13 @@ Skipped ${skippedCount} duplicate or invalid entries:
                                   </button>
                                   <button
                                     onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteStudentAssignment(assignment)}
-                                    className={`p-1 rounded hover:bg-red-100 group relative ${deletingStudentAssignmentId === assignment._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    className="p-1 rounded hover:bg-red-100 group relative"
                                     title="Delete"
-                                    disabled={termDetails.status === 'archived' || deletingStudentAssignmentId === assignment._id}
+                                    disabled={termDetails.status === 'archived'}
                                   >
-                                    {deletingStudentAssignmentId === assignment._id ? (
-                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6 text-red-600 animate-spin">
-                                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
-                                        <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
-                                      </svg>
-                                    ) : (
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
-                                      </svg>
-                                    )}
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                    </svg>
                                   </button>
                                   {assignment.status === 'archived' && (
                                     <button
@@ -10073,6 +10005,7 @@ Skipped ${skippedCount} duplicate or invalid entries:
                         <th className="p-2 border">Strand Name</th>
                         <th className="p-2 border">Section Name</th>
                         <th className="p-2 border">Grade Level</th>
+                        <th className="p-2 border">Enrollment Type</th>
                         <th className="p-2 border">Status</th>
                       </tr>
                     </thead>
@@ -10085,6 +10018,7 @@ Skipped ${skippedCount} duplicate or invalid entries:
                           <td className="p-2 border">{assignment.strandName}</td>
                           <td className="p-2 border">{assignment.sectionName}</td>
                           <td className="p-2 border">{assignment.gradeLevel}</td>
+                          <td className="p-2 border">Regular</td>
                           <td className="p-2 border flex items-center gap-1">
                             {importValidationStatus.studentAssignments[index]?.valid ? (
                               <span className="text-green-600">✓ Valid</span>
@@ -10288,6 +10222,95 @@ Skipped ${skippedCount} duplicate or invalid entries:
           </div>
         </div>
       )}
+
+      {/* Student Subjects Modal */}
+      {isSubjectsModalOpen && selectedStudentForSubjects && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-lg shadow-lg w-[800px] max-w-4xl max-h-[90vh] overflow-y-auto p-6 relative">
+            <button
+              onClick={handleCloseSubjectsModal}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl font-bold"
+            >
+              ×
+            </button>
+            
+            <h3 className="text-xl font-semibold mb-4">
+              Enrolled Subjects - {selectedStudentForSubjects.firstname || selectedStudentForSubjects.studentName?.split(' ')[0] || 'N/A'} {selectedStudentForSubjects.lastname || selectedStudentForSubjects.studentName?.split(' ').slice(-1)[0] || 'N/A'}
+            </h3>
+            
+            <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="font-medium text-gray-600">Student ID:</span>
+                  <p>{selectedStudentForSubjects.schoolID || selectedStudentForSubjects.studentSchoolID || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Grade Level:</span>
+                  <p>{selectedStudentForSubjects.gradeLevel || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Track:</span>
+                  <p>{selectedStudentForSubjects.trackName || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Strand:</span>
+                  <p>{selectedStudentForSubjects.strandName || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Section:</span>
+                  <p>{selectedStudentForSubjects.sectionName || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Enrollment Type:</span>
+                  <p>
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      (selectedStudentForSubjects.enrollmentType === 'Irregular' || selectedStudentForSubjects.EnrollmentType === 'Irregular') 
+                        ? 'bg-orange-100 text-orange-800' 
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {selectedStudentForSubjects.enrollmentType || selectedStudentForSubjects.EnrollmentType || 'Regular'}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="border rounded-lg">
+              <div className="bg-gray-50 px-4 py-3 border-b">
+                <h4 className="font-medium text-gray-900">Enrolled Subjects</h4>
+              </div>
+              
+              <div className="p-4">
+                {selectedStudentForSubjects.subjects && selectedStudentForSubjects.subjects.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {selectedStudentForSubjects.subjects.map((subject, index) => (
+                      <div key={index} className="flex items-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                        <span className="text-sm font-medium text-blue-900">{subject.subjectName}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <div className="text-4xl mb-2">📚</div>
+                    <p className="text-lg font-medium">No subjects enrolled</p>
+                    <p className="text-sm">This student has no subjects assigned yet.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={handleCloseSubjectsModal}
+                className="bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -10359,14 +10382,15 @@ const validateStrandsImport = async (strandsToValidate, existingStrands, termDet
       continue;
     }
     
-    // Check if strand already exists in the current term (across all quarters)
+    // Check if strand already exists in the current term and quarter
     // Allow importing strands that exist in other quarters of the same term
     const existingStrand = existingStrands.find(s => 
       s.trackName.toLowerCase() === strand.trackName.toLowerCase() && 
-      s.strandName.toLowerCase() === strand.strandName.toLowerCase()
+      s.strandName.toLowerCase() === strand.strandName.toLowerCase() &&
+      s.quarterName === termDetails.quarterName
     );
     if (existingStrand) {
-      // Strand already exists in current term - skip but don't mark as invalid
+      // Strand already exists in current quarter - skip but don't mark as invalid
       results.push({ valid: true, message: `Strand '${strand.strandName}' already exists - will be skipped` });
       continue;
     }
@@ -10396,16 +10420,17 @@ const validateSectionsImport = async (sectionsToValidate, existingSections, term
       continue;
     }
     
-    // Check if section already exists in the current term (across all quarters)
+    // Check if section already exists in the current term and quarter
     // Allow importing sections that exist in other quarters of the same term
     const existingSection = existingSections.find(s => 
       s.trackName.toLowerCase() === section.trackName.toLowerCase() && 
       s.strandName.toLowerCase() === section.strandName.toLowerCase() &&
       s.sectionName.toLowerCase() === section.sectionName.toLowerCase() &&
-      s.gradeLevel.toLowerCase() === section.gradeLevel.toLowerCase()
+      s.gradeLevel.toLowerCase() === section.gradeLevel.toLowerCase() &&
+      s.quarterName === termDetails.quarterName
     );
     if (existingSection) {
-      // Section already exists in current term - skip but don't mark as invalid
+      // Section already exists in current quarter - skip but don't mark as invalid
       results.push({ valid: true, message: `Section '${section.sectionName}' already exists - will be skipped` });
       continue;
     }
@@ -10521,15 +10546,21 @@ const validateFacultyAssignmentsImport = async (assignmentsToValidate, existingA
 };
 const validateStudentAssignmentsImport = async (assignmentsToValidate, existingAssignments, allStudents, allTracks, allStrands, allSections, termDetails, registrants) => {
   const results = [];
-  const activeAssignments = existingAssignments.filter(a => a.status === 'active' && a.schoolYear === termDetails.schoolYear && a.termName === termDetails.termName);
+  // Normalize existing assignments to ensure consistent fields
+  const activeAssignments = existingAssignments
+    .filter(a => a.status === 'active' && a.schoolYear === termDetails.schoolYear && a.termName === termDetails.termName)
+    .map(a => ({
+      ...a,
+      _normStudentSchoolID: String(a.studentSchoolID || a.schoolID || '').trim(),
+      _normTrack: String(a.trackName || '').toLowerCase().trim(),
+      _normStrand: String(a.strandName || '').toLowerCase().trim(),
+      _normSection: String(a.sectionName || '').toLowerCase().trim(),
+    }));
   const activeStudents = allStudents.filter(s => !s.isArchived);
   // Don't check for existing tracks/strands/sections since they'll be created during import
 
   for (const assignment of assignmentsToValidate) {
-    // Handle both old format (studentName) and new format (firstName + lastName)
-    const studentName = assignment.studentName || `${assignment.firstName || ''} ${assignment.lastName || ''}`.trim();
-    
-    if (!assignment.studentSchoolID || !studentName || !assignment.trackName || !assignment.strandName || !assignment.sectionName || !assignment.gradeLevel) {
+    if (!assignment.studentSchoolID || !assignment.studentName || !assignment.trackName || !assignment.strandName || !assignment.sectionName || !assignment.gradeLevel) {
       results.push({ valid: false, message: 'Missing required fields' });
       continue;
     }
@@ -10561,7 +10592,24 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
       
       // Check for duplicate assignment (only if student exists)
       const exists = activeAssignments.some(ea =>
-        ea.studentId === student._id &&
+        String(ea.studentId) === String(student._id) &&
+        ea._normTrack === assignment.trackName.toLowerCase() &&
+        ea._normStrand === assignment.strandName.toLowerCase() &&
+        ea._normSection === assignment.sectionName.toLowerCase()
+      );
+      if (exists) {
+        // Student assignment already exists - skip but don't mark as invalid
+        results.push({ valid: true, message: `Student assignment for "${assignment.studentName}" already exists - will be skipped` });
+        continue;
+      }
+    } else {
+      // Student doesn't exist in system - this is allowed for enrollment data
+      console.log(`Student with School ID '${assignment.studentSchoolID}' not found - will be created as new student`);
+
+      // For new students, check if there's already a manual assignment with the same details
+      const exists = activeAssignments.some(ea =>
+        !ea.studentId && // Manual assignment (no linked student)
+        ea.studentSchoolID === assignment.studentSchoolID &&
         ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
         ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
         ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
@@ -10569,34 +10617,6 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
       if (exists) {
         // Student assignment already exists - skip but don't mark as invalid
         results.push({ valid: true, message: `Student assignment for "${assignment.studentName}" already exists - will be skipped` });
-        continue;
-      }
-      
-      // Additional check: prevent duplicate by schoolID even for existing students
-      const existsBySchoolID = activeAssignments.some(ea =>
-        ea.studentSchoolID === assignment.studentSchoolID &&
-        ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
-        ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
-        ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
-      );
-      if (existsBySchoolID) {
-        results.push({ valid: true, message: `Student assignment for "${assignment.studentName}" (${assignment.studentSchoolID}) already exists - will be skipped` });
-        continue;
-      }
-    } else {
-      // Student doesn't exist in system - this is allowed for enrollment data
-      console.log(`Student with School ID '${assignment.studentSchoolID}' not found - will be created as new student`);
-      
-      // For new students, check if there's already a manual assignment with the same details
-      const exists = activeAssignments.some(ea =>
-        ea.studentSchoolID === assignment.studentSchoolID &&
-        ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
-        ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
-        ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
-      );
-      if (exists) {
-        // Student assignment already exists - skip but don't mark as invalid
-        results.push({ valid: true, message: `Student assignment for "${assignment.studentName}" (${assignment.studentSchoolID}) already exists - will be skipped` });
         continue;
       }
     }

@@ -398,4 +398,34 @@ router.patch('/quarter/:quarterName/schoolyear/:schoolYear', async (req, res) =>
   }
 });
 
+// Get available subjects for irregular student assignment
+router.get('/available', async (req, res) => {
+  try {
+    const { trackName, strandName, gradeLevel, schoolYear, termName, quarterName } = req.query;
+    
+    if (!trackName || !strandName || !gradeLevel || !schoolYear || !termName) {
+      return res.status(400).json({ message: 'trackName, strandName, gradeLevel, schoolYear, and termName are required' });
+    }
+
+    const filter = {
+      trackName,
+      strandName,
+      gradeLevel,
+      schoolYear,
+      termName,
+      status: 'active'
+    };
+
+    if (quarterName) {
+      filter.quarterName = quarterName;
+    }
+
+    const subjects = await Subject.find(filter);
+    res.json(subjects);
+  } catch (error) {
+    console.error('Error fetching available subjects:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 export default router; 
