@@ -1,3 +1,7 @@
+// Import logo images properly for Vite processing
+import logoImage from '../assets/logo/San_Juan_De_Dios_Hospital_seal.png';
+import footerLogoImage from '../assets/logo/images.png';
+
 /**
  * Convert image file to base64 data URL
  * @param {string} imagePath - Path to the image file
@@ -25,9 +29,8 @@ export const imageToBase64 = async (imagePath) => {
  * @returns {Promise<string>} Base64 data URL of the logo
  */
 export const getLogoBase64 = async () => {
-  // Try to get the logo from the public assets
-  const logoPath = '/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png';
-  return await imageToBase64(logoPath);
+  // Use the imported logo image which Vite will process correctly
+  return await imageToBase64(logoImage);
 };
 
 /**
@@ -35,7 +38,6 @@ export const getLogoBase64 = async () => {
  * @returns {Promise<string>} Base64 data URL of the footer logo
  */
 export const getFooterLogoBase64 = async () => {
-  // Try to get the footer logo from the public assets
-  const logoPath = '/src/assets/logo/images.png';
-  return await imageToBase64(logoPath);
+  // Use the imported footer logo image which Vite will process correctly
+  return await imageToBase64(footerLogoImage);
 };

@@ -2437,7 +2437,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           <div class="header">
             <div class="logo-section">
               <div class="logo">
-                <img src="${logoBase64 || '/src/assets/logo/San_Juan_De_Dios_Hospital_seal.png'}" alt="San Juan de Dios Hospital Seal" />
+                <img src="${logoBase64}" alt="San Juan de Dios Hospital Seal" />
               </div>
             </div>
             <div class="institution-info">
@@ -2678,7 +2678,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             </div>
             <div class="footer-right">
               <div class="footer-logo"> 
-                <img src="${footerLogoBase64 || '/src/assets/logo/images.png'}" alt="San Juan de Dios Hospital Seal" />
+                <img src="${footerLogoBase64}" alt="San Juan de Dios Hospital Seal" />
               </div>
             </div>
           </div>
