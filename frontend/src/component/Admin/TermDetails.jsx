@@ -4,11 +4,7 @@ import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import { getLogoBase64, getFooterLogoBase64 } from '../../utils/imageToBase64';
 
-<<<<<<< Updated upstream
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-=======
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
->>>>>>> Stashed changes
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -6554,31 +6550,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       // Import faculty assignments
       for (const assignment of validFacultyAssignments) {
         try {
-<<<<<<< Updated upstream
           // Find faculty by name
           const faculty = faculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === assignment.facultyName.toLowerCase());
-=======
-          // Create a unique key for this assignment to prevent duplicates within the same import batch
-          const assignmentKey = `${assignment.facultyName}-${assignment.trackName}-${assignment.strandName}-${assignment.sectionName}-${assignment.subjectName}`;
-          
-          if (processedFacultyAssignments.has(assignmentKey)) {
-            console.log(`Skipping duplicate faculty assignment within import batch: ${assignment.facultyName}`);
-            skippedCount++;
-            skippedMessages.push(`Faculty assignment for "${assignment.facultyName}" is duplicate within import batch`);
-            continue;
-          }
-          
-          processedFacultyAssignments.add(assignmentKey);
-          
-          // Prefer finding faculty by school ID, fallback to name
-          let faculty = null;
-          if (assignment.facultySchoolID) {
-            faculty = faculties.find(f => f.schoolID === assignment.facultySchoolID);
-          }
-          if (!faculty) {
-            faculty = faculties.find(f => `${f.firstname} ${f.lastname}`.toLowerCase() === assignment.facultyName.toLowerCase());
-          }
->>>>>>> Stashed changes
           if (!faculty) {
             skippedCount++;
             skippedMessages.push(`Faculty "${assignment.facultyName}" not found`);
@@ -6624,53 +6597,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
 
       // Import student assignments
-<<<<<<< Updated upstream
       for (const assignment of validStudentAssignments) {
         try {
-=======
-      const processedStudentAssignments = new Set(); // Track processed assignments to prevent duplicates within the same import
-      // Fetch latest student assignments for this term to avoid duplicates on repeated imports
-      let currentAssignmentsForTerm = [];
-      try {
-        const token = localStorage.getItem('token');
-        const resCurr = await fetch(`${API_BASE}/api/student-assignments?termId=${termDetails._id}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (resCurr.ok) {
-          currentAssignmentsForTerm = await resCurr.json();
-        }
-      } catch (_) {}
-      
-      for (const assignment of validStudentAssignments) {
-        try {
-          // Create a unique key for this assignment to prevent duplicates within the same import batch
-          const assignmentKey = `${assignment.studentSchoolID}-${assignment.trackName}-${assignment.strandName}-${assignment.sectionName}`;
-          
-          if (processedStudentAssignments.has(assignmentKey)) {
-            console.log(`Skipping duplicate assignment within import batch: ${assignment.studentName} (${assignment.studentSchoolID})`);
-            skippedCount++;
-            skippedMessages.push(`Student assignment for "${assignment.studentName}" is duplicate within import batch`);
-            continue;
-          }
-          
-          processedStudentAssignments.add(assignmentKey);
-          
-          // Client-side duplication check against current system data to avoid double posts on repeated imports
-          const existsInSystem = (currentAssignmentsForTerm || []).some(ea =>
-            String(ea.termId) === String(termDetails._id) &&
-            String(ea.studentSchoolID || ea.schoolID || '').trim() === String(assignment.studentSchoolID || '').trim() &&
-            String(ea.trackName || '').toLowerCase().trim() === String(assignment.trackName || '').toLowerCase().trim() &&
-            String(ea.strandName || '').toLowerCase().trim() === String(assignment.strandName || '').toLowerCase().trim() &&
-            String(ea.sectionName || '').toLowerCase().trim() === String(assignment.sectionName || '').toLowerCase().trim()
-          );
-          if (existsInSystem) {
-            // Mark as duplicate and skip creating; also reflect as 'invalid' in validation if needed
-            skippedCount++;
-            skippedMessages.push(`Student assignment for "${assignment.studentName}" (${assignment.studentSchoolID}) already exists`);
-            continue;
-          }
-          
->>>>>>> Stashed changes
           // Find student by school ID
           const student = students.find(s => s.schoolID === assignment.studentSchoolID);
           
@@ -10674,39 +10602,17 @@ const validateStudentAssignmentsImport = async (assignmentsToValidate, existingA
         results.push({ valid: true, message: `Student assignment for "${assignment.studentName}" already exists - will be skipped` });
         continue;
       }
-<<<<<<< Updated upstream
-=======
-      
-      // Additional check: prevent duplicate by schoolID even for existing students
-      const existsBySchoolID = activeAssignments.some(ea =>
-        ea._normStudentSchoolID === String(assignment.studentSchoolID).trim() &&
-        ea._normTrack === assignment.trackName.toLowerCase() &&
-        ea._normStrand === assignment.strandName.toLowerCase() &&
-        ea._normSection === assignment.sectionName.toLowerCase()
-      );
-      if (existsBySchoolID) {
-        results.push({ valid: true, message: `Student assignment for "${assignment.studentName}" (${assignment.studentSchoolID}) already exists - will be skipped` });
-        continue;
-      }
->>>>>>> Stashed changes
     } else {
       // Student doesn't exist in system - this is allowed for enrollment data
       console.log(`Student with School ID '${assignment.studentSchoolID}' not found - will be created as new student`);
 
       // For new students, check if there's already a manual assignment with the same details
       const exists = activeAssignments.some(ea =>
-<<<<<<< Updated upstream
         !ea.studentId && // Manual assignment (no linked student)
         ea.studentSchoolID === assignment.studentSchoolID &&
         ea.trackName.toLowerCase() === assignment.trackName.toLowerCase() &&
         ea.strandName.toLowerCase() === assignment.strandName.toLowerCase() &&
         ea.sectionName.toLowerCase() === assignment.sectionName.toLowerCase()
-=======
-        ea._normStudentSchoolID === String(assignment.studentSchoolID).trim() &&
-        ea._normTrack === assignment.trackName.toLowerCase() &&
-        ea._normStrand === assignment.strandName.toLowerCase() &&
-        ea._normSection === assignment.sectionName.toLowerCase()
->>>>>>> Stashed changes
       );
       if (exists) {
         // Student assignment already exists - skip but don't mark as invalid

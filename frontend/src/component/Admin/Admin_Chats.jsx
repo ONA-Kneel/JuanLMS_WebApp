@@ -95,6 +95,7 @@ export default function Admin_Chats() {
 
   // Add loading state for chat list
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   // Highlight chats with new/unread messages
   const [highlightedChats, setHighlightedChats] = useState(() => {
     try { return JSON.parse(localStorage.getItem('highlightedChats_admin') || '{}'); } catch { return {}; }
@@ -122,12 +123,12 @@ export default function Admin_Chats() {
   const { socket: ctxSocket, isConnected } = useSocket();
   const chatListRef = useRef(null);
   const fetchedGroupPreviewIds = useRef(new Set());
-  const missingUserIdsRef = useRef(new Set());
   // Live refs to avoid stale closures in socket handlers
   const recentChatsRef = useRef([]);
   const selectedChatRef = useRef(null);
   const isGroupChatRef = useRef(false);
   const usersRef = useRef([]);
+  const lastSendRef = useRef(0);
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
@@ -144,9 +145,6 @@ export default function Admin_Chats() {
   // Fetch a single user by id and merge to cache/state
   const fetchUserIfMissing = async (userId) => {
     if (!userId) return null;
-    const isValidObjectId = typeof userId === 'string' && /^[a-f\d]{24}$/i.test(userId);
-    if (!isValidObjectId) return null;
-    if (missingUserIdsRef.current.has(userId)) return null;
     const existing = users.find(u => u._id === userId);
     if (existing) return existing;
     try {
@@ -164,7 +162,7 @@ export default function Admin_Chats() {
         return fetched;
       }
     } catch (e) {
-      try { missingUserIdsRef.current.add(userId); } catch {}
+      // ignore
     }
     return null;
   };
@@ -456,7 +454,7 @@ export default function Admin_Chats() {
           if (messages.length > 0) {
             // Find the user object
             let otherUser = users.find(u => u._id === otherUserId);
-            if (!otherUser && !(missingUserIdsRef.current && missingUserIdsRef.current.has(otherUserId))) {
+            if (!otherUser) {
               // fetch minimal user profile if missing to avoid "Unknown User"
               // eslint-disable-next-line no-await-in-loop
               otherUser = await fetchUserIfMissing(otherUserId);
@@ -511,14 +509,11 @@ export default function Admin_Chats() {
   // Clean up any corrupted data in recentChats
   useEffect(() => {
     if (recentChats.length > 0) {
-      const cleanedChats = recentChats.filter(chat => {
-        const validId = chat && chat._id && /^[a-f\d]{24}$/i.test(chat._id);
-        return (
-          validId && chat.firstname && chat.lastname &&
-          chat.firstname !== 'undefined' && chat.lastname !== 'undefined' &&
-          chat.firstname !== undefined && chat.lastname !== undefined
-        );
-      });
+      const cleanedChats = recentChats.filter(chat => 
+        chat && chat._id && chat.firstname && chat.lastname && 
+        chat.firstname !== 'undefined' && chat.lastname !== 'undefined' &&
+        chat.firstname !== undefined && chat.lastname !== undefined
+      );
       
       if (cleanedChats.length !== recentChats.length) {
         setRecentChats(cleanedChats);
@@ -534,14 +529,11 @@ export default function Admin_Chats() {
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          const cleaned = parsed.filter(chat => {
-            const validId = chat && chat._id && /^[a-f\d]{24}$/i.test(chat._id);
-            return (
-              validId && chat.firstname && chat.lastname &&
-              chat.firstname !== 'undefined' && chat.lastname !== 'undefined' &&
-              chat.firstname !== undefined && chat.lastname !== undefined
-            );
-          });
+          const cleaned = parsed.filter(chat => 
+            chat && chat._id && chat.firstname && chat.lastname && 
+            chat.firstname !== 'undefined' && chat.lastname !== 'undefined' &&
+            chat.firstname !== undefined && chat.lastname !== undefined
+          );
           if (cleaned.length !== parsed.length) {
             localStorage.setItem("recentChats_admin", JSON.stringify(cleaned));
             setRecentChats(cleaned);
@@ -561,10 +553,7 @@ export default function Admin_Chats() {
     const fetchMessages = async () => {
       if (!selectedChat) return;
       try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
+        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`);
         setMessages((prev) => {
           const newMessages = { ...prev, [selectedChat._id]: res.data };
           
@@ -606,19 +595,9 @@ export default function Admin_Chats() {
   const handleSendMessage = async () => {
     if (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0)) return;
     if (!selectedChat) return;
+    if (isSending) return;
 
-<<<<<<< Updated upstream
-    const formData = new FormData();
-    formData.append("senderId", currentUserId);
-    formData.append("receiverId", selectedChat._id);
-    formData.append("message", newMessage);
-    if (selectedFile) {
-      formData.append("file", selectedFile);
-    }
-
-=======
     setIsSending(true);
->>>>>>> Stashed changes
     try {
       const token = localStorage.getItem("token");
 
@@ -689,17 +668,22 @@ export default function Admin_Chats() {
         bumpChatToTop(selectedChat);
       }
 
-      // Clear inputs
       setNewMessage("");
       setSelectedFiles([]);
     } catch (err) {
       console.error("Error sending message:", err);
+    } finally {
+      setIsSending(false);
     }
   };
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      if (isSending) return;
+      const now = Date.now();
+      if (now - (lastSendRef.current || 0) < 400) return;
+      lastSendRef.current = now;
       if (selectedChat && selectedChat.isGroup) {
         handleSendGroupMessage();
       } else {
@@ -746,41 +730,6 @@ export default function Admin_Chats() {
     
     setShowNewChatModal(false);
     setUserSearchTerm("");
-  };
-
-  // Group consecutive attachment-only messages from the same sender into a single render group
-  const groupMessagesForDisplay = (rawList) => {
-    const list = Array.isArray(rawList) ? rawList : [];
-    const groups = [];
-    for (let i = 0; i < list.length; i += 1) {
-      const msg = list[i];
-      const isAttachmentOnly = !!msg.fileUrl && (!msg.message || msg.message.trim() === "");
-      if (!isAttachmentOnly) {
-        groups.push({ type: 'message', msg });
-        continue;
-      }
-      // Start a new attachment group
-      const attachments = [msg];
-      let j = i + 1;
-      while (j < list.length) {
-        const next = list[j];
-        const nextIsAttachmentOnly = !!next.fileUrl && (!next.message || next.message.trim() === "");
-        if (!nextIsAttachmentOnly) break;
-        if (next.senderId !== msg.senderId) break;
-        // Same sender and consecutive attachment-only -> group
-        attachments.push(next);
-        j += 1;
-      }
-      groups.push({ type: 'attachment_group', senderId: msg.senderId, items: attachments });
-      i = j - 1; // advance outer loop
-    }
-    return groups;
-  };
-
-  const isImageUrl = (fileUrl) => {
-    if (!fileUrl || typeof fileUrl !== 'string') return false;
-    const cleaned = fileUrl.split('?')[0];
-    return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(cleaned);
   };
 
   // Keep recentChats in sync with localStorage
@@ -1161,19 +1110,9 @@ export default function Admin_Chats() {
   const handleSendGroupMessage = async () => {
     if (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0)) return;
     if (!selectedChat || !selectedChat.isGroup) return;
+    if (isSending) return;
 
-<<<<<<< Updated upstream
-    const formData = new FormData();
-    formData.append("groupId", selectedChat._id);
-    formData.append("senderId", currentUserId);
-    formData.append("message", newMessage);
-    if (selectedFile) {
-      formData.append("file", selectedFile);
-    }
-
-=======
     setIsSending(true);
->>>>>>> Stashed changes
     try {
       const token = localStorage.getItem("token");
       const parsedUser = storedUser ? JSON.parse(storedUser) : null;
@@ -1202,34 +1141,6 @@ export default function Admin_Chats() {
           senderLastname: parsedUser ? parsedUser.lastname : "User",
           senderProfilePic: parsedUser ? parsedUser.profilePic : null,
         });
-<<<<<<< Updated upstream
-
-      setGroupMessages((prev) => ({
-        ...prev,
-        [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
-      }));
-
-      // Update last message preview for group immediately
-      setLastMessages(prev => ({
-        ...prev,
-        [selectedChat._id]: {
-          prefix: 'You: ',
-          text: sentMessage.message ? sentMessage.message : (sentMessage.fileUrl ? 'File sent' : '')
-        }
-      }));
-
-        // Avoid delayed refresh; sidebar preview already updated
-
-        setNewMessage("");
-        setSelectedFile(null);
-      } catch (err) {
-        setValidationModal({
-          isOpen: true,
-          type: 'error',
-          title: 'Send Failed',
-          message: err.response?.data?.error || "Error sending group message"
-        });
-=======
         setGroupMessages((prev) => ({
           ...prev,
           [selectedChat._id]: [...(prev[selectedChat._id] || []), textMessage],
@@ -1238,7 +1149,6 @@ export default function Admin_Chats() {
           ...prev,
           [selectedChat._id]: { prefix: 'You: ', text: textMessage.message }
         }));
->>>>>>> Stashed changes
       }
 
       // 2) Send each selected file as its own message with empty text
@@ -1610,28 +1520,28 @@ export default function Admin_Chats() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
-                  {groupMessagesForDisplay(selectedChat.isGroup ? groupMessages[selectedChat._id] || [] : messages[selectedChat._id] || []).map((entry, index, arr) => {
-                    if (entry.type === 'message') {
-                      const msg = entry.msg;
-                      const sender = users.find(u => u._id === msg.senderId);
-                      const prev = index > 0 ? arr[index - 1] : null;
-                      const prevMsg = prev && prev.type === 'message' ? prev.msg : null;
-                      const prevSenderId = prevMsg ? prevMsg.senderId : (prev && prev.type === 'attachment_group' ? prev.senderId : null);
-                      const prevTime = prevMsg ? (prevMsg.createdAt || prevMsg.updatedAt) : (prev && prev.type === 'attachment_group' && prev.items.length > 0 ? (prev.items[prev.items.length - 1].createdAt || prev.items[prev.items.length - 1].updatedAt) : null);
-                      const showHeader = index === 0 || msg.senderId !== prevSenderId || Math.abs(new Date(msg.createdAt || msg.updatedAt) - new Date(prevTime)) > 5 * 60 * 1000;
-                      return (
-                        <div key={msg._id} className={`flex ${msg.senderId !== currentUserId ? "justify-start" : "justify-end"}`}>
-                          <div className={`max-w-xs lg:max-w-md ${msg.senderId !== currentUserId ? "order-1" : "order-2"}`}>
-                            {showHeader && msg.senderId !== currentUserId && (
-                              <div className="text-xs text-gray-500 mb-1">
-                                {selectedChat.isGroup ? (msg.senderName || "Unknown User") : (sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown User")}
-                              </div>
-                            )}
-                            <div className={`rounded-lg px-4 py-2 ${msg.senderId !== currentUserId ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>
-                              {msg.message && <p className="break-words">{msg.message}</p>}
-                              {msg.fileUrl && (
-                                <div className="mt-2">
-                                  {isImageUrl(msg.fileUrl) ? (
+                  {(selectedChat.isGroup ? groupMessages[selectedChat._id] || [] : messages[selectedChat._id] || []).map((msg, index, arr) => {
+                    const sender = users.find(u => u._id === msg.senderId);
+                    const prevMsg = arr[index - 1];
+                    const showHeader =
+                      index === 0 ||
+                      msg.senderId !== prevMsg?.senderId ||
+                      Math.abs(new Date(msg.createdAt || msg.updatedAt) - new Date(prevMsg?.createdAt || prevMsg?.updatedAt)) > 5 * 60 * 1000;
+                    return (
+                      <div key={msg._id} className={`flex ${msg.senderId !== currentUserId ? "justify-start" : "justify-end"}`}>
+                        <div className={`max-w-xs lg:max-w-md ${msg.senderId !== currentUserId ? "order-1" : "order-2"}`}>
+                          {showHeader && msg.senderId !== currentUserId && (
+                            <div className="text-xs text-gray-500 mb-1">
+                              {selectedChat.isGroup ? (msg.senderName || "Unknown User") : (sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown User")}
+                            </div>
+                          )}
+                          <div className={`rounded-lg px-4 py-2 ${msg.senderId !== currentUserId ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>
+                            {msg.message && <p className="break-words">{msg.message}</p>}
+                            {msg.fileUrl && (
+                              <div className="mt-2">
+                                {(() => {
+                                  const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(msg.fileUrl.split('?')[0]);
+                                  return isImage ? (
                                     <a href={`${API_BASE}/${msg.fileUrl}`} target="_blank" rel="noopener noreferrer">
                                       <img
                                         src={`${API_BASE}/${msg.fileUrl}`}
@@ -1641,52 +1551,25 @@ export default function Admin_Chats() {
                                       />
                                     </a>
                                   ) : (
-                                    <a href={`${API_BASE}/${msg.fileUrl}`} target="_blank" rel="noopener noreferrer" className="text-blue-100 underline decoration-white/40 hover:decoration-white">📎 Attachment</a>
-                                  )}
-                                </div>
-                              )}
-                              <div className={`text-xs mt-1 ${msg.senderId !== currentUserId ? "text-gray-500" : "text-blue-100"}`}>
-                                {(() => { const ts = msg.createdAt || msg.updatedAt; const d = ts ? new Date(ts) : null; return d && !isNaN(d.getTime()) ? d.toLocaleTimeString() : ''; })()}
+                                    <a
+                                      href={`${API_BASE}/${msg.fileUrl}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className={`${msg.senderId !== currentUserId ? "text-blue-700" : "text-blue-100"} underline decoration-current/40 hover:decoration-current`}
+                                    >
+                                      📎 Attachment
+                                    </a>
+                                  );
+                                })()
+                                }
                               </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }
-                    // attachment group bubble
-                    const first = entry.items[0];
-                    const sender = users.find(u => u._id === entry.senderId);
-                    return (
-                      <div key={`ag-${index}-${entry.senderId}-${entry.items.length}`} className={`flex ${entry.senderId !== currentUserId ? "justify-start" : "justify-end"}`}>
-                        <div className={`max-w-xs lg:max-w-md ${entry.senderId !== currentUserId ? "order-1" : "order-2"}`}>
-                          {entry.senderId !== currentUserId && (
-                            <div className="text-xs text-gray-500 mb-1">
-                              {selectedChat.isGroup ? (first.senderName || "Unknown User") : (sender ? `${sender.lastname}, ${sender.firstname}` : "Unknown User")}
-                            </div>
-                          )}
-                          <div className={`rounded-lg px-4 py-2 ${entry.senderId !== currentUserId ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>
-                            <div className="space-y-2">
-                              {entry.items.map((att, i) => (
-                                <div key={att._id || `${att.fileUrl}-${i}`} className="pt-1 first:pt-0 border-t border-white/20 first:border-t-0">
-                                  {isImageUrl(att.fileUrl) ? (
-                                    <a href={`${API_BASE}/${att.fileUrl}`} target="_blank" rel="noopener noreferrer">
-                                      <img
-                                        src={`${API_BASE}/${att.fileUrl}`}
-                                        alt={`Attachment ${i + 1}`}
-                                        className="rounded-md max-h-56 max-w-full object-contain border border-white/30"
-                                        loading="lazy"
-                                      />
-                                    </a>
-                                  ) : (
-                                    <a href={`${API_BASE}/${att.fileUrl}`} target="_blank" rel="noopener noreferrer" className={`${entry.senderId !== currentUserId ? "text-blue-700" : "text-blue-100"} underline decoration-current/40 hover:decoration-current`}>
-                                      📎 Attachment {entry.items.length > 1 ? `(${i + 1})` : ''}
-                                    </a>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                            <div className={`text-xs mt-2 ${entry.senderId !== currentUserId ? "text-gray-500" : "text-blue-100"}`}>
-                              {(() => { const ts = entry.items[entry.items.length - 1].createdAt || entry.items[entry.items.length - 1].updatedAt; const d = ts ? new Date(ts) : null; return d && !isNaN(d.getTime()) ? d.toLocaleTimeString() : ''; })()}
+                            )}
+                            <div className={`text-xs mt-1 ${msg.senderId !== currentUserId ? "text-gray-500" : "text-blue-100"}`}>
+                              {(() => {
+                                const ts = msg.createdAt || msg.updatedAt;
+                                const d = ts ? new Date(ts) : null;
+                                return d && !isNaN(d.getTime()) ? d.toLocaleTimeString() : '';
+                              })()}
                             </div>
                           </div>
                         </div>
@@ -1722,14 +1605,10 @@ export default function Admin_Chats() {
                     />
                     <button
                       onClick={selectedChat.isGroup ? handleSendGroupMessage : handleSendMessage}
-<<<<<<< Updated upstream
-                      className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
-=======
                       disabled={isSending || (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0))}
                       className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
->>>>>>> Stashed changes
                     >
-                      Send
+                      {isSending ? 'Sending...' : 'Send'}
                     </button>
                   </div>
                   {selectedFiles && selectedFiles.length > 0 && (

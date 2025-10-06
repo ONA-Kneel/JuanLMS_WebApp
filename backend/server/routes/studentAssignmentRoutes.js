@@ -162,20 +162,6 @@ router.post('/', authenticateToken, async (req, res) => {
     
     console.log('About to query database for duplicates...');
     
-<<<<<<< Updated upstream
-=======
-    // Enhanced duplicate checking - check both studentId and studentSchoolID
-    console.log('🔍 DUPLICATE CHECK - Searching for existing assignments with:');
-    console.log('  - studentSchoolID:', studentSchoolID);
-    console.log('  - schoolYear:', term.schoolYear);
-    console.log('  - termName:', term.termName);
-    console.log('  - quarterName:', quarterName || null);
-    console.log('  - actualStudentId:', actualStudentId);
-    
-    // Enhanced duplicate check - only prevent exact duplicates (same student, same quarter)
-    // Normalize null/undefined quarterName to null for consistent matching
-    const normalizedQuarter = quarterName || null;
->>>>>>> Stashed changes
     const existingAssignment = await StudentAssignment.findOne({
       $or: [
         // Check by studentId if it exists - only prevent same student in same term and quarter
@@ -191,23 +177,8 @@ router.post('/', authenticateToken, async (req, res) => {
           studentSchoolID,
           schoolYear: term.schoolYear,
           termName: term.termName,
-<<<<<<< Updated upstream
           quarterName: quarterName || null
         }] : [])
-=======
-          quarterName: normalizedQuarter
-        }] : []),
-        // Check for exact same assignment details (same student, same quarter)
-        {
-          studentSchoolID,
-          trackName,
-          strandName,
-          sectionName,
-          schoolYear: term.schoolYear,
-          termName: term.termName,
-          quarterName: normalizedQuarter
-        }
->>>>>>> Stashed changes
       ]
     });
     
@@ -422,12 +393,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 
       // allow manual entries when no matching student is found
 
-<<<<<<< Updated upstream
       // Check for existing assignment before creating new one (same logic as single creation)
-=======
-      // Enhanced duplicate check for bulk import - only prevent exact duplicates (same student, same quarter)
-      const normalizedQuarter = quarterName || null;
->>>>>>> Stashed changes
       const existingAssignment = await StudentAssignment.findOne({
         $or: [
           // Check by studentId if it exists - only prevent same student in same term and quarter
@@ -443,23 +409,8 @@ router.post('/bulk', authenticateToken, async (req, res) => {
             studentSchoolID,
             schoolYear: term.schoolYear,
             termName: term.termName,
-<<<<<<< Updated upstream
             quarterName: quarterName || null
           }] : [])
-=======
-            quarterName: normalizedQuarter
-          }] : []),
-          // Check for exact same assignment details (same student, same quarter)
-          {
-            studentSchoolID,
-            trackName,
-            strandName,
-            sectionName,
-            schoolYear: term.schoolYear,
-            termName: term.termName,
-            quarterName: normalizedQuarter
-          }
->>>>>>> Stashed changes
         ]
       });
 
@@ -504,13 +455,9 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         termId,
         schoolYear: term.schoolYear,
         termName: term.termName,
-<<<<<<< Updated upstream
         quarterName,
         enrollmentType: enrollmentType || 'Regular',
         subjects: bulkSubjects
-=======
-        quarterName: normalizedQuarter,
->>>>>>> Stashed changes
       });
 
       const savedAssignment = await newAssignment.save();
