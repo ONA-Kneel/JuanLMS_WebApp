@@ -1,6 +1,9 @@
 import express from "express";
 import GeneralAnnouncement from "../models/GeneralAnnouncement.js";
+import Notification from "../models/Notification.js";
+import User from "../models/User.js";
 import { authenticateToken } from "../middleware/authMiddleware.js";
+import { getIO } from "../server.js";
 import mongoose from "mongoose";
 
 const router = express.Router();
@@ -60,6 +63,54 @@ router.post("/", authenticateToken, async (req, res) => {
     });
 
     await announcement.save();
+
+    // Create notifications for all users with the specified roles
+    try {
+      console.log(`[GENERAL-ANNOUNCEMENT] Creating notifications for roles: ${filteredRecipientRoles.join(', ')}`);
+      
+      // Get all users with the specified roles
+      const users = await User.find({
+        role: { $in: filteredRecipientRoles },
+        status: { $ne: 'archived' }
+      });
+
+      console.log(`[GENERAL-ANNOUNCEMENT] Found ${users.length} users to notify`);
+
+      // Create notifications for each user
+      const notifications = [];
+      for (const user of users) {
+        const notification = new Notification({
+          recipientId: user._id,
+          type: 'general_announcement',
+          title: `New General Announcement: ${title}`,
+          message: `A new general announcement has been posted: "${title}"`,
+          priority: 'high',
+          relatedItemId: announcement._id,
+          timestamp: new Date()
+        });
+        
+        await notification.save();
+        notifications.push(notification);
+      }
+
+      console.log(`[GENERAL-ANNOUNCEMENT] Created ${notifications.length} notifications`);
+
+      // Emit real-time notifications to all users
+      const io = getIO();
+      if (io) {
+        for (const notification of notifications) {
+          io.to(`user_${notification.recipientId}`).emit('newNotification', {
+            notification,
+            timestamp: new Date().toISOString()
+          });
+        }
+        console.log(`[GENERAL-ANNOUNCEMENT] Emitted real-time notifications to ${notifications.length} users`);
+      }
+
+    } catch (notificationError) {
+      console.error('[GENERAL-ANNOUNCEMENT] Error creating notifications:', notificationError);
+      // Don't fail the announcement creation if notifications fail
+    }
 
     res.status(201).json({
       message: "Announcement created successfully",

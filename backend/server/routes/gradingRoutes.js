@@ -1022,4 +1022,283 @@ router.get('/export/quarter-classlist', authenticateToken, async (req, res) => {
   }
 });
 
+// Helper function to calculate total points from activities and quizzes
+async function calculateTotalPoints(classId, quarter, termName, academicYear) {
+  try {
+    // Get all assignments for this class, quarter, term, and academic year
+    const assignments = await Assignment.find({
+      classID: classId,
+      quarter,
+      termName,
+      academicYear
+    });
+
+    // Get all quizzes for this class, quarter, term, and academic year
+    const quizzes = await Quiz.find({
+      classID: classId,
+      quarter,
+      termName,
+      academicYear
+    });
+
+    // Calculate total points breakdown
+    const writtenWorks = {
+      totalPoints: 0,
+      activities: []
+    };
+
+    const performanceTasks = {
+      totalPoints: 0,
+      activities: []
+    };
+
+    // Process assignments
+    assignments.forEach(assignment => {
+      const maxPoints = assignment.points || 0;
+      
+      const activityData = {
+        id: assignment._id,
+        title: assignment.title,
+        type: 'assignment',
+        points: maxPoints,
+        activityType: assignment.activityType
+      };
+
+      if (assignment.activityType === 'written') {
+        writtenWorks.totalPoints += maxPoints;
+        writtenWorks.activities.push(activityData);
+      } else if (assignment.activityType === 'performance') {
+        performanceTasks.totalPoints += maxPoints;
+        performanceTasks.activities.push(activityData);
+      }
+    });
+
+    // Process quizzes
+    quizzes.forEach(quiz => {
+      const maxPoints = quiz.points || 0;
+      
+      const activityData = {
+        id: quiz._id,
+        title: quiz.title,
+        type: 'quiz',
+        points: maxPoints,
+        activityType: quiz.activityType
+      };
+
+      if (quiz.activityType === 'written') {
+        writtenWorks.totalPoints += maxPoints;
+        writtenWorks.activities.push(activityData);
+      } else if (quiz.activityType === 'performance') {
+        performanceTasks.totalPoints += maxPoints;
+        performanceTasks.activities.push(activityData);
+      }
+    });
+
+    return {
+      writtenWorks,
+      performanceTasks,
+      grandTotal: writtenWorks.totalPoints + performanceTasks.totalPoints,
+      summary: {
+        totalActivities: assignments.length + quizzes.length,
+        totalAssignments: assignments.length,
+        totalQuizzes: quizzes.length,
+        writtenWorksCount: writtenWorks.activities.length,
+        performanceTasksCount: performanceTasks.activities.length
+      }
+    };
+  } catch (error) {
+    console.error('[GRADING] Error calculating total points:', error);
+    throw error;
+  }
+}
+
+// Get total points (HPS) from all activities and quizzes for a class
+router.get('/total-points/:classId', authenticateToken, async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const { quarter, termName, academicYear } = req.query;
+
+    if (!quarter || !termName || !academicYear) {
+      return res.status(400).json({ 
+        error: 'Quarter, term name, and academic year are required' 
+      });
+    }
+
+    console.log(`[GRADING] Calculating total points for class ${classId}, quarter ${quarter}, term ${termName}, year ${academicYear}`);
+
+    const totalPoints = await calculateTotalPoints(classId, quarter, termName, academicYear);
+
+    console.log(`[GRADING] Total points calculated:`, {
+      writtenWorks: totalPoints.writtenWorks.totalPoints,
+      performanceTasks: totalPoints.performanceTasks.totalPoints,
+      grandTotal: totalPoints.grandTotal
+    });
+
+    res.json(totalPoints);
+  } catch (error) {
+    console.error('[GRADING] Error calculating total points:', error);
+    res.status(500).json({ error: 'Failed to calculate total points' });
+  }
+});
+
+// Get student grading data with auto-calculated HPS
+router.get('/student-grading/:studentId', authenticateToken, async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { classId, quarter, termName, academicYear } = req.query;
+
+    if (!classId || !quarter || !termName || !academicYear) {
+      return res.status(400).json({ 
+        error: 'Class ID, quarter, term name, and academic year are required' 
+      });
+    }
+
+    console.log(`[GRADING] Getting student grading data for student ${studentId}, class ${classId}, quarter ${quarter}, term ${termName}, year ${academicYear}`);
+
+    // Get total points from all activities and quizzes
+    const totalPoints = await calculateTotalPoints(classId, quarter, termName, academicYear);
+
+    // Get student's current grades using the existing breakdown logic
+    const assignments = await Assignment.find({
+      classID: classId,
+      quarter,
+      termName,
+      academicYear
+    });
+
+    const quizzes = await Quiz.find({
+      classID: classId,
+      quarter,
+      termName,
+      academicYear
+    });
+
+    // Get student submissions
+    const assignmentSubmissions = await Submission.find({
+      student: studentId,
+      assignment: { $in: assignments.map(a => a._id) }
+    });
+
+    const quizResponses = await QuizResponse.find({
+      studentId: studentId,
+      quizId: { $in: quizzes.map(q => q._id) }
+    });
+
+    // Calculate written works breakdown
+    const writtenWorks = {
+      raw: 0,
+      hps: 0,
+      ps: 0,
+      ws: 0,
+      activities: []
+    };
+
+    const performanceTasks = {
+      raw: 0,
+      hps: 0,
+      ps: 0,
+      ws: 0,
+      activities: []
+    };
+
+    // Process assignments
+    assignments.forEach(assignment => {
+      const submission = assignmentSubmissions.find(s => s.assignment.toString() === assignment._id.toString());
+      const earnedPoints = submission?.grade || 0;
+      const maxPoints = assignment.points || 0;
+      
+      const activityData = {
+        id: assignment._id,
+        title: assignment.title,
+        type: 'assignment',
+        earned: earnedPoints,
+        max: maxPoints
+      };
+
+      if (assignment.activityType === 'written') {
+        writtenWorks.raw += earnedPoints;
+        writtenWorks.hps += maxPoints;
+        writtenWorks.activities.push(activityData);
+      } else if (assignment.activityType === 'performance') {
+        performanceTasks.raw += earnedPoints;
+        performanceTasks.hps += maxPoints;
+        performanceTasks.activities.push(activityData);
+      }
+    });
+
+    // Process quizzes
+    quizzes.forEach(quiz => {
+      const response = quizResponses.find(r => r.quizId.toString() === quiz._id.toString());
+      const earnedPoints = response?.score || 0;
+      const maxPoints = quiz.points || 0;
+      
+      const activityData = {
+        id: quiz._id,
+        title: quiz.title,
+        type: 'quiz',
+        earned: earnedPoints,
+        max: maxPoints
+      };
+
+      if (quiz.activityType === 'written') {
+        writtenWorks.raw += earnedPoints;
+        writtenWorks.hps += maxPoints;
+        writtenWorks.activities.push(activityData);
+      } else if (quiz.activityType === 'performance') {
+        performanceTasks.raw += earnedPoints;
+        performanceTasks.hps += maxPoints;
+        performanceTasks.activities.push(activityData);
+      }
+    });
+
+    // Calculate percentage scores and weighted scores
+    writtenWorks.ps = writtenWorks.hps > 0 ? (writtenWorks.raw / writtenWorks.hps) * 100 : 0;
+    writtenWorks.ws = writtenWorks.ps * 0.3; // 30% weight for written works
+
+    performanceTasks.ps = performanceTasks.hps > 0 ? (performanceTasks.raw / performanceTasks.hps) * 100 : 0;
+    performanceTasks.ws = performanceTasks.ps * 0.5; // 50% weight for performance tasks
+
+    const studentGrades = {
+      writtenWorks,
+      performanceTasks
+    };
+
+    // Combine total points with student's current performance
+    const gradingData = {
+      studentId,
+      classId,
+      quarter,
+      termName,
+      academicYear,
+      totalPoints: {
+        writtenWorks: totalPoints.writtenWorks.totalPoints,
+        performanceTasks: totalPoints.performanceTasks.totalPoints,
+        grandTotal: totalPoints.grandTotal
+      },
+      studentPerformance: {
+        writtenWorks: studentGrades.writtenWorks,
+        performanceTasks: studentGrades.performanceTasks
+      },
+      activities: {
+        writtenWorks: totalPoints.writtenWorks.activities,
+        performanceTasks: totalPoints.performanceTasks.activities
+      },
+      summary: totalPoints.summary
+    };
+
+    console.log(`[GRADING] Student grading data prepared:`, {
+      totalPoints: gradingData.totalPoints,
+      studentPerformance: {
+        writtenWorks: gradingData.studentPerformance.writtenWorks.raw,
+        performanceTasks: gradingData.studentPerformance.performanceTasks.raw
+      }
+    });
+
+    res.json(gradingData);
+  } catch (error) {
+    console.error('[GRADING] Error getting student grading data:', error);
+    res.status(500).json({ error: 'Failed to get student grading data' });
+  }
+});
+
 export default router; 

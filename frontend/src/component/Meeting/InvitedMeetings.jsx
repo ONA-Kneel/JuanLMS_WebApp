@@ -17,13 +17,22 @@ const InvitedMeetings = ({ onJoinMeeting, refreshTrigger = 0 }) => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
+      console.log(`[INVITED-MEETINGS] Fetching invited meetings`);
+      
       const response = await fetch(`${API_BASE}/api/meetings/invited`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (response.ok) {
         const meetings = await response.json();
-        setInvitedMeetings(meetings);
+        
+        // Deduplicate meetings by _id to prevent duplicates
+        const uniqueMeetings = meetings.filter((meeting, index, self) => 
+          index === self.findIndex(m => m._id === meeting._id)
+        );
+        
+        console.log(`[INVITED-MEETINGS] Found ${meetings.length} meetings, ${uniqueMeetings.length} unique after deduplication`);
+        setInvitedMeetings(uniqueMeetings);
       } else {
         setError('Failed to fetch invited meetings');
       }

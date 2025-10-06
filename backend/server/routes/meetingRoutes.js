@@ -1,6 +1,10 @@
 import express from 'express';
 import Meeting from '../models/Meeting.js';
+import Notification from '../models/Notification.js';
+import User from '../models/User.js';
+import Class from '../models/Class.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import { getIO } from '../server.js';
 import jwt from 'jsonwebtoken';
 
 const router = express.Router();
@@ -14,8 +18,17 @@ const JITSI_SECRET = process.env.JITSI_SECRET || '';
 router.get('/class/:classID', authenticateToken, async (req, res) => {
   try {
     const { classID } = req.params;
+    console.log(`[MEETINGS] Fetching meetings for classID: ${classID}`);
+    
     const meetings = await Meeting.find({ classID });
-    res.json(meetings);
+    
+    // Deduplicate meetings by _id to prevent duplicates
+    const uniqueMeetings = meetings.filter((meeting, index, self) => 
+      index === self.findIndex(m => m._id.toString() === meeting._id.toString())
+    );
+    
+    console.log(`[MEETINGS] Found ${meetings.length} meetings, ${uniqueMeetings.length} unique after deduplication`);
+    res.json(uniqueMeetings);
   } catch (err) {
     console.error('Error fetching meetings:', err);
     res.status(500).json({ error: 'Failed to fetch meetings' });
@@ -42,7 +55,13 @@ router.get('/direct-invite', authenticateToken, async (req, res) => {
       .populate('invitedUsers.userId', 'firstName lastName email role')
       .sort({ createdAt: -1 });
 
-    res.json(meetings);
+    // Deduplicate meetings by _id to prevent duplicates
+    const uniqueMeetings = meetings.filter((meeting, index, self) => 
+      index === self.findIndex(m => m._id.toString() === meeting._id.toString())
+    );
+    
+    console.log(`[MEETINGS] Found ${meetings.length} direct-invite meetings, ${uniqueMeetings.length} unique after deduplication`);
+    res.json(uniqueMeetings);
   } catch (err) {
     console.error('Error fetching direct invitation meetings:', err);
     res.status(500).json({ error: 'Failed to fetch direct invitation meetings' });
@@ -68,6 +87,53 @@ router.post('/', authenticateToken, async (req, res) => {
       createdAt: new Date()
     });
     await newMeeting.save();
+
+    // Create notifications for class members
+    try {
+      console.log(`[MEETING] Creating notifications for class: ${classID}`);
+      
+      // Get class members
+      const classData = await Class.findById(classID);
+      if (classData && classData.members) {
+        console.log(`[MEETING] Found ${classData.members.length} class members to notify`);
+        
+        // Create notifications for each class member
+        const notifications = [];
+        for (const memberId of classData.members) {
+          const notification = new Notification({
+            recipientId: memberId,
+            type: 'meeting',
+            title: `New Meeting: ${title}`,
+            message: `A new meeting "${title}" has been scheduled for your class`,
+            priority: 'normal',
+            classID: classID,
+            relatedItemId: newMeeting._id,
+            timestamp: new Date()
+          });
+          
+          await notification.save();
+          notifications.push(notification);
+        }
+
+        console.log(`[MEETING] Created ${notifications.length} notifications`);
+
+        // Emit real-time notifications to all class members
+        const io = getIO();
+        if (io) {
+          for (const notification of notifications) {
+            io.to(`user_${notification.recipientId}`).emit('newNotification', {
+              notification,
+              timestamp: new Date().toISOString()
+            });
+          }
+          console.log(`[MEETING] Emitted real-time notifications to ${notifications.length} class members`);
+        }
+      }
+    } catch (notificationError) {
+      console.error('[MEETING] Error creating notifications:', notificationError);
+      // Don't fail the meeting creation if notifications fail
+    }
+
     res.status(201).json(newMeeting);
   } catch (err) {
     console.error('Error creating meeting:', err);
@@ -121,6 +187,44 @@ router.post('/direct-invite', authenticateToken, async (req, res) => {
       title: newMeeting.title,
       invitedUsers: newMeeting.invitedUsers.length
     });
+
+    // Create notifications for invited users
+    try {
+      console.log(`[MEETING] Creating notifications for ${newMeeting.invitedUsers.length} invited users`);
+      
+      const notifications = [];
+      for (const invitedUser of newMeeting.invitedUsers) {
+        const notification = new Notification({
+          recipientId: invitedUser.userId,
+          type: 'meeting_invitation',
+          title: `Meeting Invitation: ${title}`,
+          message: `You have been invited to a meeting: "${title}"`,
+          priority: 'high',
+          relatedItemId: newMeeting._id,
+          timestamp: new Date()
+        });
+        
+        await notification.save();
+        notifications.push(notification);
+      }
+
+      console.log(`[MEETING] Created ${notifications.length} invitation notifications`);
+
+      // Emit real-time notifications to all invited users
+      const io = getIO();
+      if (io) {
+        for (const notification of notifications) {
+          io.to(`user_${notification.recipientId}`).emit('newNotification', {
+            notification,
+            timestamp: new Date().toISOString()
+          });
+        }
+        console.log(`[MEETING] Emitted real-time notifications to ${notifications.length} invited users`);
+      }
+    } catch (notificationError) {
+      console.error('[MEETING] Error creating invitation notifications:', notificationError);
+      // Don't fail the meeting creation if notifications fail
+    }
 
     res.status(201).json(newMeeting);
   } catch (err) {
@@ -215,7 +319,13 @@ router.get('/invited', authenticateToken, async (req, res) => {
     .populate('invitedUsers.userId', 'firstName lastName email role')
     .sort({ createdAt: -1 });
 
-    res.json(meetings);
+    // Deduplicate meetings by _id to prevent duplicates
+    const uniqueMeetings = meetings.filter((meeting, index, self) => 
+      index === self.findIndex(m => m._id.toString() === meeting._id.toString())
+    );
+    
+    console.log(`[MEETINGS] Found ${meetings.length} invited meetings, ${uniqueMeetings.length} unique after deduplication`);
+    res.json(uniqueMeetings);
   } catch (error) {
     console.error('[MEETINGS] Error fetching invited meetings:', error);
     res.status(500).json({ error: 'Failed to fetch invited meetings' });

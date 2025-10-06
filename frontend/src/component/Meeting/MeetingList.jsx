@@ -13,6 +13,8 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
       const token = localStorage.getItem('token');
       let response;
       
+      console.log(`[MEETING-LIST] Fetching meetings for classId: ${classId}`);
+      
       // Handle direct invitation meetings differently
       if (classId === 'direct-invite') {
         response = await fetch(`${API_BASE}/api/meetings/direct-invite`, {
@@ -31,7 +33,13 @@ const MeetingList = ({ classId, userRole, onJoinMeeting, refreshTrigger }) => {
       const result = await response.json();
 
       if (response.ok) {
-        setMeetings(result);
+        // Deduplicate meetings by _id to prevent duplicates
+        const uniqueMeetings = result.filter((meeting, index, self) => 
+          index === self.findIndex(m => m._id === meeting._id)
+        );
+        
+        console.log(`[MEETING-LIST] Found ${result.length} meetings, ${uniqueMeetings.length} unique after deduplication`);
+        setMeetings(uniqueMeetings);
         setError('');
       } else {
         setError(result.message || 'Failed to fetch meetings');

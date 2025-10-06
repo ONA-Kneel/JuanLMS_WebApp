@@ -303,8 +303,30 @@ export default function FacultyCreateClass() {
         {/* Confirmation Modal */}
         {confirmingClass && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
               <h3 className="text-xl font-bold mb-4">Confirm Class: {confirmingClass.className}</h3>
+              
+              {/* Student Members Section */}
+              {confirmingClass.members && confirmingClass.members.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-3">Class Members ({confirmingClass.members.length})</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
+                    <div className="space-y-2">
+                      {confirmingClass.members.map((member, index) => (
+                        <div key={member._id || index} className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200">
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-800">{member.firstName} {member.lastName}</p>
+                            <p className="text-sm text-gray-600">School ID: {member.schoolId || 'N/A'}</p>
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {member.role || 'Student'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
               
               <div className="space-y-4">
                 <div>
