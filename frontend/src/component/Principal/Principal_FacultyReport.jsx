@@ -1157,11 +1157,11 @@ export default function Principal_FacultyReport() {
     const diffDays = Math.floor((now - loginDate) / (1000 * 60 * 60 * 24));
     if (diffDays >= 3) return 'bg-red-100';
     if (diffDays === 2) return 'bg-yellow-100';
-    if (diffDays <= 1) return 'bg-green-100';
+    if (diffDays <= 1) return 'bg-blue-100';
     return '';
   };
 
-  // Sort faculty logins: reds first, then yellow, then green, then by most recent lastLogin
+  // Sort faculty logins: reds first, then yellow, then blue, then by most recent lastLogin
   const sortedFacultyLogins = [...facultyLastLogins].sort((a, b) => {
     const getPriority = (log) => {
       if (!log.lastLogin) return 3;
@@ -1170,7 +1170,7 @@ export default function Principal_FacultyReport() {
       const diffDays = Math.floor((now - loginDate) / (1000 * 60 * 60 * 24));
       if (diffDays >= 3) return 0; // red
       if (diffDays === 2) return 1; // yellow
-      if (diffDays <= 1) return 2; // green
+      if (diffDays <= 1) return 2; // blue
       return 3;
     };
     const pa = getPriority(a);
@@ -1412,7 +1412,7 @@ export default function Principal_FacultyReport() {
             >
               Faculty Last Logins
             </button>
-            <button
+            {/* <button
               onClick={() => setActiveTab('ai-analyses')}
               className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
                 activeTab === 'ai-analyses'
@@ -1421,7 +1421,7 @@ export default function Principal_FacultyReport() {
               }`}
             >
               AI Analyses
-            </button>
+            </button> */}
             <button
               onClick={() => setActiveTab('vpe-reports')}
               className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
@@ -1442,7 +1442,9 @@ export default function Principal_FacultyReport() {
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
                   <h3 className="text-xl font-semibold text-gray-800">Faculty Activity Audit Log</h3>
             
-            <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+            
+          </div>
+          <div className="flex flex-col md:flex-row gap-3 flex-wrap  md:w-auto">
               {/* School Year Filter */}
               <select
                 value={selectedSchoolYear}
@@ -1555,7 +1557,6 @@ export default function Principal_FacultyReport() {
                 Clear Filters
               </button>
             </div>
-          </div>
 
 
           {/* Faculty Activities Table */}
@@ -1639,7 +1640,7 @@ export default function Principal_FacultyReport() {
                           <td className="p-3 border text-gray-900 whitespace-nowrap">
                             <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
                               activity.postAt && new Date(activity.postAt) <= new Date()
-                                ? 'bg-green-100 text-green-700 border border-green-200'
+                                ? 'bg-blue-100 text-blue-700 border border-blue-200'
                                 : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
                             }`}>
                               {activity.postAt && new Date(activity.postAt) <= new Date() ? 'Posted' : 'Pending'}
@@ -1716,10 +1717,13 @@ export default function Principal_FacultyReport() {
               
               // Create unique activities by using a Map to deduplicate by activityId
               const uniqueActivitiesMap = new Map();
-              auditData.forEach(item => {
+              auditData.forEach((item, index) => {
                 if (!uniqueActivitiesMap.has(item.activityId)) {
+                  // Create a clean identifier instead of using encrypted activityId
+                  const cleanId = `activity_${index}_${item.activityTitle?.replace(/\s+/g, '_').toLowerCase() || 'unknown'}`;
                   uniqueActivitiesMap.set(item.activityId, {
-                  id: item.activityId,
+                  id: cleanId,
+                  originalId: item.activityId, // Keep original for filtering
                   title: item.activityTitle,
                   sectionName: item.sectionName
                   });
@@ -1734,7 +1738,9 @@ export default function Principal_FacultyReport() {
               // Filter audit data based on selections
               const filteredRows = auditData.filter(item => {
                 const inSection = selectedSection === "All Sections" || item.sectionName === selectedSection;
-                const inActivity = selectedActivityId === "all" || item.activityId === selectedActivityId;
+                // Find the activity by clean ID and use original ID for filtering
+                const selectedActivity = activities.find(a => a.id === selectedActivityId);
+                const inActivity = selectedActivityId === "all" || (selectedActivity && item.activityId === selectedActivity.originalId);
                 const inStatus = statusFilter === "all" ? true : item.status === statusFilter;
                 const inSearch = studentSearch.trim() === "" || item.studentName.toLowerCase().includes(studentSearch.trim().toLowerCase());
                 return inSection && inActivity && inStatus && inSearch;
@@ -1976,7 +1982,7 @@ export default function Principal_FacultyReport() {
                                 <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
                                   item.status === 'not_viewed' ? 'bg-red-100 text-red-700 border border-red-200' :
                                   item.status === 'missed' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
-                                  'bg-green-100 text-green-700 border border-green-200'
+                                  'bg-blue-100 text-blue-700 border border-blue-200'
                                 }`}>
                                   {item.status.replace('_', ' ')}
                                 </span>
@@ -2098,7 +2104,7 @@ export default function Principal_FacultyReport() {
                   <span>2 days inactive</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-green-100 border border-green-200 rounded"></div>
+                  <div className="w-3 h-3 bg-blue-100 border border-blue-200 rounded"></div>
                   <span>Active (≤1 day)</span>
                 </div>
               </div>
@@ -2227,7 +2233,7 @@ export default function Principal_FacultyReport() {
                           </td>
                           <td className="p-3 border whitespace-nowrap">
                             <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
-                              report.status === 'sent' ? 'bg-green-100 text-green-700 border border-green-200' :
+                              report.status === 'sent' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
                               report.status === 'delivered' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
                               'bg-yellow-100 text-yellow-700 border border-yellow-200'
                             }`}>
@@ -2387,7 +2393,7 @@ export default function Principal_FacultyReport() {
                       `AI_Analysis_${selectedSchoolYear}_${selectedTerm}`,
                       { assignmentsCount, quizzesCount }
                     )}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                   >
                     Download as PDF
                   </button>
@@ -2491,7 +2497,7 @@ export default function Principal_FacultyReport() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 {selectedReportFile && (
-                  <p className="mt-2 text-sm text-green-600">
+                  <p className="mt-2 text-sm text-blue-600">
                     ✓ Selected: {selectedReportFile.name}
                   </p>
                 )}

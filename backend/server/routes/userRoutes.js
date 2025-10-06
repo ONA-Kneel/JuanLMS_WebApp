@@ -997,7 +997,7 @@ userRoutes.get('/users/students/by-section', authenticateToken, async (req, res)
     if (!assignments || assignments.length === 0) return res.json([]);
 
     const linkedIds = assignments.map(a => a.studentId).filter(Boolean);
-    const users = linkedIds.length > 0 ? await User.find({ _id: { $in: linkedIds } }).lean() : [];
+    const users = linkedIds.length > 0 ? await User.find({ _id: { $in: linkedIds } }) : [];
     const usersById = new Map(users.map(u => [String(u._id), u]));
 
     const results = [];
@@ -1007,7 +1007,20 @@ userRoutes.get('/users/students/by-section', authenticateToken, async (req, res)
       if (seen.has(key)) continue;
       seen.add(key);
       const u = a.studentId ? usersById.get(String(a.studentId)) : null;
-      const schoolIdVal = u ? (u.getDecryptedSchoolID ? u.getDecryptedSchoolID() : u.schoolID) : a.studentSchoolID;
+      // Always try to get the clean school ID, never return encrypted IDs
+      let schoolIdVal = null;
+      if (u) {
+        // If user exists, try to get decrypted school ID
+        schoolIdVal = u.getDecryptedSchoolID ? u.getDecryptedSchoolID() : u.schoolID;
+      } else if (a.studentSchoolID && !a.studentSchoolID.includes(':')) {
+        // Only use studentSchoolID if it's not encrypted
+        schoolIdVal = a.studentSchoolID;
+      }
+      
+      // If we still don't have a clean school ID, use userID as fallback
+      if (!schoolIdVal) {
+        schoolIdVal = u?.userID || a.studentSchoolID || `STU-${results.length + 1}`;
+      }
       results.push({
         _id: u?._id || a.studentId || a.studentSchoolID,
         userID: u?.userID,

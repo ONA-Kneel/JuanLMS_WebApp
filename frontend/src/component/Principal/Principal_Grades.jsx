@@ -338,11 +338,15 @@ export default function Principal_Grades() {
           };
         }
         
+        // Get the actual student ID from schoolID (like 25-20000)
+        const actualStudentID = student.schoolID || student.userID || student.studentID || 'STU-ID';
+        
         return {
-          _id: student._id || student.userID || student.studentID,
+          _id: `student_${actualStudentID}`, // Create clean ID
+          originalId: student._id || student.userID || student.studentID, // Keep original for API calls
           userID: student.userID || student.studentID || student._id,
           name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
-          schoolID: student.schoolID || student.userID || student.studentID,
+          schoolID: actualStudentID, // Use actual student ID
           section: student.section || student.sectionName || 'default',
           grades: gradesStructure
         };
@@ -380,16 +384,19 @@ export default function Principal_Grades() {
       });
       const studentsData = res.ok ? await res.json() : [];
 
-      const transformed = studentsData.map(student => ({
-        _id: student._id || student.userID || student.studentID,
-        userID: student.userID || student.studentID || student._id,
-        name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
-        schoolID: student.schoolID || student.userID || student.studentID,
-        section: student.section || student.sectionName || 'default',
-        grades: currentTerm?.termName === 'Term 2'
-          ? { quarter3: '', quarter4: '', semesterFinal: '', remarks: '' }
-          : { quarter1: '', quarter2: '', semesterFinal: '', remarks: '' }
-      }));
+      const transformed = studentsData.map((student, index) => {
+        return {
+          _id: `student_${index}_${student.schoolID || student.userID}`, // Create clean ID
+          originalId: student._id, // Keep original for API calls
+          userID: student.userID || student.studentID || student._id,
+          name: student.name || `${student.firstname || ''} ${student.lastname || ''}`.trim(),
+          schoolID: student.schoolID || student.userID || `STU-${index + 1}`, // Use schoolID from backend
+          section: student.section || student.sectionName || 'default',
+          grades: currentTerm?.termName === 'Term 2'
+            ? { quarter3: '', quarter4: '', semesterFinal: '', remarks: '' }
+            : { quarter1: '', quarter2: '', semesterFinal: '', remarks: '' }
+        };
+      });
 
       setStudents(transformed);
       const initial = {};
@@ -509,7 +516,7 @@ export default function Principal_Grades() {
       
       for (const student of studentsList) {
         try {
-          const studentSchoolID = student.schoolID || student._id;
+          const studentSchoolID = student.schoolID || student.originalId;
           console.log(`🔍 Fetching grades for student: ${student.name} (ID: ${studentSchoolID})`);
           
           const response = await fetch(`${API_BASE}/api/semestral-grades/student/${studentSchoolID}?termName=${currentTerm.termName}&academicYear=${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`, {
@@ -802,11 +809,11 @@ export default function Principal_Grades() {
                   .map(s => (
                     <button
                       key={s._id}
-                      onClick={() => { setSelectedStudentId(s._id); setStudentSearch(`${s.name} (${s.schoolID || s._id})`); setShowStudentResults(false); }}
+                      onClick={() => { setSelectedStudentId(s._id); setStudentSearch(s.name); setShowStudentResults(false); }}
                       className="w-full text-left px-3 py-2 hover:bg-gray-100"
                     >
                       <div className="text-sm font-medium">{s.name}</div>
-                      <div className="text-xs text-gray-500">{s.schoolID || s.userID || s._id}</div>
+                      <div className="text-xs text-gray-500">{s.schoolID || 'Student ID'}</div>
                     </button>
                   ))}
                 {students.filter(s => {

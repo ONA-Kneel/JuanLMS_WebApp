@@ -1239,4 +1239,43 @@ router.patch('/lock/:gradeId', authenticateToken, async (req, res) => {
   }
 });
 
+// Get grades for a specific section
+router.get('/section/:sectionName', authenticateToken, async (req, res) => {
+  try {
+    const { sectionName } = req.params;
+    const { termName, academicYear } = req.query;
+
+    if (!sectionName || !termName || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters: sectionName, termName, academicYear'
+      });
+    }
+
+    console.log(`[SEMESTRAL-GRADES] Fetching grades for section: ${sectionName}, term: ${termName}, year: ${academicYear}`);
+
+    // Find all grades for the section
+    const grades = await SemestralGrade.find({
+      section: sectionName,
+      termName: termName,
+      academicYear: academicYear
+    }).lean();
+
+    console.log(`[SEMESTRAL-GRADES] Found ${grades.length} grades for section ${sectionName}`);
+
+    res.json({
+      success: true,
+      grades: grades,
+      count: grades.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching grades by section:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch grades for section'
+    });
+  }
+});
+
 export default router;
