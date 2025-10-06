@@ -442,6 +442,7 @@ app.use('/uploads/quiz-images', express.static('uploads/quiz-images'));
 // Core application routes
 app.use("/events", eventRoutes);
 app.use("/classes", classRoutes);
+app.use("/api/classes", classRoutes);
 app.use("/", auditTrailRoutes);
 app.use("/lessons", lessonRoutes);
 app.use("/announcements", announcementRoutes);

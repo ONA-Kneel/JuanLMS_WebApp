@@ -174,65 +174,95 @@ export default function Faculty_Grades() {
         
         // Get current faculty ID from token (no need for separate API call)
         const token = localStorage.getItem('token');
-        if (token) {
-          // Decode token to get user info
+        if (!token) {
+          console.error('No token found');
+          showModal('Authentication Error', 'Please log in again', 'error');
+          return;
+        }
+
+        // Decode token to get user info
+        try {
           const payload = JSON.parse(atob(token.split('.')[1]));
           setCurrentFacultyID(payload._id);
+        } catch (tokenError) {
+          console.error('Error decoding token:', tokenError);
+          showModal('Authentication Error', 'Invalid token. Please log in again', 'error');
+          return;
         }
 
         // Fetch academic year
         let academicYearData = null;
         let currentTermData = null;
         
-        const academicYearResponse = await fetch(`${API_BASE}/api/schoolyears/active`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (academicYearResponse.ok) {
-          academicYearData = await academicYearResponse.json();
-          setAcademicYear(academicYearData);
-          
-          // Fetch active term after academic year is set (using same approach as Faculty_Dashboard)
-          const schoolYearName = `${academicYearData.schoolYearStart}-${academicYearData.schoolYearEnd}`;
-          const termResponse = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+        try {
+          const academicYearResponse = await fetch(`${API_BASE}/api/schoolyears/active`, {
             headers: { Authorization: `Bearer ${token}` }
           });
-          if (termResponse.ok) {
-            const terms = await termResponse.json();
-            const activeTerm = terms.find((t) => t.status === "active");
-            currentTermData = activeTerm || null;
-            setCurrentTerm(currentTermData);
+          if (academicYearResponse.ok) {
+            academicYearData = await academicYearResponse.json();
+            setAcademicYear(academicYearData);
+            console.log('Fetched academic year:', academicYearData);
+            
+            // Fetch active term after academic year is set
+            const schoolYearName = `${academicYearData.schoolYearStart}-${academicYearData.schoolYearEnd}`;
+            const termResponse = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (termResponse.ok) {
+              const terms = await termResponse.json();
+              const activeTerm = terms.find((t) => t.status === "active");
+              currentTermData = activeTerm || null;
+              setCurrentTerm(currentTermData);
+              console.log('Fetched active term:', currentTermData);
+            } else {
+              console.error('Error fetching terms:', termResponse.status, termResponse.statusText);
+              setCurrentTerm(null);
+            }
           } else {
-            console.error('Error fetching terms:', termResponse.status, termResponse.statusText);
-            setCurrentTerm(null);
+            console.error('Error fetching academic year:', academicYearResponse.status, academicYearResponse.statusText);
+            setAcademicYear(null);
           }
+        } catch (fetchError) {
+          console.error('Error fetching academic data:', fetchError);
+          setAcademicYear(null);
+          setCurrentTerm(null);
         }
 
-        // Fetch classes and filter them immediately
-        const classesResponse = await fetch(`${API_BASE}/classes/my-classes`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (classesResponse.ok) {
-          const classesData = await classesResponse.json();
-          // Filter classes immediately if we have academic year and term
-          if (academicYearData && currentTermData) {
-            const filtered = classesData.filter(
-              (cls) =>
-                cls.isArchived !== true &&
-                cls.academicYear ===
-                  `${academicYearData.schoolYearStart}-${academicYearData.schoolYearEnd}` &&
-                cls.termName === currentTermData.termName
-            );
-            setClasses(filtered);
+        // Fetch classes
+        try {
+          const classesResponse = await fetch(`${API_BASE}/classes/my-classes`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (classesResponse.ok) {
+            const classesData = await classesResponse.json();
+            console.log('Fetched classes:', classesData);
+            
+            // Filter classes if we have academic year and term
+            if (academicYearData && currentTermData) {
+              const filtered = classesData.filter(
+                (cls) =>
+                  cls.isArchived !== true &&
+                  cls.academicYear ===
+                    `${academicYearData.schoolYearStart}-${academicYearData.schoolYearEnd}` &&
+                  cls.termName === currentTermData.termName
+              );
+              setClasses(filtered);
+              console.log('Filtered classes:', filtered);
+            } else {
+              setClasses(classesData);
+            }
           } else {
-            setClasses(classesData);
+            console.error('Error fetching classes:', classesResponse.status, classesResponse.statusText);
+            setClasses([]);
           }
+        } catch (classesError) {
+          console.error('Error fetching classes:', classesError);
+          setClasses([]);
         }
-
-        // Quarter status will be fetched by separate useEffect when academicYear state is set
 
       } catch (error) {
         console.error('Error initializing data:', error);
-        showModal('Error', 'Failed to load initial data', 'error');
+        showModal('Error', 'Failed to load initial data. Please refresh the page.', 'error');
       } finally {
         setLoading(false);
       }
@@ -597,12 +627,99 @@ export default function Faculty_Grades() {
     }
   }, [currentTerm]);
 
+  const loadQuarterData = useCallback(() => {
+    // Load the data for the selected quarter
+    const quarterKey = `${selectedClass}_${selectedSection}_${selectedQuarter}`;
+    const savedData = quarterData[quarterKey] || {};
+    setGrades(savedData);
+  }, [selectedClass, selectedSection, selectedQuarter, quarterData]);
+
+  const loadQuarterlyGradesFromDatabase = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const selectedClassData = classes.find(c => c._id === selectedClass);
+      
+      if (!selectedClassData) return;
+      
+      const response = await fetch(`${API_BASE}/api/grades/load-quarterly?classId=${selectedClassData.classID}&section=${selectedSection}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.success && result.data && result.data.length > 0) {
+          const loadedQuarterlyGrades = {};
+          result.data.forEach(grade => {
+            if (!loadedQuarterlyGrades[grade.studentId]) {
+              loadedQuarterlyGrades[grade.studentId] = {};
+            }
+            loadedQuarterlyGrades[grade.studentId][grade.quarter] = grade.quarterlyGrade;
+          });
+          
+          setQuarterlyGrades(loadedQuarterlyGrades);
+          
+          const updatedGrades = { ...grades };
+          result.data.forEach(grade => {
+            if (grade.quarter === selectedQuarter) {
+              if (!updatedGrades[grade.studentId]) {
+                updatedGrades[grade.studentId] = {};
+              }
+              if (!updatedGrades[grade.studentId].quarterlyExam) {
+                updatedGrades[grade.studentId].quarterlyExam = grade.quarterlyGrade.toString();
+              }
+            }
+          });
+          setGrades(updatedGrades);
+          console.log('✅ Updated grades state with quarterly exam scores:', updatedGrades);
+        } else {
+          console.log('⚠️ No quarterly grades found in database');
+        }
+      } else {
+        console.error('❌ Failed to load quarterly grades:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ Error loading quarterly grades from database:', error);
+    }
+  }, [selectedClass, selectedSection, selectedQuarter, classes, grades]);
+
+  const loadSavedGrades = useCallback(async () => {
+    if (!selectedClass || !selectedSection) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const selectedClassData = classes.find(c => c._id === selectedClass);
+      
+      if (!selectedClassData) return;
+
+      const response = await fetch(`${API_BASE}/api/grades/load?classId=${selectedClassData.classID}&section=${selectedSection}&quarter=${selectedQuarter}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const savedGradesData = await response.json();
+        
+        if (savedGradesData.success && savedGradesData.data && savedGradesData.data.grades) {
+          const loadedGrades = {};
+          savedGradesData.data.grades.forEach(grade => {
+            loadedGrades[grade.studentId] = {
+              quarterlyExam: grade.quarterlyExam || ''
+            };
+          });
+          setGrades(loadedGrades);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading saved grades:', error);
+    }
+  }, [selectedClass, selectedSection, selectedQuarter, classes]);
+
   // Load quarter-specific data when quarter changes
   useEffect(() => {
     if (selectedClass && selectedSection && selectedQuarter) {
       loadQuarterData();
     }
-  }, [selectedQuarter, loadQuarterData, selectedClass, selectedSection]);
+  }, [selectedQuarter, selectedClass, selectedSection, loadQuarterData]);
 
   // Load saved grades when class and section are selected
   useEffect(() => {
@@ -610,14 +727,7 @@ export default function Faculty_Grades() {
       loadSavedGrades();
       loadQuarterlyGradesFromDatabase();
     }
-  }, [selectedClass, selectedSection, students, selectedQuarter]);
-
-  const loadQuarterData = () => {
-    // Load the data for the selected quarter
-    const quarterKey = `${selectedClass}_${selectedSection}_${selectedQuarter}`;
-    const savedData = quarterData[quarterKey] || {};
-    setGrades(savedData);
-  };
+  }, [selectedClass, selectedSection, students, selectedQuarter, loadSavedGrades, loadQuarterlyGradesFromDatabase]);
 
   const saveQuarterData = () => {
     // Save the current grades data for the selected quarter
@@ -715,65 +825,6 @@ export default function Faculty_Grades() {
       }
     } catch (error) {
       console.error('❌ Error saving quarterly grade to database:', error);
-    }
-  };
-
-  const loadQuarterlyGradesFromDatabase = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const selectedClassData = classes.find(c => c._id === selectedClass);
-      
-      console.log('🔄 Loading quarterly grades for:', {
-        classId: selectedClassData?.classID,
-        section: selectedSection
-      });
-      
-      const response = await fetch(`${API_BASE}/api/grades/load-quarterly?classId=${selectedClassData.classID}&section=${selectedSection}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('📥 Quarterly grades response:', result);
-        
-        if (result.success && result.data && result.data.length > 0) {
-          console.log('✅ Loaded quarterly grades from database:', result.data);
-          
-          // Update the quarterlyGrades state with data from database
-          const loadedQuarterlyGrades = {};
-          result.data.forEach(grade => {
-            if (!loadedQuarterlyGrades[grade.studentId]) {
-              loadedQuarterlyGrades[grade.studentId] = {};
-            }
-            loadedQuarterlyGrades[grade.studentId][grade.quarter] = grade.quarterlyGrade;
-          });
-          
-          setQuarterlyGrades(loadedQuarterlyGrades);
-          console.log('✅ Set quarterly grades state:', loadedQuarterlyGrades);
-
-          // Also update the main grades state with quarterly exam scores if they exist
-          const updatedGrades = { ...grades };
-          result.data.forEach(grade => {
-            if (grade.quarter === selectedQuarter) {
-              if (!updatedGrades[grade.studentId]) {
-                updatedGrades[grade.studentId] = {};
-              }
-              // Don't overwrite existing quarterlyExam if it's already set
-              if (!updatedGrades[grade.studentId].quarterlyExam) {
-                updatedGrades[grade.studentId].quarterlyExam = grade.quarterlyGrade.toString();
-              }
-            }
-          });
-          setGrades(updatedGrades);
-          console.log('✅ Updated grades state with quarterly exam scores:', updatedGrades);
-        } else {
-          console.log('⚠️ No quarterly grades found in database');
-        }
-      } else {
-        console.error('❌ Failed to load quarterly grades:', response.status);
-      }
-    } catch (error) {
-      console.error('❌ Error loading quarterly grades from database:', error);
     }
   };
 
@@ -989,51 +1040,6 @@ export default function Faculty_Grades() {
     }
   };
 
-  const loadSavedGrades = async () => {
-    if (!selectedClass || !selectedSection) return;
-
-    try {
-      const token = localStorage.getItem('token');
-      const selectedClassData = classes.find(c => c._id === selectedClass);
-      
-      if (!selectedClassData) {
-        console.log('No selected class data found for loading grades');
-        return;
-      }
-
-      // Load saved grades from database
-      const response = await fetch(`${API_BASE}/api/grades/load?classId=${selectedClassData.classID}&section=${selectedSection}&quarter=${selectedQuarter}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const savedGradesData = await response.json();
-        console.log('📥 Regular grades response:', savedGradesData);
-        
-        if (savedGradesData.success && savedGradesData.data && savedGradesData.data.grades) {
-          // Convert saved grades back to local state format
-          const loadedGrades = {};
-          savedGradesData.data.grades.forEach(grade => {
-            loadedGrades[grade.studentId] = {
-              quarterlyExam: grade.quarterlyExam || ''
-            };
-          });
-          setGrades(loadedGrades);
-          console.log('✅ Loaded saved grades successfully:', loadedGrades);
-        } else {
-          console.log('⚠️ No regular grades found in database');
-        }
-      } else {
-        console.error('❌ Failed to load regular grades:', response.status);
-      }
-
-      // Also load quarterly grades from the quarterly grades system
-      await loadQuarterlyGradesFromDatabase();
-      
-    } catch (error) {
-      console.error('❌ Error loading saved grades:', error);
-    }
-  };
 
   // Function to determine track and percentages based on subject
   const getSubjectTrackAndPercentages = (className) => {
@@ -1180,6 +1186,32 @@ export default function Faculty_Grades() {
           <div className="text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             <p className="mt-2 text-gray-600">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if no data is loaded
+  if (!academicYear || !currentTerm) {
+    return (
+      <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+        <Faculty_Navbar />
+        <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="text-red-500 text-6xl mb-4">⚠️</div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">Unable to Load Grades</h3>
+              <p className="text-gray-600 mb-4">
+                {!academicYear ? 'Academic year not found' : 'Active term not found'}
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+              >
+                Refresh Page
+              </button>
+            </div>
           </div>
         </div>
       </div>

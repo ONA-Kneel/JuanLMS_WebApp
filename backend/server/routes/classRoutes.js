@@ -9,6 +9,7 @@ import { ObjectId } from 'mongodb';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import User from '../models/User.js';
 import StudentAssignment from '../models/StudentAssignment.js';
+import FacultyAssignment from '../models/FacultyAssignment.js';
 import Registrant from '../models/Registrant.js';
 import SchoolYear from '../models/SchoolYear.js';
 import Term from '../models/Term.js';
@@ -1037,16 +1038,37 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
     
     let classes = [];
     if (userRole === 'faculty') {
-      // Faculty: classes where facultyID matches
+      // Faculty: classes where facultyID matches AND has active faculty assignment
       console.log(`[MY-CLASSES] Processing as faculty user`);
       
-      // Find classes where facultyID matches ObjectId or userID
-      // Only show confirmed classes in the main faculty classes view
-      classes = await Class.find({ 
+      // First, get active faculty assignments for this faculty
+      const activeAssignments = await FacultyAssignment.find({
+        facultyId: userObjectId,
+        status: 'active'
+      });
+      
+      console.log(`[MY-CLASSES] Found ${activeAssignments.length} active faculty assignments`);
+      
+      // Create a list of subject/section combinations that this faculty is assigned to
+      const activeSubjectSections = activeAssignments.map(assignment => ({
+        subjectName: assignment.subjectName,
+        sectionName: assignment.sectionName,
+        schoolYear: assignment.schoolYear,
+        termName: assignment.termName
+      }));
+      
+      console.log(`[MY-CLASSES] Active subject/sections:`, activeSubjectSections);
+      
+      // Find classes where facultyID matches AND matches active subject/section assignments
+      const classQueries = activeSubjectSections.map(assignment => ({
         $or: [
-          { facultyID: userObjectId }, // ObjectId
-          { facultyID: userID } // userID fallback
+          { facultyID: userObjectId },
+          { facultyID: userID }
         ],
+        className: { $regex: new RegExp(`^${assignment.subjectName}$`, 'i') },
+        section: { $regex: new RegExp(`^${assignment.sectionName}$`, 'i') },
+        academicYear: assignment.schoolYear,
+        termName: assignment.termName,
         isArchived: { $ne: true },
         $and: [
           {
@@ -1062,7 +1084,13 @@ router.get('/my-classes', authenticateToken, async (req, res) => {
             ]
           }
         ]
-      });
+      }));
+      
+      if (classQueries.length > 0) {
+        classes = await Class.find({ $or: classQueries });
+      } else {
+        classes = [];
+      }
       console.log(`[MY-CLASSES] Found ${classes.length} classes as faculty`);
       console.log(`[MY-CLASSES] Classes found:`, classes.map(c => ({ 
         classID: c.classID, 
@@ -1168,13 +1196,31 @@ router.get('/faculty-classes', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied. Faculty only.' });
     }
     
-    // Get classes where the logged-in faculty is assigned (support both ObjectId and legacy userID string)
-    // Only show confirmed classes in the main faculty classes view
-    const classes = await Class.find({
+    // Get classes where the logged-in faculty is assigned AND has active faculty assignment
+    // First, get active faculty assignments for this faculty
+    const activeAssignments = await FacultyAssignment.find({
+      facultyId: userObjectId,
+      status: 'active'
+    });
+    
+    // Create a list of subject/section combinations that this faculty is assigned to
+    const activeSubjectSections = activeAssignments.map(assignment => ({
+      subjectName: assignment.subjectName,
+      sectionName: assignment.sectionName,
+      schoolYear: assignment.schoolYear,
+      termName: assignment.termName
+    }));
+    
+    // Find classes where facultyID matches AND matches active subject/section assignments
+    const classQueries = activeSubjectSections.map(assignment => ({
       $or: [
         { facultyID: userObjectId },
         { facultyID: userID }
       ],
+      className: { $regex: new RegExp(`^${assignment.subjectName}$`, 'i') },
+      section: { $regex: new RegExp(`^${assignment.sectionName}$`, 'i') },
+      academicYear: assignment.schoolYear,
+      termName: assignment.termName,
       isArchived: { $ne: true },
       $and: [
         {
@@ -1190,7 +1236,12 @@ router.get('/faculty-classes', authenticateToken, async (req, res) => {
           ]
         }
       ]
-    });
+    }));
+    
+    let classes = [];
+    if (classQueries.length > 0) {
+      classes = await Class.find({ $or: classQueries });
+    }
     res.json(classes);
   } catch (err) {
     console.error('Error fetching faculty classes:', err);

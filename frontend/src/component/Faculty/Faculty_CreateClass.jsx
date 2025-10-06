@@ -277,7 +277,7 @@ export default function FacultyCreateClass() {
                 <div key={classData.classID} className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <h4 className="text-xl font-bold text-gray-800">{classData.className}</h4>
+                      <h4 className="text-xl font-bold text-gray-800 truncate">{classData.className}</h4>
                       <p className="text-gray-600">Class Code: {classData.classCode}</p>
                       <p className="text-gray-600">Section: {classData.section}</p>
                       <p className="text-gray-600">Students: {classData.members?.length || 0}</p>
