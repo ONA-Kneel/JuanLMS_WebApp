@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 
 const SocketContext = createContext();
@@ -14,6 +14,7 @@ export const useSocket = () => {
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const quizCompletionListeners = useRef([]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -49,8 +50,21 @@ export const SocketProvider = ({ children }) => {
         setIsConnected(false);
       });
 
-      newSocket.on('connect_error', (error) => {
+      newSocket.on('connect_error', () => {
         setIsConnected(false);
+      });
+
+      // Add quiz completion event listener
+      newSocket.on('quizCompleted', (data) => {
+        console.log('[SocketContext] Quiz completed event received:', data);
+        // Notify all registered listeners
+        quizCompletionListeners.current.forEach(listener => {
+          try {
+            listener(data);
+          } catch (error) {
+            console.error('[SocketContext] Error in quiz completion listener:', error);
+          }
+        });
       });
 
       setSocket(newSocket);
@@ -85,13 +99,21 @@ export const SocketProvider = ({ children }) => {
     }
   };
 
+  const addQuizCompletionListener = (listener) => {
+    quizCompletionListeners.current.push(listener);
+    return () => {
+      quizCompletionListeners.current = quizCompletionListeners.current.filter(l => l !== listener);
+    };
+  };
+
   const value = {
     socket,
     isConnected,
     joinClass,
     leaveClass,
     joinUserRoom,
-    leaveUserRoom
+    leaveUserRoom,
+    addQuizCompletionListener
   };
 
   return (

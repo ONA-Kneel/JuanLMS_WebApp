@@ -3,12 +3,14 @@ import { useNavigate } from "react-router-dom";
 
 import Student_Navbar from "./Student_Navbar";
 import ProfileMenu from "../ProfileMenu";
+import { useSocket } from "../../contexts/SocketContext";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Student_Activities() {
   console.log('Student_Activities component is rendering...');
   const navigate = useNavigate();
+  const { addQuizCompletionListener } = useSocket();
   const [activeTab, setActiveTab] = useState("upcoming");
   const [assignments, setAssignments] = useState([]);
   const [quizzes, setQuizzes] = useState([]);
@@ -352,6 +354,193 @@ export default function Student_Activities() {
       fetchActivities();
     }
   }, [academicYear, currentTerm]);
+
+  // Add quiz completion listener for real-time updates
+  useEffect(() => {
+    const handleQuizCompletion = (data) => {
+      console.log('[Student_Activities] Quiz completion event received:', data);
+      
+      // Get current user info
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const decodedToken = JSON.parse(atob(token.split('.')[1]));
+      const currentUserId = decodedToken.userID;
+      const currentUserObjectId = decodedToken.id;
+      
+      // Check if this completion is for the current student
+      const isCurrentStudent = data.studentId === currentUserId || 
+                              data.studentId === currentUserObjectId ||
+                              String(data.studentId) === String(currentUserId) ||
+                              String(data.studentId) === String(currentUserObjectId);
+      
+      if (isCurrentStudent) {
+        console.log('[Student_Activities] Quiz completion is for current student, refreshing activities...');
+        
+        // Refresh activities to show updated quiz status
+        if (academicYear && currentTerm) {
+          // Trigger a re-fetch of activities
+          const fetchActivities = async () => {
+            setLoading(true);
+            try {
+              const token = localStorage.getItem('token');
+              const decodedToken = JSON.parse(atob(token.split('.')[1]));
+              const userId = decodedToken.userID;
+              const userObjectId = decodedToken.id;
+              
+              // Fetch student's enrolled classes
+              const classesRes = await fetch(`${API_BASE}/classes/my-classes`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              
+              if (!classesRes.ok) {
+                throw new Error('Failed to fetch classes');
+              }
+              
+              const classes = await classesRes.json();
+              
+              // Apply filtering logic
+              const activeClasses = classes.filter(cls => {
+                if (cls.isArchived === true) return false;
+                if (cls.academicYear && cls.academicYear !== `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`) return false;
+                if (cls.termName && cls.termName !== currentTerm.termName) return false;
+                return true;
+              });
+              
+              setStudentClasses(activeClasses);
+              
+              let allAssignments = [];
+              let allQuizzes = [];
+              
+              // Fetch assignments and quizzes for each active class
+              for (const cls of activeClasses) {
+                const classCode = cls.classID || cls.classCode || cls._id;
+                
+                try {
+                  // Fetch assignments
+                  const assignmentRes = await fetch(`${API_BASE}/assignments?classID=${classCode}&termName=${encodeURIComponent(currentTerm.termName)}&academicYear=${encodeURIComponent(`${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  
+                  if (assignmentRes.ok) {
+                    const assignments = await assignmentRes.json();
+                    if (Array.isArray(assignments)) {
+                      const studentAssignments = assignments.filter(assignment => {
+                        const entry = assignment.assignedTo?.find?.(e => e.classID === classCode);
+                        if (!entry || !Array.isArray(entry.studentIDs)) return false;
+                        
+                        const studentInList = entry.studentIDs.some(studentId => {
+                          const studentIdStr = String(studentId);
+                          const userIdStr = String(userId);
+                          const userObjectIdStr = String(userObjectId);
+                          
+                          return studentIdStr === userIdStr || 
+                                 studentIdStr === userObjectIdStr ||
+                                 studentId === userId ||
+                                 studentId === userObjectId;
+                        });
+                        
+                        return studentInList;
+                      });
+                      
+                      const assignmentsWithClass = studentAssignments.map(assignment => ({
+                        ...assignment,
+                        classInfo: {
+                          classID: classCode,
+                          className: cls.className || cls.classCode,
+                          classCode: cls.classCode
+                        }
+                      }));
+                      
+                      allAssignments = [...allAssignments, ...assignmentsWithClass];
+                    }
+                  }
+                  
+                  // Fetch quizzes
+                  const quizRes = await fetch(`${API_BASE}/quizzes?classID=${classCode}&termName=${encodeURIComponent(currentTerm.termName)}&academicYear=${encodeURIComponent(`${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  
+                  if (quizRes.ok) {
+                    const quizzes = await quizRes.json();
+                    if (Array.isArray(quizzes)) {
+                      const studentQuizzes = quizzes.filter(quiz => {
+                        const entry = quiz.assignedTo?.find?.(e => e.classID === classCode);
+                        if (!entry || !Array.isArray(entry.studentIDs)) return false;
+                        
+                        const studentInList = entry.studentIDs.some(studentId => {
+                          const studentIdStr = String(studentId);
+                          const userIdStr = String(userId);
+                          const userObjectIdStr = String(userObjectId);
+                          
+                          return studentIdStr === userIdStr || 
+                                 studentIdStr === userObjectIdStr ||
+                                 studentId === userId ||
+                                 studentId === userObjectId;
+                        });
+                        
+                        return studentInList;
+                      });
+                      
+                      const quizzesWithClass = studentQuizzes.map(quiz => ({
+                        ...quiz,
+                        classInfo: {
+                          classID: classCode,
+                          className: cls.className || cls.classCode,
+                          classCode: cls.classCode
+                        }
+                      }));
+                      
+                      allQuizzes = [...allQuizzes, ...quizzesWithClass];
+                    }
+                  }
+                } catch (error) {
+                  console.error(`Error fetching activities for class ${classCode}:`, error);
+                }
+              }
+              
+              // Fetch submissions and quiz responses
+              const submissionsRes = await fetch(`${API_BASE}/submissions?studentId=${userId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              
+              if (submissionsRes.ok) {
+                const submissions = await submissionsRes.json();
+                setSubmissions(submissions);
+              }
+              
+              const quizResponsesRes = await fetch(`${API_BASE}/quiz-responses?studentId=${userId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              
+              if (quizResponsesRes.ok) {
+                const quizResponses = await quizResponsesRes.json();
+                setQuizResponses(quizResponses);
+              }
+              
+              setAssignments(allAssignments);
+              setQuizzes(allQuizzes);
+              setLoading(false);
+              
+            } catch (error) {
+              console.error('Error refreshing activities after quiz completion:', error);
+              setLoading(false);
+            }
+          };
+          
+          fetchActivities();
+        }
+      }
+    };
+    
+    const removeListener = addQuizCompletionListener(handleQuizCompletion);
+    
+    return () => {
+      if (removeListener) {
+        removeListener();
+      }
+    };
+  }, [addQuizCompletionListener, academicYear, currentTerm]);
 
   // Click outside to close dropdowns
   useEffect(() => {

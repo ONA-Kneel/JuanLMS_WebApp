@@ -522,6 +522,20 @@ router.post('/:quizId/submit', authenticateToken, async (req, res) => {
     });
     const response = new QuizResponse({ quizId, studentId, answers, score, checkedAnswers, violationCount, violationEvents, questionTimes });
     await response.save();
+    
+    // Emit real-time quiz completion event
+    const io = getIO();
+    if (io) {
+      io.to(`class_${quiz.classID}`).emit('quizCompleted', {
+        quizId: quizId,
+        studentId: studentId,
+        response: response,
+        classID: quiz.classID,
+        timestamp: new Date().toISOString()
+      });
+      console.log(`[QuizRoutes] Emitted quizCompleted event for quiz ${quizId} by student ${studentId} in class ${quiz.classID}`);
+    }
+    
     res.status(201).json({ message: 'Quiz submitted successfully.', score });
   } catch (err) {
     res.status(500).json({ error: err.message });
