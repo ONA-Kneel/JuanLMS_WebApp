@@ -21,6 +21,7 @@ export default function FacultyCreateClass() {
   const [confirmingClass, setConfirmingClass] = useState(null);
   const [classImage, setClassImage] = useState(null);
   const [classDesc, setClassDesc] = useState("");
+  const [viewingStudents, setViewingStudents] = useState(null);
 
   // Fetch pending classes function
   const fetchPendingClasses = useCallback(async () => {
@@ -37,6 +38,11 @@ export default function FacultyCreateClass() {
       
       if (pendingRes.ok) {
         const pendingData = await pendingRes.json();
+        console.log('Fetched pending classes:', pendingData);
+        if (pendingData.length > 0) {
+          console.log('Sample class data:', pendingData[0]);
+          console.log('Sample class members:', pendingData[0].members);
+        }
         setPendingClasses(pendingData);
       } else {
         console.error('Failed to fetch pending classes');
@@ -276,18 +282,28 @@ export default function FacultyCreateClass() {
               {pendingClasses.map((classData) => (
                 <div key={classData.classID} className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
                   <div className="flex justify-between items-start mb-4">
-                    <div>
+                    <div className="flex-1">
                       <h4 className="text-xl font-bold text-gray-800 truncate">{classData.className}</h4>
                       <p className="text-gray-600">Class Code: {classData.classCode}</p>
                       <p className="text-gray-600">Section: {classData.section}</p>
-                      <p className="text-gray-600">Students: {classData.members?.length || 0}</p>
+                      <div className="flex items-center gap-3 mt-2">
+                        <p className="text-gray-600">Students: {classData.members?.length || 0}</p>
+                        <button
+                          onClick={() => setViewingStudents(classData)}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg transition-colors text-sm"
+                        >
+                          View Students
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => handleConfirmClass(classData)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-                    >
-                      Confirm Class
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleConfirmClass(classData)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                      >
+                        Confirm Class
+                      </button>
+                    </div>
                   </div>
                   
                   <div className="text-sm text-gray-500">
@@ -311,15 +327,35 @@ export default function FacultyCreateClass() {
                 <div className="mb-6">
                   <h4 className="text-lg font-semibold text-gray-800 mb-3">Class Members ({confirmingClass.members.length})</h4>
                   <div className="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {confirmingClass.members.map((member, index) => (
-                        <div key={member._id || index} className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200">
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-800">{member.firstName} {member.lastName}</p>
-                            <p className="text-sm text-gray-600">School ID: {member.schoolId || 'N/A'}</p>
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {member.role || 'Student'}
+                        <div key={member._id || index} className="flex items-center justify-between bg-white p-4 rounded-lg border border-blue-200 shadow-sm hover:shadow-md transition-all duration-200">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-lg overflow-hidden">
+                              {member.profilePicture ? (
+                                <img 
+                                  src={member.profilePicture} 
+                                  alt={`${member.firstname || member.firstName} ${member.lastname || member.lastName}`}
+                                  className="w-full h-full object-cover rounded-full"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
+                              <div className={`w-full h-full flex items-center justify-center text-lg ${member.profilePicture ? 'hidden' : 'flex'}`}>
+                                {(member.firstname || member.firstName || 'S')?.[0]}{(member.lastname || member.lastName || '')?.[0]}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                                {member.firstname || member.firstName} {member.lastname || member.lastName}
+                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  ✅ Active
+                                </span>
+                              </div>
+                              <div className="text-sm text-blue-600 font-medium">ID: {member.schoolID || member.schoolId || member.userID || 'N/A'}</div>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -367,6 +403,82 @@ export default function FacultyCreateClass() {
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   Confirm Class
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Students Modal */}
+        {viewingStudents && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold">Students in {viewingStudents.className}</h3>
+                <button
+                  onClick={() => setViewingStudents(null)}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="mb-4 text-sm text-gray-600">
+                <p><strong>Class Code:</strong> {viewingStudents.classCode}</p>
+                <p><strong>Section:</strong> {viewingStudents.section}</p>
+                <p><strong>Total Students:</strong> {viewingStudents.members?.length || 0}</p>
+              </div>
+
+              {/* Student Members Section */}
+              {viewingStudents.members && viewingStudents.members.length > 0 ? (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="space-y-3">
+                    {viewingStudents.members.map((member, index) => (
+                      <div key={member._id || index} className="flex items-center justify-between bg-white p-4 rounded-lg border border-blue-200 shadow-sm hover:shadow-md transition-all duration-200">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-lg overflow-hidden">
+                            {member.profilePicture ? (
+                              <img 
+                                src={member.profilePicture} 
+                                alt={`${member.firstname || member.firstName} ${member.lastname || member.lastName}`}
+                                className="w-full h-full object-cover rounded-full"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <div className={`w-full h-full flex items-center justify-center text-lg ${member.profilePicture ? 'hidden' : 'flex'}`}>
+                              {(member.firstname || member.firstName || 'S')?.[0]}{(member.lastname || member.lastName || '')?.[0]}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                              {member.firstname || member.firstName} {member.lastname || member.lastName}
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                ✅ Active
+                              </span>
+                            </div>
+                            <div className="text-sm text-blue-600 font-medium">ID: {member.schoolID || member.schoolId || member.userID || 'N/A'}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <div className="text-4xl mb-2">👥</div>
+                  <p className="font-medium">No students assigned to this class yet.</p>
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setViewingStudents(null)}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  Close
                 </button>
               </div>
             </div>

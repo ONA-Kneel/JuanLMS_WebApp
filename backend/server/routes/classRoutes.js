@@ -1289,10 +1289,83 @@ router.get('/pending-confirmation', authenticateToken, async (req, res) => {
       academicYear: schoolYearName,
       termName: activeTerm.termName
     });
+
+    // Populate members from StudentAssignment for each class
+    const populatedClasses = [];
     
-    console.log(`[PENDING-CONFIRMATION] Found ${classes.length} pending classes for faculty ${userID} in term ${activeTerm.termName}`);
+    for (const classDoc of classes) {
+      try {
+        // Get all student assignments for this section/term/year
+        const studentAssignments = await StudentAssignment.find({
+          sectionName: classDoc.section,
+          schoolYear: classDoc.academicYear,
+          termName: classDoc.termName
+        }).populate('studentId');
+
+        console.log(`[PENDING-CONFIRMATION] Found ${studentAssignments.length} student assignments for class ${classDoc.className}`);
+        console.log(`[PENDING-CONFIRMATION] Original class members:`, classDoc.members);
+
+        // Process students with their data - keep the original school IDs from members array
+        const studentsWithData = [];
+        const memberSchoolIds = (classDoc.members || []).map(m => String(m));
+        console.log(`[PENDING-CONFIRMATION] Member school IDs to match:`, memberSchoolIds);
+        
+        for (const assignment of studentAssignments) {
+          if (assignment.studentId && !assignment.studentId.isArchived) {
+            const student = assignment.studentId;
+            const schoolID = assignment.studentSchoolID || (student.getDecryptedSchoolID ? student.getDecryptedSchoolID() : student.schoolID);
+            
+            console.log(`[PENDING-CONFIRMATION] Checking assignment - student: ${student.firstname} ${student.lastname}, schoolID: ${schoolID}, matches: ${memberSchoolIds.includes(String(schoolID))}`);
+            
+            // Only include students whose school ID matches the class members
+            if (memberSchoolIds.includes(String(schoolID))) {
+              const studentData = {
+                _id: String(student._id),
+                firstname: student.firstname,
+                lastname: student.lastname,
+                schoolID: schoolID,
+                userID: schoolID,
+                role: student.role
+              };
+              studentsWithData.push(studentData);
+              console.log(`[PENDING-CONFIRMATION] Added student:`, studentData);
+            }
+          }
+        }
+
+        // Create a new object with populated members
+        const populatedClass = {
+          ...classDoc.toObject(),
+          members: studentsWithData
+        };
+        
+        populatedClasses.push(populatedClass);
+        console.log(`[PENDING-CONFIRMATION] Populated ${studentsWithData.length} members for class ${classDoc.className}`);
+        if (studentsWithData.length > 0) {
+          console.log(`[PENDING-CONFIRMATION] Sample populated member:`, studentsWithData[0]);
+        }
+      } catch (populateError) {
+        console.error(`[PENDING-CONFIRMATION] Error populating members for class ${classDoc.className}:`, populateError);
+        const errorClass = {
+          ...classDoc.toObject(),
+          members: []
+        };
+        populatedClasses.push(errorClass);
+      }
+    }
+
+    console.log(`[PENDING-CONFIRMATION] Found ${populatedClasses.length} pending classes for faculty ${userID} in term ${activeTerm.termName}`);
     
-    res.json(classes);
+    // Log the populated data for debugging
+    populatedClasses.forEach(cls => {
+      console.log(`[PENDING-CONFIRMATION] Class ${cls.className} has ${cls.members?.length || 0} members`);
+      if (cls.members && cls.members.length > 0) {
+        console.log(`[PENDING-CONFIRMATION] Sample member:`, JSON.stringify(cls.members[0], null, 2));
+        console.log(`[PENDING-CONFIRMATION] All members:`, JSON.stringify(cls.members, null, 2));
+      }
+    });
+    
+    res.json(populatedClasses);
   } catch (err) {
     console.error('Error fetching pending confirmation classes:', err);
     res.status(500).json({ error: 'Failed to fetch pending confirmation classes.' });
