@@ -21,15 +21,15 @@ const __dirname = path.dirname(__filename);
 const lessonsUploadDir = path.join(__dirname, '..', 'uploads', 'lessons');
 
 // Storage configuration
-// Temporarily disable Cloudinary to test with local storage
-const USE_CLOUDINARY = false; // process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
 
 
 async function initializeLessonStorage() {
   if (USE_CLOUDINARY) {
-    console.log('[LESSONS] Using Cloudinary storage');
+    console.log('[LESSONS] Attempting to use Cloudinary storage');
     try {
       const { lessonStorage } = await import('../config/cloudinary.js');
+      console.log('[LESSONS] Cloudinary storage imported successfully');
       return multer({
         storage: lessonStorage,
         limits: { 
@@ -45,8 +45,11 @@ async function initializeLessonStorage() {
         }
       });
     } catch (error) {
-      console.error('[LESSONS] Cloudinary setup failed, falling back to local storage:', error.message);
-      // Force fallback to local storage
+      console.error('[LESSONS] Cloudinary setup failed, falling back to local storage:', {
+        message: error.message,
+        stack: error.stack
+      });
+      // Continue to local storage fallback
     }
   }
   
@@ -101,49 +104,14 @@ try {
   });
 }
 
-// Health check endpoint
-router.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    uploadConfigured: !!upload
-  });
-});
-
-// Test endpoint to check if the route is working
-router.post('/test', authenticateToken, async (req, res) => {
-  try {
-    console.log('[LESSONS] Test endpoint hit');
-    res.json({ 
-      status: 'ok', 
-      message: 'Lesson route is working',
-      timestamp: new Date().toISOString(),
-      body: req.body
-    });
-  } catch (error) {
-    console.error('[LESSONS] Test endpoint error:', error);
-    res.status(500).json({ error: 'Test endpoint failed' });
-  }
-});
 
 // --- POST /lessons - upload lesson with multiple files ---
 // Accepts up to 5 files per lesson
 router.post('/', authenticateToken, upload.array('files', 5), async (req, res) => {
-  console.log('[LESSONS] POST /lessons route hit');
   try {
-    console.log('[LESSONS] Upload request received:', {
-      classID: req.body.classID,
-      title: req.body.title,
-      hasFiles: !!req.files,
-      fileCount: req.files ? req.files.length : 0,
-      link: req.body.link,
-      userId: req.user._id,
-      userRole: req.user.role
-    });
 
     const { classID, title, link } = req.body;
     if (!classID || !title) {
-      console.log('[LESSONS] Missing required fields:', { classID, title });
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -154,7 +122,6 @@ router.post('/', authenticateToken, upload.array('files', 5), async (req, res) =
     });
     
     if (existingLesson) {
-      console.log('[LESSONS] Duplicate lesson found:', { classID, title });
       return res.status(400).json({ 
         error: `A lesson with the title "${title}" already exists in this class. Please use a different title.` 
       });
@@ -162,39 +129,19 @@ router.post('/', authenticateToken, upload.array('files', 5), async (req, res) =
 
     // Map uploaded files when present
     const files = Array.isArray(req.files) && req.files.length > 0
-      ? req.files.map(file => {
-          console.log('[LESSONS] Processing file:', {
-            originalname: file.originalname,
-            size: file.size,
-            mimetype: file.mimetype,
-            hasSecureUrl: !!file.secure_url,
-            hasPath: !!file.path,
-            filename: file.filename
-          });
-          return {
-            fileUrl: file.secure_url || file.path || `/uploads/lessons/${file.filename}`,
-            fileName: file.originalname
-          };
-        })
+      ? req.files.map(file => ({
+          fileUrl: file.secure_url || file.path || `/uploads/lessons/${file.filename}`,
+          fileName: file.originalname
+        }))
       : [];
 
     // Disallow empty lessons with neither files nor link
     if ((!link || String(link).trim() === '') && files.length === 0) {
-      console.log('[LESSONS] Empty lesson rejected:', { hasLink: !!link, fileCount: files.length });
       return res.status(400).json({ error: 'Provide at least one file or a link.' });
     }
 
-    console.log('[LESSONS] Creating lesson with data:', {
-      classID,
-      title: title.trim(),
-      fileCount: files.length,
-      hasLink: !!link
-    });
-
     const lesson = new Lesson({ classID, title: title.trim(), files, link });
     await lesson.save();
-    
-    console.log('[LESSONS] Lesson saved successfully:', { lessonId: lesson._id });
 
     // Create audit log for material upload
     const db = database.getDb();
