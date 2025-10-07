@@ -9,13 +9,14 @@
     RewriteRule ^(.*)$ /index.html [L]
 </IfModule>
 
-# Enable CORS for API calls
-Header always set Access-Control-Allow-Origin "*"
-Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
-
-# Security headers for better protection
+# Enable CORS and security headers
 <IfModule mod_headers.c>
+    # CORS headers for API calls
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+    
+    # Security headers for better protection
     Header always set X-Content-Type-Options "nosniff"
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set X-XSS-Protection "1; mode=block"
