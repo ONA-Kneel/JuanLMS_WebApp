@@ -1574,14 +1574,28 @@ export default function ClassContent({ selected, isFaculty = false }) {
         message: 'Class material uploaded successfully!'
       });
     } else {
-      const data = await res.json();
-      let errorMessage = data.error || "Failed to upload lesson. Please try again.";
+      let errorMessage = "Failed to upload lesson. Please try again.";
       
-      // Provide more specific error messages
-      if (data.error && data.error.includes('File too large')) {
-        errorMessage = 'One or more files exceed the 100MB limit. Please compress or split your files.';
-      } else if (data.error && data.error.includes('duplicate')) {
-        errorMessage = 'A lesson with this title already exists. Please use a different title.';
+      try {
+        const data = await res.json();
+        errorMessage = data.error || errorMessage;
+        
+        // Provide more specific error messages
+        if (data.error && data.error.includes('File too large')) {
+          errorMessage = 'One or more files exceed the 100MB limit. Please compress or split your files.';
+        } else if (data.error && data.error.includes('duplicate')) {
+          errorMessage = 'A lesson with this title already exists. Please use a different title.';
+        }
+      } catch (parseError) {
+        // Server returned HTML instead of JSON (likely a 500 error page)
+        console.error('[LESSONS] Failed to parse server response as JSON:', parseError);
+        if (res.status === 500) {
+          errorMessage = 'Server error occurred. Please try again or contact support if the issue persists.';
+        } else if (res.status === 404) {
+          errorMessage = 'Upload endpoint not found. Please refresh the page and try again.';
+        } else {
+          errorMessage = `Server error (${res.status}). Please try again.`;
+        }
       }
       
       setValidationModal({

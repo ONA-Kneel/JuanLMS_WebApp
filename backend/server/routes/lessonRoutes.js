@@ -75,11 +75,51 @@ async function initializeLessonStorage() {
 }
 
 // Initialize upload middleware
-const upload = await initializeLessonStorage();
+let upload;
+try {
+  upload = await initializeLessonStorage();
+  console.log('[LESSONS] Upload middleware initialized successfully');
+} catch (error) {
+  console.error('[LESSONS] Failed to initialize upload middleware:', error);
+  // Create a fallback multer instance
+  upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { 
+      fileSize: 100 * 1024 * 1024, // 100MB per file
+      files: 5 // Maximum 5 files per upload
+    }
+  });
+}
+
+// Health check endpoint
+router.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uploadConfigured: !!upload
+  });
+});
+
+// Test endpoint to check if the route is working
+router.post('/test', authenticateToken, async (req, res) => {
+  try {
+    console.log('[LESSONS] Test endpoint hit');
+    res.json({ 
+      status: 'ok', 
+      message: 'Lesson route is working',
+      timestamp: new Date().toISOString(),
+      body: req.body
+    });
+  } catch (error) {
+    console.error('[LESSONS] Test endpoint error:', error);
+    res.status(500).json({ error: 'Test endpoint failed' });
+  }
+});
 
 // --- POST /lessons - upload lesson with multiple files ---
 // Accepts up to 5 files per lesson
 router.post('/', authenticateToken, upload.array('files', 5), async (req, res) => {
+  console.log('[LESSONS] POST /lessons route hit');
   try {
     console.log('[LESSONS] Upload request received:', {
       classID: req.body.classID,
@@ -374,6 +414,23 @@ router.patch('/:lessonId/files', authenticateToken, upload.array('files', 5), as
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to add files to lesson' });
+  }
+});
+
+// Global error handler for lesson routes
+router.use((err, req, res, next) => {
+  console.error('[LESSONS] Unhandled error in lesson routes:', {
+    message: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method
+  });
+  
+  if (!res.headersSent) {
+    res.status(500).json({ 
+      error: 'Internal server error occurred during lesson processing',
+      timestamp: new Date().toISOString()
+    });
   }
 });
 

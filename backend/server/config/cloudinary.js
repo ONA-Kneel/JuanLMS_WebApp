@@ -2,17 +2,29 @@ import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 
 // Configure Cloudinary - supports both CLOUDINARY_URL and individual env vars
+console.log('[CLOUDINARY] Configuring Cloudinary...');
+console.log('[CLOUDINARY] Environment check:', {
+  hasCloudinaryUrl: !!process.env.CLOUDINARY_URL,
+  hasCloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
+  hasApiKey: !!process.env.CLOUDINARY_API_KEY,
+  hasApiSecret: !!process.env.CLOUDINARY_API_SECRET
+});
+
 if (process.env.CLOUDINARY_URL) {
   // Use CLOUDINARY_URL format: cloudinary://api_key:api_secret@cloud_name
+  console.log('[CLOUDINARY] Using CLOUDINARY_URL configuration');
   cloudinary.config(process.env.CLOUDINARY_URL);
 } else {
   // Use individual environment variables
+  console.log('[CLOUDINARY] Using individual environment variables');
   cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
   });
 }
+
+console.log('[CLOUDINARY] Configuration completed');
 
 // Create storage for different file types
 export const ticketStorage = new CloudinaryStorage({
