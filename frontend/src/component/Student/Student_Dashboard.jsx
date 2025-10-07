@@ -18,6 +18,9 @@ export default function Student_Dashboard() {
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const [showChangePwModal, setShowChangePwModal] = useState(false);
 
+  // General announcements
+  const [announcements, setAnnouncements] = useState([]);
+
   useEffect(() => {
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -48,6 +51,17 @@ export default function Student_Dashboard() {
   };
 
   const currentUserID = localStorage.getItem("userID");
+
+  /* ------------------------------ helpers ------------------------------ */
+  const DISMISSED_KEY = "student_dashboard_dismissed_announcements";
+  const getDismissed = () => {
+    try { return JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]"); }
+    catch { return []; }
+  };
+  const addDismissed = (id) => {
+    const next = Array.from(new Set([...(getDismissed() || []), id]));
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
+  };
 
 
   /* ----------------------- load academic year/term ---------------------- */
@@ -169,6 +183,42 @@ export default function Student_Dashboard() {
     }
   }, [currentUserID, academicYear, currentTerm]);
 
+  /* ----------------------------- Announcements ---------------------------- */
+  useEffect(() => {
+    async function fetchAnnouncements() {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const res = await fetch(`${API_BASE}/api/general-announcements`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+
+        const all = await res.json();
+        const dismissed = new Set(getDismissed());
+
+        // Only show if created by Principal OR any "vice ... education"
+        const filtered = (all || []).filter((a) => {
+          const role = (a?.createdBy?.role || "").toLowerCase();
+          const fromPrincipal = role.includes("principal");
+          const fromVPE = role.includes("vice") && role.includes("education");
+          return (fromPrincipal || fromVPE) && !dismissed.has(a._id);
+        });
+
+        setAnnouncements(filtered);
+      } catch (err) {
+        console.error("Failed to fetch announcements", err);
+      }
+    }
+
+    fetchAnnouncements();
+  }, []);
+
+  const dismissAnnouncement = (id) => {
+    addDismissed(id);
+    setAnnouncements((prev) => prev.filter((a) => a._id !== id));
+  };
 
   /* -------------------------------- render -------------------------------- */
   return (
@@ -237,6 +287,49 @@ export default function Student_Dashboard() {
             <ProfileMenu />
           </div>
         </div>
+
+        {/* Announcements */}
+        {announcements.length > 0 && (
+          <div className="mb-6">
+            <div className="bg-white rounded-2xl shadow p-4 md:p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-lg font-semibold">Announcements</h4>
+                <button
+                  onClick={() => dismissAnnouncement(announcements[0]._id)}
+                  className="text-gray-500 hover:text-gray-700"
+                  aria-label="Dismiss announcement"
+                  title="Dismiss"
+                >
+                  {/* simple × so no extra icon deps */}
+                  <span className="text-xl leading-none">&times;</span>
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-base font-semibold text-gray-900">
+                  {announcements[0].title}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {announcements[0].termName} • {announcements[0].schoolYear}
+                </div>
+                <div className="text-sm text-gray-800 whitespace-pre-wrap break-words overflow-hidden mt-2">
+                  {announcements[0].body}
+                </div>
+                {announcements[0]?.createdBy && (
+                  <div className="text-xs text-gray-600 mt-3">
+                    {(announcements[0].createdBy.firstname || "") +
+                      (announcements[0].createdBy.lastname
+                        ? " " + announcements[0].createdBy.lastname
+                        : "")}
+                    {announcements[0].createdBy.role
+                      ? ` — ${announcements[0].createdBy.role}`
+                      : ""}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Recent Classes Section */}
         <h3 className="text-lg md:text-4xl font-bold mb-3">
