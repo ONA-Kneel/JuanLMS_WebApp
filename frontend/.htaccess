@@ -30,14 +30,24 @@ Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-R
     AddType font/woff2 .woff2
 </IfModule>
 
-# Prevent caching of HTML and critical JS files
-# Set no-cache headers for HTML files only, allow JS modules to be cached properly
+# Smart caching strategy - no hard refresh needed
 <IfModule mod_headers.c>
-    # Only apply no-cache to HTML files
+    # HTML files - always check for updates but allow short-term caching
     <FilesMatch "\.(html|htm)$">
-        Header set Cache-Control "no-cache, no-store, must-revalidate"
-        Header set Pragma "no-cache"
-        Header set Expires "0"
+        Header set Cache-Control "public, max-age=300, must-revalidate"
+        Header set ETag "strong"
+    </FilesMatch>
+    
+    # JavaScript and CSS files with hash in filename - can cache longer
+    <FilesMatch "\.(js|css)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+        Header set ETag "strong"
+    </FilesMatch>
+    
+    # Static assets - cache for a year
+    <FilesMatch "\.(png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+        Header set ETag "strong"
     </FilesMatch>
 </IfModule>
 
@@ -55,32 +65,21 @@ Header always set Referrer-Policy "strict-origin-when-cross-origin"
 <IfModule mod_expires.c>
     ExpiresActive on
     
-    # CSS and JavaScript files (shorter cache for auth-sensitive apps)
-    ExpiresByType text/css "access plus 1 hour"
-    ExpiresByType application/javascript "access plus 1 hour"
-    ExpiresByType application/x-javascript "access plus 1 hour"
-    
-    # Ensure proper cache headers for JS modules
-    <FilesMatch "\.(js|mjs)$">
-        Header set Cache-Control "public, max-age=3600"
-    </FilesMatch>
-    
-    # Images
+    # Set fallback expiration times (headers above take precedence)
+    ExpiresByType text/html "access plus 5 minutes"
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType application/x-javascript "access plus 1 year"
     ExpiresByType image/png "access plus 1 year"
     ExpiresByType image/jpg "access plus 1 year"
     ExpiresByType image/jpeg "access plus 1 year"
     ExpiresByType image/gif "access plus 1 year"
     ExpiresByType image/svg+xml "access plus 1 year"
     ExpiresByType image/webp "access plus 1 year"
-    
-    # Fonts
     ExpiresByType font/ttf "access plus 1 year"
     ExpiresByType font/otf "access plus 1 year"
     ExpiresByType font/woff "access plus 1 year"
     ExpiresByType font/woff2 "access plus 1 year"
-    
-    # HTML files (shorter cache for dynamic content)
-    ExpiresByType text/html "access plus 1 hour"
 </IfModule>
 
 # Compress text files for better performance

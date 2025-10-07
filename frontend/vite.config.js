@@ -11,12 +11,21 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // Ensure consistent module naming
+        // Ensure consistent module naming with content-based hashing
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]'
+        assetFileNames: (assetInfo) => {
+          // Use content hash for better cache busting
+          const info = assetInfo.name.split('.');
+          const ext = info[info.length - 1];
+          return `assets/[name]-[hash].${ext}`;
+        }
       }
-    }
+    },
+    // Ensure clean builds
+    emptyOutDir: true,
+    // Generate manifest for cache busting
+    manifest: false
   },
   server: {
     proxy: {

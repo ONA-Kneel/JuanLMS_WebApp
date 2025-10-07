@@ -7,8 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "postbuild": "copy .htaccess dist/",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "build:clean": "rmdir /s /q dist 2>nul & npm run build",
+    "preview": "vite preview",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@daily-co/daily-js": "^0.81.0",
