@@ -14,12 +14,31 @@ Header always set Access-Control-Allow-Origin "*"
 Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
 Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
 
+# Ensure proper MIME types for JavaScript modules
+<IfModule mod_mime.c>
+    AddType application/javascript .js
+    AddType application/javascript .mjs
+    AddType text/css .css
+    AddType application/json .json
+    AddType image/svg+xml .svg
+    AddType image/png .png
+    AddType image/jpeg .jpg .jpeg
+    AddType image/gif .gif
+    AddType image/webp .webp
+    AddType font/ttf .ttf
+    AddType font/woff .woff
+    AddType font/woff2 .woff2
+</IfModule>
+
 # Prevent caching of HTML and critical JS files
-# Set no-cache headers for all requests (will be overridden by ExpiresByType for other files)
+# Set no-cache headers for HTML files only, allow JS modules to be cached properly
 <IfModule mod_headers.c>
-    Header set Cache-Control "no-cache, no-store, must-revalidate"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
+    # Only apply no-cache to HTML files
+    <FilesMatch "\.(html|htm)$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
 </IfModule>
 
 # Handle OPTIONS preflight requests
@@ -40,6 +59,11 @@ Header always set Referrer-Policy "strict-origin-when-cross-origin"
     ExpiresByType text/css "access plus 1 hour"
     ExpiresByType application/javascript "access plus 1 hour"
     ExpiresByType application/x-javascript "access plus 1 hour"
+    
+    # Ensure proper cache headers for JS modules
+    <FilesMatch "\.(js|mjs)$">
+        Header set Cache-Control "public, max-age=3600"
+    </FilesMatch>
     
     # Images
     ExpiresByType image/png "access plus 1 year"

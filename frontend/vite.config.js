@@ -8,6 +8,16 @@ export default defineConfig({
     tailwindcss(),
     react()
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Ensure consistent module naming
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
+      }
+    }
+  },
   server: {
     proxy: {
       '/uploads': 'https://juanlms-webapp-server.onrender.com',
