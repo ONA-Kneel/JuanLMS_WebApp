@@ -812,7 +812,14 @@ export default function ClassContent({ selected, isFaculty = false }) {
     // Listen for new lessons/materials
     const handleNewLesson = (data) => {
       if (data.classID === classId) {
-        setBackendLessons(prev => [data.lesson, ...prev]);
+        setBackendLessons(prev => {
+          // Check if lesson already exists to prevent duplicates
+          const existingLesson = prev.find(lesson => lesson._id === data.lesson._id);
+          if (existingLesson) {
+            return prev; // Don't add duplicate
+          }
+          return [data.lesson, ...prev];
+        });
         setRealtimeUpdate({ type: 'lesson', message: 'New class material received!' });
         setTimeout(() => setRealtimeUpdate(null), 3000);
       }
@@ -1481,12 +1488,44 @@ export default function ClassContent({ selected, isFaculty = false }) {
 
   const handleLessonUpload = async (e) => {
   e.preventDefault();
+  
+  // Prevent double submission
+  if (uploading) return;
+  
   if (!lessonTitle || (lessonFiles.length === 0 && !lessonLink)) {
     setValidationModal({
       isOpen: true,
       type: 'warning',
       title: 'Missing Information',
       message: 'Please provide a title and either a file or a link.'
+    });
+    return;
+  }
+
+  // Check for file size limits (100MB per file)
+  const maxFileSize = 100 * 1024 * 1024; // 100MB
+  const oversizedFiles = lessonFiles.filter(file => file.size > maxFileSize);
+  if (oversizedFiles.length > 0) {
+    setValidationModal({
+      isOpen: true,
+      type: 'error',
+      title: 'File Too Large',
+      message: `The following files exceed the 100MB limit: ${oversizedFiles.map(f => f.name).join(', ')}. Please compress or split these files.`
+    });
+    return;
+  }
+
+  // Check for duplicate lesson titles in the same class
+  const existingLesson = backendLessons.find(lesson => 
+    lesson.title.toLowerCase().trim() === lessonTitle.toLowerCase().trim() && 
+    lesson.classID === classId
+  );
+  if (existingLesson) {
+    setValidationModal({
+      isOpen: true,
+      type: 'warning',
+      title: 'Duplicate Lesson Title',
+      message: `A lesson with the title "${lessonTitle}" already exists in this class. Please use a different title.`
     });
     return;
   }
@@ -1519,22 +1558,48 @@ export default function ClassContent({ selected, isFaculty = false }) {
       setLessonTitle("");
       setLessonFiles([]);
       setLessonLink(""); // Clear the link field
+      
+      // Show success message
+      setValidationModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Upload Successful',
+        message: 'Class material uploaded successfully!'
+      });
     } else {
       const data = await res.json();
+      let errorMessage = data.error || "Failed to upload lesson. Please try again.";
+      
+      // Provide more specific error messages
+      if (data.error && data.error.includes('File too large')) {
+        errorMessage = 'One or more files exceed the 100MB limit. Please compress or split your files.';
+      } else if (data.error && data.error.includes('duplicate')) {
+        errorMessage = 'A lesson with this title already exists. Please use a different title.';
+      }
+      
       setValidationModal({
         isOpen: true,
         type: 'error',
         title: 'Upload Failed',
-        message: data.error || "Failed to upload lesson. Please try again."
+        message: errorMessage
       });
       setShowLessonForm(false); // ✅ Close modal on error
     }
-  } catch {
+  } catch (error) {
+    let errorMessage = 'Failed to upload lesson due to network error. Please check your connection and try again.';
+    
+    // Provide more specific error messages based on error type
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      errorMessage = 'Network connection failed. Please check your internet connection and try again.';
+    } else if (error.message.includes('timeout')) {
+      errorMessage = 'Upload timed out. Please try again with smaller files or check your connection.';
+    }
+    
     setValidationModal({
       isOpen: true,
       type: 'error',
       title: 'Network Error',
-      message: 'Failed to upload lesson due to network error. Please check your connection and try again.'
+      message: errorMessage
     });
     setShowLessonForm(false); // ✅ Close modal on network error
   } finally {
@@ -1607,77 +1672,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
     }
   };
 
-  const handleCreateLesson = async () => {
-    const token = localStorage.getItem('token');
-
-    // Basic validation
-    if (!lessonTitle || !classId || (lessonFiles.length === 0 && !lessonLink)) {
-      setValidationModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Missing Data',
-        message: 'Please provide a title, select a class, and either upload at least one file or add a link.',
-        onConfirm: () => {
-          setValidationModal({ isOpen: false, type: 'error', title: '', message: '', onConfirm: null });
-        },
-        confirmText: 'OK',
-        showCancel: false
-      });
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('classID', classId);
-    formData.append('title', lessonTitle);
-
-    if (lessonLink) {
-      formData.append('link', lessonLink);
-    }
-
-    for (const file of lessonFiles) {
-      formData.append('files', file);
-    }
-
-
-    try {
-      const res = await fetch(`${API_BASE}/lessons`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          // ❗ No Content-Type header when using FormData
-        },
-        body: formData,
-      });
-
-      if (res.ok) {
-        // Socket listener will automatically update the lessons list
-        setLessonTitle('');
-        setLessonFiles([]);
-        setLessonLink(''); // ✅ Clear link input too
-        setValidationModal({
-          isOpen: true,
-          type: 'success',
-          title: 'Success',
-          message: 'Lesson uploaded successfully!'
-        });
-      } else {
-        const error = await res.json();
-        setValidationModal({
-          isOpen: true,
-          type: 'error',
-          title: 'Upload Failed',
-          message: error?.error || 'Failed to upload lesson.'
-        });
-      }
-    } catch (err) {
-      setValidationModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Network Error',
-        message: 'Check your internet connection and try again.'
-      });
-    }
-  };
 
   // Upload new files to lesson (requires backend PATCH/POST endpoint, not currently implemented)
   const handleAddFilesToLesson = async (lessonId) => {
@@ -2186,8 +2180,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
             </div>
             <div className="flex gap-2 mt-2">
               <button
-                type="button"
-                onClick={handleCreateLesson}
+                type="submit"
                 className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-950 text-sm"
                 disabled={uploading || lessonFiles.length === 0}
               >
@@ -3283,6 +3276,24 @@ export default function ClassContent({ selected, isFaculty = false }) {
                   }
                   className="border rounded px-3 py-2 w-full"
                 />
+                <p className="text-sm text-gray-600 mt-1">
+                  Maximum 5 files, 100MB per file. Supported formats: PDF, DOC, DOCX, PPT, PPTX, images, videos, etc.
+                </p>
+                {lessonFiles.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm font-medium">Selected files:</p>
+                    <ul className="text-sm text-gray-600">
+                      {lessonFiles.map((file, index) => (
+                        <li key={index} className="flex justify-between">
+                          <span>{file.name}</span>
+                          <span className="text-gray-500">
+                            {(file.size / (1024 * 1024)).toFixed(1)} MB
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
               {/* Optional Link */}

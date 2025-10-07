@@ -62,8 +62,16 @@ const io = new Server(server, {
     allowedHeaders: ["Content-Type", "Authorization"]
   },
   transports: ['websocket', 'polling'],
-  allowEIO3: true
+  allowEIO3: true,
+  // Increase timeout for file uploads
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
+
+// Set server timeout for long file uploads
+server.timeout = 300000; // 5 minutes
+server.keepAliveTimeout = 300000; // 5 minutes
+server.headersTimeout = 300000; // 5 minutes
 
 // Socket.IO authentication middleware
 io.use((socket, next) => {

@@ -30,8 +30,15 @@ async function initializeLessonStorage() {
       const { lessonStorage } = await import('../config/cloudinary.js');
       return multer({
         storage: lessonStorage,
-        limits: { fileSize: 100 * 1024 * 1024 }, // 100MB per file
+        limits: { 
+          fileSize: 100 * 1024 * 1024, // 100MB per file
+          files: 5 // Maximum 5 files per upload
+        },
         fileFilter: (req, file, cb) => {
+          // Check file size before processing
+          if (file.size && file.size > 100 * 1024 * 1024) {
+            return cb(new Error('File size exceeds 100MB limit'), false);
+          }
           cb(null, true); // Accept all file types for lesson materials
         }
       });
@@ -53,8 +60,15 @@ async function initializeLessonStorage() {
   });
   return multer({
     storage: localStorage,
-    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB per file
+    limits: { 
+      fileSize: 100 * 1024 * 1024, // 100MB per file
+      files: 5 // Maximum 5 files per upload
+    },
     fileFilter: (req, file, cb) => {
+      // Check file size before processing
+      if (file.size && file.size > 100 * 1024 * 1024) {
+        return cb(new Error('File size exceeds 100MB limit'), false);
+      }
       cb(null, true);
     }
   });
@@ -72,6 +86,18 @@ router.post('/', authenticateToken, upload.array('files', 5), async (req, res) =
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Check for duplicate lesson titles in the same class
+    const existingLesson = await Lesson.findOne({ 
+      classID: classID, 
+      title: { $regex: new RegExp(`^${title.trim()}$`, 'i') } 
+    });
+    
+    if (existingLesson) {
+      return res.status(400).json({ 
+        error: `A lesson with the title "${title}" already exists in this class. Please use a different title.` 
+      });
+    }
+
     // Map uploaded files when present
     const files = Array.isArray(req.files) && req.files.length > 0
       ? req.files.map(file => ({
@@ -85,7 +111,7 @@ router.post('/', authenticateToken, upload.array('files', 5), async (req, res) =
       return res.status(400).json({ error: 'Provide at least one file or a link.' });
     }
 
-    const lesson = new Lesson({ classID, title, files, link });
+    const lesson = new Lesson({ classID, title: title.trim(), files, link });
     await lesson.save();
 
     // Create audit log for material upload
@@ -112,8 +138,23 @@ router.post('/', authenticateToken, upload.array('files', 5), async (req, res) =
 
     res.status(201).json({ success: true, lesson });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to upload lesson' });
+    console.error('[LESSONS] Upload error:', err);
+    
+    // Handle specific error types
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large. Maximum size is 100MB per file.' });
+    }
+    if (err.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({ error: 'Too many files. Maximum 5 files per upload.' });
+    }
+    if (err.message && err.message.includes('File size exceeds')) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ error: 'Invalid lesson data provided.' });
+    }
+    
+    res.status(500).json({ error: 'Failed to upload lesson. Please try again.' });
   }
 });
 
