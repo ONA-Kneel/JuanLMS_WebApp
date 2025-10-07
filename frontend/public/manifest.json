@@ -27,7 +27,9 @@
   ],
   "categories": ["education", "productivity"],
   "lang": "en",
-  "dir": "ltr"
+  "dir": "ltr",
+  "scope": "/",
+  "id": "juanlms-app"
 }
 
 
