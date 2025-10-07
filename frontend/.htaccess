@@ -14,27 +14,21 @@ Header always set Access-Control-Allow-Origin "*"
 Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
 Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
 
-# Prevent caching of HTML and critical JS files
-# Set no-cache headers for all requests (will be overridden by ExpiresByType for other files)
-<IfModule mod_headers.c>
-    Header set Cache-Control "no-cache, no-store, must-revalidate"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
-</IfModule>
-
-# Handle OPTIONS preflight requests
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^(.*)$ $1 [R=200,L]
-
 # Security headers for better protection
-Header always set X-Content-Type-Options "nosniff"
-Header always set X-Frame-Options "SAMEORIGIN"
-Header always set X-XSS-Protection "1; mode=block"
-Header always set Referrer-Policy "strict-origin-when-cross-origin"
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header set Connection keep-alive
+</IfModule>
 
 # Cache static assets with longer expiration for better performance
 <IfModule mod_expires.c>
     ExpiresActive on
+    
+    # HTML files - no cache for dynamic content
+    ExpiresByType text/html "access plus 0 seconds"
     
     # CSS and JavaScript files (shorter cache for auth-sensitive apps)
     ExpiresByType text/css "access plus 1 hour"
@@ -54,9 +48,6 @@ Header always set Referrer-Policy "strict-origin-when-cross-origin"
     ExpiresByType font/otf "access plus 1 year"
     ExpiresByType font/woff "access plus 1 year"
     ExpiresByType font/woff2 "access plus 1 year"
-    
-    # HTML files (shorter cache for dynamic content)
-    ExpiresByType text/html "access plus 1 hour"
 </IfModule>
 
 # Compress text files for better performance
@@ -77,10 +68,12 @@ Header always set Referrer-Policy "strict-origin-when-cross-origin"
     AddOutputFilterByType DEFLATE font/woff2
 </IfModule>
 
-# Prevent access to sensitive files using mod_rewrite
-RewriteRule \.(env|htaccess|htpasswd|ini|log|sh|sql|conf|bak|backup|old|tmp|temp)$ - [F,L]
-
-# Enable Keep-Alive for better performance
-<IfModule mod_headers.c>
-    Header set Connection keep-alive
+# Handle OPTIONS preflight requests and prevent access to sensitive files
+<IfModule mod_rewrite.c>
+    # Handle OPTIONS preflight requests
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ $1 [R=200,L]
+    
+    # Prevent access to sensitive files
+    RewriteRule \.(env|htaccess|htpasswd|ini|log|sh|sql|conf|bak|backup|old|tmp|temp)$ - [F,L]
 </IfModule>
