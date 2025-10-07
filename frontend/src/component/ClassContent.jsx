@@ -1546,11 +1546,18 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const token = localStorage.getItem("token");
 
   try {
+    // Create AbortController for timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes timeout
+    
     const res = await fetch(`${API_BASE}/lessons`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
 
     if (res.ok) {
       // Socket listener will automatically update the lessons list
@@ -1589,11 +1596,21 @@ export default function ClassContent({ selected, isFaculty = false }) {
     let errorMessage = 'Failed to upload lesson due to network error. Please check your connection and try again.';
     
     // Provide more specific error messages based on error type
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+    if (error.name === 'AbortError') {
+      errorMessage = 'Upload timed out. Please try again with smaller files or check your connection.';
+    } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
       errorMessage = 'Network connection failed. Please check your internet connection and try again.';
     } else if (error.message.includes('timeout')) {
       errorMessage = 'Upload timed out. Please try again with smaller files or check your connection.';
+    } else if (error.message.includes('Failed to fetch')) {
+      errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
     }
+    
+    console.error('[LESSONS] Frontend upload error:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     
     setValidationModal({
       isOpen: true,

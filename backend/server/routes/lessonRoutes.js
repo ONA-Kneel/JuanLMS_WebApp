@@ -81,8 +81,19 @@ const upload = await initializeLessonStorage();
 // Accepts up to 5 files per lesson
 router.post('/', authenticateToken, upload.array('files', 5), async (req, res) => {
   try {
+    console.log('[LESSONS] Upload request received:', {
+      classID: req.body.classID,
+      title: req.body.title,
+      hasFiles: !!req.files,
+      fileCount: req.files ? req.files.length : 0,
+      link: req.body.link,
+      userId: req.user._id,
+      userRole: req.user.role
+    });
+
     const { classID, title, link } = req.body;
     if (!classID || !title) {
+      console.log('[LESSONS] Missing required fields:', { classID, title });
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -93,6 +104,7 @@ router.post('/', authenticateToken, upload.array('files', 5), async (req, res) =
     });
     
     if (existingLesson) {
+      console.log('[LESSONS] Duplicate lesson found:', { classID, title });
       return res.status(400).json({ 
         error: `A lesson with the title "${title}" already exists in this class. Please use a different title.` 
       });
@@ -100,19 +112,39 @@ router.post('/', authenticateToken, upload.array('files', 5), async (req, res) =
 
     // Map uploaded files when present
     const files = Array.isArray(req.files) && req.files.length > 0
-      ? req.files.map(file => ({
-          fileUrl: file.secure_url || file.path || `/uploads/lessons/${file.filename}`,
-          fileName: file.originalname
-        }))
+      ? req.files.map(file => {
+          console.log('[LESSONS] Processing file:', {
+            originalname: file.originalname,
+            size: file.size,
+            mimetype: file.mimetype,
+            hasSecureUrl: !!file.secure_url,
+            hasPath: !!file.path,
+            filename: file.filename
+          });
+          return {
+            fileUrl: file.secure_url || file.path || `/uploads/lessons/${file.filename}`,
+            fileName: file.originalname
+          };
+        })
       : [];
 
     // Disallow empty lessons with neither files nor link
     if ((!link || String(link).trim() === '') && files.length === 0) {
+      console.log('[LESSONS] Empty lesson rejected:', { hasLink: !!link, fileCount: files.length });
       return res.status(400).json({ error: 'Provide at least one file or a link.' });
     }
 
+    console.log('[LESSONS] Creating lesson with data:', {
+      classID,
+      title: title.trim(),
+      fileCount: files.length,
+      hasLink: !!link
+    });
+
     const lesson = new Lesson({ classID, title: title.trim(), files, link });
     await lesson.save();
+    
+    console.log('[LESSONS] Lesson saved successfully:', { lessonId: lesson._id });
 
     // Create audit log for material upload
     const db = database.getDb();
@@ -138,7 +170,12 @@ router.post('/', authenticateToken, upload.array('files', 5), async (req, res) =
 
     res.status(201).json({ success: true, lesson });
   } catch (err) {
-    console.error('[LESSONS] Upload error:', err);
+    console.error('[LESSONS] Upload error:', {
+      message: err.message,
+      code: err.code,
+      name: err.name,
+      stack: err.stack
+    });
     
     // Handle specific error types
     if (err.code === 'LIMIT_FILE_SIZE') {
@@ -152,6 +189,15 @@ router.post('/', authenticateToken, upload.array('files', 5), async (req, res) =
     }
     if (err.name === 'ValidationError') {
       return res.status(400).json({ error: 'Invalid lesson data provided.' });
+    }
+    if (err.message && err.message.includes('Cloudinary')) {
+      return res.status(500).json({ error: 'File upload service temporarily unavailable. Please try again.' });
+    }
+    if (err.message && err.message.includes('timeout')) {
+      return res.status(408).json({ error: 'Upload timed out. Please try again with a smaller file.' });
+    }
+    if (err.message && err.message.includes('ENOTFOUND') || err.message.includes('ECONNREFUSED')) {
+      return res.status(503).json({ error: 'Upload service unavailable. Please try again later.' });
     }
     
     res.status(500).json({ error: 'Failed to upload lesson. Please try again.' });
@@ -173,11 +219,31 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Add Multer error handler for file size
+// Add Multer error handler for file size and other upload errors
 router.use((err, req, res, next) => {
+  console.error('[LESSONS] Multer error:', {
+    code: err.code,
+    message: err.message,
+    field: err.field,
+    name: err.name
+  });
+  
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: 'File too large. Max size is 100MB per file.' });
   }
+  if (err.code === 'LIMIT_FILE_COUNT') {
+    return res.status(400).json({ error: 'Too many files. Maximum 5 files per upload.' });
+  }
+  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+    return res.status(400).json({ error: 'Unexpected file field. Please use the correct file input.' });
+  }
+  if (err.message && err.message.includes('File size exceeds')) {
+    return res.status(400).json({ error: err.message });
+  }
+  if (err.message && err.message.includes('Cloudinary')) {
+    return res.status(500).json({ error: 'File upload service temporarily unavailable. Please try again.' });
+  }
+  
   next(err);
 });
 
