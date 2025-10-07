@@ -7,6 +7,7 @@ import multer from 'multer';
 import Lesson from '../models/Lesson.js';
 import mongoose from 'mongoose';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import database from '../connect.cjs';
 import { ObjectId } from 'mongodb';
@@ -20,7 +21,8 @@ const __dirname = path.dirname(__filename);
 const lessonsUploadDir = path.join(__dirname, '..', 'uploads', 'lessons');
 
 // Storage configuration
-const USE_CLOUDINARY = process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+// Temporarily disable Cloudinary to test with local storage
+const USE_CLOUDINARY = false; // process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
 
 
 async function initializeLessonStorage() {
@@ -44,11 +46,19 @@ async function initializeLessonStorage() {
       });
     } catch (error) {
       console.error('[LESSONS] Cloudinary setup failed, falling back to local storage:', error.message);
+      // Force fallback to local storage
     }
   }
   
   // Local storage fallback
   console.log('[LESSONS] Using local storage');
+  
+  // Ensure uploads directory exists
+  if (!fs.existsSync(lessonsUploadDir)) {
+    fs.mkdirSync(lessonsUploadDir, { recursive: true });
+    console.log('[LESSONS] Created uploads directory:', lessonsUploadDir);
+  }
+  
   const localStorage = multer.diskStorage({
     destination: function (req, file, cb) {
       cb(null, lessonsUploadDir);
