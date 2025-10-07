@@ -26,6 +26,7 @@ export default function Faculty_Activities() {
   const [activities, setActivities] = useState([]);
   const [quizzes, setQuizzes] = useState([]);
   const [facultyClasses, setFacultyClasses] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("All");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const filterRef = useRef();
@@ -125,6 +126,7 @@ export default function Faculty_Activities() {
 
   // Define fetchActivitiesAndQuizzes function
   const fetchActivitiesAndQuizzes = async () => {
+      setLoading(true);
       try {
         const token = localStorage.getItem("token");
         
@@ -200,6 +202,8 @@ export default function Faculty_Activities() {
         
       } catch (err) {
         console.error("Failed to fetch activities or quizzes", err);
+      } finally {
+        setLoading(false);
       }
   };
 
@@ -450,7 +454,7 @@ export default function Faculty_Activities() {
                 <div>
                   <div className="flex items-center gap-4 mb-2">
                     <h3 className="text-black text-2xl font-bold">Activities & Quizzes</h3>
-                    <button
+                    {/* <button
                       onClick={triggerRefresh}
                       className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-2"
                       title="Refresh activities and quizzes"
@@ -459,7 +463,7 @@ export default function Faculty_Activities() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                       Refresh
-                    </button>
+                    </button> */}
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
@@ -620,7 +624,14 @@ export default function Faculty_Activities() {
                 </div> */}
               </div>
 
-              {(() => {
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="inline-flex items-center gap-2 text-gray-600">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                    <span>Loading activities...</span>
+                  </div>
+                </div>
+              ) : (() => {
                 // Combine and sort activities by creation date (newest first)
                 let allActivities = [...activities.map((item) => ({ ...item, type: "assignment" })), ...quizzes.map((item) => ({ ...item, type: "quiz" }))]
                   .sort((a, b) => new Date(b.createdAt || b.postAt || 0) - new Date(a.createdAt || a.postAt || 0));
@@ -753,7 +764,7 @@ export default function Faculty_Activities() {
                 <div>
                   <div className="flex items-center gap-4 mb-2">
                     <h3 className="text-black text-2xl font-bold">Ready to Grade</h3>
-                    <button
+                    {/* <button
                       onClick={triggerRefresh}
                       className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-2"
                       title="Refresh activities and quizzes"
@@ -762,7 +773,7 @@ export default function Faculty_Activities() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                       Refresh
-                    </button>
+                    </button> */}
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
@@ -864,7 +875,14 @@ export default function Faculty_Activities() {
                   </div>
                 </div>
               </div>
-              {readyToGradeItems.length === 0 ? (
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="inline-flex items-center gap-2 text-gray-600">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                    <span>Loading submissions...</span>
+                  </div>
+                </div>
+              ) : readyToGradeItems.length === 0 ? (
                 <p className="mt-4">No submissions yet.</p>
               ) : (
                 (() => {
@@ -994,7 +1012,7 @@ export default function Faculty_Activities() {
                 <div>
                   <div className="flex items-center gap-4 mb-2">
                     <h3 className="text-black text-2xl font-bold">Graded Activities</h3>
-                    <button
+                    {/* <button
                       onClick={triggerRefresh}
                       className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-2"
                       title="Refresh activities and quizzes"
@@ -1003,7 +1021,7 @@ export default function Faculty_Activities() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                       Refresh
-                    </button>
+                    </button> */}
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
@@ -1105,7 +1123,14 @@ export default function Faculty_Activities() {
                   </div>
                 </div>
               </div>
-              {gradedItems.length === 0 ? (
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="inline-flex items-center gap-2 text-gray-600">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                    <span>Loading graded activities...</span>
+                  </div>
+                </div>
+              ) : gradedItems.length === 0 ? (
                 <p className="mt-4">No graded activities yet.</p>
               ) : (
                 (() => {
@@ -1267,7 +1292,7 @@ export default function Faculty_Activities() {
                           {groupedByDate[dateKey].map((item) => (
                             <div
                               key={`${item.type}-${item._id || item.id}-${item.classInfo?.classCode || 'unknown'}`}
-                              className="bg-green-600 p-4 rounded-xl shadow-lg mb-4 hover:bg-green-700 cursor-pointer transition-colors"
+                              className="bg-blue-600 p-4 rounded-xl shadow-lg mb-4 hover:bg-blue-700 cursor-pointer transition-colors"
                               onClick={() => {
                                 if (item.type === 'assignment') {
                                   navigate(`/assignment/${item._id || item.id}`);
@@ -1280,7 +1305,7 @@ export default function Faculty_Activities() {
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 mb-2">
                                     <h3 className="text-white text-xl md:text-2xl font-semibold">{item.title}</h3>
-                                    <span className="bg-green-500 text-white px-2 py-1 rounded text-xs font-bold">
+                                    <span className="bg-blue-500 text-white px-2 py-1 rounded text-xs font-bold">
                                       ✓ Graded
                                     </span>
                                   </div>

@@ -602,25 +602,23 @@ export default function Student_Activities() {
     }
   };
 
-  // Check if student has completed an activity (must be graded to be considered completed)
+  // Check if student has completed an activity (submitted, regardless of grading status)
   const hasStudentCompleted = (activity) => {
     if (activity.type === 'assignment') {
       return submissions.some(sub => {
         const assignmentId = sub.assignment?._id || sub.assignment;
         const activityId = activity._id;
         
-        // Check if submission exists AND is graded
-        return String(assignmentId) === String(activityId) && 
-               (sub.status === 'graded' || sub.graded === true);
+        // Check if submission exists (regardless of grading status)
+        return String(assignmentId) === String(activityId);
       });
     } else if (activity.type === 'quiz') {
       return quizResponses.some(resp => {
         const quizId = resp.quiz?._id || resp.quiz || resp.quizId;
         const activityId = activity._id;
         
-        // Check if response exists AND is graded
-        return String(quizId) === String(activityId) && 
-               (resp.graded === true || resp.status === 'graded');
+        // Check if response exists (regardless of grading status)
+        return String(quizId) === String(activityId);
       });
     }
     return false;
@@ -1036,7 +1034,10 @@ export default function Student_Activities() {
 
             {loading ? (
               <div className="text-center py-8">
-                <p className="text-gray-600">Loading activities...</p>
+                <div className="inline-flex items-center gap-2 text-gray-600">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                  <span>Loading activities...</span>
+                </div>
               </div>
             ) : error ? (
               <div className="text-center py-8">
