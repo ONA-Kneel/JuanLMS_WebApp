@@ -1261,15 +1261,9 @@ export default function ClassContent({ selected, isFaculty = false }) {
         body: JSON.stringify({ classID: classId, title, content })
       });
       if (res.ok) {
-        setAnnouncementsLoading(true);
-        fetch(`${API_BASE}/announcements?classID=${classId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-          .then(res => res.json())
-          .then(data => setAnnouncements(Array.isArray(data) ? data : []))
-          .finally(() => setAnnouncementsLoading(false));
-    setShowAnnouncementForm(false);
-    form.reset();
+        // Socket listener will automatically update the announcements list
+        setShowAnnouncementForm(false);
+        form.reset();
       } else {
         setValidationModal({
           isOpen: true,
@@ -1520,18 +1514,11 @@ export default function ClassContent({ selected, isFaculty = false }) {
     });
 
     if (res.ok) {
+      // Socket listener will automatically update the lessons list
       setShowLessonForm(false);
       setLessonTitle("");
       setLessonFiles([]);
       setLessonLink(""); // Clear the link field
-
-      const payload = await res.json();
-      const createdLesson = payload.lesson || payload;
-      // Ensure lesson has an _id for future delete/edit ops
-      if (!createdLesson || !createdLesson._id) {
-        // Unexpected create lesson payload
-      }
-      setBackendLessons(lessons => [createdLesson, ...lessons]);
     } else {
       const data = await res.json();
       setValidationModal({
@@ -1663,8 +1650,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setBackendLessons(prev => [data.lesson, ...prev]);
+        // Socket listener will automatically update the lessons list
         setLessonTitle('');
         setLessonFiles([]);
         setLessonLink(''); // ✅ Clear link input too
