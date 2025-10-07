@@ -32,10 +32,13 @@ Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-R
 
 # Smart caching strategy - no hard refresh needed
 <IfModule mod_headers.c>
-    # HTML files - always check for updates but allow short-term caching
+    # HTML files - prevent caching completely to ensure fresh content
     <FilesMatch "\.(html|htm)$">
-        Header set Cache-Control "public, max-age=300, must-revalidate"
-        Header set ETag "strong"
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+        Header unset ETag
+        Header unset Last-Modified
     </FilesMatch>
     
     # JavaScript and CSS files with hash in filename - can cache longer
