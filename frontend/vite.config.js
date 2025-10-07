@@ -9,6 +9,9 @@ export default defineConfig({
     react()
   ],
   server: {
+    host: true, // Allow external connections
+    port: 5173,
+    strictPort: false, // Allow fallback to other ports
     proxy: {
       '/uploads': 'https://juanlms-webapp-server.onrender.com',
       '/api': 'https://juanlms-webapp-server.onrender.com',
@@ -32,6 +35,15 @@ export default defineConfig({
       '/notifications': 'https://juanlms-webapp-server.onrender.com',
       '/grading': 'https://juanlms-webapp-server.onrender.com',
       '/grades': 'https://juanlms-webapp-server.onrender.com'
+    }
+  },
+  build: {
+    // Ensure the build works in various environments
+    target: 'es2015',
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
     }
   }
 })

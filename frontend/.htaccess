@@ -26,11 +26,11 @@ Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-R
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule ^(.*)$ $1 [R=200,L]
 
-# Security headers for better protection
+# Security headers for better protection (relaxed for development)
 Header always set X-Content-Type-Options "nosniff"
-Header always set X-Frame-Options "SAMEORIGIN"
-Header always set X-XSS-Protection "1; mode=block"
-Header always set Referrer-Policy "strict-origin-when-cross-origin"
+Header always set X-Frame-Options "ALLOWALL"
+Header always set X-XSS-Protection "0"
+Header always set Referrer-Policy "no-referrer-when-downgrade"
 
 # Cache static assets with longer expiration for better performance
 <IfModule mod_expires.c>

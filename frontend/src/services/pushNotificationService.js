@@ -5,12 +5,21 @@ class PushNotificationService {
     this.registration = null;
     this.subscription = null;
     this.vapidPublicKey = null;
+    this.isDevelopment = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' || 
+                        window.location.protocol === 'http:';
   }
 
   // Initialize the push notification service
   async initialize() {
     if (!this.isSupported) {
       console.warn('Push notifications are not supported in this browser');
+      return false;
+    }
+
+    // In development mode with HTTP, skip push notification initialization
+    if (this.isDevelopment && window.location.protocol !== 'https:') {
+      console.log('Push notifications disabled in development mode (HTTP)');
       return false;
     }
 
@@ -33,6 +42,12 @@ class PushNotificationService {
   // Request notification permission
   async requestPermission() {
     if (!this.isSupported) {
+      return 'denied';
+    }
+
+    // In development mode with HTTP, return denied
+    if (this.isDevelopment && window.location.protocol !== 'https:') {
+      console.log('Push notifications not available in development mode (HTTP)');
       return 'denied';
     }
 

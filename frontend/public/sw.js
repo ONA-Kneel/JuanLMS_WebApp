@@ -1,11 +1,16 @@
-// Service Worker for Push Notifications
-const CACHE_NAME = 'juanlms-v2'; // Increment version to force cache refresh
+// Service Worker for Push Notifications (Development-friendly)
+const CACHE_NAME = 'juanlms-v3'; // Increment version to force cache refresh
 const urlsToCache = [
   '/',
   '/static/js/bundle.js',
   '/static/css/main.css',
   '/manifest.json'
 ];
+
+// Check if we're in development mode (localhost)
+const isDevelopment = self.location.hostname === 'localhost' || 
+                     self.location.hostname === '127.0.0.1' || 
+                     self.location.protocol === 'http:';
 
 // Install event
 self.addEventListener('install', (event) => {
@@ -55,9 +60,15 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Push event - Handle incoming push notifications
+// Push event - Handle incoming push notifications (with development support)
 self.addEventListener('push', (event) => {
   console.log('Push event received:', event);
+  
+  // Skip push notifications in development mode if not HTTPS
+  if (isDevelopment && self.location.protocol !== 'https:') {
+    console.log('Skipping push notification in development mode (non-HTTPS)');
+    return;
+  }
   
   let notificationData = {
     title: 'JuanLMS Notification',
