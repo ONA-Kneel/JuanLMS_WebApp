@@ -20,6 +20,7 @@ export default function Admin_Dashboard() {
   const [lastLoginsError, setLastLoginsError] = useState(null);
   const [lastLoginsPage, setLastLoginsPage] = useState(1);
   const LAST_LOGINS_PER_PAGE = 7;
+  const [isLoading, setIsLoading] = useState(true);
 
   // Announcements (inline box)
   const [announcements, setAnnouncements] = useState([]);
@@ -58,41 +59,128 @@ export default function Admin_Dashboard() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-
-          fetch(`${API_BASE}/audit-logs?page=1&limit=50`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data?.logs) setRecentAuditLogs(data.logs);
-      });
-
-    fetch(`${API_BASE}/user-counts`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data) setAccountCounts(data);
-      })
-      .catch(() => { });
-
-    async function fetchAcademicYear() {
+    const fetchInitialData = async () => {
       try {
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (yearRes.ok) {
-          const year = await yearRes.json();
-          setAcademicYear(year);
+        const token = localStorage.getItem('token');
+        
+        // Fetch all data in parallel for better performance
+        const [auditRes, countsRes, yearRes, classDatesRes, holidaysRes, loginsRes, announcementsRes] = await Promise.allSettled([
+          // Audit logs
+          fetch(`${API_BASE}/audit-logs?page=1&limit=50`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }).then(res => res.json()),
+          
+          // User counts
+          fetch(`${API_BASE}/user-counts`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }).then(res => res.json()),
+          
+          // Academic year
+          fetch(`${API_BASE}/api/schoolyears/active`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          }).then(res => res.json()),
+          
+          // Class dates
+          fetch(`${API_BASE}/api/class-dates`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          }).then(res => res.json()),
+          
+          // Holidays
+          fetch(`https://date.nager.at/api/v3/PublicHolidays/${new Date().getFullYear()}/PH`)
+            .then(res => res.json()),
+          
+          // Last logins
+          fetch(`${API_BASE}/audit-logs/last-logins`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          }).then(res => res.json()),
+          
+          // Announcements
+          fetch(`${API_BASE}/api/general-announcements`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }).then(res => res.json())
+        ]);
+        
+        // Process audit logs
+        if (auditRes.status === 'fulfilled' && auditRes.value?.logs) {
+          setRecentAuditLogs(auditRes.value.logs);
         }
+        
+        // Process user counts
+        if (countsRes.status === 'fulfilled' && countsRes.value) {
+          setAccountCounts(countsRes.value);
+        }
+        
+        // Process academic year
+        if (yearRes.status === 'fulfilled' && yearRes.value) {
+          setAcademicYear(yearRes.value);
+        }
+        
+        // Process class dates
+        if (classDatesRes.status === 'fulfilled' && Array.isArray(classDatesRes.value)) {
+          setClassDates(classDatesRes.value);
+        }
+        
+        // Process holidays
+        if (holidaysRes.status === 'fulfilled' && Array.isArray(holidaysRes.value)) {
+          const dates = holidaysRes.value.map(holiday => holiday.date);
+          setHolidays(dates);
+        }
+        
+        // Process last logins
+        if (loginsRes.status === 'fulfilled' && loginsRes.value?.lastLogins) {
+          setLastLogins(loginsRes.value.lastLogins);
+          setLastLoginsLoading(false);
+        } else {
+          setLastLoginsError("Failed to fetch last logins");
+          setLastLoginsLoading(false);
+        }
+        
+        // Process announcements
+        if (announcementsRes.status === 'fulfilled' && Array.isArray(announcementsRes.value)) {
+          const dismissed = new Set(getDismissed());
+          const filtered = announcementsRes.value.filter((a) => {
+            const role = (a?.createdBy?.role || "").toLowerCase();
+            const fromPrincipal = role.includes("principal");
+            const fromVPE = role.includes("vice") && role.includes("education");
+            return (fromPrincipal || fromVPE) && !dismissed.has(a._id);
+          });
+          setAnnouncements(filtered);
+        }
+        
       } catch (err) {
-        console.error("Failed to fetch academic year", err);
+        console.error("Failed to fetch initial data", err);
+      } finally {
+        setIsLoading(false);
       }
-    }
-
-    fetchAcademicYear();
+    };
+    
+    fetchInitialData();
   }, []);
+
+  // Fetch current term when academic year is loaded
+  useEffect(() => {
+    if (academicYear) {
+      async function fetchActiveTermForYear() {
+        try {
+          const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+          const token = localStorage.getItem("token");
+          const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const terms = await res.json();
+            const active = terms.find(term => term.status === 'active');
+            setCurrentTerm(active || null);
+          } else {
+            setCurrentTerm(null);
+          }
+        } catch {
+          setCurrentTerm(null);
+        }
+      }
+      fetchActiveTermForYear();
+    }
+  }, [academicYear]);
 
   // Filter to show only students and faculties
   useEffect(() => {
@@ -100,78 +188,13 @@ export default function Admin_Dashboard() {
     setFilteredAuditLogs(recentAuditLogs.slice(0, 5));
   }, [recentAuditLogs]);
 
-  useEffect(() => {
-    async function fetchActiveTermForYear() {
-      if (!academicYear) return;
-      try {
-        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const terms = await res.json();
-          const active = terms.find(term => term.status === 'active');
-          setCurrentTerm(active || null);
-        } else {
-          setCurrentTerm(null);
-        }
-      } catch {
-        setCurrentTerm(null);
-      }
-    }
-    fetchActiveTermForYear();
-  }, [academicYear]);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    fetch(`${API_BASE}/api/class-dates`, {
-      headers: { "Authorization": `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setClassDates(data);
-        } else {
-          console.error("❌ Unexpected response format", data);
-        }
-      })
-      .catch(err => console.error("❌ Failed to fetch class dates", err));
-  }, []);
 
-  useEffect(() => {
-    const year = new Date().getFullYear();
 
-    fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/PH`)
-      .then(res => res.json())
-      .then(data => {
-        const dates = data.map(holiday => holiday.date);
-        setHolidays(dates);
-      })
-      .catch(err => console.error("Failed to fetch holidays", err));
-  }, []);
 
-  useEffect(() => {
-    // Fetch last logins for all users
-    const token = localStorage.getItem("token");
-    setLastLoginsLoading(true);
-    fetch(`${API_BASE}/audit-logs/last-logins`, {
-      headers: { "Authorization": `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data && Array.isArray(data.lastLogins)) {
-          setLastLogins(data.lastLogins);
-        } else {
-          setLastLogins([]);
-        }
-        setLastLoginsLoading(false);
-      })
-      .catch(err => {
-        setLastLoginsError("Failed to fetch last logins");
-        setLastLoginsLoading(false);
-      });
-  }, []);
+
+
+
 
   /* ------------------------------ helpers ------------------------------ */
   const DISMISSED_KEY = "admin_dashboard_dismissed_announcements";
@@ -184,37 +207,7 @@ export default function Admin_Dashboard() {
     localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
   };
 
-  /* ----------------------------- Announcements ---------------------------- */
-  useEffect(() => {
-    async function fetchAnnouncements() {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) return;
 
-        const res = await fetch(`${API_BASE}/api/general-announcements`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return;
-
-        const all = await res.json();
-        const dismissed = new Set(getDismissed());
-
-        // Only show if created by Principal OR any "vice ... education"
-        const filtered = (all || []).filter((a) => {
-          const role = (a?.createdBy?.role || "").toLowerCase();
-          const fromPrincipal = role.includes("principal");
-          const fromVPE = role.includes("vice") && role.includes("education");
-          return (fromPrincipal || fromVPE) && !dismissed.has(a._id);
-        });
-
-        setAnnouncements(filtered);
-      } catch (err) {
-        console.error("Failed to fetch announcements", err);
-      }
-    }
-
-    fetchAnnouncements();
-  }, []);
 
   const dismissAnnouncement = (id) => {
     addDismissed(id);
@@ -316,6 +309,22 @@ export default function Admin_Dashboard() {
     (lastLoginsPage - 1) * LAST_LOGINS_PER_PAGE,
     lastLoginsPage * LAST_LOGINS_PER_PAGE
   );
+
+  // Loading screen component
+  if (isLoading) {
+    return (
+      <div className="flex flex-col min-h-screen overflow-hidden font-poppinsr">
+        <Admin_Navbar />
+        <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <h3 className="text-xl font-semibold text-gray-700">Loading Dashboard...</h3>
+            <p className="text-gray-500 mt-2">Retrieving all data from backend</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen overflow-hidden font-poppinsr">

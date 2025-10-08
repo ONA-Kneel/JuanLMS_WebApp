@@ -73,6 +73,7 @@ export default function Admin_Calendar() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [classDates, setClassDates] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
     type: 'error',
@@ -88,6 +89,63 @@ export default function Admin_Calendar() {
   });
 
   const sidebarColor = "#002366";
+
+  // Consolidated data fetching function
+  const fetchInitialData = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      
+      const [eventsRes, classDatesRes, yearRes] = await Promise.allSettled([
+        axios.get(`${API_BASE}/events`),
+        fetch(`${API_BASE}/api/class-dates`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        })
+      ]);
+
+      // Process events
+      if (eventsRes.status === 'fulfilled') {
+        setEvents(eventsRes.value.data.map(ev => ({
+          ...ev,
+          id: ev._id,
+          start: ev.start ? ev.start.slice(0, 16) : '',
+          end: ev.end ? ev.end.slice(0, 16) : '',
+          color: ev.color || '#1890ff'
+        })));
+        setLoadingEvents(false);
+      } else {
+        console.error("Failed to fetch events", eventsRes.reason);
+        setLoadingEvents(false);
+      }
+
+      // Process class dates
+      if (classDatesRes.status === 'fulfilled') {
+        const classDatesData = await classDatesRes.value.json();
+        if (Array.isArray(classDatesData)) {
+          setClassDates(classDatesData);
+        } else {
+          console.error("❌ Unexpected response format", classDatesData);
+        }
+      } else {
+        console.error("❌ Failed to fetch class dates", classDatesRes.reason);
+      }
+
+      // Process academic year
+      if (yearRes.status === 'fulfilled' && yearRes.value.ok) {
+        const year = await yearRes.value.json();
+        setAcademicYear(year);
+      } else {
+        console.error("Failed to fetch academic year", yearRes.reason);
+      }
+    } catch (error) {
+      console.error("Error fetching initial data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Load events from backend on mount
   const fetchEvents = async () => {
@@ -108,43 +166,10 @@ export default function Admin_Calendar() {
   };
 
   useEffect(() => {
-    fetchEvents();
+    fetchInitialData();
   }, []);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    fetch(`${API_BASE}/api/class-dates`, {
-      headers: { "Authorization": `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setClassDates(data);
-        } else {
-          console.error("❌ Unexpected response format", data);
-        }
-      })
-      .catch(err => console.error("❌ Failed to fetch class dates", err));
-  }, []);
 
-  // Fetch holidays
-  useEffect(() => {
-    const years = [2024, 2025, 2026, 2027, 2028, 2029, 2030];
-    Promise.all(
-      years.map(year =>
-        fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/PH`).then(res => res.json())
-      )
-    ).then(results => {
-      const allHolidayEvents = results.flatMap(data =>
-        data.map(holiday => ({
-          title: holiday.localName,
-          date: holiday.date,
-          color: '#ff4d4f',
-        }))
-      );
-      setHolidays(allHolidayEvents);
-    });
-  }, []);
 
   // Combine user events and holidays
   const allEvents = [
@@ -285,23 +310,7 @@ export default function Admin_Calendar() {
     setShowDayModal(true);
   };
 
-  useEffect(() => {
-    async function fetchAcademicYear() {
-      try {
-        const token = localStorage.getItem("token");
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (yearRes.ok) {
-          const year = await yearRes.json();
-          setAcademicYear(year);
-        }
-      } catch (err) {
-        console.error("Failed to fetch academic year", err);
-      }
-    }
-    fetchAcademicYear();
-  }, []);
+
 
   useEffect(() => {
     async function fetchActiveTermForYear() {
@@ -325,6 +334,22 @@ export default function Admin_Calendar() {
     }
     fetchActiveTermForYear();
   }, [academicYear]);
+
+  // Loading screen
+  if (isLoading) {
+    return (
+      <div className="flex flex-col md:flex-row min-h-screen overflow-hidden relative">
+        <Admin_Navbar />
+        <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading calendar data...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching events, class dates, and academic year information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden relative">

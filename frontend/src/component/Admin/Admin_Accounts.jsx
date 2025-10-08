@@ -25,6 +25,7 @@ export default function Admin_Accounts() {
   const [userToArchive, setUserToArchive] = useState(null);
   const [showCancellationMessage, setShowCancellationMessage] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   const [formData, setFormData] = useState({
     firstname: "",
@@ -93,6 +94,46 @@ export default function Admin_Accounts() {
     }
   };
 
+  // Consolidated data fetching function
+  const fetchInitialData = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      
+      const [usersRes, yearRes] = await Promise.allSettled([
+        fetch(`${API_BASE}/users?page=${currentPage}&limit=${ITEMS_PER_PAGE}${activeTab && activeTab !== 'all' ? `&role=${encodeURIComponent(activeTab)}` : ''}`),
+        fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        })
+      ]);
+
+      // Process users
+      if (usersRes.status === 'fulfilled') {
+        const usersData = await usersRes.value.json();
+        if (usersRes.value.ok) {
+          setUsers(usersData.users);
+          setTotalPages(usersData.pagination.totalPages);
+        } else {
+          console.error("Failed to fetch users:", usersData);
+        }
+      } else {
+        console.error("Error fetching users:", usersRes.reason);
+      }
+
+      // Process academic year
+      if (yearRes.status === 'fulfilled' && yearRes.value.ok) {
+        const year = await yearRes.value.json();
+        setAcademicYear(year);
+      } else {
+        console.error("Failed to fetch academic year", yearRes.reason);
+      }
+    } catch (error) {
+      console.error("Error fetching initial data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const [searchTerms, setSearchTerms] = useState({
     firstname: "",
     middlename: "",
@@ -109,6 +150,10 @@ export default function Admin_Accounts() {
     // Reset to first page when switching tabs to get correct pagination per role
     setCurrentPage(1);
   }, [activeTab]);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -694,23 +739,7 @@ export default function Admin_Accounts() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
 
-  useEffect(() => {
-    async function fetchAcademicYear() {
-      try {
-        const token = localStorage.getItem("token");
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (yearRes.ok) {
-          const year = await yearRes.json();
-          setAcademicYear(year);
-        }
-      } catch (err) {
-        console.error("Failed to fetch academic year", err);
-      }
-    }
-    fetchAcademicYear();
-  }, []);
+
 
   useEffect(() => {
     async function fetchActiveTermForYear() {
@@ -760,6 +789,22 @@ export default function Admin_Accounts() {
     title: '',
     message: ''
   });
+
+  // Loading screen
+  if (isLoading) {
+    return (
+      <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+        <Admin_Navbar />
+        <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading accounts...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching users and academic year information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

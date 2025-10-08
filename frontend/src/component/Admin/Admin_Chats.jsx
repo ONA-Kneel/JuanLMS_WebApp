@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
 import { getProfileImageUrl } from "../../utils/imageUtils";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Admin_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
@@ -100,6 +100,7 @@ export default function Admin_Chats() {
   const [highlightedChats, setHighlightedChats] = useState(() => {
     try { return JSON.parse(localStorage.getItem('highlightedChats_admin') || '{}'); } catch { return {}; }
   });
+  const [isLoading, setIsLoading] = useState(true);
   const addHighlight = (chatId) => {
     if (!chatId) return;
     setHighlightedChats(prev => {
@@ -391,32 +392,53 @@ export default function Admin_Chats() {
     };
   }, [ctxSocket, isConnected, currentUserId, selectedChat, recentChats, users, userGroups]);
 
-  // ================= FETCH USERS =================
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        // If we already have cached users, don't block UI with a spinner
-        if (users.length === 0) setIsLoadingChats(true);
-        const token = localStorage.getItem("token");
-        // Use active users endpoint (non-paginated) so search sees all users
-        const res = await axios.get(`${API_BASE}/users/active`, {
+  // Consolidated data fetching function
+  const fetchInitialData = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      
+      const [usersRes, yearRes] = await Promise.allSettled([
+        axios.get(`${API_BASE}/users/active`, {
           headers: { "Authorization": `Bearer ${token}` }
-        });
-        const userArray = Array.isArray(res.data) ? res.data : [];
+        }),
+        fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        })
+      ]);
+
+      // Process users
+      if (usersRes.status === 'fulfilled') {
+        const userArray = Array.isArray(usersRes.value.data) ? usersRes.value.data : [];
         setUsers(userArray);
         try { localStorage.setItem('users_all_admin', JSON.stringify(userArray)); } catch {}
-        // Preserve current selection; do not clear selected chat
-      } catch (err) {
-        if (err.response && err.response.status === 401) {
+      } else {
+        console.error("Error fetching users:", usersRes.reason);
+        if (usersRes.reason?.response?.status === 401) {
           window.location.href = '/';
-        } else {
-          console.error("Error fetching users:", err);
         }
-      } finally {
-        setIsLoadingChats(false);
       }
-    };
-    fetchUsers();
+
+      // Process academic year
+      if (yearRes.status === 'fulfilled' && yearRes.value.ok) {
+        const year = await yearRes.value.json();
+        setAcademicYear(year);
+      } else {
+        console.error("Failed to fetch academic year", yearRes.reason);
+      }
+    } catch (error) {
+      console.error("Error fetching initial data:", error);
+    } finally {
+      setIsLoadingChats(false);
+      setIsLoading(false);
+    }
+  };
+
+  // ================= FETCH USERS =================
+  useEffect(() => {
+    if (currentUserId) {
+      fetchInitialData();
+    }
   }, [currentUserId]);
 
   // ================= FETCH RECENT CONVERSATIONS =================
@@ -798,23 +820,7 @@ export default function Admin_Chats() {
     return () => clearTimeout(handle);
   }, [searchTerm]);
 
-  useEffect(() => {
-    async function fetchAcademicYear() {
-      try {
-        const token = localStorage.getItem("token");
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (yearRes.ok) {
-          const year = await yearRes.json();
-          setAcademicYear(year);
-        }
-      } catch (err) {
-        console.error("Failed to fetch academic year", err);
-      }
-    }
-    fetchAcademicYear();
-  }, []);
+
 
   useEffect(() => {
     async function fetchActiveTermForYear() {
@@ -1252,6 +1258,22 @@ export default function Admin_Chats() {
       .filter(user => !recentChats.some(chat => chat._id === user._id))
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
+
+  // Loading screen
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Admin_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading chats...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching users, conversations, and academic year information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Unified chat interface with tabs, left/right panels, and modals
   return (

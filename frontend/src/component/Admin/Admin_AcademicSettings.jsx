@@ -82,6 +82,7 @@ export default function Admin_AcademicSettings() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState('');
   const [confirmAction, setConfirmAction] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [formData, setFormData] = useState({
     schoolYearStart: "",
@@ -100,8 +101,52 @@ export default function Admin_AcademicSettings() {
 
   // Fetch school years on mount
   useEffect(() => {
-      fetchSchoolYears();
+    fetchInitialData();
   }, []);
+
+  // Consolidated data fetching function
+  const fetchInitialData = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Fetch all initial data in parallel
+      const [schoolYearsRes, academicYearRes] = await Promise.allSettled([
+        fetch(`${API_BASE}/api/schoolyears`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+      
+      // Process school years
+      if (schoolYearsRes.status === 'fulfilled' && schoolYearsRes.value.ok) {
+        const schoolYearsData = await schoolYearsRes.value.json();
+        setSchoolYears(schoolYearsData);
+        computeArchivedCountsForYears(schoolYearsData);
+      } else {
+        console.error('Failed to fetch school years');
+        setErrorMessage('Failed to fetch school years');
+        setShowErrorModal(true);
+      }
+      
+      // Process academic year
+      if (academicYearRes.status === 'fulfilled' && academicYearRes.value.ok) {
+        const academicYearData = await academicYearRes.value.json();
+        setAcademicYear(academicYearData);
+      } else {
+        console.error('Failed to fetch academic year');
+      }
+      
+    } catch (error) {
+      console.error('Error fetching initial data:', error);
+      setErrorMessage('Error loading academic settings data');
+      setShowErrorModal(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Fetch terms and quarters when a school year is selected
   useEffect(() => {
@@ -110,24 +155,6 @@ export default function Admin_AcademicSettings() {
       fetchQuarters(selectedYear);
     }
   }, [selectedYear]);
-
-  useEffect(() => {
-    async function fetchAcademicYear() {
-      try {
-        const token = localStorage.getItem("token");
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (yearRes.ok) {
-          const year = await yearRes.json();
-          setAcademicYear(year);
-        }
-      } catch (err) {
-        console.error("Failed to fetch academic year", err);
-      }
-    }
-    fetchAcademicYear();
-  }, []);
 
   useEffect(() => {
     async function fetchActiveTermForYear() {
@@ -1941,8 +1968,25 @@ export default function Admin_AcademicSettings() {
     { id: 'students', label: 'Student Assignment' }
   ];
 
+  // Loading screen
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Admin_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading Academic Settings...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching school years, terms, and academic data</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
+      
       <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
         <Admin_Navbar />
 

@@ -45,6 +45,7 @@ export default function Admin_Registrants() {
   const [currentTerm, setCurrentTerm] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Fetch registrants from backend
   const fetchRegistrants = async () => {
@@ -89,23 +90,47 @@ export default function Admin_Registrants() {
     }
   };
 
-  useEffect(() => {
-    async function fetchAcademicYear() {
-      try {
-        const token = localStorage.getItem("token");
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+  // Consolidated data fetching function
+  const fetchInitialData = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      
+      const [registrantsRes, yearRes] = await Promise.allSettled([
+        axios.get(`${API_BASE}/api/registrants`, { 
+          params: { page: pagination.page, limit: pagination.limit },
+          headers: { Authorization: `Bearer ${token}` } 
+        }),
+        fetch(`${API_BASE}/api/schoolyears/active`, {
           headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (yearRes.ok) {
-          const year = await yearRes.json();
-          setAcademicYear(year);
-        }
-      } catch (err) {
-        console.error("Failed to fetch academic year", err);
+        })
+      ]);
+
+      // Process registrants
+      if (registrantsRes.status === 'fulfilled') {
+        setRegistrants(registrantsRes.value.data?.data || []);
+        if (registrantsRes.value.data?.pagination) setPagination(registrantsRes.value.data.pagination);
+        setError('');
+      } else {
+        console.error('Error fetching registrants:', registrantsRes.reason);
+        setError('Failed to fetch registrants. Please try again.');
       }
+
+      // Process academic year
+      if (yearRes.status === 'fulfilled' && yearRes.value.ok) {
+        const year = await yearRes.value.json();
+        setAcademicYear(year);
+      } else {
+        console.error("Failed to fetch academic year", yearRes.reason);
+      }
+    } catch (error) {
+      console.error("Error fetching initial data:", error);
+      setError('Error fetching registrants data');
+    } finally {
+      setLoading(false);
+      setIsLoading(false);
     }
-    fetchAcademicYear();
-  }, []);
+  };
 
   useEffect(() => {
     async function fetchActiveTermForYear() {
@@ -132,6 +157,10 @@ export default function Admin_Registrants() {
     }
     fetchActiveTermForYear();
   }, [academicYear]);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
 
   useEffect(() => {
     fetchRegistrants();
@@ -454,6 +483,22 @@ export default function Admin_Registrants() {
     setSelectedDate('');
     setStatusFilter('all');
   };
+
+  // Loading screen
+  if (isLoading) {
+    return (
+      <div className="flex flex-col min-h-screen bg-gray-100 font-poppinsr">
+        <Admin_Navbar />
+        <div className="flex-1 p-4 sm:p-6 md:p-10 md:ml-64 font-poppinsr">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading registrants...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching registration data and academic year information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 font-poppinsr">

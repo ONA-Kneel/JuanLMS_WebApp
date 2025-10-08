@@ -2,26 +2,41 @@ import ProfileMenu from "../ProfileMenu";
 import Admin_Navbar from "./Admin_Navbar";
 import { useState, useEffect } from "react";
 
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+
 export default function Admin_Progress() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Consolidated data fetching function
+  const fetchInitialData = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      
+      const [yearRes] = await Promise.allSettled([
+        fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        })
+      ]);
+
+      // Process academic year
+      if (yearRes.status === 'fulfilled' && yearRes.value.ok) {
+        const year = await yearRes.value.json();
+        setAcademicYear(year);
+      } else {
+        console.error("Failed to fetch academic year", yearRes.reason);
+      }
+    } catch (error) {
+      console.error("Error fetching initial data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function fetchAcademicYear() {
-      try {
-        const token = localStorage.getItem("token");
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (yearRes.ok) {
-          const year = await yearRes.json();
-          setAcademicYear(year);
-        }
-      } catch (err) {
-        console.error("Failed to fetch academic year", err);
-      }
-    }
-    fetchAcademicYear();
+    fetchInitialData();
   }, []);
 
   useEffect(() => {
@@ -46,6 +61,22 @@ export default function Admin_Progress() {
     }
     fetchActiveTermForYear();
   }, [academicYear]);
+
+  // Loading screen
+  if (isLoading) {
+    return (
+      <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+        <Admin_Navbar />
+        <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading progress data...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching academic year and term information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">

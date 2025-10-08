@@ -16,45 +16,62 @@ export default function Admin_Activities() {
   ];
 
   useEffect(() => {
-    async function fetchAcademicYear() {
+    const fetchInitialData = async () => {
       try {
         const token = localStorage.getItem("token");
+        
+        // Fetch academic year first
         const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
+        
         if (yearRes.ok) {
           const year = await yearRes.json();
           setAcademicYear(year);
+          
+          // Now fetch terms for this academic year
+          try {
+            const schoolYearName = `${year.schoolYearStart}-${year.schoolYearEnd}`;
+            const termRes = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
+              headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (termRes.ok) {
+              const terms = await termRes.json();
+              const active = terms.find(term => term.status === 'active');
+              setCurrentTerm(active || null);
+            }
+          } catch (err) {
+            console.error("Failed to fetch terms", err);
+          }
         }
+        
       } catch (err) {
-        console.error("Failed to fetch academic year", err);
+        console.error("Failed to fetch initial data", err);
+      } finally {
+        setIsLoading(false);
       }
-    }
-    fetchAcademicYear();
+    };
+    
+    fetchInitialData();
   }, []);
 
-  useEffect(() => {
-    async function fetchActiveTermForYear() {
-      if (!academicYear) return;
-      try {
-        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${API_BASE}/api/terms/schoolyear/${schoolYearName}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const terms = await res.json();
-          const active = terms.find(term => term.status === 'active');
-          setCurrentTerm(active || null);
-        } else {
-          setCurrentTerm(null);
-        }
-      } catch {
-        setCurrentTerm(null);
-      }
-    }
-    fetchActiveTermForYear();
-  }, [academicYear]);
+  // Loading screen component
+  if (isLoading) {
+    return (
+      <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+        <Admin_Navbar/>
+        <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <h3 className="text-xl font-semibold text-gray-700">Loading Activities...</h3>
+            <p className="text-gray-500 mt-2">Retrieving data from backend</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">

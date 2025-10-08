@@ -31,6 +31,7 @@ export default function AdminSupportCenter() {
   const [attachmentType, setAttachmentType] = useState("application/octet-stream");
   const [attachmentLoading, setAttachmentLoading] = useState(false);
   const [attachmentError, setAttachmentError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
   /* -------------------------- User details lookup -------------------------- */
   const fetchUserDetails = async (list) => {
@@ -59,6 +60,57 @@ export default function AdminSupportCenter() {
       setUserDetails(details);
     }
   };
+
+  /* --------------------------- Consolidated data fetching --------------------------- */
+  const fetchInitialData = async () => {
+    setIsLoading(true);
+    try {
+      const raw = localStorage.getItem("token") || "";
+      const token = raw.startsWith('"') ? JSON.parse(raw) : raw;
+      
+      const [ticketsRes, yearRes] = await Promise.allSettled([
+        getAllTickets(activeFilter === "all" ? null : activeFilter),
+        fetch(`${API_BASE}/api/schoolyears/active`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      ]);
+
+      // Process tickets
+      if (ticketsRes.status === 'fulfilled') {
+        const ticketsData = ticketsRes.value || [];
+        setTickets(ticketsData);
+        if (activeFilter !== "all") {
+          const allData = await getAllTickets();
+          setAllTickets(allData || []);
+        } else {
+          setAllTickets(ticketsData);
+        }
+        if (ticketsData?.length) await fetchUserDetails(ticketsData);
+        setError("");
+      } else {
+        console.error("Error fetching tickets:", ticketsRes.reason);
+        setError("Failed to fetch support tickets. Please try again.");
+      }
+
+      // Process academic year
+      if (yearRes.status === 'fulfilled' && yearRes.value.ok) {
+        const year = await yearRes.value.json();
+        setAcademicYear(year);
+      } else {
+        console.error("Failed to fetch academic year", yearRes.reason);
+      }
+    } catch (error) {
+      console.error("Error fetching initial data:", error);
+      setError("Error fetching support center data");
+    } finally {
+      setLoading(false);
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
 
   /* ------------------------------- Fetch tickets ------------------------------- */
   useEffect(() => {
@@ -100,21 +152,6 @@ export default function AdminSupportCenter() {
   }, [activeFilter]);
 
   /* --------------------------- AY / Term for header --------------------------- */
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = localStorage.getItem("token") || "";
-        const token = raw.startsWith('"') ? JSON.parse(raw) : raw;
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (yearRes.ok) setAcademicYear(await yearRes.json());
-      } catch (e) {
-        console.error("AY fetch error:", e);
-      }
-    })();
-  }, []);
-
   useEffect(() => {
     (async () => {
       if (!academicYear) return;
@@ -324,6 +361,22 @@ export default function AdminSupportCenter() {
   };
 
   /* --------------------------------- Render --------------------------------- */
+  // Loading screen
+  if (isLoading) {
+    return (
+      <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr">
+        <Admin_Navbar />
+        <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading support center...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching tickets and academic year information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr">
       <Admin_Navbar />

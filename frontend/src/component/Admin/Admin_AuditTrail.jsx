@@ -19,6 +19,7 @@ export default function Admin_AuditTrail() {
   const navigate = useNavigate();
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Map backend action values to user-friendly labels
   const actionLabelMap = {
@@ -87,26 +88,66 @@ export default function Admin_AuditTrail() {
       navigate('/login');
       return;
     }
-    fetchAuditLogs();
+    fetchInitialData();
   }, [currentPage, selectedAction, selectedRole, navigate]);
 
-  useEffect(() => {
-    async function fetchAcademicYear() {
-      try {
-        const token = localStorage.getItem("token");
-        const yearRes = await fetch(`${API_BASE}/api/schoolyears/active`, {
+  // Consolidated data fetching function
+  const fetchInitialData = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      
+      const [auditRes, yearRes] = await Promise.allSettled([
+        axios.get(
+          `${API_BASE}/audit-logs?page=${currentPage}&limit=${logsPerPage}&action=${selectedAction}&role=${selectedRole}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        ),
+        fetch(`${API_BASE}/api/schoolyears/active`, {
           headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (yearRes.ok) {
-          const year = await yearRes.json();
-          setAcademicYear(year);
+        })
+      ]);
+
+      // Process audit logs
+      if (auditRes.status === 'fulfilled') {
+        if (auditRes.value.data && auditRes.value.data.logs) {
+          setAuditLogs(auditRes.value.data.logs);
+          setTotalPages(auditRes.value.data.pagination.totalPages || 1);
+          setError(null);
+        } else {
+          setError('Invalid data format received from server');
         }
-      } catch (err) {
-        console.error("Failed to fetch academic year", err);
+      } else {
+        console.error('Error fetching audit logs:', auditRes.reason);
+        if (auditRes.reason?.response?.status === 401) {
+          navigate('/login');
+        } else if (auditRes.reason?.response?.status === 500) {
+          setError('Server error. Please try again later.');
+        } else {
+          setError(auditRes.reason?.response?.data?.message || 'Failed to fetch audit logs');
+        }
+        setAuditLogs([]);
+        setTotalPages(1);
       }
+
+      // Process academic year
+      if (yearRes.status === 'fulfilled' && yearRes.value.ok) {
+        const year = await yearRes.value.json();
+        setAcademicYear(year);
+      } else {
+        console.error("Failed to fetch academic year", yearRes.reason);
+      }
+    } catch (error) {
+      console.error("Error fetching initial data:", error);
+      setError('Error fetching audit trail data');
+    } finally {
+      setLoading(false);
+      setIsLoading(false);
     }
-    fetchAcademicYear();
-  }, []);
+  };
 
   useEffect(() => {
     async function fetchActiveTermForYear() {
@@ -131,45 +172,7 @@ export default function Admin_AuditTrail() {
     fetchActiveTermForYear();
   }, [academicYear]);
 
-  const fetchAuditLogs = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        navigate('/login');
-        return;
-      }
 
-      const response = await axios.get(
-        `${API_BASE}/audit-logs?page=${currentPage}&limit=${logsPerPage}&action=${selectedAction}&role=${selectedRole}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-
-      if (response.data && response.data.logs) {
-        setAuditLogs(response.data.logs);
-        setTotalPages(response.data.pagination.totalPages || 1);
-        setError(null);
-      } else {
-        setError('Invalid data format received from server');
-      }
-    } catch (err) {
-      console.error('Error fetching audit logs:', err);
-      if (err.response?.status === 401) {
-        navigate('/login');
-      } else if (err.response?.status === 500) {
-        setError('Server error. Please try again later.');
-      } else {
-        setError(err.response?.data?.message || 'Failed to fetch audit logs');
-      }
-      setAuditLogs([]);
-      setTotalPages(1);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -499,6 +502,22 @@ export default function Admin_AuditTrail() {
     if (selectedRole !== 'all' && log.userRole !== selectedRole) return false;
     return true;
   });
+
+  // Loading screen
+  if (isLoading) {
+    return (
+      <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
+        <Admin_Navbar />
+        <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading audit trail...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching audit logs and academic year information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
