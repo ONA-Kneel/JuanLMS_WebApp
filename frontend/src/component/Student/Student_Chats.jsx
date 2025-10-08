@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
 import { getProfileImageUrl } from "../../utils/imageUtils";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Student_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
@@ -25,6 +25,7 @@ export default function Student_Chats() {
   const [messages, setMessages] = useState({});
   const [newMessage, setNewMessage] = useState("");
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [lastMessages, setLastMessages] = useState({});
   const [recentChats, setRecentChats] = useState(() => {
     // Load from localStorage if available
@@ -851,6 +852,10 @@ export default function Student_Chats() {
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length > 0) {
+      // Set the first file for single file chat input
+      setSelectedFile(files[0]);
+      
+      // Also update the selectedFiles array for potential multi-file support
       setSelectedFiles((prev) => {
         const existingNames = new Set(prev.map(f => `${f.name}|${f.size}|${f.lastModified}`));
         const additions = files.filter(f => !existingNames.has(`${f.name}|${f.size}|${f.lastModified}`));
