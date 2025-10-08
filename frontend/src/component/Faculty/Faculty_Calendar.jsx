@@ -16,6 +16,7 @@ export default function Faculty_Calendar() {
   const [holidays, setHolidays] = useState([]);
   const [adminEvents, setAdminEvents] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedDayEvents, setSelectedDayEvents] = useState([]);
   const [showDayModal, setShowDayModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
@@ -190,6 +191,14 @@ export default function Faculty_Calendar() {
       .catch(err => console.error("❌ Failed to fetch class dates", err));
   }, []);
 
+  // Set loading state
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
   const allEvents = [
     ...adminEvents,
     ...holidays,
@@ -262,6 +271,21 @@ export default function Faculty_Calendar() {
           <span style={{ fontSize: '0.8em', color: '#666', marginLeft: 16 }}>{subtitle}</span>
         )}
       </span>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Faculty_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading calendar...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching events, assignments, and academic year information</p>
+          </div>
+        </div>
+      </div>
     );
   }
 

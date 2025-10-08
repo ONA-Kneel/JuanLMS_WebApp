@@ -19,6 +19,7 @@ const Faculty_Meeting = () => {
   const [activeMeeting, setActiveMeeting] = useState(null);
   const [userInfo, setUserInfo] = useState({ name: '', email: '' });
   const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [studentCounts, setStudentCounts] = useState({});
   const [activeTab, setActiveTab] = useState('class-meetings'); // 'class-meetings' or 'invited-meetings'
 
@@ -252,6 +253,14 @@ const Faculty_Meeting = () => {
     if (classes && classes.length > 0) loadCounts();
   }, [classes]);
 
+  // Set loading state
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Meeting handlers
   const handleMeetingCreated = (newMeeting) => {
     setMeetingRefreshTrigger(prev => prev + 1);
@@ -283,6 +292,21 @@ const Faculty_Meeting = () => {
     setActiveMeeting(null);
     setMeetingRefreshTrigger(prev => prev + 1);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Faculty_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading meetings...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching classes, meetings, and academic year information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">

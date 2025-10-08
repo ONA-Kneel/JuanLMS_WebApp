@@ -9,6 +9,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.
 export default function Faculty_Dashboard() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [showSuggestPw, setShowSuggestPw] = useState(false);
@@ -101,6 +102,14 @@ export default function Faculty_Dashboard() {
     fetchActiveTermForYear();
   }, [academicYear]);
 
+  // Set loading state
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
   /* ----------------------------- Announcements ---------------------------- */
   useEffect(() => {
     async function fetchAnnouncements() {
@@ -170,6 +179,21 @@ export default function Faculty_Dashboard() {
   }, [currentFacultyID, academicYear, currentTerm]);
 
   /* --------------------------------- Render -------------------------------- */
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Faculty_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading dashboard...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching classes, announcements, and academic year information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr md:ml-64">
       <Faculty_Navbar />

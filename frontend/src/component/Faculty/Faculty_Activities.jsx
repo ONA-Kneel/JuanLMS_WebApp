@@ -9,6 +9,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.
 export default function Faculty_Activities() {
   const [activeTab, setActiveTab] = useState("activities-quiz");
   const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(true);
   
   const tabs = [
     { id: "activities-quiz", label: "Activities/Quiz" },
@@ -247,6 +248,14 @@ export default function Faculty_Activities() {
     };
   }, []);
 
+  // Set loading state
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
   const fetchReadyToGradeItems = async (activityData, quizData, token) => {
     try {
       const readyItems = [];
@@ -407,6 +416,21 @@ export default function Faculty_Activities() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Faculty_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading activities...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching assignments, quizzes, and academic year information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">

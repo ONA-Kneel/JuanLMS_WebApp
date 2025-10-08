@@ -90,6 +90,7 @@ export default function Faculty_Chats() {
   // Add loading state for chat list
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   // Highlight chats with new/unread messages
   const [highlightedChats, setHighlightedChats] = useState(() => {
     try { return JSON.parse(localStorage.getItem('highlightedChats_faculty') || '{}'); } catch { return {}; }
@@ -390,6 +391,14 @@ export default function Faculty_Chats() {
       });
     } catch {}
   }, [groups, ctxSocket, isConnected, currentUserId]);
+
+  // Set loading state
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // ================= FETCH USERS =================
   useEffect(() => {
@@ -1331,6 +1340,21 @@ export default function Faculty_Chats() {
       .filter(user => !recentChats.some(chat => chat._id === user._id))
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Faculty_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading chats...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching users, conversations, and academic year information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen h-screen max-h-screen">

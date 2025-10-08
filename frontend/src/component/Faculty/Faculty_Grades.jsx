@@ -81,6 +81,7 @@ export default function Faculty_Grades() {
   const [currentTerm, setCurrentTerm] = useState(null);
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
   const [selectedQuarter, setSelectedQuarter] = useState('Q1');
@@ -278,6 +279,14 @@ export default function Faculty_Grades() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [academicYear]); // Intentionally exclude fetchQuarterStatus to prevent infinite loop
+
+  // Set loading state
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const fetchAssignmentsAndQuizzes = useCallback(async (selectedClassData) => {
     try {
@@ -1180,12 +1189,13 @@ export default function Faculty_Grades() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="flex min-h-screen h-screen max-h-screen">
         <Faculty_Navbar />
-        <div className="flex justify-center items-center h-64">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-gray-600">Loading...</p>
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading grades...</p>
+            <p className="text-gray-500 text-sm mt-2">Initializing grade management system</p>
           </div>
         </div>
       </div>
@@ -1212,6 +1222,21 @@ export default function Faculty_Grades() {
                 Refresh Page
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Faculty_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading grades...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching classes, students, and academic year information</p>
           </div>
         </div>
       </div>
