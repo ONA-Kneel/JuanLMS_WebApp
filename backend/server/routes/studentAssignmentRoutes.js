@@ -169,7 +169,7 @@ router.post('/', authenticateToken, async (req, res) => {
           studentId: actualStudentId,
           schoolYear: term.schoolYear,
           termName: term.termName,
-          quarterName: normalizedQuarter
+          quarterName: quarterName || null
         }] : []),
         // Check by studentSchoolID if no studentId - only prevent same student in same term and quarter
         // This ensures we're checking for the exact same student, not just similar names
@@ -227,7 +227,7 @@ router.post('/', authenticateToken, async (req, res) => {
       termId,
       schoolYear: term.schoolYear,
       termName: term.termName,
-      quarterName: normalizedQuarter
+      quarterName: quarterName || null
     });
 
     // Determine subjects based on enrollment type
@@ -401,7 +401,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
             studentId: actualStudentId,
             schoolYear: term.schoolYear,
             termName: term.termName,
-            quarterName: normalizedQuarter
+            quarterName: quarterName || null
           }] : []),
           // Check by studentSchoolID if no studentId - only prevent same student in same term and quarter
           // This ensures we're checking for the exact same student, not just similar names
