@@ -9,6 +9,12 @@ export default defineConfig({
     react()
   ],
   build: {
+    // Ensure the build works in various environments
+    target: 'es2015',
+    // Ensure clean builds
+    emptyOutDir: true,
+    // Generate manifest for cache busting
+    manifest: false,
     rollupOptions: {
       output: {
         // Ensure consistent module naming with content-based hashing
@@ -19,13 +25,10 @@ export default defineConfig({
           const info = assetInfo.name.split('.');
           const ext = info[info.length - 1];
           return `assets/[name]-[hash].${ext}`;
-        }
+        },
+        manualChunks: undefined
       }
-    },
-    // Ensure clean builds
-    emptyOutDir: true,
-    // Generate manifest for cache busting
-    manifest: false
+    }
   },
   server: {
     host: true, // Allow external connections
@@ -54,15 +57,6 @@ export default defineConfig({
       '/notifications': 'https://juanlms-webapp-server.onrender.com',
       '/grading': 'https://juanlms-webapp-server.onrender.com',
       '/grades': 'https://juanlms-webapp-server.onrender.com'
-    }
-  },
-  build: {
-    // Ensure the build works in various environments
-    target: 'es2015',
-    rollupOptions: {
-      output: {
-        manualChunks: undefined
-      }
     }
   }
 })
