@@ -9,6 +9,7 @@ import { Video, Users, Calendar, Plus, Search, UserPlus } from 'lucide-react';
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 const VPE_Meeting = () => {
+  const [isLoading, setIsLoading] = useState(true);
   const [showCreateMeetingModal, setShowCreateMeetingModal] = useState(false);
   const [meetingRefreshTrigger, setMeetingRefreshTrigger] = useState(0);
   const [activeMeeting, setActiveMeeting] = useState(null);
@@ -17,6 +18,14 @@ const VPE_Meeting = () => {
   const [allUsers, setAllUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
+
+  // Loading effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1600);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Get user info from token
   useEffect(() => {
@@ -133,6 +142,21 @@ const VPE_Meeting = () => {
     setSelectedUsers([]);
     setSearchTerm('');
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <VPE_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading meetings...</p>
+            <p className="text-gray-500 text-sm mt-2">Setting up VPE meeting management</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">

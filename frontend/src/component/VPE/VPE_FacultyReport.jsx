@@ -250,6 +250,7 @@ const downloadAsPDF = async (content, filename, chartData) => {
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function VPE_FacultyReport() {
+  const [isLoading, setIsLoading] = useState(true);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [error, setError] = useState(null);
@@ -301,6 +302,14 @@ export default function VPE_FacultyReport() {
 
   // Tab state
   const [activeTab, setActiveTab] = useState('activities');
+
+  // Loading effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 2100);
+    return () => clearTimeout(timer);
+  }, []);
 
   // VPE Reports states
   const [receivedReports, setReceivedReports] = useState([]);
@@ -1256,6 +1265,21 @@ export default function VPE_FacultyReport() {
       if (strandChartInstanceRef.current) strandChartInstanceRef.current.destroy();
     };
   }, [showAnalysisModal, assignmentsCount, quizzesCount, filteredActivities, analysisMeta, modalStrand, modalSection, selectedStrand, selectedSection]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <VPE_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading faculty reports...</p>
+            <p className="text-gray-500 text-sm mt-2">Gathering VPE data and analytics</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
 
   return (
