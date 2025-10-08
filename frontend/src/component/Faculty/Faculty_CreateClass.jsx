@@ -247,7 +247,7 @@ export default function FacultyCreateClass() {
                         isOpen: true,
                         type: 'success',
                         title: 'Sync Completed',
-                        message: `Successfully added ${result.totalStudentsAdded} students to ${result.classesProcessed} classes.`
+                        message: `Successfully syched students to classes.`
                       });
                       // Refresh the pending classes to show updated student counts
                       fetchPendingClasses();
