@@ -22,6 +22,7 @@ export default function FacultyCreateClass() {
   const [classImage, setClassImage] = useState(null);
   const [classDesc, setClassDesc] = useState("");
   const [viewingStudents, setViewingStudents] = useState(null);
+  const [syncingStudents, setSyncingStudents] = useState(false);
 
   // Fetch pending classes function
   const fetchPendingClasses = useCallback(async () => {
@@ -229,9 +230,11 @@ export default function FacultyCreateClass() {
               
               
               <button
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center gap-2"
+                className={`${syncingStudents ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white px-6 py-3 rounded-lg transition-colors flex items-center gap-2`}
+                disabled={syncingStudents}
                 onClick={async () => {
                   try {
+                    setSyncingStudents(true);
                     const token = localStorage.getItem('token');
                     const response = await fetch(`${API_BASE}/sync-students-to-auto-classes`, {
                       method: 'POST',
@@ -242,7 +245,6 @@ export default function FacultyCreateClass() {
                     });
                     
                     if (response.ok) {
-                      const result = await response.json();
                       setValidationModal({
                         isOpen: true,
                         type: 'success',
@@ -268,13 +270,24 @@ export default function FacultyCreateClass() {
                       title: 'Network Error',
                       message: 'Failed to sync students. Please check your connection and try again.'
                     });
+                  } finally {
+                    setSyncingStudents(false);
                   }
                 }}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Sync Students to Classes
+                {syncingStudents ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    Syncing Students...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Sync Students to Classes
+                  </>
+                )}
               </button>
             </div>
 
