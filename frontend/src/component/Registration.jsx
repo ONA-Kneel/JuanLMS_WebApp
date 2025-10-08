@@ -11,7 +11,6 @@ export default function Registration() {
     middleName: '',
     lastName: '',
     personalEmail: '',
-    contactNo: '',
     schoolID: '',
     role: 'students',
     trackName: '',
@@ -98,14 +97,11 @@ export default function Registration() {
   }, [form.strandName, form.sectionName, sections]);
 
   function isValidName(name) { return /^[\p{L}\s'-]+$/u.test(name); }
-  function isValidContactNo(contactNo) { return /^09\d{9}$/.test(contactNo); }
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     let newValue = value;
-    if (name === 'contactNo') {
-      newValue = value.replace(/[^0-9]/g, '').slice(0, 11);
-    } else if (name === 'firstName' || name === 'middleName' || name === 'lastName') {
+    if (name === 'firstName' || name === 'middleName' || name === 'lastName') {
       newValue = value.replace(/[^\p{L}\s'-]/gu, '');
     }
     setForm(prev => ({ ...prev, [name]: newValue }));
@@ -120,10 +116,6 @@ export default function Registration() {
 
     if (!isValidName(form.firstName) || (form.middleName && !isValidName(form.middleName)) || !isValidName(form.lastName)) {
       setValidationModal({ isOpen: true, type: 'warning', title: 'Invalid Name', message: 'Names must only contain letters (including international characters), spaces, apostrophes, or hyphens.' });
-      setLoading(false); return;
-    }
-    if (!isValidContactNo(form.contactNo)) {
-      setValidationModal({ isOpen: true, type: 'warning', title: 'Invalid Contact Number', message: 'Contact number must be 11 digits and start with 09.' });
       setLoading(false); return;
     }
     if (!isValidSchoolId(form.schoolID)) {
@@ -189,6 +181,7 @@ export default function Registration() {
           </div>
         </div>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Row 1: Name fields */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-base mb-2">First Name<span className="text-red-500">*</span></label>
@@ -202,19 +195,22 @@ export default function Registration() {
               <label className="block text-base mb-2">Last Name<span className="text-red-500">*</span></label>
               <input type="text" name="lastName" required placeholder="Last Name" className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.lastName} onChange={handleChange} disabled={loading} />
             </div>
+          </div>
+          
+          {/* Row 2: School Email and Student ID */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-base mb-2">School Email<span className="text-red-500">*</span></label>
               <input type="email" name="personalEmail" required placeholder="username@sjdefi.edu.ph" className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.personalEmail} onChange={handleChange} disabled={loading} />
-              
-            </div>
-            <div>
-              <label className="block text-base mb-2">Contact No.<span className="text-red-500">*</span></label>
-              <input type="text" name="contactNo" required placeholder="09XXXXXXXXX" maxLength={11} className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.contactNo} onChange={handleChange} disabled={loading} />
             </div>
             <div>
               <label className="block text-base mb-2">Student ID<span className="text-red-500">*</span></label>
               <input type="text" name="schoolID"  required className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.schoolID} onChange={handleChange} disabled={loading} placeholder={getSchoolIdPlaceholder()} />
             </div>
+          </div>
+          
+          {/* Row 3: Academic Information - Track, Strand, Section */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-base mb-2">Track<span className="text-red-500">*</span></label>
               <select name="trackName" required className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" value={form.trackName} onChange={handleChange} disabled={loading || loadingData}>

@@ -37,7 +37,6 @@ export default function Admin_Accounts() {
     password: "",
     role: "",
     userID: "", // invisible field
-    contactNo: "",
   });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [users, setUsers] = useState([]);
@@ -209,11 +208,6 @@ export default function Admin_Accounts() {
     if (name === "schoolID") {
       // Allow manual entry; uppercase only. Validation enforced on submit.
       setFormData((prev) => ({ ...prev, [name]: value.toUpperCase() }));
-    } else if (name === "contactNo") {
-      // Only allow numbers, max 11 digits, must start with 09
-      let newValue = value.replace(/[^0-9]/g, "");
-      if (newValue.length > 11) newValue = newValue.slice(0, 11);
-      setFormData((prev) => ({ ...prev, [name]: newValue }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
@@ -273,7 +267,7 @@ export default function Admin_Accounts() {
       setIsCreatingAccount(true);
     }
     
-    const requiredFields = ["firstname", "lastname", "email", "password", "role", "schoolID", "contactNo"];
+    const requiredFields = ["firstname", "lastname", "email", "password", "role", "schoolID"];
     for (const field of requiredFields) {
       if (!formData[field]) {
         setValidationModal({
@@ -286,14 +280,14 @@ export default function Admin_Accounts() {
         return;
       }
     }
-    // Validate personal email format
+    // Validate school email format
     const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
     if (!emailPattern.test(formData.personalemail)) {
       setValidationModal({
         isOpen: true,
         type: 'warning',
-        title: 'Invalid Personal Email',
-        message: 'Enter a valid personal email address.'
+        title: 'Invalid School Email',
+        message: 'Enter a valid school email address.'
       });
       setIsCreatingAccount(false);
       return;
@@ -344,17 +338,7 @@ export default function Admin_Accounts() {
         return;
       }
     }
-    // Contact number validation: must be 11 digits and start with 09
-    if (!/^09\d{9}$/.test(formData.contactNo)) {
-      setValidationModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Invalid Contact Number',
-        message: "Contact number must be exactly 11 digits and start with 09 (e.g., 09000000000)"
-      });
-      setIsCreatingAccount(false);
-      return;
-    }
+
     // Check duplicate School ID before proceeding (create mode only)
     if (!isEditMode) {
       try {
@@ -462,7 +446,6 @@ export default function Admin_Accounts() {
             password: generatePassword(),
             role: 'faculty',
             userID: '',
-            contactNo: '',
           });
           fetchUsers();
           setIsCreatingAccount(false);
@@ -515,7 +498,6 @@ export default function Admin_Accounts() {
           trackAssigned: formData.trackAssigned || [],
           strandAssigned: formData.strandAssigned || [],
           sectionAssigned: formData.sectionAssigned || [],
-          contactNo: formData.contactNo,
         }),
       });
 
@@ -546,7 +528,6 @@ export default function Admin_Accounts() {
             password: "",
             role: "faculty",
             userID: "",
-            contactNo: '',
           });
         }, 2000);
       } else {
@@ -590,7 +571,6 @@ export default function Admin_Accounts() {
       password: generatePassword(),
       role: 'faculty',
       userID: '',
-      contactNo: '',
     });
     // Show cancellation message
     setShowCancellationMessage(true);
@@ -624,7 +604,6 @@ export default function Admin_Accounts() {
         'email',
         'role',
         'schoolID',
-        'contactNo',
         'personalemail'
       ];
       const allFilled = requiredFields.every(field => formData[field] && formData[field].toString().trim() !== '');
@@ -658,7 +637,6 @@ export default function Admin_Accounts() {
       password: user.password,
       role: user.role,
       userID: user.userID,
-      contactNo: user.contactNo || '',
     });
     setShowCreateModal(true); // Open the modal when editing
   };
@@ -778,7 +756,6 @@ export default function Admin_Accounts() {
     && formData.lastname
     && formData.email
     && formData.schoolID
-    && formData.contactNo
     && formData.personalemail
     && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.personalemail)
     && formData.password;
@@ -895,7 +872,6 @@ export default function Admin_Accounts() {
                     <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
                     <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
                     <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border-b font-semibold text-gray-700 whitespace-nowrap">Contact No.</th>
                     <th className="p-3 border-b font-semibold text-gray-700 whitespace-nowrap">Role</th>
                     <th className="p-3 border-b font-semibold text-gray-700 whitespace-nowrap">Actions</th>
                   </tr>
@@ -915,13 +891,12 @@ export default function Admin_Accounts() {
                     </th>
                     <th className="p-2 border-b"></th>
                     <th className="p-2 border-b"></th>
-                    <th className="p-2 border-b"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {displayedUsers.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="text-center p-4 text-gray-500">
+                      <td colSpan="5" className="text-center p-4 text-gray-500">
                         No users found.
                       </td>
                     </tr>
@@ -932,7 +907,6 @@ export default function Admin_Accounts() {
                         <td className="p-3 border-b">{user.lastname}</td>
                         <td className="p-3 border-b">{user.firstname}</td>
                         <td className="p-3 border-b">{user.middlename}</td>
-                        <td className="p-3 border-b">{user.contactNo}</td>
                         <td className="p-3 border-b">
                           <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
                             ${user.role === 'students' ? 'bg-green-100 text-green-700 border border-green-300' :
@@ -1197,7 +1171,6 @@ export default function Admin_Accounts() {
                       password: "",
                       role: "",
                       userID: "",
-                      contactNo: "",
                     });
                   }}
                   aria-label="Close"
@@ -1224,25 +1197,21 @@ export default function Admin_Accounts() {
                   {/* Row 2: School Email, Personal Email, School ID */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-2">
                     <div>
-                      <label className="block font-semibold mb-1" htmlFor="email">Zoho Mail Address</label>
-                      <input id="email" type="email" name="email" value={formData.email} readOnly placeholder="Zoho Mail (auto-generated with role)" className="border rounded p-4 text-lg w-full bg-gray-100 cursor-not-allowed" required />
+                      <label className="block font-semibold mb-1" htmlFor="email">LMS Email</label>
+                      <input id="email" type="email" name="email" value={formData.email} readOnly placeholder="LMS Email (auto-generated with role)" className="border rounded p-4 text-lg w-full bg-gray-100 cursor-not-allowed" required />
                       <p className="text-xs text-gray-500 mt-1">Format: role.firstname.lastname@sjdefilms.com</p>
                     </div>
                     <div>
-                      <label className="block font-semibold mb-1" htmlFor="personalemail">Personal Email</label>
-                      <input id="personalemail" type="email" name="personalemail" value={formData.personalemail} onChange={handleChange} placeholder="Personal Email" className="border rounded p-4 text-lg w-full" required />
+                      <label className="block font-semibold mb-1" htmlFor="personalemail">School Email</label>
+                      <input id="personalemail" type="email" name="personalemail" value={formData.personalemail} onChange={handleChange} placeholder="School Email" className="border rounded p-4 text-lg w-full" required />
                     </div>
                     <div>
                       <label className="block font-semibold mb-1" htmlFor="schoolID">School ID</label>
                       <input id="schoolID" type="text" name="schoolID" value={formData.schoolID} onChange={handleChange} placeholder={formData.role === 'faculty' ? 'e.g., F001' : formData.role === 'admin' ? 'e.g., A001' : (formData.role === 'vice president of education' || formData.role === 'principal') ? 'e.g., N001' : 'School ID'} className="border rounded p-4 text-lg w-full" required />
                     </div>
                   </div>
-                  {/* Row 3: Contact Number, Role, Password */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-2">
-                    <div>
-                      <label className="block font-semibold mb-1" htmlFor="contactNo">Contact Number</label>
-                      <input id="contactNo" type="text" name="contactNo" value={formData.contactNo || ''} onChange={handleChange} placeholder="Contact Number" className="border rounded p-4 text-lg w-full" required />
-                    </div>
+                  {/* Row 3: Role, Password */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
                     <div>
                       <label className="block font-semibold mb-1" htmlFor="role">Role</label>
                       <select id="role" name="role" value={formData.role} onChange={handleChange} className="border rounded p-4 text-lg w-full" required>
@@ -1282,7 +1251,7 @@ export default function Admin_Accounts() {
                       {isCreatingAccount ? 'Creating Account...' : (isEditMode ? 'Save Edited Account' : 'Create Account')}
                     </button>
                     {isEditMode && (
-                      <button type="button" onClick={() => { setIsEditMode(false); setEditingUser(null); setIsCreatingAccount(false); setFormData({ firstname: "", middlename: "", lastname: "", email: "", personalemail: "", schoolID: "", password: "", role: "faculty", userID: "", contactNo: '' }); setShowCreateModal(false); }} className="flex-1 bg-gray-500 hover:bg-gray-600 text-white rounded p-4 text-lg">Cancel Edit</button>
+                      <button type="button" onClick={() => { setIsEditMode(false); setEditingUser(null); setIsCreatingAccount(false); setFormData({ firstname: "", middlename: "", lastname: "", email: "", personalemail: "", schoolID: "", password: "", role: "faculty", userID: "" }); setShowCreateModal(false); }} className="flex-1 bg-gray-500 hover:bg-gray-600 text-white rounded p-4 text-lg">Cancel Edit</button>
                     )}
                   </div>
                 </form>

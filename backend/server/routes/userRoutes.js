@@ -1676,15 +1676,15 @@ userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
     const userId = req.params.id;
     const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
     if (!user || !user.personalemail) {
-        return res.status(404).json({ message: 'User not found or missing personal email.' });
+        return res.status(404).json({ message: 'User not found or missing school email.' });
     }
-    // Decrypt personal email
-    const decryptedPersonalEmail = user.getDecryptedPersonalEmail
-      ? user.getDecryptedPersonalEmail()
+    // Decrypt school email
+    const decryptedSchoolEmail = user.getDecryptedPersonalEmail
+      ? user.getDecryptedSchoolEmail()
       : (typeof user.personalemail === 'string' ? decrypt(user.personalemail) : '');
-    if (!decryptedPersonalEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(decryptedPersonalEmail)) {
-      console.error('Invalid or missing personal email for user:', user);
-      return res.status(400).json({ message: 'User does not have a valid personal email.' });
+    if (!decryptedSchoolEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(decryptedSchoolEmail)) {
+      console.error('Invalid or missing school email for user:', user);
+      return res.status(400).json({ message: 'User does not have a valid school email.' });
     }
     // Generate OTP and expiry
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -1695,24 +1695,24 @@ userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
     );
     // Send OTP via Brevo to Personal Email address
     try {
-        console.log('🔍 [DEBUG] Decrypted personal email for password change OTP:', decryptedPersonalEmail);
+        console.log('🔍 [DEBUG] Decrypted school email for password change OTP:', decryptedSchoolEmail);
         console.log('🔍 [DEBUG] User ID:', userId);
         console.log('🔍 [DEBUG] User firstname:', user.firstname);
         console.log('🔍 [DEBUG] OTP:', otp);
         
         const emailService = await import('../services/emailService.js');
         const result = await emailService.default.sendOTP(
-            decryptedPersonalEmail, // Send to personal email address
+            decryptedSchoolEmail, // Send to school email address
             user.firstname,
             otp,
             'password_change',
-            decryptedPersonalEmail
+            decryptedSchoolEmail
         );
         console.log('🔍 [DEBUG] Email service result:', result);
     } catch (emailErr) {
         console.error('Error sending OTP email to personal email via Brevo:', emailErr);
     }
-    return res.json({ message: 'OTP sent to your personal email address.' });
+    return res.json({ message: 'OTP sent to your school email address.' });
 });
 
 // Change password route (requires current password, after OTP is validated)
@@ -1762,7 +1762,7 @@ userRoutes.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ message: 'Enter a valid email address.' });
     }
 
-    const genericMsg = 'If your email is registered, a reset link or OTP has been sent to your personal email address.';
+    const genericMsg = 'If your email is registered, a reset link or OTP has been sent to your school email address.';
 
     try {
         // Find user by emailHash (deterministic hash for searching)
@@ -1786,36 +1786,36 @@ userRoutes.post('/forgot-password', async (req, res) => {
             { $set: { resetOTP: otp, resetOTPExpires: otpExpiry } }
         );
 
-        // --- Send OTP via Brevo to Personal Email address ---
-        console.log('About to send OTP to Personal Email via EmailService...');
+        // --- Send OTP via Brevo to School Email address ---
+        console.log('About to send OTP to School Email via EmailService...');
 
         try {
-            // Decrypt the personal email address before sending
+            // Decrypt the school email address before sending
             const { decrypt } = await import('../utils/encryption.js');
-            const decryptedPersonalEmail = user.getDecryptedPersonalEmail
-              ? user.getDecryptedPersonalEmail()
+            const decryptedSchoolEmail = user.getDecryptedPersonalEmail
+              ? user.getDecryptedSchoolEmail()
               : (typeof user.personalemail === 'string' ? decrypt(user.personalemail) : '');
-            console.log('🔍 [DEBUG] Decrypted personal email for OTP:', decryptedPersonalEmail);
+            console.log('🔍 [DEBUG] Decrypted school email for OTP:', decryptedSchoolEmail);
             console.log('🔍 [DEBUG] User ID:', user._id);
             console.log('🔍 [DEBUG] User firstname:', user.firstname);
             console.log('🔍 [DEBUG] OTP:', otp);
             
-            if (!decryptedPersonalEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(decryptedPersonalEmail)) {
-                console.error('Invalid or missing personal email for user:', user);
-                return res.status(400).json({ message: 'User does not have a valid personal email for password reset.' });
+            if (!decryptedSchoolEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(decryptedSchoolEmail)) {
+                console.error('Invalid or missing school email for user:', user);
+                return res.status(400).json({ message: 'User does not have a valid school email for password reset.' });
             }
             
             const emailService = await import('../services/emailService.js');
             const result = await emailService.default.sendOTP(
-                decryptedPersonalEmail, // Send to personal email address
+                decryptedSchoolEmail, // Send to school email address
                 user.firstname,
                 otp,
                 'password_reset',
-                decryptedPersonalEmail
+                decryptedSchoolEmail
             );
-            console.log('🔍 [DEBUG] OTP email sent to Personal Email:', decryptedPersonalEmail, 'Result:', result);
+            console.log('🔍 [DEBUG] OTP email sent to School Email:', decryptedSchoolEmail, 'Result:', result);
         } catch (emailErr) {
-            console.error('Error sending OTP email to Personal Email via Brevo:', emailErr);
+            console.error('Error sending OTP email to School Email via Brevo:', emailErr);
         }
 
         console.log('After sendTransacEmail call');
