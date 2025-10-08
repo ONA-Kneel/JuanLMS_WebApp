@@ -164,17 +164,23 @@ router.post('/', authenticateToken, async (req, res) => {
     
     const existingAssignment = await StudentAssignment.findOne({
       $or: [
-        // Check by studentId if it exists - only prevent same student in same term and quarter
+        // Check by studentId if it exists - only prevent same student in same section, term and quarter
         ...(actualStudentId ? [{
           studentId: actualStudentId,
+          trackName,
+          strandName,
+          sectionName,
           schoolYear: term.schoolYear,
           termName: term.termName,
           quarterName: quarterName || null
         }] : []),
-        // Check by studentSchoolID if no studentId - only prevent same student in same term and quarter
-        // This ensures we're checking for the exact same student, not just similar names
+        // Check by studentSchoolID if no studentId - only prevent same student in same section, term and quarter
+        // This ensures we're checking for the exact same student in the same section, not just any section
         ...(!actualStudentId && studentSchoolID ? [{
           studentSchoolID,
+          trackName,
+          strandName,
+          sectionName,
           schoolYear: term.schoolYear,
           termName: term.termName,
           quarterName: quarterName || null
@@ -396,17 +402,23 @@ router.post('/bulk', authenticateToken, async (req, res) => {
       // Check for existing assignment before creating new one (same logic as single creation)
       const existingAssignment = await StudentAssignment.findOne({
         $or: [
-          // Check by studentId if it exists - only prevent same student in same term and quarter
+          // Check by studentId if it exists - only prevent same student in same section, term and quarter
           ...(actualStudentId ? [{
             studentId: actualStudentId,
+            trackName,
+            strandName,
+            sectionName,
             schoolYear: term.schoolYear,
             termName: term.termName,
             quarterName: quarterName || null
           }] : []),
-          // Check by studentSchoolID if no studentId - only prevent same student in same term and quarter
-          // This ensures we're checking for the exact same student, not just similar names
+          // Check by studentSchoolID if no studentId - only prevent same student in same section, term and quarter
+          // This ensures we're checking for the exact same student in the same section, not just any section
           ...(!actualStudentId && studentSchoolID ? [{
             studentSchoolID,
+            trackName,
+            strandName,
+            sectionName,
             schoolYear: term.schoolYear,
             termName: term.termName,
             quarterName: quarterName || null

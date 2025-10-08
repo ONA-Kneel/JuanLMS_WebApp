@@ -2128,7 +2128,16 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         setAvailableSubjects([]);
       } else {
         const data = await res.json();
-        setStudentError(data.message || 'Failed to assign student');
+        console.error('Student assignment failed:', data);
+        
+        // Handle specific error cases
+        if (data.message && data.message.includes('already enrolled')) {
+          setStudentError(`Student is already enrolled in this term and quarter. Please check existing assignments or contact administrator.`);
+        } else if (data.message && data.message.includes('already exists')) {
+          setStudentError(`Student assignment already exists. Please check existing assignments.`);
+        } else {
+          setStudentError(data.message || 'Failed to assign student');
+        }
       }
     } catch (err) {
       setStudentError('Error assigning student');
@@ -4812,28 +4821,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         continue; // Skip all other validations for this row
       }
 
-      // 2. Resolve student identity without enforcing enrollment/registration in current term/quarter
+      // 2. For bulk upload, always create new student assignments without trying to match existing students
+      // This prevents the system from overriding student IDs and names you provide
       if (isValid) {
-        const studentFound = activeStudentsMap.get(studentSchoolIDInput);
-        console.log(`Student with School ID "${studentSchoolIDInput}" found:`, studentFound);
-
-        if (studentFound) {
-          const expectedName = `${studentFound.firstname} ${studentFound.lastname}`.toLowerCase();
-          const providedName = `${firstNameInput} ${lastNameInput}`.toLowerCase();
-          if (expectedName !== providedName) {
-            console.log(`Name mismatch for existing student - will create new entry for "${firstNameInput} ${lastNameInput}"`);
-            studentId = null; // Allow creating a new student record on upload
-            message = 'Will create new student record due to name mismatch';
-          } else {
-            studentId = studentFound._id; // Use existing student record
-            message = 'Student resolved';
-          }
-        } else {
-          // Student not found in current active list; allow free entry (will create)
-          console.log(`Student with School ID "${studentSchoolIDInput}" not found; allowing free entry`);
-          studentId = null;
-          message = 'New student will be created';
-        }
+        console.log(`Bulk upload mode: Creating new student assignment for "${firstNameInput} ${lastNameInput}" (${studentSchoolIDInput})`);
+        studentId = null; // Always create new student records for bulk upload
+        message = 'New student will be created';
       }
 
       // 3. Check if track exists and is active
@@ -5021,142 +5014,10 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const createdAssignments = [];
       const token = localStorage.getItem('token');
 
-      // First, create any missing academic structures (tracks, strands, sections, subjects)
-      const uniqueTracks = [...new Set(validAssignments.map(a => a['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track'))];
-      const uniqueStrands = [...new Set(validAssignments.map(a => a['strand']))];
-      const uniqueSections = [...new Set(validAssignments.map(a => a['section']))];
-      const uniqueSubjects = [...new Set(validAssignments.map(a => a['subject'] || 'General'))]; // Default subject if not provided
+      // Note: For student assignments, we assume the infrastructure (tracks, strands, sections, subjects) already exists
+      // We only create student assignments, not the academic infrastructure
+      console.log('Creating student assignments for existing infrastructure...');
 
-      console.log('Creating academic structures:', { uniqueTracks, uniqueStrands, uniqueSections, uniqueSubjects });
-
-      // Create tracks
-      for (const trackName of uniqueTracks) {
-        if (trackName) {
-          try {
-            const res = await fetch(`${API_BASE}/api/tracks`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                trackName: trackName,
-                schoolYear: termDetails.schoolYear,
-                termName: termDetails.termName,
-                quarterName: quarterData ? quarterData.quarterName : undefined
-              })
-            });
-            if (res.ok) {
-              console.log(`Created track: ${trackName}`);
-            } else {
-              const data = await res.json();
-              if (data.message && data.message.includes('already exists')) {
-                console.log(`Track ${trackName} already exists`);
-              }
-            }
-          } catch (err) {
-            console.error(`Error creating track ${trackName}:`, err);
-          }
-        }
-      }
-
-      // Create strands
-      for (const strandName of uniqueStrands) {
-        if (strandName) {
-          const trackName = strandName === 'STEM' ? 'Academic Track' : 'TVL Track';
-          try {
-            const res = await fetch(`${API_BASE}/api/strands`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                strandName: strandName,
-                trackName: trackName,
-                schoolYear: termDetails.schoolYear,
-                termName: termDetails.termName,
-                quarterName: quarterData ? quarterData.quarterName : undefined
-              })
-            });
-            if (res.ok) {
-              console.log(`Created strand: ${strandName}`);
-            } else {
-              const data = await res.json();
-              if (data.message && data.message.includes('already exists')) {
-                console.log(`Strand ${strandName} already exists`);
-              }
-            }
-          } catch (err) {
-            console.error(`Error creating strand ${strandName}:`, err);
-          }
-        }
-      }
-
-      // Create sections
-      for (const sectionName of uniqueSections) {
-        if (sectionName) {
-          const assignment = validAssignments.find(a => a['section'] === sectionName);
-          if (assignment) {
-            try {
-              const res = await fetch(`${API_BASE}/api/sections`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  sectionName: sectionName,
-                  trackName: assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track',
-                  strandName: assignment['strand'],
-                  gradeLevel: assignment['grade'],
-                  schoolYear: termDetails.schoolYear,
-                  termName: termDetails.termName,
-                  quarterName: quarterData ? quarterData.quarterName : null
-                })
-              });
-              if (res.ok) {
-                console.log(`Created section: ${sectionName}`);
-              } else {
-                const data = await res.json();
-                console.log(`Failed to create section "${sectionName}":`, data);
-                if (data.message && data.message.includes('already exists')) {
-                  console.log(`Section ${sectionName} already exists`);
-                } else {
-                  console.error(`Error creating section ${sectionName}: ${data.message || 'Unknown error'}`);
-                }
-              }
-            } catch (err) {
-              console.error(`Error creating section ${sectionName}:`, err);
-            }
-          }
-        }
-      }
-
-      // Create subjects
-      for (const subjectName of uniqueSubjects) {
-        if (subjectName) {
-          const assignment = validAssignments.find(a => (a['subject'] || 'General') === subjectName);
-          if (assignment) {
-            try {
-              const res = await fetch(`${API_BASE}/api/subjects`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  subjectName: subjectName,
-                  trackName: assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track',
-                  strandName: assignment['strand'],
-                  gradeLevel: assignment['grade'],
-                  schoolYear: termDetails.schoolYear,
-                  termName: termDetails.termName,
-                  quarterName: quarterData ? quarterData.quarterName : undefined
-                })
-              });
-              if (res.ok) {
-                console.log(`Created subject: ${subjectName}`);
-              } else {
-                const data = await res.json();
-                if (data.message && data.message.includes('already exists')) {
-                  console.log(`Subject ${subjectName} already exists`);
-                }
-              }
-            } catch (err) {
-              console.error(`Error creating subject ${subjectName}:`, err);
-            }
-          }
-        }
-      }
 
       // Now create the student assignments
       for (let i = 0; i < validAssignments.length; i++) {
@@ -5281,9 +5142,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         setSubjects(data);
       } else {
         const data = await res.json();
+        console.error('Failed to fetch subjects:', data);
+        console.error('Request URL:', `${API_BASE}/api/subjects/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}${quarterParam}`);
         setSubjectError(data.message || 'Failed to fetch subjects');
       }
     } catch (err) {
+      console.error('Error fetching subjects:', err);
       setSubjectError('Error fetching subjects');
     }
   };
@@ -5318,14 +5182,18 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       return;
     }
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE}/api/subjects`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           ...subjectFormData,
           schoolYear: termDetails.schoolYear,
           termName: termDetails.termName,
-          quarterName: quarterData ? quarterData.quarterName : undefined
+          ...(quarterData && { quarterName: quarterData.quarterName })
         })
       });
       if (res.ok) {
@@ -5351,6 +5219,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         window.alert('Subject added successfully!');
       } else {
         const data = await res.json();
+        console.error('Subject creation failed:', data);
+        console.error('Request data:', {
+          ...subjectFormData,
+          schoolYear: termDetails.schoolYear,
+          termName: termDetails.termName,
+          quarterName: quarterData ? quarterData.quarterName : undefined
+        });
         setSubjectError(data.message || 'Failed to add subject');
       }
     } catch (err) {
@@ -5377,9 +5252,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       return;
     }
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE}/api/subjects/${editingSubject._id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           ...subjectFormData,
           schoolYear: termDetails.schoolYear,
@@ -5427,7 +5306,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     
     try {
       // First, check dependencies
-      const dependenciesRes = await fetch(`${API_BASE}/api/subjects/${subject._id}/dependencies`);
+      const token = localStorage.getItem('token');
+      const dependenciesRes = await fetch(`${API_BASE}/api/subjects/${subject._id}/dependencies`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       
       if (dependenciesRes.ok) {
         const dependencies = await dependenciesRes.json();
@@ -5452,8 +5336,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         }
         
         // Proceed with deletion (with cascade if needed)
+        const token = localStorage.getItem('token');
         const deleteRes = await fetch(`${API_BASE}/api/subjects/${subject._id}?confirmCascade=true`, {
-          method: 'DELETE'
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
         });
 
         if (deleteRes.ok) {
@@ -5636,6 +5524,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     ));
     
     console.log('Existing subjects in system:', Array.from(existingSubjectKeys));
+    console.log('Available tracks:', tracks.map(t => `${t.trackName} (${t.status})`));
+    console.log('Available strands:', strands.map(s => `${s.strandName} in ${s.trackName} (${s.status})`));
     
     for (let i = 0; i < subjectsToValidate.length; i++) {
       const subject = subjectsToValidate[i];
@@ -5675,15 +5565,23 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
       
       // 4. Check if track exists and is active
-      if (isValid && !tracks.find(t => t.trackName === trackName && t.status === 'active')) {
-        isValid = false;
-        message = `Track "${trackName}" does not exist or is not active`;
+      if (isValid) {
+        const trackExists = tracks.find(t => t.trackName === trackName && t.status === 'active');
+        console.log(`Checking track "${trackName}":`, trackExists ? 'Found' : 'Not found');
+        if (!trackExists) {
+          isValid = false;
+          message = `Track "${trackName}" does not exist or is not active`;
+        }
       }
       
       // 5. Check if strand exists within the active track and is active
-      if (isValid && !strands.find(s => s.strandName === strandName && s.trackName === trackName && s.status === 'active')) {
-        isValid = false;
-        message = `Strand "${strandName}" does not exist in track "${trackName}" or is not active`;
+      if (isValid) {
+        const strandExists = strands.find(s => s.strandName === strandName && s.trackName === trackName && s.status === 'active');
+        console.log(`Checking strand "${strandName}" in track "${trackName}":`, strandExists ? 'Found' : 'Not found');
+        if (!strandExists) {
+          isValid = false;
+          message = `Strand "${strandName}" does not exist in track "${trackName}" or is not active`;
+        }
       }
       
       // 6. Check if grade level is valid
@@ -5778,24 +5676,95 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     setIsSubjectUploading(true);
     setSubjectExcelError('');
     try {
-      const createdSubjects = [];
-      for (const subject of validSubjects) {
-        const res = await fetch(`${API_BASE}/api/subjects`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...subject,
-            schoolYear: termDetails.schoolYear,
-            termName: termDetails.termName
-          })
-        });
-        if (res.ok) {
-          const newSubject = await res.json();
-          createdSubjects.push(newSubject);
-        } else {
-          const data = await res.json();
-          throw new Error(data.message || 'Failed to create subject');
+      const token = localStorage.getItem('token');
+      
+      // Prepare subjects data for bulk upload
+      const subjectsData = validSubjects.map(subject => ({
+        ...subject,
+        schoolYear: termDetails.schoolYear,
+        termName: termDetails.termName,
+        ...(quarterData && { quarterName: quarterData.quarterName })
+      }));
+      
+      console.log('Creating subjects in bulk with data:', subjectsData);
+      
+      // Filter out existing subjects to avoid duplicates
+      const existingSubjects = subjects.filter(subject => subject.status === 'active');
+      console.log('Existing subjects in system:', existingSubjects.map(s => ({
+        subjectName: s.subjectName,
+        trackName: s.trackName,
+        strandName: s.strandName,
+        gradeLevel: s.gradeLevel,
+        termName: s.termName,
+        schoolYear: s.schoolYear,
+        quarterName: s.quarterName
+      })));
+      
+      const existingSubjectKeys = new Set(existingSubjects.map(s => 
+        `${s.trackName}-${s.strandName}-${s.subjectName}-${s.gradeLevel}-${s.termName}-${s.schoolYear}-${s.quarterName || ''}`
+      ));
+      
+      console.log('Existing subject keys:', Array.from(existingSubjectKeys));
+      
+      const newSubjectsData = subjectsData.filter(subject => {
+        const subjectKey = `${subject.trackName}-${subject.strandName}-${subject.subjectName}-${subject.gradeLevel}-${subject.termName}-${subject.schoolYear}-${subject.quarterName || ''}`;
+        console.log(`Checking subject key: "${subjectKey}" - exists: ${existingSubjectKeys.has(subjectKey)}`);
+        return !existingSubjectKeys.has(subjectKey);
+      });
+      
+      const skippedSubjects = subjectsData.filter(subject => {
+        const subjectKey = `${subject.trackName}-${subject.strandName}-${subject.subjectName}-${subject.gradeLevel}-${subject.termName}-${subject.schoolYear}-${subject.quarterName || ''}`;
+        return existingSubjectKeys.has(subjectKey);
+      });
+      
+      console.log(`Found ${newSubjectsData.length} new subjects to create, ${skippedSubjects.length} already exist`);
+      console.log('New subjects data:', newSubjectsData);
+      console.log('Skipped subjects:', skippedSubjects);
+      
+      if (newSubjectsData.length === 0) {
+        window.alert('All subjects already exist in the system. No new subjects were created.');
+        setSubjectExcelFile(null);
+        setSubjectPreviewModalOpen(false);
+        document.querySelector('input[type="file"][accept=".xlsx,.xls"]').value = '';
+        return;
+      }
+      
+      const res = await fetch(`${API_BASE}/api/subjects/bulk`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          subjects: newSubjectsData
+        })
+      });
+      
+      if (res.ok) {
+        const createdSubjects = await res.json();
+        console.log('Successfully created subjects:', createdSubjects);
+        
+        // Show user feedback about what was created vs skipped
+        let message = `Successfully created ${createdSubjects.length} new subject(s)!`;
+        if (skippedSubjects.length > 0) {
+          message += `\n\nSkipped ${skippedSubjects.length} subject(s) that already exist:`;
+          skippedSubjects.forEach(subject => {
+            message += `\n• ${subject.subjectName} (${subject.trackName} - ${subject.strandName} - ${subject.gradeLevel})`;
+          });
         }
+        window.alert(message);
+      } else {
+        const data = await res.json();
+        console.error('Bulk subject creation failed:', {
+          status: res.status,
+          statusText: res.statusText,
+          response: data,
+          url: res.url
+        });
+        console.error('Full server response:', data);
+        console.error('Server error details:', JSON.stringify(data, null, 2));
+        console.error('Request data:', newSubjectsData);
+        throw new Error(data.message || `Failed to create subjects (${res.status}: ${res.statusText})`);
       }
       await fetchSubjects();
       // Audit log: Batch Upload Subjects
@@ -5809,12 +5778,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           },
           body: JSON.stringify({
             action: 'Batch Upload Subjects',
-            details: `Uploaded ${validSubjects.length} Subjects for ${termDetails.schoolYear} ${termDetails.termName}`,
+            details: `Uploaded ${newSubjectsData.length} new Subjects (${skippedSubjects.length} skipped as duplicates) for ${termDetails.schoolYear} ${termDetails.termName}`,
             userRole: 'admin'
           })
         }).catch(() => {});
       } catch {}
-      window.alert(`${validSubjects.length} subject(s) uploaded successfully!`);
+      // Success message is now handled above with detailed feedback
       setSubjectExcelFile(null);
       setSubjectPreviewModalOpen(false);
       document.querySelector('input[type="file"][accept=".xlsx,.xls"]').value = '';
@@ -6599,42 +6568,25 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       // Import student assignments
       for (const assignment of validStudentAssignments) {
         try {
-          // Find student by school ID
-          const student = students.find(s => s.schoolID === assignment.studentSchoolID);
-          
           const displayName = assignment.firstName && assignment.lastName ? `${assignment.firstName} ${assignment.lastName}` : assignment.studentName;
           console.log(`Creating student assignment for ${displayName} in ${assignment.trackName}/${assignment.strandName}/${assignment.sectionName}`);
 
-          // Prepare payload based on whether student exists in system
-          let payload;
-          if (student) {
-            // Student exists in system - link to existing account
-            payload = {
-              studentId: student._id,
-              trackName: assignment.trackName,
-              strandName: assignment.strandName,
-              sectionName: assignment.sectionName,
-              gradeLevel: assignment.gradeLevel,
-              termId: termDetails._id,
-              quarterName: quarterData ? quarterData.quarterName : undefined
-            };
-          } else {
-            // Student doesn't exist - create manual entry
-            payload = {
-              studentName: assignment.studentName,
-              studentSchoolID: assignment.studentSchoolID,
-              firstName: assignment.firstName || assignment.studentName.split(' ')[0],
-              lastName: assignment.lastName || assignment.studentName.split(' ').slice(1).join(' '),
-              enrollmentNo: assignment.enrollmentNo || '',
-              enrollmentDate: assignment.enrollmentDate || new Date(),
-              trackName: assignment.trackName,
-              strandName: assignment.strandName,
-              sectionName: assignment.sectionName,
-              gradeLevel: assignment.gradeLevel,
-              termId: termDetails._id,
-              quarterName: quarterData ? quarterData.quarterName : undefined
-            };
-          }
+          // For bulk import, always create new student assignments without trying to match existing students
+          // This prevents the system from overriding student IDs and names you provide
+          const payload = {
+            studentName: assignment.studentName,
+            studentSchoolID: assignment.studentSchoolID,
+            firstName: assignment.firstName || assignment.studentName.split(' ')[0],
+            lastName: assignment.lastName || assignment.studentName.split(' ').slice(1).join(' '),
+            enrollmentNo: assignment.enrollmentNo || '',
+            enrollmentDate: assignment.enrollmentDate || new Date(),
+            trackName: assignment.trackName,
+            strandName: assignment.strandName,
+            sectionName: assignment.sectionName,
+            gradeLevel: assignment.gradeLevel,
+            termId: termDetails._id,
+            quarterName: quarterData ? quarterData.quarterName : undefined
+          };
 
           const res = await fetch(`${API_BASE}/api/student-assignments`, {
             method: 'POST',
