@@ -9,6 +9,7 @@ import { Video, Users, Calendar, Plus, Search, UserPlus, Crown } from 'lucide-re
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 const Principal_Meeting = () => {
+  const [isLoading, setIsLoading] = useState(true);
   const [showCreateMeetingModal, setShowCreateMeetingModal] = useState(false);
   const [meetingRefreshTrigger, setMeetingRefreshTrigger] = useState(0);
   const [activeMeeting, setActiveMeeting] = useState(null);
@@ -63,6 +64,14 @@ const Principal_Meeting = () => {
     };
 
     fetchAllUsers();
+  }, []);
+
+  // Loading effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+    return () => clearTimeout(timer);
   }, []);
 
   // Meeting handlers
@@ -132,6 +141,21 @@ const Principal_Meeting = () => {
     setSelectedUsers([]);
     setSearchTerm('');
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Principal_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading meetings...</p>
+            <p className="text-gray-500 text-sm mt-2">Setting up meeting management system</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">

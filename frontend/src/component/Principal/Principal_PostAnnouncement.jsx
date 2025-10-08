@@ -5,6 +5,7 @@ import ProfileMenu from "../ProfileMenu";
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Principal_PostAnnouncement() {
+  const [isLoading, setIsLoading] = useState(true);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   
@@ -246,6 +247,14 @@ export default function Principal_PostAnnouncement() {
     }).join(', ');
   };
 
+  // Loading effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1400);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     async function fetchAcademicYear() {
       try {
@@ -307,6 +316,21 @@ export default function Principal_PostAnnouncement() {
   useEffect(() => {
     setSelectedAnnouncement(null);
   }, [selectedSchoolYear, selectedTerm]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Principal_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading announcements...</p>
+            <p className="text-gray-500 text-sm mt-2">Setting up announcement management</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">

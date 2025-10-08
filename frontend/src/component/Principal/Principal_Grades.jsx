@@ -6,6 +6,7 @@ import ProfileMenu from "../ProfileMenu";
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Principal_Grades() {
+  const [isLoading, setIsLoading] = useState(true);
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [classes, setClasses] = useState([]);
@@ -21,6 +22,14 @@ export default function Principal_Grades() {
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [showStudentResults, setShowStudentResults] = useState(false);
   const [studentSubjectRows, setStudentSubjectRows] = useState([]);
+
+  // Loading effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1600);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     async function fetchAcademicYear() {
@@ -702,6 +711,21 @@ export default function Principal_Grades() {
     const average = validGrades.reduce((sum, grade) => sum + grade, 0) / validGrades.length;
     return average.toFixed(2);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Principal_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading grades...</p>
+            <p className="text-gray-500 text-sm mt-2">Initializing grade management system</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">

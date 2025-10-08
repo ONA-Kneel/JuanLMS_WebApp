@@ -14,6 +14,7 @@ import { getProfileImageUrl } from "../../utils/imageUtils";
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Principal_Chats() {
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedChat, setSelectedChat] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [users, setUsers] = useState(() => {
@@ -149,6 +150,14 @@ export default function Principal_Chats() {
     }
   };
 
+
+  // Loading effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -1175,6 +1184,21 @@ export default function Principal_Chats() {
       )
       .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Principal_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading chats...</p>
+            <p className="text-gray-500 text-sm mt-2">Fetching users, conversations, and groups</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen h-screen max-h-screen">

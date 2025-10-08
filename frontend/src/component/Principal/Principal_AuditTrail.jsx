@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 export default function Principal_AuditTrail() {
+  const [isLoading, setIsLoading] = useState(true);
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -35,6 +36,14 @@ export default function Principal_AuditTrail() {
     'PRINCIPAL_UPLOAD_MATERIAL': 'Upload Material',
     'PRINCIPAL_ADD_CLASS': 'Add Class',
   };
+
+  // Loading effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
@@ -183,6 +192,21 @@ export default function Principal_AuditTrail() {
       alert('Failed to export audit logs. Please try again.');
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen h-screen max-h-screen">
+        <Principal_Navbar />
+        <div className="flex-1 flex flex-col bg-gray-100 font-poppinsr overflow-hidden md:ml-64 h-full min-h-screen">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading audit trail...</p>
+            <p className="text-gray-500 text-sm mt-2">Gathering system activity logs</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
