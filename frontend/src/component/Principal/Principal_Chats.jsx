@@ -454,7 +454,7 @@ export default function Principal_Chats() {
     if (!currentUserId) return;
     const id = setInterval(() => {
       try { fetchRecentConversations(); } catch {}
-    }, 8000);
+    }, 4000);
     return () => clearInterval(id);
   }, [currentUserId]);
 

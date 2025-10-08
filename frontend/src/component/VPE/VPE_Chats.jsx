@@ -258,7 +258,7 @@ export default function VPE_Chats() {
           }
           
           // Refresh recent conversations to update sidebar
-          setTimeout(() => { fetchRecentConversations(); }, 100);
+          setTimeout(() => { fetchRecentConversations(); }, 60);
         }
         
         return newMessages;
@@ -499,7 +499,7 @@ export default function VPE_Chats() {
     if (!currentUserId) return;
     const id = setInterval(() => {
       try { fetchRecentConversations(); } catch {}
-    }, 8000);
+    }, 4000);
     return () => clearInterval(id);
   }, [currentUserId]);
 
@@ -789,7 +789,7 @@ export default function VPE_Chats() {
 
         setNewMessage("");
         setSelectedFiles([]);
-        setTimeout(() => { fetchRecentConversations(); }, 100);
+        setTimeout(() => { fetchRecentConversations(); }, 60);
       } catch (err) {
         console.error("Error sending group message:", err);
       } finally {
@@ -871,7 +871,7 @@ export default function VPE_Chats() {
 
         setNewMessage("");
         setSelectedFiles([]);
-        setTimeout(() => { fetchRecentConversations(); }, 100);
+        setTimeout(() => { fetchRecentConversations(); }, 60);
       } catch (err) {
         console.error("Error sending message:", err);
       } finally {

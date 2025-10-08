@@ -262,7 +262,7 @@ export default function Faculty_Chats() {
                   // Refresh recent conversations to update sidebar
         setTimeout(() => {
           fetchRecentConversations();
-        }, 100);
+        }, 60);
         }
         
         return newMessages;
@@ -280,7 +280,7 @@ export default function Faculty_Chats() {
       // Force a re-render by updating the messages state
       setTimeout(() => {
         setMessages(prev => ({ ...prev }));
-      }, 50);
+      }, 20);
     };
     ctxSocket.on("getMessage", handleGetMessage);
     ctxSocket.on("receiveMessage", handleGetMessage);
@@ -513,7 +513,7 @@ export default function Faculty_Chats() {
     if (!currentUserId) return;
     const id = setInterval(() => {
       try { fetchRecentConversations(); } catch {}
-    }, 8000);
+    }, 4000);
     return () => clearInterval(id);
   }, [currentUserId]);
 
@@ -799,7 +799,7 @@ export default function Faculty_Chats() {
 
         setNewMessage("");
         setSelectedFiles([]);
-        setTimeout(() => { fetchRecentConversations(); }, 100);
+        setTimeout(() => { fetchRecentConversations(); }, 60);
       } catch (err) {
         console.error("Error sending group message:", err);
       } finally {
@@ -893,7 +893,7 @@ export default function Faculty_Chats() {
 
         setNewMessage("");
         setSelectedFiles([]);
-        setTimeout(() => { fetchRecentConversations(); }, 100);
+        setTimeout(() => { fetchRecentConversations(); }, 60);
       } catch (err) {
         console.error("Error sending message:", err);
       } finally {

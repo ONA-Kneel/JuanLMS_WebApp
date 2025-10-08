@@ -287,7 +287,7 @@ export default function Student_Chats() {
                   // Refresh recent conversations to update sidebar
         setTimeout(() => {
           fetchRecentConversations();
-        }, 100);
+        }, 60);
         }
         
         return newMessages;
@@ -305,7 +305,7 @@ export default function Student_Chats() {
       // Force a re-render by updating the messages state
       setTimeout(() => {
         setMessages(prev => ({ ...prev }));
-      }, 50);
+      }, 20);
     };
     socket.current.on("getMessage", handleIncomingDirect);
     socket.current.on("receiveMessage", handleIncomingDirect);
