@@ -48,7 +48,24 @@ self.addEventListener('fetch', (event) => {
       event.request.url.includes('/login') ||
       event.request.url.includes('/users/') ||
       event.request.url.includes('juanlms-webapp-server.onrender.com')) {
-    return fetch(event.request);
+    
+    // For cross-origin requests, ensure proper headers
+    const request = new Request(event.request.url, {
+      method: event.request.method,
+      headers: event.request.headers,
+      body: event.request.body,
+      mode: 'cors',
+      credentials: 'include'
+    });
+    
+    return fetch(request).catch(error => {
+      console.error('Service Worker fetch error:', error);
+      // Don't throw the error, just log it to prevent uncaught promise rejections
+      return new Response(JSON.stringify({ error: 'Network error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    });
   }
   
   event.respondWith(

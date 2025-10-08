@@ -274,14 +274,56 @@ io.on("connection", (socket) => {
 
 // Middleware - More permissive CORS for development
 app.use(cors({
-  origin: "*",
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allow requests from your frontend domains
+    const allowedOrigins = [
+      'https://sjdefilms.com',
+      'https://www.sjdefilms.com',
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:5173'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || origin === undefined) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "X-Requested-With"],
   exposedHeaders: ["Content-Length", "X-Foo", "X-Bar"],
   preflightContinue: false,
   optionsSuccessStatus: 200
 }));
+
+// Handle all OPTIONS requests for CORS preflight
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    'https://sjdefilms.com',
+    'https://www.sjdefilms.com',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173'
+  ];
+  
+  if (!origin || allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
+  }
+  res.sendStatus(200);
+});
 
 // Increase body parser limits for file uploads
 app.use(express.json({ limit: '100mb' }));
@@ -479,6 +521,15 @@ app.use("/api/subjects", subjectRoutes);
 app.use('/api/registrants', registrantRoutes);
 app.use('/api/class-dates', classDateRoutes);
 app.use('/api/quizzes', quizRoutes);
+// Handle OPTIONS requests for notifications route
+app.options('/notifications/*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
+
 app.use('/notifications', notificationRoutes);
 app.use('/api/grading', gradingRoutes);
 app.use('/api/traditional-grades', traditionalGradeRoutes);
