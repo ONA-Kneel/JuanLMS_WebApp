@@ -39,22 +39,14 @@ const addStudentToExistingClasses = async (student) => {
     
     console.log(`[ADD-STUDENT-TO-CLASSES] Found ${studentAssignments.length} assignments by schoolID`);
     
-    // If no assignments found by schoolID, try other methods
+    // If no assignments found by schoolID, only try by exact studentId match
+    // This prevents auto-linking based on name matching
     if (studentAssignments.length === 0) {
       studentAssignments = await StudentAssignment.find({
-        $or: [
-          { studentId: student._id },
-          { studentName: { $regex: `${student.firstname} ${student.lastname}`, $options: 'i' } },
-          { studentName: { $regex: `${student.lastname} ${student.firstname}`, $options: 'i' } },
-          { firstName: { $regex: student.firstname, $options: 'i' } },
-          { lastName: { $regex: student.lastname, $options: 'i' } },
-          // Add more flexible matching for common name variations
-          { studentName: { $regex: student.firstname, $options: 'i' } },
-          { studentName: { $regex: student.lastname, $options: 'i' } }
-        ],
+        studentId: student._id,
         status: 'active'
       });
-      console.log(`[ADD-STUDENT-TO-CLASSES] Found ${studentAssignments.length} assignments by other methods`);
+      console.log(`[ADD-STUDENT-TO-CLASSES] Found ${studentAssignments.length} assignments by studentId`);
     }
     
     console.log(`[ADD-STUDENT-TO-CLASSES] Found ${studentAssignments.length} student assignments for student ${student.userID}`);
@@ -308,25 +300,8 @@ userRoutes.post('/bulk-add-students-to-classes', authenticateToken, async (req, 
         console.log(`[BULK-ADD] Found student by schoolID: ${assignment.studentSchoolID} -> ${student ? student.userID : 'Not found'}`);
       }
       
-      // If not found by schoolID, try by name
-      if (!student && assignment.studentName) {
-        const nameParts = assignment.studentName.split(' ');
-        const firstName = nameParts[0];
-        const lastName = nameParts.slice(1).join(' ');
-        
-        student = await User.findOne({
-          role: 'students',
-          $or: [
-            { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, assignment.studentName.toLowerCase()] } },
-            { $expr: { $eq: [{ $toLower: { $concat: ["$lastname", " ", "$firstname"] } }, assignment.studentName.toLowerCase()] } },
-            { firstname: { $regex: new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } },
-            { lastname: { $regex: new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } }
-          ]
-        });
-        console.log(`[BULK-ADD] Found student by name: ${assignment.studentName} -> ${student ? student.userID : 'Not found'}`);
-      }
-      
-      // If still not found, try by linked studentId
+      // Only try by linked studentId if no schoolID match
+      // This prevents auto-linking based on name matching
       if (!student && assignment.studentId) {
         student = await User.findById(assignment.studentId);
         console.log(`[BULK-ADD] Found student by linked ID: ${assignment.studentId} -> ${student ? student.userID : 'Not found'}`);
@@ -615,22 +590,11 @@ userRoutes.post('/sync-students-to-auto-classes', authenticateToken, async (req,
           console.log(`[SYNC-AUTO-CLASSES] Found student by linked ID: ${assignment.studentId} -> ${student ? student.userID : 'Not found'}`);
         }
         
-        // If still not found, try by name
-        if (!student && assignment.studentName) {
-          const nameParts = assignment.studentName.split(' ');
-          const firstName = nameParts[0];
-          const lastName = nameParts.slice(1).join(' ');
-          
-          student = await User.findOne({
-            role: 'students',
-            $or: [
-              { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, assignment.studentName.toLowerCase()] } },
-              { $expr: { $eq: [{ $toLower: { $concat: ["$lastname", " ", "$firstname"] } }, assignment.studentName.toLowerCase()] } },
-              { firstname: { $regex: new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } },
-              { lastname: { $regex: new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } }
-            ]
-          });
-          console.log(`[SYNC-AUTO-CLASSES] Found student by name: ${assignment.studentName} -> ${student ? student.userID : 'Not found'}`);
+        // Only try by linked studentId if no schoolID match
+        // This prevents auto-linking based on name matching
+        if (!student && assignment.studentId) {
+          student = await User.findById(assignment.studentId);
+          console.log(`[SYNC-AUTO-CLASSES] Found student by linked ID: ${assignment.studentId} -> ${student ? student.userID : 'Not found'}`);
         }
         
         if (student) {

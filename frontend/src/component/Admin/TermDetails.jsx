@@ -1365,8 +1365,10 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       setStudentSearchTerm(value);
       setStudentFormData(prev => ({ ...prev, studentId: '' }));
 
-      if (value.trim()) {
-        console.log('🔍 Searching for students with:', value);
+      // Only search if the user explicitly wants to link to an existing student
+      // This prevents auto-linking when creating manual entries for new students
+      if (value.trim() && value.includes('(') && value.includes(')')) {
+        console.log('🔍 Searching for existing students with:', value);
         try {
           const token = localStorage.getItem('token');
           console.log('🔑 Token exists:', !!token);
@@ -1390,18 +1392,17 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
                 allKeys: Object.keys(user)
               })));
             }
-            // Also filter by name and school ID if the search term matches
-            // Make the search more strict to prevent false matches
+            // Only show exact matches to prevent false auto-linking
             const filteredStudents = studentUsers.filter(student => {
               const searchTerm = value.toLowerCase().trim();
               const fullName = `${student.firstname || student.firstName || ''} ${student.lastname || student.lastName || ''}`.toLowerCase();
               const schoolID = (student.schoolID || '').toLowerCase();
               
-              // Only match if the search term is at the beginning of the name or is an exact school ID match
-              const nameMatch = fullName.startsWith(searchTerm) || fullName.includes(` ${searchTerm}`);
-              const schoolIDMatch = schoolID === searchTerm;
+              // Only match exact school ID or exact name match to prevent false auto-linking
+              const exactNameMatch = fullName === searchTerm;
+              const exactSchoolIDMatch = schoolID === searchTerm;
               
-              return nameMatch || schoolIDMatch;
+              return exactNameMatch || exactSchoolIDMatch;
             });
             console.log('✅ Filtered students:', filteredStudents);
             setStudentSearchResults(filteredStudents);

@@ -99,54 +99,39 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'gradeLevel is required' });
     }
 
-    let actualStudentId = studentId;
-    // Construct studentName from firstName and lastName if not provided directly
-    const fullStudentName = studentName || (firstName && lastName ? `${firstName} ${lastName}` : null);
-    console.log('Name construction debug:', { studentName, firstName, lastName, fullStudentName });
+    let actualStudentId = null;
     
-    // For manual assignments, ensure we have a name
-    if (!actualStudentId && !fullStudentName && studentSchoolID) {
-      console.log('Warning: Manual assignment without proper name, using school ID as fallback');
-    }
+    console.log('[STUDENT-ASSIGNMENT] DEBUG - Input received:', {
+      studentId: studentId,
+      studentName: studentName,
+      firstName: firstName,
+      lastName: lastName,
+      studentSchoolID: studentSchoolID
+    });
     
-    if (!actualStudentId && fullStudentName) {
-      console.log('Looking for student by name:', fullStudentName);
-      let student = await User.findOne({
-        $or: [
-          { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, fullStudentName.toLowerCase()] } },
-          { firstname: { $regex: new RegExp(fullStudentName.split(' ')[0], 'i') }, lastname: { $regex: new RegExp(fullStudentName.split(' ').slice(-1)[0], 'i') } },
-          { $expr: { $regexMatch: { input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, regex: fullStudentName.toLowerCase() } } },
-          { firstname: { $regex: new RegExp(fullStudentName, 'i') } },
-          { lastname: { $regex: new RegExp(fullStudentName, 'i') } }
-        ],
-        role: 'students'
-      });
-
-      if (!student) {
-        console.log('Student not found with regex, trying more flexible search...');
-        const nameParts = fullStudentName.trim().split(/\s+/);
-        if (nameParts.length >= 2) {
-          student = await User.findOne({
-            $and: [
-              { role: 'students' },
-              {
-                $or: [
-                  { firstname: { $regex: new RegExp(nameParts[0], 'i') } },
-                  { firstname: { $regex: new RegExp(nameParts[nameParts.length - 1], 'i') } },
-                  { lastname: { $regex: new RegExp(nameParts[0], 'i') } },
-                  { lastname: { $regex: new RegExp(nameParts[nameParts.length - 1], 'i') } }
-                ]
-              }
-            ]
-          });
-        }
-      }
-
-      if (student) {
-        console.log('Found student:', student.firstname, student.lastname);
+    // ONLY attempt to link if we have a specific studentId provided AND it's a valid ObjectId
+    // NO NAME MATCHING AT ALL - ONLY STUDENT ID
+    if (studentId && studentId !== '' && studentId !== null && studentId !== undefined) {
+      console.log('[STUDENT-ASSIGNMENT] Looking for student by provided ID ONLY:', studentId);
+      let student = await User.findById(studentId);
+      
+      if (student && student.role === 'students') {
+        console.log('[STUDENT-ASSIGNMENT] Found student by ID:', student.firstname, student.lastname);
         actualStudentId = student._id;
+      } else {
+        console.log('[STUDENT-ASSIGNMENT] Student ID provided but student not found or not a student role');
+        actualStudentId = null; // Explicitly set to null for manual entry
       }
+    } else {
+      console.log('[STUDENT-ASSIGNMENT] NO STUDENT ID PROVIDED - Creating manual entry');
     }
+    
+    // For manual entries, construct studentName from firstName and lastName if not provided directly
+    const fullStudentName = studentName || (firstName && lastName ? `${firstName} ${lastName}` : null);
+    console.log('[STUDENT-ASSIGNMENT] Manual entry details:', {
+      fullStudentName: fullStudentName,
+      actualStudentId: actualStudentId
+    });
 
     // For manual entries, allow creation without an existing student
 
@@ -259,6 +244,15 @@ router.post('/', authenticateToken, async (req, res) => {
       }));
     }
 
+    console.log('[STUDENT-ASSIGNMENT] FINAL ASSIGNMENT CREATION - Values being set:', {
+      actualStudentId: actualStudentId,
+      fullStudentName: fullStudentName,
+      studentSchoolID: studentSchoolID,
+      firstName: firstName,
+      lastName: lastName,
+      willCreateManualEntry: !actualStudentId
+    });
+
     const assignment = new StudentAssignment({
       studentId: actualStudentId || undefined,
       studentName: !actualStudentId ? (fullStudentName || `Student ${studentSchoolID}`) : undefined,
@@ -354,48 +348,27 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         continue;
       }
 
-      let actualStudentId = studentId;
-      // Construct studentName from firstName and lastName if not provided directly
-      const fullStudentName = studentName || (firstName && lastName ? `${firstName} ${lastName}` : null);
+      let actualStudentId = null;
       
-      if (!actualStudentId && fullStudentName) {
-        console.log('Looking for student by name:', fullStudentName);
-        let student = await User.findOne({
-          $or: [
-            { $expr: { $eq: [{ $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, fullStudentName.toLowerCase()] } },
-            { firstname: { $regex: new RegExp(fullStudentName.split(' ')[0], 'i') }, lastname: { $regex: new RegExp(fullStudentName.split(' ').slice(-1)[0], 'i') } },
-            { $expr: { $regexMatch: { input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } }, regex: fullStudentName.toLowerCase() } } },
-            { firstname: { $regex: new RegExp(fullStudentName, 'i') } },
-            { lastname: { $regex: new RegExp(fullStudentName, 'i') } }
-          ],
-          role: 'students'
-        });
-
-        if (!student) {
-          console.log('Student not found with regex, trying more flexible search...');
-          const nameParts = fullStudentName.trim().split(/\s+/);
-          if (nameParts.length >= 2) {
-            student = await User.findOne({
-              $and: [
-                { role: 'students' },
-                {
-                  $or: [
-                    { firstname: { $regex: new RegExp(nameParts[0], 'i') } },
-                    { firstname: { $regex: new RegExp(nameParts[nameParts.length - 1], 'i') } },
-                    { lastname: { $regex: new RegExp(nameParts[0], 'i') } },
-                    { lastname: { $regex: new RegExp(nameParts[nameParts.length - 1], 'i') } }
-                  ]
-                }
-              ]
-            });
-          }
-        }
-
-        if (student) {
-          console.log('Found student:', student.firstname, student.lastname);
+      // ONLY attempt to link if we have a specific studentId provided AND it's a valid ObjectId
+      // NO NAME MATCHING AT ALL - ONLY STUDENT ID
+      if (studentId && studentId !== '' && studentId !== null && studentId !== undefined) {
+        console.log('[BULK-ASSIGNMENT] Looking for student by provided ID ONLY:', studentId);
+        let student = await User.findById(studentId);
+        
+        if (student && student.role === 'students') {
+          console.log('[BULK-ASSIGNMENT] Found student by ID:', student.firstname, student.lastname);
           actualStudentId = student._id;
+        } else {
+          console.log('[BULK-ASSIGNMENT] Student ID provided but student not found or not a student role');
+          actualStudentId = null; // Explicitly set to null for manual entry
         }
+      } else {
+        console.log('[BULK-ASSIGNMENT] NO STUDENT ID PROVIDED - Creating manual entry');
       }
+      
+      // For manual entries, construct studentName from firstName and lastName if not provided directly
+      const fullStudentName = studentName || (firstName && lastName ? `${firstName} ${lastName}` : null);
 
       // allow manual entries when no matching student is found
 
@@ -677,4 +650,4 @@ router.patch('/quarter/:quarterName/schoolyear/:schoolYear', async (req, res) =>
   }
 });
 
-export default router; 
+export default router;
