@@ -866,6 +866,7 @@ router.get('/:classID/members-with-status', authenticateToken, async (req, res) 
     }).populate('studentId');
     
     console.log(`[GET-MEMBERS-STATUS] Found ${studentAssignments.length} student assignments`);
+    console.log(`[GET-MEMBERS-STATUS] Class members:`, classDoc.members);
     
     // Log assignment details for debugging
     studentAssignments.forEach((assignment, index) => {
@@ -880,9 +881,11 @@ router.get('/:classID/members-with-status', authenticateToken, async (req, res) 
       });
     });
     
-    // Process students with their status
+    // Process students with their status - use BOTH student assignments AND class members
     const studentsWithStatus = [];
+    const memberSchoolIds = (classDoc.members || []).map(m => String(m));
     
+    // First, process students from StudentAssignment records
     for (const assignment of studentAssignments) {
       let studentData = null;
       let registrationStatus = 'pending';
@@ -988,6 +991,44 @@ router.get('/:classID/members-with-status', authenticateToken, async (req, res) 
           assignmentId: assignment._id,
           assignmentStatus: assignment.status
         });
+      }
+    }
+    
+    // Then, for any class members that don't have StudentAssignment records, find them by schoolID
+    for (const memberSchoolId of memberSchoolIds) {
+      // Check if this student is already in our list
+      const alreadyAdded = studentsWithStatus.some(student => student.schoolID === memberSchoolId);
+      
+      if (!alreadyAdded) {
+        console.log(`[GET-MEMBERS-STATUS] Looking for student with schoolID: ${memberSchoolId}`);
+        
+        // Find student by schoolID
+        const allStudents = await User.find({ role: 'students' });
+        const student = allStudents.find(s => {
+          const decryptedSchoolID = s.getDecryptedSchoolID ? s.getDecryptedSchoolID() : s.schoolID;
+          return decryptedSchoolID === memberSchoolId;
+        });
+        
+        if (student && !student.isArchived) {
+          console.log(`[GET-MEMBERS-STATUS] Found student by schoolID: ${student.firstname} ${student.lastname}`);
+          
+          const studentData = {
+            _id: String(student._id),
+            userID: memberSchoolId,
+            firstname: student.firstname,
+            lastname: student.lastname,
+            email: student.getDecryptedEmail ? student.getDecryptedEmail() : student.email,
+            schoolID: memberSchoolId,
+            role: student.role,
+            registrationStatus: 'active', // Assume active if they're in the class members
+            assignmentId: null,
+            assignmentStatus: 'active'
+          };
+          studentsWithStatus.push(studentData);
+          console.log(`[GET-MEMBERS-STATUS] Added student from class members:`, studentData);
+        } else {
+          console.log(`[GET-MEMBERS-STATUS] Student with schoolID ${memberSchoolId} not found or archived`);
+        }
       }
     }
     
@@ -1305,30 +1346,63 @@ router.get('/pending-confirmation', authenticateToken, async (req, res) => {
         console.log(`[PENDING-CONFIRMATION] Found ${studentAssignments.length} student assignments for class ${classDoc.className}`);
         console.log(`[PENDING-CONFIRMATION] Original class members:`, classDoc.members);
 
-        // Process students with their data - keep the original school IDs from members array
+        // Process students with their data - use BOTH class members AND student assignments
         const studentsWithData = [];
         const memberSchoolIds = (classDoc.members || []).map(m => String(m));
-        console.log(`[PENDING-CONFIRMATION] Member school IDs to match:`, memberSchoolIds);
+        console.log(`[PENDING-CONFIRMATION] Member school IDs from class:`, memberSchoolIds);
+        console.log(`[PENDING-CONFIRMATION] Found ${studentAssignments.length} student assignments for section ${classDoc.section}`);
         
+        // First, process students from StudentAssignment records
         for (const assignment of studentAssignments) {
           if (assignment.studentId && !assignment.studentId.isArchived) {
             const student = assignment.studentId;
             const schoolID = assignment.studentSchoolID || (student.getDecryptedSchoolID ? student.getDecryptedSchoolID() : student.schoolID);
             
-            console.log(`[PENDING-CONFIRMATION] Checking assignment - student: ${student.firstname} ${student.lastname}, schoolID: ${schoolID}, matches: ${memberSchoolIds.includes(String(schoolID))}`);
+            console.log(`[PENDING-CONFIRMATION] Processing student from assignment: ${student.firstname} ${student.lastname}, schoolID: ${schoolID}`);
             
-            // Only include students whose school ID matches the class members
-            if (memberSchoolIds.includes(String(schoolID))) {
+            const studentData = {
+              _id: String(student._id),
+              firstname: student.firstname,
+              lastname: student.lastname,
+              schoolID: schoolID,
+              userID: schoolID,
+              role: student.role
+            };
+            studentsWithData.push(studentData);
+            console.log(`[PENDING-CONFIRMATION] Added student from assignment:`, studentData);
+          }
+        }
+        
+        // Then, for any class members that don't have StudentAssignment records, find them by schoolID
+        for (const memberSchoolId of memberSchoolIds) {
+          // Check if this student is already in our list
+          const alreadyAdded = studentsWithData.some(student => student.schoolID === memberSchoolId);
+          
+          if (!alreadyAdded) {
+            console.log(`[PENDING-CONFIRMATION] Looking for student with schoolID: ${memberSchoolId}`);
+            
+            // Find student by schoolID
+            const allStudents = await User.find({ role: 'students' });
+            const student = allStudents.find(s => {
+              const decryptedSchoolID = s.getDecryptedSchoolID ? s.getDecryptedSchoolID() : s.schoolID;
+              return decryptedSchoolID === memberSchoolId;
+            });
+            
+            if (student && !student.isArchived) {
+              console.log(`[PENDING-CONFIRMATION] Found student by schoolID: ${student.firstname} ${student.lastname}`);
+              
               const studentData = {
                 _id: String(student._id),
                 firstname: student.firstname,
                 lastname: student.lastname,
-                schoolID: schoolID,
-                userID: schoolID,
+                schoolID: memberSchoolId,
+                userID: memberSchoolId,
                 role: student.role
               };
               studentsWithData.push(studentData);
-              console.log(`[PENDING-CONFIRMATION] Added student:`, studentData);
+              console.log(`[PENDING-CONFIRMATION] Added student from class members:`, studentData);
+            } else {
+              console.log(`[PENDING-CONFIRMATION] Student with schoolID ${memberSchoolId} not found or archived`);
             }
           }
         }
