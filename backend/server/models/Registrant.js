@@ -5,7 +5,7 @@ const registrantSchema = new mongoose.Schema({
   middleName:     { type: String },
   lastName:       { type: String, required: true },
   personalEmail:  { type: String, required: true, unique: true },
-  contactNo:      { type: String, required: true },
+  contactNo:      { type: String, required: false },
   // Academic placement preferences captured during registration
   trackName:      { type: String },
   strandName:     { type: String },
