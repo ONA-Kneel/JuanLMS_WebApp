@@ -15,15 +15,15 @@ const router = express.Router();
 router.post('/register', async (req, res) => {
   try {
     const { firstName, middleName, lastName, personalEmail, contactNo, schoolID, trackName, strandName, sectionName } = req.body;
-    if (!firstName || !lastName || !personalEmail || !contactNo || !schoolID) {
+    if (!firstName || !lastName || !personalEmail || !schoolID) {
       return res.status(400).json({ message: 'Please fill in all required fields.' });
     }
     // Validate schoolID format
     if (!/^\d{2}-\d{5}$/.test(schoolID) && !/^F00/.test(schoolID) && !/^A00/.test(schoolID)) {
       return res.status(400).json({ message: 'Invalid School ID format. Use YY-00000 for students, F00... for faculty, or A00... for admin.' });
     }
-    // Validate contactNo: must be 11 digits and only numbers
-    if (!/^\d{11}$/.test(contactNo)) {
+    // Validate contactNo if provided: must be 11 digits and only numbers
+    if (contactNo && !/^\d{11}$/.test(contactNo)) {
       return res.status(400).json({ message: 'Contact number must be exactly 11 digits and contain only numbers.' });
     }
     
@@ -150,7 +150,7 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
     if (!(isStudentId || isFacultyId || isAdminId || isVPEPrincipalId)) {
       return res.status(400).json({ message: 'Registrant has an invalid or missing School ID. Please correct it before approval.' });
     }
-    if (!/^\d{11}$/.test(registrant.contactNo || '')) {
+    if (registrant.contactNo && !/^\d{11}$/.test(registrant.contactNo)) {
       return res.status(400).json({ message: 'Registrant has an invalid contact number. It must be exactly 11 digits.' });
     }
 
@@ -503,7 +503,7 @@ router.post('/test-approval', async (req, res) => {
     if (!(isStudentId || isFacultyId || isAdminId || isVPEPrincipalId)) {
       return res.status(400).json({ message: 'Registrant has an invalid or missing School ID. Please correct it before approval.' });
     }
-    if (!/^\d{11}$/.test(registrant.contactNo || '')) {
+    if (registrant.contactNo && !/^\d{11}$/.test(registrant.contactNo)) {
       return res.status(400).json({ message: 'Registrant has an invalid contact number. It must be exactly 11 digits.' });
     }
 

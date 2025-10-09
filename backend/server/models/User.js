@@ -20,10 +20,10 @@ const userSchema = new mongoose.Schema({
   profilePic: { type: String, default: null },
   contactNo: {
     type: String,
-    required: true,
+    required: false,
     validate: {
       validator: function(v) {
-        return /^\d{11}$/.test(v);
+        return !v || /^\d{11}$/.test(v);
       },
       message: 'Contact number must be exactly 11 digits and contain only numbers.'
     }
