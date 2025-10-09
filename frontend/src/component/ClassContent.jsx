@@ -8,6 +8,7 @@ import ValidationModal from './ValidationModal';
 import { getFileUrl } from "../utils/imageUtils";
 import { useSocket } from "../contexts/SocketContext";
 import { getLogoBase64, getFooterLogoBase64 } from "../utils/imageToBase64";
+import * as XLSX from 'xlsx';
 // import fileIcon from "../../assets/file-icon.png"; // Add your file icon path
 // import moduleImg from "../../assets/module-img.png"; // Add your module image path
 
@@ -1163,6 +1164,24 @@ export default function ClassContent({ selected, isFaculty = false }) {
       
       const fetchGradesData = async () => {
         try {
+          // First, fetch members if not already loaded
+          if (members.students.length === 0) {
+            try {
+              const membersRes = await fetch(`${API_BASE}/classes/${classId}/members-with-status`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              if (membersRes.ok) {
+                const membersData = await membersRes.json();
+                if (Array.isArray(membersData.students) && membersData.students.length > 0) {
+                  const studentsOnly = (membersData.students || []).filter(s => (s.role || '').toLowerCase() === 'students');
+                  setMembers({ faculty: membersData.faculty ? [membersData.faculty] : [], students: dedupeStudentsById(studentsOnly) });
+                }
+              }
+            } catch (err) {
+              console.error('Failed to fetch members for grades:', err);
+            }
+          }
+
           // Fetch all assignments and quizzes for this class
           const [assignmentsRes, quizzesRes] = await Promise.all([
             fetch(`${API_BASE}/assignments?classID=${classId}`, {
