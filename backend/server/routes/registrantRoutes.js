@@ -761,4 +761,87 @@ router.get('/sections', async (req, res) => {
   }
 });
 
+// GET /api/registrants/student-options - Get all student options for dropdown
+router.get('/student-options', async (req, res) => {
+  try {
+    // Import StudentAssignment model
+    const StudentAssignment = (await import('../models/StudentAssignment.js')).default;
+    
+    // Get all student assignments with basic info for dropdown
+    const studentAssignments = await StudentAssignment.find({
+      status: 'active'
+    }).select('studentSchoolID studentName firstName lastName trackName strandName sectionName personalEmail');
+    
+    console.log('Raw student assignments from DB:', studentAssignments.length);
+    
+    // Transform data for dropdown and filter out invalid entries
+    const studentOptions = studentAssignments
+      .filter(assignment => 
+        assignment.studentSchoolID && 
+        (assignment.studentName || (assignment.firstName && assignment.lastName))
+      )
+      .map(assignment => ({
+        studentSchoolID: assignment.studentSchoolID,
+        studentName: assignment.studentName || `${assignment.firstName} ${assignment.lastName}`,
+        firstName: assignment.firstName || '',
+        lastName: assignment.lastName || '',
+        trackName: assignment.trackName || '',
+        strandName: assignment.strandName || '',
+        sectionName: assignment.sectionName || '',
+        personalEmail: assignment.personalEmail || ''
+      }));
+    
+    console.log('Processed student options:', studentOptions.length);
+    res.json(studentOptions);
+  } catch (error) {
+    console.error('Error fetching student options:', error);
+    res.status(500).json({ message: 'Failed to fetch student options', error: error.message });
+  }
+});
+
+// GET /api/registrants/student-details - Get student details from StudentAssignment by school ID and email
+router.post('/student-details', async (req, res) => {
+  try {
+    const { schoolID, personalEmail } = req.body;
+    
+    if (!schoolID || !personalEmail) {
+      return res.status(400).json({ message: 'School ID and personal email are required' });
+    }
+    
+    // Import StudentAssignment model
+    const StudentAssignment = (await import('../models/StudentAssignment.js')).default;
+    
+    // Find student assignment by school ID and email
+    const studentAssignment = await StudentAssignment.findOne({
+      studentSchoolID: schoolID,
+      $or: [
+        { studentName: { $regex: personalEmail, $options: 'i' } }, // In case email is stored in studentName
+        { firstName: { $regex: personalEmail, $options: 'i' } },  // In case email is stored in firstName
+        { lastName: { $regex: personalEmail, $options: 'i' } }    // In case email is stored in lastName
+      ]
+    });
+    
+    if (!studentAssignment) {
+      return res.status(404).json({ message: 'Student not found in assignment records' });
+    }
+    
+    // Return student details
+    res.json({
+      firstName: studentAssignment.firstName,
+      middleName: '', // StudentAssignment doesn't have middleName field
+      lastName: studentAssignment.lastName,
+      personalEmail: personalEmail, // Use the provided email
+      schoolID: studentAssignment.studentSchoolID,
+      trackName: studentAssignment.trackName,
+      strandName: studentAssignment.strandName,
+      sectionName: studentAssignment.sectionName,
+      gradeLevel: studentAssignment.gradeLevel,
+      enrollmentType: studentAssignment.enrollmentType
+    });
+  } catch (error) {
+    console.error('Error fetching student details:', error);
+    res.status(500).json({ message: 'Failed to fetch student details', error: error.message });
+  }
+});
+
 export default router; 
