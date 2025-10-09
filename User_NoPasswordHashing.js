@@ -1,4 +1,4 @@
-//models/users.js
+//models/users.js - Modified version without password hashing for students
 
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";

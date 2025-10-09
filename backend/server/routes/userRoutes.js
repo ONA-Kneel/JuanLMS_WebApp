@@ -1926,8 +1926,15 @@ userRoutes.post('/login', async (req, res) => {
         return res.status(403).json({ success: false, message: "Account is archived. Please contact admin." });
     }
 
-    // Compare hashed password
-    const isMatch = await bcrypt.compare(password, user.password);
+    // Compare password - handle students with unhashed passwords
+    let isMatch;
+    if (user.role === 'students') {
+        // For students, compare plain text passwords
+        isMatch = password === user.password;
+    } else {
+        // For other roles, use bcrypt comparison
+        isMatch = await bcrypt.compare(password, user.password);
+    }
     console.log('Password match:', isMatch);
     if (!isMatch) {
         return res.status(401).json({ success: false, message: "Invalid password" });

@@ -1,4 +1,4 @@
-//models/users.js
+//models/users.js - BACKUP
 
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
@@ -44,9 +44,8 @@ const userSchema = new mongoose.Schema({
 });
 
 // Hash password and encrypt sensitive fields before saving
-// MODIFIED: Skip password hashing for students
 userSchema.pre("save", async function (next) {
-  if (this.isModified("password") && this.role !== "students") {
+  if (this.isModified("password")) {
     this.password = await bcrypt.hash(this.password, 10);
   }
   if (this.isModified("email")) {
