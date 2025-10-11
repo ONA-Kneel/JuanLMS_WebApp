@@ -4,7 +4,7 @@ import ProfileMenu from '../ProfileMenu';
 import DirectInviteMeetingModal from '../Meeting/DirectInviteMeetingModal';
 import MeetingList from '../Meeting/MeetingList';
 import StreamMeetingRoom from '../Meeting/StreamMeetingRoom';
-import { Video, Users, Calendar, Plus, Search, UserPlus } from 'lucide-react';
+import { Video, Users, Calendar, Plus, Search, UserPlus, ChevronDown, ChevronRight } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -18,6 +18,7 @@ const VPE_Meeting = () => {
   const [allUsers, setAllUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [expandedRoles, setExpandedRoles] = useState({});
 
   // Loading effect
   useEffect(() => {
@@ -143,6 +144,13 @@ const VPE_Meeting = () => {
     setSearchTerm('');
   };
 
+  const toggleRoleExpansion = (role) => {
+    setExpandedRoles(prev => ({
+      ...prev,
+      [role]: !prev[role]
+    }));
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen h-screen max-h-screen">
@@ -208,6 +216,17 @@ const VPE_Meeting = () => {
           </div>
         </div>
 
+        {/* Meeting List */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Direct Invitation Meetings</h3>
+          <MeetingList
+            classId="direct-invite" // Special identifier for direct invitation meetings
+            userRole="vpe"
+            onJoinMeeting={handleJoinMeeting}
+            refreshTrigger={meetingRefreshTrigger}
+          />
+        </div>
+
         {/* User Selection Section */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -265,65 +284,80 @@ const VPE_Meeting = () => {
             </div>
           )}
 
-          {/* User List by Role */}
+          {/* User List by Role with Collapsible Dropdowns */}
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
               <span className="ml-2 text-gray-600">Loading users...</span>
             </div>
           ) : (
-            <div className="space-y-4">
-              {Object.entries(usersByRole).map(([role, users]) => (
-                <div key={role}>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2 capitalize">
-                    {role} ({users.length})
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {users.map(user => {
-                      const isSelected = selectedUsers.some(u => u._id === user._id);
-                      return (
-                        <button
-                          key={user._id}
-                          onClick={() => toggleUserSelection(user)}
-                          className={`p-3 rounded-lg border-2 transition-all text-left ${
-                            isSelected
-                              ? 'border-blue-500 bg-blue-50 text-blue-700'
-                              : 'border-gray-200 hover:border-gray-300 bg-white'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                              isSelected ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
-                            }`}>
-                              {user.firstName?.[0]}{user.lastName?.[0]}
-                            </div>
-                            <div>
-                              <h5 className="font-medium text-sm">
-                                {user.firstName} {user.lastName}
-                              </h5>
-                              <p className="text-xs text-gray-500">{user.email}</p>
-                              <p className="text-xs text-gray-400 capitalize">{user.role}</p>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
+            <div className="space-y-3">
+              {Object.entries(usersByRole).map(([role, users]) => {
+                const isExpanded = expandedRoles[role];
+                const selectedInRole = users.filter(user => selectedUsers.some(u => u._id === user._id)).length;
+                
+                return (
+                  <div key={role} className="border border-gray-200 rounded-lg">
+                    <button
+                      onClick={() => toggleRoleExpansion(role)}
+                      className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        {isExpanded ? (
+                          <ChevronDown className="w-5 h-5 text-gray-500" />
+                        ) : (
+                          <ChevronRight className="w-5 h-5 text-gray-500" />
+                        )}
+                        <h4 className="text-sm font-medium text-gray-700 capitalize">
+                          {role}
+                        </h4>
+                        <span className="text-xs text-gray-500">
+                          ({selectedInRole}/{users.length} selected)
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-500">{users.length} users</span>
+                    </button>
+                    
+                    {isExpanded && (
+                      <div className="px-4 pb-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {users.map(user => {
+                            const isSelected = selectedUsers.some(u => u._id === user._id);
+                            return (
+                              <button
+                                key={user._id}
+                                onClick={() => toggleUserSelection(user)}
+                                className={`p-3 rounded-lg border-2 transition-all text-left ${
+                                  isSelected
+                                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                                    isSelected ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
+                                  }`}>
+                                    {user.firstName?.[0]}{user.lastName?.[0]}
+                                  </div>
+                                  <div>
+                                    <h5 className="font-medium text-sm">
+                                      {user.firstName} {user.lastName}
+                                    </h5>
+                                    <p className="text-xs text-gray-500">{user.email}</p>
+                                    <p className="text-xs text-gray-400 capitalize">{user.role}</p>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
-        </div>
-
-        {/* Meeting List */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Direct Invitation Meetings</h3>
-          <MeetingList
-            classId="direct-invite" // Special identifier for direct invitation meetings
-            userRole="vpe"
-            onJoinMeeting={handleJoinMeeting}
-            refreshTrigger={meetingRefreshTrigger}
-          />
         </div>
 
         {/* Create Meeting Modal */}
