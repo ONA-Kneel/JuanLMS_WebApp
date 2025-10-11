@@ -62,7 +62,7 @@ const StudentDirectInviteMeetingModal = ({ isOpen, onClose, selectedUsers, onMee
         invitedUsers: selectedUsers.map(user => ({
           userId: user._id,
           email: user.email,
-          name: `${user.firstName} ${user.lastName}`,
+          name: `${user.firstName || user.firstname} ${user.lastName || user.lastname}`,
           role: user.role
         }))
       };
@@ -166,7 +166,7 @@ const StudentDirectInviteMeetingModal = ({ isOpen, onClose, selectedUsers, onMee
                   key={user._id}
                   className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs"
                 >
-                  {user.firstName} {user.lastName}
+                  {user.firstName || user.firstname} {user.lastName || user.lastname}
                 </span>
               ))}
               {selectedUsers.length > 3 && (

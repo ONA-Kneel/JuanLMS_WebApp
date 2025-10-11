@@ -16,23 +16,58 @@ const StudentUserSelector = ({ selectedUsers, onUsersChange }) => {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch(`${API_BASE}/users/all`, {
+        console.log('🔍 Fetching students for invitation...');
+        let response = await fetch(`${API_BASE}/users/all`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
+        console.log('📡 Response status:', response.status);
+        
+        // If /users/all fails, try /users/active as fallback
+        if (!response.ok) {
+          console.log('🔄 /users/all failed, trying /users/active...');
+          response = await fetch(`${API_BASE}/users/active`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          console.log('📡 Fallback response status:', response.status);
+        }
+        
         if (response.ok) {
           const users = await response.json();
+          console.log('📊 Users fetched:', users);
+          console.log('📊 Total users:', users.length);
+          
           // Filter to only include students and exclude current user
           const currentUserId = JSON.parse(atob(token.split('.')[1]))._id;
-          const students = users.filter(user => 
-            user._id !== currentUserId && 
-            user.role === 'student' && 
-            user.status !== 'inactive'
-          );
+          console.log('👤 Current user ID:', currentUserId);
+          
+          const students = users.filter(user => {
+            const isNotCurrentUser = user._id !== currentUserId;
+            const isStudent = user.role === 'students' || user.role === 'student'; // Check both plural and singular
+            const isActive = user.status !== 'inactive';
+            
+            console.log(`👤 User ${user.firstName || user.firstname} ${user.lastName || user.lastname}:`, {
+              id: user._id,
+              role: user.role,
+              status: user.status,
+              isNotCurrentUser,
+              isStudent,
+              isActive,
+              passes: isNotCurrentUser && isStudent && isActive
+            });
+            
+            return isNotCurrentUser && isStudent && isActive;
+          });
+          
+          console.log('👨‍🎓 Filtered students:', students);
+          console.log('👨‍🎓 Student count:', students.length);
           setAllStudents(students);
+        } else {
+          const errorData = await response.json();
+          console.error('❌ Failed to fetch users:', errorData);
         }
       } catch (error) {
-        console.error('Error fetching students:', error);
+        console.error('💥 Error fetching students:', error);
       } finally {
         setLoading(false);
       }
@@ -44,9 +79,11 @@ const StudentUserSelector = ({ selectedUsers, onUsersChange }) => {
   // Filter students based on search term
   const filteredStudents = allStudents.filter(student => {
     const searchLower = searchTerm.toLowerCase();
-    const fullName = `${student.firstName} ${student.lastName}`.toLowerCase();
+    const firstName = student.firstName || student.firstname || '';
+    const lastName = student.lastName || student.lastname || '';
+    const fullName = `${firstName} ${lastName}`.toLowerCase();
     const email = (student.email || '').toLowerCase();
-    const studentId = (student.studentId || '').toLowerCase();
+    const studentId = (student.studentId || student.schoolID || '').toLowerCase();
     
     return fullName.includes(searchLower) || 
            email.includes(searchLower) || 
@@ -169,11 +206,11 @@ const StudentUserSelector = ({ selectedUsers, onUsersChange }) => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-gray-900 truncate">
-                            {student.firstName} {student.lastName}
+                            {student.firstName || student.firstname} {student.lastName || student.lastname}
                           </p>
-                          {student.studentId && (
+                          {(student.studentId || student.schoolID) && (
                             <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                              {student.studentId}
+                              {student.studentId || student.schoolID}
                             </span>
                           )}
                         </div>
