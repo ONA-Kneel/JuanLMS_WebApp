@@ -460,6 +460,7 @@ export default function Admin_Accounts() {
       const token = localStorage.getItem('token');
 
       try {
+        console.log('Sending account data:', accountData); // Debug log
         const res = await axios.post(`${API_BASE}/users`, accountData, {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -490,16 +491,19 @@ export default function Admin_Accounts() {
           setIsCreatingAccount(false);
         }
       } catch (err) {
+        console.error('Account creation error:', err.response?.data); // Enhanced error logging
         if (err?.response?.status === 409 && err?.response?.data?.suggestedEmail) {
           setSuggestedEmail(err.response.data.suggestedEmail);
           setDuplicateEmailModal(true);
           setIsCreatingAccount(false);
         } else {
+          // Show the actual error message from backend
+          const errorMessage = err?.response?.data?.message || err?.response?.data?.error || 'Failed to create account';
           setValidationModal({
             isOpen: true,
             type: 'error',
             title: 'Creation Failed',
-            message: 'Error: Failed to create account'
+            message: errorMessage
           });
           setIsCreatingAccount(false);
         }
