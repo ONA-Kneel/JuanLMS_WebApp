@@ -15,6 +15,8 @@ export default defineConfig({
     emptyOutDir: true,
     // Generate manifest for cache busting
     manifest: false,
+    // Adjust chunk size limit for Vercel deployment
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         // Ensure consistent module naming with content-based hashing

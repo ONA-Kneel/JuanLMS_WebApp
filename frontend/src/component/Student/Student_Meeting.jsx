@@ -4,7 +4,9 @@ import ProfileMenu from '../ProfileMenu';
 import MeetingList from '../Meeting/MeetingList';
 import StreamMeetingRoom from '../Meeting/StreamMeetingRoom';
 import InvitedMeetings from '../Meeting/InvitedMeetings';
-import { Users, Video, Calendar, UserPlus } from 'lucide-react';
+import StudentDirectInviteMeetingModal from '../Meeting/StudentDirectInviteMeetingModal';
+import StudentUserSelector from '../Meeting/StudentUserSelector';
+import { Users, Video, Calendar, UserPlus, Plus, Search } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -18,7 +20,9 @@ export default function Student_Meeting() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [studentCounts, setStudentCounts] = useState({});
-  const [activeTab, setActiveTab] = useState('class-meetings'); // 'class-meetings' or 'invited-meetings'
+  const [activeTab, setActiveTab] = useState('class-meetings'); // 'class-meetings', 'invited-meetings', or 'host-meeting'
+  const [showCreateMeetingModal, setShowCreateMeetingModal] = useState(false);
+  const [selectedStudents, setSelectedStudents] = useState([]);
 
   // Get user info from token
   useEffect(() => {
@@ -187,6 +191,14 @@ export default function Student_Meeting() {
     setMeetingRefreshTrigger(prev => prev + 1);
   };
 
+  const handleMeetingCreated = (newMeeting) => {
+    setMeetingRefreshTrigger(prev => prev + 1);
+    if (newMeeting.meetingType === 'instant') {
+      // Auto-join instant meetings
+      setActiveMeeting(newMeeting);
+    }
+  };
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden">
       <Student_Navbar />
@@ -265,6 +277,19 @@ export default function Student_Meeting() {
                     Direct Invitations
                   </div>
                 </button>
+                <button
+                  onClick={() => setActiveTab('host-meeting')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === 'host-meeting'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Video className="w-4 h-4" />
+                    Host Meeting
+                  </div>
+                </button>
               </div>
             </div>
 
@@ -337,6 +362,42 @@ export default function Student_Meeting() {
                 refreshTrigger={meetingRefreshTrigger}
               />
             )}
+
+            {/* Host Meeting Tab */}
+            {activeTab === 'host-meeting' && (
+              <>
+                {/* Student Hosted Meetings List */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Hosted Meetings</h3>
+                  <MeetingList
+                    classId="student-direct-invite" // Special identifier for student direct invitation meetings
+                    userRole="student"
+                    onJoinMeeting={handleJoinMeeting}
+                    refreshTrigger={meetingRefreshTrigger}
+                  />
+                </div>
+
+                {/* Student Selection Section */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Select Students to Invite</h3>
+                    <button
+                      onClick={() => setShowCreateMeetingModal(true)}
+                      disabled={selectedStudents.length === 0}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 font-medium"
+                    >
+                      <Plus className="w-5 h-5" />
+                      Create Meeting ({selectedStudents.length})
+                    </button>
+                  </div>
+
+                  <StudentUserSelector
+                    selectedUsers={selectedStudents}
+                    onUsersChange={setSelectedStudents}
+                  />
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -356,6 +417,14 @@ export default function Student_Meeting() {
             }}
           />
         )}
+
+        {/* Student Direct Invite Meeting Modal */}
+        <StudentDirectInviteMeetingModal
+          isOpen={showCreateMeetingModal}
+          onClose={() => setShowCreateMeetingModal(false)}
+          selectedUsers={selectedStudents}
+          onMeetingCreated={handleMeetingCreated}
+        />
       </div>
     </div>
   );
