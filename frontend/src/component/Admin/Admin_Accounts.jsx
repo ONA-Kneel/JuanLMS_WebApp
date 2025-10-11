@@ -4,7 +4,7 @@ import Admin_Navbar from "./Admin_Navbar";
 import axios from "axios";
 import ValidationModal from "../ValidationModal";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Admin_Accounts() {
   const [isEditMode, setIsEditMode] = useState(false);
@@ -26,6 +26,7 @@ export default function Admin_Accounts() {
   const [showCancellationMessage, setShowCancellationMessage] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [copySuccess, setCopySuccess] = useState(false);
   
   const [formData, setFormData] = useState({
     firstname: "",
@@ -267,7 +268,7 @@ export default function Admin_Accounts() {
       setIsCreatingAccount(true);
     }
     
-    const requiredFields = ["firstname", "lastname", "email", "password", "role", "schoolID"];
+    const requiredFields = ["firstname", "lastname", "email", "password", "role", "schoolID", "personalemail"];
     for (const field of requiredFields) {
       if (!formData[field]) {
         setValidationModal({
@@ -589,29 +590,24 @@ export default function Admin_Accounts() {
     return password;
   };
 
-  // Set a generated password on mount and when not editing
+  // Set a generated password on mount and when role changes
   useEffect(() => {
-    if (!isEditMode) {
+    if (!isEditMode && formData.role) {
       setFormData((prev) => ({ ...prev, password: generatePassword() }));
     }
-  }, [isEditMode]);
+  }, [isEditMode, formData.role]);
 
-  useEffect(() => {
-    if (!isEditMode) {
-      const requiredFields = [
-        'firstname',
-        'lastname',
-        'email',
-        'role',
-        'schoolID',
-        'personalemail'
-      ];
-      const allFilled = requiredFields.every(field => formData[field] && formData[field].toString().trim() !== '');
-      if (allFilled && !formData.password) {
-        setFormData(prev => ({ ...prev, password: generatePassword() }));
-      }
+  // Copy password to clipboard
+  const handleCopyPassword = () => {
+    if (formData.password) {
+      navigator.clipboard.writeText(formData.password).then(() => {
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+      }).catch(err => {
+        console.error('Failed to copy password:', err);
+      });
     }
-  }, [formData, isEditMode]);
+  };
 
   const handleSort = (key) => {
     setSortConfig((prev) => {
@@ -1223,12 +1219,28 @@ export default function Admin_Accounts() {
                       </select>
                     </div>
                     <div>
-                      {formData.password && formData.role !== "" ? (
-                        <>
-                          <label className="block font-semibold mb-1" htmlFor="password">Password</label>
-                          <input id="password" type="text" name="password" value={formData.password} readOnly placeholder="Password" className="border rounded p-4 text-lg w-full bg-gray-100 cursor-not-allowed" />
-                        </>
-                      ) : null}
+                      <label className="block font-semibold mb-1" htmlFor="password">Password (Click to Copy)</label>
+                      <div className="relative">
+                        <input 
+                          id="password" 
+                          type="text" 
+                          name="password" 
+                          value={formData.password} 
+                          readOnly 
+                          onClick={handleCopyPassword}
+                          placeholder="Password will be generated" 
+                          className="border rounded p-4 text-lg w-full bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors" 
+                          title="Click to copy password"
+                        />
+                        {copySuccess && (
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 bg-green-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Copied!
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {/* Submit button row */}

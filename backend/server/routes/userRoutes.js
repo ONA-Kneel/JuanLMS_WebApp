@@ -1290,12 +1290,8 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
     } = req.body;
 
     // Simple server-side validation (backend safety)
-    if (!firstname || !lastname || !email || !password || !role || !schoolID || !contactNo) {
+    if (!firstname || !lastname || !email || !password || !role || !schoolID) {
         return res.status(400).json({ error: "Missing required fields" });
-    }
-    // Validate contactNo
-    if (!/^\d{11}$/.test(contactNo)) {
-        return res.status(400).json({ error: "Contact number must be exactly 11 digits and contain only numbers." });
     }
 
     // Debug: log received schoolID and role
