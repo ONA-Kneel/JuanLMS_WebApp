@@ -9,7 +9,7 @@ import adminIcon from "../../assets/admin.png";
 import vpeIcon from "../../assets/vpe.png";
 import principalIcon from "../../assets/principal.png";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || "https://juanlms-webapp-server.onrender.com";
 
 export default function Admin_Accounts() {
   const [isEditMode, setIsEditMode] = useState(false);
