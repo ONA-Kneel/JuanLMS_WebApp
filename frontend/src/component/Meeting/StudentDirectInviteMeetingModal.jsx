@@ -53,7 +53,7 @@ const StudentDirectInviteMeetingModal = ({ isOpen, onClose, selectedUsers, onMee
       const meetingData = {
         title: formData.title.trim(),
         description: formData.description.trim(),
-        classID: 'student-direct-invite', // Special identifier for student direct invitation meetings
+        classID: 'direct-invite', // Special identifier for direct invitation meetings
         meetingType: formData.meetingType,
         duration: formData.duration ? parseInt(formData.duration) : null,
         scheduledTime: formData.meetingType === 'scheduled' && formData.scheduledTime
@@ -69,7 +69,7 @@ const StudentDirectInviteMeetingModal = ({ isOpen, onClose, selectedUsers, onMee
 
       console.log('Sending student direct invitation meeting data:', meetingData);
 
-      const response = await fetch(`${API_BASE}/api/meetings/student-direct-invite`, {
+      const response = await fetch(`${API_BASE}/api/meetings/direct-invite`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

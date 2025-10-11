@@ -39,10 +39,10 @@ router.get('/class/:classID', authenticateToken, async (req, res) => {
 router.get('/direct-invite', authenticateToken, async (req, res) => {
   try {
     console.log('[MEETINGS] User role:', req.user.role, 'User ID:', req.user._id);
-    // Only VPE and Principal can access direct invitation meetings
-    if (!['vpe', 'principal', 'vice president of education'].includes(req.user.role)) {
+    // VPE, Principal, and Students can access direct invitation meetings
+    if (!['vpe', 'principal', 'vice president of education', 'students', 'student'].includes(req.user.role)) {
       console.log('[MEETINGS] Access denied for role:', req.user.role);
-      return res.status(403).json({ error: 'Access denied. Only VPE and Principal can view direct invitation meetings.' });
+      return res.status(403).json({ error: 'Access denied. Only VPE, Principal, and Students can view direct invitation meetings.' });
     }
 
     const meetings = await Meeting.find({ 
@@ -155,9 +155,9 @@ router.post('/direct-invite', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'At least one user must be invited' });
     }
 
-    // Validate user roles - only VPE and Principal can create direct invitation meetings
-    if (!['vpe', 'principal', 'vice president of education'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Only VPE and Principal can create direct invitation meetings' });
+    // Validate user roles - VPE, Principal, and Students can create direct invitation meetings
+    if (!['vpe', 'principal', 'vice president of education', 'students', 'student'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only VPE, Principal, and Students can create direct invitation meetings' });
     }
 
     const newMeeting = new Meeting({

@@ -370,7 +370,7 @@ export default function Student_Meeting() {
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Hosted Meetings</h3>
                   <MeetingList
-                    classId="student-direct-invite" // Special identifier for student direct invitation meetings
+                    classId="direct-invite" // Special identifier for direct invitation meetings
                     userRole="student"
                     onJoinMeeting={handleJoinMeeting}
                     refreshTrigger={meetingRefreshTrigger}

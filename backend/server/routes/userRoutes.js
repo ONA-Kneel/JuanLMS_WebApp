@@ -821,14 +821,14 @@ userRoutes.post('/retroactive-class-assignment', authenticateToken, async (req, 
 
 // ------------------ CRUD ROUTES ------------------
 
-// Get all users for meeting invitations (VPE and Principal only)
+// Get all users for meeting invitations (VPE, Principal, and Students)
 userRoutes.get('/users/all', authenticateToken, async (req, res) => {
   try {
     console.log('[USERS] User role:', req.user.role, 'User ID:', req.user._id);
-    // Only VPE and Principal can access this endpoint
-    if (!['vpe', 'principal', 'vice president of education'].includes(req.user.role)) {
+    // VPE, Principal, and Students can access this endpoint
+    if (!['vpe', 'principal', 'vice president of education', 'students', 'student'].includes(req.user.role)) {
       console.log('[USERS] Access denied for role:', req.user.role);
-      return res.status(403).json({ error: 'Access denied. Only VPE and Principal can view all users.' });
+      return res.status(403).json({ error: 'Access denied. Only VPE, Principal, and Students can view all users.' });
     }
 
     const users = await User.find({ 
