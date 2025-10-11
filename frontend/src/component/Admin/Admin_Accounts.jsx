@@ -3,8 +3,13 @@ import ProfileMenu from "../ProfileMenu";
 import Admin_Navbar from "./Admin_Navbar";
 import axios from "axios";
 import ValidationModal from "../ValidationModal";
+import studentIcon from "../../assets/student.png";
+import facultyIcon from "../../assets/faculty.png";
+import adminIcon from "../../assets/admin.png";
+import vpeIcon from "../../assets/vpe.png";
+import principalIcon from "../../assets/principal.png";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Admin_Accounts() {
   const [isEditMode, setIsEditMode] = useState(false);
@@ -53,6 +58,16 @@ export default function Admin_Accounts() {
 
   // Add state for active tab
   const [activeTab, setActiveTab] = useState('all');
+
+  // Define tabs with icons
+  const tabs = [
+    { id: 'all', label: 'All', icon: null },
+    { id: 'students', label: 'Students', icon: studentIcon },
+    { id: 'faculty', label: 'Faculty', icon: facultyIcon },
+    { id: 'admin', label: 'Admin', icon: adminIcon },
+    { id: 'vice president of education', label: 'Vice President of Education', icon: vpeIcon },
+    { id: 'principal', label: 'Principal', icon: principalIcon },
+  ];
 
   // Calculate days left until permanent deletion
   const getDaysLeft = (deletedAt) => {
@@ -138,11 +153,20 @@ export default function Admin_Accounts() {
     firstname: "",
     middlename: "",
     lastname: "",
-    userID: "",
+    schoolID: "",
   });
   
-  // NOTE: Server returns paginated and role-filtered users; use directly to avoid sparse pages
-  const displayedUsers = users;
+  // Check if any search field has input
+  const isSearching = searchTerms.firstname || searchTerms.middlename || searchTerms.lastname || searchTerms.schoolID;
+  
+  // Client-side filtering for search
+  const displayedUsers = users.filter(user => {
+    const matchesFirstname = user.firstname?.toLowerCase().includes(searchTerms.firstname.toLowerCase());
+    const matchesMiddlename = user.middlename?.toLowerCase().includes(searchTerms.middlename.toLowerCase());
+    const matchesLastname = user.lastname?.toLowerCase().includes(searchTerms.lastname.toLowerCase());
+    const matchesSchoolID = user.schoolID?.toLowerCase().includes(searchTerms.schoolID.toLowerCase());
+    return matchesFirstname && matchesMiddlename && matchesLastname && matchesSchoolID;
+  });
 
   // Optional client-side search can be applied here if desired in the future
 
@@ -161,7 +185,13 @@ export default function Admin_Accounts() {
       const pageAtCall = currentPage;
       try {
         const roleParam = activeTab && activeTab !== 'all' ? `&role=${encodeURIComponent(activeTab)}` : '';
-        const res = await fetch(`${API_BASE}/users?page=${pageAtCall}&limit=${ITEMS_PER_PAGE}${roleParam}`);
+        // Check if currently searching
+        const isCurrentlySearching = searchTerms.firstname || searchTerms.middlename || searchTerms.lastname || searchTerms.schoolID;
+        const endpoint = isCurrentlySearching 
+          ? `${API_BASE}/users?limit=10000${roleParam}` // Fetch all users when searching
+          : `${API_BASE}/users?page=${pageAtCall}&limit=${ITEMS_PER_PAGE}${roleParam}`; // Normal pagination
+        
+        const res = await fetch(endpoint);
         const data = await res.json();
         if (!isActive) return;
         if (res.ok) {
@@ -180,7 +210,7 @@ export default function Admin_Accounts() {
     return () => {
       isActive = false;
     };
-  }, [currentPage, activeTab]);
+  }, [currentPage, activeTab, searchTerms]);
 
   useEffect(() => {
     if (showArchivedTable) {
@@ -824,7 +854,7 @@ export default function Admin_Accounts() {
               <h4 className="text-xl md:text-2xl font-semibold">Users</h4>
               <div className="flex gap-2">
                 <button
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                  className="bg-[#00418B] hover:bg-[#003166] text-white px-4 py-2 rounded"
                   onClick={() => setShowCreateModal(true)}
                 >
                   Create New Account
@@ -837,29 +867,38 @@ export default function Admin_Accounts() {
                 </button>
               </div>
             </div>
+            {/* Results Count */}
+            <div className="mb-4 text-sm text-gray-600">
+              {isSearching ? (
+                <span>Showing {displayedUsers.length} result{displayedUsers.length !== 1 ? 's' : ''} across all pages</span>
+              ) : (
+                <span>Showing {users.length} of {totalPages * ITEMS_PER_PAGE} users | Page {currentPage} of {totalPages}</span>
+              )}
+              {activeTab !== 'all' && (
+                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded ml-2 text-xs">
+                  Role: {tabs.find(t => t.id === activeTab)?.label}
+                </span>
+              )}
+            </div>
             <div className="bg-white p-4 rounded-xl shadow mb-4">
-              {/* Tabs for roles (inside the table card) */}
-              <div className="flex gap-2 mb-4">
-                {[
-                  { label: 'All', value: 'all' },
-                  { label: 'Students', value: 'students' },
-                  { label: 'Faculty', value: 'faculty' },
-                  { label: 'Vice President of Education', value: 'vice president of education' },
-                  { label: 'Admin', value: 'admin' },
-                  { label: 'Principal', value: 'principal' },
-                ].map(tab => (
-                  <button
-                    key={tab.value}
-                    className={`px-4 py-2 rounded-t-lg font-semibold focus:outline-none transition-colors border-b-2 ${
-                      activeTab === tab.value
-                        ? 'bg-white border-blue-600 text-blue-700'
-                        : 'bg-gray-200 border-transparent text-gray-600 hover:bg-gray-300'
-                    }`}
-                    onClick={() => setActiveTab(tab.value)}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+              {/* Tabs for roles (inside the table card) - Mini Navigation Header */}
+              <div className="border-b mb-4">
+                <div className="flex overflow-x-auto">
+                  {tabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center ${
+                        activeTab === tab.id 
+                          ? 'border-b-2 border-[#00418B] text-[#00418B]' 
+                          : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {tab.icon && <img src={tab.icon} alt={tab.label} className="w-5 h-5 mr-2" />}
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <table className="min-w-full bg-white border rounded-lg text-sm table-fixed overflow-visible">
                 <thead>
@@ -916,25 +955,23 @@ export default function Admin_Accounts() {
                           <div className="inline-flex space-x-2">
                             <button
                               onClick={() => handleEdit(user)}
-                              className="p-1 rounded hover:bg-yellow-100 group relative"
+                              className="bg-yellow-500 hover:bg-yellow-600 p-2.5 rounded-md transition-colors shadow-sm"
                               title="Edit"
                             >
                               {/* Heroicons Pencil Square */}
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                               </svg>
-                              <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">Edit</span>
                             </button>
                             <button
                               onClick={() => handleArchive(user)}
-                              className="p-1 rounded hover:bg-red-100 group relative"
+                              className="bg-red-500 hover:bg-red-600 p-2.5 rounded-md transition-colors shadow-sm"
                               title="Archive"
                             >
                               {/* Heroicons Trash (archive) */}
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                               </svg>
-                              <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">Archive</span>
                             </button>
                           </div>
                         </td>
@@ -946,7 +983,7 @@ export default function Admin_Accounts() {
             </div>
 
             {/* Pagination Controls */}
-            {totalPages > 1 && (
+            {!isSearching && totalPages > 1 && (
               <div className="flex justify-center items-center gap-4 mt-4">
                 <button
                   className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
@@ -957,7 +994,7 @@ export default function Admin_Accounts() {
                 </button>
                 <span className="text-sm">Page {currentPage} of {totalPages}</span>
                 <button
-                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
+                  className="px-4 py-2 rounded bg-[#00418B] hover:bg-[#003166] text-white disabled:opacity-50"
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
                 >

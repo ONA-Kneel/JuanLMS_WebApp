@@ -531,7 +531,7 @@ export default function Admin_Registrants() {
             <div className="flex gap-2">
               <button
                 onClick={handleExportClick}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+                className="bg-[#00418B] hover:bg-[#003166] text-white px-4 py-2 rounded transition"
               >
                 Export
               </button>
@@ -551,14 +551,14 @@ export default function Admin_Registrants() {
           </div>
           
           {/* Re-registration Info */}
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mt-4 p-3 bg-[#E3F2FD] border border-[#00418B] rounded-lg">
             <div className="flex items-start gap-2">
-              <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-5 h-5 text-[#00418B] mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
-              <div className="text-sm text-blue-800">
+              <div className="text-sm text-[#00418B]">
                 <p className="font-medium mb-1">Re-registration Process</p>
-                <p className="text-blue-700">
+                <p className="text-[#003166]">
                   Applicants who were previously rejected can re-register using the same email. 
                   Re-registrations are marked with "Re-registration" and "Updated" indicators. 
                   Check the "Rejection History" column to review previous rejection reasons.
@@ -587,8 +587,9 @@ export default function Admin_Registrants() {
         {loading ? (
           <div className="text-center py-8">Loading...</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+          <div className="bg-white p-4 rounded-xl shadow mb-4">
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
               <thead>
                 <tr className="bg-gray-50 text-left">
                   <th className="p-3 border-b font-semibold text-gray-700">School ID</th>
@@ -695,34 +696,31 @@ export default function Admin_Registrants() {
                           )}
                         </div>
                       </td>
-                      <td className="p-3 border-b align-middle">
+                      <td className="p-3 border-b">
                         <div className="inline-flex space-x-2">
                       {r.status === 'pending' && (
                         <>
                           <button
-                                className="p-1 rounded hover:bg-yellow-100 group relative"
+                            className="bg-green-500 hover:bg-green-600 p-2.5 rounded-md transition-colors shadow-sm"
                             onClick={() => handleApprove(r._id)}
                             disabled={actionLoading === r._id}
-                                title="Approve"
-                              >
-                                {/* Heroicons Check Circle */}
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-green-600">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
-                                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                                </svg>
-                                <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Approve</span>
+                            title="Approve"
+                          >
+                            {/* Heroicons Check Circle */}
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
                           </button>
                           <button
-                                className="p-1 rounded hover:bg-red-100 group relative"
+                            className="bg-red-500 hover:bg-red-600 p-2.5 rounded-md transition-colors shadow-sm"
                             onClick={() => handleReject(r._id)}
                             disabled={actionLoading === r._id}
-                                title="Reject"
-                              >
-                                {/* Heroicons Trash (reject) */}
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                                <span className="absolute left-1/2 -translate-x-1/2 top-8 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">Reject</span>
+                            title="Reject"
+                          >
+                            {/* Heroicons X Circle */}
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
                           </button>
                         </>
                       )}
@@ -732,12 +730,29 @@ export default function Admin_Registrants() {
                   ))
                 )}
               </tbody>
-            </table>
-          <div className="flex justify-center items-center gap-2 mt-4">
-            <button className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50" onClick={() => setPagination(p => ({ ...p, page: Math.max(1, p.page - 1) }))} disabled={pagination.page === 1}>{'<'}</button>
-            <span className="text-sm">Page {pagination.page} of {pagination.totalPages}</span>
-            <button className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50" onClick={() => setPagination(p => ({ ...p, page: Math.min(p.totalPages, p.page + 1) }))} disabled={pagination.page >= pagination.totalPages}>{'>'}</button>
+              </table>
+            </div>
           </div>
+        )}
+        
+        {/* Pagination Controls */}
+        {!loading && pagination.totalPages > 1 && (
+          <div className="flex justify-center items-center gap-4 mt-4">
+            <button 
+              className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50" 
+              onClick={() => setPagination(p => ({ ...p, page: Math.max(1, p.page - 1) }))} 
+              disabled={pagination.page === 1}
+            >
+              Previous
+            </button>
+            <span className="text-sm">Page {pagination.page} of {pagination.totalPages}</span>
+            <button 
+              className="px-4 py-2 rounded bg-[#00418B] hover:bg-[#003166] text-white disabled:opacity-50" 
+              onClick={() => setPagination(p => ({ ...p, page: Math.min(p.totalPages, p.page + 1) }))} 
+              disabled={pagination.page >= pagination.totalPages}
+            >
+              Next
+            </button>
           </div>
         )}
         {/* Reject Modal */}
