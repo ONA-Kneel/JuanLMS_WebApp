@@ -2058,7 +2058,7 @@ export default function Admin_AcademicSettings() {
             // Original School Year Management Section
             <>
               {/* School Years List */}
-              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-[#00418B]">
                 <h2 className="text-xl font-semibold mb-4">School Years</h2>
                 <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <div className="flex items-center">
@@ -2074,12 +2074,12 @@ export default function Admin_AcademicSettings() {
                   <input 
                     type="text" 
                     placeholder="Search by year (e.g., 2024, 2023-2024)" 
-                    className="w-full p-2 border rounded px-2 py-1 text-sm" 
+                    className="w-full p-2 border border-[#00418B] rounded px-2 py-1 text-sm" 
                     value={searchTerm} 
                     onChange={e => setSearchTerm(e.target.value)} 
                   />
                 </div>
-                <div className="bg-white p-4 rounded-xl shadow mb-4">
+                <div className="bg-white p-4 rounded-xl shadow mb-4 border-2 border-[#00418B]">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2 gap-2">
                     <h4 className="text-xl md:text-2xl font-semibold">School Years</h4>
                                          <div className="flex gap-2">
@@ -2090,21 +2090,21 @@ export default function Admin_AcademicSettings() {
                          View Validation Results
                        </button> */}
                        <button
-                         className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded"
+                         className="bg-[#00418B] hover:bg-[#003166] text-white px-4 py-2 rounded border border-[#00418B]"
                          onClick={() => setShowCreateModal(true)}
                        >
                          Add New School Year
                        </button>
                      </div>
                   </div>
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                  <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-visible text-sm table-fixed">
                     <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border">Start Year</th>
-                        <th className="p-3 border">End Year</th>
-                        <th className="p-3 border">Status</th>
-                        <th className="p-3 border">Inactive Terms</th>
-                        <th className="p-3 border">Actions</th>
+                      <tr className="bg-gray-50 text-left">
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Start Year</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">End Year</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Status</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Inactive Terms</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2121,7 +2121,7 @@ export default function Admin_AcademicSettings() {
                         })
                         .length === 0 ? (
                         <tr>
-                          <td colSpan="5" className="p-3 border text-center text-gray-500">
+                          <td colSpan="5" className="p-3 border-b border-[#00418B] text-center text-gray-500">
                             No school years found
                           </td>
                         </tr>
@@ -2137,48 +2137,43 @@ export default function Admin_AcademicSettings() {
                                    endYear.includes(searchLower) || 
                                    fullYear.includes(searchLower);
                           })
-                          .map((year) => (
-                            <tr key={year._id} className="hover:bg-gray-50 transition">
-                              <td className="p-3 border">{year.schoolYearStart}</td>
-                              <td className="p-3 border">{year.schoolYearEnd}</td>
-                              <td className="p-3 border">
-                                <button
-                                  onClick={() => handleToggleStatus(year)}
-                                  className={`px-3 py-1 rounded-full text-xs font-semibold border border-gray-300
-                                    ${year.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 hover:bg-green-200'}
-                                    hover:shadow`}
-                                  title={year.status === 'active' ? 'Set as inactive' : 'Set as active'}
-                                >
+                          .map((year, idx) => (
+                            <tr key={year._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
+                              <td className="p-3 border-b border-[#00418B]">{year.schoolYearStart}</td>
+                              <td className="p-3 border-b border-[#00418B]">{year.schoolYearEnd}</td>
+                              <td className="p-3 border-b border-[#00418B]">
+                                <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
+                                  ${year.status === 'active' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-700 border border-gray-300'}`}>
                                   {year.status === 'active' ? 'Active' : 'Inactive'}
-                                </button>
+                                </span>
                               </td>
-                              <td className="p-3 border">
+                              <td className="p-3 border-b border-[#00418B]">
                                 {(() => {
                                   const schoolYearName = `${year.schoolYearStart}-${year.schoolYearEnd}`;
                                   return archivedCounts[schoolYearName] ?? 0;
                                 })()}
                               </td>
-                              <td className="p-3 border">
+                              <td className="p-3 border-b border-[#00418B]">
                                 <div className="inline-flex space-x-2">
                                   <button
-                                    onClick={() => handleDelete(year)}
-                                    className="p-1 rounded hover:bg-red-100 group relative"
-                                    title={year.status === 'active' ? 'Archive' : 'Delete'}
+                                    onClick={() => handleView(year)}
+                                    className="bg-blue-200 hover:bg-blue-300 p-2.5 rounded-md transition-colors shadow-sm"
+                                    title="View"
                                   >
-                                    {/* Heroicons Trash (red) */}
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
+                                    {/* Heroicons Eye */}
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12Z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
                                     </svg>
                                   </button>
                                   <button
-                                    onClick={() => handleView(year)}
-                                    className="p-1 rounded hover:bg-blue-100 group relative"
-                                    title="View"
+                                    onClick={() => handleDelete(year)}
+                                    className="bg-red-200 hover:bg-red-300 p-2.5 rounded-md transition-colors shadow-sm"
+                                    title={year.status === 'active' ? 'Archive' : 'Delete'}
                                   >
-                                    {/* Heroicons Eye (black) */}
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12Z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+                                    {/* Heroicons Trash */}
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                     </svg>
                                   </button>
                                 </div>
@@ -2207,7 +2202,7 @@ export default function Admin_AcademicSettings() {
                         <>
                           <button
                             onClick={() => setShowAddTermModal(true)}
-                            className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2 ${
+                            className={`px-4 py-2 bg-[#00418B] text-white rounded-md hover:bg-[#003166] border border-[#00418B] flex items-center gap-2 ${
                               (terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status === 'active'))) ? 'opacity-50 cursor-not-allowed' : ''
                             }`}
                             disabled={terms.length >= 2 || (terms.length >= 1 && terms.some(t => t.status === 'active'))}
@@ -2226,7 +2221,7 @@ export default function Admin_AcademicSettings() {
                           </button>
                           <button
                             onClick={openAddQuarterModal}
-                            className={`px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2 ${
+                            className={`px-4 py-2 bg-[#00418B] text-white rounded-md hover:bg-[#003166] border border-[#00418B] flex items-center gap-2 ${
                               (quarters.filter(q => q.status !== 'archived').length >= 4 || terms.length === 0) ? 'opacity-50 cursor-not-allowed' : ''
                             }`}
                             disabled={quarters.filter(q => q.status !== 'archived').length >= 4 || terms.length === 0}
@@ -2295,9 +2290,13 @@ export default function Admin_AcademicSettings() {
                       new Date(a.startDate) - new Date(b.startDate)
                     );
                     return (
-                      <div key={term._id} className="mb-6 bg-white border rounded-lg overflow-hidden">
+                      <div key={term._id} className={`mb-6 border rounded-lg overflow-hidden ${
+                        term.status === 'inactive' || term.status === 'archived' ? 'bg-gray-200' : 'bg-white'
+                      }`}>
                         {/* Term Header */}
-                        <div className="bg-gray-50 px-4 py-3 border-b">
+                        <div className={`px-4 py-3 border-b ${
+                          term.status === 'inactive' || term.status === 'archived' ? 'bg-gray-300' : 'bg-gray-50'
+                        }`}>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                             <div>
@@ -2309,10 +2308,10 @@ export default function Admin_AcademicSettings() {
                               {selectedYear.status === 'active' && (
                                 <button
                                   onClick={() => handleEditTerm(term)}
-                                  className="p-2 rounded hover:bg-yellow-100"
+                                  className="bg-yellow-200 hover:bg-yellow-300 p-2.5 rounded-md transition-colors shadow-sm"
                                   title="Edit term dates"
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-800">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                                   </svg>
                                 </button>
@@ -2320,26 +2319,18 @@ export default function Admin_AcademicSettings() {
                             </div>
                             <div className="flex items-center gap-2">
                               {selectedYear.status !== 'active' ? (
-                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
                                   archived
                                 </span>
                               ) : (
                                 term.status === 'active' ? (
-                                  <button
-                                    onClick={() => handleDeactivateActiveTerm(term)}
-                                    className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer hover:shadow bg-green-100 text-green-800 hover:bg-red-100 hover:text-red-800"
-                                    title={`Click to set ${term.termName} inactive`}
-                                  >
+                                  <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700 border border-green-300">
                                     active
-                                  </button>
+                                  </span>
                                 ) : (
-                                  <button
-                                    onClick={() => handleToggleTermStatus(term)}
-                                    className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer hover:shadow bg-gray-100 text-gray-800 hover:bg-green-100 hover:text-green-800"
-                                    title={`Click to activate ${term.termName}`}
-                                  >
+                                  <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
                                     {term.status === 'archived' ? 'archived' : term.status}
-                                  </button>
+                                  </span>
                                 )
                               )}
                               {/* Moved edit button next to date range for better accessibility */}
@@ -2349,84 +2340,68 @@ export default function Admin_AcademicSettings() {
                         
                         {/* Quarters Table */}
                         <div className="p-4">
-                          <table className="min-w-full bg-white text-sm">
+                          <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-visible text-sm table-fixed">
                             <thead>
-                              <tr className="bg-gray-100 text-left">
-                                <th className="p-3 border">Quarter Name</th>
-                                <th className="p-3 border">Start Date</th>
-                                <th className="p-3 border">End Date</th>
-                                <th className="p-3 border">Status</th>
-                                <th className="p-3 border">Actions</th>
+                              <tr className="bg-gray-50 text-left">
+                                <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Quarter Name</th>
+                                <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Start Date</th>
+                                <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">End Date</th>
+                                <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Status</th>
+                                <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Actions</th>
                               </tr>
                             </thead>
                             <tbody>
                               {termQuarters.length === 0 ? (
                                 <tr>
-                                  <td colSpan="5" className="p-3 border text-center text-gray-500">
+                                  <td colSpan="5" className="p-3 border-b border-[#00418B] text-center text-gray-500">
                                     No quarters found for {term.termName}
                                   </td>
                                 </tr>
                               ) : (
                                 termQuarters.map((quarter) => (
-                                  <tr key={quarter._id}>
-                                    <td className="p-3 border font-medium">{quarter.quarterName}</td>
-                                    <td className="p-3 border">
+                                  <tr key={quarter._id} className={`${
+                                    quarter.status === 'inactive' || quarter.status === 'archived' ? 'bg-gray-200' : ''
+                                  }`}>
+                                    <td className="p-3 border-b border-[#00418B] font-medium">{quarter.quarterName}</td>
+                                    <td className="p-3 border-b border-[#00418B]">
                                       {new Date(quarter.startDate).toLocaleDateString()}
                                     </td>
-                                    <td className="p-3 border">
+                                    <td className="p-3 border-b border-[#00418B]">
                                       {new Date(quarter.endDate).toLocaleDateString()}
                                     </td>
-                                    <td className="p-3 border">
+                                    <td className="p-3 border-b border-[#00418B]">
                                       {selectedYear.status !== 'active' ? (
-                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">archived</span>
+                                        <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">archived</span>
                                       ) : term.status !== 'active' ? (
-                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-400" title="Enable the term to toggle quarter status">{quarter.status}</span>
+                                        <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-400 border border-gray-300" title="Enable the term to toggle quarter status">{quarter.status}</span>
                                       ) : (
-                                        <button
-                                          onClick={() => handleToggleQuarterStatus(quarter)}
-                                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer hover:shadow ${
-                                            quarter.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-red-100 hover:text-red-800' : 'bg-gray-100 text-gray-800 hover:bg-green-100 hover:text-green-800'
-                                          }`}
-                                          title={`Click to ${quarter.status === 'active' ? 'deactivate' : 'activate'} ${quarter.quarterName}`}
-                                        >
+                                        <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
+                                          ${quarter.status === 'active' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-700 border border-gray-300'}`}>
                                           {quarter.status === 'archived' ? 'inactive' : quarter.status}
-                                        </button>
+                                        </span>
                                       )}
                                     </td>
-                                    <td className="p-3 border">
+                                    <td className="p-3 border-b border-[#00418B]">
                                       <div className="inline-flex space-x-2">
                                         <button
+                                          onClick={() => handleEditQuarter(quarter)}
+                                          className="bg-yellow-200 hover:bg-yellow-300 p-2.5 rounded-md transition-colors shadow-sm"
+                                          title="Edit quarter dates"
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
+                                          </svg>
+                                        </button>
+                                        <button
                                           onClick={() => handleViewQuarter(quarter)}
-                                          className="p-1 rounded hover:bg-blue-100 group relative"
+                                          className="bg-blue-200 hover:bg-blue-300 p-2.5 rounded-md transition-colors shadow-sm"
                                           title="View"
                                         >
-                                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12Z" />
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
                                           </svg>
                                         </button>
-                                        {selectedYear.status === 'active' ? (
-                                          <button
-                                            onClick={() => handleEditQuarter(quarter)}
-                                            className="p-1 rounded hover:bg-yellow-100 group relative"
-                                            title="Edit quarter dates"
-                                          >
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
-                                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
-                                            </svg>
-                                          </button>
-                                        ) : (
-                                          <button
-                                            disabled
-                                            className="p-1 rounded bg-gray-200 text-gray-600 cursor-not-allowed"
-                                            title="Cannot edit quarters of inactive school year"
-                                          >
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-600">
-                                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
-                                            </svg>
-                                          </button>
-                                        )}
-                                        {/* Removed quarter activate action button */}
                                       </div>
                                     </td>
                                   </tr>
@@ -2471,7 +2446,7 @@ export default function Admin_AcademicSettings() {
                       name="schoolYearStart"
                       value={formData.schoolYearStart}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                      className="w-full px-4 py-3 border border-[#00418B] rounded-md focus:outline-none focus:ring-2 focus:ring-[#00418B] text-lg"
                       required
                     >
                       <option value="" disabled>Select year</option>
@@ -2488,10 +2463,10 @@ export default function Admin_AcademicSettings() {
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className={`flex-1 py-3 px-4 rounded-md text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                      className={`flex-1 py-3 px-4 rounded-md text-lg border border-[#00418B] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2 ${
                         isSubmitting 
                           ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
-                          : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                          : 'bg-[#00418B] text-white hover:bg-[#003166]'
                       }`}
                     >
                       {isSubmitting ? 'Creating...' : (isEditMode ? 'Save Changes' : 'Add School Year')}
@@ -2656,7 +2631,7 @@ export default function Admin_AcademicSettings() {
                       type="date"
                       value={termFormData.startDate}
                       onChange={(e) => setTermFormData({ ...termFormData, startDate: e.target.value })}
-                      className={`w-full p-2 border rounded-md ${
+                      className={`w-full p-2 border border-[#00418B] rounded-md ${
                         selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       required
@@ -2672,7 +2647,7 @@ export default function Admin_AcademicSettings() {
                       type="date"
                       value={termFormData.endDate}
                       onChange={(e) => setTermFormData({ ...termFormData, endDate: e.target.value })}
-                      className={`w-full p-2 border rounded-md ${
+                      className={`w-full p-2 border border-[#00418B] rounded-md ${
                         selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       required
@@ -2700,7 +2675,7 @@ export default function Admin_AcademicSettings() {
                     </button>
                     <button
                       type="submit"
-                      className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 ${
+                      className={`px-4 py-2 bg-[#00418B] text-white rounded-md hover:bg-[#003166] border border-[#00418B] ${
                         selectedYear && (selectedYear.status !== 'active' || terms.length >= 2) ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       disabled={selectedYear && (selectedYear.status !== 'active' || terms.length >= 2)}
@@ -2809,7 +2784,7 @@ export default function Admin_AcademicSettings() {
                           setAvailableQuarters([]);
                         }
                       }}
-                      className="w-full p-2 border rounded-md"
+                      className="w-full p-2 border border-[#00418B] rounded-md"
                       required
                       disabled
                     >
@@ -2824,7 +2799,7 @@ export default function Admin_AcademicSettings() {
                     <select
                       value={quarterFormData.quarterName}
                       onChange={(e) => setQuarterFormData({ ...quarterFormData, quarterName: e.target.value })}
-                      className="w-full p-2 border rounded-md"
+                      className="w-full p-2 border border-[#00418B] rounded-md"
                       required
                       disabled
                     >
@@ -2840,7 +2815,7 @@ export default function Admin_AcademicSettings() {
                       type="date"
                       value={quarterFormData.startDate}
                       onChange={(e) => setQuarterFormData({ ...quarterFormData, startDate: e.target.value })}
-                      className={`w-full p-2 border rounded-md ${
+                      className={`w-full p-2 border border-[#00418B] rounded-md ${
                         selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       required
@@ -2856,7 +2831,7 @@ export default function Admin_AcademicSettings() {
                       type="date"
                       value={quarterFormData.endDate}
                       onChange={(e) => setQuarterFormData({ ...quarterFormData, endDate: e.target.value })}
-                      className={`w-full p-2 border rounded-md ${
+                      className={`w-full p-2 border border-[#00418B] rounded-md ${
                         selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       required
@@ -2884,7 +2859,7 @@ export default function Admin_AcademicSettings() {
                     </button>
                     <button
                       type="submit"
-                      className={`px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 ${
+                      className={`px-4 py-2 bg-[#00418B] text-white rounded-md hover:bg-[#003166] border border-[#00418B] ${
                         selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       disabled={selectedYear && selectedYear.status !== 'active'}
@@ -2926,7 +2901,7 @@ export default function Admin_AcademicSettings() {
                       type="date"
                       value={editTermFormData.startDate}
                       onChange={(e) => setEditTermFormData({ ...editTermFormData, startDate: e.target.value })}
-                      className={`w-full p-2 border rounded-md ${
+                      className={`w-full p-2 border border-[#00418B] rounded-md ${
                         selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : (editingTerm && new Date(editingTerm.startDate) < new Date(new Date().setHours(0,0,0,0)) ? 'opacity-50 cursor-not-allowed' : '')
                       }`}
                       required
@@ -2942,7 +2917,7 @@ export default function Admin_AcademicSettings() {
                       type="date"
                       value={editTermFormData.endDate}
                       onChange={(e) => setEditTermFormData({ ...editTermFormData, endDate: e.target.value })}
-                      className={`w-full p-2 border rounded-md ${
+                      className={`w-full p-2 border border-[#00418B] rounded-md ${
                         selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       required
@@ -2970,7 +2945,7 @@ export default function Admin_AcademicSettings() {
                     </button>
                     <button
                       type="submit"
-                      className={`px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 ${
+                      className={`px-4 py-2 bg-[#00418B] text-white rounded-md hover:bg-[#003166] border border-[#00418B] ${
                         selectedYear && selectedYear.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       disabled={selectedYear && selectedYear.status !== 'active'}

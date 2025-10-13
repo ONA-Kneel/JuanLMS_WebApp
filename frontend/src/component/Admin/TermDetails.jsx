@@ -7255,7 +7255,7 @@ Validation issues (${skippedCount} items):
                   </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('tracks')}>
+                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100 border-2 border-[#00418B]" onClick={() => setActiveTab('tracks')}>
                     <img src={tracksIcon} alt="Tracks Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
                       filteredTracks.filter(t => t.status === 'active').length
@@ -7269,7 +7269,7 @@ Validation issues (${skippedCount} items):
                       Extract Active Tracks
                     </button>
                   </div>
-                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('strands')}>
+                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100 border-2 border-[#00418B]" onClick={() => setActiveTab('strands')}>
                     <img src={strandsIcon} alt="Strands Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
                       strands.filter(s => s.status === 'active' && filteredTracks.find(t => t.trackName === s.trackName && t.status === 'active')).length
@@ -7283,7 +7283,7 @@ Validation issues (${skippedCount} items):
                       Extract to Excel
                     </button>
                   </div>
-                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('sections')}>
+                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100 border-2 border-[#00418B]" onClick={() => setActiveTab('sections')}>
                     <img src={sectionsIcon} alt="Sections Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
                       filteredSections.filter(sec => sec.status === 'active' && filteredTracks.find(t => t.trackName === sec.trackName && t.status === 'active')).length
@@ -7297,7 +7297,7 @@ Validation issues (${skippedCount} items):
                       Extract to Excel
                     </button>
                   </div>
-                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('subjects')}>
+                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100 border-2 border-[#00418B]" onClick={() => setActiveTab('subjects')}>
                     <img src={subjectsIcon} alt="Subjects Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
                       filteredSubjects.filter(sub => sub.status === 'active').length
@@ -7311,7 +7311,7 @@ Validation issues (${skippedCount} items):
                       Extract to Excel
                     </button>
                   </div>
-                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('faculty')}>
+                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100 border-2 border-[#00418B]" onClick={() => setActiveTab('faculty')}>
                     <img src={facultyIcon} alt="Faculty Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
                       facultyAssignments.filter(fa => fa.status === 'active').length
@@ -7325,7 +7325,7 @@ Validation issues (${skippedCount} items):
                       Extract to Excel
                     </button>
                   </div>
-                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100" onClick={() => setActiveTab('students')}>
+                  <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:bg-gray-100 border-2 border-[#00418B]" onClick={() => setActiveTab('students')}>
                     <img src={studentIcon} alt="Student Icon" className="w-12 h-12 mb-2 p-2 bg-blue-50 rounded-full" />
                     <span className="text-3xl font-bold text-[#00418B]">{
                       studentAssignments.filter(sa => sa.status === 'active' && isStudentApproved(sa)).length
@@ -7448,59 +7448,63 @@ Validation issues (${skippedCount} items):
                   <h4 className="text-2xl font-semibold mb-2 ">Tracks List</h4>
                     <div className="flex justify-end mb-4">
                     <button
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                      className="bg-[#00418B] hover:bg-[#003166] text-white px-4 py-2 rounded border border-[#00418B]"
                       onClick={() => {
                         setShowTrackModal(true);
                         setIsEditMode(false);
                         setEditingTrack(null);
                         setTrackFormData({ trackName: '', trackType: '' });
                       }}
+                      disabled={termDetails.status === 'archived'}
                     >
                       Add New Track
                     </button>
                   </div>
                   </div>
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                  <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-visible text-sm table-fixed">
                     <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border w-2/5">Track Name</th>
-                        <th className="p-3 border w-1/5">Status</th>
-                        <th className="p-3 border w-2/5">Actions</th>
+                      <tr className="bg-gray-50 text-left">
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-2/5">Track Name</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/5">Status</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-2/5">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredTracks.length === 0 ? (
                         <tr>
-                          <td colSpan="3" className="p-3 border text-center text-gray-500">
+                          <td colSpan="3" className="p-3 border-b border-[#00418B] text-center text-gray-500">
                             No tracks found.
                           </td>
                         </tr>
                       ) : (
                         paginate(filteredTracks, tracksPage, ROWS_PER_PAGE).slice.map(track => (
                           <tr key={track._id}>
-                            <td className="p-3 border">{track.trackName}</td>
-                            <td className="p-3 border">{track.status}</td>
-                            <td className="p-3 border">
+                            <td className="p-3 border-b border-[#00418B]">{track.trackName}</td>
+                            <td className="p-3 border-b border-[#00418B]">
+                              <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
+                                ${track.status === 'active' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-700 border border-gray-300'}`}>
+                                {track.status === 'active' ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td className="p-3 border-b border-[#00418B]">
                               <div className="inline-flex space-x-2">
                                 <button
                                   onClick={() => handleEditTrack(track)}
-                                  className="p-1 rounded hover:bg-yellow-100 group relative"
+                                  className="bg-yellow-200 hover:bg-yellow-300 p-2.5 rounded-md transition-colors shadow-sm"
                                   title="Edit"
                                   disabled={termDetails.status === 'archived'}
                                 >
-                                  {/* Heroicons Pencil Square (black) */}
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                                   </svg>
                                 </button>
                                 <button
                                   onClick={() => handleDeleteTrack(track)}
-                                  className="p-1 rounded hover:bg-red-100 group relative"
+                                  className="bg-red-200 hover:bg-red-300 p-2.5 rounded-md transition-colors shadow-sm"
                                   title="Delete"
                                   disabled={termDetails.status === 'archived'}
                                 >
-                                  {/* Heroicons Trash (red) */}
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
                                 </button>
@@ -7710,7 +7714,7 @@ Validation issues (${skippedCount} items):
                   <div className="flex justify-end mb-4">
                   <button
                     type="button"
-                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
+                    className="w-full bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003166] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2 mb-4 border border-[#00418B]"
                     onClick={() => {
                       setIsStrandModalOpen(true);
                       setIsStrandEditMode(false);
@@ -7723,47 +7727,52 @@ Validation issues (${skippedCount} items):
                   </button>
                   </div>
                   </div>
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                  <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-visible text-sm table-fixed">
                   <thead>
-                    <tr className="bg-gray-100 text-left">
-                      <th className="p-3 border">Track Name</th>
-                      <th className="p-3 border">Strand Name</th>
-                      <th className="p-3 border">Status</th>
-                      <th className="p-3 border">Actions</th>
+                    <tr className="bg-gray-50 text-left">
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Track Name</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Strand Name</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Status</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {uniqueStrands.length === 0 ? (
                       <tr>
-                        <td colSpan="4" className="p-3 border text-center text-gray-500">
+                        <td colSpan="4" className="p-3 border-b border-[#00418B] text-center text-gray-500">
                           No strands found.
                         </td>
                       </tr>
                     ) : (
                       paginate(uniqueStrands, strandsPage, ROWS_PER_PAGE).slice.map((strand) => (
                         <tr key={strand._id}>
-                          <td className="p-3 border">{strand.trackName}</td>
-                          <td className="p-3 border">{strand.strandName}</td>
-                          <td className="p-3 border">{strand.status}</td>
-                          <td className="p-3 border">
+                          <td className="p-3 border-b border-[#00418B]">{strand.trackName}</td>
+                          <td className="p-3 border-b border-[#00418B]">{strand.strandName}</td>
+                          <td className="p-3 border-b border-[#00418B]">
+                            <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
+                              ${strand.status === 'active' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-700 border border-gray-300'}`}>
+                              {strand.status === 'active' ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="p-3 border-b border-[#00418B]">
                             <div className="inline-flex space-x-2">
                               <button
                                 onClick={termDetails.status === 'archived' ? undefined : () => handleEditStrand(strand)}
-                          className="p-1 rounded hover:bg-yellow-100 group relative"
+                                className="bg-yellow-200 hover:bg-yellow-300 p-2.5 rounded-md transition-colors shadow-sm"
                                 title="Edit"
                                 disabled={termDetails.status === 'archived'}
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                                   </svg>
                               </button>
                               <button
                                 onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteStrand(strand)}
-                          className="p-1 rounded hover:bg-red-100 group relative"
+                                className="bg-red-200 hover:bg-red-300 p-2.5 rounded-md transition-colors shadow-sm"
                                 title="Delete"
                                 disabled={termDetails.status === 'archived'}
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
                               </button>
@@ -7978,7 +7987,7 @@ Validation issues (${skippedCount} items):
                     <div className="flex justify-end">
                     <button
                       type="button"
-                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
+                      className="w-full bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003166] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2 mb-4 border border-[#00418B]"
                       onClick={() => {
                         setIsSectionModalOpen(true);
                         setIsSectionEditMode(false);
@@ -7991,53 +8000,58 @@ Validation issues (${skippedCount} items):
                     </button>
                     </div>
                   </div>
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                  <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-visible text-sm table-fixed">
                   <thead>
-                    <tr className="bg-gray-100 text-left">
-                      <th className="p-3 border w-1/7">Track Name</th>
-                      <th className="p-3 border w-1/7">Strand Name</th>
-                      <th className="p-3 border w-1/7">Section Name</th>
-                      <th className="p-3 border w-1/7">Section Code</th>
-                      <th className="p-3 border w-1/7">Grade Level</th>
-                      <th className="p-3 border w-1/7">Status</th>
-                      <th className="p-3 border w-1/7">Actions</th>
+                    <tr className="bg-gray-50 text-left">
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/7">Track Name</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/7">Strand Name</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/7">Section Name</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/7">Section Code</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/7">Grade Level</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/7">Status</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/7">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredSections.length === 0 ? (
                       <tr>
-                        <td colSpan="7" className="p-3 border text-center text-gray-500">
+                        <td colSpan="7" className="p-3 border-b border-[#00418B] text-center text-gray-500">
                           No sections found.
                         </td>
                       </tr>
                     ) : (
                       paginate(filteredSections, sectionsPage, ROWS_PER_PAGE).slice.map((section) => (
                         <tr key={section._id}>
-                          <td className="p-3 border">{section.trackName}</td>
-                          <td className="p-3 border">{section.strandName}</td>
-                          <td className="p-3 border">{section.sectionName}</td>
-                          <td className="p-3 border">{section.sectionCode || 'N/A'}</td>
-                          <td className="p-3 border">{section.gradeLevel}</td>
-                          <td className="p-3 border">{section.status}</td>
-                          <td className="p-3 border">
+                          <td className="p-3 border-b border-[#00418B]">{section.trackName}</td>
+                          <td className="p-3 border-b border-[#00418B]">{section.strandName}</td>
+                          <td className="p-3 border-b border-[#00418B]">{section.sectionName}</td>
+                          <td className="p-3 border-b border-[#00418B]">{section.sectionCode || 'N/A'}</td>
+                          <td className="p-3 border-b border-[#00418B]">{section.gradeLevel}</td>
+                          <td className="p-3 border-b border-[#00418B]">
+                            <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
+                              ${section.status === 'active' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-700 border border-gray-300'}`}>
+                              {section.status === 'active' ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="p-3 border-b border-[#00418B]">
                             <div className="inline-flex space-x-2">
                               <button
                                 onClick={termDetails.status === 'archived' ? undefined : () => handleEditSection(section)}
                                 title="Edit"
-                                className="p-1 rounded hover:bg-yellow-100 group relative"
+                                className="bg-yellow-200 hover:bg-yellow-300 p-2.5 rounded-md transition-colors shadow-sm"
                                 disabled={termDetails.status === 'archived'}
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                                   </svg>
                               </button>
                               <button
                                 onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteSection(section)}
-                                className="p-1 rounded hover:bg-red-100 group relative"
+                                className="bg-red-200 hover:bg-red-300 p-2.5 rounded-md transition-colors shadow-sm"
                                 title="Delete"
                                 disabled={termDetails.status === 'archived'}
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
                               </button>
@@ -8159,7 +8173,7 @@ Validation issues (${skippedCount} items):
                   <div className="flex justify-end">
                     <button
                       type="button"
-                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
+                      className="w-full bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003166] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2 mb-4 border border-[#00418B]"
                       onClick={() => {
                         setIsSubjectModalOpen(true);
                         setIsSubjectEditMode(false);
@@ -8305,51 +8319,56 @@ Validation issues (${skippedCount} items):
                 )}
                 {/* Subjects List */}
                 <div className="mt-8">
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                  <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-visible text-sm table-fixed">
                   <thead>
-                    <tr className="bg-gray-100 text-left">
-                      <th className="p-3 border">Track Name</th>
-                      <th className="p-3 border">Strand Name</th>
-                      <th className="p-3 border">Grade Level</th>
-                      <th className="p-3 border">Subject Name</th>
-                      <th className="p-3 border">Status</th>
-                      <th className="p-3 border">Actions</th>
+                    <tr className="bg-gray-50 text-left">
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Track Name</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Strand Name</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Grade Level</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Subject Name</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Status</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredSubjects.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="p-3 border text-center text-gray-500">
+                        <td colSpan="6" className="p-3 border-b border-[#00418B] text-center text-gray-500">
                           No subjects found.
                         </td>
                       </tr>
                     ) : (
                       paginate(filteredSubjects, subjectsPage, ROWS_PER_PAGE).slice.map((subject) => (
                         <tr key={subject._id}>
-                          <td className="p-3 border">{subject.trackName}</td>
-                          <td className="p-3 border">{subject.strandName}</td>
-                          <td className="p-3 border">{subject.gradeLevel}</td>
-                          <td className="p-3 border">{subject.subjectName}</td>
-                          <td className="p-3 border">{subject.status}</td>
-                          <td className="p-3 border">
+                          <td className="p-3 border-b border-[#00418B]">{subject.trackName}</td>
+                          <td className="p-3 border-b border-[#00418B]">{subject.strandName}</td>
+                          <td className="p-3 border-b border-[#00418B]">{subject.gradeLevel}</td>
+                          <td className="p-3 border-b border-[#00418B]">{subject.subjectName}</td>
+                          <td className="p-3 border-b border-[#00418B]">
+                            <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
+                              ${subject.status === 'active' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-700 border border-gray-300'}`}>
+                              {subject.status === 'active' ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="p-3 border-b border-[#00418B]">
                             <div className="inline-flex space-x-2">
                               <button
                               onClick={termDetails.status === 'archived' ? undefined : () => handleEditSubject(subject)}
                         title="Edit"
-                              className="p-1 rounded hover:bg-yellow-100 group relative"
+                              className="bg-yellow-200 hover:bg-yellow-300 p-2.5 rounded-md transition-colors shadow-sm"
                               disabled={termDetails.status === 'archived'}
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                                   </svg>
                               </button>
                               <button
                                 onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteSubject(subject)}
-                        className="p-1 rounded hover:bg-red-100 group relative"
+                        className="bg-red-200 hover:bg-red-300 p-2.5 rounded-md transition-colors shadow-sm"
                                 title="Delete"
                                 disabled={termDetails.status === 'archived'}
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
                               </button>
@@ -8472,7 +8491,7 @@ Validation issues (${skippedCount} items):
                   <div className="flex justify-end">
                     <button
                       type="button"
-                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
+                      className="w-full bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003166] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2 mb-4 border border-[#00418B]"
                       onClick={() => {
                         setIsFacultyModalOpen(true);
                         setIsFacultyEditMode(false);
@@ -8716,7 +8735,7 @@ Validation issues (${skippedCount} items):
                 {/* Faculty Assignments List */}
                 <div className="mt-8">
                   {/* Faculty Assignment Filters */}
-                  <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                  <div className="mb-4 p-4 bg-gray-50 rounded-lg border-2 border-[#00418B]">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Section</label>
@@ -8770,76 +8789,76 @@ Validation issues (${skippedCount} items):
                     </div>
                   </div>
                   
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                  <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-visible text-sm table-fixed">
                   <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border w-1/9">Faculty School ID</th>
-                        <th className="p-3 border w-1/9">Faculty Name</th>
-                        <th className="p-3 border w-1/9">Track Name</th>
-                        <th className="p-3 border w-1/9">Strand Name</th>
-                        <th className="p-3 border w-1/9">Grade Level</th>
-                        <th className="p-3 border w-1/9">Section</th>
-                        <th className="p-3 border w-1/9">Subject</th>
-                        <th className="p-3 border w-1/9">Status</th>
-                        <th className="p-3 border w-1/9">Actions</th>
+                      <tr className="bg-gray-50 text-left">
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/9">Faculty School ID</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/9">Faculty Name</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/9">Track Name</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/9">Strand Name</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/9">Grade Level</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/9">Section</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/9">Subject</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/9">Status</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 w-1/9">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredFacultyAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="9" className="p-3 border text-center text-gray-500">
+                          <td colSpan="9" className="p-3 border-b border-[#00418B] text-center text-gray-500">
                             No faculty assignments found.
                           </td>
                         </tr>
                       ) : (
                         paginate(filteredFacultyAssignments, facultyAssignPage, ROWS_PER_PAGE).slice.map((assignment) => (
                           <tr key={assignment._id}>
-                            <td className="p-3 border">{assignment.facultySchoolID || ''}</td>
-                            <td className="p-3 border">{assignment.facultyName}</td>
-                            <td className="p-3 border">{assignment.trackName}</td>
-                            <td className="p-3 border">{assignment.strandName}</td>
-                            <td className="p-3 border">{assignment.gradeLevel}</td>
-                            <td className="p-3 border">{assignment.sectionName}</td>
-                            <td className="p-3 border">{assignment.subjectName || ''}</td>
-                            <td className="p-3 border">
+                            <td className="p-3 border-b border-[#00418B]">{assignment.facultySchoolID || ''}</td>
+                            <td className="p-3 border-b border-[#00418B]">{assignment.facultyName}</td>
+                            <td className="p-3 border-b border-[#00418B]">{assignment.trackName}</td>
+                            <td className="p-3 border-b border-[#00418B]">{assignment.strandName}</td>
+                            <td className="p-3 border-b border-[#00418B]">{assignment.gradeLevel}</td>
+                            <td className="p-3 border-b border-[#00418B]">{assignment.sectionName}</td>
+                            <td className="p-3 border-b border-[#00418B]">{assignment.subjectName || ''}</td>
+                            <td className="p-3 border-b border-[#00418B]">
                               {termDetails.status === 'archived' ? (
-                                <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
+                                <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">Archived</span>
                               ) : assignment.status === 'archived' ? (
-                                <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
+                                <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">Archived</span>
                               ) : (
-                                <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Active</span>
+                                <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700 border border-green-300">Active</span>
                               )}
                             </td>
-                            <td className="p-3 border min-w-[120px]">
+                            <td className="p-3 border-b border-[#00418B] min-w-[120px]">
                               <div className="flex justify-center gap-2">
                                 <button
                                   onClick={() => handleEditFacultyAssignment(assignment)}
                            title="Edit"
                                   disabled={termDetails.status === 'archived'}
-                                  className="p-1 rounded hover:bg-yellow-100 group relative"
+                                  className="bg-yellow-200 hover:bg-yellow-300 p-2.5 rounded-md transition-colors shadow-sm"
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                                   </svg>
                                 </button>
                                 <button
                                   onClick={() => handleDeleteFacultyAssignment(assignment)}
-                          className="p-1 rounded hover:bg-red-100 group relative"
+                          className="bg-red-200 hover:bg-red-300 p-2.5 rounded-md transition-colors shadow-sm"
                                   title="Delete"
                                   disabled={termDetails.status === 'archived'}
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                   </svg>
                                 </button>
                                 {assignment.status === 'archived' && (
                                   <button
                                     onClick={() => handleUnarchiveFacultyAssignment(assignment)}
-                                    className="p-1 rounded hover:bg-green-100 group relative"
+                                    className="bg-green-200 hover:bg-green-300 p-2.5 rounded-md transition-colors shadow-sm"
                                     title="Unarchive"
                                     disabled={termDetails.status === 'archived'}
                                   >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-green-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                     </svg>
                                   </button>
@@ -8969,7 +8988,7 @@ Validation issues (${skippedCount} items):
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      className="bg-blue-900 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      className="bg-green-200 text-gray-800 py-2 px-4 rounded-md hover:bg-green-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 border border-green-300"
                       onClick={handleExportStudentAssignments}
                       disabled={termDetails.status === 'archived'}
                     >
@@ -8977,7 +8996,7 @@ Validation issues (${skippedCount} items):
                     </button>
                     <button
                       type="button"
-                      className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      className="bg-[#00418B] text-white py-2 px-4 rounded-md hover:bg-[#003166] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2 border border-[#00418B]"
                       onClick={() => {
                         setIsStudentModalOpen(true);
                         setIsStudentEditMode(false);
@@ -8996,7 +9015,7 @@ Validation issues (${skippedCount} items):
                 </div>
 
                 {/* Filter Controls */}
-                <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                <div className="mb-4 p-4 bg-gray-50 rounded-lg border-2 border-[#00418B]">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Section</label>
@@ -9489,26 +9508,26 @@ Validation issues (${skippedCount} items):
                 
                 {/* Enrolled Students List */}
                 <div className="mt-8">
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+                  <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-visible text-sm table-fixed">
                     <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border">Enrollment No.</th>
-                        <th className="p-3 border">Enrollment Date</th>
-                        <th className="p-3 border">Student No.</th>
-                        <th className="p-3 border">Last Name</th>
-                        <th className="p-3 border">First Name</th>
-                        <th className="p-3 border">Strand</th>
-                        <th className="p-3 border">Section</th>
-                        <th className="p-3 border">Grade</th>
-                        <th className="p-3 border">Enrollment Type</th>
-                        <th className="p-3 border">Status</th>
-                        <th className="p-3 border">Actions</th>
+                      <tr className="bg-gray-50 text-left">
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Enrollment No.</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Enrollment Date</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Student No.</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Last Name</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">First Name</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Strand</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Section</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Grade</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Enrollment Type</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Status</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredStudentAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="11" className="p-3 border text-center text-gray-500">
+                          <td colSpan="11" className="p-3 border-b border-[#00418B] text-center text-gray-500">
                             No student assignments found.
                           </td>
                         </tr>
@@ -9528,8 +9547,8 @@ Validation issues (${skippedCount} items):
                           
                           return (
                             <tr key={assignment._id} className={student?.isArchived ? 'bg-red-50' : ''}>
-                              <td className="p-3 border">{assignment.enrollmentNo || 'N/A'}</td>
-                              <td className="p-3 border">
+                              <td className="p-3 border-b border-[#00418B]">{assignment.enrollmentNo || 'N/A'}</td>
+                              <td className="p-3 border-b border-[#00418B]">
                                 {assignment.enrollmentDate ? 
                                   new Date(assignment.enrollmentDate).toLocaleDateString('en-US', {
                                     month: '2-digit',
@@ -9538,13 +9557,13 @@ Validation issues (${skippedCount} items):
                                   }) : 'N/A'
                                 }
                               </td>
-                              <td className="p-3 border">{student?.schoolID || assignment.studentSchoolID || assignment.schoolID || ''}</td>
-                              <td className="p-3 border">{assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || 'N/A'}</td>
-                              <td className="p-3 border">{assignment.firstname || assignment.studentName?.split(' ')[0] || 'N/A'}</td>
-                              <td className="p-3 border">{assignment.strandName}</td>
-                              <td className="p-3 border">{assignment.sectionName}</td>
-                              <td className="p-3 border">{assignment.gradeLevel}</td>
-                              <td className="p-3 border">
+                              <td className="p-3 border-b border-[#00418B]">{student?.schoolID || assignment.studentSchoolID || assignment.schoolID || ''}</td>
+                              <td className="p-3 border-b border-[#00418B]">{assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || 'N/A'}</td>
+                              <td className="p-3 border-b border-[#00418B]">{assignment.firstname || assignment.studentName?.split(' ')[0] || 'N/A'}</td>
+                              <td className="p-3 border-b border-[#00418B]">{assignment.strandName}</td>
+                              <td className="p-3 border-b border-[#00418B]">{assignment.sectionName}</td>
+                              <td className="p-3 border-b border-[#00418B]">{assignment.gradeLevel}</td>
+                              <td className="p-3 border-b border-[#00418B]">
                                 {(() => {
                                   const enrollmentTypeValue = assignment.enrollmentType || assignment.EnrollmentType || 'Regular';
                                   const isIrregular = (assignment.enrollmentType === 'Irregular' || assignment.EnrollmentType === 'Irregular');
@@ -9562,7 +9581,7 @@ Validation issues (${skippedCount} items):
                                   return (
                                     <button
                                       onClick={() => handleViewStudentSubjects(assignment)}
-                                      className={`px-2 py-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity ${isIrregular ? 'bg-orange-100 text-orange-800 hover:bg-orange-200' : 'bg-blue-100 text-blue-800 hover:bg-blue-200'}`}
+                                      className={`px-2 py-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity ${isIrregular ? 'bg-orange-100 text-orange-800 hover:bg-orange-200 border border-orange-300' : 'bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-300'}`}
                                       title="Click to view enrolled subjects"
                                     >
                                       {enrollmentTypeValue}
@@ -9570,47 +9589,47 @@ Validation issues (${skippedCount} items):
                                   );
                                 })()}
                               </td>
-                              <td className="p-3 border">
+                              <td className="p-3 border-b border-[#00418B]">
                                 {termDetails.status === 'archived' ? (
-                                  <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
+                                  <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">Archived</span>
                                 ) : assignment.status === 'archived' ? (
-                                  <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Archived</span>
+                                  <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">Archived</span>
                                 ) : isStudentApproved(assignment) ? (
-                                  <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Active</span>
+                                  <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700 border border-green-300">Active</span>
                                 ) : (
-                                  <span className="px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800">Pending Approval</span>
+                                  <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-300">Pending Approval</span>
                                 )}
                               </td>
-                              <td className="p-3 border">
+                              <td className="p-3 border-b border-[#00418B]">
                                 <div className="inline-flex space-x-2">
                                   <button
                                     onClick={termDetails.status === 'archived' ? undefined : () => handleEditStudentAssignment(assignment)}
                                     title="Edit"
-                                    className="p-1 rounded hover:bg-yellow-100 group relative"
+                                    className="bg-yellow-200 hover:bg-yellow-300 p-2.5 rounded-md transition-colors shadow-sm"
                                     disabled={termDetails.status === 'archived'}
                                   >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                                     </svg>
                                   </button>
                                   <button
                                     onClick={termDetails.status === 'archived' ? undefined : () => handleDeleteStudentAssignment(assignment)}
-                                    className="p-1 rounded hover:bg-red-100 group relative"
+                                    className="bg-red-200 hover:bg-red-300 p-2.5 rounded-md transition-colors shadow-sm"
                                     title="Delete"
                                     disabled={termDetails.status === 'archived'}
                                   >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V6.75A2.25 2.25 0 0 1 8.25 4.5h7.5A2.25 2.25 0 0 1 18 6.75V7.5M4.5 7.5h15m-1.5 0v10.125A2.625 2.625 0 0 1 15.375 20.25h-6.75A2.625 2.625 0 0 1 6 17.625V7.5m3 4.5v4.125m3-4.125v4.125" />
                                     </svg>
                                   </button>
                                   {assignment.status === 'archived' && (
                                     <button
                                       onClick={() => handleUnarchiveStudentAssignment(assignment)}
-                                      className="p-1 rounded hover:bg-green-100 group relative"
+                                      className="bg-green-200 hover:bg-green-300 p-2.5 rounded-md transition-colors shadow-sm"
                                       title="Unarchive"
                                       disabled={termDetails.status === 'archived'}
                                     >
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-green-600">
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                       </svg>
                                     </button>

@@ -6,12 +6,6 @@ import ExportModal from './ExportModal';
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://juanlms-webapp-server.onrender.com";
 
-const statusColors = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-800',
-};
-
 function maskEmail(email) {
   if (!email || typeof email !== 'string') return '';
   const [user, domain] = email.split('@');
@@ -47,18 +41,75 @@ export default function Admin_Registrants() {
   const [exportLoading, setExportLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch registrants from backend
+  // Add state for active tab
+  const [activeTab, setActiveTab] = useState('all');
+
+  // Add search terms state similar to Admin_Accounts
+  const [searchTerms, setSearchTerms] = useState({
+    schoolID: "",
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    personalEmail: "",
+    track: "",
+    strand: "",
+    section: "",
+    status: "all"
+  });
+  
+  // Check if any search field has input
+  const isSearching = searchTerms.schoolID || searchTerms.firstName || searchTerms.middleName || searchTerms.lastName || searchTerms.personalEmail || searchTerms.track || searchTerms.strand || searchTerms.section;
+  
+  // Client-side filtering for search
+  const displayedRegistrants = registrants.filter(registrant => {
+    const matchesSchoolID = registrant.schoolID?.toLowerCase().includes(searchTerms.schoolID.toLowerCase());
+    const matchesFirstName = registrant.firstName?.toLowerCase().includes(searchTerms.firstName.toLowerCase());
+    const matchesMiddleName = registrant.middleName?.toLowerCase().includes(searchTerms.middleName.toLowerCase());
+    const matchesLastName = registrant.lastName?.toLowerCase().includes(searchTerms.lastName.toLowerCase());
+    const matchesPersonalEmail = registrant.personalEmail?.toLowerCase().includes(searchTerms.personalEmail.toLowerCase());
+    const matchesTrack = registrant.trackName?.toLowerCase().includes(searchTerms.track.toLowerCase());
+    const matchesStrand = registrant.strandName?.toLowerCase().includes(searchTerms.strand.toLowerCase());
+    const matchesSection = registrant.sectionName?.toLowerCase().includes(searchTerms.section.toLowerCase());
+    const matchesStatus = searchTerms.status === "all" || registrant.status === searchTerms.status;
+    return matchesSchoolID && matchesFirstName && matchesMiddleName && matchesLastName && matchesPersonalEmail && matchesTrack && matchesStrand && matchesSection && matchesStatus;
+  });
+
+  // Define tabs for status filtering
+  const tabs = [
+    { id: 'all', label: 'All', icon: null },
+    { id: 'pending', label: 'Pending', icon: null },
+    { id: 'approved', label: 'Approved', icon: null },
+    { id: 'rejected', label: 'Rejected', icon: null },
+  ];
+
+  // Fetch registrants from backend with search functionality
   const fetchRegistrants = async () => {
-    setLoading(true);
+    // Don't show loading spinner during search - only show on initial load
+    if (!isSearching) {
+      setLoading(true);
+    }
     setError('');
     try {
-      const params = { page: pagination.page, limit: pagination.limit };
+      // Check if currently searching
+      const isCurrentlySearching = searchTerms.schoolID || searchTerms.firstName || searchTerms.middleName || searchTerms.lastName || searchTerms.personalEmail || searchTerms.track || searchTerms.strand || searchTerms.section;
+      
+      const params = {
+        page: isCurrentlySearching ? 1 : pagination.page,
+        limit: isCurrentlySearching ? 10000 : pagination.limit // Fetch all when searching
+      };
+      
       if (selectedDate) params.date = selectedDate;
       if (statusFilter !== 'all') params.status = statusFilter;
+      
       const token = localStorage.getItem("token");
       const res = await axios.get(`${API_BASE}/api/registrants`, { params, headers: { Authorization: `Bearer ${token}` } });
       setRegistrants(res.data?.data || []);
-      if (res.data?.pagination) setPagination(res.data.pagination);
+      if (res.data?.pagination && !isCurrentlySearching) {
+        setPagination(res.data.pagination);
+      } else if (isCurrentlySearching) {
+        // When searching, update pagination to show we have all data
+        setPagination(prev => ({ ...prev, totalPages: 1, page: 1, total: res.data?.data?.length || 0 }));
+      }
     } catch (err) {
       console.error('Error fetching registrants:', err);
       let errorMessage = 'Failed to fetch registrants. Please try again.';
@@ -163,8 +214,18 @@ export default function Admin_Registrants() {
   }, []);
 
   useEffect(() => {
+    // Reset to first page when switching tabs to get correct pagination per status
+    setPagination(prev => ({ ...prev, page: 1 }));
+  }, [activeTab]);
+
+  useEffect(() => {
     fetchRegistrants();
-  }, [selectedDate, statusFilter, pagination.page, pagination.limit]);
+  }, [selectedDate, statusFilter, pagination.page, pagination.limit, searchTerms]);
+
+  // Update statusFilter when activeTab changes
+  useEffect(() => {
+    setStatusFilter(activeTab);
+  }, [activeTab]);
 
   // Fetch student assignments for the active term to validate registrants
   useEffect(() => {
@@ -468,20 +529,33 @@ export default function Admin_Registrants() {
     }
   };
 
-  // Filter registrants based on status
+  // Filter registrants based on status (for tabs) and then apply search filtering
   const getFilteredRegistrants = () => {
-    if (statusFilter === 'all') {
-      return registrants;
+    let filtered = registrants;
+    if (statusFilter !== 'all') {
+      filtered = registrants.filter(registrant => registrant.status === statusFilter);
     }
-    return registrants.filter(registrant => registrant.status === statusFilter);
+    return filtered;
   };
 
-  const filteredRegistrants = getFilteredRegistrants();
+  const filteredRegistrants = displayedRegistrants; // Use search-filtered results
 
   // Reset filters
   const resetFilters = () => {
     setSelectedDate('');
     setStatusFilter('all');
+    setActiveTab('all');
+    setSearchTerms({
+      schoolID: "",
+      firstName: "",
+      middleName: "",
+      lastName: "",
+      personalEmail: "",
+      track: "",
+      strand: "",
+      section: "",
+      status: "all"
+    });
   };
 
   // Loading screen
@@ -517,17 +591,10 @@ export default function Admin_Registrants() {
           <ProfileMenu />
         </div>
         
-        {/* Filters and Actions */}
-        <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
-            <div className="flex flex-col sm:flex-row gap-3 flex-1">
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="border rounded px-3 py-2"
-              />
-            </div>
+        {/* Registrants section with tabs and controls */}
+        <div className="mt-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2 gap-2">
+            <h4 className="text-xl md:text-2xl font-semibold">Registrants</h4>
             <div className="flex gap-2">
               <button
                 onClick={handleExportClick}
@@ -541,14 +608,29 @@ export default function Admin_Registrants() {
               >
                 Refresh
               </button>
-              <button 
-                className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400 transition" 
-                onClick={resetFilters}
-              >
-                Reset Filters
-              </button>
             </div>
           </div>
+
+          {/* Filters */}
+          <div className="bg-white p-4 rounded-lg shadow-sm mb-4 border border-[#00418B]">
+            <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+              <div className="flex flex-col sm:flex-row gap-3 flex-1">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="border border-[#00418B] rounded px-3 py-2"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400 transition" 
+                  onClick={resetFilters}
+                >
+                  Reset Filters
+                </button>
+              </div>
+            </div>
           
           {/* Re-registration Info */}
           <div className="mt-4 p-3 bg-[#E3F2FD] border border-[#00418B] rounded-lg">
@@ -568,175 +650,223 @@ export default function Admin_Registrants() {
           </div>
         </div>
         {error && <div className="text-red-600 mb-2">{error}</div>}
+
+          {/* Results Count */}
+          <div className="mb-4 text-sm text-gray-600">
+            {isSearching ? (
+              <span>Showing {displayedRegistrants.length} result{displayedRegistrants.length !== 1 ? 's' : ''} across all pages</span>
+            ) : (
+              <span>Showing {registrants.length} of {pagination.total} registrants | Page {pagination.page} of {pagination.totalPages}</span>
+            )}
+            {activeTab !== 'all' && (
+              <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded ml-2 text-xs">
+                Status: {tabs.find(t => t.id === activeTab)?.label}
+              </span>
+            )}
+            {selectedDate && (
+              <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded ml-2 text-xs">
+                Date: {selectedDate}
+              </span>
+            )}
+          </div>
         
-        {/* Results Count */}
-        <div className="mb-4 text-sm text-gray-600">
-          Showing {registrants.length} of {pagination.total} registrants | Page {pagination.page} of {pagination.totalPages}
-          {statusFilter !== 'all' && (
-            <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded ml-2 text-xs">
-              Status: {statusFilter}
-            </span>
-          )}
-          {selectedDate && (
-            <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded ml-2 text-xs">
-              Date: {selectedDate}
-            </span>
+          {loading && !registrants.length ? (
+            <div className="text-center py-8">Loading...</div>
+          ) : (
+            <div className="bg-white p-4 rounded-xl shadow mb-4 border-2 border-[#00418B]">
+              {/* Tabs for status (inside the table card) - Mini Navigation Header */}
+              <div className="border-b border-[#00418B] mb-4">
+                <div className="flex overflow-x-auto">
+                  {tabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center ${
+                        activeTab === tab.id 
+                          ? 'border-b-2 border-[#00418B] text-[#00418B]' 
+                          : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg text-sm table-fixed overflow-visible">
+                <thead>
+                  <tr className="bg-gray-50 text-left">
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">School ID</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Track</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Strand</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Section</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Validation</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">First Name</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Middle Name</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Last Name</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Personal Email</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Date</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Status</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Rejection History</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Actions</th>
+                  </tr>
+                  {/* New row for search inputs */}
+                  <tr className="bg-white text-left">
+                    <th className="p-2 border-b border-[#00418B] font-normal">
+                      <input type="text" placeholder="Search School ID" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, schoolID: e.target.value }))} value={searchTerms.schoolID} />
+                    </th>
+                    <th className="p-2 border-b border-[#00418B] font-normal">
+                      <input type="text" placeholder="Search Track" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, track: e.target.value }))} value={searchTerms.track} />
+                    </th>
+                    <th className="p-2 border-b border-[#00418B] font-normal">
+                      <input type="text" placeholder="Search Strand" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, strand: e.target.value }))} value={searchTerms.strand} />
+                    </th>
+                    <th className="p-2 border-b border-[#00418B] font-normal">
+                      <input type="text" placeholder="Search Section" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, section: e.target.value }))} value={searchTerms.section} />
+                    </th>
+                    <th className="p-2 border-b border-[#00418B] font-normal"></th>
+                    <th className="p-2 border-b border-[#00418B] font-normal">
+                      <input type="text" placeholder="Search First Name" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, firstName: e.target.value }))} value={searchTerms.firstName} />
+                    </th>
+                    <th className="p-2 border-b border-[#00418B] font-normal">
+                      <input type="text" placeholder="Search Middle Name" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, middleName: e.target.value }))} value={searchTerms.middleName} />
+                    </th>
+                    <th className="p-2 border-b border-[#00418B] font-normal">
+                      <input type="text" placeholder="Search Last Name" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, lastName: e.target.value }))} value={searchTerms.lastName} />
+                    </th>
+                    <th className="p-2 border-b border-[#00418B] font-normal">
+                      <input type="text" placeholder="Search Personal Email" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, personalEmail: e.target.value }))} value={searchTerms.personalEmail} />
+                    </th>
+                    <th className="p-2 border-b border-[#00418B] font-normal">
+                      <input type="text" placeholder="Search Date" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" />
+                    </th>
+                    <th className="p-2 border-b border-[#00418B] font-normal">
+                      <select 
+                        className="w-full border border-[#00418B] rounded px-2 py-1 text-sm"
+                        value={searchTerms.status}
+                        onChange={(e) => setSearchTerms((prev) => ({ ...prev, status: e.target.value }))}
+                      >
+                        <option value="all">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    </th>
+                    <th className="p-2 border-b border-[#00418B] font-normal"></th>
+                    <th className="p-2 border-b border-[#00418B] font-normal"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRegistrants.length === 0 ? (
+                    <tr>
+                      <td colSpan="13" className="text-center p-4 text-gray-500">
+                        No registrants found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRegistrants.map((r, idx) => (
+                      <tr key={r._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
+                        <td className="p-3 border-b border-[#00418B]">{formatSchoolId(r.schoolID)}</td>
+                        <td className="p-3 border-b border-[#00418B]">{r.trackName || '-'}</td>
+                        <td className="p-3 border-b border-[#00418B]">{r.strandName || '-'}</td>
+                        <td className="p-3 border-b border-[#00418B]">{r.sectionName || '-'}</td>
+                        <td className="p-3 border-b border-[#00418B]">
+                          {validateAgainstAssignments(r) ? (
+                            <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Student is enrolled</span>
+                          ) : (
+                            <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Student not enrolled</span>
+                          )}
+                        </td>
+                        <td className="p-3 border-b border-[#00418B]">{r.firstName}</td>
+                        <td className="p-3 border-b border-[#00418B]">{r.middleName}</td>
+                        <td className="p-3 border-b border-[#00418B]">{r.lastName}</td>
+                        <td className="p-3 border-b border-[#00418B]">
+                          <div className="flex flex-col">
+                            <span>{maskEmail(r.personalEmail)}</span>
+                            {r.processedAt && r.status === 'pending' && (
+                              <span className="text-xs text-blue-600 font-medium">Re-registration</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3 border-b border-[#00418B]">
+                          <div className="flex flex-col">
+                            <span>{r.registrationDate ? r.registrationDate.slice(0, 10) : ''}</span>
+                            {r.processedAt && r.status === 'pending' && (
+                              <span className="text-xs text-gray-500">
+                                Previously: {new Date(r.processedAt).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3 border-b border-[#00418B]">
+                          <div className="flex flex-col">
+                            <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
+                              ${ r.status === 'pending' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                                r.status === 'approved' ? 'bg-green-100 text-green-700 border border-green-300' :
+                                r.status === 'rejected' ? 'bg-red-100 text-red-700 border border-red-300' :
+                                'bg-gray-100 text-gray-700 border border-gray-300'}`}>
+                              {r.status}
+                            </span>
+                            {r.processedAt && r.status === 'pending' && (
+                              <span className="text-xs text-blue-600 mt-1">Updated</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3 border-b border-[#00418B]">
+                          <div className="flex flex-col">
+                            {r.rejectionHistory && r.rejectionHistory.length > 0 ? (
+                              r.rejectionHistory.map((history, hIdx) => (
+                                <div key={hIdx} className="text-xs text-gray-600 mb-1">
+                                  <span className="font-medium">{new Date(history.date).toLocaleDateString()}:</span>
+                                  <br />
+                                  <span className="text-gray-500">{history.note}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <span className="text-gray-500 text-xs">No rejection history</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3 border-b border-[#00418B]">
+                          <div className="inline-flex space-x-2">
+                            {r.status === 'pending' && (
+                              <>
+                                <button
+                                  onClick={() => handleApprove(r._id)}
+                                  className="bg-green-200 hover:bg-green-300 p-2.5 rounded-md transition-colors shadow-sm"
+                                  disabled={actionLoading === r._id}
+                                  title="Approve"
+                                >
+                                  {/* Heroicons Check Circle */}
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleReject(r._id)}
+                                  className="bg-red-200 hover:bg-red-300 p-2.5 rounded-md transition-colors shadow-sm"
+                                  disabled={actionLoading === r._id}
+                                  title="Reject"
+                                >
+                                  {/* Heroicons X Circle */}
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
         
-        {loading ? (
-          <div className="text-center py-8">Loading...</div>
-        ) : (
-          <div className="bg-white p-4 rounded-xl shadow mb-4">
-            <div className="overflow-x-auto">
-              <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
-              <thead>
-                <tr className="bg-gray-50 text-left">
-                  <th className="p-3 border-b font-semibold text-gray-700">School ID</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Track</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Strand</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Section</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Validation</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">First Name</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Middle Name</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Last Name</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Personal Email</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Contact No.</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Date</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Status</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Rejection History</th>
-                  <th className="p-3 border-b font-semibold text-gray-700">Actions</th>
-                </tr>
-                <tr className="bg-white text-left">
-                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search School ID" /></th>
-                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Track" /></th>
-                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Strand" /></th>
-                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Section" /></th>
-                  <th className="p-2 border-b"></th>
-                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search First Name" /></th>
-                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Middle Name" /></th>
-                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Last Name" /></th>
-                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Personal Email" /></th>
-                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Contact No." /></th>
-                  <th className="p-2 border-b"><input className="w-full border rounded px-2 py-1 text-sm" placeholder="Search Date" /></th>
-                  <th className="p-2 border-b">
-                    <select 
-                      className="w-full border rounded px-2 py-1 text-sm"
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                      <option value="all">All Status</option>
-                      <option value="pending">Pending</option>
-                      <option value="approved">Approved</option>
-                      <option value="rejected">Rejected</option>
-                    </select>
-                  </th>
-                  <th className="p-2 border-b"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRegistrants.length === 0 ? (
-                  <tr><td colSpan={12} className="text-center p-4 text-gray-500">No registrants found.</td></tr>
-                ) : (
-                  filteredRegistrants.map((r, idx) => (
-                    <tr key={r._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
-                      <td className="p-3 border-b align-middle">{formatSchoolId(r.schoolID)}</td>
-                      <td className="p-3 border-b align-middle">{r.trackName || '-'}</td>
-                      <td className="p-3 border-b align-middle">{r.strandName || '-'}</td>
-                      <td className="p-3 border-b align-middle">{r.sectionName || '-'}</td>
-                      <td className="p-3 border-b align-middle">
-                        {validateAgainstAssignments(r) ? (
-                          <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">Student is enrolled</span>
-                        ) : (
-                          <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-800">Student not enrolled</span>
-                        )}
-                      </td>
-                      <td className="p-3 border-b align-middle">{r.firstName}</td>
-                      <td className="p-3 border-b align-middle">{r.middleName}</td>
-                      <td className="p-3 border-b align-middle">{r.lastName}</td>
-                      <td className="p-3 border-b align-middle">
-                        <div className="flex flex-col">
-                          <span>{maskEmail(r.personalEmail)}</span>
-                          {r.processedAt && r.status === 'pending' && (
-                            <span className="text-xs text-blue-600 font-medium">Re-registration</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3 border-b align-middle">{r.contactNo}</td>
-                      <td className="p-3 border-b align-middle">
-                        <div className="flex flex-col">
-                          <span>{r.registrationDate ? r.registrationDate.slice(0, 10) : ''}</span>
-                          {r.processedAt && r.status === 'pending' && (
-                            <span className="text-xs text-gray-500">
-                              Previously: {new Date(r.processedAt).toLocaleDateString()}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className={`p-3 border-b align-middle font-semibold ${statusColors[r.status]}`}>
-                        <div className="flex flex-col">
-                          <span>{r.status}</span>
-                          {r.processedAt && r.status === 'pending' && (
-                            <span className="text-xs text-blue-600">Updated</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3 border-b align-middle">
-                        <div className="flex flex-col">
-                          {r.rejectionHistory && r.rejectionHistory.length > 0 ? (
-                            r.rejectionHistory.map((history, hIdx) => (
-                              <div key={hIdx} className="text-xs text-gray-600 mb-1">
-                                <span className="font-medium">{new Date(history.date).toLocaleDateString()}:</span>
-                                <br />
-                                <span className="text-gray-500">{history.note}</span>
-                              </div>
-                            ))
-                          ) : (
-                            <span className="text-gray-500 text-xs">No rejection history</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3 border-b">
-                        <div className="inline-flex space-x-2">
-                      {r.status === 'pending' && (
-                        <>
-                          <button
-                            className="bg-green-500 hover:bg-green-600 p-2.5 rounded-md transition-colors shadow-sm"
-                            onClick={() => handleApprove(r._id)}
-                            disabled={actionLoading === r._id}
-                            title="Approve"
-                          >
-                            {/* Heroicons Check Circle */}
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </button>
-                          <button
-                            className="bg-red-500 hover:bg-red-600 p-2.5 rounded-md transition-colors shadow-sm"
-                            onClick={() => handleReject(r._id)}
-                            disabled={actionLoading === r._id}
-                            title="Reject"
-                          >
-                            {/* Heroicons X Circle */}
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </button>
-                        </>
-                      )}
-                        </div>
-                    </td>
-                  </tr>
-                  ))
-                )}
-              </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-        
         {/* Pagination Controls */}
-        {!loading && pagination.totalPages > 1 && (
+        {!loading && !isSearching && pagination.totalPages > 1 && (
           <div className="flex justify-center items-center gap-4 mt-4">
             <button 
               className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50" 

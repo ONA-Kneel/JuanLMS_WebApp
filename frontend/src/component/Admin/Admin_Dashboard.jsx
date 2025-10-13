@@ -333,7 +333,7 @@ export default function Admin_Dashboard() {
         {/* Suggest change password modal */}
         {showSuggestPw && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md border-2 border-[#00418B]">
               <h3 className="text-xl font-semibold mb-2">Change Password</h3>
               <p className="text-sm text-gray-600 mb-4">To improve your account security, please change your password.</p>
               <div className="flex items-center justify-between mb-4">
@@ -361,7 +361,7 @@ export default function Admin_Dashboard() {
         )}
         {showChangePwModal && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md border-2 border-[#00418B]">
               <h3 className="text-lg font-semibold mb-2">Open Change Password</h3>
               <p className="text-sm text-gray-600 mb-4">Open your profile and use the Change Password option.</p>
               <div className="flex justify-end gap-2">
@@ -385,7 +385,7 @@ export default function Admin_Dashboard() {
         {/* Announcements (inline box) */}
         {announcements.length > 0 && (
           <div className="mb-6">
-            <div className="bg-white rounded-2xl shadow p-4 md:p-6">
+            <div className="bg-white rounded-2xl shadow p-4 md:p-6 border-2 border-[#00418B]">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-lg font-semibold">Announcements</h4>
                 <button
@@ -428,21 +428,21 @@ export default function Admin_Dashboard() {
         <div className="flex flex-col md:flex-row gap-6">
           <div className="flex-1 flex flex-col gap-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
+              <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center border-2 border-[#00418B]">
                 <span className="text-2xl font-bold text-blue-950">{accountCounts.admin}</span>
                 <span className="text-gray-700 mt-2">Admins</span>
               </div>
-              <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
+              <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center border-2 border-[#00418B]">
                 <span className="text-2xl font-bold text-yellow-600">{accountCounts.faculty}</span>
                 <span className="text-gray-700 mt-2">Faculty</span>
               </div>
-              <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
+              <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center border-2 border-[#00418B]">
                 <span className="text-2xl font-bold text-blue-950">{accountCounts.student}</span>
                 <span className="text-gray-700 mt-2">Students</span>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center mb-4 min-h-[220px] w-full">
+            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center mb-4 min-h-[220px] w-full border-2 border-[#00418B]">
               <span className="text-lg font-bold text-gray-800 mb-4">School Year Progress</span>
               <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden shadow-inner">
                 <div className="bg-indigo-600 h-6 text-white text-sm font-semibold text-center" style={{ width: `${schoolYearProgress}%` }}>
@@ -456,7 +456,7 @@ export default function Admin_Dashboard() {
               </p>
             </div>
 
-            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center mb-4 min-h-[220px] w-full">
+            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center mb-4 min-h-[220px] w-full border-2 border-[#00418B]">
               <span className="text-lg font-bold text-gray-800 mb-4">Term Progress</span>
               <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden shadow-inner">
                 <div className="bg-green-500 h-6 text-white text-sm font-semibold text-center" style={{ width: `${termProgress}%` }}>
@@ -526,7 +526,7 @@ export default function Admin_Dashboard() {
           </div>
 
           <div className="w-full md:w-96 flex flex-col gap-6">
-            <div className="bg-white rounded-xl shadow p-4 mb-4 max-h-80 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow p-4 mb-4 max-h-80 overflow-y-auto border-2 border-[#00418B]">
               <h3 className="text-lg md:text-xl font-bold mb-3">Student/Faculty Audit Preview</h3>
               <table className="min-w-full bg-white border rounded-lg overflow-hidden text-xs table-fixed">
                 <thead>
@@ -556,7 +556,7 @@ export default function Admin_Dashboard() {
               </table>
             </div>
 
-            <div className="bg-white rounded-xl shadow p-4 flex flex-col mb-4" style={{ maxWidth: 400, fontSize: '13px' }}>
+            <div className="bg-white rounded-xl shadow p-4 flex flex-col mb-4 border-2 border-[#00418B]" style={{ maxWidth: 400, fontSize: '13px' }}>
               <span className="text-lg font-bold text-gray-800 mb-2">Academic Calendar</span>
               <FullCalendar
                 plugins={[dayGridPlugin]}

@@ -884,9 +884,9 @@ export default function Admin_Accounts() {
                 </span>
               )}
             </div>
-            <div className="bg-white p-4 rounded-xl shadow mb-4">
+            <div className="bg-white p-4 rounded-xl shadow mb-4 border-2 border-[#00418B]">
               {/* Tabs for roles (inside the table card) - Mini Navigation Header */}
-              <div className="border-b mb-4">
+              <div className="border-b border-[#00418B] mb-4">
                 <div className="flex overflow-x-auto">
                   {tabs.map(tab => (
                     <button
@@ -904,32 +904,32 @@ export default function Admin_Accounts() {
                   ))}
                 </div>
               </div>
-              <table className="min-w-full bg-white border rounded-lg text-sm table-fixed overflow-visible">
+              <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg text-sm table-fixed overflow-visible">
                 <thead>
                   <tr className="bg-gray-50 text-left">
-                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("schoolID")}>School ID {sortConfig.key === "schoolID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border-b w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
-                    <th className="p-3 border-b font-semibold text-gray-700 whitespace-nowrap">Role</th>
-                    <th className="p-3 border-b font-semibold text-gray-700 whitespace-nowrap">Actions</th>
+                    <th className="p-3 border-b border-[#00418B] w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("schoolID")}>School ID {sortConfig.key === "schoolID" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b border-[#00418B] w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("lastname")}>Last Name {sortConfig.key === "lastname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b border-[#00418B] w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("firstname")}>First Name {sortConfig.key === "firstname" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b border-[#00418B] w-1/6 cursor-pointer select-none font-semibold text-gray-700 whitespace-nowrap" onClick={() => handleSort("middlename")}>Middle Name {sortConfig.key === "middlename" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Role</th>
+                    <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Actions</th>
                   </tr>
                   {/* New row for search inputs */}
                   <tr className="bg-white text-left">
-                    <th className="p-2 border-b">
-                      <input type="text" placeholder="Search School ID" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, schoolID: e.target.value }))} />
+                    <th className="p-2 border-b border-[#00418B]">
+                      <input type="text" placeholder="Search School ID" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, schoolID: e.target.value }))} />
                     </th>
-                    <th className="p-2 border-b">
-                      <input type="text" placeholder="Search Last Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, lastname: e.target.value }))} />
+                    <th className="p-2 border-b border-[#00418B]">
+                      <input type="text" placeholder="Search Last Name" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, lastname: e.target.value }))} />
                     </th>
-                    <th className="p-2 border-b">
-                      <input type="text" placeholder="Search First Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, firstname: e.target.value }))} />
+                    <th className="p-2 border-b border-[#00418B]">
+                      <input type="text" placeholder="Search First Name" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, firstname: e.target.value }))} />
                     </th>
-                    <th className="p-2 border-b">
-                      <input type="text" placeholder="Search Middle Name" className="w-full border rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, middlename: e.target.value }))} />
+                    <th className="p-2 border-b border-[#00418B]">
+                      <input type="text" placeholder="Search Middle Name" className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" onChange={(e) => setSearchTerms((prev) => ({ ...prev, middlename: e.target.value }))} />
                     </th>
-                    <th className="p-2 border-b"></th>
-                    <th className="p-2 border-b"></th>
+                    <th className="p-2 border-b border-[#00418B]"></th>
+                    <th className="p-2 border-b border-[#00418B]"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -942,11 +942,11 @@ export default function Admin_Accounts() {
                   ) : (
                     displayedUsers.map((user, idx) => (
                       <tr key={user._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
-                        <td className="p-3 border-b">{formatSchoolId(user.schoolID)}</td>
-                        <td className="p-3 border-b">{user.lastname}</td>
-                        <td className="p-3 border-b">{user.firstname}</td>
-                        <td className="p-3 border-b">{user.middlename}</td>
-                        <td className="p-3 border-b">
+                        <td className="p-3 border-b border-[#00418B]">{formatSchoolId(user.schoolID)}</td>
+                        <td className="p-3 border-b border-[#00418B]">{user.lastname}</td>
+                        <td className="p-3 border-b border-[#00418B]">{user.firstname}</td>
+                        <td className="p-3 border-b border-[#00418B]">{user.middlename}</td>
+                        <td className="p-3 border-b border-[#00418B]">
                           <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
                             ${user.role === 'students' ? 'bg-green-100 text-green-700 border border-green-300' :
                               user.role === 'faculty' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
@@ -955,11 +955,11 @@ export default function Admin_Accounts() {
                               user.role === 'vice president of education' ? 'bg-pink-100 text-pink-700 border border-pink-300' :
                               'bg-gray-100 text-gray-700 border border-gray-300'}`}>{user.role === 'vice president of education' ? 'Vice President of Education' : user.role}</span>
                         </td>
-                        <td className="p-3 border-b">
+                        <td className="p-3 border-b border-[#00418B]">
                           <div className="inline-flex space-x-2">
                             <button
                               onClick={() => handleEdit(user)}
-                              className="bg-yellow-500 hover:bg-yellow-600 p-2.5 rounded-md transition-colors shadow-sm"
+                              className="bg-yellow-200 hover:bg-yellow-300 p-2.5 rounded-md transition-colors shadow-sm"
                               title="Edit"
                             >
                               {/* Heroicons Pencil Square */}
@@ -969,7 +969,7 @@ export default function Admin_Accounts() {
                             </button>
                             <button
                               onClick={() => handleArchive(user)}
-                              className="bg-red-500 hover:bg-red-600 p-2.5 rounded-md transition-colors shadow-sm"
+                              className="bg-red-200 hover:bg-red-300 p-2.5 rounded-md transition-colors shadow-sm"
                               title="Archive"
                             >
                               {/* Heroicons Trash (archive) */}
@@ -1335,17 +1335,17 @@ export default function Admin_Accounts() {
             </div>
             
             <div className="overflow-x-auto max-h-[60vh]">
-              <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+              <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-hidden text-sm">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr className="text-left">
-                    <th className="p-4 border-b font-semibold text-gray-700">School ID</th>
-                    <th className="p-4 border-b font-semibold text-gray-700">Last Name</th>
-                    <th className="p-4 border-b font-semibold text-gray-700">First Name</th>
-                    <th className="p-4 border-b font-semibold text-gray-700">Middle Name</th>
-                    <th className="p-4 border-b font-semibold text-gray-700">Role</th>
-                    <th className="p-4 border-b font-semibold text-gray-700">Archived At</th>
-                    <th className="p-4 border-b font-semibold text-gray-700">Days Left</th>
-                    <th className="p-4 border-b font-semibold text-gray-700">Actions</th>
+                    <th className="p-4 border-b border-[#00418B] font-semibold text-gray-700">School ID</th>
+                    <th className="p-4 border-b border-[#00418B] font-semibold text-gray-700">Last Name</th>
+                    <th className="p-4 border-b border-[#00418B] font-semibold text-gray-700">First Name</th>
+                    <th className="p-4 border-b border-[#00418B] font-semibold text-gray-700">Middle Name</th>
+                    <th className="p-4 border-b border-[#00418B] font-semibold text-gray-700">Role</th>
+                    <th className="p-4 border-b border-[#00418B] font-semibold text-gray-700">Archived At</th>
+                    <th className="p-4 border-b border-[#00418B] font-semibold text-gray-700">Days Left</th>
+                    <th className="p-4 border-b border-[#00418B] font-semibold text-gray-700">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1364,11 +1364,11 @@ export default function Admin_Accounts() {
                   ) : (
                     archivedUsers.map((user, idx) => (
                       <tr key={user._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition-colors" : "bg-gray-50 hover:bg-gray-100 transition-colors"}>
-                        <td className="p-4 border-b font-medium">{formatSchoolId(user.userID)}</td>
-                        <td className="p-4 border-b">{user.lastname}</td>
-                        <td className="p-4 border-b">{user.firstname}</td>
-                        <td className="p-4 border-b">{user.middlename || '-'}</td>
-                        <td className="p-4 border-b">
+                        <td className="p-4 border-b border-[#00418B] font-medium">{formatSchoolId(user.userID)}</td>
+                        <td className="p-4 border-b border-[#00418B]">{user.lastname}</td>
+                        <td className="p-4 border-b border-[#00418B]">{user.firstname}</td>
+                        <td className="p-4 border-b border-[#00418B]">{user.middlename || '-'}</td>
+                        <td className="p-4 border-b border-[#00418B]">
                           <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold
                             ${user.role === 'students' ? 'bg-green-100 text-green-700 border border-green-300' :
                               user.role === 'faculty' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
@@ -1379,14 +1379,14 @@ export default function Admin_Accounts() {
                             {user.role === 'vice president of education' ? 'Vice President of Education' : user.role}
                           </span>
                         </td>
-                        <td className="p-4 border-b text-gray-600">
+                        <td className="p-4 border-b border-[#00418B] text-gray-600">
                           {user.archivedAt ? new Date(user.archivedAt).toLocaleDateString('en-US', {
                             year: 'numeric',
                             month: 'short',
                             day: 'numeric'
                           }) : '-'}
                         </td>
-                        <td className="p-4 border-b">
+                        <td className="p-4 border-b border-[#00418B]">
                           {user.deletedAt ? (
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                               getDaysLeft(user.deletedAt) <= 3 ? 'bg-red-100 text-red-700' :
@@ -1397,10 +1397,10 @@ export default function Admin_Accounts() {
                             </span>
                           ) : '-'}
                         </td>
-                        <td className="p-4 border-b">
+                        <td className="p-4 border-b border-[#00418B]">
                           <button
                             onClick={() => handleRecover(user)}
-                            className="inline-flex items-center px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors duration-200 group"
+                            className="inline-flex items-center px-3 py-1.5 bg-green-200 hover:bg-green-300 text-gray-800 text-xs font-medium rounded-lg transition-colors duration-200 group"
                             title="Recover Account"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
